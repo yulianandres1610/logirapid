@@ -1,0 +1,100 @@
+'use client'
+
+import React, { createContext, useContext, useEffect, useState } from 'react'
+
+interface CompanyInfo {
+  companyId?: string
+  companyName?: string
+  userRole?: string
+}
+
+interface CompanyContextType {
+  companyInfo: CompanyInfo
+  setCompanyInfo: (info: CompanyInfo) => void
+  isLoading: boolean
+}
+
+const CompanyContext = createContext<CompanyContextType | undefined>(undefined)
+
+export function CompanyProvider({
+  children,
+  initialCompanyInfo
+}: {
+  children: React.ReactNode
+  initialCompanyInfo?: CompanyInfo
+}) {
+  const [companyInfo, setCompanyInfo] = useState<CompanyInfo>(initialCompanyInfo || {})
+  const [isLoading, setIsLoading] = useState(true)
+
+  useEffect(() => {
+    // Intentar obtener la información de la empresa de las cookies
+    // que el middleware podría haber establecido
+    const getCompanyInfoFromCookies = () => {
+      try {
+        const cookies = document.cookie.split(';')
+        let info: CompanyInfo = {}
+
+        cookies.forEach(cookie => {
+          const [name, value] = cookie.trim().split('=')
+          if (name === 'user-company-id') {
+            info.companyId = decodeURIComponent(value)
+          } else if (name === 'user-company-name') {
+            info.companyName = decodeURIComponent(value)
+          } else if (name === 'user-role') {
+            info.userRole = decodeURIComponent(value)
+          }
+        })
+
+        setCompanyInfo(info)
+      } catch (error) {
+        console.error('Error reading company info from cookies:', error)
+      } finally {
+        setIsLoading(false)
+      }
+    }
+
+    // Si no hay información inicial, intentar obtenerla de las cookies
+    if (!initialCompanyInfo?.companyId) {
+      getCompanyInfoFromCookies()
+    } else {
+      setIsLoading(false)
+    }
+  }, [initialCompanyInfo])
+
+  const value: CompanyContextType = {
+    companyInfo,
+    setCompanyInfo,
+    isLoading
+  }
+
+  return (
+    <CompanyContext.Provider value={value}>
+      {children}
+    </CompanyContext.Provider>
+  )
+}
+
+export function useCompany() {
+  const context = useContext(CompanyContext)
+  if (context === undefined) {
+    throw new Error('useCompany must be used within a CompanyProvider')
+  }
+  return context
+}
+
+// Hook para verificar si el usuario es administrador de empresa
+export function useIsAgencyAdmin() {
+  const { companyInfo } = useCompany()
+  return companyInfo.userRole === 'ADMIN'
+}
+
+// Hook para obtener el ID de la empresa actual
+export function useCompanyId() {
+  const { companyInfo, isLoading } = useCompany()
+
+  if (isLoading) {
+    return null
+  }
+
+  return companyInfo.companyId || null
+}

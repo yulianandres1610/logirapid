@@ -1,0 +1,567 @@
+'use client'
+
+import React, { useEffect, useRef, useState } from 'react'
+import mapboxgl from 'mapbox-gl'
+import { Package, MapPin, Navigation, User, Clock } from 'lucide-react'
+
+// Importar CSS de Mapbox
+import 'mapbox-gl/dist/mapbox-gl.css'
+
+// Configurar token de Mapbox
+mapboxgl.accessToken = 'pk.eyJ1IjoieXVsaWFuYW5kcmVzMTYxMCIsImEiOiJjbWgycTdlYmoxNHJxcTJuYTVpMWgxZ3VmIn0.nnRMcQEyti0lz8pLohO75g'
+
+interface PackageOrder {
+  id: number
+  orderNumber: string
+  customerName: string
+  customerAddress?: string
+  services: string[]
+  status: string
+  scheduledDate?: string
+  timeSlot?: string
+  total?: number
+  latitude?: number | null
+  longitude?: number | null
+}
+
+interface PackageDeliveryMapProps {
+  orders: PackageOrder[]
+  theme?: 'light' | 'dark'
+  onOrderClick?: (order: PackageOrder) => void
+}
+
+export default function PackageDeliveryMap({
+  orders,
+  theme = 'light',
+  onOrderClick
+}: PackageDeliveryMapProps) {
+  const mapContainerRef = useRef<HTMLDivElement>(null)
+  const mapRef = useRef<mapboxgl.Map>()
+  const markersRef = useRef<mapboxgl.Marker[]>([])
+  const [selectedOrder, setSelectedOrder] = useState<PackageOrder | null>(null)
+
+  // Helper function to format address object to string
+  const formatAddress = (address: any) => {
+    if (!address) return 'Sin dirección'
+
+    // If it's already a string, return as is
+    if (typeof address === 'string') return address
+
+    // If it's an object, format it
+    if (typeof address === 'object' && address !== null) {
+      const parts = []
+      if (address.street) parts.push(address.street)
+      if (address.apartment) parts.push(`Apt: ${address.apartment}`)
+      if (address.city) parts.push(address.city)
+      if (address.state) parts.push(address.state)
+      if (address.zipCode) parts.push(address.zipCode)
+      if (address.country && address.country !== 'Estados Unidos') parts.push(address.country)
+
+      return parts.length > 0 ? parts.join(', ') : 'Sin dirección'
+    }
+
+    return 'Sin dirección'
+  }
+
+  // Siempre usar el estilo de mapa claro por defecto
+  const mapStyle = 'mapbox://styles/mapbox/streets-v12'
+
+  // Inicializar el mapa
+  useEffect(() => {
+    if (!mapContainerRef.current || mapRef.current) return
+
+    console.log('🗺️ Inicializando mapa Mapbox GL JS')
+
+    mapRef.current = new mapboxgl.Map({
+      container: mapContainerRef.current,
+      style: mapStyle,
+      center: [-80.1978, 25.7743], // Miami, Florida coordinates
+      zoom: 10,
+      pitch: 0,
+      bearing: 0
+    })
+
+    console.log('✅ Mapa inicializado')
+
+    // Esperar a que el mapa esté completamente cargado
+    mapRef.current.on('load', () => {
+      console.log('🎯 Mapa completamente cargado y listo para añadir marcadores')
+    })
+
+    // Agregar controles
+    mapRef.current.addControl(new mapboxgl.NavigationControl(), 'top-right')
+    mapRef.current.addControl(new mapboxgl.FullscreenControl(), 'top-right')
+    mapRef.current.addControl(new mapboxgl.ScaleControl(), 'bottom-left')
+
+    console.log('✅ Controles del mapa agregados')
+
+    return () => {
+      if (mapRef.current) {
+        console.log('🗑️ Limpiando mapa')
+        mapRef.current.remove()
+        mapRef.current = undefined
+      }
+    }
+  }, [])
+
+  
+  // Función simplificada para geocodificar direcciones usando Mapbox Geocoding API
+  const geocodeAddress = async (address: string): Promise<[number, number] | null> => {
+    // Validación de entrada
+    if (!address || typeof address !== 'string' || address.trim() === '') {
+      console.warn('⚠️ Invalid address provided:', address)
+      // Fallback a Miami con variación aleatoria
+      return [
+        -80.1978 + (Math.random() - 0.5) * 0.015,
+        25.7743 + (Math.random() - 0.5) * 0.015
+      ]
+    }
+
+    try {
+      // Usar Mapbox API directamente para geocodificar la dirección real
+      const bbox = '-80.501656,25.604643,-80.118564,25.965748' // Miami-Dade County bounds
+      const cleanedAddress = address.replace(/(\d+)(st|nd|rd|th)/gi, '$1').trim()
+      const searchAddress = `${cleanedAddress}, Miami, FL`
+      const encodedAddress = encodeURIComponent(searchAddress)
+
+      console.log(`🔍 Geocodificando dirección real: "${searchAddress}"`)
+
+      const response = await fetch(
+        `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodedAddress}.json?` +
+        `access_token=${mapboxgl.accessToken}&` +
+        `bbox=${bbox}&` +
+        `limit=1&` +
+        `types=address,place,poi&` +
+        `proximity=-80.1978,25.7743&` +
+        `country=US`
+      )
+
+      if (!response.ok) {
+        console.warn('Geocoding API request failed:', response.status, 'for address:', address)
+        // Fallback a Miami con variación
+        return [
+          -80.1978 + (Math.random() - 0.5) * 0.015,
+          25.7743 + (Math.random() - 0.5) * 0.015
+        ]
+      }
+
+      const data = await response.json()
+
+      if (data.features && data.features.length > 0) {
+        const [longitude, latitude] = data.features[0].center
+        console.log(`✅ Geocoded "${address}" to coordinates: [${longitude}, ${latitude}]`)
+        return [longitude, latitude]
+      } else {
+        console.warn('⚠️ No geocoding results for address:', address)
+        // Fallback a Miami con variación basada en hash de dirección
+        try {
+          const hash = address.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0)
+          return [
+            -80.1978 + (Math.sin(hash) * 0.02),
+            25.7743 + (Math.cos(hash) * 0.02)
+          ]
+        } catch {
+          // Fallback si el hash falla
+          return [
+            -80.1978 + (Math.random() - 0.5) * 0.02,
+            25.7743 + (Math.random() - 0.5) * 0.02
+          ]
+        }
+      }
+    } catch (error) {
+      console.error('❌ Geocoding error for address:', address, error)
+      // Fallback determinístico con validación
+      try {
+        const hash = address.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0)
+        return [
+          -80.1978 + (Math.sin(hash) * 0.02),
+          25.7743 + (Math.cos(hash) * 0.02)
+        ]
+      } catch {
+        // Fallback final si todo falla
+        return [
+          -80.1978 + (Math.random() - 0.5) * 0.02,
+          25.7743 + (Math.random() - 0.5) * 0.02
+        ]
+      }
+    }
+  }
+
+  // Función para crear marcadores personalizados más atractivos
+  const createMarkerElement = (order: PackageOrder) => {
+    const el = document.createElement('div')
+    el.className = 'custom-delivery-marker'
+
+    // Determinar colores y iconos según estado
+    const statusConfig = {
+      pending: {
+        color: '#F59E0B', // amber-500
+        icon: '📦',
+        label: 'Pendiente'
+      },
+      scheduled: {
+        color: '#3B82F6', // blue-500
+        icon: '📅',
+        label: 'Programado'
+      },
+      picked_up: {
+        color: '#8B5CF6', // violet-500
+        icon: '🚚',
+        label: 'En Camino'
+      },
+      delivered: {
+        color: '#10B981', // emerald-500
+        icon: '✅',
+        label: 'Entregado'
+      },
+      cancelled: {
+        color: '#EF4444', // red-500
+        icon: '❌',
+        label: 'Cancelado'
+      },
+      in_progress: {
+        color: '#06B6D4', // cyan-500
+        icon: '🔄',
+        label: 'En Progreso'
+      }
+    }
+
+    const config = statusConfig[order.status as keyof typeof statusConfig] || statusConfig.pending
+
+    el.innerHTML = `
+      <div class="marker-container" style="
+        position: relative;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        filter: drop-shadow(0 4px 6px rgba(0, 0, 0, 0.3));
+      ">
+        <!-- Pin principal con animación -->
+        <div class="marker-pin" style="
+          width: 40px;
+          height: 40px;
+          background: linear-gradient(135deg, ${config.color} 0%, ${config.color}dd 100%);
+          border-radius: 50% 50% 50% 15%;
+          transform: rotate(-45deg);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          border: 3px solid white;
+          box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+          position: relative;
+          animation: markerBounce 2s infinite ease-in-out;
+        ">
+          <span style="
+            transform: rotate(45deg);
+            font-size: 18px;
+            filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.3));
+          ">${config.icon}</span>
+        </div>
+
+        <!-- Círculo exterior pulsante -->
+        <div class="pulse-ring" style="
+          position: absolute;
+          top: 50%;
+          left: 50%;
+          transform: translate(-50%, -50%);
+          width: 60px;
+          height: 60px;
+          border: 2px solid ${config.color};
+          border-radius: 50%;
+          opacity: 0;
+          animation: pulseAnimation 2s infinite;
+        "></div>
+
+        <!-- Tooltip personalizado -->
+        <div class="marker-tooltip" style="
+          position: absolute;
+          bottom: 100%;
+          left: 50%;
+          transform: translateX(-50%);
+          margin-bottom: 15px;
+          background: linear-gradient(135deg, #1F2937 0%, #374151 100%);
+          color: white;
+          padding: 12px 16px;
+          border-radius: 12px;
+          font-size: 12px;
+          white-space: nowrap;
+          opacity: 0;
+          visibility: hidden;
+          transition: all 0.3s ease;
+          box-shadow: 0 10px 25px rgba(0, 0, 0, 0.3);
+          z-index: 1000;
+          min-width: 180px;
+          border: 1px solid rgba(255, 255, 255, 0.1);
+        ">
+          <!-- Header del tooltip -->
+          <div style="
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 8px;
+            padding-bottom: 8px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+          ">
+            <span style="font-size: 16px;">${config.icon}</span>
+            <div style="flex: 1;">
+              <div style="font-weight: 600; font-size: 13px;">${order.orderNumber}</div>
+              <div style="font-size: 10px; opacity: 0.8; color: ${config.color};">${config.label}</div>
+            </div>
+          </div>
+
+          <!-- Contenido del tooltip -->
+          <div style="space-y: 4px;">
+            <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 4px;">
+              <span style="opacity: 0.7;">👤</span>
+              <span style="font-weight: 500;">${order.customerName}</span>
+            </div>
+            <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 4px;">
+              <span style="opacity: 0.7;">📍</span>
+              <span style="opacity: 0.9; font-size: 11px;">${formatAddress(order.customerAddress)}</span>
+            </div>
+            <div style="display: flex; align-items: center; gap: 6px;">
+              <span style="opacity: 0.7;">📅</span>
+              <span style="opacity: 0.9; font-size: 11px;">${order.scheduledDate || 'Sin fecha'}</span>
+              ${order.timeSlot ? `<span style="opacity: 0.7; font-size: 10px;">• ${order.timeSlot}</span>` : ''}
+            </div>
+          </div>
+
+          <!-- Flecha del tooltip -->
+          <div style="
+            position: absolute;
+            top: 100%;
+            left: 50%;
+            transform: translateX(-50%);
+            border: 6px solid transparent;
+            border-top-color: #374151;
+          "></div>
+        </div>
+      </div>
+
+      <!-- Estilos CSS -->
+      <style>
+        @keyframes markerBounce {
+          0%, 100% { transform: rotate(-45deg) scale(1); }
+          50% { transform: rotate(-45deg) scale(1.1); }
+        }
+
+        @keyframes pulseAnimation {
+          0% {
+            transform: translate(-50%, -50%) scale(0.8);
+            opacity: 0.8;
+          }
+          100% {
+            transform: translate(-50%, -50%) scale(1.5);
+            opacity: 0;
+          }
+        }
+
+        .marker-container:hover .marker-pin {
+          transform: rotate(-45deg) scale(1.2);
+          background: linear-gradient(135deg, ${config.color} 0%, ${config.color}ff 100%);
+        }
+
+        .marker-container:hover .marker-tooltip {
+          opacity: 1;
+          visibility: visible;
+          transform: translateX(-50%) translateY(-5px);
+        }
+
+        .marker-container:hover .pulse-ring {
+          animation-duration: 1s;
+        }
+      </style>
+    `
+
+    el.addEventListener('click', () => {
+      setSelectedOrder(order)
+      onOrderClick?.(order)
+    })
+
+    return el
+  }
+
+  // Función para añadir marcadores
+  const addMarkers = () => {
+    console.log(`🗺️ Actualizando mapa con ${orders.length} órdenes`)
+    console.log('📋 Datos de órdenes recibidas:', orders.map(o => ({
+      orderNumber: o.orderNumber,
+      customerAddress: o.customerAddress,
+      latitude: o.latitude,
+      longitude: o.longitude,
+      hasCoordinates: !!(o.latitude && o.longitude)
+    })))
+
+    // Limpiar marcadores existentes
+    markersRef.current.forEach(marker => marker.remove())
+    markersRef.current = []
+
+    // Agregar marcadores para cada orden
+    Promise.all(
+      orders.map(async (order) => {
+        let coordinates: [number, number] | null = null
+
+        // Si tenemos coordenadas guardadas en la base de datos, usarlas directamente
+        if (order.latitude && order.longitude) {
+          coordinates = [order.longitude, order.latitude]
+          console.log(`✅ Usando coordenadas guardadas para orden ${order.orderNumber}: [${order.longitude}, ${order.latitude}]`)
+        } else {
+          // Si no tenemos coordenadas, geocodificar la dirección
+          const address = order.customerAddress || 'Miami, FL'
+          coordinates = await geocodeAddress(address)
+          console.log(`📍 Geocodificando dirección "${address}" para orden ${order.orderNumber}:`, coordinates)
+        }
+
+        if (!coordinates) return null
+
+        console.log(`🗺️ Creando marcador para orden ${order.orderNumber} en coordenadas:`, coordinates)
+
+        const marker = new mapboxgl.Marker({
+          element: createMarkerElement(order),
+          anchor: 'bottom'
+        })
+          .setLngLat(coordinates)
+          .addTo(mapRef.current!)
+
+        console.log(`✅ Marcador creado y añadido para orden ${order.orderNumber}`)
+        console.log(`📍 Posición del marcador:`, marker.getLngLat())
+
+        markersRef.current.push(marker)
+        return { order, coordinates }
+      })
+    ).then((results) => {
+      // Filtrar resultados nulos y ajustar vista para mostrar todos los marcadores
+      const validResults = results.filter(r => r !== null)
+      if (validResults.length > 0 && mapRef.current) {
+        const bounds = new mapboxgl.LngLatBounds()
+        validResults.forEach(result => {
+          if (result?.coordinates) {
+            bounds.extend(result.coordinates)
+          }
+        })
+        mapRef.current.fitBounds(bounds, { padding: 50, maxZoom: 12 })
+      }
+    })
+  }
+
+  // Agregar marcadores para cada orden
+  useEffect(() => {
+    if (!mapRef.current || !orders.length) return
+
+    // Verificar que el mapa esté completamente cargado antes de añadir marcadores
+    if (!mapRef.current.isStyleLoaded()) {
+      console.log('⏳ El mapa no está completamente cargado, esperando...')
+      const checkMapLoaded = setInterval(() => {
+        if (mapRef.current && mapRef.current.isStyleLoaded()) {
+          clearInterval(checkMapLoaded)
+          console.log('✅ Mapa cargado, procediendo a añadir marcadores')
+          addMarkers()
+        }
+      }, 100)
+      return;
+    }
+
+    addMarkers()
+
+    return () => {
+      markersRef.current.forEach(marker => marker.remove())
+      markersRef.current = []
+    }
+  }, [orders, onOrderClick])
+
+  return (
+    <div className="relative w-full h-full">
+      {/* Contenedor del mapa */}
+      <div
+        ref={mapContainerRef}
+        className="w-full h-full rounded-lg overflow-hidden"
+        style={{ minHeight: '70vh', height: '70vh' }}
+      />
+
+      {/* Panel de información de órdenes */}
+      {selectedOrder && (
+        <div className="absolute top-4 left-4 bg-white dark:bg-gray-800 rounded-lg shadow-lg p-4 max-w-sm border border-gray-200 dark:border-gray-700">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="font-semibold text-gray-900 dark:text-white flex items-center gap-2">
+              <Package className="w-4 h-4" />
+              {selectedOrder.orderNumber}
+            </h3>
+            <button
+              onClick={() => setSelectedOrder(null)}
+              className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+            >
+              ×
+            </button>
+          </div>
+
+          <div className="space-y-2 text-sm">
+            <div className="flex items-center gap-2">
+              <User className="w-4 h-4 text-gray-500" />
+              <span className="text-gray-700 dark:text-gray-300">{selectedOrder.customerName}</span>
+            </div>
+
+            <div className="flex items-start gap-2">
+              <MapPin className="w-4 h-4 text-gray-500 mt-0.5" />
+              <span className="text-gray-700 dark:text-gray-300 text-xs">
+                {formatAddress(selectedOrder.customerAddress)}
+              </span>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <Clock className="w-4 h-4 text-gray-500" />
+              <span className="text-gray-700 dark:text-gray-300">
+                {selectedOrder.scheduledDate || 'Sin fecha'} {selectedOrder.timeSlot && `• ${selectedOrder.timeSlot}`}
+              </span>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <Package className="w-4 h-4 text-gray-500" />
+              <span className="text-gray-700 dark:text-gray-300">
+                {selectedOrder.services.join(', ')}
+              </span>
+            </div>
+
+            <div className="flex items-center justify-between pt-2 border-t border-gray-200 dark:border-gray-600">
+              <span className="text-gray-500 dark:text-gray-400">Total:</span>
+              <span className="font-semibold text-gray-900 dark:text-white">
+                ${(selectedOrder.total || 0).toFixed(2)}
+              </span>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Leyenda */}
+      <div className="absolute bottom-4 left-4 bg-white dark:bg-gray-800 rounded-lg shadow-lg p-3 border border-gray-200 dark:border-gray-700">
+        <h4 className="text-xs font-semibold text-gray-700 dark:text-gray-300 mb-2">Estado de entregas - Miami</h4>
+        <div className="space-y-1">
+          <div className="flex items-center gap-2 text-xs">
+            <div className="w-3 h-3 bg-yellow-500 rounded-full"></div>
+            <span className="text-gray-600 dark:text-gray-400">Pendiente</span>
+          </div>
+          <div className="flex items-center gap-2 text-xs">
+            <div className="w-3 h-3 bg-blue-500 rounded-full"></div>
+            <span className="text-gray-600 dark:text-gray-400">En progreso</span>
+          </div>
+          <div className="flex items-center gap-2 text-xs">
+            <div className="w-3 h-3 bg-green-500 rounded-full"></div>
+            <span className="text-gray-600 dark:text-gray-400">Completado</span>
+          </div>
+          <div className="flex items-center gap-2 text-xs">
+            <div className="w-3 h-3 bg-red-500 rounded-full"></div>
+            <span className="text-gray-600 dark:text-gray-400">Cancelado</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Contador de órdenes */}
+      <div className="absolute top-4 right-4 bg-white dark:bg-gray-800 rounded-lg shadow-lg px-3 py-2 border border-gray-200 dark:border-gray-700">
+        <div className="flex items-center gap-2">
+          <Navigation className="w-4 h-4 text-gray-600 dark:text-gray-400" />
+          <span className="text-sm font-medium text-gray-900 dark:text-white">
+            {orders.length} {orders.length === 1 ? 'orden' : 'órdenes'}
+          </span>
+        </div>
+      </div>
+    </div>
+  )
+}

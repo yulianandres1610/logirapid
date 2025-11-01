@@ -1,0 +1,55 @@
+{
+  "vehicles": [
+    {
+      "vin": "TEST1234567890ABC",
+      "license_plate": "XYZ999",
+      "make": "Toyota",
+      "model": "Hilux",
+      "year": 2024,
+      "body_type": "Pickup",
+      "color": "Blanco",
+      "nickname": "Toyota Hilux 2024",
+      "status": "MAINTENANCE",
+      "availability": "UNAVAILABLE",
+      "capacity": {
+        "weight_kg": 375,
+        "volume_m3": 1.5,
+        "empty_boxes": 10,
+        "full_boxes": 5
+      },
+      "photos": [],
+      "insurance_documents": [],
+      "registration_date": "2025-10-31",
+      "id": "vehicle_1761920371394_990b3kzpn",
+      "created_at": "2025-10-31T14:19:31.394Z",
+      "updated_at": "2025-10-31T14:24:19.446Z"
+    },
+    {
+      "vin": "HONDA987654321XYZ",
+      "license_plate": "ABC123",
+      "make": "Honda",
+      "model": "CR-V",
+      "year": 2023,
+      "body_type": "SUV",
+      "color": "Negro",
+      "nickname": "Honda CR-V Reparto",
+      "status": "ACTIVE",
+      "availability": "AVAILABLE",
+      "capacity": {
+        "weight_kg": 500,
+        "volume_m3": 2,
+        "empty_boxes": 8,
+        "full_boxes": 12
+      },
+      "photos": [],
+      "insurance_documents": [],
+      "registration_date": "2025-10-31",
+      "id": "vehicle_1761920385468_uk9150329",
+      "created_at": "2025-10-31T14:19:45.468Z",
+      "updated_at": "2025-10-31T14:19:45.468Z"
+    }
+  ],
+  "drivers": [],
+  "routes": [],
+  "assignments": []
+}

@@ -1,0 +1,6 @@
+{
+  "/_not-found/page": "app/_not-found/page.js",
+  "/api/packages/route": "app/api/packages/route.js",
+  "/dashboard/admin/page": "app/dashboard/admin/page.js",
+  "/dashboard/admin/package-route/page": "app/dashboard/admin/package-route/page.js"
+}

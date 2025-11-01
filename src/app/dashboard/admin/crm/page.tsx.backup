@@ -1,0 +1,2473 @@
+'use client'
+
+import { useState, useEffect } from 'react'
+import { motion, AnimatePresence } from 'framer-motion'
+import {
+  Users,
+  Plus,
+  Search,
+  Filter,
+  Eye,
+  Edit,
+  Trash2,
+  Building2,
+  TrendingUp,
+  Settings,
+  FileText,
+  Check,
+  ChevronRight,
+  ChevronLeft,
+  X,
+  Home,
+  Globe,
+  Phone,
+  MapPin,
+  Mail,
+  Calendar,
+  Activity,
+  Zap,
+  Shield,
+  Star,
+  UserCheck,
+  User,
+  Package,
+  MessageSquare,
+  Clock,
+  AlertCircle,
+  CheckCircle,
+  XCircle,
+  ArrowLeft,
+  DollarSign
+} from 'lucide-react'
+import { cn } from '@/lib/utils'
+import { useTheme } from '@/contexts/theme-context'
+import { DashboardLayout } from '@/components/layout/dashboard-layout'
+import { Button } from '@/components/ui/button'
+
+interface Customer {
+  id: number
+  firstName: string
+  lastName: string
+  phone: string
+  email?: string
+  address?: string
+  city?: string
+  notes?: string
+  createdAt: string
+}
+
+interface Order {
+  id: number
+  customerId: number
+  orderNumber: string
+  packageType: string
+  status: 'pending' | 'in_transit' | 'delivered' | 'cancelled'
+  notes?: string
+  createdAt: string
+  customer?: Customer
+}
+
+interface OrderNote {
+  id: number
+  orderId: number
+  content: string
+  agentId: string
+  createdAt: string
+}
+
+// Customer creation form steps
+const CUSTOMER_STEPS = [
+  { id: 1, title: 'Información Personal', icon: User },
+  { id: 2, title: 'Contacto', icon: Phone },
+  { id: 3, title: 'Ubicación', icon: MapPin },
+  { id: 4, title: 'Notas Adicionales', icon: FileText },
+  { id: 5, title: 'Confirmación', icon: Check }
+]
+
+const PACKAGE_TYPES = [
+  { id: 'documento', name: 'Documento', description: 'Papeles y documentos' },
+  { id: 'paquete_pequeno', name: 'Paquete Pequeño', description: 'Menos de 1kg' },
+  { id: 'paquete_mediano', name: 'Paquete Mediano', description: '1-5kg' },
+  { id: 'paquete_grande', name: 'Paquete Grande', description: 'Más de 5kg' },
+  { id: 'caja', name: 'Caja', description: 'Caja de cualquier tamaño' },
+  { id: 'sobre', name: 'Sobre', description: 'Sobre o carta' }
+]
+
+// Component for Customer Detail View
+function CustomerDetailView({
+  customer,
+  orders,
+  notes,
+  transactions,
+  onClose,
+  theme,
+  loading
+}: {
+  customer: Customer | null
+  orders: Order[]
+  notes: OrderNote[]
+  transactions: any[]
+  onClose: () => void
+  theme: 'dark' | 'light'
+  loading: boolean
+}) {
+  if (!customer) return null
+
+  const formatDate = (dateString: string) => {
+    return new Date(dateString).toLocaleDateString('es-ES', {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    })
+  }
+
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'pending':
+        return theme === 'dark' ? 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30' : 'bg-yellow-100 text-yellow-800 border-yellow-200'
+      case 'in_transit':
+        return theme === 'dark' ? 'bg-blue-500/20 text-blue-400 border-blue-500/30' : 'bg-blue-100 text-blue-800 border-blue-200'
+      case 'delivered':
+        return theme === 'dark' ? 'bg-green-500/20 text-green-400 border-green-500/30' : 'bg-green-100 text-green-800 border-green-200'
+      case 'cancelled':
+        return theme === 'dark' ? 'bg-red-500/20 text-red-400 border-red-500/30' : 'bg-red-100 text-red-800 border-red-200'
+      default:
+        return theme === 'dark' ? 'bg-gray-500/20 text-gray-400 border-gray-500/30' : 'bg-gray-100 text-gray-800 border-gray-200'
+    }
+  }
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, x: 20 }}
+      animate={{ opacity: 1, x: 0 }}
+      exit={{ opacity: 0, x: -20 }}
+      className={cn(
+        "backdrop-blur-sm border rounded-2xl shadow-lg",
+        theme === 'dark' ? "bg-white/5 border-white/10" : "bg-white/90 border-gray-200"
+      )}
+    >
+      {/* Header */}
+      <div className={cn(
+        "p-6 border-b rounded-t-2xl",
+        theme === 'dark' ? "border-gray-800 bg-gray-800/30" : "border-gray-200 bg-gray-50/50"
+      )}>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <Button
+              onClick={onClose}
+              className={cn(
+                "flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all duration-200",
+                theme === 'dark'
+                  ? "bg-gray-700 hover:bg-gray-600 text-gray-300 border border-gray-600"
+                  : "bg-white hover:bg-gray-50 text-gray-700 border border-gray-300 shadow-sm"
+              )}
+            >
+              <ArrowLeft className="w-4 h-4" />
+              Volver al Listado
+            </Button>
+            <div>
+              <h2 className={cn(
+                "text-2xl font-bold",
+                theme === 'dark' ? "text-white" : "text-black"
+              )}>
+                {customer.firstName} {customer.lastName}
+              </h2>
+              <p className={cn(
+                "text-sm",
+                theme === 'dark' ? "text-gray-400" : "text-gray-600"
+              )}>
+                Cliente desde {formatDate(customer.createdAt)}
+              </p>
+            </div>
+          </div>
+
+          {/* Stats Summary */}
+          <div className="flex items-center gap-6">
+            <div className="text-center">
+              <p className={cn(
+                "text-2xl font-bold",
+                theme === 'dark' ? "text-white" : "text-black"
+              )}>{orders.length}</p>
+              <p className={cn(
+                "text-xs",
+                theme === 'dark' ? "text-gray-400" : "text-gray-600"
+              )}>Órdenes</p>
+            </div>
+            <div className="text-center">
+              <p className={cn(
+                "text-2xl font-bold",
+                theme === 'dark' ? "text-white" : "text-black"
+              )}>{notes.length}</p>
+              <p className={cn(
+                "text-xs",
+                theme === 'dark' ? "text-gray-400" : "text-gray-600"
+              )}>Notas</p>
+            </div>
+            <div className="text-center">
+              <p className={cn(
+                "text-2xl font-bold",
+                theme === 'dark' ? "text-white" : "text-black"
+              )}>{transactions.length}</p>
+              <p className={cn(
+                "text-xs",
+                theme === 'dark' ? "text-gray-400" : "text-gray-600"
+              )}>Transacciones</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="p-6">
+        {loading ? (
+          <div className="flex items-center justify-center py-12">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {/* Left Column - Customer Info */}
+            <div className="lg:col-span-1 space-y-6">
+              {/* Customer Information Card */}
+              <div className={cn(
+                "rounded-xl p-6 border",
+                theme === 'dark' ? "bg-gray-800/50 border-gray-700" : "bg-white border-gray-200"
+              )}>
+                <div className="flex items-center gap-4 mb-6">
+                  <div className={cn(
+                    "w-12 h-12 rounded-full flex items-center justify-center",
+                    theme === 'dark' ? "bg-gradient-exa" : "bg-exa-primary"
+                  )}>
+                    <User className="w-6 h-6 text-white" />
+                  </div>
+                  <div>
+                    <h3 className={cn(
+                      "font-semibold",
+                      theme === 'dark' ? "text-white" : "text-black"
+                    )}>
+                      Información Personal
+                    </h3>
+                  </div>
+                </div>
+
+                <div className="space-y-4">
+                  <div className="flex items-center gap-3">
+                    <Phone className={cn(
+                      "w-4 h-4",
+                      theme === 'dark' ? "text-gray-400" : "text-gray-600"
+                    )} />
+                    <div className="flex-1">
+                      <p className={cn(
+                        "text-xs font-medium",
+                        theme === 'dark' ? "text-gray-500" : "text-gray-500"
+                      )}>Teléfono</p>
+                      <p className={cn(
+                        "text-sm",
+                        theme === 'dark' ? "text-white" : "text-black"
+                      )}>{customer.phone}</p>
+                    </div>
+                  </div>
+
+                  {customer.email && (
+                    <div className="flex items-center gap-3">
+                      <Mail className={cn(
+                        "w-4 h-4",
+                        theme === 'dark' ? "text-gray-400" : "text-gray-600"
+                      )} />
+                      <div className="flex-1">
+                        <p className={cn(
+                          "text-xs font-medium",
+                          theme === 'dark' ? "text-gray-500" : "text-gray-500"
+                        )}>Email</p>
+                        <p className={cn(
+                          "text-sm",
+                          theme === 'dark' ? "text-white" : "text-black"
+                        )}>{customer.email}</p>
+                      </div>
+                    </div>
+                  )}
+
+                  {customer.idNumber && (
+                    <div className="flex items-center gap-3">
+                      <UserCheck className={cn(
+                        "w-4 h-4",
+                        theme === 'dark' ? "text-gray-400" : "text-gray-600"
+                      )} />
+                      <div className="flex-1">
+                        <p className={cn(
+                          "text-xs font-medium",
+                          theme === 'dark' ? "text-gray-500" : "text-gray-500"
+                        )}>Número de ID</p>
+                        <p className={cn(
+                          "text-sm",
+                          theme === 'dark' ? "text-white" : "text-black"
+                        )}>{customer.idNumber}</p>
+                      </div>
+                    </div>
+                  )}
+
+                  {customer.idType && (
+                    <div className="flex items-center gap-3">
+                      <FileTextIcon className={cn(
+                        "w-4 h-4",
+                        theme === 'dark' ? "text-gray-400" : "text-gray-600"
+                      )} />
+                      <div className="flex-1">
+                        <p className={cn(
+                          "text-xs font-medium",
+                          theme === 'dark' ? "text-gray-500" : "text-gray-500"
+                        )}>Estado del ID</p>
+                        <p className={cn(
+                          "text-sm",
+                          theme === 'dark' ? "text-white" : "text-black"
+                        )}>{customer.idType}</p>
+                      </div>
+                    </div>
+                  )}
+
+                  {customer.address && (
+                    <div className="flex items-center gap-3">
+                      <Home className={cn(
+                        "w-4 h-4",
+                        theme === 'dark' ? "text-gray-400" : "text-gray-600"
+                      )} />
+                      <div className="flex-1">
+                        <p className={cn(
+                          "text-xs font-medium",
+                          theme === 'dark' ? "text-gray-500" : "text-gray-500"
+                        )}>Dirección</p>
+                        <p className={cn(
+                          "text-sm",
+                          theme === 'dark' ? "text-white" : "text-black"
+                        )}>{customer.address}</p>
+                      </div>
+                    </div>
+                  )}
+
+                  {customer.city && customer.state && (
+                    <div className="flex items-center gap-3">
+                      <MapPin className={cn(
+                        "w-4 h-4",
+                        theme === 'dark' ? "text-gray-400" : "text-gray-600"
+                      )} />
+                      <div className="flex-1">
+                        <p className={cn(
+                          "text-xs font-medium",
+                          theme === 'dark' ? "text-gray-500" : "text-gray-500"
+                        )}>Ubicación</p>
+                        <p className={cn(
+                          "text-sm",
+                          theme === 'dark' ? "text-white" : "text-black"
+                        )}>{customer.city}, {customer.state}</p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Right Column - Activity */}
+            <div className="lg:col-span-2 space-y-6">
+              {/* Tabs */}
+              <div className={cn(
+                "rounded-xl border p-2 flex gap-2",
+                theme === 'dark' ? "bg-gray-800/50 border-gray-700" : "bg-white border-gray-200"
+              )}>
+                <button
+                  className={cn(
+                    "flex-1 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200",
+                    theme === 'dark'
+                      ? "text-gray-400 hover:text-white hover:bg-gray-700"
+                      : "text-gray-600 hover:text-black hover:bg-gray-100"
+                  )}
+                >
+                  <Package className="w-4 h-4 inline mr-2" />
+                  Órdenes ({orders.length})
+                </button>
+                <button
+                  className={cn(
+                    "flex-1 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200",
+                    theme === 'dark'
+                      ? "text-gray-400 hover:text-white hover:bg-gray-700"
+                      : "text-gray-600 hover:text-black hover:bg-gray-100"
+                  )}
+                >
+                  <MessageSquare className="w-4 h-4 inline mr-2" />
+                  Notas ({notes.length})
+                </button>
+                <button
+                  className={cn(
+                    "flex-1 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200",
+                    theme === 'dark'
+                      ? "text-gray-400 hover:text-white hover:bg-gray-700"
+                      : "text-gray-600 hover:text-black hover:bg-gray-100"
+                  )}
+                >
+                  <DollarSign className="w-4 h-4 inline mr-2" />
+                  Transacciones ({transactions.length})
+                </button>
+              </div>
+
+              {/* Orders Section */}
+              <div className={cn(
+                "rounded-xl p-6 border max-h-96 overflow-y-auto",
+                theme === 'dark' ? "bg-gray-800/50 border-gray-700" : "bg-white border-gray-200"
+              )}>
+                <h4 className={cn(
+                  "text-lg font-semibold mb-4 flex items-center gap-2",
+                  theme === 'dark' ? "text-white" : "text-black"
+                )}>
+                  <Package className="w-5 h-5" />
+                  Órdenes Recientes
+                </h4>
+                {orders.length > 0 ? (
+                  <div className="space-y-3">
+                    {orders.slice(0, 5).map((order) => (
+                      <div
+                        key={order.id}
+                        className={cn(
+                          "p-4 rounded-lg border transition-all duration-200 hover:shadow-md",
+                          theme === 'dark' ? "bg-gray-700/50 border-gray-600 hover:border-gray-500" : "bg-gray-50 border-gray-200 hover:border-gray-300"
+                        )}
+                      >
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <p className={cn(
+                              "font-medium",
+                              theme === 'dark' ? "text-white" : "text-black"
+                            )}>
+                              #{order.orderNumber}
+                            </p>
+                            <p className={cn(
+                              "text-sm",
+                              theme === 'dark' ? "text-gray-400" : "text-gray-600"
+                            )}>
+                              {formatDate(order.createdAt)}
+                            </p>
+                          </div>
+                          <div className="flex items-center gap-3">
+                            <span className={cn(
+                              "px-3 py-1 rounded-full text-xs font-medium border",
+                              getStatusColor(order.status)
+                            )}>
+                              {order.status === 'pending' && 'Pendiente'}
+                              {order.status === 'in_transit' && 'En Tránsito'}
+                              {order.status === 'delivered' && 'Entregado'}
+                              {order.status === 'cancelled' && 'Cancelado'}
+                            </span>
+                          </div>
+                        </div>
+                        {order.notes && (
+                          <p className={cn(
+                            "text-sm mt-2 line-clamp-2",
+                            theme === 'dark' ? "text-gray-400" : "text-gray-600"
+                          )}>
+                            {order.notes}
+                          </p>
+                        )}
+                      </div>
+                    ))}
+                    {orders.length > 5 && (
+                      <p className={cn(
+                        "text-center text-sm py-2",
+                        theme === 'dark' ? "text-gray-400" : "text-gray-600"
+                      )}>
+                        Y {orders.length - 5} órdenes más...
+                      </p>
+                    )}
+                  </div>
+                ) : (
+                  <p className={cn(
+                    "text-center py-8",
+                    theme === 'dark' ? "text-gray-400" : "text-gray-600"
+                  )}>
+                    Este cliente no tiene órdenes registradas
+                  </p>
+                )}
+              </div>
+
+              {/* Recent Notes */}
+              <div className={cn(
+                "rounded-xl p-6 border max-h-96 overflow-y-auto",
+                theme === 'dark' ? "bg-gray-800/50 border-gray-700" : "bg-white border-gray-200"
+              )}>
+                <h4 className={cn(
+                  "text-lg font-semibold mb-4 flex items-center gap-2",
+                  theme === 'dark' ? "text-white" : "text-black"
+                )}>
+                  <MessageSquare className="w-5 h-5" />
+                  Notas Recientes del Call Center
+                </h4>
+                {notes.length > 0 ? (
+                  <div className="space-y-3">
+                    {notes.slice(0, 3).map((note) => (
+                      <div
+                        key={note.id}
+                        className={cn(
+                          "p-4 rounded-lg border",
+                          theme === 'dark' ? "bg-gray-700/50 border-gray-600" : "bg-gray-50 border-gray-200"
+                        )}
+                      >
+                        <p className={cn(
+                          "text-sm mb-2",
+                          theme === 'dark' ? "text-gray-300" : "text-gray-700"
+                        )}>
+                          {note.content}
+                        </p>
+                        <div className="flex items-center gap-4">
+                          <p className={cn(
+                            "text-xs",
+                            theme === 'dark' ? "text-gray-500" : "text-gray-500"
+                          )}>
+                            Agente: {note.agentId}
+                          </p>
+                          <p className={cn(
+                            "text-xs",
+                            theme === 'dark' ? "text-gray-500" : "text-gray-500"
+                          )}>
+                            {formatDate(note.createdAt)}
+                          </p>
+                        </div>
+                      </div>
+                    ))}
+                    {notes.length > 3 && (
+                      <p className={cn(
+                        "text-center text-sm py-2",
+                        theme === 'dark' ? "text-gray-400" : "text-gray-600"
+                      )}>
+                        Y {notes.length - 3} notas más...
+                      </p>
+                    )}
+                  </div>
+                ) : (
+                  <p className={cn(
+                    "text-center py-8",
+                    theme === 'dark' ? "text-gray-400" : "text-gray-600"
+                  )}>
+                    No hay notas del call center para este cliente
+                  </p>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    </motion.div>
+  )
+}
+
+export default function CRMPage() {
+  const { theme } = useTheme()
+  const [activeTab, setActiveTab] = useState<'customers' | 'orders'>('customers')
+  const [searchQuery, setSearchQuery] = useState('')
+  const [customers, setCustomers] = useState<Customer[]>([])
+  const [orders, setOrders] = useState<Order[]>([])
+  const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null)
+  const [selectedOrder, setSelectedOrder] = useState<Order | null>(null)
+  const [orderNotes, setOrderNotes] = useState<OrderNote[]>([])
+  const [newNote, setNewNote] = useState('')
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [success, setSuccess] = useState<string | null>(null)
+  const [showCreateCustomerForm, setShowCreateCustomerForm] = useState(false)
+  const [showCreateOrderForm, setShowCreateOrderForm] = useState(false)
+  const [showCustomerDetail, setShowCustomerDetail] = useState(false)
+  const [customerOrders, setCustomerOrders] = useState<Order[]>([])
+  const [customerNotes, setCustomerNotes] = useState<OrderNote[]>([])
+  const [customerTransactions, setCustomerTransactions] = useState<any[]>([])
+
+  // Customer creation form state
+  const [currentCustomerStep, setCurrentCustomerStep] = useState(1)
+  const [customerFormData, setCustomerFormData] = useState<any>({
+    firstName: '',
+    lastName: '',
+    idNumber: '',
+    idType: '',
+    phone: '',
+    email: '',
+    address: '',
+    city: '',
+    state: '',
+    country: '',
+    notes: ''
+  })
+
+  // Order creation form state
+  const [orderFormData, setOrderFormData] = useState({
+    customerId: 0,
+    orderNumber: '',
+    packageType: '',
+    notes: ''
+  })
+
+  useEffect(() => {
+    if (searchQuery) {
+      handleSearch()
+    }
+  }, [searchQuery])
+
+  // Cargar todos los clientes al iniciar la página
+  useEffect(() => {
+    if (activeTab === 'customers' && !searchQuery) {
+      loadAllCustomers()
+    }
+  }, [activeTab])
+
+  const loadAllCustomers = async () => {
+    setLoading(true)
+    setError(null)
+
+    try {
+      const response = await fetch('/api/customers')
+      const data = await response.json()
+
+      if (data.success) {
+        setCustomers(data.data)
+      } else {
+        setError(data.error)
+      }
+    } catch (err) {
+      setError('Error cargando clientes')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleSearch = async () => {
+    if (!searchQuery.trim()) return
+
+    setLoading(true)
+    setError(null)
+
+    try {
+      if (activeTab === 'customers') {
+        // Búsqueda unificada por teléfono, nombre o email
+        const endpoint = `/api/customers?search=${encodeURIComponent(searchQuery)}`
+        const response = await fetch(endpoint)
+        const data = await response.json()
+
+        if (data.success) {
+          setCustomers(data.data)
+        } else {
+          setError(data.error)
+        }
+      } else {
+        // Para órdenes, buscar por número de orden o teléfono de cliente
+        let endpoint = '/api/crm/orders'
+        if (searchQuery.match(/^[A-Z0-9-]+$/i)) {
+          // Si parece un número de orden
+          endpoint += `?orderNumber=${encodeURIComponent(searchQuery)}`
+        } else {
+          // Si parece un teléfono
+          endpoint += `?customerPhone=${encodeURIComponent(searchQuery)}`
+        }
+
+        const response = await fetch(endpoint)
+        const data = await response.json()
+
+        if (data.success) {
+          setOrders(data.data)
+        } else {
+          setError(data.error)
+        }
+      }
+    } catch (err) {
+      setError('Error de conexión. Intente nuevamente.')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const validateCurrentStep = () => {
+    if (currentCustomerStep === 1) {
+      // Validar campos de información personal
+      if (!customerFormData.firstName?.trim()) {
+        setError('El nombre es obligatorio')
+        return false
+      }
+      if (!customerFormData.lastName?.trim()) {
+        setError('El apellido es obligatorio')
+        return false
+      }
+      if (!customerFormData.idNumber?.trim()) {
+        setError('El número de ID es obligatorio')
+        return false
+      }
+      if (!customerFormData.idType?.trim()) {
+        setError('El estado del ID es obligatorio')
+        return false
+      }
+    }
+    return true
+  }
+
+  const handleNextStep = () => {
+    if (!validateCurrentStep()) {
+      return
+    }
+    setError('') // Limpiar error si la validación pasa
+    setCurrentCustomerStep(Math.min(CUSTOMER_STEPS.length, currentCustomerStep + 1))
+  }
+
+  const handleCreateCustomer = async () => {
+    if (!customerFormData.firstName || !customerFormData.lastName || !customerFormData.phone) {
+      setError('Todos los campos requeridos deben ser completados')
+      return
+    }
+
+    setLoading(true)
+    setError(null)
+
+    try {
+      const response = await fetch('/api/crm/customers', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          ...customerFormData,
+          createdBy: 'current_agent'
+        })
+      })
+
+      const data = await response.json()
+
+      if (data.success) {
+        setSuccess('Cliente creado exitosamente')
+        setShowCreateCustomerForm(false)
+        resetCustomerForm()
+        loadAllCustomers()
+      } else {
+        setError(data.error)
+      }
+    } catch (err) {
+      setError('Error creando cliente')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleCreateOrder = async () => {
+    if (!orderFormData.customerId || !orderFormData.orderNumber || !orderFormData.packageType) {
+      setError('Todos los campos requeridos deben ser completados')
+      return
+    }
+
+    setLoading(true)
+    setError(null)
+
+    try {
+      const response = await fetch('/api/crm/orders', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          ...orderFormData,
+          createdBy: 'current_agent',
+          agentId: 'current_agent'
+        })
+      })
+
+      const data = await response.json()
+
+      if (data.success) {
+        setSuccess('Orden creada exitosamente')
+        setShowCreateOrderForm(false)
+        setOrderFormData({
+          customerId: 0,
+          orderNumber: '',
+          packageType: '',
+          notes: ''
+        })
+        handleSearch()
+      } else {
+        setError(data.error)
+      }
+    } catch (err) {
+      setError('Error creando orden')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleAddNote = async () => {
+    if (!selectedOrder || !newNote.trim()) return
+
+    try {
+      const response = await fetch('/api/crm/orders/notes', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          orderId: selectedOrder.id,
+          content: newNote,
+          agentId: 'current_agent'
+        })
+      })
+
+      const data = await response.json()
+
+      if (data.success) {
+        setNewNote('')
+        loadOrderNotes(selectedOrder.id)
+        setSuccess('Nota agregada exitosamente')
+      } else {
+        setError(data.error)
+      }
+    } catch (err) {
+      setError('Error agregando nota')
+    }
+  }
+
+  const loadOrderNotes = async (orderId: number) => {
+    try {
+      const response = await fetch(`/api/crm/orders/notes?orderId=${orderId}`)
+      const data = await response.json()
+
+      if (data.success) {
+        setOrderNotes(data.data)
+      }
+    } catch (err) {
+      console.error('Error loading notes:', err)
+    }
+  }
+
+  const handleSelectCustomer = (customer: Customer) => {
+    setSelectedCustomer(customer)
+    setOrderFormData(prev => ({ ...prev, customerId: customer.id }))
+  }
+
+  const handleViewCustomerDetail = async (customer: Customer) => {
+    setLoading(true)
+    setError(null)
+
+    try {
+      setSelectedCustomer(customer)
+
+      // Cargar órdenes del cliente
+      const ordersResponse = await fetch(`/api/crm/orders?customerId=${customer.id}`)
+      const ordersData = await ordersResponse.json()
+
+      if (ordersData.success) {
+        setCustomerOrders(ordersData.data)
+      }
+
+      // Cargar notas del cliente (agrupadas de todas las órdenes)
+      const allNotes: OrderNote[] = []
+      for (const order of ordersData.data || []) {
+        const notesResponse = await fetch(`/api/crm/orders/notes?orderId=${order.id}`)
+        const notesData = await notesResponse.json()
+        if (notesData.success) {
+          allNotes.push(...notesData.data)
+        }
+      }
+      setCustomerNotes(allNotes)
+
+      // Simular transacciones (esto podría venir de otra tabla)
+      const transactions = ordersData.data?.map((order: Order) => ({
+        id: order.id,
+        type: 'remesa',
+        amount: Math.floor(Math.random() * 500) + 50,
+        status: order.status,
+        date: order.createdAt,
+        orderNumber: order.orderNumber
+      })) || []
+      setCustomerTransactions(transactions)
+
+      setShowCustomerDetail(true)
+    } catch (err) {
+      setError('Error cargando detalles del cliente')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleCloseCustomerDetail = () => {
+    setShowCustomerDetail(false)
+    setSelectedCustomer(null)
+    setCustomerOrders([])
+    setCustomerNotes([])
+    setCustomerTransactions([])
+  }
+
+  const handleSelectOrder = (order: Order) => {
+    setSelectedOrder(order)
+    loadOrderNotes(order.id)
+  }
+
+  const resetCustomerForm = () => {
+    setCustomerFormData({
+      firstName: '',
+      lastName: '',
+      idNumber: '',
+      idType: '',
+      phone: '',
+      email: '',
+      address: '',
+      city: '',
+      state: '',
+      country: '',
+      notes: ''
+    })
+    setCurrentCustomerStep(1)
+  }
+
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'pending': return 'text-yellow-600 dark:text-yellow-400 bg-yellow-50 dark:bg-yellow-900/20'
+      case 'in_transit': return 'text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20'
+      case 'delivered': return 'text-green-600 dark:text-green-400 bg-green-50 dark:bg-green-900/20'
+      case 'cancelled': return 'text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20'
+      default: return 'text-gray-600 dark:text-gray-400 bg-gray-50 dark:bg-gray-900/20'
+    }
+  }
+
+  const getStatusIcon = (status: string) => {
+    switch (status) {
+      case 'pending': return <Clock className="w-4 h-4" />
+      case 'in_transit': return <Package className="w-4 h-4" />
+      case 'delivered': return <CheckCircle className="w-4 h-4" />
+      case 'cancelled': return <XCircle className="w-4 h-4" />
+      default: return <AlertCircle className="w-4 h-4" />
+    }
+  }
+
+  return (
+    <DashboardLayout>
+      <div className="max-w-7xl mx-auto p-6">
+        {/* Header */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="mb-8"
+        >
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h1 className={cn(
+                "text-3xl font-bold mb-2",
+                theme === 'dark' ? "text-white" : "text-black"
+              )}>
+                Sistema CRM
+              </h1>
+              <p className={cn(
+                "text-sm",
+                theme === 'dark' ? "text-gray-400" : "text-gray-600"
+              )}>
+                Gestión de clientes y órdenes del call center
+              </p>
+            </div>
+
+            <div className="flex gap-3">
+              {activeTab === 'customers' ? (
+                <Button
+                  onClick={() => setShowCreateCustomerForm(true)}
+                  className={cn(
+                    "flex items-center gap-2 px-6 py-3 rounded-xl font-medium transition-all duration-300",
+                    theme === 'dark' ? "bg-exa-secondary text-white hover:bg-exa-secondary/90" : "bg-exa-primary text-white hover:bg-exa-primary/90"
+                  )}
+                >
+                  <Plus className="w-5 h-5" />
+                  Nuevo Cliente
+                </Button>
+              ) : (
+                <Button
+                  onClick={() => setShowCreateOrderForm(true)}
+                  className={cn(
+                    "flex items-center gap-2 px-6 py-3 rounded-xl font-medium transition-all duration-300",
+                    theme === 'dark' ? "bg-exa-secondary text-white hover:bg-exa-secondary/90" : "bg-exa-primary text-white hover:bg-exa-primary/90"
+                  )}
+                >
+                  <Plus className="w-5 h-5" />
+                  Nueva Orden
+                </Button>
+              )}
+            </div>
+          </div>
+
+          {/* Stats */}
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ delay: 0.1 }}
+              className={cn(
+                "p-4 rounded-xl border",
+                theme === 'dark' ? "bg-white/5 border-white/10" : "bg-white/90 border-gray-200"
+              )}
+            >
+              <div className="flex items-center gap-3">
+                <div className={cn(
+                  "w-12 h-12 rounded-xl flex items-center justify-center",
+                  theme === 'dark' ? "bg-blue-600/20" : "bg-blue-500/20"
+                )}>
+                  <Users className={cn(
+                    "w-6 h-6",
+                    theme === 'dark' ? "text-blue-400" : "text-blue-600"
+                  )} />
+                </div>
+                <div>
+                  <p className={cn(
+                    "text-2xl font-bold",
+                    theme === 'dark' ? "text-white" : "text-black"
+                  )}>
+                    {customers.length}
+                  </p>
+                  <p className={cn(
+                    "text-xs",
+                    theme === 'dark' ? "text-gray-400" : "text-gray-600"
+                  )}>
+                    Total Clientes
+                  </p>
+                </div>
+              </div>
+            </motion.div>
+
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ delay: 0.2 }}
+              className={cn(
+                "p-4 rounded-xl border",
+                theme === 'dark' ? "bg-white/5 border-white/10" : "bg-white/90 border-gray-200"
+              )}
+            >
+              <div className="flex items-center gap-3">
+                <div className={cn(
+                  "w-12 h-12 rounded-xl flex items-center justify-center",
+                  theme === 'dark' ? "bg-green-500/20" : "bg-green-500/20"
+                )}>
+                  <Package className={cn(
+                    "w-6 h-6",
+                    theme === 'dark' ? "text-green-400" : "text-green-600"
+                  )} />
+                </div>
+                <div>
+                  <p className={cn(
+                    "text-2xl font-bold",
+                    theme === 'dark' ? "text-white" : "text-black"
+                  )}>
+                    {orders.length}
+                  </p>
+                  <p className={cn(
+                    "text-xs",
+                    theme === 'dark' ? "text-gray-400" : "text-gray-600"
+                  )}>
+                    Total Órdenes
+                  </p>
+                </div>
+              </div>
+            </motion.div>
+
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ delay: 0.3 }}
+              className={cn(
+                "p-4 rounded-xl border",
+                theme === 'dark' ? "bg-white/5 border-white/10" : "bg-white/90 border-gray-200"
+              )}
+            >
+              <div className="flex items-center gap-3">
+                <div className={cn(
+                  "w-12 h-12 rounded-xl flex items-center justify-center",
+                  theme === 'dark' ? "bg-yellow-500/20" : "bg-yellow-500/20"
+                )}>
+                  <Clock className={cn(
+                    "w-6 h-6",
+                    theme === 'dark' ? "text-yellow-400" : "text-yellow-600"
+                  )} />
+                </div>
+                <div>
+                  <p className={cn(
+                    "text-2xl font-bold",
+                    theme === 'dark' ? "text-white" : "text-black"
+                  )}>
+                    {orders.filter(o => o.status === 'pending').length}
+                  </p>
+                  <p className={cn(
+                    "text-xs",
+                    theme === 'dark' ? "text-gray-400" : "text-gray-600"
+                  )}>
+                    Pendientes
+                  </p>
+                </div>
+              </div>
+            </motion.div>
+
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ delay: 0.4 }}
+              className={cn(
+                "p-4 rounded-xl border",
+                theme === 'dark' ? "bg-white/5 border-white/10" : "bg-white/90 border-gray-200"
+              )}
+            >
+              <div className="flex items-center gap-3">
+                <div className={cn(
+                  "w-12 h-12 rounded-xl flex items-center justify-center",
+                  theme === 'dark' ? "bg-purple-500/20" : "bg-purple-500/20"
+                )}>
+                  <MessageSquare className={cn(
+                    "w-6 h-6",
+                    theme === 'dark' ? "text-purple-400" : "text-purple-600"
+                  )} />
+                </div>
+                <div>
+                  <p className={cn(
+                    "text-2xl font-bold",
+                    theme === 'dark' ? "text-white" : "text-black"
+                  )}>
+                    {orderNotes.length}
+                  </p>
+                  <p className={cn(
+                    "text-xs",
+                    theme === 'dark' ? "text-gray-400" : "text-gray-600"
+                  )}>
+                    Notas de Agentes
+                  </p>
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        </motion.div>
+
+        {/* Alerts */}
+        {error && (
+          <motion.div
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="mb-6 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg flex items-center space-x-2"
+          >
+            <AlertCircle className="w-5 h-5 text-red-600 dark:text-red-400 flex-shrink-0" />
+            <span className="text-red-800 dark:text-red-200">{error}</span>
+            <button
+              onClick={() => setError(null)}
+              className="ml-auto text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-200"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </motion.div>
+        )}
+
+        {success && (
+          <motion.div
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="mb-6 p-4 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg flex items-center space-x-2"
+          >
+            <CheckCircle className="w-5 h-5 text-green-600 dark:text-green-400 flex-shrink-0" />
+            <span className="text-green-800 dark:text-green-200">{success}</span>
+            <button
+              onClick={() => setSuccess(null)}
+              className="ml-auto text-green-600 hover:text-green-800 dark:text-green-400 dark:hover:text-green-200"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </motion.div>
+        )}
+
+        {/* Tab Navigation */}
+        <div className="mb-6 border-b border-gray-200 dark:border-gray-700">
+          <nav className="flex space-x-8">
+            <button
+              onClick={() => setActiveTab('customers')}
+              className={cn(
+                'py-2 px-1 border-b-2 font-medium text-sm transition-colors',
+                activeTab === 'customers'
+                  ? 'border-blue-500 text-blue-600 dark:text-blue-400'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300'
+              )}
+            >
+              <div className="flex items-center space-x-2">
+                <User className="w-4 h-4" />
+                <span>Clientes</span>
+              </div>
+            </button>
+            <button
+              onClick={() => setActiveTab('orders')}
+              className={cn(
+                'py-2 px-1 border-b-2 font-medium text-sm transition-colors',
+                activeTab === 'orders'
+                  ? 'border-blue-500 text-blue-600 dark:text-blue-400'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300'
+              )}
+            >
+              <div className="flex items-center space-x-2">
+                <Package className="w-4 h-4" />
+                <span>Órdenes</span>
+              </div>
+            </button>
+          </nav>
+        </div>
+
+        {showCustomerDetail ? (
+          /* Customer Detail View - Full Layout */
+          <CustomerDetailView
+            customer={selectedCustomer}
+            orders={customerOrders}
+            notes={customerNotes}
+            transactions={customerTransactions}
+            onClose={handleCloseCustomerDetail}
+            theme={theme}
+            loading={loading}
+          />
+        ) : showCreateCustomerForm ? (
+          /* Customer Creation Form - Full Layout */
+          <motion.div
+            initial={{ opacity: 0, x: 20 }}
+            animate={{ opacity: 1, x: 0 }}
+            className={cn(
+              "backdrop-blur-sm border rounded-2xl shadow-lg",
+              theme === 'dark' ? "bg-white/5 border-white/10" : "bg-white/90 border-gray-200"
+            )}
+          >
+            {/* Form Header */}
+            <div className={cn(
+              "p-6 border-b rounded-t-2xl",
+              theme === 'dark' ? "border-gray-800" : "border-gray-200"
+            )}>
+              <div className="flex items-center justify-between mb-4">
+                <div>
+                  <h2 className={cn(
+                    "text-2xl font-bold mb-2",
+                    theme === 'dark' ? "text-white" : "text-black"
+                  )}>
+                    Nuevo Cliente
+                  </h2>
+                  <p className={cn(
+                    "text-sm",
+                    theme === 'dark' ? "text-gray-400" : "text-gray-600"
+                  )}>
+                    Guía al cliente para recopilar su información
+                  </p>
+                </div>
+
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setShowCreateCustomerForm(false)
+                    resetCustomerForm()
+                  }}
+                  className={cn(
+                    theme === 'dark' ? "border-gray-700 text-gray-300 hover:bg-gray-800" : "border-gray-300 text-gray-700 hover:bg-gray-50"
+                  )}
+                >
+                  <X className="w-4 h-4 mr-2" />
+                  Cancelar
+                </Button>
+              </div>
+
+              {/* Progress Steps */}
+              <div className="mb-8">
+                <div className="flex items-center justify-between">
+                  {CUSTOMER_STEPS.map((step, index) => (
+                    <div key={step.id} className="flex items-center flex-1">
+                      <div className="flex items-center">
+                        <motion.div
+                          className={cn(
+                            "w-10 h-10 rounded-full flex items-center justify-center text-sm font-semibold transition-all duration-300",
+                            currentCustomerStep === step.id
+                              ? theme === 'dark' ? "bg-exa-secondary text-white" : "bg-exa-primary text-white"
+                              : currentCustomerStep > step.id
+                                ? theme === 'dark' ? "bg-green-500 text-white" : "bg-green-500 text-white"
+                                : theme === 'dark' ? "bg-gray-700 text-gray-400" : "bg-gray-200 text-gray-500"
+                          )}
+                          whileHover={{ scale: 1.1 }}
+                        >
+                          {currentCustomerStep > step.id ? (
+                            <Check className="w-5 h-5" />
+                          ) : (
+                            <step.icon className="w-5 h-5" />
+                          )}
+                        </motion.div>
+                        <div className="ml-3 hidden sm:block">
+                          <p className={cn(
+                            "text-xs font-medium",
+                            currentCustomerStep === step.id
+                              ? theme === 'dark' ? "text-white" : "text-black"
+                              : theme === 'dark' ? "text-gray-400" : "text-gray-500"
+                          )}>
+                            {step.title}
+                          </p>
+                        </div>
+                      </div>
+                      {index < CUSTOMER_STEPS.length - 1 && (
+                        <div className={cn(
+                          "flex-1 h-1 mx-4",
+                          currentCustomerStep > step.id
+                            ? theme === 'dark' ? "bg-blue-600" : "bg-blue-500"
+                            : theme === 'dark' ? "bg-gray-700" : "bg-gray-200"
+                        )} />
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* Step Content */}
+            <div className="p-6">
+              <AnimatePresence mode="wait">
+                <motion.div
+                  key={currentCustomerStep}
+                  initial={{ opacity: 0, x: 20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  exit={{ opacity: 0, x: -20 }}
+                  transition={{ duration: 0.3 }}
+                >
+                  {/* Step 1: Personal Information */}
+                  {currentCustomerStep === 1 && (
+                    <div>
+                      <h3 className={cn(
+                        "text-xl font-bold mb-2",
+                        theme === 'dark' ? "text-white" : "text-black"
+                      )}>
+                        Información Personal
+                      </h3>
+                      <p className={cn(
+                        "text-sm mb-6",
+                        theme === 'dark' ? "text-gray-400" : "text-gray-600"
+                      )}>
+                        "Por favor, dígame su nombre completo para poder registrarle en nuestro sistema"
+                      </p>
+
+                      <div className="grid grid-cols-1 gap-6">
+                        <div>
+                          <label className={cn(
+                            "block text-sm font-medium mb-2",
+                            theme === 'dark' ? "text-gray-300" : "text-gray-700"
+                          )}>
+                            Nombre *
+                          </label>
+                          <input
+                            type="text"
+                            value={customerFormData.firstName}
+                            onChange={(e) => setCustomerFormData({...customerFormData, firstName: e.target.value})}
+                            className={cn(
+                              "w-full px-4 py-3 rounded-xl border focus:outline-none focus:ring-2 transition-all duration-300",
+                              theme === 'dark'
+                                ? "bg-gray-800 border-gray-700 text-white focus:border-blue-500 focus:ring-blue-500/20"
+                                : "bg-white border-gray-300 text-black focus:border-blue-500 focus:ring-blue-500/20"
+                            )}
+                            placeholder="Ingrese el primer nombre"
+                          />
+                        </div>
+
+                        <div>
+                          <label className={cn(
+                            "block text-sm font-medium mb-2",
+                            theme === 'dark' ? "text-gray-300" : "text-gray-700"
+                          )}>
+                            Apellido *
+                          </label>
+                          <input
+                            type="text"
+                            value={customerFormData.lastName}
+                            onChange={(e) => setCustomerFormData({...customerFormData, lastName: e.target.value})}
+                            className={cn(
+                              "w-full px-4 py-3 rounded-xl border focus:outline-none focus:ring-2 transition-all duration-300",
+                              theme === 'dark'
+                                ? "bg-gray-800 border-gray-700 text-white focus:border-blue-500 focus:ring-blue-500/20"
+                                : "bg-white border-gray-300 text-black focus:border-blue-500 focus:ring-blue-500/20"
+                            )}
+                            placeholder="Ingrese el apellido"
+                          />
+                        </div>
+
+                        <div>
+                          <label className={cn(
+                            "block text-sm font-medium mb-2",
+                            theme === 'dark' ? "text-gray-300" : "text-gray-700"
+                          )}>
+                            Número de ID *
+                          </label>
+                          <input
+                            type="text"
+                            value={customerFormData.idNumber}
+                            onChange={(e) => setCustomerFormData({...customerFormData, idNumber: e.target.value})}
+                            className={cn(
+                              "w-full px-4 py-3 rounded-xl border focus:outline-none focus:ring-2 transition-all duration-300",
+                              theme === 'dark'
+                                ? "bg-gray-800 border-gray-700 text-white focus:border-blue-500 focus:ring-blue-500/20"
+                                : "bg-white border-gray-300 text-black focus:border-blue-500 focus:ring-blue-500/20"
+                            )}
+                            placeholder="Ingrese el número de identificación"
+                          />
+                        </div>
+
+                        <div>
+                          <label className={cn(
+                            "block text-sm font-medium mb-2",
+                            theme === 'dark' ? "text-gray-300" : "text-gray-700"
+                          )}>
+                            Estado del ID *
+                          </label>
+                          <select
+                            value={customerFormData.idType}
+                            onChange={(e) => setCustomerFormData({...customerFormData, idType: e.target.value})}
+                            className={cn(
+                              "w-full px-4 py-3 rounded-xl border focus:outline-none focus:ring-2 transition-all duration-300",
+                              theme === 'dark'
+                                ? "bg-gray-800 border-gray-700 text-white focus:border-blue-500 focus:ring-blue-500/20"
+                                : "bg-white border-gray-300 text-black focus:border-blue-500 focus:ring-blue-500/20"
+                            )}
+                          >
+                            <option value="">Seleccione el tipo de ID</option>
+                            <option value="Carné de Identidad">Carné de Identidad</option>
+                            <option value="Pasaporte">Pasaporte</option>
+                            <option value="Cédula">Cédula</option>
+                            <option value="Tarjeta de Residencia">Tarjeta de Residencia</option>
+                            <option value="Otro">Otro</option>
+                          </select>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Step 2: Contact */}
+                  {currentCustomerStep === 2 && (
+                    <div>
+                      <h3 className={cn(
+                        "text-xl font-bold mb-2",
+                        theme === 'dark' ? "text-white" : "text-black"
+                      )}>
+                        Información de Contacto
+                      </h3>
+                      <p className={cn(
+                        "text-sm mb-6",
+                        theme === 'dark' ? "text-gray-400" : "text-gray-600"
+                      )}>
+                        "Necesito su número de teléfono para contactarle. ¿También tiene correo electrónico?"
+                      </p>
+
+                      <div className="space-y-6">
+                        <div>
+                          <label className={cn(
+                            "block text-sm font-medium mb-2",
+                            theme === 'dark' ? "text-gray-300" : "text-gray-700"
+                          )}>
+                            Teléfono *
+                          </label>
+                          <input
+                            type="tel"
+                            value={customerFormData.phone}
+                            onChange={(e) => setCustomerFormData({...customerFormData, phone: e.target.value})}
+                            className={cn(
+                              "w-full px-4 py-3 rounded-xl border focus:outline-none focus:ring-2 transition-all duration-300",
+                              theme === 'dark'
+                                ? "bg-gray-800 border-gray-700 text-white focus:border-blue-500 focus:ring-blue-500/20"
+                                : "bg-white border-gray-300 text-black focus:border-blue-500 focus:ring-blue-500/20"
+                            )}
+                            placeholder={
+                              customerFormData.country === 'Cuba'
+                                ? '5xxxxxxxx (8 dígitos)'
+                                : customerFormData.country === 'Estados Unidos'
+                                  ? '(555) 555-5555 (10 dígitos)'
+                                  : '+53 5 12345678'
+                            }
+                            required
+                          />
+                          {customerFormData.country && (
+                            <p className={cn(
+                              "text-xs mt-1",
+                              theme === 'dark' ? "text-gray-400" : "text-gray-500"
+                            )}>
+                              {customerFormData.country === 'Cuba'
+                                ? 'Formato: 5xxxxxxxx (8 dígitos, comienza con 5)'
+                                : customerFormData.country === 'Estados Unidos'
+                                  ? 'Formato: 10 dígitos incluyendo código de área'
+                                  : 'Formato: 8-15 dígitos según país'
+                              }
+                            </p>
+                          )}
+                        </div>
+
+                        <div>
+                          <label className={cn(
+                            "block text-sm font-medium mb-2",
+                            theme === 'dark' ? "text-gray-300" : "text-gray-700"
+                          )}>
+                            Correo Electrónico
+                          </label>
+                          <input
+                            type="email"
+                            value={customerFormData.email}
+                            onChange={(e) => setCustomerFormData({...customerFormData, email: e.target.value})}
+                            className={cn(
+                              "w-full px-4 py-3 rounded-xl border focus:outline-none focus:ring-2 transition-all duration-300",
+                              theme === 'dark'
+                                ? "bg-gray-800 border-gray-700 text-white focus:border-blue-500 focus:ring-blue-500/20"
+                                : "bg-white border-gray-300 text-black focus:border-blue-500 focus:ring-blue-500/20"
+                            )}
+                            placeholder="correo@ejemplo.com"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Step 3: Location */}
+                  {currentCustomerStep === 3 && (
+                    <div>
+                      <h3 className={cn(
+                        "text-xl font-bold mb-2",
+                        theme === 'dark' ? "text-white" : "text-black"
+                      )}>
+                        Ubicación
+                      </h3>
+                      <p className={cn(
+                        "text-sm mb-6",
+                        theme === 'dark' ? "text-gray-400" : "text-gray-600"
+                      )}>
+                        "¿Cuál es su dirección completa para poder entregarle sus paquetes?"
+                      </p>
+
+                      <div className="space-y-6">
+                        <div>
+                          <label className={cn(
+                            "block text-sm font-medium mb-2",
+                            theme === 'dark' ? "text-gray-300" : "text-gray-700"
+                          )}>
+                            País *
+                          </label>
+                          <select
+                            value={customerFormData.country}
+                            onChange={(e) => setCustomerFormData({...customerFormData, country: e.target.value})}
+                            className={cn(
+                              "w-full px-4 py-3 rounded-xl border focus:outline-none focus:ring-2 transition-all duration-300",
+                              theme === 'dark'
+                                ? "bg-gray-800 border-gray-700 text-white focus:border-blue-500 focus:ring-blue-500/20"
+                                : "bg-white border-gray-300 text-black focus:border-blue-500 focus:ring-blue-500/20"
+                            )}
+                            required
+                          >
+                            <option value="">Seleccione un país</option>
+                            <option value="Cuba">Cuba</option>
+                            <option value="Estados Unidos">Estados Unidos</option>
+                            <option value="México">México</option>
+                            <option value="Canadá">Canadá</option>
+                            <option value="España">España</option>
+                            <option value="Otro">Otro</option>
+                          </select>
+                        </div>
+
+                        <div>
+                          <label className={cn(
+                            "block text-sm font-medium mb-2",
+                            theme === 'dark' ? "text-gray-300" : "text-gray-700"
+                          )}>
+                            Estado/Provincia *
+                          </label>
+                          <select
+                            value={customerFormData.state}
+                            onChange={(e) => setCustomerFormData({...customerFormData, state: e.target.value})}
+                            className={cn(
+                              "w-full px-4 py-3 rounded-xl border focus:outline-none focus:ring-2 transition-all duration-300",
+                              theme === 'dark'
+                                ? "bg-gray-800 border-gray-700 text-white focus:border-blue-500 focus:ring-blue-500/20"
+                                : "bg-white border-gray-300 text-black focus:border-blue-500 focus:ring-blue-500/20"
+                            )}
+                            required
+                          >
+                            <option value="">Seleccione estado/provincia</option>
+                            {customerFormData.country === 'Cuba' && (
+                              <>
+                                <option value="La Habana">La Habana</option>
+                                <option value="Artemisa">Artemisa</option>
+                                <option value="Mayabeque">Mayabeque</option>
+                                <option value="Pinar del Río">Pinar del Río</option>
+                                <option value="Villa Clara">Villa Clara</option>
+                                <option value="Cienfuegos">Cienfuegos</option>
+                                <option value="Sancti Spíritus">Sancti Spíritus</option>
+                                <option value="Ciego de Ávila">Ciego de Ávila</option>
+                                <option value="Camagüey">Camagüey</option>
+                                <option value="Las Tunas">Las Tunas</option>
+                                <option value="Holguín">Holguín</option>
+                                <option value="Granma">Granma</option>
+                                <option value="Santiago de Cuba">Santiago de Cuba</option>
+                                <option value="Guantánamo">Guantánamo</option>
+                                <option value="Isla de la Juventud">Isla de la Juventud</option>
+                              </>
+                            )}
+                            {customerFormData.country === 'Estados Unidos' && (
+                              <>
+                                <option value="Florida">Florida</option>
+                                <option value="California">California</option>
+                                <option value="Texas">Texas</option>
+                                <option value="Nueva York">Nueva York</option>
+                                <option value="Nueva Jersey">Nueva Jersey</option>
+                                <option value="Otro">Otro</option>
+                              </>
+                            )}
+                            {(customerFormData.country !== 'Cuba' && customerFormData.country !== 'Estados Unidos' && customerFormData.country) && (
+                              <option value="Otro">Otro</option>
+                            )}
+                          </select>
+                        </div>
+
+                        <div>
+                          <label className={cn(
+                            "block text-sm font-medium mb-2",
+                            theme === 'dark' ? "text-gray-300" : "text-gray-700"
+                          )}>
+                            Ciudad *
+                          </label>
+                          <input
+                            type="text"
+                            value={customerFormData.city}
+                            onChange={(e) => setCustomerFormData({...customerFormData, city: e.target.value})}
+                            className={cn(
+                              "w-full px-4 py-3 rounded-xl border focus:outline-none focus:ring-2 transition-all duration-300",
+                              theme === 'dark'
+                                ? "bg-gray-800 border-gray-700 text-white focus:border-blue-500 focus:ring-blue-500/20"
+                                : "bg-white border-gray-300 text-black focus:border-blue-500 focus:ring-blue-500/20"
+                            )}
+                            placeholder="La Habana"
+                            required
+                          />
+                        </div>
+
+                        <div>
+                          <label className={cn(
+                            "block text-sm font-medium mb-2",
+                            theme === 'dark' ? "text-gray-300" : "text-gray-700"
+                          )}>
+                            Dirección *
+                          </label>
+                          <input
+                            type="text"
+                            value={customerFormData.address}
+                            onChange={(e) => setCustomerFormData({...customerFormData, address: e.target.value})}
+                            className={cn(
+                              "w-full px-4 py-3 rounded-xl border focus:outline-none focus:ring-2 transition-all duration-300",
+                              theme === 'dark'
+                                ? "bg-gray-800 border-gray-700 text-white focus:border-blue-500 focus:ring-blue-500/20"
+                                : "bg-white border-gray-300 text-black focus:border-blue-500 focus:ring-blue-500/20"
+                            )}
+                            placeholder="Calle 23 #456, Vedado"
+                            required
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Step 4: Additional Notes */}
+                  {currentCustomerStep === 4 && (
+                    <div>
+                      <h3 className={cn(
+                        "text-xl font-bold mb-2",
+                        theme === 'dark' ? "text-white" : "text-black"
+                      )}>
+                        Notas Adicionales
+                      </h3>
+                      <p className={cn(
+                        "text-sm mb-6",
+                        theme === 'dark' ? "text-gray-400" : "text-gray-600"
+                      )}>
+                        "¿Hay alguna información adicional que debamos conocer para servirle mejor?"
+                      </p>
+
+                      <div>
+                        <label className={cn(
+                          "block text-sm font-medium mb-2",
+                          theme === 'dark' ? "text-gray-300" : "text-gray-700"
+                        )}>
+                          Notas del Cliente
+                        </label>
+                        <textarea
+                          value={customerFormData.notes}
+                          onChange={(e) => setCustomerFormData({...customerFormData, notes: e.target.value})}
+                          rows={4}
+                          className={cn(
+                            "w-full px-4 py-3 rounded-xl border focus:outline-none focus:ring-2 transition-all duration-300",
+                            theme === 'dark'
+                              ? "bg-gray-800 border-gray-700 text-white focus:border-blue-500 focus:ring-blue-500/20"
+                              : "bg-white border-gray-300 text-black focus:border-blue-500 focus:ring-blue-500/20"
+                          )}
+                          placeholder="Instrucciones especiales, preferencias de contacto, etc."
+                        />
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Step 5: Confirmation */}
+                  {currentCustomerStep === 5 && (
+                    <div>
+                      <h3 className={cn(
+                        "text-xl font-bold mb-2",
+                        theme === 'dark' ? "text-white" : "text-black"
+                      )}>
+                        Confirmación de Datos
+                      </h3>
+                      <p className={cn(
+                        "text-sm mb-6",
+                        theme === 'dark' ? "text-gray-400" : "text-gray-600"
+                      )}>
+                        "Por favor, confirme que todos sus datos son correctos antes de finalizar"
+                      </p>
+
+                      <div className={cn(
+                        "p-6 rounded-xl border space-y-4",
+                        theme === 'dark' ? "bg-gray-800 border-gray-700" : "bg-gray-50 border-gray-200"
+                      )}>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <div>
+                            <h4 className={cn(
+                              "font-semibold mb-2",
+                              theme === 'dark' ? "text-white" : "text-black"
+                            )}>
+                              Información Personal
+                            </h4>
+                            <div className="space-y-2">
+                              <p className={cn(
+                                "text-sm",
+                                theme === 'dark' ? "text-gray-300" : "text-gray-700"
+                              )}>
+                                <span className="font-medium">Nombre:</span> {customerFormData.firstName} {customerFormData.lastName}
+                              </p>
+                              {customerFormData.idNumber && (
+                                <p className={cn(
+                                  "text-sm",
+                                  theme === 'dark' ? "text-gray-300" : "text-gray-700"
+                                )}>
+                                  <span className="font-medium">Número de ID:</span> {customerFormData.idNumber}
+                                </p>
+                              )}
+                              {customerFormData.idType && (
+                                <p className={cn(
+                                  "text-sm",
+                                  theme === 'dark' ? "text-gray-300" : "text-gray-700"
+                                )}>
+                                  <span className="font-medium">Estado del ID:</span> {customerFormData.idType}
+                                </p>
+                              )}
+                            </div>
+                          </div>
+
+                          <div>
+                            <h4 className={cn(
+                              "font-semibold mb-2",
+                              theme === 'dark' ? "text-white" : "text-black"
+                            )}>
+                              Contacto
+                            </h4>
+                            <div className="space-y-2">
+                              <p className={cn(
+                                "text-sm",
+                                theme === 'dark' ? "text-gray-300" : "text-gray-700"
+                              )}>
+                                <span className="font-medium">Teléfono:</span> {customerFormData.phone}
+                              </p>
+                              {customerFormData.email && (
+                                <p className={cn(
+                                  "text-sm",
+                                  theme === 'dark' ? "text-gray-300" : "text-gray-700"
+                                )}>
+                                  <span className="font-medium">Email:</span> {customerFormData.email}
+                                </p>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+
+                        {(customerFormData.address || customerFormData.city || customerFormData.state || customerFormData.country) && (
+                          <div>
+                            <h4 className={cn(
+                              "font-semibold mb-2",
+                              theme === 'dark' ? "text-white" : "text-black"
+                            )}>
+                              Dirección Completa
+                            </h4>
+                            <p className={cn(
+                              "text-sm",
+                              theme === 'dark' ? "text-gray-300" : "text-gray-700"
+                            )}>
+                              {customerFormData.address && `${customerFormData.address}, `}
+                              {customerFormData.city && customerFormData.city}
+                              {customerFormData.state && `, ${customerFormData.state}`}
+                              {customerFormData.country && `, ${customerFormData.country}`}
+                            </p>
+                          </div>
+                        )}
+
+                        {customerFormData.notes && (
+                          <div>
+                            <h4 className={cn(
+                              "font-semibold mb-2",
+                              theme === 'dark' ? "text-white" : "text-black"
+                            )}>
+                              Notas
+                            </h4>
+                            <p className={cn(
+                              "text-sm",
+                              theme === 'dark' ? "text-gray-300" : "text-gray-700"
+                            )}>
+                              {customerFormData.notes}
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </motion.div>
+              </AnimatePresence>
+
+              {/* Navigation Buttons */}
+              <div className="flex justify-between mt-8">
+                <motion.button
+                  onClick={() => setCurrentCustomerStep(Math.max(1, currentCustomerStep - 1))}
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                  disabled={currentCustomerStep === 1}
+                  className={cn(
+                    "flex items-center gap-2 px-6 py-3 rounded-xl font-medium transition-all duration-300",
+                    currentCustomerStep === 1
+                      ? "bg-gray-200 text-gray-400 cursor-not-allowed"
+                      : theme === 'dark'
+                        ? "bg-gray-700 text-white hover:bg-gray-600"
+                        : "bg-gray-200 text-gray-700 hover:bg-gray-300"
+                  )}
+                >
+                  <ChevronLeft className="w-4 h-4" />
+                  Anterior
+                </motion.button>
+
+                {currentCustomerStep === CUSTOMER_STEPS.length ? (
+                  <motion.button
+                    onClick={handleCreateCustomer}
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
+                    disabled={loading}
+                    className={cn(
+                      "flex items-center gap-2 px-6 py-3 rounded-xl font-medium transition-all duration-300",
+                      loading
+                        ? "bg-gray-400 cursor-not-allowed"
+                        : theme === 'dark'
+                          ? "bg-green-500 text-white hover:bg-green-600"
+                          : "bg-green-500 text-white hover:bg-green-600"
+                    )}
+                  >
+                    {loading ? (
+                      <div className={cn(
+                        "w-4 h-4 border-2 border-t-transparent rounded-full animate-spin",
+                        theme === 'dark' ? "border-white" : "border-white"
+                      )} />
+                    ) : (
+                      <Check className="w-4 h-4" />
+                    )}
+                    {loading ? 'Guardando...' : 'Crear Cliente'}
+                  </motion.button>
+                ) : (
+                  <motion.button
+                    onClick={handleNextStep}
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
+                    className={cn(
+                      "flex items-center gap-2 px-6 py-3 rounded-xl font-medium transition-all duration-300",
+                      theme === 'dark'
+                        ? "bg-blue-600 text-white hover:bg-blue-700"
+                        : "bg-blue-500 text-white hover:bg-blue-600"
+                    )}
+                  >
+                    Siguiente
+                    <ChevronRight className="w-4 h-4" />
+                  </motion.button>
+                )}
+              </div>
+            </div>
+          </motion.div>
+        ) : (
+          /* Search and Results View */
+          <>
+            {/* Search Section */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.2 }}
+              className={cn(
+                "backdrop-blur-sm border rounded-2xl p-6 mb-6",
+                theme === 'dark' ? "bg-white/5 border-white/10" : "bg-white/90 border-gray-200"
+              )}
+            >
+              <div className="flex flex-col sm:flex-row gap-4">
+                <div className="relative flex-1">
+                  <Search className={cn(
+                    "absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5",
+                    theme === 'dark' ? "text-gray-400" : "text-gray-500"
+                  )} />
+                  <input
+                    type="text"
+                    placeholder={
+                      activeTab === 'customers'
+                        ? 'Buscar por teléfono, nombre o email...'
+                        : 'Buscar por número de orden o teléfono...'
+                    }
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
+                    className={cn(
+                      "w-full pl-12 pr-4 py-3 rounded-xl border focus:outline-none focus:ring-2 transition-all duration-300",
+                      theme === 'dark'
+                        ? "bg-gray-800/50 border-gray-700 text-white focus:border-blue-500 focus:ring-blue-500/20"
+                        : "bg-white border-gray-300 text-black focus:border-blue-500 focus:ring-blue-500/20"
+                    )}
+                  />
+                </div>
+
+                <button
+                  onClick={handleSearch}
+                  disabled={loading}
+                  className={cn(
+                    "flex items-center gap-2 px-6 py-3 rounded-xl font-medium transition-all duration-300",
+                    loading
+                      ? "bg-gray-400 cursor-not-allowed"
+                      : theme === 'dark'
+                        ? "bg-blue-600 text-white hover:bg-blue-700"
+                        : "bg-blue-500 text-white hover:bg-blue-600"
+                  )}
+                >
+                  {loading ? (
+                    <div className={cn(
+                      "w-5 h-5 border-2 border-t-transparent rounded-full animate-spin",
+                      theme === 'dark' ? "border-white" : "border-white"
+                    )} />
+                  ) : (
+                    <Search className="w-5 h-5" />
+                  )}
+                  <span>Buscar</span>
+                </button>
+              </div>
+            </motion.div>
+
+            {/* Results List - Full Width */}
+            <div className={cn(
+                  "backdrop-blur-sm border rounded-2xl shadow-lg",
+                  theme === 'dark' ? "bg-white/5 border-white/10" : "bg-white/90 border-gray-200"
+                )}>
+                  <div className="p-6 border-b border-gray-200 dark:border-gray-700">
+                    <h2 className={cn(
+                      "text-lg font-semibold",
+                      theme === 'dark' ? "text-white" : "text-black"
+                    )}>
+                      Resultados de {activeTab === 'customers' ? 'Clientes' : 'Órdenes'}
+                    </h2>
+                  </div>
+
+                  <div className="max-h-96 overflow-y-auto">
+                    {loading ? (
+                      <div className="p-8 text-center">
+                        <div className={cn(
+                          "w-8 h-8 border-4 border-t-transparent rounded-full animate-spin mx-auto mb-4",
+                          theme === 'dark' ? "border-blue-400" : "border-blue-600"
+                        )}></div>
+                        <p className={cn(
+                          "text-sm",
+                          theme === 'dark' ? "text-gray-400" : "text-gray-600"
+                        )}>
+                          Buscando...
+                        </p>
+                      </div>
+                    ) : (activeTab === 'customers' ? customers : orders).length === 0 ? (
+                      <div className="p-8 text-center">
+                        <div className="w-16 h-16 bg-gray-100 dark:bg-gray-700 rounded-full flex items-center justify-center mx-auto mb-4">
+                          {activeTab === 'customers' ? (
+                            <User className="w-8 h-8 text-gray-400" />
+                          ) : (
+                            <Package className="w-8 h-8 text-gray-400" />
+                          )}
+                        </div>
+                        <p className={cn(
+                          "text-sm",
+                          theme === 'dark' ? "text-gray-400" : "text-gray-600"
+                        )}>
+                          No se encontraron {activeTab === 'customers' ? 'clientes' : 'órdenes'}
+                        </p>
+                      </div>
+                    ) : (
+                      <div className="divide-y divide-gray-200 dark:divide-gray-700">
+                        {activeTab === 'customers' ? customers.map((customer) => (
+                          <motion.div
+                            key={customer.id}
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            className="p-4 hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer transition-colors"
+                            onClick={() => handleViewCustomerDetail(customer)}
+                          >
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center space-x-3">
+                                <div className={cn(
+                                  "w-10 h-10 rounded-full flex items-center justify-center",
+                                  theme === 'dark' ? "bg-blue-600/20" : "bg-blue-500/20"
+                                )}>
+                                  <User className={cn(
+                                    "w-5 h-5",
+                                    theme === 'dark' ? "text-blue-400" : "text-blue-600"
+                                  )} />
+                                </div>
+                                <div>
+                                  <h3 className={cn(
+                                    "font-medium",
+                                    theme === 'dark' ? "text-white" : "text-black"
+                                  )}>
+                                    {customer.firstName} {customer.lastName}
+                                  </h3>
+                                  <div className="flex items-center space-x-4 text-sm text-gray-500 dark:text-gray-400">
+                                    <span className="flex items-center space-x-1">
+                                      <Phone className="w-3 h-3" />
+                                      <span>{customer.phone}</span>
+                                    </span>
+                                    {customer.email && (
+                                      <span className="flex items-center space-x-1">
+                                        <Mail className="w-3 h-3" />
+                                        <span>{customer.email}</span>
+                                      </span>
+                                    )}
+                                  </div>
+                                  <p className={cn(
+                                    "text-xs mt-1",
+                                    theme === 'dark' ? "text-gray-500" : "text-gray-500"
+                                  )}>
+                                    Click para ver detalles completos
+                                  </p>
+                                </div>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <Eye className={cn(
+                                  "w-4 h-4",
+                                  theme === 'dark' ? "text-gray-400" : "text-gray-500"
+                                )} />
+                                <ChevronRight className="w-5 h-5 text-gray-400" />
+                              </div>
+                            </div>
+                          </motion.div>
+                        )) : orders.map((order) => (
+                          <motion.div
+                            key={order.id}
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            className="p-4 hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer transition-colors"
+                            onClick={() => handleSelectOrder(order)}
+                          >
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center space-x-3">
+                                <div className={cn(
+                                  "w-10 h-10 rounded-full flex items-center justify-center",
+                                  theme === 'dark' ? "bg-green-600/20" : "bg-green-500/20"
+                                )}>
+                                  <Package className={cn(
+                                    "w-5 h-5",
+                                    theme === 'dark' ? "text-green-400" : "text-green-600"
+                                  )} />
+                                </div>
+                                <div>
+                                  <h3 className={cn(
+                                    "font-medium",
+                                    theme === 'dark' ? "text-white" : "text-black"
+                                  )}>
+                                    Orden #{order.orderNumber}
+                                  </h3>
+                                  <div className="flex items-center space-x-4 text-sm text-gray-500 dark:text-gray-400">
+                                    <span>{order.packageType}</span>
+                                    <span className={cn(
+                                      'flex items-center space-x-1 px-2 py-1 rounded-full text-xs font-medium',
+                                      getStatusColor(order.status)
+                                    )}>
+                                      {getStatusIcon(order.status)}
+                                      <span>{order.status.replace('_', ' ')}</span>
+                                    </span>
+                                  </div>
+                                </div>
+                              </div>
+                              <ChevronRight className="w-5 h-5 text-gray-400" />
+                            </div>
+                          </motion.div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </>
+            )}
+        </div>
+
+        {/* Modals */}
+        <div>
+          <AnimatePresence>
+          {selectedOrder && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4"
+              onClick={() => setSelectedOrder(null)}
+            >
+              <motion.div
+                initial={{ scale: 0.95, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                exit={{ scale: 0.95, opacity: 0 }}
+                onClick={(e) => e.stopPropagation()}
+                className={cn(
+                  "w-full max-w-md rounded-2xl p-6",
+                  theme === 'dark' ? "bg-gray-900" : "bg-white"
+                )}
+              >
+                <div className="flex items-center justify-between mb-6">
+                  <h3 className={cn(
+                    "text-xl font-bold",
+                    theme === 'dark' ? "text-white" : "text-black"
+                  )}>
+                    Detalles de Orden
+                  </h3>
+                  <button
+                    onClick={() => setSelectedOrder(null)}
+                    className={cn(
+                      "p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+                    )}
+                  >
+                    <X className={cn(
+                      "w-4 h-4",
+                      theme === 'dark' ? "text-gray-400" : "text-gray-600"
+                    )} />
+                  </button>
+                </div>
+
+                <div className="space-y-4">
+                  <div>
+                    <h4 className={cn(
+                      "font-medium text-lg mb-1",
+                      theme === 'dark' ? "text-white" : "text-black"
+                    )}>
+                      Orden #{selectedOrder.orderNumber}
+                    </h4>
+                    <span className={cn(
+                      'inline-flex items-center space-x-1 px-2 py-1 rounded-full text-sm font-medium',
+                      getStatusColor(selectedOrder.status)
+                    )}>
+                      {getStatusIcon(selectedOrder.status)}
+                      <span>{selectedOrder.status.replace('_', ' ')}</span>
+                    </span>
+                  </div>
+
+                  <div className="space-y-2 text-sm">
+                    <div className="flex justify-between">
+                      <span className={cn(
+                        theme === 'dark' ? "text-gray-400" : "text-gray-600"
+                      )}>
+                        Tipo de Paquete:
+                      </span>
+                      <span className={cn(
+                        theme === 'dark' ? "text-white" : "text-black"
+                      )}>
+                        {selectedOrder.packageType}
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className={cn(
+                        theme === 'dark' ? "text-gray-400" : "text-gray-600"
+                      )}>
+                        Fecha:
+                      </span>
+                      <span className={cn(
+                        theme === 'dark' ? "text-white" : "text-black"
+                      )}>
+                        {new Date(selectedOrder.createdAt).toLocaleDateString()}
+                      </span>
+                    </div>
+                  </div>
+
+                  {selectedOrder.notes && (
+                    <div className="p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
+                      <h5 className={cn(
+                        "font-medium mb-2",
+                        theme === 'dark' ? "text-white" : "text-black"
+                      )}>
+                        Notas:
+                      </h5>
+                      <p className={cn(
+                        "text-sm",
+                        theme === 'dark' ? "text-gray-300" : "text-gray-700"
+                      )}>
+                        {selectedOrder.notes}
+                      </p>
+                    </div>
+                  )}
+
+                  {/* Notes Section */}
+                  <div>
+                    <h5 className={cn(
+                      "font-medium mb-3",
+                      theme === 'dark' ? "text-white" : "text-black"
+                    )}>
+                      Notas del Agente
+                    </h5>
+
+                    <div className="space-y-2 mb-3 max-h-32 overflow-y-auto">
+                      {orderNotes.length === 0 ? (
+                        <p className={cn(
+                          "text-sm text-center py-2",
+                          theme === 'dark' ? "text-gray-400" : "text-gray-600"
+                        )}>
+                          No hay notas registradas
+                        </p>
+                      ) : (
+                        orderNotes.map((note) => (
+                          <div key={note.id} className={cn(
+                            "p-2 rounded text-sm",
+                            theme === 'dark' ? "bg-gray-800" : "bg-gray-100"
+                          )}>
+                            <div className="flex justify-between items-start mb-1">
+                              <span className={cn(
+                                "font-medium text-xs",
+                                theme === 'dark' ? "text-white" : "text-black"
+                              )}>
+                                Agente {note.agentId}
+                              </span>
+                              <span className={cn(
+                                "text-xs",
+                                theme === 'dark' ? "text-gray-400" : "text-gray-600"
+                              )}>
+                                {new Date(note.createdAt).toLocaleDateString()}
+                              </span>
+                            </div>
+                            <p className={cn(
+                              theme === 'dark' ? "text-gray-300" : "text-gray-700"
+                            )}>
+                              {note.content}
+                            </p>
+                          </div>
+                        ))
+                      )}
+                    </div>
+
+                    <div className="flex space-x-2">
+                      <input
+                        type="text"
+                        value={newNote}
+                        onChange={(e) => setNewNote(e.target.value)}
+                        placeholder="Agregar nota..."
+                        className={cn(
+                          "flex-1 px-3 py-2 rounded-lg text-sm focus:outline-none focus:ring-2 transition-all duration-300",
+                          theme === 'dark'
+                            ? "bg-gray-800 border-gray-700 text-white focus:border-blue-500 focus:ring-blue-500/20"
+                            : "bg-white border-gray-300 text-black focus:border-blue-500 focus:ring-blue-500/20"
+                        )}
+                        onKeyPress={(e) => e.key === 'Enter' && handleAddNote()}
+                      />
+                      <button
+                        onClick={handleAddNote}
+                        disabled={!newNote.trim()}
+                        className={cn(
+                          "px-3 py-2 rounded-lg transition-colors",
+                          !newNote.trim()
+                            ? "bg-gray-300 cursor-not-allowed"
+                            : theme === 'dark'
+                              ? "bg-blue-600 text-white hover:bg-blue-700"
+                              : "bg-blue-500 text-white hover:bg-blue-600"
+                        )}
+                      >
+                        <MessageSquare className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+  
+        {/* Order Creation Form Modal */}
+        <AnimatePresence>
+          {showCreateOrderForm && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4"
+              onClick={() => setShowCreateOrderForm(false)}
+            >
+              <motion.div
+                initial={{ scale: 0.95, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                exit={{ scale: 0.95, opacity: 0 }}
+                onClick={(e) => e.stopPropagation()}
+                className={cn(
+                  "w-full max-w-md rounded-2xl p-6",
+                  theme === 'dark' ? "bg-gray-900" : "bg-white"
+                )}
+              >
+                <div className="flex items-center justify-between mb-4">
+                  <h2 className={cn(
+                    "text-xl font-bold",
+                    theme === 'dark' ? "text-white" : "text-black"
+                  )}>
+                    Nueva Orden
+                  </h2>
+                  <button
+                    onClick={() => setShowCreateOrderForm(false)}
+                    className={cn(
+                      "p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+                    )}
+                  >
+                    <X className={cn(
+                      "w-4 h-4",
+                      theme === 'dark' ? "text-gray-400" : "text-gray-600"
+                    )} />
+                  </button>
+                </div>
+
+                <div className="space-y-4">
+                  <div>
+                    <label className={cn(
+                      "block text-sm font-medium mb-2",
+                      theme === 'dark' ? "text-gray-300" : "text-gray-700"
+                    )}>
+                      Cliente *
+                    </label>
+                    <select
+                      value={orderFormData.customerId}
+                      onChange={(e) => setOrderFormData(prev => ({ ...prev, customerId: parseInt(e.target.value) }))}
+                      className={cn(
+                        "w-full px-4 py-3 rounded-xl border focus:outline-none focus:ring-2 transition-all duration-300",
+                        theme === 'dark'
+                          ? "bg-gray-800 border-gray-700 text-white focus:border-blue-500 focus:ring-blue-500/20"
+                          : "bg-white border-gray-300 text-black focus:border-blue-500 focus:ring-blue-500/20"
+                      )}
+                      required
+                    >
+                      <option value="">Seleccionar cliente</option>
+                      {customers.map((customer) => (
+                        <option key={customer.id} value={customer.id}>
+                          {customer.firstName} {customer.lastName} - {customer.phone}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className={cn(
+                      "block text-sm font-medium mb-2",
+                      theme === 'dark' ? "text-gray-300" : "text-gray-700"
+                    )}>
+                      Número de Orden *
+                    </label>
+                    <input
+                      type="text"
+                      value={orderFormData.orderNumber}
+                      onChange={(e) => setOrderFormData(prev => ({ ...prev, orderNumber: e.target.value }))}
+                      className={cn(
+                        "w-full px-4 py-3 rounded-xl border focus:outline-none focus:ring-2 transition-all duration-300",
+                        theme === 'dark'
+                          ? "bg-gray-800 border-gray-700 text-white focus:border-blue-500 focus:ring-blue-500/20"
+                          : "bg-white border-gray-300 text-black focus:border-blue-500 focus:ring-blue-500/20"
+                      )}
+                      required
+                    />
+                  </div>
+
+                  <div>
+                    <label className={cn(
+                      "block text-sm font-medium mb-2",
+                      theme === 'dark' ? "text-gray-300" : "text-gray-700"
+                    )}>
+                      Tipo de Paquete *
+                    </label>
+                    <div className="space-y-2">
+                      {PACKAGE_TYPES.map((type) => (
+                        <button
+                          key={type.id}
+                          onClick={() => setOrderFormData(prev => ({ ...prev, packageType: type.id }))}
+                          className={cn(
+                            "w-full p-3 rounded-xl border text-left transition-all duration-300",
+                            orderFormData.packageType === type.id
+                              ? theme === 'dark' ? "border-blue-500 bg-blue-500/20" : "border-blue-500 bg-blue-50"
+                              : theme === 'dark' ? "border-gray-700 bg-gray-800" : "border-gray-200 bg-white"
+                          )}
+                        >
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <h4 className={cn(
+                                "font-medium",
+                                theme === 'dark' ? "text-white" : "text-black"
+                              )}>
+                                {type.name}
+                              </h4>
+                              <p className={cn(
+                                "text-xs",
+                                theme === 'dark' ? "text-gray-400" : "text-gray-600"
+                              )}>
+                                {type.description}
+                              </p>
+                            </div>
+                            {orderFormData.packageType === type.id && (
+                              <div className={cn(
+                                "w-5 h-5 rounded-full flex items-center justify-center",
+                                theme === 'dark' ? "bg-blue-500" : "bg-blue-500"
+                              )}>
+                                <Check className="w-3 h-3 text-white" />
+                              </div>
+                            )}
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className={cn(
+                      "block text-sm font-medium mb-2",
+                      theme === 'dark' ? "text-gray-300" : "text-gray-700"
+                    )}>
+                      Notas
+                    </label>
+                    <textarea
+                      value={orderFormData.notes}
+                      onChange={(e) => setOrderFormData(prev => ({ ...prev, notes: e.target.value }))}
+                      rows={3}
+                      className={cn(
+                        "w-full px-4 py-3 rounded-xl border focus:outline-none focus:ring-2 transition-all duration-300",
+                        theme === 'dark'
+                          ? "bg-gray-800 border-gray-700 text-white focus:border-blue-500 focus:ring-blue-500/20"
+                          : "bg-white border-gray-300 text-black focus:border-blue-500 focus:ring-blue-500/20"
+                      )}
+                    />
+                  </div>
+                </div>
+
+                <div className="flex justify-end space-x-3 mt-6">
+                  <button
+                    onClick={() => setShowCreateOrderForm(false)}
+                    className={cn(
+                      "px-4 py-2 rounded-xl font-medium transition-colors",
+                      theme === 'dark' ? "bg-gray-700 text-gray-300 hover:bg-gray-600" : "bg-gray-200 text-gray-700 hover:bg-gray-300"
+                    )}
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    onClick={handleCreateOrder}
+                    disabled={loading}
+                    className={cn(
+                      "px-4 py-2 rounded-xl font-medium transition-all duration-300",
+                      loading
+                        ? "bg-gray-400 cursor-not-allowed"
+                        : theme === 'dark'
+                          ? "bg-green-500 text-white hover:bg-green-600"
+                          : "bg-green-500 text-white hover:bg-green-600"
+                    )}
+                  >
+                    {loading ? 'Guardando...' : 'Crear Orden'}
+                  </button>
+                </div>
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
+    </DashboardLayout>
+  )
+}

@@ -1,0 +1,48 @@
+[
+  {
+    "vin": "23FEDWRE34534EFFW",
+    "make": "Unknown",
+    "model": "Unknown",
+    "model_year": 2025,
+    "body_type": "Unknown",
+    "color": "Unknown",
+    "nickname": "Unknown Unknown 2025",
+    "photo_url": "https://via.placeholder.com/400x300?text=Unknown+Unknown",
+    "status": "ACTIVE",
+    "availability": "AVAILABLE",
+    "capacity": {
+      "empty_boxes": 0,
+      "full_boxes": 0
+    },
+    "vin_data": {
+      "vin": "23FEDWRE34534EFFW",
+      "make": "Unknown",
+      "model": "Unknown",
+      "model_year": 2025,
+      "body_type": "Unknown",
+      "color": "Unknown",
+      "drivetrain": "",
+      "engine": "",
+      "transmission": "",
+      "fuel_type": "",
+      "doors": 4,
+      "cylinders": 0,
+      "displacement": 0,
+      "manufacturer": "",
+      "plant": "",
+      "series": "",
+      "trim": "",
+      "vehicle_type": "sedan",
+      "gvwr": "",
+      "photo_urls": []
+    },
+    "mileage": 0,
+    "insurance_expiry": null,
+    "oil_change_frequency": 5000,
+    "next_oil_change": null,
+    "can_collect_durable": false,
+    "id": "vehicle_1761951732691_2db380g8d",
+    "created_at": "2025-10-31T23:02:12.691Z",
+    "updated_at": "2025-10-31T23:02:12.691Z"
+  }
+]
