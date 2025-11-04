@@ -39,7 +39,6 @@ import {
   PurchaseOrder,
   getAllPurchaseOrders,
   createPurchaseOrder,
-  updatePurchaseOrder,
   receivePurchaseOrder
 } from '@/lib/package-types'
 import { PurchaseOrderInvoice } from '@/components/purchase-order-invoice'

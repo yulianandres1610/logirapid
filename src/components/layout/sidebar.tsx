@@ -245,7 +245,7 @@ export function Sidebar({ isCollapsed, onToggle }: SidebarProps) {
 
   // Auto-expand submenu based on current path
   useEffect(() => {
-    if (pathname.includes('/package-orders') ||
+    if (pathname.includes('/purchase-orders') ||
         pathname.includes('/orders') ||
         pathname.includes('/warehouses') ||
         pathname.includes('/vehicles') ||

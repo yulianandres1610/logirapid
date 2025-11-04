@@ -172,6 +172,24 @@ export async function createPurchaseOrder(orderData: Omit<PurchaseOrder, 'id' | 
   }
 }
 
+export async function updatePurchaseOrder(id: string, updates: Partial<PurchaseOrder>): Promise<PurchaseOrder | null> {
+  try {
+    const response = await fetch(`/api/packages?type=order&id=${id}`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(updates),
+    });
+
+    if (!response.ok) throw new Error('Failed to update order');
+    return await response.json();
+  } catch (error) {
+    console.error('Error updating order:', error);
+    return null;
+  }
+}
+
 export async function createShipment(shipmentData: Omit<Shipment, 'id' | 'created_at' | 'updated_at'>): Promise<Shipment | null> {
   try {
     const response = await fetch('/api/packages?type=shipment', {

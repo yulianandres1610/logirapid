@@ -5,154 +5,119 @@ import {
   deletePackageOrder
 } from '@/lib/database'
 
-// Get a single package order by ID
+// GET: Obtener una orden específica por ID
 export async function GET(
   request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
+  { params }: { params: { id: string } }
 ) {
   try {
-    const { id: idParam } = await params
-    const id = parseInt(idParam)
-
+    const id = parseInt(params.id)
     if (isNaN(id)) {
-      return NextResponse.json(
-        { error: 'Invalid order ID' },
-        { status: 400 }
-      )
+      return NextResponse.json({
+        success: false,
+        error: 'ID de orden inválido'
+      }, { status: 400 })
     }
 
     const order = getPackageOrderById(id)
-
     if (!order) {
-      return NextResponse.json(
-        { error: 'Package order not found' },
-        { status: 404 }
-      )
+      return NextResponse.json({
+        success: false,
+        error: 'Orden no encontrada'
+      }, { status: 404 })
     }
 
     return NextResponse.json({
       success: true,
       data: order
     })
+
   } catch (error) {
-    console.error('Error fetching package order:', error)
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    )
+    console.error('Error getting package order:', error)
+    return NextResponse.json({
+      success: false,
+      error: 'Error al obtener orden de paquetería'
+    }, { status: 500 })
   }
 }
 
-// Update a package order
+// PUT: Actualizar una orden específica por ID
 export async function PUT(
   request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
+  { params }: { params: { id: string } }
 ) {
   try {
-    const { id: idParam } = await params
-    const id = parseInt(idParam)
-
+    const id = parseInt(params.id)
     if (isNaN(id)) {
-      return NextResponse.json(
-        { error: 'Invalid order ID' },
-        { status: 400 }
-      )
+      return NextResponse.json({
+        success: false,
+        error: 'ID de orden inválido'
+      }, { status: 400 })
     }
 
     const body = await request.json()
-    const { status, scheduledDate, timeSlot, notes, services } = body
 
-    // Validate required fields
-    if (status && !['pending', 'scheduled', 'picked_up', 'delivered', 'cancelled'].includes(status)) {
-      return NextResponse.json(
-        { error: 'Invalid status' },
-        { status: 400 }
-      )
+    // Handle additionalServices if it's an array
+    if (body.additionalServices && Array.isArray(body.additionalServices)) {
+      body.additionalServices = JSON.stringify(body.additionalServices)
     }
 
-    const updatedOrder = updatePackageOrder(id, {
-      status,
-      scheduledDate,
-      timeSlot,
-      notes,
-      services
-    })
+    const updatedOrder = updatePackageOrder(id, body)
 
-    if (!updatedOrder) {
-      return NextResponse.json(
-        { error: 'Package order not found' },
-        { status: 404 }
-      )
+    if (!updatedOrder || updatedOrder.changes === 0) {
+      return NextResponse.json({
+        success: false,
+        error: 'No se encontró la orden o no hay cambios'
+      }, { status: 404 })
     }
 
     return NextResponse.json({
       success: true,
-      data: updatedOrder
+      message: 'Orden de paquetería actualizada exitosamente'
     })
+
   } catch (error) {
     console.error('Error updating package order:', error)
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    )
+    return NextResponse.json({
+      success: false,
+      error: 'Error al actualizar orden de paquetería'
+    }, { status: 500 })
   }
 }
 
-// Delete a package order
+// DELETE: Eliminar una orden específica por ID
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
+  { params }: { params: { id: string } }
 ) {
   try {
-    const { id: idParam } = await params
-    const id = parseInt(idParam)
-
+    const id = parseInt(params.id)
     if (isNaN(id)) {
-      return NextResponse.json(
-        { error: 'Invalid order ID' },
-        { status: 400 }
-      )
+      return NextResponse.json({
+        success: false,
+        error: 'ID de orden inválido'
+      }, { status: 400 })
     }
 
-    // Check if order exists and get its details
-    const order = getPackageOrderById(id)
-    if (!order) {
-      return NextResponse.json(
-        { error: 'Package order not found' },
-        { status: 404 }
-      )
-    }
+    const deletedOrder = deletePackageOrder(id)
 
-    // Only allow deletion of pending orders
-    if (order.status !== 'pending') {
-      return NextResponse.json(
-        { error: 'Solo se pueden eliminar órdenes en estado pendiente' },
-        { status: 400 }
-      )
-    }
-
-    // Attempt to delete the order
-    const deleted = deletePackageOrder(id)
-
-    if (!deleted) {
-      return NextResponse.json(
-        { error: 'No se pudo eliminar la orden' },
-        { status: 500 }
-      )
+    if (!deletedOrder || deletedOrder.changes === 0) {
+      return NextResponse.json({
+        success: false,
+        error: 'No se encontró la orden'
+      }, { status: 404 })
     }
 
     return NextResponse.json({
       success: true,
-      message: 'Orden eliminada exitosamente'
+      message: 'Orden de paquetería eliminada exitosamente'
     })
+
   } catch (error) {
     console.error('Error deleting package order:', error)
-    return NextResponse.json(
-      {
-        error: 'Error interno del servidor',
-        details: error instanceof Error ? error.message : 'Error desconocido'
-      },
-      { status: 500 }
-    )
+    return NextResponse.json({
+      success: false,
+      error: 'Error al eliminar orden de paquetería'
+    }, { status: 500 })
   }
 }
