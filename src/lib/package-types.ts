@@ -154,6 +154,24 @@ export async function createPrice(priceData: Omit<PackagePrice, 'id' | 'final_pr
   }
 }
 
+export async function updatePrice(id: string, updates: Partial<PackagePrice>): Promise<PackagePrice | null> {
+  try {
+    const response = await fetch(`/api/packages?type=price&id=${id}`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(updates),
+    });
+
+    if (!response.ok) throw new Error('Failed to update price');
+    return await response.json();
+  } catch (error) {
+    console.error('Error updating price:', error);
+    return null;
+  }
+}
+
 export async function createPurchaseOrder(orderData: Omit<PurchaseOrder, 'id' | 'order_number' | 'total_amount' | 'created_at' | 'updated_at'>): Promise<PurchaseOrder | null> {
   try {
     const response = await fetch('/api/packages?type=order', {

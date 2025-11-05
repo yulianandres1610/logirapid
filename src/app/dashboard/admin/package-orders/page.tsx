@@ -1235,7 +1235,8 @@ export default function PackageOrdersPage() {
                     onViewChange={setActiveView}
                     counts={{
                       table: orders.length,
-                      map: allOrders.length
+                      map: allOrders.length,
+                      statistics: allOrders.length
                     }}
                     theme={theme}
                     compact={true}

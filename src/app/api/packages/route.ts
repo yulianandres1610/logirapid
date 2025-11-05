@@ -20,6 +20,7 @@ export interface Box {
   status: 'AVAILABLE' | 'IN_USE' | 'MAINTENANCE' | 'DAMAGED' | 'DISPOSED';
   current_location?: string;
   current_route_id?: string;
+  purchase_order_id?: string;
   created_at: string;
   updated_at: string;
 }
@@ -109,14 +110,37 @@ export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
     const type = searchParams.get('type');
+    const page = parseInt(searchParams.get('page') || '1');
+    const limit = parseInt(searchParams.get('limit') || '20');
 
     const db = readPackageDatabase();
 
     switch (type) {
-      case 'boxes':
-        return NextResponse.json(db.boxes.sort((a: Box, b: Box) =>
+      case 'boxes': {
+        const sortedBoxes = db.boxes.sort((a: Box, b: Box) =>
           new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-        ));
+        );
+
+        // Apply pagination
+        const startIndex = (page - 1) * limit;
+        const endIndex = startIndex + limit;
+        const paginatedBoxes = sortedBoxes.slice(startIndex, endIndex);
+
+        // Convert to format expected by frontend
+        const formattedBoxes = paginatedBoxes.map((box: Box) => ({
+          ...box,
+          hasBarcode: !!box.barcode,
+          qrCode: box.barcode || ''
+        }));
+
+        return NextResponse.json({
+          boxes: formattedBoxes,
+          page,
+          limit,
+          total: sortedBoxes.length,
+          totalPages: Math.ceil(sortedBoxes.length / limit)
+        });
+      }
       case 'prices':
         return NextResponse.json(db.prices.sort((a: PackagePrice, b: PackagePrice) =>
           new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
@@ -150,6 +174,50 @@ export async function POST(request: NextRequest) {
     const db = readPackageDatabase();
 
     switch (type) {
+      case 'boxes': {
+        // Creación masiva de cajas
+        const { boxes: newBoxes, batch } = body;
+
+        console.log('API DEBUG: First box current_location:', newBoxes?.[0]?.current_location);
+        console.log('API DEBUG: Warehouses count:', newBoxes?.length);
+
+        if (!newBoxes || !Array.isArray(newBoxes)) {
+          return NextResponse.json(
+            { error: 'boxes array is required' },
+            { status: 400 }
+          );
+        }
+
+        const createdBoxes: Box[] = [];
+
+        for (const newBox of newBoxes) {
+          console.log('Procesando caja:', newBox); // Debug
+          const dimensions = calculateBoxSize(newBox.size);
+          const box: Box = {
+            id: `box_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+            barcode: newBox.barcode,
+            size: newBox.size,
+            dimensions,
+            cost: newBox.cost,
+            supplier: newBox.supplier,
+            status: 'AVAILABLE',
+            current_location: newBox.current_location, // Agregar ubicación del almacén
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString()
+          };
+
+          console.log('Caja creada:', box); // Debug
+          db.boxes.push(box);
+          createdBoxes.push(box);
+        }
+
+        writePackageDatabase(db);
+        return NextResponse.json({
+          success: true,
+          created_boxes: createdBoxes,
+          message: `${createdBoxes.length} cajas creadas exitosamente`
+        });
+      }
       case 'box': {
         const barcode = `PKG${Date.now()}${Math.random().toString(36).substr(2, 9).toUpperCase()}`;
         const newBox: Box = {

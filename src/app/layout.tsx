@@ -1,4 +1,5 @@
 import './globals.css'
+import '@/styles/brand-colors.css'
 import type { Metadata } from 'next'
 import { Inter } from 'next/font/google'
 import { AuthProvider } from '@/components/providers/auth-provider'

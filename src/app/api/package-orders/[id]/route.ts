@@ -8,10 +8,11 @@ import {
 // GET: Obtener una orden específica por ID
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const id = parseInt(params.id)
+    const resolvedParams = await params
+    const id = parseInt(resolvedParams.id)
     if (isNaN(id)) {
       return NextResponse.json({
         success: false,
@@ -44,10 +45,11 @@ export async function GET(
 // PUT: Actualizar una orden específica por ID
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const id = parseInt(params.id)
+    const resolvedParams = await params
+    const id = parseInt(resolvedParams.id)
     if (isNaN(id)) {
       return NextResponse.json({
         success: false,
@@ -64,7 +66,7 @@ export async function PUT(
 
     const updatedOrder = updatePackageOrder(id, body)
 
-    if (!updatedOrder || updatedOrder.changes === 0) {
+    if (!updatedOrder) {
       return NextResponse.json({
         success: false,
         error: 'No se encontró la orden o no hay cambios'
@@ -88,10 +90,11 @@ export async function PUT(
 // DELETE: Eliminar una orden específica por ID
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const id = parseInt(params.id)
+    const resolvedParams = await params
+    const id = parseInt(resolvedParams.id)
     if (isNaN(id)) {
       return NextResponse.json({
         success: false,
@@ -101,7 +104,7 @@ export async function DELETE(
 
     const deletedOrder = deletePackageOrder(id)
 
-    if (!deletedOrder || deletedOrder.changes === 0) {
+    if (!deletedOrder) {
       return NextResponse.json({
         success: false,
         error: 'No se encontró la orden'

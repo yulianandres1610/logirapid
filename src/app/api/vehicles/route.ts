@@ -59,10 +59,10 @@ export async function GET(request: NextRequest) {
       if (vehicle.capacity && (vehicle.capacity.weight_lbs || vehicle.capacity.weight_kg)) {
         // Old format with weight/volume - use as is
         capacity = vehicle.capacity;
-      } else if (vehicle.capacity && (vehicle.capacity.empty_boxes !== undefined || vehicle.capacity.full_boxes !== undefined)) {
+      } else if (vehicle.capacity && ('empty_boxes' in vehicle.capacity || 'full_boxes' in vehicle.capacity)) {
         // New format with boxes - convert to weight/volume for display compatibility
-        const emptyBoxes = vehicle.capacity.empty_boxes || 0;
-        const fullBoxes = vehicle.capacity.full_boxes || 0;
+        const emptyBoxes = (vehicle.capacity as any).empty_boxes || 0;
+        const fullBoxes = (vehicle.capacity as any).full_boxes || 0;
         const totalBoxes = emptyBoxes + fullBoxes;
 
         // Convert boxes to estimated weight/volume (assuming average box: 25 lbs, 1.5 ft³)

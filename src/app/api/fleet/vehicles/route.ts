@@ -158,7 +158,9 @@ export async function POST(request: NextRequest) {
       },
       photos,
       insurance_documents,
-      registration_date: new Date().toISOString().split('T')[0]
+      registration_date: new Date().toISOString().split('T')[0],
+      can_collect_durable: true,
+      last_updated: new Date().toISOString()
     };
 
     const vehicle = createVehicle(vehicleData);

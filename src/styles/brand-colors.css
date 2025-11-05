@@ -1,0 +1,29 @@
+/* Colores de marca LogiRapid */
+:root {
+  /* Colores principales */
+  --brand-red: #cc0a46;
+  --brand-red-hover: #a50837;
+  --brand-red-light: #e61e5c;
+
+  /* Azules de marca */
+  --brand-blue: #2a5caa;
+  --brand-blue-hover: #1e4387;
+  --brand-blue-light: #3d6fc4;
+
+  /* Gradientes de marca */
+  --gradient-brand-red: linear-gradient(135deg, #cc0a46 0%, #a50837 100%);
+  --gradient-brand-blue: linear-gradient(135deg, #2a5caa 0%, #1e4387 100%);
+
+  /* Colores secundarios */
+  --brand-gray: #6b7280;
+  --brand-gray-light: #9ca3af;
+  --brand-gray-dark: #4b5563;
+}
+
+/* Para tema oscuro */
+.dark {
+  --brand-red: #e61e5c;
+  --brand-red-hover: #cc0a46;
+  --brand-blue: #3d6fc4;
+  --brand-blue-hover: #2a5caa;
+}
