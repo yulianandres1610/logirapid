@@ -21,6 +21,7 @@
     "@types/bcryptjs": "^2.4.6",
     "@types/mapbox-gl": "^3.4.1",
     "@types/qrcode": "^1.5.6",
+    "@types/sqlite3": "^3.1.11",
     "bcryptjs": "^3.0.2",
     "better-sqlite3": "^12.4.1",
     "class-variance-authority": "^0.7.1",
@@ -39,6 +40,8 @@
     "react-hook-form": "^7.48.0",
     "react-hot-toast": "^2.6.0",
     "recharts": "^2.15.4",
+    "sqlite": "^5.1.1",
+    "sqlite3": "^5.1.7",
     "tailwind-merge": "^2.0.0",
     "zod": "^3.22.0",
     "zustand": "^4.4.0"

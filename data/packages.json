@@ -1,25 +1,8 @@
 {
   "boxes": [
     {
-      "id": "box_1698793200000_abc123",
-      "barcode": "PKG1698793200000ABC123DEF",
-      "size": "pequeño",
-      "dimensions": {
-        "length": 30,
-        "width": 20,
-        "height": 15,
-        "weight_capacity": 5
-      },
-      "cost": 12.5,
-      "supplier": "Packaging Solutions Inc.",
-      "status": "AVAILABLE",
-      "current_location": "Almacén Principal",
-      "created_at": "2023-10-31T18:00:00.000Z",
-      "updated_at": "2023-10-31T18:00:00.000Z"
-    },
-    {
-      "id": "box_1698793300000_def456",
-      "barcode": "PKG1698793300000DEF456GHI",
+      "id": "box_1762302503897_l6uo5dh58",
+      "barcode": "PKG1762302503425ZLJ6M7CHM",
       "size": "mediano",
       "dimensions": {
         "length": 40,
@@ -27,158 +10,5098 @@
         "height": 20,
         "weight_capacity": 10
       },
-      "cost": 18.75,
-      "supplier": "Packaging Solutions Inc.",
+      "cost": 0,
+      "supplier": "LogiRapid",
       "status": "AVAILABLE",
-      "current_location": "Almacén Principal",
-      "created_at": "2023-10-31T18:05:00.000Z",
-      "updated_at": "2023-10-31T18:05:00.000Z"
+      "current_location": "Almacén ID: 2",
+      "created_at": "2025-11-05T00:28:23.897Z",
+      "updated_at": "2025-11-05T00:28:23.897Z"
     },
     {
-      "id": "box_1698793400000_ghi789",
-      "barcode": "PKG1698793400000GHI789JKL",
-      "size": "grande",
-      "dimensions": {
-        "length": 50,
-        "width": 40,
-        "height": 30,
-        "weight_capacity": 20
-      },
-      "cost": 25,
-      "supplier": "Box Master Corp.",
-      "status": "IN_USE",
-      "current_location": "Ruta 001",
-      "current_route_id": "route_001",
-      "created_at": "2023-10-31T18:10:00.000Z",
-      "updated_at": "2023-10-31T18:15:00.000Z"
-    }
-  ],
-  "prices": [
-    {
-      "id": "price_1698793200000_abc123",
-      "size": "pequeño",
-      "base_price": 10,
-      "supplier_margin": 5,
-      "final_price": 15,
-      "supplier": "Packaging Solutions Inc.",
-      "effective_date": "2023-10-01",
-      "created_at": "2023-10-31T18:00:00.000Z",
-      "updated_at": "2023-10-31T18:00:00.000Z"
-    },
-    {
-      "id": "price_1698793300000_def456",
+      "id": "box_1762302503897_7x6lt9dv8",
+      "barcode": "PKG1762302503425W47V2NX23",
       "size": "mediano",
-      "base_price": 15,
-      "supplier_margin": 7.5,
-      "final_price": 22.5,
-      "supplier": "Packaging Solutions Inc.",
-      "effective_date": "2023-10-01",
-      "created_at": "2023-10-31T18:05:00.000Z",
-      "updated_at": "2023-10-31T18:05:00.000Z"
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Almacén ID: 2",
+      "created_at": "2025-11-05T00:28:23.897Z",
+      "updated_at": "2025-11-05T00:28:23.897Z"
     },
     {
-      "id": "price_1698793400000_ghi789",
-      "size": "grande",
-      "base_price": 20,
-      "supplier_margin": 10,
-      "final_price": 30,
-      "supplier": "Box Master Corp.",
-      "effective_date": "2023-10-01",
-      "created_at": "2023-10-31T18:10:00.000Z",
-      "updated_at": "2023-10-31T18:10:00.000Z"
+      "id": "box_1762302503897_5kvbbohzg",
+      "barcode": "PKG176230250342566BN7S3AH",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Almacén ID: 2",
+      "created_at": "2025-11-05T00:28:23.897Z",
+      "updated_at": "2025-11-05T00:28:23.897Z"
+    },
+    {
+      "id": "box_1762302503897_l60x6jpsn",
+      "barcode": "PKG1762302503425Y7VLPV24U",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Almacén ID: 2",
+      "created_at": "2025-11-05T00:28:23.897Z",
+      "updated_at": "2025-11-05T00:28:23.897Z"
+    },
+    {
+      "id": "box_1762302503897_wc3nv7gr9",
+      "barcode": "PKG1762302503425YNZM99X6U",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Almacén ID: 2",
+      "created_at": "2025-11-05T00:28:23.897Z",
+      "updated_at": "2025-11-05T00:28:23.897Z"
+    },
+    {
+      "id": "box_1762302503897_pqf2q64r0",
+      "barcode": "PKG17623025034254SXC02JVY",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Almacén ID: 2",
+      "created_at": "2025-11-05T00:28:23.897Z",
+      "updated_at": "2025-11-05T00:28:23.897Z"
+    },
+    {
+      "id": "box_1762302503897_5vv26jn61",
+      "barcode": "PKG17623025034252VSDUZGIO",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Almacén ID: 2",
+      "created_at": "2025-11-05T00:28:23.897Z",
+      "updated_at": "2025-11-05T00:28:23.897Z"
+    },
+    {
+      "id": "box_1762302503897_qrvsk7inl",
+      "barcode": "PKG1762302503425RTQTO3GZT",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Almacén ID: 2",
+      "created_at": "2025-11-05T00:28:23.897Z",
+      "updated_at": "2025-11-05T00:28:23.897Z"
+    },
+    {
+      "id": "box_1762302503898_98rz73cp5",
+      "barcode": "PKG1762302503425BG0EQYDA8",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Almacén ID: 2",
+      "created_at": "2025-11-05T00:28:23.898Z",
+      "updated_at": "2025-11-05T00:28:23.898Z"
+    },
+    {
+      "id": "box_1762302503898_kw8c1ielo",
+      "barcode": "PKG176230250342557WP7JSK8",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Almacén ID: 2",
+      "created_at": "2025-11-05T00:28:23.898Z",
+      "updated_at": "2025-11-05T00:28:23.898Z"
+    },
+    {
+      "id": "box_1762302503898_aipeaf4n1",
+      "barcode": "PKG1762302503425U29VPU38X",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Almacén ID: 2",
+      "created_at": "2025-11-05T00:28:23.898Z",
+      "updated_at": "2025-11-05T00:28:23.898Z"
+    },
+    {
+      "id": "box_1762302503898_6gphjnxnh",
+      "barcode": "PKG1762302503425ZHIFDV7DK",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Almacén ID: 2",
+      "created_at": "2025-11-05T00:28:23.898Z",
+      "updated_at": "2025-11-05T00:28:23.898Z"
+    },
+    {
+      "id": "box_1762302503898_4hvlwz6n4",
+      "barcode": "PKG1762302503425HYF2R7ROE",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Almacén ID: 2",
+      "created_at": "2025-11-05T00:28:23.898Z",
+      "updated_at": "2025-11-05T00:28:23.898Z"
+    },
+    {
+      "id": "box_1762302503898_xwpcouxby",
+      "barcode": "PKG1762302503425YN9BG1IGT",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Almacén ID: 2",
+      "created_at": "2025-11-05T00:28:23.898Z",
+      "updated_at": "2025-11-05T00:28:23.898Z"
+    },
+    {
+      "id": "box_1762302503898_8pdlfrpn5",
+      "barcode": "PKG17623025034253ZIKAQ1X6",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Almacén ID: 2",
+      "created_at": "2025-11-05T00:28:23.898Z",
+      "updated_at": "2025-11-05T00:28:23.898Z"
+    },
+    {
+      "id": "box_1762302503898_zycdf354b",
+      "barcode": "PKG1762302503425L3GHM99N0",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Almacén ID: 2",
+      "created_at": "2025-11-05T00:28:23.898Z",
+      "updated_at": "2025-11-05T00:28:23.898Z"
+    },
+    {
+      "id": "box_1762302503898_v0y0akw14",
+      "barcode": "PKG17623025034251F32KMQ07",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Almacén ID: 2",
+      "created_at": "2025-11-05T00:28:23.898Z",
+      "updated_at": "2025-11-05T00:28:23.898Z"
+    },
+    {
+      "id": "box_1762302503898_699zpfu0c",
+      "barcode": "PKG1762302503425L6W45DJN0",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Almacén ID: 2",
+      "created_at": "2025-11-05T00:28:23.898Z",
+      "updated_at": "2025-11-05T00:28:23.898Z"
+    },
+    {
+      "id": "box_1762302503898_qj7k47yh8",
+      "barcode": "PKG1762302503425Y0UAGYA3V",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Almacén ID: 2",
+      "created_at": "2025-11-05T00:28:23.898Z",
+      "updated_at": "2025-11-05T00:28:23.898Z"
+    },
+    {
+      "id": "box_1762302503898_8w7kzxlz2",
+      "barcode": "PKG17623025034253PXF9J7R8",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Almacén ID: 2",
+      "created_at": "2025-11-05T00:28:23.898Z",
+      "updated_at": "2025-11-05T00:28:23.898Z"
+    },
+    {
+      "id": "box_1762302503898_ruhftbord",
+      "barcode": "PKG17623025034256NOMI8RCX",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Almacén ID: 2",
+      "created_at": "2025-11-05T00:28:23.898Z",
+      "updated_at": "2025-11-05T00:28:23.898Z"
+    },
+    {
+      "id": "box_1762302503898_ouu19fqxa",
+      "barcode": "PKG1762302503425ZCL4QK2GO",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Almacén ID: 2",
+      "created_at": "2025-11-05T00:28:23.898Z",
+      "updated_at": "2025-11-05T00:28:23.898Z"
+    },
+    {
+      "id": "box_1762302503898_zglu5s81y",
+      "barcode": "PKG1762302503425WBBWIG54O",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Almacén ID: 2",
+      "created_at": "2025-11-05T00:28:23.898Z",
+      "updated_at": "2025-11-05T00:28:23.898Z"
+    },
+    {
+      "id": "box_1762302503898_vuz6pen1e",
+      "barcode": "PKG17623025034256U642HWH0",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Almacén ID: 2",
+      "created_at": "2025-11-05T00:28:23.898Z",
+      "updated_at": "2025-11-05T00:28:23.898Z"
+    },
+    {
+      "id": "box_1762302503898_p6hze3sd6",
+      "barcode": "PKG1762302503425PCXPJH4JS",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Almacén ID: 2",
+      "created_at": "2025-11-05T00:28:23.898Z",
+      "updated_at": "2025-11-05T00:28:23.898Z"
+    },
+    {
+      "id": "box_1762302503898_p7d03c3lr",
+      "barcode": "PKG1762302503425Y5MZAF7SQ",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Almacén ID: 2",
+      "created_at": "2025-11-05T00:28:23.898Z",
+      "updated_at": "2025-11-05T00:28:23.898Z"
+    },
+    {
+      "id": "box_1762302503898_gsbp1vkte",
+      "barcode": "PKG17623025034257EG35U2IF",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Almacén ID: 2",
+      "created_at": "2025-11-05T00:28:23.898Z",
+      "updated_at": "2025-11-05T00:28:23.898Z"
+    },
+    {
+      "id": "box_1762302503898_gpzdoajtd",
+      "barcode": "PKG1762302503425W3ZORSJ4N",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Almacén ID: 2",
+      "created_at": "2025-11-05T00:28:23.898Z",
+      "updated_at": "2025-11-05T00:28:23.898Z"
+    },
+    {
+      "id": "box_1762302503899_1kr4d6mlh",
+      "barcode": "PKG176230250342505QBTQG94",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Almacén ID: 2",
+      "created_at": "2025-11-05T00:28:23.899Z",
+      "updated_at": "2025-11-05T00:28:23.899Z"
+    },
+    {
+      "id": "box_1762302503899_umlqu37ig",
+      "barcode": "PKG1762302503425SDBD6AHC4",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Almacén ID: 2",
+      "created_at": "2025-11-05T00:28:23.899Z",
+      "updated_at": "2025-11-05T00:28:23.899Z"
+    },
+    {
+      "id": "box_1762302503899_3zt9dk3ni",
+      "barcode": "PKG1762302503425UNDT26ME5",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Almacén ID: 2",
+      "created_at": "2025-11-05T00:28:23.899Z",
+      "updated_at": "2025-11-05T00:28:23.899Z"
+    },
+    {
+      "id": "box_1762302503899_l9rq0gd1i",
+      "barcode": "PKG1762302503425YWKNJU8U2",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Almacén ID: 2",
+      "created_at": "2025-11-05T00:28:23.899Z",
+      "updated_at": "2025-11-05T00:28:23.899Z"
+    },
+    {
+      "id": "box_1762302503899_e0wcltt6m",
+      "barcode": "PKG17623025034257KPEFQM9I",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Almacén ID: 2",
+      "created_at": "2025-11-05T00:28:23.899Z",
+      "updated_at": "2025-11-05T00:28:23.899Z"
+    },
+    {
+      "id": "box_1762302503899_2xmwzj96b",
+      "barcode": "PKG17623025034253QK7GKQ93",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Almacén ID: 2",
+      "created_at": "2025-11-05T00:28:23.899Z",
+      "updated_at": "2025-11-05T00:28:23.899Z"
+    },
+    {
+      "id": "box_1762302503899_krxfuim6p",
+      "barcode": "PKG1762302503425Z6RTN7FSS",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Almacén ID: 2",
+      "created_at": "2025-11-05T00:28:23.899Z",
+      "updated_at": "2025-11-05T00:28:23.899Z"
+    },
+    {
+      "id": "box_1762302503899_mu2kvh8b6",
+      "barcode": "PKG1762302503425B0SBJ42IB",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Almacén ID: 2",
+      "created_at": "2025-11-05T00:28:23.899Z",
+      "updated_at": "2025-11-05T00:28:23.899Z"
+    },
+    {
+      "id": "box_1762302503899_ut3t70o19",
+      "barcode": "PKG17623025034251CDO9LD2J",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Almacén ID: 2",
+      "created_at": "2025-11-05T00:28:23.899Z",
+      "updated_at": "2025-11-05T00:28:23.899Z"
+    },
+    {
+      "id": "box_1762302503899_g2jooqfr1",
+      "barcode": "PKG1762302503425ZP4Q23IFN",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Almacén ID: 2",
+      "created_at": "2025-11-05T00:28:23.899Z",
+      "updated_at": "2025-11-05T00:28:23.899Z"
+    },
+    {
+      "id": "box_1762302503899_hgzozbzgc",
+      "barcode": "PKG17623025034252XM4JZOSP",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Almacén ID: 2",
+      "created_at": "2025-11-05T00:28:23.899Z",
+      "updated_at": "2025-11-05T00:28:23.899Z"
+    },
+    {
+      "id": "box_1762302503899_7ael0h2jx",
+      "barcode": "PKG1762302503425FWU6UPX0U",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Almacén ID: 2",
+      "created_at": "2025-11-05T00:28:23.899Z",
+      "updated_at": "2025-11-05T00:28:23.899Z"
+    },
+    {
+      "id": "box_1762302503899_7e1crrfph",
+      "barcode": "PKG1762302503425WX0GOGHIC",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Almacén ID: 2",
+      "created_at": "2025-11-05T00:28:23.899Z",
+      "updated_at": "2025-11-05T00:28:23.899Z"
+    },
+    {
+      "id": "box_1762302503899_fjqm2hy2e",
+      "barcode": "PKG1762302503425EJ5CP57MS",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Almacén ID: 2",
+      "created_at": "2025-11-05T00:28:23.899Z",
+      "updated_at": "2025-11-05T00:28:23.899Z"
+    },
+    {
+      "id": "box_1762302503899_4jgmtz71c",
+      "barcode": "PKG1762302503425XD6YW6C9J",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Almacén ID: 2",
+      "created_at": "2025-11-05T00:28:23.899Z",
+      "updated_at": "2025-11-05T00:28:23.899Z"
+    },
+    {
+      "id": "box_1762302503899_eruputlo0",
+      "barcode": "PKG1762302503425TZ93UKGBT",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Almacén ID: 2",
+      "created_at": "2025-11-05T00:28:23.899Z",
+      "updated_at": "2025-11-05T00:28:23.899Z"
+    },
+    {
+      "id": "box_1762302503899_7v1w8tmas",
+      "barcode": "PKG176230250342589E3PHSNH",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Almacén ID: 2",
+      "created_at": "2025-11-05T00:28:23.899Z",
+      "updated_at": "2025-11-05T00:28:23.899Z"
+    },
+    {
+      "id": "box_1762302503899_t93luw38a",
+      "barcode": "PKG17623025034254NIF7UJYG",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Almacén ID: 2",
+      "created_at": "2025-11-05T00:28:23.899Z",
+      "updated_at": "2025-11-05T00:28:23.899Z"
+    },
+    {
+      "id": "box_1762302503899_mx7watcyb",
+      "barcode": "PKG1762302503425M6WH2ZCYT",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Almacén ID: 2",
+      "created_at": "2025-11-05T00:28:23.899Z",
+      "updated_at": "2025-11-05T00:28:23.899Z"
+    },
+    {
+      "id": "box_1762302503899_absiayk8p",
+      "barcode": "PKG1762302503425I6N5YIZG7",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Almacén ID: 2",
+      "created_at": "2025-11-05T00:28:23.899Z",
+      "updated_at": "2025-11-05T00:28:23.899Z"
+    },
+    {
+      "id": "box_1762302503899_b3rfo738v",
+      "barcode": "PKG1762302503425MOXE9W1MF",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Almacén ID: 2",
+      "created_at": "2025-11-05T00:28:23.899Z",
+      "updated_at": "2025-11-05T00:28:23.899Z"
+    },
+    {
+      "id": "box_1762302503899_qm7fl0858",
+      "barcode": "PKG1762302503425RE1AW70FK",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Almacén ID: 2",
+      "created_at": "2025-11-05T00:28:23.899Z",
+      "updated_at": "2025-11-05T00:28:23.899Z"
+    },
+    {
+      "id": "box_1762302503899_6532c2hin",
+      "barcode": "PKG1762302503425KVK0KBI44",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Almacén ID: 2",
+      "created_at": "2025-11-05T00:28:23.899Z",
+      "updated_at": "2025-11-05T00:28:23.899Z"
+    },
+    {
+      "id": "box_1762302503899_ge2wwxru2",
+      "barcode": "PKG1762302503425M3MYD59H8",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Almacén ID: 2",
+      "created_at": "2025-11-05T00:28:23.899Z",
+      "updated_at": "2025-11-05T00:28:23.899Z"
+    },
+    {
+      "id": "box_1762302503899_o59q102mc",
+      "barcode": "PKG1762302503425YX1Z275UL",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Almacén ID: 2",
+      "created_at": "2025-11-05T00:28:23.899Z",
+      "updated_at": "2025-11-05T00:28:23.899Z"
+    },
+    {
+      "id": "box_1762302503899_zgqtoju1r",
+      "barcode": "PKG17623025034254DHWII47Y",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Almacén ID: 2",
+      "created_at": "2025-11-05T00:28:23.899Z",
+      "updated_at": "2025-11-05T00:28:23.899Z"
+    },
+    {
+      "id": "box_1762302503899_xj9vnd2cv",
+      "barcode": "PKG1762302503425TQMF77X75",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Almacén ID: 2",
+      "created_at": "2025-11-05T00:28:23.899Z",
+      "updated_at": "2025-11-05T00:28:23.899Z"
+    },
+    {
+      "id": "box_1762302503899_pqh5h2b2e",
+      "barcode": "PKG1762302503425YOT2GODDB",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Almacén ID: 2",
+      "created_at": "2025-11-05T00:28:23.899Z",
+      "updated_at": "2025-11-05T00:28:23.899Z"
+    },
+    {
+      "id": "box_1762302503899_gzhfum9hc",
+      "barcode": "PKG17623025034254HJ35PT8H",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Almacén ID: 2",
+      "created_at": "2025-11-05T00:28:23.899Z",
+      "updated_at": "2025-11-05T00:28:23.899Z"
+    },
+    {
+      "id": "box_1762302503899_7e619eh4q",
+      "barcode": "PKG1762302503425X2DG7DER8",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Almacén ID: 2",
+      "created_at": "2025-11-05T00:28:23.899Z",
+      "updated_at": "2025-11-05T00:28:23.899Z"
+    },
+    {
+      "id": "box_1762302503899_beer4p88j",
+      "barcode": "PKG17623025034256AB7RWM0P",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Almacén ID: 2",
+      "created_at": "2025-11-05T00:28:23.899Z",
+      "updated_at": "2025-11-05T00:28:23.899Z"
+    },
+    {
+      "id": "box_1762302503899_4o1zwl1vt",
+      "barcode": "PKG1762302503425GLGKV3G0S",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Almacén ID: 2",
+      "created_at": "2025-11-05T00:28:23.899Z",
+      "updated_at": "2025-11-05T00:28:23.899Z"
+    },
+    {
+      "id": "box_1762302503899_415kntmq6",
+      "barcode": "PKG17623025034256K1XJBYLB",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Almacén ID: 2",
+      "created_at": "2025-11-05T00:28:23.899Z",
+      "updated_at": "2025-11-05T00:28:23.899Z"
+    },
+    {
+      "id": "box_1762302503899_a17uhy1b8",
+      "barcode": "PKG17623025034252L2W473K2",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Almacén ID: 2",
+      "created_at": "2025-11-05T00:28:23.899Z",
+      "updated_at": "2025-11-05T00:28:23.899Z"
+    },
+    {
+      "id": "box_1762302503900_xtbo4q6bo",
+      "barcode": "PKG17623025034255KJSDC7EY",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Almacén ID: 2",
+      "created_at": "2025-11-05T00:28:23.900Z",
+      "updated_at": "2025-11-05T00:28:23.900Z"
+    },
+    {
+      "id": "box_1762302503900_lbmtp4gnd",
+      "barcode": "PKG17623025034251O6ZFOTGQ",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Almacén ID: 2",
+      "created_at": "2025-11-05T00:28:23.900Z",
+      "updated_at": "2025-11-05T00:28:23.900Z"
+    },
+    {
+      "id": "box_1762302503900_41y88ij8r",
+      "barcode": "PKG1762302503425U0GMJB2YH",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Almacén ID: 2",
+      "created_at": "2025-11-05T00:28:23.900Z",
+      "updated_at": "2025-11-05T00:28:23.900Z"
+    },
+    {
+      "id": "box_1762302503900_ons6bpogi",
+      "barcode": "PKG17623025034252O9MOE27E",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Almacén ID: 2",
+      "created_at": "2025-11-05T00:28:23.900Z",
+      "updated_at": "2025-11-05T00:28:23.900Z"
+    },
+    {
+      "id": "box_1762302503900_fi7pqbbxu",
+      "barcode": "PKG1762302503425KB2KW8GO0",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Almacén ID: 2",
+      "created_at": "2025-11-05T00:28:23.900Z",
+      "updated_at": "2025-11-05T00:28:23.900Z"
+    },
+    {
+      "id": "box_1762302503900_vbwj43a3t",
+      "barcode": "PKG17623025034253TH3VC176",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Almacén ID: 2",
+      "created_at": "2025-11-05T00:28:23.900Z",
+      "updated_at": "2025-11-05T00:28:23.900Z"
+    },
+    {
+      "id": "box_1762302503900_waae0loxo",
+      "barcode": "PKG1762302503425A640PHVPS",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Almacén ID: 2",
+      "created_at": "2025-11-05T00:28:23.900Z",
+      "updated_at": "2025-11-05T00:28:23.900Z"
+    },
+    {
+      "id": "box_1762302503900_2hbfsi8lf",
+      "barcode": "PKG1762302503425SOVPBCX9P",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Almacén ID: 2",
+      "created_at": "2025-11-05T00:28:23.900Z",
+      "updated_at": "2025-11-05T00:28:23.900Z"
+    },
+    {
+      "id": "box_1762302503900_3f4fk25sv",
+      "barcode": "PKG1762302503425O1UDNYJP1",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Almacén ID: 2",
+      "created_at": "2025-11-05T00:28:23.900Z",
+      "updated_at": "2025-11-05T00:28:23.900Z"
+    },
+    {
+      "id": "box_1762302503900_pqd5fz2r2",
+      "barcode": "PKG1762302503425O6UMPF0ES",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Almacén ID: 2",
+      "created_at": "2025-11-05T00:28:23.900Z",
+      "updated_at": "2025-11-05T00:28:23.900Z"
+    },
+    {
+      "id": "box_1762302503900_ra0kbs187",
+      "barcode": "PKG176230250342553KFCPS1K",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Almacén ID: 2",
+      "created_at": "2025-11-05T00:28:23.900Z",
+      "updated_at": "2025-11-05T00:28:23.900Z"
+    },
+    {
+      "id": "box_1762302503900_1rgzvip9l",
+      "barcode": "PKG1762302503425DSBIO1RKL",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Almacén ID: 2",
+      "created_at": "2025-11-05T00:28:23.900Z",
+      "updated_at": "2025-11-05T00:28:23.900Z"
+    },
+    {
+      "id": "box_1762302503900_fz4k0y8g8",
+      "barcode": "PKG1762302503425AR42V1U7A",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Almacén ID: 2",
+      "created_at": "2025-11-05T00:28:23.900Z",
+      "updated_at": "2025-11-05T00:28:23.900Z"
+    },
+    {
+      "id": "box_1762302503900_0jlvk5zg0",
+      "barcode": "PKG1762302503425NOGMZ0XDS",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Almacén ID: 2",
+      "created_at": "2025-11-05T00:28:23.900Z",
+      "updated_at": "2025-11-05T00:28:23.900Z"
+    },
+    {
+      "id": "box_1762302503900_o5hr4s2t3",
+      "barcode": "PKG17623025034259F5TOXWZL",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Almacén ID: 2",
+      "created_at": "2025-11-05T00:28:23.900Z",
+      "updated_at": "2025-11-05T00:28:23.900Z"
+    },
+    {
+      "id": "box_1762302503900_1bedt7dlt",
+      "barcode": "PKG1762302503425FL50JBFTP",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Almacén ID: 2",
+      "created_at": "2025-11-05T00:28:23.900Z",
+      "updated_at": "2025-11-05T00:28:23.900Z"
+    },
+    {
+      "id": "box_1762302503900_06sxvfy9i",
+      "barcode": "PKG17623025034259V2SICON6",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Almacén ID: 2",
+      "created_at": "2025-11-05T00:28:23.900Z",
+      "updated_at": "2025-11-05T00:28:23.900Z"
+    },
+    {
+      "id": "box_1762302503900_g9k1mdn4z",
+      "barcode": "PKG17623025034257YOXH97HU",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Almacén ID: 2",
+      "created_at": "2025-11-05T00:28:23.900Z",
+      "updated_at": "2025-11-05T00:28:23.900Z"
+    },
+    {
+      "id": "box_1762302503900_otlqk35vc",
+      "barcode": "PKG1762302503425CXPF5Y35R",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Almacén ID: 2",
+      "created_at": "2025-11-05T00:28:23.900Z",
+      "updated_at": "2025-11-05T00:28:23.900Z"
+    },
+    {
+      "id": "box_1762302503900_njlyur4ut",
+      "barcode": "PKG1762302503425DJ72Y9ORG",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Almacén ID: 2",
+      "created_at": "2025-11-05T00:28:23.900Z",
+      "updated_at": "2025-11-05T00:28:23.900Z"
+    },
+    {
+      "id": "box_1762302503900_aj0u3nybk",
+      "barcode": "PKG17623025034254JIQ8RUXE",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Almacén ID: 2",
+      "created_at": "2025-11-05T00:28:23.900Z",
+      "updated_at": "2025-11-05T00:28:23.900Z"
+    },
+    {
+      "id": "box_1762302503900_3h80tzx3t",
+      "barcode": "PKG1762302503425C0ETA8VTS",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Almacén ID: 2",
+      "created_at": "2025-11-05T00:28:23.900Z",
+      "updated_at": "2025-11-05T00:28:23.900Z"
+    },
+    {
+      "id": "box_1762302503900_5qkhudy4f",
+      "barcode": "PKG1762302503425T5VQDXNMN",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Almacén ID: 2",
+      "created_at": "2025-11-05T00:28:23.900Z",
+      "updated_at": "2025-11-05T00:28:23.900Z"
+    },
+    {
+      "id": "box_1762302503900_mb1vs42vb",
+      "barcode": "PKG1762302503425PHDM70D2T",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Almacén ID: 2",
+      "created_at": "2025-11-05T00:28:23.900Z",
+      "updated_at": "2025-11-05T00:28:23.900Z"
+    },
+    {
+      "id": "box_1762302503900_3b6pceb4o",
+      "barcode": "PKG1762302503425AM52MHJ5R",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Almacén ID: 2",
+      "created_at": "2025-11-05T00:28:23.900Z",
+      "updated_at": "2025-11-05T00:28:23.900Z"
+    },
+    {
+      "id": "box_1762302503900_6pmkitxn9",
+      "barcode": "PKG1762302503425103TKLM93",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Almacén ID: 2",
+      "created_at": "2025-11-05T00:28:23.900Z",
+      "updated_at": "2025-11-05T00:28:23.900Z"
+    },
+    {
+      "id": "box_1762302503900_llamiqw2r",
+      "barcode": "PKG1762302503425R8ISD8E0Y",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Almacén ID: 2",
+      "created_at": "2025-11-05T00:28:23.900Z",
+      "updated_at": "2025-11-05T00:28:23.900Z"
+    },
+    {
+      "id": "box_1762302503900_lzrkkvcd6",
+      "barcode": "PKG17623025034251CCE87GTB",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Almacén ID: 2",
+      "created_at": "2025-11-05T00:28:23.900Z",
+      "updated_at": "2025-11-05T00:28:23.900Z"
+    },
+    {
+      "id": "box_1762302503900_3tz3i7kgy",
+      "barcode": "PKG1762302503425Q8GSFY1JI",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Almacén ID: 2",
+      "created_at": "2025-11-05T00:28:23.900Z",
+      "updated_at": "2025-11-05T00:28:23.900Z"
+    },
+    {
+      "id": "box_1762302503900_8cq0bkuyt",
+      "barcode": "PKG1762302503425IOC67W9CB",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Almacén ID: 2",
+      "created_at": "2025-11-05T00:28:23.900Z",
+      "updated_at": "2025-11-05T00:28:23.900Z"
+    },
+    {
+      "id": "box_1762302503900_crusvokai",
+      "barcode": "PKG1762302503425PJUOJD0TJ",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Almacén ID: 2",
+      "created_at": "2025-11-05T00:28:23.900Z",
+      "updated_at": "2025-11-05T00:28:23.900Z"
+    },
+    {
+      "id": "box_1762302503900_y417yt8d5",
+      "barcode": "PKG1762302503425ZBAX01ING",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Almacén ID: 2",
+      "created_at": "2025-11-05T00:28:23.900Z",
+      "updated_at": "2025-11-05T00:28:23.900Z"
+    },
+    {
+      "id": "box_1762302503900_p4igkmow3",
+      "barcode": "PKG1762302503425JDQQ9KK5E",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Almacén ID: 2",
+      "created_at": "2025-11-05T00:28:23.900Z",
+      "updated_at": "2025-11-05T00:28:23.900Z"
+    },
+    {
+      "id": "box_1762302503900_hit246j5n",
+      "barcode": "PKG1762302503425OBTU75L06",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Almacén ID: 2",
+      "created_at": "2025-11-05T00:28:23.900Z",
+      "updated_at": "2025-11-05T00:28:23.900Z"
+    },
+    {
+      "id": "box_1762302503900_t9h1454tq",
+      "barcode": "PKG17623025034259G57VPF3W",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Almacén ID: 2",
+      "created_at": "2025-11-05T00:28:23.900Z",
+      "updated_at": "2025-11-05T00:28:23.900Z"
+    },
+    {
+      "id": "box_1762302503900_kgpwxjweq",
+      "barcode": "PKG17623025034250U5UH1KPP",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Almacén ID: 2",
+      "created_at": "2025-11-05T00:28:23.900Z",
+      "updated_at": "2025-11-05T00:28:23.900Z"
+    },
+    {
+      "id": "box_1762302503900_trkvh0wjz",
+      "barcode": "PKG1762302503425HT0D85ZX8",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Almacén ID: 2",
+      "created_at": "2025-11-05T00:28:23.900Z",
+      "updated_at": "2025-11-05T00:28:23.900Z"
+    },
+    {
+      "id": "box_1762302503900_muhktvdrj",
+      "barcode": "PKG1762302503425MXOM3EDS1",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Almacén ID: 2",
+      "created_at": "2025-11-05T00:28:23.900Z",
+      "updated_at": "2025-11-05T00:28:23.900Z"
+    },
+    {
+      "id": "box_1762303303945_riog2vsck",
+      "barcode": "PKG176230330344359HRV6FF7",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Miami",
+      "created_at": "2025-11-05T00:41:43.945Z",
+      "updated_at": "2025-11-05T00:41:43.945Z"
+    },
+    {
+      "id": "box_1762303303945_ekjze49ck",
+      "barcode": "PKG1762303303443IJ0S2UDEG",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Miami",
+      "created_at": "2025-11-05T00:41:43.945Z",
+      "updated_at": "2025-11-05T00:41:43.945Z"
+    },
+    {
+      "id": "box_1762303303945_e09vv9klg",
+      "barcode": "PKG1762303303443D8DIIXE2U",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Miami",
+      "created_at": "2025-11-05T00:41:43.945Z",
+      "updated_at": "2025-11-05T00:41:43.945Z"
+    },
+    {
+      "id": "box_1762303303945_3wqdc5h0o",
+      "barcode": "PKG17623033034437JPD51BGP",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Miami",
+      "created_at": "2025-11-05T00:41:43.945Z",
+      "updated_at": "2025-11-05T00:41:43.945Z"
+    },
+    {
+      "id": "box_1762303303945_ahc2lnjzi",
+      "barcode": "PKG17623033034432NAQ707MA",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Miami",
+      "created_at": "2025-11-05T00:41:43.945Z",
+      "updated_at": "2025-11-05T00:41:43.945Z"
+    },
+    {
+      "id": "box_1762303303945_jrpd3ba41",
+      "barcode": "PKG1762303303443T7WLZD8NN",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Miami",
+      "created_at": "2025-11-05T00:41:43.945Z",
+      "updated_at": "2025-11-05T00:41:43.945Z"
+    },
+    {
+      "id": "box_1762303303945_yshxg7y1h",
+      "barcode": "PKG17623033034438SMYEZ7D6",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Miami",
+      "created_at": "2025-11-05T00:41:43.945Z",
+      "updated_at": "2025-11-05T00:41:43.945Z"
+    },
+    {
+      "id": "box_1762303303945_yc72p1x0l",
+      "barcode": "PKG17623033034432S59RHYJ5",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Miami",
+      "created_at": "2025-11-05T00:41:43.945Z",
+      "updated_at": "2025-11-05T00:41:43.945Z"
+    },
+    {
+      "id": "box_1762303303945_4fd869ffa",
+      "barcode": "PKG17623033034432CQ33C9TK",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Miami",
+      "created_at": "2025-11-05T00:41:43.945Z",
+      "updated_at": "2025-11-05T00:41:43.945Z"
+    },
+    {
+      "id": "box_1762303303945_33t0tt9tc",
+      "barcode": "PKG1762303303443AFJ2DNYV0",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Miami",
+      "created_at": "2025-11-05T00:41:43.945Z",
+      "updated_at": "2025-11-05T00:41:43.945Z"
+    },
+    {
+      "id": "box_1762303303945_ncz20fye5",
+      "barcode": "PKG17623033034435S9QBP7Z4",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Miami",
+      "created_at": "2025-11-05T00:41:43.945Z",
+      "updated_at": "2025-11-05T00:41:43.945Z"
+    },
+    {
+      "id": "box_1762303303945_6nmhsh206",
+      "barcode": "PKG1762303303443RS6PQBNDQ",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Miami",
+      "created_at": "2025-11-05T00:41:43.945Z",
+      "updated_at": "2025-11-05T00:41:43.945Z"
+    },
+    {
+      "id": "box_1762303303945_u1styzdjq",
+      "barcode": "PKG1762303303443VMTSV72I3",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Miami",
+      "created_at": "2025-11-05T00:41:43.945Z",
+      "updated_at": "2025-11-05T00:41:43.945Z"
+    },
+    {
+      "id": "box_1762303303945_09pk6tnsy",
+      "barcode": "PKG1762303303443QCI3RZCE1",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Miami",
+      "created_at": "2025-11-05T00:41:43.945Z",
+      "updated_at": "2025-11-05T00:41:43.945Z"
+    },
+    {
+      "id": "box_1762303303945_pxigtrsm1",
+      "barcode": "PKG1762303303443RDD7GHY98",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Miami",
+      "created_at": "2025-11-05T00:41:43.945Z",
+      "updated_at": "2025-11-05T00:41:43.945Z"
+    },
+    {
+      "id": "box_1762303303945_cc5401ci0",
+      "barcode": "PKG17623033034437JLB94FQE",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Miami",
+      "created_at": "2025-11-05T00:41:43.945Z",
+      "updated_at": "2025-11-05T00:41:43.945Z"
+    },
+    {
+      "id": "box_1762303303945_o7rtjqd8b",
+      "barcode": "PKG1762303303443SLK2ZBI4C",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Miami",
+      "created_at": "2025-11-05T00:41:43.945Z",
+      "updated_at": "2025-11-05T00:41:43.945Z"
+    },
+    {
+      "id": "box_1762303303945_iw66q3cv6",
+      "barcode": "PKG1762303303443ISO67F9QM",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Miami",
+      "created_at": "2025-11-05T00:41:43.945Z",
+      "updated_at": "2025-11-05T00:41:43.945Z"
+    },
+    {
+      "id": "box_1762303303945_dkj2k067f",
+      "barcode": "PKG17623033034432BEQLG4JX",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Miami",
+      "created_at": "2025-11-05T00:41:43.945Z",
+      "updated_at": "2025-11-05T00:41:43.945Z"
+    },
+    {
+      "id": "box_1762303303945_vsl09uikt",
+      "barcode": "PKG17623033034439RE1EE38O",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Miami",
+      "created_at": "2025-11-05T00:41:43.945Z",
+      "updated_at": "2025-11-05T00:41:43.945Z"
+    },
+    {
+      "id": "box_1762303303945_2nmlht241",
+      "barcode": "PKG1762303303443TR9TM54DO",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Miami",
+      "created_at": "2025-11-05T00:41:43.945Z",
+      "updated_at": "2025-11-05T00:41:43.945Z"
+    },
+    {
+      "id": "box_1762303303945_bgmta8s0c",
+      "barcode": "PKG1762303303443PKGRHXQRF",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Miami",
+      "created_at": "2025-11-05T00:41:43.945Z",
+      "updated_at": "2025-11-05T00:41:43.945Z"
+    },
+    {
+      "id": "box_1762303303945_ase4xqdj8",
+      "barcode": "PKG1762303303443PB0V1BD8I",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Miami",
+      "created_at": "2025-11-05T00:41:43.945Z",
+      "updated_at": "2025-11-05T00:41:43.945Z"
+    },
+    {
+      "id": "box_1762303303945_8r66bmi34",
+      "barcode": "PKG17623033034430HFSALP70",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Miami",
+      "created_at": "2025-11-05T00:41:43.945Z",
+      "updated_at": "2025-11-05T00:41:43.945Z"
+    },
+    {
+      "id": "box_1762303303945_iwtd5pnaa",
+      "barcode": "PKG1762303303443WWFDKWJKG",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Miami",
+      "created_at": "2025-11-05T00:41:43.945Z",
+      "updated_at": "2025-11-05T00:41:43.945Z"
+    },
+    {
+      "id": "box_1762303303945_0hrt4i8l8",
+      "barcode": "PKG17623033034435G2L5VRZN",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Miami",
+      "created_at": "2025-11-05T00:41:43.945Z",
+      "updated_at": "2025-11-05T00:41:43.945Z"
+    },
+    {
+      "id": "box_1762303303946_ltzpj3su7",
+      "barcode": "PKG1762303303443I3UWAV855",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Miami",
+      "created_at": "2025-11-05T00:41:43.946Z",
+      "updated_at": "2025-11-05T00:41:43.946Z"
+    },
+    {
+      "id": "box_1762303303946_jioac0bpz",
+      "barcode": "PKG1762303303443BM8T5GCCI",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Miami",
+      "created_at": "2025-11-05T00:41:43.946Z",
+      "updated_at": "2025-11-05T00:41:43.946Z"
+    },
+    {
+      "id": "box_1762303303946_ztlifezgt",
+      "barcode": "PKG1762303303443QCYBE6P43",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Miami",
+      "created_at": "2025-11-05T00:41:43.946Z",
+      "updated_at": "2025-11-05T00:41:43.946Z"
+    },
+    {
+      "id": "box_1762303303946_w6ikqye38",
+      "barcode": "PKG1762303303443UHCCGENYY",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Miami",
+      "created_at": "2025-11-05T00:41:43.946Z",
+      "updated_at": "2025-11-05T00:41:43.946Z"
+    },
+    {
+      "id": "box_1762303303946_yk6ffs5ly",
+      "barcode": "PKG1762303303443SR72WW7FA",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Miami",
+      "created_at": "2025-11-05T00:41:43.946Z",
+      "updated_at": "2025-11-05T00:41:43.946Z"
+    },
+    {
+      "id": "box_1762303303946_kfcnzggs7",
+      "barcode": "PKG1762303303443OB2PNZUS2",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Miami",
+      "created_at": "2025-11-05T00:41:43.946Z",
+      "updated_at": "2025-11-05T00:41:43.946Z"
+    },
+    {
+      "id": "box_1762303303946_wweu76hld",
+      "barcode": "PKG1762303303443BR90IM8A4",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Miami",
+      "created_at": "2025-11-05T00:41:43.946Z",
+      "updated_at": "2025-11-05T00:41:43.946Z"
+    },
+    {
+      "id": "box_1762303303946_n67cr3051",
+      "barcode": "PKG1762303303443S7AA45I86",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Miami",
+      "created_at": "2025-11-05T00:41:43.946Z",
+      "updated_at": "2025-11-05T00:41:43.946Z"
+    },
+    {
+      "id": "box_1762303303946_eil9inxtt",
+      "barcode": "PKG1762303303443W5KWRO2Z3",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Miami",
+      "created_at": "2025-11-05T00:41:43.946Z",
+      "updated_at": "2025-11-05T00:41:43.946Z"
+    },
+    {
+      "id": "box_1762303303946_h78o3ulyp",
+      "barcode": "PKG176230330344369EO325S6",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Miami",
+      "created_at": "2025-11-05T00:41:43.946Z",
+      "updated_at": "2025-11-05T00:41:43.946Z"
+    },
+    {
+      "id": "box_1762303303946_l42diofjt",
+      "barcode": "PKG17623033034435COK19BTE",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Miami",
+      "created_at": "2025-11-05T00:41:43.946Z",
+      "updated_at": "2025-11-05T00:41:43.946Z"
+    },
+    {
+      "id": "box_1762303303946_1m8npo329",
+      "barcode": "PKG1762303303443Y93U9F49A",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Miami",
+      "created_at": "2025-11-05T00:41:43.946Z",
+      "updated_at": "2025-11-05T00:41:43.946Z"
+    },
+    {
+      "id": "box_1762303303946_uqo3wmd03",
+      "barcode": "PKG1762303303444VFMOCD2SU",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Miami",
+      "created_at": "2025-11-05T00:41:43.946Z",
+      "updated_at": "2025-11-05T00:41:43.946Z"
+    },
+    {
+      "id": "box_1762303303946_pavgq74rd",
+      "barcode": "PKG1762303303444Y7CD9IDK5",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Miami",
+      "created_at": "2025-11-05T00:41:43.946Z",
+      "updated_at": "2025-11-05T00:41:43.946Z"
+    },
+    {
+      "id": "box_1762303303946_nu4foz70t",
+      "barcode": "PKG17623033034447GKNLO7P7",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Miami",
+      "created_at": "2025-11-05T00:41:43.946Z",
+      "updated_at": "2025-11-05T00:41:43.946Z"
+    },
+    {
+      "id": "box_1762303303946_m3yfuxp9w",
+      "barcode": "PKG1762303303444CPXAHEVH3",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Miami",
+      "created_at": "2025-11-05T00:41:43.946Z",
+      "updated_at": "2025-11-05T00:41:43.946Z"
+    },
+    {
+      "id": "box_1762303303946_zv50868t5",
+      "barcode": "PKG1762303303444LWYHMT2LD",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Miami",
+      "created_at": "2025-11-05T00:41:43.946Z",
+      "updated_at": "2025-11-05T00:41:43.946Z"
+    },
+    {
+      "id": "box_1762303303946_3vfvbicvx",
+      "barcode": "PKG176230330344499L3B8L9C",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Miami",
+      "created_at": "2025-11-05T00:41:43.946Z",
+      "updated_at": "2025-11-05T00:41:43.946Z"
+    },
+    {
+      "id": "box_1762303303946_uzycgs7w7",
+      "barcode": "PKG1762303303444SFAXEK4AR",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Miami",
+      "created_at": "2025-11-05T00:41:43.946Z",
+      "updated_at": "2025-11-05T00:41:43.946Z"
+    },
+    {
+      "id": "box_1762303303946_ouy0uy8me",
+      "barcode": "PKG1762303303444O8AQAKOO9",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Miami",
+      "created_at": "2025-11-05T00:41:43.946Z",
+      "updated_at": "2025-11-05T00:41:43.946Z"
+    },
+    {
+      "id": "box_1762303303946_3her07o3u",
+      "barcode": "PKG1762303303444MSNBBFDDZ",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Miami",
+      "created_at": "2025-11-05T00:41:43.946Z",
+      "updated_at": "2025-11-05T00:41:43.946Z"
+    },
+    {
+      "id": "box_1762303303946_1av0tpdfn",
+      "barcode": "PKG17623033034448COZKOSHV",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Miami",
+      "created_at": "2025-11-05T00:41:43.946Z",
+      "updated_at": "2025-11-05T00:41:43.946Z"
+    },
+    {
+      "id": "box_1762303303946_gvgy8jred",
+      "barcode": "PKG1762303303444W0S4Y6L1M",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Miami",
+      "created_at": "2025-11-05T00:41:43.946Z",
+      "updated_at": "2025-11-05T00:41:43.946Z"
+    },
+    {
+      "id": "box_1762303303946_j24sc1u5p",
+      "barcode": "PKG1762303303444FABNEOMYB",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Miami",
+      "created_at": "2025-11-05T00:41:43.946Z",
+      "updated_at": "2025-11-05T00:41:43.946Z"
+    },
+    {
+      "id": "box_1762303303946_ggmgcxjjl",
+      "barcode": "PKG176230330344418UWAT4SE",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Miami",
+      "created_at": "2025-11-05T00:41:43.946Z",
+      "updated_at": "2025-11-05T00:41:43.946Z"
+    },
+    {
+      "id": "box_1762303303946_q5tpckk3a",
+      "barcode": "PKG1762303303444SLIKT5EW2",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Miami",
+      "created_at": "2025-11-05T00:41:43.946Z",
+      "updated_at": "2025-11-05T00:41:43.946Z"
+    },
+    {
+      "id": "box_1762303303946_908lgl69j",
+      "barcode": "PKG1762303303444P1KZK3FJW",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Miami",
+      "created_at": "2025-11-05T00:41:43.946Z",
+      "updated_at": "2025-11-05T00:41:43.946Z"
+    },
+    {
+      "id": "box_1762303303946_1sr81r90p",
+      "barcode": "PKG1762303303444LTLVBKVMH",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Miami",
+      "created_at": "2025-11-05T00:41:43.946Z",
+      "updated_at": "2025-11-05T00:41:43.946Z"
+    },
+    {
+      "id": "box_1762303303946_1j3o75uxr",
+      "barcode": "PKG1762303303444ZYNQLW0AE",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Miami",
+      "created_at": "2025-11-05T00:41:43.946Z",
+      "updated_at": "2025-11-05T00:41:43.946Z"
+    },
+    {
+      "id": "box_1762303303946_4ju7pvagm",
+      "barcode": "PKG1762303303444QG1SLVD1H",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Miami",
+      "created_at": "2025-11-05T00:41:43.946Z",
+      "updated_at": "2025-11-05T00:41:43.946Z"
+    },
+    {
+      "id": "box_1762303303946_7mrinj02l",
+      "barcode": "PKG1762303303444PQPWSXPDV",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Miami",
+      "created_at": "2025-11-05T00:41:43.946Z",
+      "updated_at": "2025-11-05T00:41:43.946Z"
+    },
+    {
+      "id": "box_1762303303946_viqyoqlq6",
+      "barcode": "PKG1762303303444VDCQRVQFR",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Miami",
+      "created_at": "2025-11-05T00:41:43.946Z",
+      "updated_at": "2025-11-05T00:41:43.946Z"
+    },
+    {
+      "id": "box_1762303303947_bnpkltg5j",
+      "barcode": "PKG1762303303444W98KIWMIP",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Miami",
+      "created_at": "2025-11-05T00:41:43.947Z",
+      "updated_at": "2025-11-05T00:41:43.947Z"
+    },
+    {
+      "id": "box_1762303303947_6s4dxx33a",
+      "barcode": "PKG1762303303444Q1EWCHT35",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Miami",
+      "created_at": "2025-11-05T00:41:43.947Z",
+      "updated_at": "2025-11-05T00:41:43.947Z"
+    },
+    {
+      "id": "box_1762303303947_6i2z846gj",
+      "barcode": "PKG1762303303444JKBC32JBF",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Miami",
+      "created_at": "2025-11-05T00:41:43.947Z",
+      "updated_at": "2025-11-05T00:41:43.947Z"
+    },
+    {
+      "id": "box_1762303303947_doehuwhbi",
+      "barcode": "PKG1762303303444YSA4G67EU",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Miami",
+      "created_at": "2025-11-05T00:41:43.947Z",
+      "updated_at": "2025-11-05T00:41:43.947Z"
+    },
+    {
+      "id": "box_1762303303947_4sia8trsh",
+      "barcode": "PKG176230330344439VDS30CG",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Miami",
+      "created_at": "2025-11-05T00:41:43.947Z",
+      "updated_at": "2025-11-05T00:41:43.947Z"
+    },
+    {
+      "id": "box_1762303303947_ebvownox8",
+      "barcode": "PKG17623033034444LFZ6N3UA",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Miami",
+      "created_at": "2025-11-05T00:41:43.947Z",
+      "updated_at": "2025-11-05T00:41:43.947Z"
+    },
+    {
+      "id": "box_1762303303947_tgbitfk8l",
+      "barcode": "PKG1762303303444N8NUORMZ6",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Miami",
+      "created_at": "2025-11-05T00:41:43.947Z",
+      "updated_at": "2025-11-05T00:41:43.947Z"
+    },
+    {
+      "id": "box_1762303303947_oh8rk4x1e",
+      "barcode": "PKG1762303303444A5EB2M1ON",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Miami",
+      "created_at": "2025-11-05T00:41:43.947Z",
+      "updated_at": "2025-11-05T00:41:43.947Z"
+    },
+    {
+      "id": "box_1762303303947_veolh65h3",
+      "barcode": "PKG1762303303444R2Z5SC0EI",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Miami",
+      "created_at": "2025-11-05T00:41:43.947Z",
+      "updated_at": "2025-11-05T00:41:43.947Z"
+    },
+    {
+      "id": "box_1762303303947_h7p7n4edd",
+      "barcode": "PKG1762303303444CUFZ4S0W6",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Miami",
+      "created_at": "2025-11-05T00:41:43.947Z",
+      "updated_at": "2025-11-05T00:41:43.947Z"
+    },
+    {
+      "id": "box_1762303303947_fk2ituvpe",
+      "barcode": "PKG1762303303444ZQ0EVN7F3",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Miami",
+      "created_at": "2025-11-05T00:41:43.947Z",
+      "updated_at": "2025-11-05T00:41:43.947Z"
+    },
+    {
+      "id": "box_1762303303947_whdfhtkqx",
+      "barcode": "PKG1762303303444STASXLYGK",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Miami",
+      "created_at": "2025-11-05T00:41:43.947Z",
+      "updated_at": "2025-11-05T00:41:43.947Z"
+    },
+    {
+      "id": "box_1762303303947_rcs35104f",
+      "barcode": "PKG1762303303444G8HTTOKLT",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Miami",
+      "created_at": "2025-11-05T00:41:43.947Z",
+      "updated_at": "2025-11-05T00:41:43.947Z"
+    },
+    {
+      "id": "box_1762303303947_5m3y8d4zk",
+      "barcode": "PKG1762303303444KHXRP8PXI",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Miami",
+      "created_at": "2025-11-05T00:41:43.947Z",
+      "updated_at": "2025-11-05T00:41:43.947Z"
+    },
+    {
+      "id": "box_1762303303947_qi7lgt4ti",
+      "barcode": "PKG1762303303444LUY1ZVD5V",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Miami",
+      "created_at": "2025-11-05T00:41:43.947Z",
+      "updated_at": "2025-11-05T00:41:43.947Z"
+    },
+    {
+      "id": "box_1762303303947_oj82vjr9b",
+      "barcode": "PKG1762303303444SGY4CGAAX",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Miami",
+      "created_at": "2025-11-05T00:41:43.947Z",
+      "updated_at": "2025-11-05T00:41:43.947Z"
+    },
+    {
+      "id": "box_1762303303947_81g7j4niu",
+      "barcode": "PKG17623033034441QVJKWWJV",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Miami",
+      "created_at": "2025-11-05T00:41:43.947Z",
+      "updated_at": "2025-11-05T00:41:43.947Z"
+    },
+    {
+      "id": "box_1762303303947_k09onnv6c",
+      "barcode": "PKG1762303303444VWT19SIF1",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Miami",
+      "created_at": "2025-11-05T00:41:43.947Z",
+      "updated_at": "2025-11-05T00:41:43.947Z"
+    },
+    {
+      "id": "box_1762303303947_zclm97e1d",
+      "barcode": "PKG1762303303444EV0A53OC0",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Miami",
+      "created_at": "2025-11-05T00:41:43.947Z",
+      "updated_at": "2025-11-05T00:41:43.947Z"
+    },
+    {
+      "id": "box_1762303303947_6djee4t5r",
+      "barcode": "PKG1762303303444JZET6RZSR",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Miami",
+      "created_at": "2025-11-05T00:41:43.947Z",
+      "updated_at": "2025-11-05T00:41:43.947Z"
+    },
+    {
+      "id": "box_1762303303947_dsap6xjom",
+      "barcode": "PKG17623033034443VR12OWQ6",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Miami",
+      "created_at": "2025-11-05T00:41:43.947Z",
+      "updated_at": "2025-11-05T00:41:43.947Z"
+    },
+    {
+      "id": "box_1762303303947_n07isurxb",
+      "barcode": "PKG17623033034442A77GIO3F",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Miami",
+      "created_at": "2025-11-05T00:41:43.947Z",
+      "updated_at": "2025-11-05T00:41:43.947Z"
+    },
+    {
+      "id": "box_1762303303947_n60dkqaf4",
+      "barcode": "PKG1762303303444KVL6CC5E6",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Miami",
+      "created_at": "2025-11-05T00:41:43.947Z",
+      "updated_at": "2025-11-05T00:41:43.947Z"
+    },
+    {
+      "id": "box_1762303303947_gwzpa2y8n",
+      "barcode": "PKG1762303303444SOCTOPWOM",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Miami",
+      "created_at": "2025-11-05T00:41:43.947Z",
+      "updated_at": "2025-11-05T00:41:43.947Z"
+    },
+    {
+      "id": "box_1762303303947_hlhe3u92f",
+      "barcode": "PKG1762303303444MYOFKS2X6",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Miami",
+      "created_at": "2025-11-05T00:41:43.947Z",
+      "updated_at": "2025-11-05T00:41:43.947Z"
+    },
+    {
+      "id": "box_1762303303947_cbkq1vbdr",
+      "barcode": "PKG1762303303444OAGD625XY",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Miami",
+      "created_at": "2025-11-05T00:41:43.947Z",
+      "updated_at": "2025-11-05T00:41:43.947Z"
+    },
+    {
+      "id": "box_1762303303947_newa724l9",
+      "barcode": "PKG1762303303444AGUFAS78E",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Miami",
+      "created_at": "2025-11-05T00:41:43.947Z",
+      "updated_at": "2025-11-05T00:41:43.947Z"
+    },
+    {
+      "id": "box_1762303303947_qc7a2lw33",
+      "barcode": "PKG1762303303444S8GG0PK6N",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Miami",
+      "created_at": "2025-11-05T00:41:43.947Z",
+      "updated_at": "2025-11-05T00:41:43.947Z"
+    },
+    {
+      "id": "box_1762303303947_cuz7ei4oc",
+      "barcode": "PKG1762303303444M0BVZTTH6",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Miami",
+      "created_at": "2025-11-05T00:41:43.947Z",
+      "updated_at": "2025-11-05T00:41:43.947Z"
+    },
+    {
+      "id": "box_1762303303947_xsdcezq0e",
+      "barcode": "PKG1762303303444D8PM13V2Y",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Miami",
+      "created_at": "2025-11-05T00:41:43.947Z",
+      "updated_at": "2025-11-05T00:41:43.947Z"
+    },
+    {
+      "id": "box_1762303303947_k3t6fzcgd",
+      "barcode": "PKG17623033034446CQN55BRH",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Miami",
+      "created_at": "2025-11-05T00:41:43.947Z",
+      "updated_at": "2025-11-05T00:41:43.947Z"
+    },
+    {
+      "id": "box_1762303303947_uy92v028p",
+      "barcode": "PKG176230330344439LHZ1MV2",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Miami",
+      "created_at": "2025-11-05T00:41:43.947Z",
+      "updated_at": "2025-11-05T00:41:43.947Z"
+    },
+    {
+      "id": "box_1762303303947_lylf73208",
+      "barcode": "PKG1762303303444GTIAY6J7I",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Miami",
+      "created_at": "2025-11-05T00:41:43.947Z",
+      "updated_at": "2025-11-05T00:41:43.947Z"
+    },
+    {
+      "id": "box_1762303303947_jqn44iipm",
+      "barcode": "PKG176230330344427WD2SMR4",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Miami",
+      "created_at": "2025-11-05T00:41:43.947Z",
+      "updated_at": "2025-11-05T00:41:43.947Z"
+    },
+    {
+      "id": "box_1762303303947_16oqtdqn4",
+      "barcode": "PKG1762303303444PMZTQ90PN",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Miami",
+      "created_at": "2025-11-05T00:41:43.947Z",
+      "updated_at": "2025-11-05T00:41:43.947Z"
+    },
+    {
+      "id": "box_1762303303947_ht708xn0i",
+      "barcode": "PKG1762303303444DA0J3X6WK",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Miami",
+      "created_at": "2025-11-05T00:41:43.947Z",
+      "updated_at": "2025-11-05T00:41:43.947Z"
+    },
+    {
+      "id": "box_1762303303947_0cpy32blp",
+      "barcode": "PKG1762303303444DU7IYCX71",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Miami",
+      "created_at": "2025-11-05T00:41:43.947Z",
+      "updated_at": "2025-11-05T00:41:43.947Z"
+    },
+    {
+      "id": "box_1762303303947_7fkzl9kvj",
+      "barcode": "PKG1762303303444TPBPUM23S",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Miami",
+      "created_at": "2025-11-05T00:41:43.947Z",
+      "updated_at": "2025-11-05T00:41:43.947Z"
+    },
+    {
+      "id": "box_1762303303947_py2vhdi1w",
+      "barcode": "PKG1762303303444S3QNS65PV",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Miami",
+      "created_at": "2025-11-05T00:41:43.947Z",
+      "updated_at": "2025-11-05T00:41:43.947Z"
+    },
+    {
+      "id": "box_1762303303947_5qidsh6yy",
+      "barcode": "PKG1762303303444MZEQLA8KV",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Miami",
+      "created_at": "2025-11-05T00:41:43.947Z",
+      "updated_at": "2025-11-05T00:41:43.947Z"
+    },
+    {
+      "id": "box_1762303303947_9ivzdiee9",
+      "barcode": "PKG1762303303444QKAILWFAB",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Miami",
+      "created_at": "2025-11-05T00:41:43.947Z",
+      "updated_at": "2025-11-05T00:41:43.947Z"
+    },
+    {
+      "id": "box_1762303303948_s0nm45w16",
+      "barcode": "PKG17623033034444G6RCN3Y5",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Miami",
+      "created_at": "2025-11-05T00:41:43.948Z",
+      "updated_at": "2025-11-05T00:41:43.948Z"
+    },
+    {
+      "id": "box_1762316657881_rfzio2iof",
+      "barcode": "PKG1762316657804DHFYE2Y8W",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Louisville KY",
+      "created_at": "2025-11-05T04:24:17.881Z",
+      "updated_at": "2025-11-05T04:24:17.881Z"
+    },
+    {
+      "id": "box_1762316657881_s9xarq9o0",
+      "barcode": "PKG176231665780662FQQY8BZ",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Louisville KY",
+      "created_at": "2025-11-05T04:24:17.881Z",
+      "updated_at": "2025-11-05T04:24:17.881Z"
+    },
+    {
+      "id": "box_1762316657882_tn1dhmga1",
+      "barcode": "PKG1762316657806E5PUHCQ8B",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Louisville KY",
+      "created_at": "2025-11-05T04:24:17.882Z",
+      "updated_at": "2025-11-05T04:24:17.882Z"
+    },
+    {
+      "id": "box_1762316657882_3ygvuuz2o",
+      "barcode": "PKG1762316657806FYA136S1U",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Louisville KY",
+      "created_at": "2025-11-05T04:24:17.882Z",
+      "updated_at": "2025-11-05T04:24:17.882Z"
+    },
+    {
+      "id": "box_1762316657882_nxi9kgujm",
+      "barcode": "PKG1762316657806HFXX5W67I",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Louisville KY",
+      "created_at": "2025-11-05T04:24:17.882Z",
+      "updated_at": "2025-11-05T04:24:17.882Z"
+    },
+    {
+      "id": "box_1762316657882_q8yuwab26",
+      "barcode": "PKG1762316657806JGXPVUB54",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Louisville KY",
+      "created_at": "2025-11-05T04:24:17.882Z",
+      "updated_at": "2025-11-05T04:24:17.882Z"
+    },
+    {
+      "id": "box_1762316657882_4q18drd5j",
+      "barcode": "PKG1762316657806AZC80TWXP",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Louisville KY",
+      "created_at": "2025-11-05T04:24:17.882Z",
+      "updated_at": "2025-11-05T04:24:17.882Z"
+    },
+    {
+      "id": "box_1762316657882_1w318knra",
+      "barcode": "PKG1762316657806Y40UH9S6O",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Louisville KY",
+      "created_at": "2025-11-05T04:24:17.882Z",
+      "updated_at": "2025-11-05T04:24:17.882Z"
+    },
+    {
+      "id": "box_1762316657882_cm9mi9caa",
+      "barcode": "PKG1762316657806IDIZ0RQCE",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Louisville KY",
+      "created_at": "2025-11-05T04:24:17.882Z",
+      "updated_at": "2025-11-05T04:24:17.882Z"
+    },
+    {
+      "id": "box_1762316657882_3rppfrqr2",
+      "barcode": "PKG1762316657806QSOR2M6GX",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Louisville KY",
+      "created_at": "2025-11-05T04:24:17.882Z",
+      "updated_at": "2025-11-05T04:24:17.882Z"
+    },
+    {
+      "id": "box_1762316657882_x0bx5efj0",
+      "barcode": "PKG1762316657806XBDXQOSV8",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Louisville KY",
+      "created_at": "2025-11-05T04:24:17.882Z",
+      "updated_at": "2025-11-05T04:24:17.882Z"
+    },
+    {
+      "id": "box_1762316657882_mknyk56td",
+      "barcode": "PKG1762316657806AN5MAG7IV",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Louisville KY",
+      "created_at": "2025-11-05T04:24:17.882Z",
+      "updated_at": "2025-11-05T04:24:17.882Z"
+    },
+    {
+      "id": "box_1762316657882_x1oobm1zh",
+      "barcode": "PKG17623166578064JGAMN10A",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Louisville KY",
+      "created_at": "2025-11-05T04:24:17.882Z",
+      "updated_at": "2025-11-05T04:24:17.882Z"
+    },
+    {
+      "id": "box_1762316657882_tsepafo7u",
+      "barcode": "PKG1762316657806M1DBONKSE",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Louisville KY",
+      "created_at": "2025-11-05T04:24:17.882Z",
+      "updated_at": "2025-11-05T04:24:17.882Z"
+    },
+    {
+      "id": "box_1762316657882_0uiv9mgwy",
+      "barcode": "PKG17623166578061T57YMOCH",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Louisville KY",
+      "created_at": "2025-11-05T04:24:17.882Z",
+      "updated_at": "2025-11-05T04:24:17.882Z"
+    },
+    {
+      "id": "box_1762316657882_natkm7kqb",
+      "barcode": "PKG1762316657806FP0731I24",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Louisville KY",
+      "created_at": "2025-11-05T04:24:17.882Z",
+      "updated_at": "2025-11-05T04:24:17.882Z"
+    },
+    {
+      "id": "box_1762316657882_hcx6u2t50",
+      "barcode": "PKG1762316657806CPST82TNF",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Louisville KY",
+      "created_at": "2025-11-05T04:24:17.882Z",
+      "updated_at": "2025-11-05T04:24:17.882Z"
+    },
+    {
+      "id": "box_1762316657882_74m5oq778",
+      "barcode": "PKG1762316657806QOFEZP7RM",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Louisville KY",
+      "created_at": "2025-11-05T04:24:17.882Z",
+      "updated_at": "2025-11-05T04:24:17.882Z"
+    },
+    {
+      "id": "box_1762316657882_8qsi8f3qv",
+      "barcode": "PKG1762316657806ESL5ERA3T",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Louisville KY",
+      "created_at": "2025-11-05T04:24:17.882Z",
+      "updated_at": "2025-11-05T04:24:17.882Z"
+    },
+    {
+      "id": "box_1762316657882_aq6jxzc29",
+      "barcode": "PKG1762316657806ZGT5KX02T",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Louisville KY",
+      "created_at": "2025-11-05T04:24:17.882Z",
+      "updated_at": "2025-11-05T04:24:17.882Z"
+    },
+    {
+      "id": "box_1762316657882_hzu1rola0",
+      "barcode": "PKG17623166578064XBRCFW8I",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Louisville KY",
+      "created_at": "2025-11-05T04:24:17.882Z",
+      "updated_at": "2025-11-05T04:24:17.882Z"
+    },
+    {
+      "id": "box_1762316657883_v729lko0m",
+      "barcode": "PKG1762316657806S4O2V51FO",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Louisville KY",
+      "created_at": "2025-11-05T04:24:17.883Z",
+      "updated_at": "2025-11-05T04:24:17.883Z"
+    },
+    {
+      "id": "box_1762316657883_s13bhxe16",
+      "barcode": "PKG1762316657806SSXU5LRQU",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Louisville KY",
+      "created_at": "2025-11-05T04:24:17.883Z",
+      "updated_at": "2025-11-05T04:24:17.883Z"
+    },
+    {
+      "id": "box_1762316657883_3oxyq7abe",
+      "barcode": "PKG1762316657806X38317ZVK",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Louisville KY",
+      "created_at": "2025-11-05T04:24:17.883Z",
+      "updated_at": "2025-11-05T04:24:17.883Z"
+    },
+    {
+      "id": "box_1762316657883_owk1lukx7",
+      "barcode": "PKG1762316657806J79RL5L3E",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Louisville KY",
+      "created_at": "2025-11-05T04:24:17.883Z",
+      "updated_at": "2025-11-05T04:24:17.883Z"
+    },
+    {
+      "id": "box_1762316657883_jvh1ggtm3",
+      "barcode": "PKG1762316657806WAVLBDSE8",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Louisville KY",
+      "created_at": "2025-11-05T04:24:17.883Z",
+      "updated_at": "2025-11-05T04:24:17.883Z"
+    },
+    {
+      "id": "box_1762316657883_6isutw2wh",
+      "barcode": "PKG1762316657806VLSUMHWHZ",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Louisville KY",
+      "created_at": "2025-11-05T04:24:17.883Z",
+      "updated_at": "2025-11-05T04:24:17.883Z"
+    },
+    {
+      "id": "box_1762316657883_3sm5ftrpm",
+      "barcode": "PKG17623166578066AM480SAJ",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Louisville KY",
+      "created_at": "2025-11-05T04:24:17.883Z",
+      "updated_at": "2025-11-05T04:24:17.883Z"
+    },
+    {
+      "id": "box_1762316657883_t7bp5bk10",
+      "barcode": "PKG176231665780623AKM01O0",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Louisville KY",
+      "created_at": "2025-11-05T04:24:17.883Z",
+      "updated_at": "2025-11-05T04:24:17.883Z"
+    },
+    {
+      "id": "box_1762316657883_vjls6r5n8",
+      "barcode": "PKG1762316657806K258WZ0Z5",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Louisville KY",
+      "created_at": "2025-11-05T04:24:17.883Z",
+      "updated_at": "2025-11-05T04:24:17.883Z"
+    },
+    {
+      "id": "box_1762316657883_rfhr157k5",
+      "barcode": "PKG1762316657806IT1W2KJX2",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Louisville KY",
+      "created_at": "2025-11-05T04:24:17.883Z",
+      "updated_at": "2025-11-05T04:24:17.883Z"
+    },
+    {
+      "id": "box_1762316657883_g8bfz5t7l",
+      "barcode": "PKG1762316657806TCLXNB2U3",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Louisville KY",
+      "created_at": "2025-11-05T04:24:17.883Z",
+      "updated_at": "2025-11-05T04:24:17.883Z"
+    },
+    {
+      "id": "box_1762316657883_u38phgbe1",
+      "barcode": "PKG1762316657806K56JSF72I",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Louisville KY",
+      "created_at": "2025-11-05T04:24:17.883Z",
+      "updated_at": "2025-11-05T04:24:17.883Z"
+    },
+    {
+      "id": "box_1762316657884_0xtu696rb",
+      "barcode": "PKG176231665780630S8VEAAJ",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Louisville KY",
+      "created_at": "2025-11-05T04:24:17.884Z",
+      "updated_at": "2025-11-05T04:24:17.884Z"
+    },
+    {
+      "id": "box_1762316657884_gv824hzl6",
+      "barcode": "PKG1762316657806YDCX62OR5",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Louisville KY",
+      "created_at": "2025-11-05T04:24:17.884Z",
+      "updated_at": "2025-11-05T04:24:17.884Z"
+    },
+    {
+      "id": "box_1762316657884_gtm590fop",
+      "barcode": "PKG1762316657806XIZH3HNHM",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Louisville KY",
+      "created_at": "2025-11-05T04:24:17.884Z",
+      "updated_at": "2025-11-05T04:24:17.884Z"
+    },
+    {
+      "id": "box_1762316657884_cdcjnajrb",
+      "barcode": "PKG1762316657806CZFQIRB8I",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Louisville KY",
+      "created_at": "2025-11-05T04:24:17.884Z",
+      "updated_at": "2025-11-05T04:24:17.884Z"
+    },
+    {
+      "id": "box_1762316657884_beetdqg3s",
+      "barcode": "PKG1762316657806XH8WEZAGX",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Louisville KY",
+      "created_at": "2025-11-05T04:24:17.884Z",
+      "updated_at": "2025-11-05T04:24:17.884Z"
+    },
+    {
+      "id": "box_1762316657884_hcgebpmjt",
+      "barcode": "PKG1762316657806PQMMHEBQM",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Louisville KY",
+      "created_at": "2025-11-05T04:24:17.884Z",
+      "updated_at": "2025-11-05T04:24:17.884Z"
+    },
+    {
+      "id": "box_1762316657884_zqowykjq9",
+      "barcode": "PKG1762316657806J1KSI2JXN",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Louisville KY",
+      "created_at": "2025-11-05T04:24:17.884Z",
+      "updated_at": "2025-11-05T04:24:17.884Z"
+    },
+    {
+      "id": "box_1762316657884_ng1idyxlr",
+      "barcode": "PKG1762316657806FSYTIX53G",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Louisville KY",
+      "created_at": "2025-11-05T04:24:17.884Z",
+      "updated_at": "2025-11-05T04:24:17.884Z"
+    },
+    {
+      "id": "box_1762316657887_0g9dn1j79",
+      "barcode": "PKG1762316657806N8GUCPK53",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Louisville KY",
+      "created_at": "2025-11-05T04:24:17.887Z",
+      "updated_at": "2025-11-05T04:24:17.887Z"
+    },
+    {
+      "id": "box_1762316657887_zi5zlomun",
+      "barcode": "PKG1762316657806XH8HKNI16",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Louisville KY",
+      "created_at": "2025-11-05T04:24:17.887Z",
+      "updated_at": "2025-11-05T04:24:17.887Z"
+    },
+    {
+      "id": "box_1762316657887_bra4no063",
+      "barcode": "PKG1762316657806TBMU67EYF",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Louisville KY",
+      "created_at": "2025-11-05T04:24:17.887Z",
+      "updated_at": "2025-11-05T04:24:17.887Z"
+    },
+    {
+      "id": "box_1762316657887_16nja1q8z",
+      "barcode": "PKG1762316657806TBZO5OGRC",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Louisville KY",
+      "created_at": "2025-11-05T04:24:17.887Z",
+      "updated_at": "2025-11-05T04:24:17.887Z"
+    },
+    {
+      "id": "box_1762316657887_e56lc4pii",
+      "barcode": "PKG1762316657806OEY8BMN29",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Louisville KY",
+      "created_at": "2025-11-05T04:24:17.887Z",
+      "updated_at": "2025-11-05T04:24:17.887Z"
+    },
+    {
+      "id": "box_1762316657887_4cvtlzmb5",
+      "barcode": "PKG1762316657806HYMILCEI1",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Louisville KY",
+      "created_at": "2025-11-05T04:24:17.887Z",
+      "updated_at": "2025-11-05T04:24:17.887Z"
+    },
+    {
+      "id": "box_1762316657887_68os3mbsq",
+      "barcode": "PKG1762316657806P8WU9BU8U",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Louisville KY",
+      "created_at": "2025-11-05T04:24:17.887Z",
+      "updated_at": "2025-11-05T04:24:17.887Z"
+    },
+    {
+      "id": "box_1762316657887_6yexfvydg",
+      "barcode": "PKG176231665780609CPMRTRW",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Louisville KY",
+      "created_at": "2025-11-05T04:24:17.887Z",
+      "updated_at": "2025-11-05T04:24:17.887Z"
+    },
+    {
+      "id": "box_1762316657887_kajgrg8m2",
+      "barcode": "PKG17623166578060YARODIXO",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Louisville KY",
+      "created_at": "2025-11-05T04:24:17.887Z",
+      "updated_at": "2025-11-05T04:24:17.887Z"
+    },
+    {
+      "id": "box_1762316657887_ecta72m65",
+      "barcode": "PKG1762316657806YU9Z00MTZ",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Louisville KY",
+      "created_at": "2025-11-05T04:24:17.887Z",
+      "updated_at": "2025-11-05T04:24:17.887Z"
+    },
+    {
+      "id": "box_1762316657887_0vkbiyawf",
+      "barcode": "PKG1762316657806Q1JVPBA0G",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Louisville KY",
+      "created_at": "2025-11-05T04:24:17.887Z",
+      "updated_at": "2025-11-05T04:24:17.887Z"
+    },
+    {
+      "id": "box_1762316657887_gpw27v1mh",
+      "barcode": "PKG1762316657806H8PQYHN0D",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Louisville KY",
+      "created_at": "2025-11-05T04:24:17.887Z",
+      "updated_at": "2025-11-05T04:24:17.887Z"
+    },
+    {
+      "id": "box_1762316657887_qsrc6dv6j",
+      "barcode": "PKG1762316657806ABL42EQ8Z",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Louisville KY",
+      "created_at": "2025-11-05T04:24:17.887Z",
+      "updated_at": "2025-11-05T04:24:17.887Z"
+    },
+    {
+      "id": "box_1762316657887_2qmj4vgdu",
+      "barcode": "PKG1762316657806LYUDXPU5U",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Louisville KY",
+      "created_at": "2025-11-05T04:24:17.887Z",
+      "updated_at": "2025-11-05T04:24:17.887Z"
+    },
+    {
+      "id": "box_1762316657887_e2dqy7xid",
+      "barcode": "PKG1762316657806R02E43GNO",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Louisville KY",
+      "created_at": "2025-11-05T04:24:17.887Z",
+      "updated_at": "2025-11-05T04:24:17.887Z"
+    },
+    {
+      "id": "box_1762316657887_wjb51rd4r",
+      "barcode": "PKG17623166578069S6ZFJW4Z",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Louisville KY",
+      "created_at": "2025-11-05T04:24:17.887Z",
+      "updated_at": "2025-11-05T04:24:17.887Z"
+    },
+    {
+      "id": "box_1762316657887_q6gxoi5i8",
+      "barcode": "PKG1762316657806HG9CJFSKZ",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Louisville KY",
+      "created_at": "2025-11-05T04:24:17.887Z",
+      "updated_at": "2025-11-05T04:24:17.887Z"
+    },
+    {
+      "id": "box_1762316657887_ihkfga95v",
+      "barcode": "PKG1762316657806NVU55T4MP",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Louisville KY",
+      "created_at": "2025-11-05T04:24:17.887Z",
+      "updated_at": "2025-11-05T04:24:17.887Z"
+    },
+    {
+      "id": "box_1762316657887_h7h8ynkrc",
+      "barcode": "PKG1762316657806T6IS74LWK",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Louisville KY",
+      "created_at": "2025-11-05T04:24:17.887Z",
+      "updated_at": "2025-11-05T04:24:17.887Z"
+    },
+    {
+      "id": "box_1762316657887_3v8j3qdof",
+      "barcode": "PKG1762316657806UHQKJKQMQ",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Louisville KY",
+      "created_at": "2025-11-05T04:24:17.887Z",
+      "updated_at": "2025-11-05T04:24:17.887Z"
+    },
+    {
+      "id": "box_1762316657887_pmchl7sry",
+      "barcode": "PKG1762316657806M0B11NK0K",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Louisville KY",
+      "created_at": "2025-11-05T04:24:17.887Z",
+      "updated_at": "2025-11-05T04:24:17.887Z"
+    },
+    {
+      "id": "box_1762316657887_h0u5ro3dz",
+      "barcode": "PKG1762316657806QG1WFPVVI",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Louisville KY",
+      "created_at": "2025-11-05T04:24:17.887Z",
+      "updated_at": "2025-11-05T04:24:17.887Z"
+    },
+    {
+      "id": "box_1762316657887_z1jany527",
+      "barcode": "PKG1762316657806BD2Q1MKGW",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Louisville KY",
+      "created_at": "2025-11-05T04:24:17.887Z",
+      "updated_at": "2025-11-05T04:24:17.887Z"
+    },
+    {
+      "id": "box_1762316657888_36l50gwc2",
+      "barcode": "PKG1762316657806QS2928LZV",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Louisville KY",
+      "created_at": "2025-11-05T04:24:17.888Z",
+      "updated_at": "2025-11-05T04:24:17.888Z"
+    },
+    {
+      "id": "box_1762316657888_et8ocx1rb",
+      "barcode": "PKG17623166578061B52OS9VD",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Louisville KY",
+      "created_at": "2025-11-05T04:24:17.888Z",
+      "updated_at": "2025-11-05T04:24:17.888Z"
+    },
+    {
+      "id": "box_1762316657888_3znyvm4ip",
+      "barcode": "PKG17623166578069Z545NMFQ",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Louisville KY",
+      "created_at": "2025-11-05T04:24:17.888Z",
+      "updated_at": "2025-11-05T04:24:17.888Z"
+    },
+    {
+      "id": "box_1762316657888_e8moje866",
+      "barcode": "PKG1762316657806VIA7YA4RK",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Louisville KY",
+      "created_at": "2025-11-05T04:24:17.888Z",
+      "updated_at": "2025-11-05T04:24:17.888Z"
+    },
+    {
+      "id": "box_1762316657888_i9xjife6k",
+      "barcode": "PKG1762316657806C1C7EWQTU",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Louisville KY",
+      "created_at": "2025-11-05T04:24:17.888Z",
+      "updated_at": "2025-11-05T04:24:17.888Z"
+    },
+    {
+      "id": "box_1762316657888_p6jt75ne2",
+      "barcode": "PKG1762316657806I8JMJ4RF4",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Louisville KY",
+      "created_at": "2025-11-05T04:24:17.888Z",
+      "updated_at": "2025-11-05T04:24:17.888Z"
+    },
+    {
+      "id": "box_1762316657888_yowrpyfah",
+      "barcode": "PKG1762316657806JT5FI31VH",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Louisville KY",
+      "created_at": "2025-11-05T04:24:17.888Z",
+      "updated_at": "2025-11-05T04:24:17.888Z"
+    },
+    {
+      "id": "box_1762316657888_zg48vsagd",
+      "barcode": "PKG1762316657806Q0Q36EOG3",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Louisville KY",
+      "created_at": "2025-11-05T04:24:17.888Z",
+      "updated_at": "2025-11-05T04:24:17.888Z"
+    },
+    {
+      "id": "box_1762316657888_g6h1igsgs",
+      "barcode": "PKG17623166578063YQE2IDBZ",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Louisville KY",
+      "created_at": "2025-11-05T04:24:17.888Z",
+      "updated_at": "2025-11-05T04:24:17.888Z"
+    },
+    {
+      "id": "box_1762316657888_gaucehq4k",
+      "barcode": "PKG176231665780683MY7THY0",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Louisville KY",
+      "created_at": "2025-11-05T04:24:17.888Z",
+      "updated_at": "2025-11-05T04:24:17.888Z"
+    },
+    {
+      "id": "box_1762316657888_y91n61sg5",
+      "barcode": "PKG1762316657806U2PKTE8U2",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Louisville KY",
+      "created_at": "2025-11-05T04:24:17.888Z",
+      "updated_at": "2025-11-05T04:24:17.888Z"
+    },
+    {
+      "id": "box_1762316657888_igoldztpq",
+      "barcode": "PKG1762316657806HIZ20X1SK",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Louisville KY",
+      "created_at": "2025-11-05T04:24:17.888Z",
+      "updated_at": "2025-11-05T04:24:17.888Z"
+    },
+    {
+      "id": "box_1762316657888_fys0kjle9",
+      "barcode": "PKG17623166578060XNEBOHSB",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Louisville KY",
+      "created_at": "2025-11-05T04:24:17.888Z",
+      "updated_at": "2025-11-05T04:24:17.888Z"
+    },
+    {
+      "id": "box_1762316657888_wuulmkexu",
+      "barcode": "PKG1762316657806JB9I2RZAM",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Louisville KY",
+      "created_at": "2025-11-05T04:24:17.888Z",
+      "updated_at": "2025-11-05T04:24:17.888Z"
+    },
+    {
+      "id": "box_1762316657888_7ht34dd8w",
+      "barcode": "PKG17623166578065KRJZUW2W",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Louisville KY",
+      "created_at": "2025-11-05T04:24:17.888Z",
+      "updated_at": "2025-11-05T04:24:17.888Z"
+    },
+    {
+      "id": "box_1762316657888_bjfhrad1s",
+      "barcode": "PKG1762316657806KG0Z4DCIJ",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Louisville KY",
+      "created_at": "2025-11-05T04:24:17.888Z",
+      "updated_at": "2025-11-05T04:24:17.888Z"
+    },
+    {
+      "id": "box_1762316657888_37owecj43",
+      "barcode": "PKG176231665780623CV3G6P1",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Louisville KY",
+      "created_at": "2025-11-05T04:24:17.888Z",
+      "updated_at": "2025-11-05T04:24:17.888Z"
+    },
+    {
+      "id": "box_1762316657888_pmcaehelx",
+      "barcode": "PKG1762316657806QY82MNRZX",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Louisville KY",
+      "created_at": "2025-11-05T04:24:17.888Z",
+      "updated_at": "2025-11-05T04:24:17.888Z"
+    },
+    {
+      "id": "box_1762316657888_mrbx1ge7o",
+      "barcode": "PKG1762316657806BAH8C515Z",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Louisville KY",
+      "created_at": "2025-11-05T04:24:17.888Z",
+      "updated_at": "2025-11-05T04:24:17.888Z"
+    },
+    {
+      "id": "box_1762316657888_pjgw531fb",
+      "barcode": "PKG1762316657806Z82GDZ24X",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Louisville KY",
+      "created_at": "2025-11-05T04:24:17.888Z",
+      "updated_at": "2025-11-05T04:24:17.888Z"
+    },
+    {
+      "id": "box_1762316657888_b3y7hmxgf",
+      "barcode": "PKG1762316657806XWFU0THNR",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Louisville KY",
+      "created_at": "2025-11-05T04:24:17.888Z",
+      "updated_at": "2025-11-05T04:24:17.888Z"
+    },
+    {
+      "id": "box_1762316657888_ea7pys5ic",
+      "barcode": "PKG1762316657806HXSS2OW36",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Louisville KY",
+      "created_at": "2025-11-05T04:24:17.888Z",
+      "updated_at": "2025-11-05T04:24:17.888Z"
+    },
+    {
+      "id": "box_1762316657888_m0tc807xz",
+      "barcode": "PKG1762316657806GO51FOCB3",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Louisville KY",
+      "created_at": "2025-11-05T04:24:17.888Z",
+      "updated_at": "2025-11-05T04:24:17.888Z"
+    },
+    {
+      "id": "box_1762316657888_dyzajhfrg",
+      "barcode": "PKG1762316657806F1FSIIKH2",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Louisville KY",
+      "created_at": "2025-11-05T04:24:17.888Z",
+      "updated_at": "2025-11-05T04:24:17.888Z"
+    },
+    {
+      "id": "box_1762316657888_jjduukmxc",
+      "barcode": "PKG1762316657806RI9D9LA3I",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Louisville KY",
+      "created_at": "2025-11-05T04:24:17.888Z",
+      "updated_at": "2025-11-05T04:24:17.888Z"
+    },
+    {
+      "id": "box_1762316657888_8nym62tkd",
+      "barcode": "PKG17623166578065IW5U7JZ4",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Louisville KY",
+      "created_at": "2025-11-05T04:24:17.888Z",
+      "updated_at": "2025-11-05T04:24:17.888Z"
+    },
+    {
+      "id": "box_1762316657888_nc73ydrl0",
+      "barcode": "PKG1762316657806ION0JU655",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Louisville KY",
+      "created_at": "2025-11-05T04:24:17.888Z",
+      "updated_at": "2025-11-05T04:24:17.888Z"
+    },
+    {
+      "id": "box_1762316657888_4c9bww7ia",
+      "barcode": "PKG1762316657806JXN1ZT4LI",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Louisville KY",
+      "created_at": "2025-11-05T04:24:17.888Z",
+      "updated_at": "2025-11-05T04:24:17.888Z"
+    },
+    {
+      "id": "box_1762316657888_n72mvi4ld",
+      "barcode": "PKG1762316657806EJ7RA9HLP",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Louisville KY",
+      "created_at": "2025-11-05T04:24:17.888Z",
+      "updated_at": "2025-11-05T04:24:17.888Z"
+    },
+    {
+      "id": "box_1762316657888_b783li1c7",
+      "barcode": "PKG17623166578061VBEDO6TZ",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Louisville KY",
+      "created_at": "2025-11-05T04:24:17.888Z",
+      "updated_at": "2025-11-05T04:24:17.888Z"
+    },
+    {
+      "id": "box_1762316657888_09gblnla6",
+      "barcode": "PKG1762316657806HZUKE9VS6",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Louisville KY",
+      "created_at": "2025-11-05T04:24:17.888Z",
+      "updated_at": "2025-11-05T04:24:17.888Z"
+    },
+    {
+      "id": "box_1762316657888_73wcjv6ak",
+      "barcode": "PKG176231665780677C8C2TQ5",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Louisville KY",
+      "created_at": "2025-11-05T04:24:17.888Z",
+      "updated_at": "2025-11-05T04:24:17.888Z"
+    },
+    {
+      "id": "box_1762316657888_gskodkdfy",
+      "barcode": "PKG1762316657806SWAVJGHWB",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Louisville KY",
+      "created_at": "2025-11-05T04:24:17.888Z",
+      "updated_at": "2025-11-05T04:24:17.888Z"
+    },
+    {
+      "id": "box_1762316657888_kf9p4p259",
+      "barcode": "PKG17623166578061YYHPJ3YV",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Louisville KY",
+      "created_at": "2025-11-05T04:24:17.888Z",
+      "updated_at": "2025-11-05T04:24:17.888Z"
+    },
+    {
+      "id": "box_1762316657888_powofdini",
+      "barcode": "PKG1762316657806LZSWVIL22",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Louisville KY",
+      "created_at": "2025-11-05T04:24:17.888Z",
+      "updated_at": "2025-11-05T04:24:17.888Z"
+    },
+    {
+      "id": "box_1762316657889_i674e164v",
+      "barcode": "PKG1762316657806UNQSMPQAM",
+      "size": "mediano",
+      "dimensions": {
+        "length": 40,
+        "width": 30,
+        "height": 20,
+        "weight_capacity": 10
+      },
+      "cost": 0,
+      "supplier": "LogiRapid",
+      "status": "AVAILABLE",
+      "current_location": "Louisville KY",
+      "created_at": "2025-11-05T04:24:17.889Z",
+      "updated_at": "2025-11-05T04:24:17.889Z"
     }
   ],
-  "orders": [
-    {
-      "id": "order_1698793500000_jkl012",
-      "order_number": "PO202310310001",
-      "supplier": "Packaging Solutions Inc.",
-      "status": "COMPRADA",
-      "items": [
-        {
-          "size": "pequeño",
-          "quantity": 10,
-          "unit_price": 12.5,
-          "total_price": 125
-        },
-        {
-          "size": "mediano",
-          "quantity": 5,
-          "unit_price": 18.75,
-          "total_price": 93.75
-        }
-      ],
-      "total_amount": 218.75,
-      "order_date": "2023-10-31T18:15:00.000Z",
-      "expected_delivery": "2023-11-05T00:00:00.000Z",
-      "budget_request_date": "2023-10-30T00:00:00.000Z",
-      "purchase_date": "2023-10-31T00:00:00.000Z",
-      "notes": "Orden estándar de cajas para inventario",
-      "supplier_contact": "Juan Pérez",
-      "supplier_phone": "+1-555-0101",
-      "supplier_email": "juan@packagingsolutions.com",
-      "payment_method": "Transferencia Bancaria",
-      "payment_terms": "Net 30",
-      "created_at": "2023-10-31T18:15:00.000Z",
-      "updated_at": "2023-10-31T18:15:00.000Z"
-    },
-    {
-      "id": "order_1698793600000_mno345",
-      "order_number": "PO202310310002",
-      "supplier": "Box Master Corp.",
-      "status": "BORRADOR",
-      "items": [
-        {
-          "size": "extra grande",
-          "quantity": 3,
-          "unit_price": 35,
-          "total_price": 105
-        }
-      ],
-      "total_amount": 105,
-      "order_date": "2023-10-31T18:20:00.000Z",
-      "expected_delivery": "2023-11-10T00:00:00.000Z",
-      "notes": "Cajas extra grandes para proyectos especiales",
-      "supplier_contact": "María García",
-      "supplier_phone": "+1-555-0102",
-      "supplier_email": "maria@boxmaster.com",
-      "created_at": "2023-10-31T18:20:00.000Z",
-      "updated_at": "2023-10-31T18:20:00.000Z"
-    },
-    {
-      "supplier": "Miami Box",
-      "expected_delivery": "2025-10-31",
-      "notes": "",
-      "items": [
-        {
-          "size": "mediano",
-          "quantity": 10000,
-          "unit_price": 1,
-          "total_price": 10000
-        }
-      ],
-      "id": "order_1761958736717_0g8xhcnt6",
-      "order_number": "PO17619587367174QQM",
-      "total_amount": 10000,
-      "created_at": "2025-11-01T00:58:56.717Z",
-      "updated_at": "2025-11-01T00:58:56.717Z"
-    }
-  ],
-  "shipments": [
-    {
-      "id": "shipment_1698793700000_pqr678",
-      "boxes": [
-        "box_1698793400000_ghi789"
-      ],
-      "origin": "Almacén Principal",
-      "destination": "Cliente A - Sucursal Norte",
-      "status": "IN_TRANSIT",
-      "route_id": "route_001",
-      "driver_id": "driver_001",
-      "departure_time": "2023-10-31T16:00:00.000Z",
-      "notes": "Entrega estándar",
-      "created_at": "2023-10-31T18:25:00.000Z",
-      "updated_at": "2023-10-31T18:25:00.000Z"
-    }
-  ]
+  "prices": [],
+  "orders": [],
+  "shipments": []
 }

@@ -144,8 +144,8 @@ export default function CreatePackageOrderPage() {
   const [phoneNumber, setPhoneNumber] = useState('')
   const [foundCustomer, setFoundCustomer] = useState<Customer | null>(null)
   const [orderData, setOrderData] = useState<OrderData>({
-    services: [],
-    serviceQuantities: {},
+    services: [SERVICE_TYPES[0].name], // Seleccionar el primer servicio por defecto
+    serviceQuantities: { [SERVICE_TYPES[0].name]: 1 },
     needsBoxConstruction: {},
     boxSizes: {},
     boxSelections: {},
@@ -1455,7 +1455,13 @@ Estado: Pendiente
   }
 
   const handleFinish = () => {
-    router.push('/dashboard/admin/package-orders')
+    if (createdOrder) {
+      // Redirigir a la página de edición de la orden recién creada
+      router.push(`/dashboard/admin/package-orders/${createdOrder.id}/edit`)
+    } else {
+      // Fallback: redirigir a la tabla de órdenes
+      router.push('/dashboard/admin/package-orders')
+    }
   }
 
   return (

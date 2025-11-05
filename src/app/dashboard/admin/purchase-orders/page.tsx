@@ -109,7 +109,7 @@ export default function PurchaseOrdersPage() {
       setOrders(data)
     } catch (error) {
       console.error('Error loading orders:', error)
-      showNotification('Error al cargar las órdenes', 'error')
+      showNotification('error', 'Error al cargar las órdenes', 'Error al cargar las órdenes')
     } finally {
       setLoading(false)
     }

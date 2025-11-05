@@ -74,7 +74,68 @@ export default function PackageOrderDetailPage() {
       const response = await fetch(`/api/package-orders/${params.id}`)
       if (response.ok) {
         const data = await response.json()
-        setOrder(data.data)
+
+        // Parsear campos JSON si vienen como string
+        let services = []
+        let serviceQuantities = {}
+        let needsBoxConstruction = {}
+
+        if (data.data.services) {
+          if (typeof data.data.services === 'string') {
+            try {
+              services = JSON.parse(data.data.services)
+            } catch (e) {
+              services = []
+            }
+          } else if (Array.isArray(data.data.services)) {
+            services = data.data.services
+          }
+        }
+
+        if (data.data.serviceQuantities) {
+          if (typeof data.data.serviceQuantities === 'string') {
+            try {
+              serviceQuantities = JSON.parse(data.data.serviceQuantities)
+            } catch (e) {
+              serviceQuantities = {}
+            }
+          } else if (typeof data.data.serviceQuantities === 'object') {
+            serviceQuantities = data.data.serviceQuantities
+          }
+        }
+
+        if (data.data.needsBoxConstruction) {
+          if (typeof data.data.needsBoxConstruction === 'string') {
+            try {
+              needsBoxConstruction = JSON.parse(data.data.needsBoxConstruction)
+            } catch (e) {
+              needsBoxConstruction = {}
+            }
+          } else if (typeof data.data.needsBoxConstruction === 'object') {
+            needsBoxConstruction = data.data.needsBoxConstruction
+          }
+        }
+
+        const processedOrder = {
+          ...data.data,
+          services: services,
+          serviceQuantities: serviceQuantities,
+          needsBoxConstruction: needsBoxConstruction
+        }
+
+        console.log('📅 Datos de orden cargados:', {
+          id: processedOrder.id,
+          status: processedOrder.status,
+          scheduledDate: processedOrder.scheduledDate,
+          timeSlot: processedOrder.timeSlot,
+          updatedAt: processedOrder.updatedAt
+        });
+
+        // Forzar actualización del estado para asegurar refresco del componente
+        setOrder(null)
+        setTimeout(() => {
+          setOrder(processedOrder)
+        }, 10)
       } else {
         showNotification('error', 'Error', 'No se pudo cargar la orden')
         router.push('/dashboard/admin/package-orders')
@@ -88,6 +149,94 @@ export default function PackageOrderDetailPage() {
     }
   }
 
+  // Helper function para formatear fechas consistentemente
+  const formatDate = (dateString: string) => {
+    console.log('🗓️ Formateando fecha:', dateString);
+
+    // Crear fecha en UTC para evitar problemas de zona horaria
+    const date = new Date(dateString + 'T00:00:00.000Z');
+    console.log('🕐 Fecha creada:', date.toString());
+    console.log('🌍 Zona horaria:', Intl.DateTimeFormat().resolvedOptions().timeZone);
+
+    const formattedDate = date.toLocaleDateString('es-ES', {
+      day: 'numeric',
+      month: 'long',
+      year: 'numeric',
+      timeZone: 'UTC'
+    });
+
+    console.log('✅ Fecha formateada:', formattedDate);
+    return formattedDate;
+  };
+
+  // Reprogramar orden
+  const reprogramOrder = async () => {
+    if (!order) return;
+
+    // Mostrar diálogo simple para nueva fecha
+    const newDate = window.prompt('Ingrese la nueva fecha (YYYY-MM-DD):', '2025-11-06');
+    if (!newDate) return;
+
+    const timeSlots = [
+      '8:00 AM - 12:00 PM',
+      '12:00 PM - 4:00 PM',
+      '4:00 PM - 8:00 PM'
+    ];
+
+    const timeSlotIndex = window.prompt(
+      'Seleccione la franja horaria:\n1. 8:00 AM - 12:00 PM\n2. 12:00 PM - 4:00 PM\n3. 4:00 PM - 8:00 PM\n\nIngrese el número (1-3):',
+      '1'
+    );
+
+    if (!timeSlotIndex) return;
+
+    const slotNum = parseInt(timeSlotIndex);
+    if (slotNum < 1 || slotNum > 3 || isNaN(slotNum)) {
+      showNotification('error', 'Error', 'Franja horaria inválida');
+      return;
+    }
+
+    const newTimeSlot = timeSlots[slotNum - 1];
+
+    const confirmReprogram = window.confirm(
+      `¿Está seguro que desea reprogramar esta orden para:\n\nFecha: ${newDate}\nFranja: ${newTimeSlot}\n\nSe cambiará el estado a "Reprogramada" y se removerá de la ruta actual.`
+    );
+
+    if (!confirmReprogram) return;
+
+    try {
+      const response = await fetch(`/api/package-orders/${params.id}/reprogram`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          newScheduledDate: newDate,
+          newTimeSlot: newTimeSlot
+        }),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        showNotification('success', 'Éxito', 'Orden reprogramada correctamente');
+
+        // Forzar recarga completa de la orden desde la BD
+        await new Promise(resolve => setTimeout(resolve, 500)); // Pequeña espera para asegurar que la BD se actualizó
+        await fetchOrder(); // Refresh order data
+
+        // Verificación adicional: mostrar los datos que se guardaron
+        console.log('✅ Orden reprogramada:', data.data);
+      } else {
+        const errorData = await response.json();
+        showNotification('error', 'Error', errorData.error || 'No se pudo reprogramar la orden');
+        console.error('❌ Error en reprogramación:', errorData);
+      }
+    } catch (error) {
+      console.error('Error reprogramming order:', error);
+      showNotification('error', 'Error', 'No se pudo reprogramar la orden. Intente nuevamente.');
+    }
+  };
+
   useEffect(() => {
     if (params.id) {
       fetchOrder()
@@ -99,7 +248,13 @@ export default function PackageOrderDetailPage() {
     scheduled: { label: 'Programado', color: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400', icon: Calendar },
     picked_up: { label: 'Recogido', color: 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-400', icon: Package },
     delivered: { label: 'Entregado', color: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400', icon: CheckCircle },
-    cancelled: { label: 'Cancelado', color: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400', icon: XCircle }
+    cancelled: { label: 'Cancelado', color: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400', icon: XCircle },
+    // Additional common statuses that might exist in the database
+    in_transit: { label: 'En Ruta', color: 'bg-gradient-to-r from-blue-500 to-indigo-600 text-white shadow-lg border border-blue-200 dark:from-blue-600 dark:to-indigo-700 dark:border-blue-400', icon: Package },
+    reprogrammed: { label: 'Reprogramada', color: 'bg-gradient-to-r from-yellow-500 to-orange-600 text-white shadow-lg border border-yellow-200 dark:from-yellow-600 dark:to-orange-700 dark:border-yellow-400', icon: AlertCircle },
+    processing: { label: 'Procesando', color: 'bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-400', icon: AlertCircle },
+    ready: { label: 'Listo', color: 'bg-teal-100 text-teal-800 dark:bg-teal-900/30 dark:text-teal-400', icon: CheckCircle },
+    failed: { label: 'Fallido', color: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400', icon: XCircle }
   }
 
   // Parse address from JSON if needed
@@ -161,7 +316,7 @@ export default function PackageOrderDetailPage() {
               <Button
                 variant="ghost"
                 onClick={() => router.back()}
-                className="flex items-center gap-2"
+                className="flex items-center gap-2 text-blue-600 hover:text-blue-700 hover:bg-blue-50 dark:text-blue-400 dark:hover:text-blue-300 dark:hover:bg-blue-950/20"
               >
                 <ArrowLeft className="w-4 h-4" />
                 Volver
@@ -176,9 +331,18 @@ export default function PackageOrderDetailPage() {
               </div>
             </div>
             <div className="flex gap-2">
+              {(order.status as any) === 'in_transit' && (
+                <Button
+                  onClick={reprogramOrder}
+                  className="bg-gradient-to-r from-yellow-500 to-orange-600 hover:from-yellow-600 hover:to-orange-700 text-white flex items-center gap-2 shadow-lg"
+                >
+                  <Calendar className="w-4 h-4" />
+                  Reprogramar
+                </Button>
+              )}
               <Button
                 onClick={() => router.push(`/dashboard/admin/package-orders/${order.id}/edit`)}
-                className="bg-amber-600 hover:bg-amber-700 text-white flex items-center gap-2"
+                className="bg-red-600 hover:bg-red-700 text-white flex items-center gap-2"
               >
                 <Edit className="w-4 h-4" />
                 Editar
@@ -212,13 +376,13 @@ export default function PackageOrderDetailPage() {
                     <p className="text-sm text-gray-600 dark:text-gray-400">Estado</p>
                     <span className={cn(
                       'inline-flex items-center px-3 py-1 rounded-full text-sm font-medium',
-                      STATUSES[order.status].color
+                      STATUSES[order.status]?.color || 'bg-gray-100 text-gray-800 dark:bg-gray-900/30 dark:text-gray-400'
                     )}>
                       {(() => {
-                        const StatusIcon = STATUSES[order.status].icon
+                        const StatusIcon = STATUSES[order.status]?.icon || AlertCircle
                         return <StatusIcon className="w-4 h-4 mr-2" />
                       })()}
-                      {STATUSES[order.status].label}
+                      {STATUSES[order.status]?.label || order.status || 'Desconocido'}
                     </span>
                   </div>
                   <div>
@@ -416,11 +580,7 @@ export default function PackageOrderDetailPage() {
                     <div>
                       <p className="text-sm text-gray-600 dark:text-gray-400">Fecha Programada</p>
                       <p className="font-medium text-gray-900 dark:text-white">
-                        {new Date(order.scheduledDate).toLocaleDateString('es-ES', {
-                          day: 'numeric',
-                          month: 'long',
-                          year: 'numeric'
-                        })}
+                        {formatDate(order.scheduledDate)}
                       </p>
                     </div>
                     {order.timeSlot && (

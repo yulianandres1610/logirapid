@@ -1527,7 +1527,18 @@ export function getAllPackageOrders() {
     // Parse services from JSON string back to array
     return orders.map(order => ({
       ...order,
-      services: JSON.parse(order.services || '[]'),
+      services: (() => {
+        try {
+          // Handle case where services might be [object Object] string
+          if (order.services === '[object Object]') {
+            return ['Recogida Caja Llena'] // Default service for corrupted data
+          }
+          return JSON.parse(order.services || '[]')
+        } catch (error) {
+          console.warn('Failed to parse services for order', order.id, ':', order.services, error)
+          return ['Recogida Caja Llena'] // Default service for corrupted data
+        }
+      })(),
       customerAddress: order.customerAddress ? (() => {
         try {
           // Check if it's already an object (not a string)

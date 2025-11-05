@@ -305,7 +305,7 @@ export function Sidebar({ isCollapsed, onToggle }: SidebarProps) {
         { icon: Package, label: "Órdenes", href: "/dashboard/agency-admin/orders" },
         { icon: Warehouse, label: "Almacenes", href: "/dashboard/agency-admin/warehouses" },
         { icon: Car, label: "Vehículos", href: "/dashboard/agency-admin/vehicles" },
-        { icon: Route, label: "Rutas", href: "/dashboard/agency-admin/routes" },
+        { icon: Route, label: "Rutas", href: "/dashboard/admin/routes" },
         { icon: Box, label: "Empaque", href: "/dashboard/agency-admin/package-route" }
       ]
     },
@@ -329,7 +329,7 @@ export function Sidebar({ isCollapsed, onToggle }: SidebarProps) {
         { icon: Package, label: "Órdenes", href: "/dashboard/manager/orders" },
         { icon: Warehouse, label: "Almacenes", href: "/dashboard/manager/warehouses" },
         { icon: Car, label: "Vehículos", href: "/dashboard/manager/vehicles" },
-        { icon: Route, label: "Rutas", href: "/dashboard/manager/routes" },
+        { icon: Route, label: "Rutas", href: "/dashboard/admin/routes" },
         { icon: Box, label: "Empaque", href: "/dashboard/manager/package-route" }
       ]
     },

@@ -25,6 +25,15 @@ import { useAuth } from '@/hooks/useAuth'
 import { useNotifications } from '@/contexts/NotificationContext'
 import { DashboardLayout } from '@/components/layout/dashboard-layout'
 import { Button } from '@/components/ui/button'
+import { AdvancedServicePackageManager } from '@/components/services/AdvancedServicePackageManager'
+
+interface PackageSize {
+  id: number
+  codigo: string
+  tamano: 'pequeno' | 'mediano' | 'grande'
+  tipo: string
+  descripcion: string
+}
 
 interface PackageOrder {
   id: number
@@ -35,10 +44,13 @@ interface PackageOrder {
   services: string[]
   serviceQuantities?: { [serviceName: string]: number }
   needsBoxConstruction?: { [serviceName: string]: boolean }
+  servicePackages?: { [serviceName: string]: string[] }
+  boxSize?: string
+  boxQuantity?: number
   notes?: string
   scheduledDate?: string
   timeSlot?: string
-  status: 'pending' | 'scheduled' | 'picked_up' | 'delivered' | 'cancelled'
+  status: 'pending' | 'in_transit' | 'reprogrammed' | 'picked_up' | 'delivered' | 'cancelled'
   createdAt: string
   updatedAt: string
   firstName?: string
@@ -91,12 +103,44 @@ const calculateOrderTotal = (services: string[], serviceQuantities: {[key: strin
 }
 
 const TIME_SLOTS = [
-  '08:00 AM - 10:00 AM',
-  '10:00 AM - 12:00 PM',
-  '12:00 PM - 02:00 PM',
-  '02:00 PM - 04:00 PM',
-  '04:00 PM - 06:00 PM'
+  '8:00 AM - 12:00 PM',
+  '12:00 PM - 4:00 PM',
+  '4:00 PM - 8:00 PM'
 ]
+
+const BOX_SIZES = [
+  { value: 'pequeno', label: 'Pequeño', color: 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300' },
+  { value: 'mediano', label: 'Mediano', color: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300' },
+  { value: 'grande', label: 'Grande', color: 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300' }
+]
+
+// Función para obtener la fecha mínima (mañana)
+const getMinDate = () => {
+  const tomorrow = new Date()
+  tomorrow.setDate(tomorrow.getDate() + 1)
+  return tomorrow.toISOString().split('T')[0]
+}
+
+// Función para formatear fecha a un formato legible
+const formatDate = (dateString: string) => {
+  if (!dateString) return ''
+  const date = new Date(dateString + 'T00:00:00')
+  const options: Intl.DateTimeFormatOptions = {
+    weekday: 'long',
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric'
+  }
+  return date.toLocaleDateString('es-ES', options)
+}
+
+// Función para obtener el nombre del día de mañana
+const getTomorrowName = () => {
+  const tomorrow = new Date()
+  tomorrow.setDate(tomorrow.getDate() + 1)
+  const options: Intl.DateTimeFormatOptions = { weekday: 'long' }
+  return tomorrow.toLocaleDateString('es-ES', options)
+}
 
 export default function EditPackageOrderPage() {
   const params = useParams()
@@ -109,8 +153,9 @@ export default function EditPackageOrderPage() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [selectedServices, setSelectedServices] = useState<string[]>([])
+  const [serviceConfigurations, setServiceConfigurations] = useState<{ [serviceName: string]: any }>({})
   const [formData, setFormData] = useState({
-    status: 'pending' as const,
+    status: 'pending' as 'pending' | 'reprogrammed' | 'in_transit' | 'delivered' | 'cancelled',
     scheduledDate: '',
     timeSlot: '',
     notes: ''
@@ -123,8 +168,92 @@ export default function EditPackageOrderPage() {
       const response = await fetch(`/api/package-orders/${params.id}`)
       if (response.ok) {
         const data = await response.json()
-        setOrder(data.data)
-        setSelectedServices(data.data.services || [])
+        // Parsear campos JSON si vienen como string
+        let services = []
+        let serviceQuantities = {}
+        let servicePackages = {}
+
+        if (data.data.services) {
+          if (typeof data.data.services === 'string') {
+            try {
+              services = JSON.parse(data.data.services)
+            } catch (e) {
+              services = []
+            }
+          } else if (Array.isArray(data.data.services)) {
+            services = data.data.services
+          }
+        }
+
+        if (data.data.serviceQuantities) {
+          if (typeof data.data.serviceQuantities === 'string') {
+            try {
+              serviceQuantities = JSON.parse(data.data.serviceQuantities)
+            } catch (e) {
+              serviceQuantities = {}
+            }
+          } else if (typeof data.data.serviceQuantities === 'object') {
+            serviceQuantities = data.data.serviceQuantities
+          }
+        }
+
+        if (data.data.servicePackages) {
+          if (typeof data.data.servicePackages === 'string') {
+            try {
+              servicePackages = JSON.parse(data.data.servicePackages)
+            } catch (e) {
+              servicePackages = {}
+            }
+          } else if (typeof data.data.servicePackages === 'object') {
+            servicePackages = data.data.servicePackages
+          }
+        }
+
+        const processedOrder = {
+          ...data.data,
+          services: services,
+          serviceQuantities: serviceQuantities,
+          servicePackages: servicePackages
+        }
+
+        setOrder(processedOrder)
+        setSelectedServices(services)
+
+        // Convertir el formato antiguo al nuevo formato de configuraciones
+        const initialConfigurations: { [serviceName: string]: any } = {}
+        services.forEach((serviceName: string) => {
+          const quantity = (serviceQuantities as { [key: string]: number })[serviceName] || 1
+          const packages = (servicePackages as { [key: string]: string[] })[serviceName] || []
+
+          initialConfigurations[serviceName] = {
+            serviceName: serviceName,
+            cajas: []
+          }
+
+          // Si hay paquetes asignados, tratar de extraer el tamaño y cantidad
+          if (packages.length > 0) {
+            // Agrupar por tamaño (asumiendo que los códigos tienen información de tamaño)
+            const boxesBySize: { [size: string]: string[] } = {}
+            packages.forEach((pack: any) => {
+              const size = pack.tamano || 'mediano' // fallback
+              if (!boxesBySize[size]) boxesBySize[size] = []
+              if (pack.codigo) boxesBySize[size].push(pack.codigo)
+            })
+
+            // Crear configuraciones por tamaño
+            Object.entries(boxesBySize).forEach(([size, codes]) => {
+              const boxCount = Math.ceil(codes.length / quantity) || 1
+              initialConfigurations[serviceName].cajas.push({
+                tamano: size as any,
+                cantidad: boxCount,
+                codigos: codes
+              })
+            })
+          }
+        })
+
+        setServiceConfigurations(initialConfigurations)
+
         setFormData({
           status: data.data.status || 'pending',
           scheduledDate: data.data.scheduledDate || '',
@@ -150,15 +279,22 @@ export default function EditPackageOrderPage() {
     }
   }, [params.id])
 
-  // Handle service selection
-  const toggleService = (service: string) => {
-    setSelectedServices(prev =>
-      prev.includes(service)
-        ? prev.filter(s => s !== service)
-        : [...prev, service]
-    )
-  }
+  // Efecto para manejar la reprogramación automática
+  useEffect(() => {
+    if (formData.status === 'reprogrammed') {
+      // Siempre establecer la fecha del día siguiente cuando está en estado reprogramado
+      // Esto asegura que la fecha sea correcta cada vez que se cambia el estado
+      const tomorrow = getMinDate()
+      if (formData.scheduledDate !== tomorrow) {
+        setFormData(prev => ({
+          ...prev,
+          scheduledDate: tomorrow
+        }))
+      }
+    }
+  }, [formData.status])
 
+  
   // Calculate financial summary
   const calculateFinancialSummary = () => {
     // Use saved order data if available, otherwise calculate from selected services
@@ -194,20 +330,19 @@ export default function EditPackageOrderPage() {
 
   // Calculate subtotal for individual service display
   const calculateSubtotal = () => {
-    // If we have saved order data with totalAmount, use that
-    if (order && order.totalAmount && order.totalAmount > 0) {
-      return order.subtotal || calculateOrderTotal(order.services, order.serviceQuantities || {}, order.needsBoxConstruction || {})
-    }
-
-    // Otherwise calculate from current selections
+    // Calculate from current configurations
     return selectedServices.reduce((total, service) => {
-      const quantity = order?.serviceQuantities?.[service] || 1
+      const config = serviceConfigurations[service]
+      if (!config || !config.cajas) return total
+
       const needsConstruction = order?.needsBoxConstruction?.[service] || false
-      let unitPrice = 0
-      if (service.toLowerCase().includes('caja') || service.toLowerCase().includes('box')) {
-        unitPrice = needsConstruction ? 70 : 65
-      }
-      return total + (unitPrice * quantity)
+      const unitPrice = service.toLowerCase().includes('caja') || service.toLowerCase().includes('box')
+        ? (needsConstruction ? 70 : 65)
+        : 0
+
+      // Calcular total de cajas para este servicio
+      const totalBoxes = config.cajas.reduce((sum: number, box: any) => sum + box.cantidad, 0)
+      return total + (unitPrice * totalBoxes)
     }, 0)
   }
 
@@ -223,18 +358,85 @@ export default function EditPackageOrderPage() {
     setSaving(true)
 
     try {
+      // Convertir configuraciones al formato esperado por la API
+      const serviceQuantitiesForSave: { [serviceName: string]: number } = {}
+      const servicePackagesForSave: { [serviceName: string]: string[] } = {}
+
+      Object.entries(serviceConfigurations).forEach(([serviceName, config]) => {
+        const totalBoxes = config.cajas?.reduce((sum: number, box: any) => sum + box.cantidad, 0) || 0
+        serviceQuantitiesForSave[serviceName] = totalBoxes
+
+        // Recolectar todos los códigos de todos los tamaños
+        const allCodes: string[] = []
+        config.cajas?.forEach((box: any) => {
+          if (box.codigos) {
+            allCodes.push(...box.codigos)
+          }
+        })
+        servicePackagesForSave[serviceName] = allCodes
+      })
+
       const response = await fetch(`/api/package-orders/${params.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           services: selectedServices,
+          serviceQuantities: serviceQuantitiesForSave,
+          servicePackages: servicePackagesForSave,
           ...formData
         })
       })
 
       if (response.ok) {
         const data = await response.json()
-        setOrder(data.data)
+        // Parsear campos JSON si vienen como string
+        let services = []
+        let serviceQuantities = {}
+        let needsBoxConstruction = {}
+
+        if (data.data.services) {
+          if (typeof data.data.services === 'string') {
+            try {
+              services = JSON.parse(data.data.services)
+            } catch (e) {
+              services = []
+            }
+          } else if (Array.isArray(data.data.services)) {
+            services = data.data.services
+          }
+        }
+
+        if (data.data.serviceQuantities) {
+          if (typeof data.data.serviceQuantities === 'string') {
+            try {
+              serviceQuantities = JSON.parse(data.data.serviceQuantities)
+            } catch (e) {
+              serviceQuantities = {}
+            }
+          } else if (typeof data.data.serviceQuantities === 'object') {
+            serviceQuantities = data.data.serviceQuantities
+          }
+        }
+
+        if (data.data.needsBoxConstruction) {
+          if (typeof data.data.needsBoxConstruction === 'string') {
+            try {
+              needsBoxConstruction = JSON.parse(data.data.needsBoxConstruction)
+            } catch (e) {
+              needsBoxConstruction = {}
+            }
+          } else if (typeof data.data.needsBoxConstruction === 'object') {
+            needsBoxConstruction = data.data.needsBoxConstruction
+          }
+        }
+
+        const updatedOrder = {
+          ...data.data,
+          services: services,
+          serviceQuantities: serviceQuantities,
+          needsBoxConstruction: needsBoxConstruction
+        }
+        setOrder(updatedOrder)
         showNotification('success', 'Orden Actualizada', 'La orden ha sido actualizada exitosamente')
         router.push(`/dashboard/admin/package-orders/${params.id}`)
       } else {
@@ -307,7 +509,7 @@ export default function EditPackageOrderPage() {
               <Button
                 variant="ghost"
                 onClick={() => router.back()}
-                className="flex items-center gap-2"
+                className="flex items-center gap-2 text-blue-600 hover:text-blue-700 hover:bg-blue-50 dark:text-blue-400 dark:hover:text-blue-300 dark:hover:bg-blue-950/20"
               >
                 <ArrowLeft className="w-4 h-4" />
                 Volver
@@ -338,37 +540,15 @@ export default function EditPackageOrderPage() {
                   )}
                 >
                   <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">
-                    Servicios
+                    Servicios y Empaques
                   </h2>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                    {AVAILABLE_SERVICES.map((service) => (
-                      <label
-                        key={service}
-                        className={cn(
-                          'flex items-center p-3 rounded-lg border cursor-pointer transition-all',
-                          'hover:border-exa-primary hover:bg-exa-primary/5',
-                          selectedServices.includes(service)
-                            ? 'border-exa-primary bg-exa-primary/10'
-                            : 'border-gray-200 dark:border-gray-600'
-                        )}
-                      >
-                        <input
-                          type="checkbox"
-                          checked={selectedServices.includes(service)}
-                          onChange={() => toggleService(service)}
-                          className="mr-3 text-exa-primary focus:ring-exa-primary"
-                        />
-                        <span className={cn(
-                          'text-sm font-medium',
-                          selectedServices.includes(service)
-                            ? 'text-exa-primary dark:text-exa-secondary'
-                            : 'text-gray-700 dark:text-gray-300'
-                        )}>
-                          {service}
-                        </span>
-                      </label>
-                    ))}
-                  </div>
+
+                  <AdvancedServicePackageManager
+                  services={selectedServices}
+                  serviceConfigurations={serviceConfigurations}
+                  onServicesChange={setSelectedServices}
+                  onServiceConfigurationsChange={setServiceConfigurations}
+                />
                 </motion.div>
 
                 {/* Status */}
@@ -384,100 +564,165 @@ export default function EditPackageOrderPage() {
                   <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">
                     Estado de la Orden
                   </h2>
-                  <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                    {[
-                      { value: 'pending', label: 'Pendiente' },
-                      { value: 'scheduled', label: 'Programado' },
-                      { value: 'picked_up', label: 'Recogido' },
-                      { value: 'delivered', label: 'Entregado' },
-                      { value: 'cancelled', label: 'Cancelado' }
-                    ].map((status) => (
-                      <label
-                        key={status.value}
-                        className={cn(
-                          'flex items-center p-3 rounded-lg border cursor-pointer transition-all',
-                          'hover:border-exa-primary hover:bg-exa-primary/5',
-                          formData.status === status.value
-                            ? 'border-exa-primary bg-exa-primary/10'
-                            : 'border-gray-200 dark:border-gray-600'
-                        )}
-                      >
-                        <input
-                          type="radio"
-                          name="status"
-                          value={status.value}
-                          checked={formData.status === status.value}
-                          onChange={(e) => setFormData(prev => ({ ...prev, status: e.target.value as any }))}
-                          className="mr-3 text-exa-primary focus:ring-exa-primary"
-                        />
-                        <span className={cn(
-                          'text-sm font-medium',
-                          formData.status === status.value
-                            ? 'text-exa-primary dark:text-exa-secondary'
-                            : 'text-gray-700 dark:text-gray-300'
-                        )}>
-                          {status.label}
+                  <div className="space-y-3">
+                    {/* Mostrar estado En Ruta si aplica */}
+                    {order.status === 'in_transit' && (
+                      <div className="flex items-center p-3 rounded-lg border-2 border-blue-500 bg-blue-50 dark:bg-blue-900/20">
+                        <Package className="w-5 h-5 text-blue-600 dark:text-blue-400 mr-3" />
+                        <span className="text-sm font-medium text-blue-600 dark:text-blue-400">
+                          Estado actual: En Ruta
                         </span>
-                      </label>
-                    ))}
+                      </div>
+                    )}
+
+                    {/* Mostrar estado Pendiente si aplica */}
+                    {order.status === 'pending' && (
+                      <div className="flex items-center p-3 rounded-lg border-2 border-yellow-500 bg-yellow-50 dark:bg-yellow-900/20">
+                        <AlertCircle className="w-5 h-5 text-yellow-600 dark:text-yellow-400 mr-3" />
+                        <span className="text-sm font-medium text-yellow-600 dark:text-yellow-400">
+                          Estado actual: Pendiente
+                        </span>
+                      </div>
+                    )}
+
+                    {/* Estados editables */}
+                    <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                      {[
+                        { value: 'reprogrammed', label: 'Reprogramada' },
+                        { value: 'picked_up', label: 'Recogido' },
+                        { value: 'delivered', label: 'Entregado' },
+                        { value: 'cancelled', label: 'Cancelado' }
+                      ].map((status) => (
+                        <label
+                          key={status.value}
+                          className={cn(
+                            'flex items-center p-3 rounded-lg border cursor-pointer transition-all',
+                            'hover:border-exa-primary hover:bg-exa-primary/5',
+                            formData.status === status.value
+                              ? 'border-exa-primary bg-exa-primary/10'
+                              : 'border-gray-200 dark:border-gray-600'
+                          )}
+                        >
+                          <input
+                            type="radio"
+                            name="status"
+                            value={status.value}
+                            checked={formData.status === status.value}
+                            onChange={(e) => setFormData(prev => ({ ...prev, status: e.target.value as any }))}
+                            className="mr-3 text-exa-primary focus:ring-exa-primary"
+                          />
+                          <span className={cn(
+                            'text-sm font-medium',
+                            formData.status === status.value
+                              ? 'text-exa-primary dark:text-exa-secondary'
+                              : 'text-gray-700 dark:text-gray-300'
+                          )}>
+                            {status.label}
+                          </span>
+                        </label>
+                      ))}
+                    </div>
+
+                    {/* Nota sobre estados automáticos */}
+                    {(order.status === 'in_transit' || order.status === 'pending') && (
+                      <div className="text-xs text-gray-500 dark:text-gray-400 mt-2">
+                        <div>
+                          {order.status === 'in_transit' && (
+                            <>Nota: El estado "En Ruta" solo se modifica a través del sistema de gestión de rutas</>
+                          )}
+                          {order.status === 'pending' && (
+                            <>Nota: El estado "Pendiente" se asigna automáticamente al crear una nueva orden</>
+                          )}
+                        </div>
+                        <div className="mt-1">
+                          Estados automáticos no se pueden modificar manualmente
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </motion.div>
 
-                {/* Schedule */}
-                <motion.div
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.3 }}
-                  className={cn(
-                    'p-6 rounded-xl border border-gray-200 dark:border-gray-700',
-                    theme === 'dark' ? 'bg-gray-800' : 'bg-white'
-                  )}
-                >
-                  <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
-                    <Calendar className="w-5 h-5" />
-                    Programación
-                  </h2>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                        Fecha Programada
-                      </label>
-                      <input
-                        type="date"
-                        value={formData.scheduledDate}
-                        onChange={(e) => setFormData(prev => ({ ...prev, scheduledDate: e.target.value }))}
-                        className={cn(
-                          'w-full px-4 py-2 rounded-lg border transition-colors',
-                          'focus:outline-none focus:ring-2 focus:ring-exa-primary',
-                          theme === 'dark'
-                            ? 'bg-gray-700 border-gray-600 text-white'
-                            : 'bg-white border-gray-300 text-gray-900'
+                {/* Schedule - Solo mostrar cuando está reprogramada */}
+                {formData.status === 'reprogrammed' && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.3 }}
+                    className={cn(
+                      'p-6 rounded-xl border border-gray-200 dark:border-gray-700',
+                      theme === 'dark' ? 'bg-gray-800' : 'bg-white'
+                    )}
+                  >
+                    <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+                      <Calendar className="w-5 h-5" />
+                      Reprogramación
+                    </h2>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                          Nueva Fecha Programada
+                          <span className="text-xs text-amber-600 dark:text-amber-400 ml-2 font-medium">
+                            (Día siguiente: {getTomorrowName()})
+                          </span>
+                        </label>
+                        <input
+                          type="date"
+                          value={formData.scheduledDate}
+                          min={getMinDate()}
+                          onChange={(e) => setFormData(prev => ({ ...prev, scheduledDate: e.target.value }))}
+                          className={cn(
+                            'w-full px-4 py-2 rounded-lg border transition-colors',
+                            'focus:outline-none focus:ring-2 focus:ring-exa-primary',
+                            theme === 'dark'
+                              ? 'bg-gray-700 border-gray-600 text-white'
+                              : 'bg-white border-gray-300 text-gray-900'
+                          )}
+                        />
+                        {formData.scheduledDate && (
+                          <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">
+                            Fecha seleccionada: {formatDate(formData.scheduledDate)}
+                          </p>
                         )}
-                      />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                          Nueva Franja Horaria
+                        </label>
+                        <select
+                          value={formData.timeSlot}
+                          onChange={(e) => setFormData(prev => ({ ...prev, timeSlot: e.target.value }))}
+                          className={cn(
+                            'w-full px-4 py-2 rounded-lg border transition-colors',
+                            'focus:outline-none focus:ring-2 focus:ring-exa-primary',
+                            theme === 'dark'
+                              ? 'bg-gray-700 border-gray-600 text-white'
+                              : 'bg-white border-gray-300 text-gray-900'
+                          )}
+                        >
+                          <option value="">Seleccionar franja horaria</option>
+                          {TIME_SLOTS.map((slot) => (
+                            <option key={slot} value={slot}>{slot}</option>
+                          ))}
+                        </select>
+                      </div>
                     </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                        Franja Horaria
-                      </label>
-                      <select
-                        value={formData.timeSlot}
-                        onChange={(e) => setFormData(prev => ({ ...prev, timeSlot: e.target.value }))}
-                        className={cn(
-                          'w-full px-4 py-2 rounded-lg border transition-colors',
-                          'focus:outline-none focus:ring-2 focus:ring-exa-primary',
-                          theme === 'dark'
-                            ? 'bg-gray-700 border-gray-600 text-white'
-                            : 'bg-white border-gray-300 text-gray-900'
-                        )}
-                      >
-                        <option value="">Seleccionar franja horaria</option>
-                        {TIME_SLOTS.map((slot) => (
-                          <option key={slot} value={slot}>{slot}</option>
-                        ))}
-                      </select>
+
+                    {/* Nota informativa sobre reglas de reprogramación */}
+                    <div className="mt-4 p-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg">
+                      <div className="flex items-start gap-2">
+                        <Calendar className="w-4 h-4 text-amber-600 dark:text-amber-400 mt-0.5 flex-shrink-0" />
+                        <div className="text-xs text-amber-800 dark:text-amber-200">
+                          <p className="font-medium mb-1">Reglas de reprogramación:</p>
+                          <ul className="list-disc list-inside space-y-1 text-amber-700 dark:text-amber-300">
+                            <li>Las paradas solo pueden reprogramarse para el día siguiente</li>
+                            <li>Franjas horarias disponibles: 8:00 AM - 12:00 PM, 12:00 PM - 4:00 PM, 4:00 PM - 8:00 PM</li>
+                            <li>No se permite reprogramar para el mismo día</li>
+                          </ul>
+                        </div>
+                      </div>
                     </div>
-                  </div>
-                </motion.div>
+                  </motion.div>
+                )}
 
                 {/* Notes */}
                 <motion.div
@@ -579,70 +824,82 @@ export default function EditPackageOrderPage() {
                 )}
 
                 {/* Financial Summary */}
-                {order && order.services && order.services.length > 0 && (
+                {selectedServices.length > 0 && (
                   <motion.div
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: 0.6 }}
-                    className="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 rounded-xl p-6 border border-blue-200 dark:border-blue-800"
+                    className="bg-gray-800 rounded-xl p-6 border border-gray-700"
                   >
                     <div className="flex items-center gap-3 mb-4">
-                      <div className="w-10 h-10 bg-blue-500 rounded-lg flex items-center justify-center">
+                      <div className="w-10 h-10 bg-blue-600 rounded-lg flex items-center justify-center">
                         <Receipt className="w-5 h-5 text-white" />
                       </div>
-                      <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                      <h3 className="text-lg font-semibold text-white">
                         Resumen Financiero
                       </h3>
                     </div>
 
                     <div className="space-y-3">
-                      {order.services.map((service, index) => {
-                        const quantity = order.serviceQuantities?.[service] || 1
+                      {selectedServices.map((service, index) => {
+                        const config = serviceConfigurations[service]
+                        const totalBoxes = config?.cajas?.reduce((sum: number, box: any) => sum + box.cantidad, 0) || 0
                         const isBoxService = service.toLowerCase().includes('caja') || service.toLowerCase().includes('box')
-                        const needsConstruction = order.needsBoxConstruction?.[service] || false
+                        const needsConstruction = order?.needsBoxConstruction?.[service] || false
                         const unitPrice = isBoxService ? (needsConstruction ? 70 : 65) : 0
-                        const subtotal = unitPrice * quantity
+                        const subtotal = unitPrice * totalBoxes
                         const constructionText = isBoxService && needsConstruction ? ' (Con confección)' : ''
 
+                        // Mostrar desglose por tamaño
+                        const sizeDetails = config?.cajas?.map((box: any) =>
+                          `${BOX_SIZES.find(s => s.value === box.tamano)?.label}: ${box.cantidad}`
+                        ).join(', ') || ''
+
                         return (
-                          <div key={index} className="flex justify-between items-center py-2 border-b border-blue-100 dark:border-blue-800/50 last:border-b-0">
-                            <span className="text-gray-700 dark:text-gray-300 flex items-center gap-2">
+                          <div key={index} className="flex justify-between items-center py-2 border-b border-gray-700 last:border-b-0">
+                            <span className="text-gray-300 flex items-center gap-2">
                               <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
-                              {service}{constructionText}
-                              <span className="text-xs text-gray-500">x{quantity}</span>
+                              <div>
+                                <div>{service}{constructionText}</div>
+                                {sizeDetails && (
+                                  <div className="text-xs text-gray-500">
+                                    {sizeDetails} (Total: {totalBoxes})
+                                  </div>
+                                )}
+                              </div>
                             </span>
-                            <span className="font-medium text-gray-900 dark:text-white">
+                            <span className="font-medium text-white">
                               ${subtotal.toFixed(2)}
                             </span>
                           </div>
                         )
                       })}
 
-                      <div className="flex justify-between items-center pt-3 border-t border-blue-200 dark:border-blue-800">
-                        <span className="text-gray-600 dark:text-gray-400 flex items-center gap-2">
+                      <div className="flex justify-between items-center pt-3 border-t border-gray-600">
+                        <span className="text-gray-400 flex items-center gap-2">
                           <Calculator className="w-4 h-4" />
                           Subtotal:
                         </span>
-                        <span className="font-semibold text-gray-900 dark:text-white">
+                        <span className="font-semibold text-white">
                           ${calculateSubtotal().toFixed(2)}
                         </span>
                       </div>
 
                       <div className="flex justify-between items-center">
-                        <span className="text-gray-600 dark:text-gray-400">
+                        <span className="text-gray-400">
                           Impuesto (7%):
                         </span>
-                        <span className="font-semibold text-gray-900 dark:text-white">
+                        <span className="font-semibold text-white">
                           ${calculateFinancialSummary().tax.toFixed(2)}
                         </span>
                       </div>
 
-                      <div className="flex justify-between items-center pt-3 border-t border-blue-200 dark:border-blue-800">
-                        <span className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
-                          <DollarSign className="w-5 h-5 text-green-600" />
+                      <div className="flex justify-between items-center pt-3 border-t border-gray-600">
+                        <span className="text-lg font-bold text-white flex items-center gap-2">
+                          <DollarSign className="w-5 h-5 text-green-400" />
                           Total:
                         </span>
-                        <span className="text-xl font-bold text-green-600 dark:text-green-400">
+                        <span className="text-xl font-bold text-green-400">
                           ${calculateFinancialSummary().total.toFixed(2)}
                         </span>
                       </div>
@@ -660,7 +917,7 @@ export default function EditPackageOrderPage() {
                   <Button
                     type="submit"
                     disabled={saving}
-                    className="flex-1 bg-exa-primary hover:bg-exa-primary/90 text-white"
+                    className="flex-1 bg-blue-600 hover:bg-blue-700 text-white"
                   >
                     {saving ? (
                       <>

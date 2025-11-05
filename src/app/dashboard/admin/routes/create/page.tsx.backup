@@ -1,0 +1,1555 @@
+'use client'
+
+import { useState, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
+import { motion, AnimatePresence } from 'framer-motion'
+import {
+  ArrowLeft,
+  ArrowRight,
+  MapPin,
+  Truck,
+  Clock,
+  Users,
+  CheckCircle,
+  AlertCircle,
+  BarChart3,
+  Settings,
+  Zap,
+  Edit3,
+  Eye,
+  Save,
+  Package,
+  List,
+  ListOrdered,
+  Route
+} from 'lucide-react'
+import { cn } from '@/lib/utils'
+import { useTheme } from '@/contexts/theme-context'
+import { useAuth } from '@/hooks/useAuth'
+import { useNotifications } from '@/contexts/NotificationContext'
+import { DashboardLayout } from '@/components/layout/dashboard-layout'
+import { Button } from '@/components/ui/button'
+import RouteMap from '@/components/maps/RouteMap'
+
+interface RouteCreationData {
+  mechanism: 'automatic' | 'manual'
+  timeWindows: string[]
+  warehouseId: string
+  vehicleId: string
+  driverId: string
+  routeDetails?: any
+  optimizedRoute?: any
+}
+
+const TIME_WINDOWS = [
+  { id: 'morning', label: '8:00 AM - 12:00 PM', value: '8-12' },
+  { id: 'afternoon', label: '12:00 PM - 4:00 PM', value: '12-16' },
+  { id: 'evening', label: '4:00 PM - 8:00 PM', value: '16-20' }
+]
+
+export default function CreateRoutePage() {
+  const { user } = useAuth()
+  const { theme } = useTheme()
+  const { showNotification } = useNotifications()
+  const router = useRouter()
+
+  const [currentStep, setCurrentStep] = useState(1)
+  const [loading, setLoading] = useState(false)
+  const [warehouses, setWarehouses] = useState([])
+  const [vehicles, setVehicles] = useState([])
+  const [drivers, setDrivers] = useState([])
+  const [packageOrders, setPackageOrders] = useState([])
+
+  const [routeData, setRouteData] = useState<RouteCreationData>({
+    mechanism: 'automatic',
+    timeWindows: [],
+    warehouseId: '',
+    vehicleId: '',
+    driverId: ''
+  })
+
+  const [optimizationResult, setOptimizationResult] = useState<any>(null)
+  const [optimizedRouteData, setOptimizedRouteData] = useState<any>(null)
+  const [showMap, setShowMap] = useState(true)
+
+  const steps = [
+    { id: 1, title: 'Mecanismo', icon: Settings, description: 'Elegir método de creación', color: 'blue' },
+    { id: 2, title: 'Horario', icon: Clock, description: 'Seleccionar ventanas de tiempo', color: 'red' },
+    { id: 3, title: 'Almacén', icon: MapPin, description: 'Punto de partida', color: 'blue' },
+    { id: 4, title: 'Recursos', icon: Truck, description: 'Vehículo y conductor', color: 'red' },
+    { id: 5, title: 'Optimización', icon: Zap, description: 'Procesando ruta', color: 'blue' },
+    { id: 6, title: 'Detalles', icon: BarChart3, description: 'Revisar detalles', color: 'red' },
+    { id: 7, title: 'Lista', icon: List, description: 'Ver paradas', color: 'blue' },
+    { id: 8, title: 'Mapa', icon: Eye, description: 'Visualizar ruta', color: 'red' },
+    { id: 9, title: 'Confirmar', icon: Save, description: 'Guardar ruta', color: 'blue' }
+  ]
+
+  // Fetch data for dropdowns
+  useEffect(() => {
+    fetchWarehouses()
+    fetchVehicles()
+    fetchDrivers()
+    fetchPackageOrders()
+  }, [])
+
+  const fetchWarehouses = async () => {
+    try {
+      const response = await fetch('/api/warehouses?limit=1000')
+      if (response.ok) {
+        const data = await response.json()
+        setWarehouses(data.data || [])
+      }
+    } catch (error) {
+      console.error('Error fetching warehouses:', error)
+    }
+  }
+
+  const fetchVehicles = async () => {
+    try {
+      const response = await fetch('/api/vehicles?limit=1000')
+      if (response.ok) {
+        const data = await response.json()
+        setVehicles(data.data || [])
+      }
+    } catch (error) {
+      console.error('Error fetching vehicles:', error)
+    }
+  }
+
+  const fetchDrivers = async () => {
+    try {
+      const response = await fetch('/api/users?role=driver&limit=1000')
+      if (response.ok) {
+        const data = await response.json()
+        // Filtrar solo usuarios con rol driver
+        const driversOnly = data.data?.users?.filter((user: any) => user.role === 'driver') || []
+        setDrivers(driversOnly)
+      }
+    } catch (error) {
+      console.error('Error fetching drivers:', error)
+    }
+  }
+
+  const fetchPackageOrders = async () => {
+    try {
+      const response = await fetch('/api/package-orders?status=pending&limit=1000')
+      if (response.ok) {
+        const data = await response.json()
+        setPackageOrders(data.data || [])
+      }
+    } catch (error) {
+      console.error('Error fetching package orders:', error)
+    }
+  }
+
+  const updateRouteData = (key: keyof RouteCreationData, value: any) => {
+    setRouteData(prev => ({
+      ...prev,
+      [key]: value
+    }))
+  }
+
+  const nextStep = () => {
+    if (currentStep < steps.length) {
+      // Si estamos yendo al paso 5 (optimización), ejecutar la optimización
+      if (currentStep === 4) {
+        performOptimization()
+      }
+      setCurrentStep(currentStep + 1)
+    }
+  }
+
+  const performOptimization = async () => {
+    console.log('🚀 Preparando datos para optimización de ruta...')
+    console.log('📦 Órdenes disponibles:', packageOrders.length)
+    console.log('⏰ Ventanas de tiempo seleccionadas:', routeData.timeWindows)
+    console.log('🏪 Almacén seleccionado:', routeData.warehouseId)
+
+    // Inicializar barra de progreso
+    setOptimizationResult({
+      progress: 10,
+      totalOrders: 0,
+      pickups: 0,
+      deliveries: 0,
+      totalDistance: 0,
+      estimatedDuration: 'Calculando...',
+      optimizedStops: 0,
+      timeWindows: routeData.timeWindows,
+      warehouseId: routeData.warehouseId,
+      route: { start: '', stops: [], end: '' }
+    })
+
+    try {
+      // Obtener información del almacén seleccionado
+      const selectedWarehouse = warehouses.find((w: any) => w.id.toString() === routeData.warehouseId)
+      if (!selectedWarehouse) {
+        throw new Error('No se encontró el almacén seleccionado')
+      }
+
+      console.log('🏭 Almacén:', selectedWarehouse.name)
+
+      // Filtrar y procesar órdenes con lógica mejorada
+      const relevantOrders = packageOrders.filter(order => {
+        // Si no hay ventanas de tiempo seleccionadas, incluir todas las órdenes pendientes
+        if (routeData.timeWindows.length === 0) {
+          return order.status === 'pending' || order.status === 'scheduled'
+        }
+
+        // Filtrar por ventanas de tiempo seleccionadas
+        const orderTimeSlot = order.timeSlot
+        const matchesTimeWindow = routeData.timeWindows.some(window => {
+          if (!orderTimeSlot) return false
+
+          // Mapeo más preciso de ventanas de tiempo
+          if (window === '8-12') {
+            return orderTimeSlot.includes('8:00') || orderTimeSlot.includes('9:00') ||
+                   orderTimeSlot.includes('10:00') || orderTimeSlot.includes('11:00') ||
+                   orderTimeSlot.includes('morning')
+          }
+          if (window === '12-16') {
+            return orderTimeSlot.includes('12:00') || orderTimeSlot.includes('1:00') ||
+                   orderTimeSlot.includes('2:00') || orderTimeSlot.includes('3:00') ||
+                   orderTimeSlot.includes('afternoon')
+          }
+          if (window === '16-20') {
+            return orderTimeSlot.includes('4:00') || orderTimeSlot.includes('5:00') ||
+                   orderTimeSlot.includes('6:00') || orderTimeSlot.includes('7:00') ||
+                   orderTimeSlot.includes('evening')
+          }
+          return false
+        })
+
+        return matchesTimeWindow
+      })
+
+      console.log('📋 Órdenes relevantes filtradas:', relevantOrders.length)
+
+      // Agrupar por tipo de servicio
+      const pickups = relevantOrders.filter(order =>
+        order.services.some((service: string) =>
+          service.toLowerCase().includes('recogida') || service.toLowerCase().includes('pickup')
+        )
+      )
+
+      const deliveries = relevantOrders.filter(order =>
+        order.services.some((service: string) =>
+          service.toLowerCase().includes('entrega') || service.toLowerCase().includes('delivery')
+        )
+      )
+
+      // Preparar paradas para la ruta con coordenadas válidas
+      const routeStops = relevantOrders.map((order, index) => ({
+        id: order.id,
+        address: order.address || order.customerAddress?.street || 'Sin dirección',
+        customer: order.customerName,
+        type: order.services.some((s: string) => s.toLowerCase().includes('recogida')) ? 'pickup' : 'delivery',
+        timeSlot: order.timeSlot,
+        coordinates: order.latitude && order.longitude ? [order.longitude, order.latitude] as [number, number] : undefined,
+        orderNumber: order.orderNumber || `ORD-${order.id}`,
+        // Indices para ordenamiento inicial (serán optimizados por Mapbox en el backend)
+        optimizedIndex: index,
+        waypointIndex: index
+      })).filter(stop => stop.coordinates && stop.coordinates[0] !== 0 && stop.coordinates[1] !== 0)
+
+      console.log('🛣️ Paradas preparadas para ruta:', routeStops.length)
+      console.log('📍 Coordenadas de ejemplo:', routeStops.slice(0, 3).map(s => ({
+        customer: s.customer,
+        coordinates: s.coordinates
+      })))
+
+      // Contar pickups y deliveries en las paradas finales
+      const routePickups = routeStops.filter(stop => stop.type === 'pickup')
+      const routeDeliveries = routeStops.filter(stop => stop.type === 'delivery')
+
+      console.log('📦 Estadísticas:', {
+        total: routeStops.length,
+        pickups: routePickups.length,
+        deliveries: routeDeliveries.length
+      })
+
+      // Actualizar progreso
+      setOptimizationResult(prev => prev ? { ...prev, progress: 30, optimizedStops: routeStops.length } : null)
+
+      // Preparar coordenadas del almacén
+      let warehouseCoordinates: [number, number] = [0, 0]
+
+      if (selectedWarehouse.latitude && selectedWarehouse.longitude) {
+        warehouseCoordinates = [selectedWarehouse.longitude, selectedWarehouse.latitude]
+      } else {
+        // Si no hay coordenadas, usar Miami por defecto
+        warehouseCoordinates = [-80.2395, 25.7548] // Miami coordinates
+        console.warn('⚠️ Almacén sin coordenadas, usando Miami por defecto')
+      }
+
+      // Crear resultado preliminar con los datos preparados
+      const preliminaryResult = {
+        totalOrders: routeStops.length,
+        pickups: routePickups.length,
+        deliveries: routeDeliveries.length,
+        totalDistance: 0, // Se calculará en backend
+        estimatedDuration: 'Pendiente', // Se calculará en backend
+        optimizedStops: routeStops.length,
+        timeWindows: routeData.timeWindows,
+        warehouseId: routeData.warehouseId,
+        route: {
+          start: selectedWarehouse.name || 'Almacén seleccionado',
+          stops: routeStops,
+          end: selectedWarehouse.name || 'Almacén seleccionado'
+        },
+        warehouseCoordinates,
+        progress: 100 // Completado en frontend, backend hará optimización real
+      }
+
+      setOptimizationResult(preliminaryResult)
+      console.log('✅ Datos preparados para optimización en backend:', preliminaryResult)
+      showNotification('Datos preparados', 'success', `${routeStops.length} paradas listas para optimización`)
+
+    } catch (error) {
+      console.error('❌ Error en la optimización:', error)
+      showNotification('Error en la optimización de la ruta', 'error')
+
+      // Establecer resultado de error
+      setOptimizationResult({
+        progress: 0,
+        totalOrders: 0,
+        pickups: 0,
+        deliveries: 0,
+        totalDistance: 0,
+        estimatedDuration: 'Error',
+        optimizedStops: 0,
+        timeWindows: routeData.timeWindows,
+        warehouseId: routeData.warehouseId,
+        route: { start: '', stops: [], end: '' }
+      })
+    }
+  }
+
+  
+  const prevStep = () => {
+    if (currentStep > 1) {
+      setCurrentStep(currentStep - 1)
+    }
+  }
+
+  const canProceed = () => {
+    switch (currentStep) {
+      case 1:
+        return routeData.mechanism === 'automatic' || routeData.mechanism === 'manual'
+      case 2:
+        return routeData.timeWindows.length > 0
+      case 3:
+        return routeData.warehouseId !== ''
+      case 4:
+        return routeData.vehicleId !== '' && routeData.driverId !== ''
+      default:
+        return true
+    }
+  }
+
+  const renderStep = () => {
+    switch (currentStep) {
+      case 1:
+        return (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="space-y-8"
+          >
+            <div className="text-center space-y-4">
+              <div className="mx-auto w-16 h-16 bg-blue-600 rounded-full flex items-center justify-center">
+                <Settings className="w-8 h-8 text-white" />
+              </div>
+              <div>
+                <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
+                  ¿Cómo quieres crear la ruta?
+                </h2>
+                <p className="text-gray-600 dark:text-gray-400 mt-2">
+                  Selecciona el método para generar tu ruta
+                </p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-4xl mx-auto">
+              <motion.button
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+                onClick={() => updateRouteData('mechanism', 'automatic')}
+                className={cn(
+                  'relative p-8 rounded-2xl border-2 transition-all duration-300 text-left',
+                  routeData.mechanism === 'automatic'
+                    ? 'border-blue-600 bg-blue-50 dark:bg-blue-900/20 shadow-xl'
+                    : 'border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 hover:border-gray-300 dark:hover:border-gray-600'
+                )}
+              >
+                <div className="flex items-center gap-4 mb-4">
+                  <div className={cn(
+                    'p-3 rounded-xl',
+                    routeData.mechanism === 'automatic'
+                      ? 'bg-blue-600 text-white'
+                      : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400'
+                  )}>
+                    <Zap className="w-6 h-6" />
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                      Automática
+                    </h3>
+                    <p className="text-sm text-gray-600 dark:text-gray-400">
+                      Optimización inteligente
+                    </p>
+                  </div>
+                </div>
+                <p className="text-gray-700 dark:text-gray-300">
+                  El sistema analiza todas las órdenes y crea la ruta más óptima automáticamente usando algoritmos avanzados de optimización.
+                </p>
+                {routeData.mechanism === 'automatic' && (
+                  <div className="absolute top-4 right-4">
+                    <CheckCircle className="w-6 h-6 text-blue-500" />
+                  </div>
+                )}
+              </motion.button>
+
+              <motion.button
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+                onClick={() => updateRouteData('mechanism', 'manual')}
+                className={cn(
+                  'relative p-8 rounded-2xl border-2 transition-all duration-300 text-left',
+                  routeData.mechanism === 'manual'
+                    ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20 shadow-xl'
+                    : 'border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 hover:border-gray-300 dark:hover:border-gray-600'
+                )}
+              >
+                <div className="flex items-center gap-4 mb-4">
+                  <div className={cn(
+                    'p-3 rounded-xl',
+                    routeData.mechanism === 'manual'
+                      ? 'bg-blue-500 text-white'
+                      : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400'
+                  )}>
+                    <Edit3 className="w-6 h-6" />
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                      Manual
+                    </h3>
+                    <p className="text-sm text-gray-600 dark:text-gray-400">
+                      Control total
+                    </p>
+                  </div>
+                </div>
+                <p className="text-gray-700 dark:text-gray-300">
+                  Tú decides el orden de las paradas y la configuración de la ruta según tu experiencia y conocimiento del terreno.
+                </p>
+                {routeData.mechanism === 'manual' && (
+                  <div className="absolute top-4 right-4">
+                    <CheckCircle className="w-6 h-6 text-blue-500" />
+                  </div>
+                )}
+              </motion.button>
+            </div>
+          </motion.div>
+        )
+
+      case 2:
+        return (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="space-y-8"
+          >
+            <div className="text-center space-y-4">
+              <div className="mx-auto w-16 h-16 bg-blue-500 rounded-full flex items-center justify-center">
+                <Clock className="w-8 h-8 text-white" />
+              </div>
+              <div>
+                <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
+                  Ventanas de Tiempo
+                </h2>
+                <p className="text-gray-600 dark:text-gray-400 mt-2">
+                  Selecciona los horarios para las entregas
+                </p>
+              </div>
+            </div>
+
+            <div className="max-w-2xl mx-auto">
+              <div className="space-y-4">
+                {TIME_WINDOWS.map((window) => (
+                  <motion.button
+                    key={window.id}
+                    whileHover={{ scale: 1.01 }}
+                    whileTap={{ scale: 0.99 }}
+                    onClick={() => {
+                      const newWindows = routeData.timeWindows.includes(window.value)
+                        ? routeData.timeWindows.filter(w => w !== window.value)
+                        : [...routeData.timeWindows, window.value]
+                      updateRouteData('timeWindows', newWindows)
+                    }}
+                    className={cn(
+                      'w-full p-6 rounded-xl border-2 transition-all duration-300 text-left',
+                      routeData.timeWindows.includes(window.value)
+                        ? 'border-green-500 bg-green-50 dark:bg-green-900/20 shadow-lg'
+                        : 'border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 hover:border-gray-300 dark:hover:border-gray-600'
+                    )}
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-4">
+                        <div className={cn(
+                          'w-12 h-12 rounded-lg flex items-center justify-center',
+                          routeData.timeWindows.includes(window.value)
+                            ? 'bg-green-500 text-white'
+                            : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400'
+                        )}>
+                          <Clock className="w-6 h-6" />
+                        </div>
+                        <div>
+                          <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                            {window.label}
+                          </h3>
+                          <p className="text-sm text-gray-600 dark:text-gray-400">
+                            {window.id === 'morning' && 'Entregas matutinas'}
+                            {window.id === 'afternoon' && 'Entregas de tarde'}
+                            {window.id === 'evening' && 'Entregas nocturnas'}
+                          </p>
+                        </div>
+                      </div>
+                      {routeData.timeWindows.includes(window.value) && (
+                        <CheckCircle className="w-6 h-6 text-green-500" />
+                      )}
+                    </div>
+                  </motion.button>
+                ))}
+
+                <motion.button
+                  whileHover={{ scale: 1.01 }}
+                  whileTap={{ scale: 0.99 }}
+                  onClick={() => {
+                    const allWindows = TIME_WINDOWS.map(w => w.value)
+                    updateRouteData('timeWindows',
+                      routeData.timeWindows.length === TIME_WINDOWS.length ? [] : allWindows
+                    )
+                  }}
+                  className={cn(
+                    'w-full p-4 rounded-xl border-2 transition-all duration-300',
+                    routeData.timeWindows.length === TIME_WINDOWS.length
+                      ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
+                      : 'border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 hover:border-gray-300 dark:hover:border-gray-600'
+                  )}
+                >
+                  <span className="font-medium text-gray-900 dark:text-white">
+                    {routeData.timeWindows.length === TIME_WINDOWS.length
+                      ? 'Deseleccionar todos'
+                      : 'Seleccionar todos los horarios'
+                    }
+                  </span>
+                </motion.button>
+              </div>
+            </div>
+          </motion.div>
+        )
+
+      case 3:
+        return (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="space-y-8"
+          >
+            <div className="text-center space-y-4">
+              <div className="mx-auto w-16 h-16 bg-red-500 rounded-full flex items-center justify-center">
+                <MapPin className="w-8 h-8 text-white" />
+              </div>
+              <div>
+                <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
+                  Punto de Partida
+                </h2>
+                <p className="text-gray-600 dark:text-gray-400 mt-2">
+                  Selecciona el almacén de donde saldrá la ruta
+                </p>
+              </div>
+            </div>
+
+            <div className="max-w-3xl mx-auto">
+              {warehouses.length === 0 ? (
+                <div className="text-center py-12 bg-gray-50 dark:bg-gray-700 rounded-xl">
+                  <MapPin className="w-12 h-12 mx-auto text-gray-400 mb-4" />
+                  <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">
+                    No hay almacenes disponibles
+                  </h3>
+                  <p className="text-gray-600 dark:text-gray-400 mb-6">
+                    Necesitas crear al menos un almacén antes de generar rutas
+                  </p>
+                  <Button onClick={() => router.push('/dashboard/admin/warehouses/create')}>
+                    Crear Almacén
+                  </Button>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {warehouses.map((warehouse: any) => (
+                    <motion.button
+                      key={warehouse.id}
+                      whileHover={{ scale: 1.02 }}
+                      whileTap={{ scale: 0.98 }}
+                      onClick={() => updateRouteData('warehouseId', warehouse.id.toString())}
+                      className={cn(
+                        'p-6 rounded-xl border-2 transition-all duration-300 text-left',
+                        routeData.warehouseId === warehouse.id.toString()
+                          ? 'border-purple-500 bg-purple-50 dark:bg-purple-900/20 shadow-lg'
+                          : 'border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 hover:border-gray-300 dark:hover:border-gray-600'
+                      )}
+                    >
+                      <div className="flex items-start justify-between mb-3">
+                        <div className={cn(
+                          'w-10 h-10 rounded-lg flex items-center justify-center',
+                          routeData.warehouseId === warehouse.id.toString()
+                            ? 'bg-purple-500 text-white'
+                            : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400'
+                        )}>
+                          <MapPin className="w-5 h-5" />
+                        </div>
+                        {routeData.warehouseId === warehouse.id.toString() && (
+                          <CheckCircle className="w-6 h-6 text-purple-500" />
+                        )}
+                      </div>
+                      <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+                        {warehouse.name}
+                      </h3>
+                      <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
+                        {warehouse.address}
+                      </p>
+                      <div className="flex items-center gap-4 text-xs text-gray-500 dark:text-gray-500">
+                        <span>Código: {warehouse.code}</span>
+                        {warehouse.capacity && (
+                          <span>Capacidad: {warehouse.capacity}</span>
+                        )}
+                      </div>
+                    </motion.button>
+                  ))}
+                </div>
+              )}
+            </div>
+          </motion.div>
+        )
+
+      case 4:
+        return (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="space-y-8"
+          >
+            <div className="text-center space-y-4">
+              <div className="mx-auto w-16 h-16 bg-red-500 rounded-full flex items-center justify-center">
+                <Truck className="w-8 h-8 text-white" />
+              </div>
+              <div>
+                <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
+                  Asignar Recursos
+                </h2>
+                <p className="text-gray-600 dark:text-gray-400 mt-2">
+                  Selecciona el vehículo y conductor para esta ruta
+                </p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 max-w-4xl mx-auto">
+              {/* Vehicle Selection */}
+              <div className="space-y-4">
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-white flex items-center gap-2">
+                  <Truck className="w-5 h-5" />
+                  Vehículo
+                </h3>
+                {vehicles.length === 0 ? (
+                  <div className="text-center py-8 bg-gray-50 dark:bg-gray-700 rounded-xl">
+                    <Truck className="w-8 h-8 mx-auto text-gray-400 mb-3" />
+                    <p className="text-sm text-gray-600 dark:text-gray-400">
+                      No hay vehículos disponibles
+                    </p>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {vehicles.map((vehicle: any) => (
+                      <motion.button
+                        key={vehicle.id}
+                        whileHover={{ scale: 1.01 }}
+                        whileTap={{ scale: 0.99 }}
+                        onClick={() => updateRouteData('vehicleId', vehicle.id.toString())}
+                        className={cn(
+                          'w-full p-4 rounded-xl border-2 transition-all duration-300 text-left',
+                          routeData.vehicleId === vehicle.id.toString()
+                            ? 'border-orange-500 bg-orange-50 dark:bg-orange-900/20'
+                            : 'border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 hover:border-gray-300 dark:hover:border-gray-600'
+                        )}
+                      >
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <h4 className="font-medium text-gray-900 dark:text-white">
+                              {vehicle.make} {vehicle.model}
+                            </h4>
+                            <p className="text-sm text-gray-600 dark:text-gray-400">
+                              {vehicle.licensePlate} • {vehicle.type}
+                            </p>
+                            <div className="flex items-center gap-3 mt-2 text-xs text-gray-500 dark:text-gray-500">
+                              <span>{vehicle.year}</span>
+                              {vehicle.capacity && (
+                                <span>Capacidad: {vehicle.capacity.weight_lbs || 0} lbs</span>
+                              )}
+                            </div>
+                          </div>
+                          {routeData.vehicleId === vehicle.id.toString() && (
+                            <CheckCircle className="w-5 h-5 text-orange-500" />
+                          )}
+                        </div>
+                      </motion.button>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Driver Selection */}
+              <div className="space-y-4">
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-white flex items-center gap-2">
+                  <Users className="w-5 h-5" />
+                  Conductor
+                </h3>
+                {drivers.length === 0 ? (
+                  <div className="text-center py-8 bg-gray-50 dark:bg-gray-700 rounded-xl">
+                    <Users className="w-8 h-8 mx-auto text-gray-400 mb-3" />
+                    <p className="text-sm text-gray-600 dark:text-gray-400">
+                      No hay conductores disponibles
+                    </p>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {drivers.map((driver: any) => (
+                      <motion.button
+                        key={driver.id}
+                        whileHover={{ scale: 1.01 }}
+                        whileTap={{ scale: 0.99 }}
+                        onClick={() => updateRouteData('driverId', driver.id.toString())}
+                        className={cn(
+                          'w-full p-4 rounded-xl border-2 transition-all duration-300 text-left',
+                          routeData.driverId === driver.id.toString()
+                            ? 'border-orange-500 bg-orange-50 dark:bg-orange-900/20'
+                            : 'border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 hover:border-gray-300 dark:hover:border-gray-600'
+                        )}
+                      >
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <h4 className="font-medium text-gray-900 dark:text-white">
+                              {driver.firstName} {driver.lastName}
+                            </h4>
+                            <p className="text-sm text-gray-600 dark:text-gray-400">
+                              {driver.email}
+                            </p>
+                            {driver.phone && (
+                              <p className="text-xs text-gray-500 dark:text-gray-500 mt-1">
+                                {driver.phone}
+                              </p>
+                            )}
+                          </div>
+                          {routeData.driverId === driver.id.toString() && (
+                            <CheckCircle className="w-5 h-5 text-orange-500" />
+                          )}
+                        </div>
+                      </motion.button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          </motion.div>
+        )
+
+      case 5:
+        return (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="space-y-8"
+          >
+            <div className="text-center space-y-4">
+              <div className="mx-auto w-16 h-16 bg-blue-500 rounded-full flex items-center justify-center">
+                <Zap className="w-8 h-8 text-white" />
+              </div>
+              <div>
+                <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
+                  Optimizando Ruta
+                </h2>
+                <p className="text-gray-600 dark:text-gray-400 mt-2">
+                  {routeData.mechanism === 'automatic'
+                    ? 'El sistema está calculando la ruta más óptima...'
+                    : 'Preparando configuración manual...'
+                  }
+                </p>
+              </div>
+            </div>
+
+            <div className="max-w-md mx-auto">
+              <div className="space-y-4">
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-gray-600 dark:text-gray-400">
+                    {optimizationResult?.progress < 30 ? 'Analizando órdenes...' :
+                     optimizationResult?.progress < 60 ? 'Filtrando por horarios...' :
+                     optimizationResult?.progress < 90 ? 'Optimizando ruta...' :
+                     '¡Completado!'}
+                  </span>
+                  <span className="text-blue-600 dark:text-blue-400">
+                    {optimizationResult?.progress || 0}%
+                  </span>
+                </div>
+                <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+                  <div
+                    className="h-2 bg-blue-600 rounded-full transition-all duration-500"
+                    style={{ width: `${optimizationResult?.progress || 0}%` }}
+                  ></div>
+                </div>
+              </div>
+
+              {/* Status indicators */}
+              <div className="space-y-3 mt-6">
+                <div className="flex items-center justify-center gap-2">
+                  <div className={`w-2 h-2 rounded-full ${(optimizationResult?.progress || 0) >= 25 ? 'bg-green-600' : 'bg-gray-400'} ${(optimizationResult?.progress || 0) >= 25 ? 'animate-pulse' : ''}`}></div>
+                  <span className={`text-sm ${(optimizationResult?.progress || 0) >= 25 ? 'text-gray-900 dark:text-white' : 'text-gray-500'}`}>
+                    Analizando {packageOrders.length} órdenes disponibles
+                  </span>
+                </div>
+                <div className="flex items-center justify-center gap-2">
+                  <div className={`w-2 h-2 rounded-full ${(optimizationResult?.progress || 0) >= 50 ? 'bg-green-600' : 'bg-gray-400'} ${(optimizationResult?.progress || 0) >= 50 ? 'animate-pulse' : ''}`}></div>
+                  <span className={`text-sm ${(optimizationResult?.progress || 0) >= 50 ? 'text-gray-900 dark:text-white' : 'text-gray-500'}`}>
+                    Ventanas de tiempo: {routeData.timeWindows.length > 0 ? routeData.timeWindows.join(', ') : 'Todas'}
+                  </span>
+                </div>
+                <div className="flex items-center justify-center gap-2">
+                  <div className={`w-2 h-2 rounded-full ${(optimizationResult?.progress || 0) >= 75 ? 'bg-green-600' : 'bg-gray-400'} ${(optimizationResult?.progress || 0) >= 75 ? 'animate-pulse' : ''}`}></div>
+                  <span className={`text-sm ${(optimizationResult?.progress || 0) >= 75 ? 'text-gray-900 dark:text-white' : 'text-gray-500'}`}>
+                    {optimizationResult?.totalOrders || 0} paradas preparadas
+                  </span>
+                </div>
+              </div>
+
+              {/* Show completion message when ready */}
+              {(optimizationResult?.progress || 0) >= 100 && (
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.9 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  className="text-center mt-6"
+                >
+                  <div className="inline-flex items-center gap-2 px-6 py-3 bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-400 rounded-full">
+                    <CheckCircle className="w-5 h-5" />
+                    <span className="font-medium">
+                      ¡Listo! {optimizationResult?.totalOrders || 0} paradas optimizadas
+                    </span>
+                  </div>
+                </motion.div>
+              )}
+            </div>
+          </motion.div>
+        )
+
+      case 6:
+        return (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="space-y-8"
+          >
+            <div className="text-center space-y-4">
+              <div className="mx-auto w-16 h-16 bg-blue-500 rounded-full flex items-center justify-center">
+                <BarChart3 className="w-8 h-8 text-white" />
+              </div>
+              <div>
+                <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
+                  Detalles de la Ruta
+                </h2>
+                <p className="text-gray-600 dark:text-gray-400 mt-2">
+                  Resumen de la ruta optimizada
+                </p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 max-w-4xl mx-auto">
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.1 }}
+                className="bg-blue-50 dark:bg-blue-900/20 p-6 rounded-xl border border-blue-200 dark:border-blue-800"
+              >
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="w-10 h-10 bg-blue-500 rounded-lg flex items-center justify-center">
+                    <MapPin className="w-5 h-5 text-white" />
+                  </div>
+                  <h3 className="font-semibold text-blue-900 dark:text-blue-100">Total Paradas</h3>
+                </div>
+                <p className="text-3xl font-bold text-blue-900 dark:text-blue-100">
+                  {optimizationResult?.totalOrders || 0}
+                </p>
+                <p className="text-sm text-blue-700 dark:text-blue-300 mt-2">
+                  {optimizationResult?.deliveries || 0} entregas + {optimizationResult?.pickups || 0} recogidas
+                </p>
+              </motion.div>
+
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.2 }}
+                className="bg-green-50 dark:bg-green-900/20 p-6 rounded-xl border border-green-200 dark:border-green-800"
+              >
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="w-10 h-10 bg-green-500 rounded-lg flex items-center justify-center">
+                    <Truck className="w-5 h-5 text-white" />
+                  </div>
+                  <h3 className="font-semibold text-green-900 dark:text-green-100">Distancia</h3>
+                </div>
+                <p className="text-3xl font-bold text-green-900 dark:text-green-100">
+                  {optimizationResult?.totalDistance === 0 ? 'Pendiente' : optimizationResult?.totalDistance || 'Pendiente'}
+                </p>
+                <p className="text-sm text-green-700 dark:text-green-300 mt-2">millas totales</p>
+              </motion.div>
+
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.3 }}
+                className="bg-purple-50 dark:bg-purple-900/20 p-6 rounded-xl border border-purple-200 dark:border-purple-800"
+              >
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="w-10 h-10 bg-purple-500 rounded-lg flex items-center justify-center">
+                    <Clock className="w-5 h-5 text-white" />
+                  </div>
+                  <h3 className="font-semibold text-purple-900 dark:text-purple-100">Duración</h3>
+                </div>
+                <p className="text-3xl font-bold text-purple-900 dark:text-purple-100">
+                  {optimizationResult?.estimatedDuration === 'Pendiente' ? 'Pendiente' : optimizationResult?.estimatedDuration || 'Pendiente'}
+                </p>
+                <p className="text-sm text-purple-700 dark:text-purple-300 mt-2">tiempo estimado</p>
+              </motion.div>
+
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.4 }}
+                className="bg-orange-50 dark:bg-orange-900/20 p-6 rounded-xl border border-orange-200 dark:border-orange-800"
+              >
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="w-10 h-10 bg-orange-500 rounded-lg flex items-center justify-center">
+                    <Package className="w-5 h-5 text-white" />
+                  </div>
+                  <h3 className="font-semibold text-orange-900 dark:text-orange-100">Paquetes</h3>
+                </div>
+                <p className="text-3xl font-bold text-orange-900 dark:text-orange-100">
+                  {optimizationResult?.totalOrders || 0}
+                </p>
+                <p className="text-sm text-orange-700 dark:text-orange-300 mt-2">total a entregar</p>
+              </motion.div>
+            </div>
+
+            <div className="max-w-2xl mx-auto bg-gray-50 dark:bg-gray-700/50 rounded-xl p-6">
+              <h3 className="font-semibold text-gray-900 dark:text-white mb-4">Resumen de Configuración</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                <div>
+                  <span className="text-gray-600 dark:text-gray-400">Método:</span>
+                  <span className="ml-2 font-medium text-gray-900 dark:text-white">
+                    {routeData.mechanism === 'automatic' ? 'Automático' : 'Manual'}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-gray-600 dark:text-gray-400">Horarios:</span>
+                  <span className="ml-2 font-medium text-gray-900 dark:text-white">
+                    {routeData.timeWindows.join(', ')}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-gray-600 dark:text-gray-400">Vehículo:</span>
+                  <span className="ml-2 font-medium text-gray-900 dark:text-white">
+                    {vehicles.find((v: any) => v.id.toString() === routeData.vehicleId)?.make || 'Seleccionado'}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-gray-600 dark:text-gray-400">Conductor:</span>
+                  <span className="ml-2 font-medium text-gray-900 dark:text-white">
+                    {drivers.find((d: any) => d.id.toString() === routeData.driverId)?.firstName || 'Seleccionado'}
+                  </span>
+                </div>
+              </div>
+            </div>
+          </motion.div>
+        )
+
+      case 7:
+        return (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="space-y-6"
+          >
+            {/* Header */}
+            <div className="text-center space-y-2">
+              <div className="flex items-center justify-center space-x-3">
+                <div className="w-12 h-12 bg-blue-100 dark:bg-blue-900/20 rounded-full flex items-center justify-center">
+                  <List className="w-6 h-6 text-blue-600 dark:text-blue-400" />
+                </div>
+                <h3 className="text-xl font-semibold text-gray-900 dark:text-white">
+                  Lista de Paradas
+                </h3>
+              </div>
+              <p className="text-gray-600 dark:text-gray-400">
+                Revisa el orden de las paradas optimizado
+              </p>
+            </div>
+
+            {/* Lista de paradas */}
+            {optimizationResult && optimizationResult.route && optimizationResult.route.stops && optimizationResult.route.stops.length > 0 ? (
+              <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
+                <div className="p-4 border-b border-gray-200 dark:border-gray-700">
+                  <h4 className="font-medium text-gray-900 dark:text-white flex items-center gap-2">
+                    <ListOrdered className="w-4 h-4" />
+                    Paradas de la Ruta (ordenadas por Mapbox - {optimizationResult.route.stops.length + 2} total)
+                  </h4>
+                </div>
+                <div className="max-h-96 overflow-y-auto">
+                  {/* Almacén (Inicio) */}
+                  <div className="p-4 border-b border-gray-100 dark:border-gray-700 bg-green-50 dark:bg-green-900/10">
+                    <div className="flex items-start gap-3">
+                      <div className="flex-shrink-0 w-8 h-8 bg-green-500 text-white rounded-full flex items-center justify-center text-sm font-bold">
+                        I
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium text-gray-900 dark:text-white">
+                          {warehouses.find((w: any) => w.id.toString() === routeData.warehouseId)?.name || 'Almacén Seleccionado'}
+                        </p>
+                        <p className="text-sm text-gray-600 dark:text-gray-400">
+                          {warehouses.find((w: any) => w.id.toString() === routeData.warehouseId)?.address || 'Dirección del almacén'}
+                        </p>
+                        <div className="flex items-center gap-4 mt-1 text-xs text-gray-500">
+                          <span className="flex items-center gap-1">
+                            <Package className="w-3 h-3" />
+                            Inicio de ruta
+                          </span>
+                          <span className="flex items-center gap-1">
+                            <Clock className="w-3 h-3" />
+                            08:00 AM
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Paradas optimizadas - Orden REAL de Mapbox */}
+                  {optimizationResult.route.stops
+                    .sort((a: any, b: any) => (a.optimizedIndex || 0) - (b.optimizedIndex || 0))
+                    .map((stop: any, index: number) => (
+                      <div key={stop.id} className="p-4 border-b border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
+                        <div className="flex items-start gap-3">
+                          <div className="flex-shrink-0 w-8 h-8 bg-blue-500 text-white rounded-full flex items-center justify-center text-sm font-bold">
+                            {stop.optimizedIndex !== undefined ? stop.optimizedIndex + 1 : index + 1}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="font-medium text-gray-900 dark:text-white">
+                              {stop.customer}
+                            </p>
+                            <p className="text-sm text-gray-600 dark:text-gray-400">
+                              {stop.address}
+                            </p>
+                            <div className="flex items-center gap-4 mt-1 text-xs text-gray-500">
+                              <span className="flex items-center gap-1">
+                                <Package className="w-3 h-3" />
+                                {stop.type === 'pickup' ? 'Recogida' : 'Entrega'}
+                              </span>
+                              <span className="flex items-center gap-1">
+                                <Clock className="w-3 h-3" />
+                                {stop.timeSlot}
+                              </span>
+                              <span className="flex items-center gap-1">
+                                <MapPin className="w-3 h-3" />
+                                Parada #{stop.optimizedIndex !== undefined ? stop.optimizedIndex + 1 : index + 1}
+                              </span>
+                              <span className="flex items-center gap-1 text-purple-600 dark:text-purple-400 font-medium">
+                                <Zap className="w-3 h-3" />
+                                Mapbox orden #{stop.waypointIndex + 1}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+
+                  {/* Almacén (Retorno) */}
+                  <div className="p-4 bg-green-50 dark:bg-green-900/10">
+                    <div className="flex items-start gap-3">
+                      <div className="flex-shrink-0 w-8 h-8 bg-green-500 text-white rounded-full flex items-center justify-center text-sm font-bold">
+                        F
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium text-gray-900 dark:text-white">
+                          {warehouses.find((w: any) => w.id.toString() === routeData.warehouseId)?.name || 'Almacén Seleccionado'}
+                        </p>
+                        <p className="text-sm text-gray-600 dark:text-gray-400">
+                          {warehouses.find((w: any) => w.id.toString() === routeData.warehouseId)?.address || 'Dirección del almacén'}
+                        </p>
+                        <div className="flex items-center gap-4 mt-1 text-xs text-gray-500">
+                          <span className="flex items-center gap-1">
+                            <Package className="w-3 h-3" />
+                            Retorno al almacén
+                          </span>
+                          <span className="flex items-center gap-1">
+                            <Clock className="w-3 h-3" />
+                            {optimizationResult.estimatedDuration}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-8 text-center">
+                <div className="w-16 h-16 bg-gray-100 dark:bg-gray-700 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <AlertCircle className="w-8 h-8 text-gray-400" />
+                </div>
+                <h4 className="text-lg font-medium text-gray-900 dark:text-white mb-2">
+                  No hay paradas optimizadas
+                </h4>
+                <p className="text-gray-600 dark:text-gray-400">
+                  {optimizationResult ?
+                    `Se encontraron ${optimizationResult.totalOrders || 0} órdenes pero no se pudieron optimizar. Verifica las coordenadas y filtros.` :
+                    'Aún no se ha realizado la optimización. Por favor, completa los pasos anteriores.'
+                  }
+                </p>
+              </div>
+            )}
+          </motion.div>
+        )
+
+      case 8:
+        return (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="space-y-8"
+          >
+            <div className="text-center space-y-4">
+              <div className="mx-auto w-16 h-16 bg-red-500 rounded-full flex items-center justify-center">
+                <Eye className="w-8 h-8 text-white" />
+              </div>
+              <div>
+                <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
+                  Vista del Mapa
+                </h2>
+                <p className="text-gray-600 dark:text-gray-400 mt-2">
+                  Visualización de la ruta optimizada
+                </p>
+              </div>
+            </div>
+
+            <div className="max-w-6xl mx-auto">
+              {/* Sección de detalles del mecanismo */}
+              {optimizationResult && (
+                <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6 mb-8">
+                  <div className="flex items-center justify-between mb-6">
+                    <h3 className="text-xl font-semibold text-gray-900 dark:text-white flex items-center gap-2">
+                      <Settings className="w-5 h-5" />
+                      Detalles de la Ruta
+                    </h3>
+                    <button
+                      onClick={() => setShowMap(!showMap)}
+                      className="flex items-center gap-2 px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg transition-colors"
+                    >
+                      <MapPin className="w-4 h-4" />
+                      {showMap ? 'Ocultar Mapa' : 'Mostrar Mapa'}
+                    </button>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    {/* Información básica */}
+                    <div className="space-y-4">
+                      <h4 className="font-medium text-gray-900 dark:text-white">Información General</h4>
+                      <div className="space-y-3">
+                        <div className="flex justify-between">
+                          <span className="text-gray-600 dark:text-gray-400">Mecanismo:</span>
+                          <span className="font-medium text-gray-900 dark:text-white capitalize">
+                            {routeData.mechanism === 'automatic' ? 'Automático' : 'Manual'}
+                          </span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-gray-600 dark:text-gray-400">Total Paradas:</span>
+                          <span className="font-medium text-gray-900 dark:text-white">
+                            {optimizationResult.totalOrders}
+                          </span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-gray-600 dark:text-gray-400">Distancia:</span>
+                          <span className="font-medium text-gray-900 dark:text-white">
+                            {optimizationResult.totalDistance} mi
+                          </span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-gray-600 dark:text-gray-400">Duración:</span>
+                          <span className="font-medium text-gray-900 dark:text-white">
+                            {optimizationResult.estimatedDuration}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Ventanas de tiempo */}
+                    <div className="space-y-4">
+                      <h4 className="font-medium text-gray-900 dark:text-white">Ventanas de Tiempo</h4>
+                      <div className="space-y-2">
+                        {routeData.timeWindows.length > 0 ? (
+                          routeData.timeWindows.map((window, index) => (
+                            <div key={index} className="flex items-center gap-2">
+                              <Clock className="w-4 h-4 text-blue-500" />
+                              <span className="text-sm text-gray-600 dark:text-gray-400">
+                                {window === '8-12' && '8:00 AM - 12:00 PM'}
+                                {window === '12-16' && '12:00 PM - 4:00 PM'}
+                                {window === '16-20' && '4:00 PM - 8:00 PM'}
+                              </span>
+                            </div>
+                          ))
+                        ) : (
+                          <span className="text-sm text-gray-500">Sin ventanas específicas</span>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Recursos asignados */}
+                    <div className="space-y-4">
+                      <h4 className="font-medium text-gray-900 dark:text-white">Recursos Asignados</h4>
+                      <div className="space-y-3">
+                        <div className="flex justify-between">
+                          <span className="text-gray-600 dark:text-gray-400">Vehículo:</span>
+                          <span className="font-medium text-gray-900 dark:text-white">
+                            {vehicles.find((v: any) => v.id.toString() === routeData.vehicleId)?.make || 'N/A'} {
+                              vehicles.find((v: any) => v.id.toString() === routeData.vehicleId)?.model || ''
+                            }
+                          </span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-gray-600 dark:text-gray-400">Conductor:</span>
+                          <span className="font-medium text-gray-900 dark:text-white">
+                            {drivers.find((d: any) => d.id.toString() === routeData.driverId)?.name || 'N/A'}
+                          </span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-gray-600 dark:text-gray-400">Almacén:</span>
+                          <span className="font-medium text-gray-900 dark:text-white">
+                            {warehouses.find((w: any) => w.id.toString() === routeData.warehouseId)?.name || 'N/A'}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Mapa */}
+              {showMap && (
+                <div className="transition-all duration-300">
+                  <RouteMap
+                    optimizationResult={optimizationResult}
+                    warehouseCoordinates={optimizationResult?.warehouseCoordinates || (() => {
+                      const warehouse = warehouses.find((w: any) => w.id.toString() === routeData.warehouseId)
+                      if (warehouse?.latitude && warehouse?.longitude) {
+                        return [warehouse.longitude, warehouse.latitude] as [number, number]
+                      }
+                      return [-80.2395, 25.7548] // Miami coordinates
+                    })()}
+                    theme={theme}
+                    onOptimizationComplete={handleOptimizationComplete}
+                  />
+                </div>
+              )}
+            </div>
+          </motion.div>
+        )
+
+      case 9:
+        return (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="space-y-8"
+          >
+            <div className="text-center space-y-4">
+              <div className="mx-auto w-16 h-16 bg-blue-500 rounded-full flex items-center justify-center">
+                <Save className="w-8 h-8 text-white" />
+              </div>
+              <div>
+                <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
+                  Confirmar y Guardar
+                </h2>
+                <p className="text-gray-600 dark:text-gray-400 mt-2">
+                  Revisa toda la información antes de guardar la ruta
+                </p>
+              </div>
+            </div>
+
+            <div className="max-w-2xl mx-auto bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-xl p-6">
+              <div className="flex items-center gap-3 mb-4">
+                <CheckCircle className="w-6 h-6 text-green-600 dark:text-green-400" />
+                <h3 className="text-lg font-semibold text-green-900 dark:text-green-100">
+                  Ruta Lista para Guardar
+                </h3>
+              </div>
+              <p className="text-green-800 dark:text-green-200 mb-6">
+                Todos los parámetros han sido configurados correctamente. La ruta está optimizada y lista para ser asignada al conductor.
+              </p>
+              <div className="space-y-3">
+                <div className="flex items-center justify-between py-2 border-b border-green-200 dark:border-green-700">
+                  <span className="text-gray-600 dark:text-gray-400">Método:</span>
+                  <span className="font-medium text-gray-900 dark:text-white">
+                    {routeData.mechanism === 'automatic' ? 'Automático' : 'Manual'}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between py-2 border-b border-green-200 dark:border-green-700">
+                  <span className="text-gray-600 dark:text-gray-400">Ventanas de Tiempo:</span>
+                  <span className="font-medium text-gray-900 dark:text-white">
+                    {routeData.timeWindows.join(', ') || 'Todas'}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between py-2 border-b border-green-200 dark:border-green-700">
+                  <span className="text-gray-600 dark:text-gray-400">Fecha:</span>
+                  <span className="font-medium text-gray-900 dark:text-white">
+                    {new Date().toLocaleDateString('es-ES')}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between py-2 border-b border-green-200 dark:border-green-700">
+                  <span className="text-gray-600 dark:text-gray-400">Distancia Estimada:</span>
+                  <span className="font-medium text-gray-900 dark:text-white">
+                    {optimizationResult?.totalDistance || 0} millas
+                  </span>
+                </div>
+                <div className="flex items-center justify-between py-2">
+                  <span className="text-gray-600 dark:text-gray-400">Paradas Totales:</span>
+                  <span className="font-medium text-gray-900 dark:text-white">
+                    {optimizationResult?.totalOrders || 0}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            <div className="text-center">
+              <Button
+                onClick={async () => {
+                  try {
+                    setLoading(true)
+
+                    // Obtener detalles del warehouse seleccionado
+                    const selectedWarehouse = warehouses.find((w: any) => w.id.toString() === routeData.warehouseId)
+                    const selectedVehicle = vehicles.find((v: any) => v.id.toString() === routeData.vehicleId)
+                    const selectedDriver = drivers.find((d: any) => d.id.toString() === routeData.driverId)
+
+                    // Obtener los IDs de las órdenes seleccionadas para la optimización
+                    const selectedOrderIds = optimizationResult?.route?.stops?.map((stop: any) => stop.id) || []
+
+                    console.log('📦 Enviando órdenes seleccionadas:', selectedOrderIds)
+                    console.log('📍 Coordenadas del almacén:', selectedWarehouse)
+
+                    // Preparar datos para la API
+                    const routePayload = {
+                      mechanism: routeData.mechanism,
+                      selectedOrders: selectedOrderIds, // ¡Importante! IDs de órdenes para Mapbox
+                      timeWindows: routeData.timeWindows,
+                      warehouseId: routeData.warehouseId,
+                      vehicleId: routeData.vehicleId,
+                      driverId: routeData.driverId,
+                      driverName: selectedDriver ? `${selectedDriver.firstName} ${selectedDriver.lastName}` : undefined,
+                      vehiclePlate: selectedVehicle ? selectedVehicle.nickname || `${selectedVehicle.make} ${selectedVehicle.model}` : undefined,
+                      totalPackages: selectedOrderIds.length, // Usar cantidad real de órdenes seleccionadas
+                      estimatedDuration: optimizationResult?.estimatedDuration || '4h 30m',
+                      distance: optimizationResult?.totalDistance || 45.2,
+                      date: new Date().toISOString().split('T')[0],
+                      notes: `Ruta ${routeData.mechanism === 'automatic' ? 'automática' : 'manual'} creada el ${new Date().toLocaleDateString('es-ES')} con ${selectedOrderIds.length} paradas`,
+                      optimizedRoute: optimizationResult || {
+                        totalStops: selectedOrderIds.length,
+                        routeDetails: "Optimización completada"
+                      }
+                    }
+
+                    // Guardar ruta en la API
+                    const response = await fetch('/api/routes', {
+                      method: 'POST',
+                      headers: {
+                        'Content-Type': 'application/json',
+                      },
+                      body: JSON.stringify(routePayload)
+                    })
+
+                    if (response.ok) {
+                      const savedRoute = await response.json()
+
+                      // Actualizar estado de las órdenes a "En Ruta"
+                      try {
+                        // Obtener los IDs de las órdenes desde el resultado de la optimización
+                        const selectedOrderIds = optimizationResult?.route?.stops?.map((stop: any) => stop.id) || []
+                        const updatePromises = selectedOrderIds.map(async (orderId) => {
+                          const updateResponse = await fetch(`/api/package-orders/${orderId}`, {
+                            method: 'PUT',
+                            headers: {
+                              'Content-Type': 'application/json',
+                            },
+                            body: JSON.stringify({
+                              status: 'in_route'
+                            })
+                          })
+
+                          if (!updateResponse.ok) {
+                            console.error(`Error updating order ${orderId}:`, updateResponse.statusText)
+                          }
+                          return updateResponse
+                        })
+
+                        await Promise.all(updatePromises)
+                        console.log('✅ Estados de órdenes actualizados a "En Ruta"')
+                      } catch (error) {
+                        console.error('Error updating orders status:', error)
+                      }
+
+                      showNotification('success', 'Ruta Creada', `La ruta ${savedRoute.routeNumber} ha sido guardada exitosamente`)
+                      router.push('/dashboard/admin/routes')
+                    } else {
+                      const errorData = await response.json()
+                      showNotification('error', 'Error', errorData.error || 'No se pudo guardar la ruta')
+                    }
+                  } catch (error) {
+                    console.error('Error saving route:', error)
+                    showNotification('error', 'Error de conexión', 'No se pudo guardar la ruta. Intenta de nuevo.')
+                  } finally {
+                    setLoading(false)
+                  }
+                }}
+                disabled={loading}
+                className="px-8 py-3 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition-all duration-300 flex items-center gap-2 mx-auto shadow-lg"
+              >
+                {loading ? (
+                  <>
+                    <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    Guardando...
+                  </>
+                ) : (
+                  <>
+                    <Save className="w-5 h-5" />
+                    Guardar Ruta
+                  </>
+                )}
+              </Button>
+            </div>
+          </motion.div>
+        )
+    }
+  }
+
+  return (
+    <DashboardLayout>
+      <div className="min-h-screen p-6">
+        <div className="max-w-6xl mx-auto">
+          {/* Header */}
+          <div className="mb-8">
+            <button
+              onClick={() => router.back()}
+              className="flex items-center gap-2 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white mb-4"
+            >
+              <ArrowLeft className="w-4 h-4" />
+              Volver
+            </button>
+            <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
+              Crear Nueva Ruta
+            </h1>
+            <p className="text-gray-600 dark:text-gray-400 mt-2">
+              Configura y optimiza tu ruta de entregas
+            </p>
+          </div>
+
+          {/* Progress Steps */}
+          <div className="mb-8">
+            <div className="flex items-center justify-between relative">
+              {/* Línea de progreso continua */}
+              <div className="absolute top-6 left-0 right-0 h-1 bg-gray-200 dark:bg-gray-700 -z-10" />
+              <div
+                className="absolute top-6 left-0 h-1 bg-blue-600 -z-10 transition-all duration-500"
+                style={{ width: `${((currentStep - 1) / (steps.length - 1)) * 100}%` }}
+              />
+
+              {steps.map((step, index) => (
+                <div key={step.id} className="flex flex-col items-center">
+                  <motion.div
+                    className={cn(
+                      'w-12 h-12 rounded-full flex items-center justify-center transition-all duration-300 border-4 relative z-10',
+                      currentStep > step.id
+                        ? 'bg-green-500 text-white border-green-600 shadow-lg'
+                        : currentStep === step.id
+                        ? step.color === 'blue'
+                          ? 'bg-blue-600 text-white border-blue-700 shadow-xl scale-110'
+                          : 'bg-red-600 text-white border-red-700 shadow-xl scale-110'
+                        : 'bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400 border-gray-300 dark:border-gray-600'
+                    )}
+                    whileHover={{ scale: currentStep === step.id ? 1.15 : 1.05 }}
+                  >
+                    {currentStep > step.id ? (
+                      <CheckCircle className="w-6 h-6" />
+                    ) : (
+                      <step.icon className="w-6 h-6" />
+                    )}
+                  </motion.div>
+                  <div className="mt-3 text-center max-w-20">
+                    <div className={cn(
+                      'text-xs font-medium leading-tight',
+                      currentStep >= step.id
+                        ? 'text-gray-900 dark:text-white'
+                        : 'text-gray-500 dark:text-gray-400'
+                    )}>
+                      {step.title}
+                    </div>
+                    <div className="text-xs text-gray-500 dark:text-gray-500 mt-1 hidden sm:block">
+                      {step.id}/{steps.length}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Step Content */}
+          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl border border-gray-200 dark:border-gray-700 p-8 mb-8">
+            <AnimatePresence mode="wait">
+              {renderStep()}
+            </AnimatePresence>
+          </div>
+
+          {/* Navigation */}
+          <div className="flex justify-between items-center">
+            <Button
+              onClick={prevStep}
+              disabled={currentStep === 1}
+              variant="outline"
+              className={cn(
+                'flex items-center gap-2',
+                currentStep === 1 && 'opacity-50 cursor-not-allowed'
+              )}
+            >
+              <ArrowLeft className="w-4 h-4" />
+              Anterior
+            </Button>
+
+            <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
+              Paso {currentStep} de {steps.length}
+            </div>
+
+            <Button
+              onClick={nextStep}
+              disabled={!canProceed() || currentStep === steps.length}
+              className={cn(
+                'flex items-center gap-2',
+                (!canProceed() || currentStep === steps.length) && 'opacity-50 cursor-not-allowed'
+              )}
+            >
+              {currentStep === steps.length ? 'Finalizar' : 'Siguiente'}
+              <ArrowRight className="w-4 h-4" />
+            </Button>
+          </div>
+        </div>
+      </div>
+    </DashboardLayout>
+  )
+}

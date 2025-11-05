@@ -188,7 +188,13 @@ export default function PackageOrdersPage() {
     scheduled: { label: 'Programado', color: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400', icon: Calendar },
     picked_up: { label: 'Recogido', color: 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-400', icon: Package },
     delivered: { label: 'Entregado', color: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400', icon: CheckCircle },
-    cancelled: { label: 'Cancelado', color: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400', icon: XCircle }
+    cancelled: { label: 'Cancelado', color: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400', icon: XCircle },
+    // Additional common statuses that might exist in the database
+    in_transit: { label: 'En Ruta', color: 'bg-gradient-to-r from-blue-500 to-indigo-600 text-white shadow-lg border border-blue-200 dark:from-blue-600 dark:to-indigo-700 dark:border-blue-400', icon: Package },
+    reprogrammed: { label: 'Reprogramada', color: 'bg-gradient-to-r from-yellow-500 to-orange-600 text-white shadow-lg border border-yellow-200 dark:from-yellow-600 dark:to-orange-700 dark:border-yellow-400', icon: AlertCircle },
+    processing: { label: 'Procesando', color: 'bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-400', icon: AlertCircle },
+    ready: { label: 'Listo', color: 'bg-teal-100 text-teal-800 dark:bg-teal-900/30 dark:text-teal-400', icon: CheckCircle },
+    failed: { label: 'Fallido', color: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400', icon: XCircle }
   }
 
   // Handle view order details
@@ -999,13 +1005,13 @@ export default function PackageOrdersPage() {
                         <td className="px-4 py-4 whitespace-nowrap">
                           <span className={cn(
                             'inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium',
-                            STATUSES[order.status].color
+                            STATUSES[order.status]?.color || 'bg-gray-100 text-gray-800 dark:bg-gray-900/30 dark:text-gray-400'
                           )}>
                             {(() => {
-                              const StatusIcon = STATUSES[order.status].icon
+                              const StatusIcon = STATUSES[order.status]?.icon || AlertCircle
                               return <StatusIcon className="w-3 h-3 mr-1" />
                             })()}
-                            {STATUSES[order.status].label}
+                            {STATUSES[order.status]?.label || order.status || 'Desconocido'}
                           </span>
                         </td>
                         <td className="px-2 py-4 whitespace-nowrap">

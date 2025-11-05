@@ -50,7 +50,7 @@ interface OrderFormData {
   notes?: string
   payment_method?: string
   payment_terms?: string
-  status: string
+  status: 'BORRADOR' | 'SOLICITUD_PRESUPUESTO' | 'COMPRADA' | 'RECIBIDA' | 'CANCELLED'
 }
 
 const BOX_SIZES = ['pequeño', 'mediano', 'grande', 'extra grande']
@@ -175,7 +175,7 @@ export default function CreatePurchaseOrderPage() {
         order_date: new Date().toISOString(),
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
-        status: 'BORRADOR'
+        status: 'BORRADOR' as const
       }
 
       await createPurchaseOrder(orderData)
@@ -202,7 +202,7 @@ export default function CreatePurchaseOrderPage() {
         budget_request_date: new Date().toISOString(),
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
-        status: 'SOLICITUD_PRESUPUESTO'
+        status: 'SOLICITUD_PRESUPUESTO' as const
       }
 
       await createPurchaseOrder(orderData)
