@@ -71,6 +71,7 @@ export default function CreateRoutePage() {
   const [optimizationResult, setOptimizationResult] = useState<any>(null)
   const [optimizedRouteData, setOptimizedRouteData] = useState<any>(null)
   const [showMap, setShowMap] = useState(true)
+  const [selectedRouteData, setSelectedRouteData] = useState<any>(null) // Para guardar la ruta alternativa seleccionada
 
   const steps = [
     { id: 1, title: 'Mecanismo', icon: Settings, description: 'Elegir método de creación', color: 'blue' },
@@ -132,14 +133,30 @@ export default function CreateRoutePage() {
 
   const fetchPackageOrders = async () => {
     try {
+      // Fetch both pending and reprogrammed orders for route creation
       const response = await fetch('/api/package-orders?status=pending&limit=1000')
-      if (response.ok) {
-        const data = await response.json()
-        setPackageOrders(data.data || [])
+      const response2 = await fetch('/api/package-orders?status=reprogrammed&limit=1000')
+
+      if (response.ok && response2.ok) {
+        const data1 = await response.json()
+        const data2 = await response2.json()
+        // Combine both pending and reprogrammed orders
+        const allOrders = [...(data1.data || []), ...(data2.data || [])]
+        setPackageOrders(allOrders)
       }
     } catch (error) {
       console.error('Error fetching package orders:', error)
     }
+  }
+
+  // Función para manejar la selección de ruta alternativa
+  const handleRouteSelection = (routeData: any) => {
+    console.log('🛣️ Ruta seleccionada:', routeData)
+    setSelectedRouteData(routeData)
+
+    // Mostrar notificación sobre la ruta seleccionada
+    const routeType = routeData.selectedRouteIndex === 0 ? 'Óptima' : `Alternativa ${routeData.selectedRouteIndex}`
+    showNotification(`Ruta ${routeType} seleccionada`, 'success')
   }
 
   const updateRouteData = (key: keyof RouteCreationData, value: any) => {
@@ -190,9 +207,9 @@ export default function CreateRoutePage() {
 
       // Filtrar y procesar órdenes con lógica mejorada
       const relevantOrders = packageOrders.filter(order => {
-        // Si no hay ventanas de tiempo seleccionadas, incluir todas las órdenes pendientes
+        // Si no hay ventanas de tiempo seleccionadas, incluir todas las órdenes pendientes y reprogrammed
         if (routeData.timeWindows.length === 0) {
-          return order.status === 'pending' || order.status === 'scheduled'
+          return order.status === 'pending' || order.status === 'scheduled' || order.status === 'reprogrammed'
         }
 
         // Filtrar por ventanas de tiempo seleccionadas
@@ -1391,7 +1408,7 @@ export default function CreateRoutePage() {
                       return [-80.2395, 25.7548] // Miami coordinates
                     })()}
                     theme={theme}
-                    onOptimizationComplete={handleOptimizationComplete}
+                    onOptimizationComplete={handleRouteSelection}
                   />
                 </div>
               )}
@@ -1499,7 +1516,8 @@ export default function CreateRoutePage() {
                       optimizedRoute: optimizationResult || {
                         totalStops: selectedOrderIds.length,
                         routeDetails: "Optimización completada"
-                      }
+                      },
+                      selectedRouteData: selectedRouteData // Agregar ruta alternativa seleccionada
                     }
 
                     // Guardar ruta en la API

@@ -48,7 +48,7 @@ interface PackageOrder {
   notes?: string
   scheduledDate?: string
   timeSlot?: string
-  status: 'pending' | 'scheduled' | 'picked_up' | 'delivered' | 'cancelled'
+  status: 'pending' | 'scheduled' | 'picked_up' | 'delivered' | 'cancelled' | 'in_transit' | 'in_route'
   createdAt: string
   updatedAt: string
   firstName?: string
@@ -191,6 +191,7 @@ export default function PackageOrdersPage() {
     cancelled: { label: 'Cancelado', color: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400', icon: XCircle },
     // Additional common statuses that might exist in the database
     in_transit: { label: 'En Ruta', color: 'bg-gradient-to-r from-blue-500 to-indigo-600 text-white shadow-lg border border-blue-200 dark:from-blue-600 dark:to-indigo-700 dark:border-blue-400', icon: Package },
+    in_route: { label: 'En Ruta', color: 'bg-gradient-to-r from-blue-500 to-indigo-600 text-white shadow-lg border border-blue-200 dark:from-blue-600 dark:to-indigo-700 dark:border-blue-400', icon: Package },
     reprogrammed: { label: 'Reprogramada', color: 'bg-gradient-to-r from-yellow-500 to-orange-600 text-white shadow-lg border border-yellow-200 dark:from-yellow-600 dark:to-orange-700 dark:border-yellow-400', icon: AlertCircle },
     processing: { label: 'Procesando', color: 'bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-400', icon: AlertCircle },
     ready: { label: 'Listo', color: 'bg-teal-100 text-teal-800 dark:bg-teal-900/30 dark:text-teal-400', icon: CheckCircle },

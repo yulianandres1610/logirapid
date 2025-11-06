@@ -2,7 +2,6 @@
 
 import React, { useEffect, useRef, useState } from 'react'
 import mapboxgl from 'mapbox-gl'
-import { MapPin, Truck, Package, Navigation } from 'lucide-react'
 
 // Importar CSS de Mapbox
 import 'mapbox-gl/dist/mapbox-gl.css'
@@ -49,328 +48,346 @@ export default function RouteMap({
 }: RouteMapProps) {
   const mapContainerRef = useRef<HTMLDivElement>(null)
   const mapRef = useRef<mapboxgl.Map>()
-  const markersRef = useRef<mapboxgl.Marker[]>([])
-  const routeLayerRef = useRef<string>('route-layer')
+  const [routes, setRoutes] = useState<any[]>([])
+  const [selectedRoute, setSelectedRoute] = useState(0)
   const [loading, setLoading] = useState(true)
-  const [optimizing, setOptimizing] = useState(false)
-  const [optimizationProgress, setOptimizationProgress] = useState(0)
+  const [allCoordinates, setAllCoordinates] = useState<[number, number][]>([])
+  const markersRef = useRef<mapboxgl.Marker[]>([])
 
-  // Función para obtener ruta optimizada con Mapbox Directions API
-  const getOptimizedRoute = async (stops: RouteStop[], warehouse: [number, number]) => {
-    console.log('🚀 Iniciando optimización de ruta con Mapbox')
-    console.log('📍 Almacén:', warehouse)
-    console.log('📦 Paradas:', stops.length)
+  // Limpiar marcadores existentes
+  const clearMarkers = () => {
+    console.log('🧹 Limpiando marcadores anteriores. Total:', markersRef.current.length)
 
-    if (stops.length === 0) {
-      console.warn('❌ No hay paradas para optimizar')
-      return null
-    }
-
-    try {
-      setOptimizing(true)
-      setOptimizationProgress(20)
-
-      // Preparar coordenadas: almacén -> paradas -> almacén
-      const coordinates: [number, number][] = [warehouse]
-
-      // Añadir paradas válidas con coordenadas
-      const validStops = stops.filter(stop =>
-        stop.coordinates &&
-        stop.coordinates[0] !== 0 &&
-        stop.coordinates[1] !== 0
-      )
-
-      validStops.forEach(stop => {
-        coordinates.push(stop.coordinates!)
-      })
-
-      // Volver al almacén
-      coordinates.push(warehouse)
-
-      console.log('📍 Coordenadas preparadas:', coordinates.length, 'puntos')
-
-      if (coordinates.length < 2) {
-        console.warn('❌ No hay suficientes coordenadas válidas')
-        return null
-      }
-
-      setOptimizationProgress(50)
-
-      // Llamar a Mapbox Directions API
-      const coordinatesString = coordinates.map(coord => `${coord[0]},${coord[1]}`).join(';')
-      const mapboxToken = mapboxgl.accessToken
-
-      const directionsUrl = `https://api.mapbox.com/directions/v5/mapbox/driving/${coordinatesString}?` +
-        `access_token=${mapboxToken}&` +
-        `geometries=geojson&` +
-        `overview=full&` +
-        `steps=true`
-
-      console.log('📤 Llamando a Mapbox Directions API...')
-
-      const response = await fetch(directionsUrl)
-
-      if (!response.ok) {
-        throw new Error(`Mapbox API error: ${response.status}`)
-      }
-
-      setOptimizationProgress(80)
-
-      const result = await response.json()
-      console.log('✅ Respuesta de Mapbox recibida')
-
-      if (result.routes && result.routes.length > 0) {
-        const route = result.routes[0]
-        const distanceMiles = (route.distance / 1609.34).toFixed(1)
-        const durationMinutes = Math.floor(route.duration / 60)
-
-        console.log(`🎯 Ruta optimizada: ${distanceMiles} mi, ${durationMinutes} min`)
-
-        const optimizedData = {
-          geometry: route.geometry,
-          distance: parseFloat(distanceMiles),
-          duration: durationMinutes,
-          coordinates: route.geometry.coordinates,
-          stops: validStops
+    markersRef.current.forEach((marker, index) => {
+      try {
+        if (marker && marker.remove) {
+          marker.remove()
+          console.log(`✅ Marcador ${index} eliminado`)
         }
-
-        setOptimizationProgress(100)
-
-        // Llamar al callback
-        if (onOptimizationComplete) {
-          onOptimizationComplete(optimizedData)
-        }
-
-        return optimizedData
+      } catch (error) {
+        console.warn(`⚠️ Error eliminando marcador ${index}:`, error)
       }
+    })
 
-      return null
-
-    } catch (error) {
-      console.error('❌ Error en optimización:', error)
-      return null
-    } finally {
-      setOptimizing(false)
-      setTimeout(() => setOptimizationProgress(0), 1000)
-    }
+    markersRef.current = []
+    console.log('✅ Todos los marcadores han sido limpiados')
   }
 
-  // Inicializar mapa
   useEffect(() => {
-    if (!mapContainerRef.current || mapRef.current) return
-
+    // Crear mapa
     mapRef.current = new mapboxgl.Map({
       container: mapContainerRef.current,
-      style: 'mapbox://styles/mapbox/streets-v12',
+      style: theme === 'dark' ? 'mapbox://styles/mapbox/dark-v11' : 'mapbox://styles/mapbox/streets-v12',
       center: warehouseCoordinates,
-      zoom: 12,
-      pitch: 0,
-      bearing: 0
+      zoom: 11,
     })
 
     mapRef.current.on('load', () => {
       setLoading(false)
-      console.log('✅ Mapa cargado')
     })
 
+    // Limpieza
     return () => {
+      clearMarkers()
       if (mapRef.current) {
         mapRef.current.remove()
         mapRef.current = undefined
       }
     }
-  }, [warehouseCoordinates])
+  }, [warehouseCoordinates, theme])
 
-  // Actualizar mapa cuando hay resultados de optimización
+  // Cuando hay resultados de optimización, obtener rutas de Mapbox
   useEffect(() => {
-    const updateMapWithRoute = async () => {
-      if (!mapRef.current || !optimizationResult || loading || optimizing) {
-        return
-      }
+    if (!optimizationResult || !optimizationResult.route || !optimizationResult.route.stops) {
+      return
+    }
 
-      const map = mapRef.current
-      console.log('🗺️ Actualizando mapa con ruta optimizada')
+    const fetchRoutes = async () => {
+      try {
+        const stops = optimizationResult.route.stops
 
-      // Optimizar ruta
-      const optimizedData = await getOptimizedRoute(optimizationResult.route.stops, warehouseCoordinates)
+        // Preparar coordenadas: almacén -> paradas -> almacén
+        const coordinates: [number, number][] = [warehouseCoordinates]
 
-      if (!optimizedData) {
-        console.warn('⚠️ No se pudo obtener la ruta optimizada')
-        return
-      }
+        // Añadir paradas válidas con coordenadas
+        const validStops = stops.filter(stop =>
+          stop.coordinates &&
+          stop.coordinates[0] !== 0 &&
+          stop.coordinates[1] !== 0
+        )
 
-      // Limpiar elementos existentes
-      markersRef.current.forEach(marker => marker.remove())
-      markersRef.current = []
+        validStops.forEach(stop => {
+          coordinates.push(stop.coordinates!)
+        })
 
-      // Remover capa de ruta anterior
-      if (map.getLayer(routeLayerRef.current)) {
-        map.removeLayer(routeLayerRef.current)
-      }
-      if (map.getSource(routeLayerRef.current)) {
-        map.removeSource(routeLayerRef.current)
-      }
+        // Volver al almacén
+        coordinates.push(warehouseCoordinates)
 
-      // Dibujar la ruta
-      if (optimizedData.coordinates && optimizedData.coordinates.length > 0) {
-        console.log('🛣️ Dibujando ruta con', optimizedData.coordinates.length, 'puntos')
+        setAllCoordinates(coordinates)
 
-        const routeGeoJSON = {
-          type: 'Feature',
-          properties: {},
-          geometry: {
-            type: 'LineString',
-            coordinates: optimizedData.coordinates
-          }
+        if (coordinates.length < 2) {
+          console.warn('❌ No hay suficientes coordenadas válidas')
+          return
         }
 
-        // Añadir fuente
-        map.addSource(routeLayerRef.current, {
-          type: 'geojson',
-          data: routeGeoJSON
-        })
+        // Construir URL para Mapbox Directions API
+        const coordinatesString = coordinates.map(coord => `${coord[0]},${coord[1]}`).join(';')
+        const apiUrl = `https://api.mapbox.com/directions/v5/mapbox/driving/${coordinatesString}?alternatives=true&geometries=geojson&overview=full&steps=true&access_token=${mapboxgl.accessToken}`
 
-        // Añadir capa de ruta
-        map.addLayer({
-          id: routeLayerRef.current,
-          type: 'line',
-          source: routeLayerRef.current,
-          layout: {
-            'line-join': 'round',
-            'line-cap': 'round'
-          },
-          paint: {
-            'line-color': '#DC2626',
-            'line-width': 6,
-            'line-opacity': 1
-          }
-        })
+        console.log('📤 Obteniendo rutas de Mapbox API...')
+        const response = await fetch(apiUrl)
+        const data = await response.json()
 
-        console.log('✅ Ruta dibujada en el mapa')
+        console.log('✅ Rutas obtenidas:', data.routes.length)
+        setRoutes(data.routes)
+
+      } catch (error) {
+        console.error('❌ Error obteniendo rutas:', error)
       }
+    }
 
-      // Crear marcador del almacén
-      const createWarehouseMarker = (label: string) => {
-        const el = document.createElement('div')
-        el.style.cssText = `
-          width: 40px;
-          height: 40px;
-          background: linear-gradient(135deg, #10B981 0%, #059669 100%);
-          border-radius: 50%;
+    fetchRoutes()
+  }, [optimizationResult, warehouseCoordinates])
+
+  // Crear marcadores (función separada para reutilización)
+  const createMarkers = () => {
+    const map = mapRef.current
+    if (!map) {
+      console.warn('⚠️ Mapa no disponible para crear marcadores')
+      return
+    }
+
+    if (allCoordinates.length === 0) {
+      console.warn('⚠️ No hay coordenadas para crear marcadores')
+      return
+    }
+
+    console.log('📍 Creando marcadores. Coordenadas:', allCoordinates.length)
+    console.log('📍 Paradas disponibles:', optimizationResult?.route?.stops?.length || 0)
+
+    // Limpiar marcadores anteriores
+    clearMarkers()
+
+    // Crear marcadores simples y robustos
+    const createMarker = (coord: [number, number], index: number, isWarehouse: boolean = false, isStart: boolean = false, isEnd: boolean = false) => {
+      let markerElement: HTMLDivElement
+      let popupText = ''
+
+      if (isWarehouse) {
+        // Marcador de almacén - usar emoji simple
+        markerElement = document.createElement('div')
+        markerElement.style.cssText = `
+          width: 32px;
+          height: 32px;
+          background: #10B981;
           border: 3px solid white;
+          border-radius: 50%;
           display: flex;
           align-items: center;
           justify-content: center;
-          font-size: 20px;
-          box-shadow: 0 4px 12px rgba(16, 185, 129, 0.4);
-          position: relative;
+          font-size: 16px;
+          box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+          z-index: 1000;
         `
-        el.innerHTML = '🏢'
-
-        // Añadir etiqueta
-        const labelEl = document.createElement('div')
-        labelEl.style.cssText = `
-          position: absolute;
-          bottom: -25px;
-          left: 50%;
-          transform: translateX(-50%);
-          background: rgba(16, 185, 129, 0.9);
-          color: white;
-          padding: 2px 6px;
-          border-radius: 4px;
-          font-size: 10px;
-          font-weight: 600;
-          white-space: nowrap;
-        `
-        labelEl.textContent = label
-        el.appendChild(labelEl)
-
-        return el
-      }
-
-      // Marcador de almacén (inicio)
-      const warehouseMarker = new mapboxgl.Marker({
-        element: createWarehouseMarker('Inicio'),
-        anchor: 'center'
-      })
-        .setLngLat(warehouseCoordinates)
-        .addTo(map)
-
-      markersRef.current.push(warehouseMarker)
-
-      // Crear marcadores para las paradas
-      optimizedData.stops.forEach((stop, index) => {
-        const isPickup = stop.type === 'pickup'
+        markerElement.innerHTML = '🏢'
+        popupText = isStart ? 'Almacén (Inicio)' : 'Almacén (Fin)'
+      } else {
+        // Marcadores de paradas
+        const stop = optimizationResult?.route?.stops?.[index - 1]
+        const isPickup = stop?.type === 'pickup'
         const color = isPickup ? '#F59E0B' : '#3B82F6'
 
-        const stopEl = document.createElement('div')
-        stopEl.style.cssText = `
-          width: 36px;
-          height: 36px;
+        markerElement = document.createElement('div')
+        markerElement.style.cssText = `
+          width: 28px;
+          height: 28px;
           background: ${color};
+          border: 2px solid white;
           border-radius: 50%;
-          border: 3px solid white;
           display: flex;
           align-items: center;
           justify-content: center;
           color: white;
           font-weight: bold;
-          font-size: 14px;
-          box-shadow: 0 4px 12px ${color}66;
-          position: relative;
+          font-size: 12px;
+          box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+          z-index: 1000;
         `
-        stopEl.innerHTML = `${index + 1}`
+        markerElement.innerHTML = `${index}`
 
-        // Añadir etiqueta con nombre del cliente
-        const labelEl = document.createElement('div')
-        labelEl.style.cssText = `
-          position: absolute;
-          bottom: -22px;
-          left: 50%;
-          transform: translateX(-50%);
-          background: ${color};
-          color: white;
-          padding: 2px 6px;
-          border-radius: 4px;
-          font-size: 10px;
-          font-weight: 600;
-          white-space: nowrap;
-        `
-        labelEl.textContent = stop.customer.substring(0, 15) + (stop.customer.length > 15 ? '...' : '')
-        stopEl.appendChild(labelEl)
-
-        const stopMarker = new mapboxgl.Marker({
-          element: stopEl,
-          anchor: 'center'
-        })
-          .setLngLat(stop.coordinates!)
-          .addTo(map)
-
-        markersRef.current.push(stopMarker)
-      })
-
-      // Marcador de almacén (fin)
-      const warehouseEndMarker = new mapboxgl.Marker({
-        element: createWarehouseMarker('Fin'),
-        anchor: 'center'
-      })
-        .setLngLat(warehouseCoordinates)
-        .addTo(map)
-
-      markersRef.current.push(warehouseEndMarker)
-
-      // Ajustar vista para mostrar toda la ruta
-      if (optimizedData.coordinates && optimizedData.coordinates.length > 0) {
-        const bounds = new mapboxgl.LngLatBounds()
-        optimizedData.coordinates.forEach(coord => bounds.extend(coord))
-        map.fitBounds(bounds, { padding: 50, maxZoom: 14 })
+        if (stop) {
+          popupText = `${index}. ${stop.customer}\n${stop.address}`
+        }
       }
 
-      console.log('✅ Mapa actualizado completamente')
+      // Crear popup con información
+      const popup = new mapboxgl.Popup({
+        closeButton: false,
+        closeOnClick: false,
+        offset: 10
+      }).setHTML(`
+        <div style="padding: 4px 8px; font-size: 12px; font-weight: 500;">
+          ${popupText}
+        </div>
+      `)
+
+      // Crear y guardar el marcador
+      const marker = new mapboxgl.Marker({
+        element: markerElement,
+        anchor: 'center'
+      })
+        .setLngLat(coord)
+        .setPopup(popup)
+        .addTo(map)
+
+      markersRef.current.push(marker)
+
+      console.log(`✅ Marcador creado para índice ${index} en coordenadas:`, coord)
+
+      // Mostrar popup al pasar el mouse
+      markerElement.addEventListener('mouseenter', () => {
+        popup.addTo(map)
+      })
+
+      markerElement.addEventListener('mouseleave', () => {
+        popup.remove()
+      })
+
+      return marker
     }
 
-    updateMapWithRoute()
-  }, [optimizationResult, warehouseCoordinates])
+    // Agregar marcadores para cada coordenada
+    allCoordinates.forEach((coord, index) => {
+      if (index === 0) {
+        // Almacén inicio
+        createMarker(coord, index, true, true, false)
+      } else if (index === allCoordinates.length - 1 && allCoordinates.length > 1) {
+        // Almacén fin (solo si hay más de un punto)
+        createMarker(coord, index, true, false, true)
+      } else {
+        // Paradas intermedias
+        createMarker(coord, index, false, false, false)
+      }
+    })
+
+    console.log(`✅ Total de marcadores creados: ${markersRef.current.length}`)
+  }
+
+  // Dibujar rutas en el mapa
+  useEffect(() => {
+    const map = mapRef.current
+    if (!map || routes.length === 0) return
+
+    const updateMap = () => {
+      // Limpiar capas de rutas anteriores
+      routes.forEach((_, i) => {
+        const id = `route-${i}`
+        if (map.getLayer(id)) {
+          map.removeLayer(id)
+        }
+        if (map.getSource(id)) {
+          map.removeSource(id)
+        }
+      })
+
+      // Añadir cada ruta como una capa
+      routes.forEach((route, i) => {
+        const id = `route-${i}`
+
+        map.addSource(id, {
+          type: 'geojson',
+          data: {
+            type: 'Feature',
+            geometry: route.geometry,
+          },
+        })
+
+        map.addLayer({
+          id,
+          type: 'line',
+          source: id,
+          layout: {
+            'line-join': 'round',
+            'line-cap': 'round',
+          },
+          paint: {
+            'line-color': i === selectedRoute ? '#DC2626' : '#888',
+            'line-width': i === selectedRoute ? 6 : 3,
+            'line-opacity': i === selectedRoute ? 0.9 : 0.4,
+          },
+        })
+      })
+
+      // Ajustar vista para mostrar toda la ruta
+      if (allCoordinates.length > 0) {
+        const bounds = new mapboxgl.LngLatBounds()
+        allCoordinates.forEach(coord => bounds.extend(coord))
+        map.fitBounds(bounds, { padding: 60, maxZoom: 15 })
+      }
+    }
+
+    if (map.loaded()) {
+      updateMap()
+      createMarkers()
+    } else {
+      map.on('load', () => {
+        updateMap()
+        createMarkers()
+      })
+    }
+
+    // Cleanup para cuando se desmonte el componente
+    return () => {
+      clearMarkers()
+    }
+  }, [routes, allCoordinates, optimizationResult])
+
+  // Efecto separado para manejar cambios en selectedRoute
+  useEffect(() => {
+    const map = mapRef.current
+    if (!map || routes.length === 0) return
+
+    console.log('🔄 Actualizando ruta seleccionada:', selectedRoute)
+
+    // Actualizar colores de rutas
+    routes.forEach((_, i) => {
+      const id = `route-${i}`
+      if (map.getLayer(id)) {
+        map.setPaintProperty(id, 'line-color', i === selectedRoute ? '#DC2626' : '#888')
+        map.setPaintProperty(id, 'line-width', i === selectedRoute ? 6 : 3)
+        map.setPaintProperty(id, 'line-opacity', i === selectedRoute ? 0.9 : 0.4)
+      }
+    })
+
+    // Recrear marcadores con un pequeño retraso para asegurar que el mapa esté listo
+    const recreateMarkers = () => {
+      console.log('📍 Recreando marcadores para ruta:', selectedRoute)
+      createMarkers()
+    }
+
+    // Usar setTimeout para evitar condiciones de carrera
+    const timeoutId = setTimeout(recreateMarkers, 100)
+
+    // Notificar al componente padre sobre la ruta seleccionada
+    if (onOptimizationComplete && routes[selectedRoute]) {
+      onOptimizationComplete({
+        selectedRouteIndex: selectedRoute,
+        selectedRoute: routes[selectedRoute],
+        allRoutes: routes
+      })
+    }
+
+    // Limpiar timeout
+    return () => {
+      clearTimeout(timeoutId)
+    }
+  }, [selectedRoute, routes, onOptimizationComplete])
+
+  const highlightRoute = (index: number) => {
+    if (selectedRoute !== index) {
+      setSelectedRoute(index)
+    }
+  }
 
   return (
     <div className="relative w-full h-full">
@@ -380,55 +397,46 @@ export default function RouteMap({
         style={{ minHeight: '500px', height: '500px' }}
       />
 
-      {/* Estado de carga */}
-      {loading && (
-        <div className="absolute inset-0 bg-gray-100 dark:bg-gray-800 flex items-center justify-center rounded-lg">
-          <div className="text-center">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-            <p className="text-gray-600 dark:text-gray-400">Cargando mapa...</p>
-          </div>
+      {/* Panel lateral de rutas alternativas */}
+      {routes.length > 0 && (
+        <div className="absolute top-4 left-4 bg-white dark:bg-gray-800 rounded-lg shadow-lg p-4 border border-gray-200 dark:border-gray-700 max-w-xs">
+          <h3 className="font-semibold text-gray-900 dark:text-white mb-3">Rutas alternativas</h3>
+          {routes.map((route, i) => {
+            const distanceKm = (route.distance / 1000).toFixed(2)
+            const durationMin = Math.round(route.duration / 60)
+            return (
+              <button
+                key={i}
+                onClick={() => highlightRoute(i)}
+                className={`w-full text-left p-2 mb-2 rounded-md transition-colors ${
+                  selectedRoute === i
+                    ? 'bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 border-2 border-red-500'
+                    : 'bg-gray-50 dark:bg-gray-700 text-gray-700 dark:text-gray-300 border-2 border-transparent hover:bg-gray-100 dark:hover:bg-gray-600'
+                }`}
+              >
+                <div className="flex justify-between items-center">
+                  <span className="font-medium">Ruta {i + 1}</span>
+                  <span className={`text-xs px-2 py-1 rounded ${
+                    selectedRoute === i
+                      ? 'bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300'
+                      : 'bg-gray-100 dark:bg-gray-600 text-gray-600 dark:text-gray-400'
+                  }`}>
+                    {i === 0 ? 'Óptima' : `Alt ${i}`}
+                  </span>
+                </div>
+                <div className="text-xs text-gray-600 dark:text-gray-400 mt-1">
+                  {distanceKm} km • {durationMin} min
+                </div>
+              </button>
+            )
+          })}
         </div>
       )}
 
-      {/* Estado de optimización */}
-      {optimizing && (
-        <div className="absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center rounded-lg z-50">
-          <div className="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-md mx-4">
-            <div className="flex items-center gap-3 mb-4">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Optimizando ruta</h3>
-            </div>
-
-            <div className="space-y-3">
-              <div className="flex justify-between text-sm text-gray-600 dark:text-gray-400">
-                <span>Procesando con Mapbox...</span>
-                <span>{optimizationProgress}%</span>
-              </div>
-
-              <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
-                <div
-                  className="bg-blue-600 h-2 rounded-full transition-all duration-300 ease-out"
-                  style={{ width: `${optimizationProgress}%` }}
-                ></div>
-              </div>
-
-              <p className="text-xs text-gray-500 dark:text-gray-400">
-                {optimizationProgress < 50 && 'Preparando coordenadas...'}
-                {optimizationProgress >= 50 && optimizationProgress < 90 && 'Optimizando ruta...'}
-                {optimizationProgress >= 90 && 'Finalizando...'}
-              </p>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Información de la ruta */}
+      {/* Información de la ruta optimizada */}
       {optimizationResult && (
-        <div className="absolute top-4 left-4 bg-white dark:bg-gray-800 rounded-lg shadow-lg p-4 border border-gray-200 dark:border-gray-700">
-          <div className="flex items-center gap-2 mb-3">
-            <Navigation className="w-5 h-5 text-blue-600" />
-            <h3 className="font-semibold text-gray-900 dark:text-white">Resumen de Ruta</h3>
-          </div>
+        <div className="absolute top-4 right-4 bg-white dark:bg-gray-800 rounded-lg shadow-lg p-4 border border-gray-200 dark:border-gray-700 max-w-xs">
+          <h3 className="font-semibold text-gray-900 dark:text-white mb-3">Resumen de Ruta</h3>
           <div className="space-y-2 text-sm">
             <div className="flex justify-between gap-4">
               <span className="text-gray-600 dark:text-gray-400">Total Paradas:</span>
@@ -442,48 +450,45 @@ export default function RouteMap({
               <span className="text-gray-600 dark:text-gray-400">Entregas:</span>
               <span className="font-medium text-blue-600">{optimizationResult.deliveries}</span>
             </div>
-            <div className="flex justify-between gap-4">
-              <span className="text-gray-600 dark:text-gray-400">Distancia:</span>
-              <span className="font-medium text-gray-900 dark:text-white">{optimizationResult.totalDistance} mi</span>
-            </div>
-            <div className="flex justify-between gap-4">
-              <span className="text-gray-600 dark:text-gray-400">Duración:</span>
-              <span className="font-medium text-gray-900 dark:text-white">{optimizationResult.estimatedDuration}</span>
-            </div>
+            {routes[selectedRoute] && (
+              <>
+                <div className="flex justify-between gap-4">
+                  <span className="text-gray-600 dark:text-gray-400">Distancia:</span>
+                  <span className="font-medium text-gray-900 dark:text-white">
+                    {(routes[selectedRoute].distance / 1000).toFixed(2)} km
+                  </span>
+                </div>
+                <div className="flex justify-between gap-4">
+                  <span className="text-gray-600 dark:text-gray-400">Duración:</span>
+                  <span className="font-medium text-gray-900 dark:text-white">
+                    {Math.round(routes[selectedRoute].duration / 60)} min
+                  </span>
+                </div>
+              </>
+            )}
           </div>
         </div>
       )}
 
-      {/* Leyenda */}
-      {optimizationResult && (
-        <div className="absolute top-4 right-4 bg-white dark:bg-gray-800 rounded-lg shadow-lg p-3 border border-gray-200 dark:border-gray-700">
-          <h4 className="text-xs font-semibold text-gray-700 dark:text-gray-300 mb-2">Leyenda</h4>
-          <div className="space-y-1">
-            <div className="flex items-center gap-2 text-xs">
-              <div className="w-4 h-4 bg-green-500 rounded-full border-2 border-white"></div>
-              <span className="text-gray-600 dark:text-gray-400">Almacén</span>
-            </div>
-            <div className="flex items-center gap-2 text-xs">
-              <div className="w-4 h-4 bg-amber-500 rounded-full border-2 border-white"></div>
-              <span className="text-gray-600 dark:text-gray-400">Recogida</span>
-            </div>
-            <div className="flex items-center gap-2 text-xs">
-              <div className="w-4 h-4 bg-blue-500 rounded-full border-2 border-white"></div>
-              <span className="text-gray-600 dark:text-gray-400">Entrega</span>
-            </div>
-            <div className="flex items-center gap-2 text-xs">
-              <div className="w-8 h-1 bg-red-600"></div>
-              <span className="text-gray-600 dark:text-gray-400">Ruta</span>
-            </div>
+      {/* Estado de carga */}
+      {loading && (
+        <div className="absolute inset-0 bg-gray-100 dark:bg-gray-800 flex items-center justify-center rounded-lg">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+            <p className="text-gray-600 dark:text-gray-400">Cargando mapa...</p>
           </div>
         </div>
       )}
 
       {/* Mensaje cuando no hay ruta */}
-      {!optimizationResult && !loading && !optimizing && (
+      {!optimizationResult && !loading && (
         <div className="absolute inset-0 bg-gray-50 dark:bg-gray-800 flex items-center justify-center rounded-lg">
           <div className="text-center">
-            <MapPin className="w-16 h-16 mx-auto text-gray-400 mb-4" />
+            <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center">
+              <svg className="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
+              </svg>
+            </div>
             <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
               Mapa de Ruta
             </h3>

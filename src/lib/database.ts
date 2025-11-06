@@ -1525,42 +1525,73 @@ export function getAllPackageOrders() {
     const orders = stmt.all() as any[]
 
     // Parse services from JSON string back to array
-    return orders.map(order => ({
-      ...order,
-      services: (() => {
-        try {
-          // Handle case where services might be [object Object] string
+    return orders.map(order => {
+      console.log('🔍 Processing services for order', order.id, ':', order.services, typeof order.services)
+
+      let parsedServices = []
+      try {
+        // Handle different data formats
+        if (!order.services) {
+          console.log('❌ No services found for order', order.id)
+          parsedServices = []
+        } else if (Array.isArray(order.services)) {
+          // Already an array (shouldn't happen but handle it)
+          console.log('✅ Services already array for order', order.id, ':', order.services)
+          parsedServices = order.services
+        } else if (typeof order.services === 'string') {
+          // Handle corrupted data
           if (order.services === '[object Object]') {
-            return ['Recogida Caja Llena'] // Default service for corrupted data
+            console.warn('⚠️ Services corrupted for order', order.id, ':', order.services)
+            parsedServices = ['Recogida Caja Llena'] // Default service for corrupted data
+          } else {
+            // Try to parse as JSON
+            console.log('🔄 Parsing services JSON for order', order.id, ':', order.services)
+            parsedServices = JSON.parse(order.services)
           }
-          return JSON.parse(order.services || '[]')
-        } catch (error) {
-          console.warn('Failed to parse services for order', order.id, ':', order.services, error)
-          return ['Recogida Caja Llena'] // Default service for corrupted data
+        } else {
+          console.warn('⚠️ Unexpected services type for order', order.id, ':', typeof order.services, order.services)
+          parsedServices = ['Recogida Caja Llena'] // Default service
         }
-      })(),
-      customerAddress: order.customerAddress ? (() => {
-        try {
-          // Check if it's already an object (not a string)
-          if (typeof order.customerAddress === 'object' && order.customerAddress !== null) {
-            return order.customerAddress
-          }
-          // Try to parse as JSON string
-          if (typeof order.customerAddress === 'string') {
-            const trimmed = order.customerAddress.trim()
-            if (trimmed.startsWith('{')) {
-              return JSON.parse(trimmed)
-            } else {
-              return { street: trimmed }
+
+        // Ensure we always have an array
+        if (!Array.isArray(parsedServices)) {
+          console.warn('⚠️ Parsed services is not an array for order', order.id, ':', parsedServices)
+          parsedServices = ['Recogida Caja Llena']
+        }
+
+        console.log('✅ Final services for order', order.id, ':', parsedServices)
+
+      } catch (error) {
+        console.error('❌ Failed to parse services for order', order.id, ':', order.services, error)
+        parsedServices = ['Recogida Caja Llena'] // Default service for corrupted data
+      }
+
+      return {
+        ...order,
+        services: parsedServices,
+        customerAddress: order.customerAddress ? (() => {
+          try {
+            // Check if it's already an object (not a string)
+            if (typeof order.customerAddress === 'object' && order.customerAddress !== null) {
+              return order.customerAddress
             }
+            // Try to parse as JSON string
+            if (typeof order.customerAddress === 'string') {
+              const trimmed = order.customerAddress.trim()
+              if (trimmed.startsWith('{')) {
+                return JSON.parse(trimmed)
+              } else {
+                return { street: trimmed }
+              }
+            }
+            return null
+          } catch (error) {
+            console.warn('Failed to parse address:', order.customerAddress, error)
+            return { street: typeof order.customerAddress === 'string' ? order.customerAddress : 'Unknown address' }
           }
-          return null
-        } catch (error) {
-          console.warn('Failed to parse address:', order.customerAddress, error)
-          return { street: typeof order.customerAddress === 'string' ? order.customerAddress : 'Unknown address' }
-        }
-      })() : null
-    }))
+        })() : null
+      }
+    })
   } catch (error) {
     console.error('Error getting all package orders:', error)
     throw error
@@ -1578,15 +1609,68 @@ export function getPackageOrderById(id: number) {
     const order = stmt.get(id) as any
 
     if (order) {
-      // Parse services from JSON string back to array
+      console.log('🔍 Processing services for order by ID', order.id, ':', order.services, typeof order.services)
+
+      let parsedServices = []
+      try {
+        // Handle different data formats
+        if (!order.services) {
+          console.log('❌ No services found for order', order.id)
+          parsedServices = []
+        } else if (Array.isArray(order.services)) {
+          // Already an array (shouldn't happen but handle it)
+          console.log('✅ Services already array for order', order.id, ':', order.services)
+          parsedServices = order.services
+        } else if (typeof order.services === 'string') {
+          // Handle corrupted data
+          if (order.services === '[object Object]') {
+            console.warn('⚠️ Services corrupted for order', order.id, ':', order.services)
+            parsedServices = ['Recogida Caja Llena'] // Default service for corrupted data
+          } else {
+            // Try to parse as JSON
+            console.log('🔄 Parsing services JSON for order', order.id, ':', order.services)
+            parsedServices = JSON.parse(order.services)
+          }
+        } else {
+          console.warn('⚠️ Unexpected services type for order', order.id, ':', typeof order.services, order.services)
+          parsedServices = ['Recogida Caja Llena'] // Default service
+        }
+
+        // Ensure we always have an array
+        if (!Array.isArray(parsedServices)) {
+          console.warn('⚠️ Parsed services is not an array for order', order.id, ':', parsedServices)
+          parsedServices = ['Recogida Caja Llena']
+        }
+
+        console.log('✅ Final services for order', order.id, ':', parsedServices)
+
+      } catch (error) {
+        console.error('❌ Failed to parse services for order', order.id, ':', order.services, error)
+        parsedServices = ['Recogida Caja Llena'] // Default service for corrupted data
+      }
+
       return {
         ...order,
-        services: JSON.parse(order.services || '[]'),
+        services: parsedServices,
         customerAddress: order.customerAddress ? (() => {
           try {
-            return JSON.parse(order.customerAddress)
-          } catch {
-            return { street: order.customerAddress }
+            // Check if it's already an object (not a string)
+            if (typeof order.customerAddress === 'object' && order.customerAddress !== null) {
+              return order.customerAddress
+            }
+            // Try to parse as JSON string
+            if (typeof order.customerAddress === 'string') {
+              const trimmed = order.customerAddress.trim()
+              if (trimmed.startsWith('{')) {
+                return JSON.parse(trimmed)
+              } else {
+                return { street: trimmed }
+              }
+            }
+            return null
+          } catch (error) {
+            console.warn('Failed to parse address:', order.customerAddress, error)
+            return { street: typeof order.customerAddress === 'string' ? order.customerAddress : 'Unknown address' }
           }
         })() : null
       }

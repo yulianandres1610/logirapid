@@ -27,13 +27,10 @@ interface AdvancedServicePackageManagerProps {
 }
 
 const SERVICES_LIST = [
-  'Recogida Caja Llena',
-  'Recogida Caja Vacía',
-  'Entrega Caja Llena',
-  'Entrega Caja Vacía',
-  'Almacenamiento',
-  'Embalaje',
-  'Transporte'
+  'Recoger Caja',
+  'Entregar Caja',
+  'Recoger Duradero',
+  'Confeccionar caja'
 ]
 
 const BOX_SIZES = [
@@ -99,81 +96,98 @@ export function AdvancedServicePackageManager({
   }
 
   const toggleService = (service: string) => {
-    const updatedServices = services.includes(service)
-      ? services.filter(s => s !== service)
-      : [...services, service]
+    try {
+      const updatedServices = services.includes(service)
+        ? services.filter(s => s !== service)
+        : [...services, service]
 
-    onServicesChange(updatedServices)
+      onServicesChange(updatedServices)
 
-    // Si se elimina un servicio, eliminar su configuración
-    if (!updatedServices.includes(service)) {
-      const updatedConfigurations = { ...serviceConfigurations }
-      delete updatedConfigurations[service]
-      onServiceConfigurationsChange(updatedConfigurations)
-    } else {
-      // Si se agrega un servicio, inicializar su configuración
-      const updatedConfigurations = {
-        ...serviceConfigurations,
-        [service]: {
-          serviceName: service,
-          cajas: []
+      // Si se elimina un servicio, eliminar su configuración
+      if (!updatedServices.includes(service)) {
+        const updatedConfigurations = { ...serviceConfigurations }
+        delete updatedConfigurations[service]
+        onServiceConfigurationsChange(updatedConfigurations)
+      } else {
+        // Si se agrega un servicio, inicializar su configuración
+        const updatedConfigurations = {
+          ...serviceConfigurations,
+          [service]: {
+            serviceName: service,
+            cajas: []
+          }
         }
+        onServiceConfigurationsChange(updatedConfigurations)
       }
-      onServiceConfigurationsChange(updatedConfigurations)
+    } catch (error) {
+      console.error('Error toggling service:', error)
+      // No dejar que el error se propague y cierre la vista
     }
   }
 
   const addBoxToService = (serviceName: string, size: 'pequeno' | 'mediano' | 'grande') => {
-    const currentConfig = serviceConfigurations[serviceName] || { serviceName, cajas: [] }
+    try {
+      const currentConfig = serviceConfigurations[serviceName] || { serviceName, cajas: [] }
 
-    // Verificar si ya existe una configuración para este tamaño
-    const existingBoxIndex = currentConfig.cajas.findIndex(box => box.tamano === size)
+      // Verificar si ya existe una configuración para este tamaño
+      const existingBoxIndex = currentConfig.cajas.findIndex(box => box.tamano === size)
 
-    if (existingBoxIndex >= 0) {
-      // Si existe, incrementar la cantidad
-      const updatedBoxes = [...currentConfig.cajas]
-      updatedBoxes[existingBoxIndex].cantidad += 1
-      currentConfig.cajas = updatedBoxes
-    } else {
-      // Si no existe, agregar nueva configuración
-      currentConfig.cajas.push({
-        tamano: size,
-        cantidad: 1,
-        codigos: []
-      })
+      if (existingBoxIndex >= 0) {
+        // Si existe, incrementar la cantidad
+        const updatedBoxes = [...currentConfig.cajas]
+        updatedBoxes[existingBoxIndex].cantidad += 1
+        currentConfig.cajas = updatedBoxes
+      } else {
+        // Si no existe, agregar nueva configuración
+        currentConfig.cajas.push({
+          tamano: size,
+          cantidad: 1,
+          codigos: []
+        })
+      }
+
+      const updatedConfigurations = {
+        ...serviceConfigurations,
+        [serviceName]: currentConfig
+      }
+      onServiceConfigurationsChange(updatedConfigurations)
+    } catch (error) {
+      console.error('Error adding box to service:', error)
     }
-
-    const updatedConfigurations = {
-      ...serviceConfigurations,
-      [serviceName]: currentConfig
-    }
-    onServiceConfigurationsChange(updatedConfigurations)
   }
 
   const updateBoxQuantity = (serviceName: string, size: string, quantity: number) => {
-    if (quantity <= 0) {
-      removeBoxFromService(serviceName, size)
-      return
-    }
+    try {
+      if (quantity <= 0) {
+        removeBoxFromService(serviceName, size)
+        return
+      }
 
-    const currentConfig = serviceConfigurations[serviceName]
-    const boxIndex = currentConfig.cajas.findIndex(box => box.tamano === size)
+      const currentConfig = serviceConfigurations[serviceName]
+      const boxIndex = currentConfig.cajas.findIndex(box => box.tamano === size)
 
-    if (boxIndex >= 0) {
-      currentConfig.cajas[boxIndex].cantidad = quantity
-      const updatedConfigurations = { ...serviceConfigurations }
-      updatedConfigurations[serviceName] = currentConfig
-      onServiceConfigurationsChange(updatedConfigurations)
+      if (boxIndex >= 0) {
+        currentConfig.cajas[boxIndex].cantidad = quantity
+        const updatedConfigurations = { ...serviceConfigurations }
+        updatedConfigurations[serviceName] = currentConfig
+        onServiceConfigurationsChange(updatedConfigurations)
+      }
+    } catch (error) {
+      console.error('Error updating box quantity:', error)
     }
   }
 
   const removeBoxFromService = (serviceName: string, size: string) => {
-    const currentConfig = serviceConfigurations[serviceName]
-    currentConfig.cajas = currentConfig.cajas.filter(box => box.tamano !== size)
+    try {
+      const currentConfig = serviceConfigurations[serviceName]
+      currentConfig.cajas = currentConfig.cajas.filter(box => box.tamano !== size)
 
-    const updatedConfigurations = { ...serviceConfigurations }
-    updatedConfigurations[serviceName] = currentConfig
-    onServiceConfigurationsChange(updatedConfigurations)
+      const updatedConfigurations = { ...serviceConfigurations }
+      updatedConfigurations[serviceName] = currentConfig
+      onServiceConfigurationsChange(updatedConfigurations)
+    } catch (error) {
+      console.error('Error removing box from service:', error)
+    }
   }
 
   const startScanningForBox = (serviceName: string, size: string) => {
@@ -208,15 +222,19 @@ export function AdvancedServicePackageManager({
   }
 
   const removeCodeFromBox = (serviceName: string, size: string, code: string) => {
-    const currentConfig = serviceConfigurations[serviceName]
-    const boxIndex = currentConfig.cajas.findIndex(box => box.tamano === size)
+    try {
+      const currentConfig = serviceConfigurations[serviceName]
+      const boxIndex = currentConfig.cajas.findIndex(box => box.tamano === size)
 
-    if (boxIndex >= 0) {
-      currentConfig.cajas[boxIndex].codigos = currentConfig.cajas[boxIndex].codigos.filter(c => c !== code)
+      if (boxIndex >= 0) {
+        currentConfig.cajas[boxIndex].codigos = currentConfig.cajas[boxIndex].codigos.filter(c => c !== code)
 
-      const updatedConfigurations = { ...serviceConfigurations }
-      updatedConfigurations[serviceName] = currentConfig
-      onServiceConfigurationsChange(updatedConfigurations)
+        const updatedConfigurations = { ...serviceConfigurations }
+        updatedConfigurations[serviceName] = currentConfig
+        onServiceConfigurationsChange(updatedConfigurations)
+      }
+    } catch (error) {
+      console.error('Error removing code from box:', error)
     }
   }
 
@@ -254,6 +272,7 @@ export function AdvancedServicePackageManager({
             {SERVICES_LIST.map((service) => (
               <Button
                 key={service}
+                type="button"
                 variant={services.includes(service) ? "default" : "outline"}
                 size="sm"
                 onClick={() => toggleService(service)}
@@ -291,6 +310,7 @@ export function AdvancedServicePackageManager({
                         </div>
                       </div>
                       <Button
+                        type="button"
                         variant="ghost"
                         size="sm"
                         onClick={() => toggleService(serviceName)}
@@ -311,6 +331,7 @@ export function AdvancedServicePackageManager({
                         {BOX_SIZES.map((size) => (
                           <Button
                             key={size.value}
+                            type="button"
                             variant="outline"
                             size="sm"
                             onClick={() => addBoxToService(serviceName, size.value as any)}
@@ -338,6 +359,7 @@ export function AdvancedServicePackageManager({
                                 </span>
                                 <div className="flex items-center gap-1">
                                   <Button
+                                    type="button"
                                     variant="outline"
                                     size="sm"
                                     onClick={() => updateBoxQuantity(serviceName, box.tamano, box.cantidad - 1)}
@@ -353,6 +375,7 @@ export function AdvancedServicePackageManager({
                                     className="w-16 h-8 text-center bg-gray-500 border-gray-400 text-white"
                                   />
                                   <Button
+                                    type="button"
                                     variant="outline"
                                     size="sm"
                                     onClick={() => updateBoxQuantity(serviceName, box.tamano, box.cantidad + 1)}
@@ -364,6 +387,7 @@ export function AdvancedServicePackageManager({
                               </div>
                               <div className="flex gap-2">
                                 <Button
+                                  type="button"
                                   variant="outline"
                                   size="sm"
                                   onClick={() => startScanningForBox(serviceName, box.tamano)}
@@ -374,6 +398,7 @@ export function AdvancedServicePackageManager({
                                   Escanear
                                 </Button>
                                 <Button
+                                  type="button"
                                   variant="outline"
                                   size="sm"
                                   onClick={() => removeBoxFromService(serviceName, box.tamano)}
@@ -424,6 +449,7 @@ export function AdvancedServicePackageManager({
                                     Escanear Código - {BOX_SIZES.find(s => s.value === box.tamano)?.label}
                                   </span>
                                   <Button
+                                    type="button"
                                     variant="ghost"
                                     size="sm"
                                     onClick={() => {
@@ -462,6 +488,7 @@ export function AdvancedServicePackageManager({
                                     )}
                                   </div>
                                   <Button
+                                    type="button"
                                     onClick={handleScanCode}
                                     disabled={codeValidation !== 'valid'}
                                     className="bg-green-600 hover:bg-green-700 text-white disabled:bg-gray-600 disabled:text-gray-400"

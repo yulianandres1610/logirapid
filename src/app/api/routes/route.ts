@@ -157,9 +157,29 @@ export async function POST(request: NextRequest) {
     let waypoints: any[] = []
     let selectedOrdersWithCoords: any[] = []
 
+    // Procesar ruta alternativa seleccionada si existe
+    let selectedAlternativeRoute = null
+    if (body.selectedRouteData && body.selectedRouteData.selectedRoute) {
+      console.log('🛣️ Usando ruta alternativa seleccionada:', body.selectedRouteData.selectedRouteIndex)
+      selectedAlternativeRoute = {
+        geometry: body.selectedRouteData.selectedRoute.geometry,
+        distance: body.selectedRouteData.selectedRoute.distance,
+        duration: body.selectedRouteData.selectedRoute.duration,
+        routeIndex: body.selectedRouteData.selectedRouteIndex,
+        isAlternative: body.selectedRouteData.selectedRouteIndex > 0
+      }
+      console.log('✅ Ruta alternativa procesada:', {
+        distance: selectedAlternativeRoute.distance,
+        duration: selectedAlternativeRoute.duration,
+        isAlternative: selectedAlternativeRoute.isAlternative
+      })
+    }
+
     // Si es ruta automática y hay órdenes seleccionadas, optimizar con Mapbox
     if (body.mechanism === 'automatic' && body.selectedOrders && body.selectedOrders.length > 0) {
       console.log('🗺️ Iniciando optimización con Mapbox API...')
+      console.log(`📦 Órdenes seleccionadas en body:`, body.selectedOrders)
+      console.log(`📊 Body completo:`, JSON.stringify(body, null, 2))
 
       try {
         // Obtener coordenadas del almacén
@@ -167,34 +187,56 @@ export async function POST(request: NextRequest) {
 
         // Obtener órdenes con coordenadas - SOLO del día actual y estados Pendiente/Reprogramada
         const today = new Date().toISOString().split('T')[0] // YYYY-MM-DD
+        console.log(`📅 Fecha actual (hoy): ${today}`)
+
         const ordersResponse = await fetch(`${process.env.NEXTAUTH_URL || 'http://localhost:3000'}/api/package-orders`)
         const ordersData = await ordersResponse.json()
 
-        selectedOrdersWithCoords = ordersData.data
+        console.log(`📋 Total órdenes en BD: ${ordersData.data?.length || 0}`)
+
+        const allSelectedOrders = ordersData.data?.filter((order: any) => {
+          return body.selectedOrders.includes(order.id)
+        }) || []
+
+        console.log(`📦 Órdenes seleccionadas encontradas: ${allSelectedOrders.length}`)
+
+        selectedOrdersWithCoords = allSelectedOrders
           .filter((order: any) => {
             // Solo incluir órdenes del día actual y con estados correctos para rutas
-            const isToday = order.scheduledDate === today || order.createdAt === today
+            const isToday = order.scheduledDate === today || order.createdAt?.startsWith(today)
             const isValidStatus = order.status === 'pending' || order.status === 'reprogrammed'
-            return body.selectedOrders.includes(order.id) && isToday && isValidStatus
+            const hasCoords = order.latitude && order.longitude &&
+                             order.latitude !== 0 && order.longitude !== 0
+
+            const shouldInclude = isToday && isValidStatus && hasCoords
+
+            console.log(`🔍 Orden ${order.id}: ${order.orderNumber || 'N/A'} -`, {
+              scheduledDate: order.scheduledDate,
+              createdAt: order.createdAt,
+              status: order.status,
+              hasCoords,
+              isToday,
+              isValidStatus,
+              shouldInclude
+            })
+
+            return shouldInclude
           })
           .map((order: any) => ({
             id: order.id,
             customer: order.customerName,
             address: order.customerAddress?.street || order.address,
-            coordinates: order.latitude && order.longitude ? [order.longitude, order.latitude] : null,
+            coordinates: [order.longitude, order.latitude],
             orderNumber: order.orderNumber,
             scheduledDate: order.scheduledDate,
             status: order.status
           }))
-          .filter((order: any) => order.coordinates && order.coordinates[0] !== 0 && order.coordinates[1] !== 0)
 
         console.log(`✅ Encontradas ${selectedOrdersWithCoords.length} órdenes con coordenadas válidas`)
-        console.log(`📅 Fecha actual (hoy): ${today}`)
-        console.log(`📦 Órdenes filtradas:`, selectedOrdersWithCoords.map(o => ({
+        console.log(`📍 Coordenadas de las órdenes:`, selectedOrdersWithCoords.map(o => ({
           id: o.id,
           orderNumber: o.orderNumber,
-          scheduledDate: o.scheduledDate,
-          status: o.status
+          coordinates: o.coordinates
         })))
 
         if (selectedOrdersWithCoords.length > 0) {
@@ -266,6 +308,39 @@ export async function POST(request: NextRequest) {
     const lastRoute = await db.get('SELECT id FROM routes ORDER BY id DESC LIMIT 1')
     const routeNumber = `RUT-${new Date().getFullYear()}-${String((lastRoute?.id || 0) + 1).padStart(3, '0')}`
 
+    // Usar ruta alternativa seleccionada si existe, si no usar la ruta optimizada
+    if (selectedAlternativeRoute) {
+      optimizedRouteData = selectedAlternativeRoute
+      console.log('✅ Usando ruta alternativa seleccionada para guardar en BD')
+    }
+
+    // Calcular distancia y duración estimadas si no hay datos de optimización
+    let estimatedDistance = optimizedRouteData?.distance
+    let estimatedDuration = optimizedRouteData ? `${optimizedRouteData.duration}m` : null
+
+    // Si no hay datos de Mapbox, usar valores del body o calcular estimaciones básicas
+    if (!optimizedRouteData) {
+      // Usar valores del body si existen
+      if (body.distance) {
+        estimatedDistance = parseFloat(body.distance.toString())
+      } else if (waypoints.length > 0) {
+        // Estimar distancia: ~2.5 millas por parada
+        estimatedDistance = Math.round(waypoints.length * 2.5)
+      }
+
+      if (body.estimatedDuration) {
+        estimatedDuration = body.estimatedDuration
+      } else if (waypoints.length > 0) {
+        // Estimar duración: 25 min por parada + 30 min base
+        const estimatedMinutes = waypoints.length * 25 + 30
+        const hours = Math.floor(estimatedMinutes / 60)
+        const minutes = estimatedMinutes % 60
+        estimatedDuration = hours > 0 ? `${hours}h ${minutes}m` : `${minutes}m`
+      }
+
+      console.log(`📊 Usando estimaciones locales: ${estimatedDistance} mi, ${estimatedDuration}`)
+    }
+
     const newRoute = {
       routeNumber,
       name: `Ruta ${body.mechanism === 'automatic' ? 'Automática' : 'Manual'} ${new Date().toLocaleDateString('es-ES')}`,
@@ -276,13 +351,13 @@ export async function POST(request: NextRequest) {
       status: 'planning',
       totalPackages: body.totalPackages || waypoints.length,
       deliveredPackages: 0,
-      estimatedDuration: optimizedRouteData ? `${optimizedRouteData.duration}m` : null,
+      estimatedDuration: estimatedDuration,
       actualDuration: null,
-      distance: optimizedRouteData ? parseFloat(optimizedRouteData.distance.toString()) : null,
+      distance: estimatedDistance || 0,
       startTime: null,
       endTime: null,
       date: body.date || new Date().toISOString().split('T')[0],
-      notes: body.notes || `Ruta creada automáticamente - ${body.mechanism}`,
+      notes: body.notes || `Ruta ${body.mechanism === 'automatic' ? 'automática' : 'manual'}${selectedAlternativeRoute && selectedAlternativeRoute.isAlternative ? ' (alternativa ' + selectedAlternativeRoute.routeIndex + ')' : ''} creada el ${new Date().toLocaleDateString('es-ES')} con ${waypoints.length} paradas`,
       mechanism: body.mechanism,
       timeWindows: JSON.stringify(body.timeWindows || []),
       warehouseId: body.warehouseId,

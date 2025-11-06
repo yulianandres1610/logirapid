@@ -29,6 +29,7 @@ import { useNotifications } from '@/contexts/NotificationContext'
 import { DashboardLayout } from '@/components/layout/dashboard-layout'
 import { Button } from '@/components/ui/button'
 import PackageDeliveryMap from '@/components/maps/PackageDeliveryMap'
+import RouteMap from '@/components/maps/RouteMap'
 
 interface PackageOrder {
   id: number
@@ -37,10 +38,12 @@ interface PackageOrder {
   customerName: string
   customerAddress?: string
   services: string[]
+  serviceQuantities?: Record<string, number>
+  needsBoxConstruction?: Record<string, boolean>
   notes?: string
   scheduledDate?: string
   timeSlot?: string
-  status: 'pending' | 'scheduled' | 'picked_up' | 'delivered' | 'cancelled'
+  status: 'pending' | 'scheduled' | 'picked_up' | 'delivered' | 'cancelled' | 'in_transit' | 'in_route'
   createdAt: string
   updatedAt: string
   firstName?: string
@@ -55,6 +58,32 @@ interface PackageOrder {
   driverName?: string
   totalAmount?: number
   total?: number
+  routeAssignment?: {
+    routeId: number
+    assignedAt: string
+    position?: number
+  }
+}
+
+// Interfaz para la ruta
+interface RouteData {
+  id: number
+  name: string
+  status: string
+  assigned_orders: Array<{
+    id: number
+    customer_name: string
+    address: string
+    type: 'pickup' | 'delivery'
+    coordinates?: [number, number]
+    order_number?: string
+  }>
+  driver_id?: number
+  vehicle_id?: number
+  estimated_duration?: number
+  total_distance?: number
+  route_date?: string
+  created_at?: string
 }
 
 export default function PackageOrderDetailPage() {
@@ -66,6 +95,8 @@ export default function PackageOrderDetailPage() {
 
   const [order, setOrder] = useState<PackageOrder | null>(null)
   const [loading, setLoading] = useState(true)
+  const [routeData, setRouteData] = useState<RouteData | null>(null)
+  const [loadingRoute, setLoadingRoute] = useState(false)
 
   // Fetch order details
   const fetchOrder = async () => {
@@ -75,44 +106,99 @@ export default function PackageOrderDetailPage() {
       if (response.ok) {
         const data = await response.json()
 
-        // Parsear campos JSON si vienen como string
+        // Parsear campos JSON con manejo de corrupción (igual que en database.ts)
         let services = []
         let serviceQuantities = {}
         let needsBoxConstruction = {}
 
         if (data.data.services) {
-          if (typeof data.data.services === 'string') {
-            try {
-              services = JSON.parse(data.data.services)
-            } catch (e) {
-              services = []
-            }
-          } else if (Array.isArray(data.data.services)) {
+          if (Array.isArray(data.data.services)) {
+            console.log('✅ Services ya es array para orden', data.data.id, ':', data.data.services)
             services = data.data.services
+          } else if (typeof data.data.services === 'string') {
+            if (data.data.services === '[object Object]') {
+              console.warn('⚠️ Services corrupto para orden', data.data.id, ', usando servicePackages como respaldo')
+              // Intentar usar servicePackages como respaldo
+              if (data.data.servicePackages) {
+                try {
+                  const servicePackagesData = typeof data.data.servicePackages === 'string'
+                    ? JSON.parse(data.data.servicePackages)
+                    : data.data.servicePackages
+                  services = Object.keys(servicePackagesData)
+                  console.log('✅ Servicios recuperados desde servicePackages:', services)
+                  // Extraer cantidades y construcción de cajas
+                  if (servicePackagesData && typeof servicePackagesData === 'object') {
+                    for (const [service, packages] of Object.entries(servicePackagesData)) {
+                      if (Array.isArray(packages) && packages.length > 0) {
+                        serviceQuantities[service] = packages.length
+                        needsBoxConstruction[service] = true // Por defecto necesita construcción de caja
+                      }
+                    }
+                  }
+                } catch (e) {
+                  console.error('❌ Error parsing servicePackages para orden', data.data.id, ':', e)
+                  services = ['Recoger Caja']
+                }
+              } else {
+                services = ['Recoger Caja'] // valor por defecto
+              }
+            } else {
+              console.log('🔄 Parsing services JSON para orden', data.data.id, ':', data.data.services)
+              try {
+                services = JSON.parse(data.data.services)
+              } catch (e) {
+                console.error('❌ Error parsing services para orden', data.data.id, ':', e)
+                services = ['Recoger Caja'] // valor por defecto
+              }
+            }
+          }
+        } else if (data.data.servicePackages) {
+          // Si no hay services pero hay servicePackages, usar servicePackages
+          console.log('🔄 No hay services, usando servicePackages para orden', data.data.id)
+          try {
+            const servicePackagesData = typeof data.data.servicePackages === 'string'
+              ? JSON.parse(data.data.servicePackages)
+              : data.data.servicePackages
+            services = Object.keys(servicePackagesData)
+            console.log('✅ Servicios recuperados desde servicePackages:', services)
+            // Extraer cantidades y construcción de cajas
+            if (servicePackagesData && typeof servicePackagesData === 'object') {
+              for (const [service, packages] of Object.entries(servicePackagesData)) {
+                if (Array.isArray(packages) && packages.length > 0) {
+                  serviceQuantities[service] = packages.length
+                  needsBoxConstruction[service] = true // Por defecto necesita construcción de caja
+                }
+              }
+            }
+          } catch (e) {
+            console.error('❌ Error parsing servicePackages para orden', data.data.id, ':', e)
+            services = ['Recoger Caja']
           }
         }
 
         if (data.data.serviceQuantities) {
-          if (typeof data.data.serviceQuantities === 'string') {
+          if (typeof data.data.serviceQuantities === 'object') {
+            serviceQuantities = data.data.serviceQuantities
+          } else if (typeof data.data.serviceQuantities === 'string') {
             try {
               serviceQuantities = JSON.parse(data.data.serviceQuantities)
             } catch (e) {
+              console.error('❌ Error parsing serviceQuantities para orden', data.data.id, ':', e)
               serviceQuantities = {}
             }
-          } else if (typeof data.data.serviceQuantities === 'object') {
-            serviceQuantities = data.data.serviceQuantities
           }
         }
 
         if (data.data.needsBoxConstruction) {
-          if (typeof data.data.needsBoxConstruction === 'string') {
+          if (typeof data.data.needsBoxConstruction === 'object') {
+            needsBoxConstruction = data.data.needsBoxConstruction
+          } else if (typeof data.data.needsBoxConstruction === 'string') {
             try {
               needsBoxConstruction = JSON.parse(data.data.needsBoxConstruction)
             } catch (e) {
+              console.error('❌ Error parsing needsBoxConstruction para orden', data.data.id, ':', e)
               needsBoxConstruction = {}
             }
-          } else if (typeof data.data.needsBoxConstruction === 'object') {
-            needsBoxConstruction = data.data.needsBoxConstruction
           }
         }
 
@@ -128,7 +214,11 @@ export default function PackageOrderDetailPage() {
           status: processedOrder.status,
           scheduledDate: processedOrder.scheduledDate,
           timeSlot: processedOrder.timeSlot,
-          updatedAt: processedOrder.updatedAt
+          updatedAt: processedOrder.updatedAt,
+          services: processedOrder.services,
+          servicesCount: processedOrder.services?.length,
+          serviceQuantities: processedOrder.serviceQuantities,
+          needsBoxConstruction: processedOrder.needsBoxConstruction
         });
 
         // Forzar actualización del estado para asegurar refresco del componente
@@ -146,6 +236,58 @@ export default function PackageOrderDetailPage() {
       router.push('/dashboard/admin/package-orders')
     } finally {
       setLoading(false)
+    }
+  }
+
+  // Fetch route data when order is in transit
+  const fetchRouteData = async (routeId: number) => {
+    try {
+      setLoadingRoute(true)
+      console.log('🚀 Obteniendo datos de la ruta:', routeId)
+
+      const response = await fetch(`/api/package-route/${routeId}`)
+      if (response.ok) {
+        const data = await response.json()
+        console.log('✅ Datos de ruta recibidos:', data)
+        setRouteData(data)
+      } else {
+        console.error('❌ Error al obtener ruta:', response.status)
+        showNotification('error', 'Error', 'No se pudo cargar la información de la ruta')
+      }
+    } catch (error) {
+      console.error('❌ Error fetching route data:', error)
+      showNotification('error', 'Error', 'No se pudo cargar la información de la ruta')
+    } finally {
+      setLoadingRoute(false)
+    }
+  }
+
+  // Transform route data to RouteMap format
+  const transformRouteData = (route: RouteData) => {
+    const transformedStops = route.assigned_orders.map(order => ({
+      id: order.id,
+      address: order.address,
+      customer: order.customer_name,
+      type: order.type as 'pickup' | 'delivery',
+      orderNumber: order.order_number,
+      coordinates: order.coordinates
+    }))
+
+    const pickups = transformedStops.filter(stop => stop.type === 'pickup').length
+    const deliveries = transformedStops.filter(stop => stop.type === 'delivery').length
+
+    return {
+      totalOrders: transformedStops.length,
+      pickups,
+      deliveries,
+      totalDistance: route.total_distance || 0,
+      estimatedDuration: route.estimated_duration ? `${Math.floor(route.estimated_duration / 60)}h ${route.estimated_duration % 60}m` : 'N/A',
+      optimizedStops: transformedStops.length,
+      route: {
+        start: 'Almacén',
+        stops: transformedStops,
+        end: 'Almacén'
+      }
     }
   }
 
@@ -243,6 +385,36 @@ export default function PackageOrderDetailPage() {
     }
   }, [params.id])
 
+  // Recargar datos cuando la página gana foco (después de volver de edición)
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (!document.hidden && params.id) {
+        fetchOrder()
+      }
+    }
+
+    const handleFocus = () => {
+      if (params.id) {
+        fetchOrder()
+      }
+    }
+
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+    window.addEventListener('focus', handleFocus)
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
+      window.removeEventListener('focus', handleFocus)
+    }
+  }, [params.id])
+
+  // Fetch route data when order is in transit/route and has route assignment
+  useEffect(() => {
+    if (order && (order.status === 'in_transit' || order.status === 'in_route') && order.routeAssignment?.routeId) {
+      fetchRouteData(order.routeAssignment.routeId)
+    }
+  }, [order?.status, order?.routeAssignment?.routeId])
+
   const STATUSES = {
     pending: { label: 'Pendiente', color: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400', icon: AlertCircle },
     scheduled: { label: 'Programado', color: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400', icon: Calendar },
@@ -250,7 +422,8 @@ export default function PackageOrderDetailPage() {
     delivered: { label: 'Entregado', color: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400', icon: CheckCircle },
     cancelled: { label: 'Cancelado', color: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400', icon: XCircle },
     // Additional common statuses that might exist in the database
-    in_transit: { label: 'En Ruta', color: 'bg-gradient-to-r from-blue-500 to-indigo-600 text-white shadow-lg border border-blue-200 dark:from-blue-600 dark:to-indigo-700 dark:border-blue-400', icon: Package },
+    in_route: { label: 'En Ruta', color: 'bg-gradient-to-r from-blue-500 to-indigo-600 text-white shadow-lg border border-blue-200 dark:from-blue-600 dark:to-indigo-700 dark:border-blue-400', icon: Package },
+    in_transit: { label: 'En Tránsito', color: 'bg-gradient-to-r from-blue-500 to-indigo-600 text-white shadow-lg border border-blue-200 dark:from-blue-600 dark:to-indigo-700 dark:border-blue-400', icon: Package },
     reprogrammed: { label: 'Reprogramada', color: 'bg-gradient-to-r from-yellow-500 to-orange-600 text-white shadow-lg border border-yellow-200 dark:from-yellow-600 dark:to-orange-700 dark:border-yellow-400', icon: AlertCircle },
     processing: { label: 'Procesando', color: 'bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-400', icon: AlertCircle },
     ready: { label: 'Listo', color: 'bg-teal-100 text-teal-800 dark:bg-teal-900/30 dark:text-teal-400', icon: CheckCircle },
@@ -331,7 +504,7 @@ export default function PackageOrderDetailPage() {
               </div>
             </div>
             <div className="flex gap-2">
-              {(order.status as any) === 'in_transit' && (
+              {(order.status === 'in_transit' || order.status === 'in_route') && (
                 <Button
                   onClick={reprogramOrder}
                   className="bg-gradient-to-r from-yellow-500 to-orange-600 hover:from-yellow-600 hover:to-orange-700 text-white flex items-center gap-2 shadow-lg"
@@ -426,25 +599,101 @@ export default function PackageOrderDetailPage() {
                   <Archive className="w-5 h-5" />
                   Servicios Solicitados
                 </h2>
-                <div className="flex flex-wrap gap-2">
-                  {order.services.map((service, index) => (
-                    <span
-                      key={index}
-                      className={cn(
-                        'inline-flex items-center px-3 py-2 rounded-lg text-sm font-medium',
-                        service.toLowerCase().includes('recogida') || service.toLowerCase().includes('pickup')
-                          ? 'bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-400'
-                          : 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400'
+
+                {/* Debug information */}
+                {console.log('🔍 Debug - Services Data:', {
+                  services: order.services,
+                  serviceQuantities: order.serviceQuantities,
+                  needsBoxConstruction: order.needsBoxConstruction,
+                  servicesLength: order.services?.length,
+                  servicesType: typeof order.services
+                })}
+
+                <div className="space-y-4">
+                  {/* Services badges */}
+                  {order.services && Array.isArray(order.services) && order.services.length > 0 ? (
+                    <>
+                      <div className="flex flex-wrap gap-2">
+                        {order.services.map((service, index) => (
+                          <span
+                            key={index}
+                            className={cn(
+                              'inline-flex items-center px-3 py-2 rounded-lg text-sm font-medium',
+                              service.toLowerCase().includes('recogida') || service.toLowerCase().includes('pickup')
+                                ? 'bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-400'
+                                : 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400'
+                            )}
+                          >
+                            {service.toLowerCase().includes('recogida') || service.toLowerCase().includes('pickup') ? (
+                              <Archive className="w-4 h-4 mr-2" />
+                            ) : (
+                              <Truck className="w-4 h-4 mr-2" />
+                            )}
+                            {service}
+                          </span>
+                        ))}
+                      </div>
+
+                      {/* Service details with quantities and box info */}
+                      {order.serviceQuantities && Object.keys(order.serviceQuantities).length > 0 && (
+                        <div className="mt-4 p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
+                          <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">Detalles de Servicios</h3>
+                          <div className="space-y-2">
+                            {order.services.map((service, index) => {
+                              const quantity = order.serviceQuantities?.[service] || 1;
+                              const needsBox = order.needsBoxConstruction?.[service] || false;
+
+                              return (
+                                <div key={index} className="flex items-center justify-between p-3 bg-white dark:bg-gray-700 rounded-lg border border-gray-200 dark:border-gray-600">
+                                  <div className="flex items-center gap-3">
+                                    {service.toLowerCase().includes('recogida') || service.toLowerCase().includes('pickup') ? (
+                                      <Archive className="w-5 h-5 text-orange-600 dark:text-orange-400" />
+                                    ) : (
+                                      <Truck className="w-5 h-5 text-green-600 dark:text-green-400" />
+                                    )}
+                                    <div>
+                                      <p className="font-medium text-gray-900 dark:text-white">{service}</p>
+                                      <div className="flex items-center gap-4 mt-1">
+                                        <span className="text-sm text-gray-600 dark:text-gray-400">
+                                          Cantidad: <strong>{quantity}</strong>
+                                        </span>
+                                        {needsBox && (
+                                          <span className="inline-flex items-center px-2 py-1 text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400 rounded">
+                                            <Package className="w-3 h-3 mr-1" />
+                                            Requiere caja
+                                          </span>
+                                        )}
+                                      </div>
+                                    </div>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
                       )}
-                    >
-                      {service.toLowerCase().includes('recogida') || service.toLowerCase().includes('pickup') ? (
-                        <Archive className="w-4 h-4 mr-2" />
-                      ) : (
-                        <Truck className="w-4 h-4 mr-2" />
-                      )}
-                      {service}
-                    </span>
-                  ))}
+                    </>
+                  ) : (
+                    <div className="text-center py-8">
+                      <Archive className="w-12 h-12 mx-auto text-gray-400 mb-3" />
+                      <p className="text-gray-600 dark:text-gray-400">
+                        No hay servicios registrados para esta orden
+                      </p>
+                      <button
+                        onClick={() => {
+                          console.log('🔍 Full Order data:', order);
+                          console.log('🔍 Raw Services:', order.services);
+                          console.log('🔍 Service Type:', typeof order.services);
+                          console.log('🔍 Service Length:', order.services?.length);
+                          console.log('🔍 Service quantities:', order.serviceQuantities);
+                          console.log('🔍 Needs box construction:', order.needsBoxConstruction);
+                        }}
+                        className="mt-2 text-xs text-blue-600 dark:text-blue-400 hover:underline"
+                      >
+                        (Click para ver más info en consola)
+                      </button>
+                    </div>
+                  )}
                 </div>
               </motion.div>
 
@@ -459,17 +708,58 @@ export default function PackageOrderDetailPage() {
                 )}
               >
                 <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
-                  <MapPin className="w-5 h-5" />
-                  Ubicación de la Orden
+                  {(order.status === 'in_transit' || order.status === 'in_route') && routeData ? (
+                    <>
+                      <Truck className="w-5 h-5" />
+                      Ruta de Entrega
+                    </>
+                  ) : (
+                    <>
+                      <MapPin className="w-5 h-5" />
+                      Ubicación de la Orden
+                    </>
+                  )}
                 </h2>
-                <div className="h-96 rounded-lg overflow-hidden">
-                  <PackageDeliveryMap
-                    orders={[order]}
-                    onOrderClick={(selectedOrder) => {
-                      console.log('Order clicked:', selectedOrder)
-                    }}
-                  />
+                <div className="h-96 rounded-lg overflow-hidden relative">
+                  {(order.status === 'in_transit' || order.status === 'in_route') && routeData ? (
+                    <RouteMap
+                      optimizationResult={transformRouteData(routeData)}
+                      warehouseCoordinates={[-80.2395, 25.7548]} // Miami coordinates
+                      theme={theme}
+                      onOptimizationComplete={(result) => {
+                        console.log('Route optimization completed:', result)
+                      }}
+                    />
+                  ) : (
+                    <PackageDeliveryMap
+                      orders={[order]}
+                      onOrderClick={(selectedOrder) => {
+                        console.log('Order clicked:', selectedOrder)
+                      }}
+                    />
+                  )}
+                  {loadingRoute && (
+                    <div className="absolute inset-0 bg-white/80 dark:bg-gray-800/80 flex items-center justify-center rounded-lg">
+                      <div className="text-center">
+                        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-2"></div>
+                        <p className="text-sm text-gray-600 dark:text-gray-400">Cargando ruta...</p>
+                      </div>
+                    </div>
+                  )}
                 </div>
+                {(order.status === 'in_transit' || order.status === 'in_route') && routeData && (
+                  <div className="mt-4 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
+                    <div className="flex items-center gap-2 text-sm text-blue-800 dark:text-blue-200">
+                      <Truck className="w-4 h-4" />
+                      <span className="font-medium">
+                        Ruta #{routeData.id} - {routeData.name}
+                      </span>
+                    </div>
+                    <div className="mt-2 text-xs text-blue-600 dark:text-blue-400">
+                      {routeData.assigned_orders.length} paradas • {transformRouteData(routeData).estimatedDuration}
+                    </div>
+                  </div>
+                )}
               </motion.div>
 
               {/* Notes */}

@@ -49,13 +49,64 @@ export async function GET(
       }
     }
 
-    // Parsear servicios
+    // Parsear servicios con manejo de corrupción
     if (order.services && typeof order.services === 'string') {
-      try {
-        order.services = JSON.parse(order.services)
-      } catch (e) {
-        // Si no es JSON válido, dejar como array vacío
-        order.services = []
+      if (order.services === '[object Object]') {
+        console.warn('⚠️ Services corrupto en API para orden', order.id, ', intentando usar servicePackages')
+        // Intentar usar servicePackages como respaldo
+        if (order.servicePackages) {
+          try {
+            const servicePackagesData = JSON.parse(order.servicePackages)
+            order.services = Object.keys(servicePackagesData)
+            // Extraer serviceQuantities y needsBoxConstruction desde servicePackages
+            order.serviceQuantities = {}
+            order.needsBoxConstruction = {}
+            if (servicePackagesData && typeof servicePackagesData === 'object') {
+              for (const [service, packages] of Object.entries(servicePackagesData)) {
+                if (Array.isArray(packages) && packages.length > 0) {
+                  order.serviceQuantities[service] = packages.length
+                  order.needsBoxConstruction[service] = true
+                }
+              }
+            }
+            console.log('✅ Servicios recuperados desde servicePackages en API:', order.services)
+          } catch (e) {
+            console.error('❌ Error parsing servicePackages en API:', e)
+            order.services = ['Recoger Caja'] // valor por defecto
+          }
+        } else {
+          order.services = ['Recoger Caja'] // valor por defecto
+        }
+      } else {
+        try {
+          order.services = JSON.parse(order.services)
+        } catch (e) {
+          // Si no es JSON válido y no es [object Object], intentar servicePackages
+          console.warn('⚠️ Error parsing services en API para orden', order.id, ', intentando servicePackages')
+          if (order.servicePackages) {
+            try {
+              const servicePackagesData = JSON.parse(order.servicePackages)
+              order.services = Object.keys(servicePackagesData)
+              // Extraer serviceQuantities y needsBoxConstruction desde servicePackages
+              order.serviceQuantities = {}
+              order.needsBoxConstruction = {}
+              if (servicePackagesData && typeof servicePackagesData === 'object') {
+                for (const [service, packages] of Object.entries(servicePackagesData)) {
+                  if (Array.isArray(packages) && packages.length > 0) {
+                    order.serviceQuantities[service] = packages.length
+                    order.needsBoxConstruction[service] = true
+                  }
+                }
+              }
+              console.log('✅ Servicios recuperados desde servicePackages en API:', order.services)
+            } catch (e) {
+              console.error('❌ Error parsing servicePackages en API:', e)
+              order.services = ['Recoger Caja']
+            }
+          } else {
+            order.services = ['Recoger Caja']
+          }
+        }
       }
     }
 
@@ -146,7 +197,7 @@ export async function PUT(
       'totalAmount', 'boxCount', 'boxPrice', 'additionalServices',
       'paymentMethod', 'latitude', 'longitude', 'routeId', 'stopNumber',
       'firstName', 'lastName', 'phone', 'email', 'address', 'customerNotes',
-      'servicePackages'
+      'servicePackages', 'serviceQuantities', 'needsBoxConstruction'
     ]
 
     for (const field of allowedFields) {
@@ -159,6 +210,12 @@ export async function PUT(
         } else if (field === 'additionalServices' && Array.isArray(body[field])) {
           updateValues.push(JSON.stringify(body[field]))
         } else if (field === 'servicePackages' && typeof body[field] === 'object') {
+          updateValues.push(JSON.stringify(body[field]))
+        } else if (field === 'serviceQuantities' && typeof body[field] === 'object') {
+          updateValues.push(JSON.stringify(body[field]))
+        } else if (field === 'needsBoxConstruction' && typeof body[field] === 'object') {
+          updateValues.push(JSON.stringify(body[field]))
+        } else if (field === 'services' && Array.isArray(body[field])) {
           updateValues.push(JSON.stringify(body[field]))
         } else {
           updateValues.push(body[field])

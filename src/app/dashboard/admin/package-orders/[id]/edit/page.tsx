@@ -17,7 +17,8 @@ import {
   AlertCircle,
   DollarSign,
   Receipt,
-  Calculator
+  Calculator,
+  Archive
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useTheme } from '@/contexts/theme-context'
@@ -26,6 +27,7 @@ import { useNotifications } from '@/contexts/NotificationContext'
 import { DashboardLayout } from '@/components/layout/dashboard-layout'
 import { Button } from '@/components/ui/button'
 import { AdvancedServicePackageManager } from '@/components/services/AdvancedServicePackageManager'
+import { ErrorBoundary } from '@/components/ui/ErrorBoundary'
 
 interface PackageSize {
   id: number
@@ -361,6 +363,7 @@ export default function EditPackageOrderPage() {
       // Convertir configuraciones al formato esperado por la API
       const serviceQuantitiesForSave: { [serviceName: string]: number } = {}
       const servicePackagesForSave: { [serviceName: string]: string[] } = {}
+      const needsBoxConstructionForSave: { [serviceName: string]: boolean } = {}
 
       Object.entries(serviceConfigurations).forEach(([serviceName, config]) => {
         const totalBoxes = config.cajas?.reduce((sum: number, box: any) => sum + box.cantidad, 0) || 0
@@ -374,6 +377,11 @@ export default function EditPackageOrderPage() {
           }
         })
         servicePackagesForSave[serviceName] = allCodes
+
+        // Determinar si necesita construcción de caja
+        // Por defecto, los servicios que incluyen "Caja" necesitan construcción
+        const needsConstruction = serviceName.toLowerCase().includes('caja') || serviceName.toLowerCase().includes('box')
+        needsBoxConstructionForSave[serviceName] = needsConstruction
       })
 
       const response = await fetch(`/api/package-orders/${params.id}`, {
@@ -383,6 +391,7 @@ export default function EditPackageOrderPage() {
           services: selectedServices,
           serviceQuantities: serviceQuantitiesForSave,
           servicePackages: servicePackagesForSave,
+          needsBoxConstruction: needsBoxConstructionForSave,
           ...formData
         })
       })
@@ -543,13 +552,120 @@ export default function EditPackageOrderPage() {
                     Servicios y Empaques
                   </h2>
 
-                  <AdvancedServicePackageManager
-                  services={selectedServices}
-                  serviceConfigurations={serviceConfigurations}
-                  onServicesChange={setSelectedServices}
-                  onServiceConfigurationsChange={setServiceConfigurations}
-                />
+                  <ErrorBoundary>
+                    <AdvancedServicePackageManager
+                      services={selectedServices}
+                      serviceConfigurations={serviceConfigurations}
+                      onServicesChange={setSelectedServices}
+                      onServiceConfigurationsChange={setServiceConfigurations}
+                    />
+                  </ErrorBoundary>
                 </motion.div>
+
+                {/* Servicios Solicitados - Resumen */}
+                {true && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.15 }}
+                    className={cn(
+                      'p-6 rounded-xl border border-gray-200 dark:border-gray-700',
+                      theme === 'dark' ? 'bg-gray-800' : 'bg-white'
+                    )}
+                  >
+                    <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+                      <Archive className="w-5 h-5" />
+                      Servicios Solicitados
+                    </h2>
+                    <div className="space-y-4">
+                      {(() => {
+                        console.log('Servicios Solicitados - selectedServices:', selectedServices, 'serviceConfigurations:', serviceConfigurations)
+                        return null
+                      })()}
+
+                      {/* Mensaje de depuración */}
+                      {selectedServices.length === 0 && (
+                        <div className="text-center py-8 text-gray-500 dark:text-gray-400">
+                          <Archive className="w-12 h-12 mx-auto mb-3 opacity-50" />
+                          <p>No hay servicios seleccionados</p>
+                          <p className="text-sm mt-1">Selecciona servicios en la sección anterior para verlos aquí</p>
+                        </div>
+                      )}
+
+                      {selectedServices.map((service, index) => {
+                        const config = serviceConfigurations[service]
+                        const totalBoxes = config?.cajas?.reduce((sum: number, box: any) => sum + box.cantidad, 0) || 0
+                        console.log(`Servicio: ${service}, Config:`, config, `Total Boxes: ${totalBoxes}`)
+
+                        return (
+                          <div key={index} className="border border-gray-200 dark:border-gray-600 rounded-lg p-4 bg-gray-50 dark:bg-gray-700/50">
+                            <div className="flex items-center justify-between mb-3">
+                              <h3 className="font-medium text-gray-900 dark:text-white flex items-center gap-2">
+                                <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+                                {service}
+                              </h3>
+                              <span className="text-sm text-gray-500 dark:text-gray-400">
+                                {totalBoxes} {totalBoxes === 1 ? 'caja' : 'cajas'}
+                              </span>
+                            </div>
+
+                            {config?.cajas && config.cajas.length > 0 && (
+                              <div className="space-y-2">
+                                {config.cajas.map((box: any, boxIndex: number) => (
+                                  <div key={boxIndex} className="pl-4 border-l-2 border-gray-300 dark:border-gray-600">
+                                    <div className="flex items-center justify-between mb-2">
+                                      <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                                        {BOX_SIZES.find(s => s.value === box.tamano)?.label} - Cantidad: {box.cantidad}
+                                      </span>
+                                      <span className={cn(
+                                        'px-2 py-1 rounded text-xs font-medium',
+                                        box.tamano === 'pequeno' ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400' :
+                                        box.tamano === 'mediano' ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400' :
+                                        'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400'
+                                      )}>
+                                        {box.tamano === 'pequeno' ? 'Pequeño' : box.tamano === 'mediano' ? 'Mediano' : 'Grande'}
+                                      </span>
+                                    </div>
+
+                                    {box.codigos && box.codigos.length > 0 && (
+                                      <div className="mt-2">
+                                        <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">Códigos asignados:</p>
+                                        <div className="flex flex-wrap gap-1">
+                                          {box.codigos.map((code: string, codeIndex: number) => (
+                                            <span
+                                              key={codeIndex}
+                                              className="inline-flex items-center px-2 py-1 rounded text-xs bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400 font-mono"
+                                            >
+                                              {code}
+                                            </span>
+                                          ))}
+                                        </div>
+                                        <div className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                                          {box.codigos.length} de {box.cantidad} códigos asignados
+                                          {box.codigos.length < box.cantidad && (
+                                            <span className="text-orange-500 dark:text-orange-400 ml-1">
+                                              (Faltan {box.cantidad - box.codigos.length})
+                                            </span>
+                                          )}
+                                        </div>
+                                      </div>
+                                    )}
+
+                                    {box.codigos && box.codigos.length === 0 && (
+                                      <div className="text-xs text-gray-500 dark:text-gray-400">
+                                        Sin códigos asignados
+                                      </div>
+                                    )}
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </motion.div>
+                )}
 
                 {/* Status */}
                 <motion.div
@@ -567,9 +683,9 @@ export default function EditPackageOrderPage() {
                   <div className="space-y-3">
                     {/* Mostrar estado En Ruta si aplica */}
                     {order.status === 'in_transit' && (
-                      <div className="flex items-center p-3 rounded-lg border-2 border-blue-500 bg-blue-50 dark:bg-blue-900/20">
-                        <Package className="w-5 h-5 text-blue-600 dark:text-blue-400 mr-3" />
-                        <span className="text-sm font-medium text-blue-600 dark:text-blue-400">
+                      <div className="flex items-center p-4 rounded-lg border-2 border-blue-200 bg-gradient-to-r from-blue-500 to-indigo-600 text-white shadow-lg dark:from-blue-600 dark:to-indigo-700 dark:border-blue-400">
+                        <Package className="w-6 h-6 mr-3" />
+                        <span className="text-sm font-semibold">
                           Estado actual: En Ruta
                         </span>
                       </div>
