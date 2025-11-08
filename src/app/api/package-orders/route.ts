@@ -127,7 +127,8 @@ export async function POST(request: NextRequest) {
       totalAmount: body.totalAmount || 0,
       boxCount: body.boxCount || 0,
       boxPrice: body.boxPrice || 0,
-      additionalServices: body.additionalServices || '[]'
+      additionalServices: body.additionalServices || '[]',
+      boxes: typeof body.boxes === 'string' ? body.boxes : JSON.stringify(body.boxes || [])
     })
 
     return NextResponse.json({

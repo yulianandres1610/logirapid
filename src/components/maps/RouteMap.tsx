@@ -2,7 +2,7 @@
 
 import React, { useEffect, useRef, useState } from 'react'
 import mapboxgl from 'mapbox-gl'
-import { MapPin, Navigation, Clock, Info } from 'lucide-react'
+import { MapPin, Navigation, Clock, Info, Maximize, Minimize } from 'lucide-react'
 
 // Importar CSS de Mapbox
 import 'mapbox-gl/dist/mapbox-gl.css'
@@ -52,10 +52,12 @@ export default function RouteMap({
 }: RouteMapProps) {
   const mapContainerRef = useRef<HTMLDivElement>(null)
   const mapRef = useRef<mapboxgl.Map>()
+  const containerRef = useRef<HTMLDivElement>(null)
   const [routes, setRoutes] = useState<any[]>([])
   const [selectedRoute, setSelectedRoute] = useState(0)
   const [loading, setLoading] = useState(true)
   const [allCoordinates, setAllCoordinates] = useState<[number, number][]>([])
+  const [isFullscreen, setIsFullscreen] = useState(false)
   const markersRef = useRef<mapboxgl.Marker[]>([])
   const onOptimizationCompleteRef = useRef(onOptimizationComplete)
   const lastNotifiedRoute = useRef<number>(-1)
@@ -78,6 +80,55 @@ export default function RouteMap({
     markersRef.current = []
     console.log('✅ Todos los marcadores han sido limpiados')
   }
+
+  // Manejar fullscreen
+  const toggleFullscreen = () => {
+    if (!containerRef.current) return
+
+    if (!document.fullscreenElement) {
+      containerRef.current.requestFullscreen().then(() => {
+        setIsFullscreen(true)
+        // Resize map after fullscreen
+        setTimeout(() => {
+          if (mapRef.current) {
+            mapRef.current.resize()
+          }
+        }, 100)
+      }).catch((err) => {
+        console.error('Error entering fullscreen:', err)
+      })
+    } else {
+      document.exitFullscreen().then(() => {
+        setIsFullscreen(false)
+        // Resize map after exit fullscreen
+        setTimeout(() => {
+          if (mapRef.current) {
+            mapRef.current.resize()
+          }
+        }, 100)
+      }).catch((err) => {
+        console.error('Error exiting fullscreen:', err)
+      })
+    }
+  }
+
+  // Escuchar cambios en fullscreen
+  useEffect(() => {
+    const handleFullscreenChange = () => {
+      setIsFullscreen(!!document.fullscreenElement)
+      // Resize map when fullscreen state changes
+      setTimeout(() => {
+        if (mapRef.current) {
+          mapRef.current.resize()
+        }
+      }, 100)
+    }
+
+    document.addEventListener('fullscreenchange', handleFullscreenChange)
+    return () => {
+      document.removeEventListener('fullscreenchange', handleFullscreenChange)
+    }
+  }, [])
 
   // Update ref when callback changes
   useEffect(() => {
@@ -171,16 +222,24 @@ export default function RouteMap({
                      optimizationResult.route?.stops ||
                      []
 
-        console.log('📍 [RouteMap] Paradas encontradas:', stops.length)
+        console.log('📍 [RouteMap] Paradas encontradas (sin almacén):', stops.length)
+        console.log('📊 [RouteMap] Estructura completa de paradas:', stops.map((s: any, i: number) => ({
+          index: i,
+          waypointIndex: s.waypointIndex,
+          address: s.address,
+          coordinates: s.coordinates,
+          customer: s.customer
+        })))
 
         // Agregar coordenadas de cada parada
         if (stops.length > 0) {
           stops.forEach((stop: any, index: number) => {
-            console.log(`  Parada ${index}:`, {
+            console.log(`  🎯 Parada ${index + 1} de ${stops.length}:`, {
+              address: stop.address,
+              customer: stop.customer,
               hasCoords: !!stop.coordinates,
               coords: stop.coordinates,
-              latitude: stop.latitude,
-              longitude: stop.longitude
+              waypointIndex: stop.waypointIndex
             })
 
             // Intentar obtener coordenadas de diferentes formatos
@@ -194,7 +253,7 @@ export default function RouteMap({
 
             if (stopCoords) {
               markerCoordinates.push(stopCoords)
-              console.log(`  ✅ Agregada coordenada: [${stopCoords[0]}, ${stopCoords[1]}]`)
+              console.log(`  ✅ Waypoint ${index + 1}: [${stopCoords[0].toFixed(6)}, ${stopCoords[1].toFixed(6)}] - ${stop.address}`)
             } else {
               console.warn(`  ⚠️ Parada ${index} sin coordenadas válidas`)
             }
@@ -204,7 +263,8 @@ export default function RouteMap({
         // Volver al almacén
         markerCoordinates.push(warehouseCoordinates)
 
-        console.log('📍 Total coordenadas para marcadores:', markerCoordinates.length)
+        console.log('📍 Total coordenadas para marcadores:', markerCoordinates.length, '(incluye almacén inicio y fin)')
+        console.log('🏁 Secuencia: Almacén → ' + stops.length + ' paradas → Almacén')
         setAllCoordinates(markerCoordinates)
         return
       }
@@ -370,10 +430,21 @@ export default function RouteMap({
         // El índice de la parada real es index - 1 (porque index 0 es el almacén)
         const stopIndex = index - 1
         const stop = stops[stopIndex]
-        console.log(`🔍 Buscando parada con stopIndex ${stopIndex}:`, stop)
 
-        // Obtener el número de waypoint correcto del stop si existe, si no usar stopIndex + 1
-        const waypointNumber = stop?.waypointIndex !== undefined ? stop.waypointIndex + 1 : stopIndex + 1
+        // El número del waypoint para MOSTRAR es index (porque excluimos el almacén)
+        // index=1 → Parada 1, index=2 → Parada 2, etc.
+        const waypointNumber = index
+
+        console.log(`🔍 Procesando waypoint ${waypointNumber}:`, {
+          allCoordinatesIndex: index,
+          stopIndex: stopIndex,
+          stopData: stop ? {
+            address: stop.address,
+            customer: stop.customer,
+            coordinates: stop.coordinates,
+            waypointIndexFromBackend: stop.waypointIndex
+          } : 'NO ENCONTRADO'
+        })
 
         // Obtener número de órdenes en esta parada
         const ordersCount = stop?.totalOrders || stop?.orderIds?.length || 1
@@ -467,18 +538,26 @@ export default function RouteMap({
               `<div style="padding: 2px 0;">📦 ${orderNum}</div>`
             ).join('')
             popupText = `
-              <div style="font-weight: 600; margin-bottom: 4px;">Parada ${stopIndex + 1} (${ordersCount} órdenes)</div>
+              <div style="font-weight: 600; margin-bottom: 4px;">Parada ${waypointNumber} (${ordersCount} órdenes)</div>
               <div style="margin-bottom: 6px;">${address}</div>
-              <div style="border-top: 1px solid #e5e7eb; padding-top: 4px; font-size: 11px;">
+              <div style="border-top: 1px solid rgba(255,255,255,0.2); padding-top: 4px; font-size: 11px;">
                 ${ordersList}
               </div>
             `
           } else {
-            popupText = `${stopIndex + 1}. ${stop.customer}\n${address}`
+            popupText = `
+              <div style="font-weight: 600; margin-bottom: 2px;">Parada ${waypointNumber}</div>
+              <div style="font-size: 12px; opacity: 0.9;">${stop.customer || 'Cliente'}</div>
+              <div style="font-size: 11px; opacity: 0.7; margin-top: 2px;">${address}</div>
+            `
           }
-          console.log(`✅ Marcador de parada creado - N°${stopIndex + 1}: ${stop.customer} en ${address} (${ordersCount} órdenes)`)
+          console.log(`✅ Marcador de parada creado - Waypoint ${waypointNumber}: ${stop.customer} en ${address} (${ordersCount} órdenes)`)
         } else {
-          console.log(`⚠️ No se encontró información de la parada para stopIndex ${stopIndex}, usando marcador genérico N°${stopIndex + 1}`)
+          popupText = `
+            <div style="font-weight: 600;">Parada ${waypointNumber}</div>
+            <div style="font-size: 11px; opacity: 0.7;">Información no disponible</div>
+          `
+          console.log(`⚠️ No se encontró información de la parada para waypoint ${waypointNumber}`)
         }
       }
 
@@ -486,9 +565,23 @@ export default function RouteMap({
       const popup = new mapboxgl.Popup({
         closeButton: false,
         closeOnClick: false,
-        offset: 10
+        offset: 15,
+        className: 'custom-popup',
+        maxWidth: '300px'
       }).setHTML(`
-        <div style="padding: 4px 8px; font-size: 12px; font-weight: 500;">
+        <div style="
+          padding: 10px 14px;
+          font-size: 13px;
+          font-weight: 500;
+          background: rgb(17, 24, 39) !important;
+          color: white !important;
+          border-radius: 6px;
+          box-shadow: 0 8px 24px rgba(0,0,0,0.6);
+          border: 1px solid rgb(55, 65, 81);
+          white-space: normal;
+          max-width: 280px;
+          position: relative;
+        ">
           ${popupText}
         </div>
       `)
@@ -520,8 +613,10 @@ export default function RouteMap({
 
     // Agregar marcadores para cada coordenada
     console.log('🚀 Iniciando creación de marcadores para allCoordinates:', allCoordinates.length)
+    console.log('📊 Desglose esperado: 1 almacén inicio + ' + stops.length + ' paradas + 1 almacén fin = ' + (stops.length + 2) + ' marcadores')
+
     allCoordinates.forEach((coord, index) => {
-      console.log(`📍 Procesando coordenada index ${index}:`, coord)
+      console.log(`📍 Procesando coordenada index ${index}/${allCoordinates.length - 1}:`, coord)
       if (index === 0) {
         // Almacén inicio
         console.log('🏢 Creando marcador de almacén inicio')
@@ -531,13 +626,18 @@ export default function RouteMap({
         console.log('🏢 Creando marcador de almacén fin')
         createMarker(coord, index, true, false, true)
       } else {
-        // Paradas intermedias
-        console.log(`📦 Creando marcador de parada intermedia index ${index}`)
+        // Paradas intermedias (index 1 hasta length-2)
+        const waypointNum = index // Este será el número que se muestra
+        console.log(`📦 Creando marcador de parada intermedia - Waypoint ${waypointNum}`)
         createMarker(coord, index, false, false, false)
       }
     })
 
     console.log(`✅ Total de marcadores creados: ${markersRef.current.length}`)
+    console.log(`   - 1 Almacén (Inicio)`)
+    console.log(`   - ${stops.length} Paradas de entrega`)
+    console.log(`   - 1 Almacén (Regreso)`)
+    console.log(`🎯 Paradas SIN contar almacén: ${stops.length}`)
   }
 
   // Dibujar rutas en el mapa
@@ -686,12 +786,25 @@ export default function RouteMap({
   }
 
   return (
-    <div className="relative w-full h-full">
+    <div ref={containerRef} className="relative w-full h-full">
       <div
         ref={mapContainerRef}
         className="w-full h-full rounded-lg overflow-hidden"
-        style={{ minHeight: '500px', height: '500px' }}
+        style={{ minHeight: '500px', height: isFullscreen ? '100vh' : '500px' }}
       />
+
+      {/* Botón de Fullscreen */}
+      <button
+        onClick={toggleFullscreen}
+        className="absolute top-4 right-4 z-20 bg-white dark:bg-gray-800 hover:bg-gray-100 dark:hover:bg-gray-700 p-3 rounded-lg shadow-xl border border-gray-200 dark:border-gray-700 transition-all duration-200 hover:scale-110"
+        title={isFullscreen ? 'Salir de pantalla completa' : 'Pantalla completa'}
+      >
+        {isFullscreen ? (
+          <Minimize className="w-5 h-5 text-gray-700 dark:text-gray-300" />
+        ) : (
+          <Maximize className="w-5 h-5 text-gray-700 dark:text-gray-300" />
+        )}
+      </button>
 
       {/* Panel lateral de rutas alternativas */}
       {routes.length > 0 && (
@@ -797,6 +910,55 @@ export default function RouteMap({
           </div>
         </div>
       )}
+
+      {/* Estilos CSS personalizados para popups */}
+      <style jsx global>{`
+        /* Asegurar que los popups estén en primer plano - MÁXIMA PRIORIDAD */
+        .mapboxgl-popup.custom-popup {
+          z-index: 99999 !important;
+          pointer-events: auto !important;
+        }
+
+        /* Contenedor del popup - Sin background para que se vea el interno */
+        .mapboxgl-popup.custom-popup .mapboxgl-popup-content {
+          background: rgb(17, 24, 39) !important;
+          padding: 0 !important;
+          box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6) !important;
+          border: none !important;
+          border-radius: 8px !important;
+          overflow: visible !important;
+          min-width: 180px !important;
+        }
+
+        /* Asegurar que el contenido interno también tenga el background oscuro */
+        .mapboxgl-popup.custom-popup .mapboxgl-popup-content > div {
+          background: rgb(17, 24, 39) !important;
+          color: white !important;
+          border-radius: 6px !important;
+        }
+
+        /* Punta del popup - Color oscuro para que coincida */
+        .mapboxgl-popup.custom-popup .mapboxgl-popup-tip {
+          border-top-color: rgb(17, 24, 39) !important;
+          border-bottom-color: rgb(17, 24, 39) !important;
+          border-left-color: rgb(17, 24, 39) !important;
+          border-right-color: rgb(17, 24, 39) !important;
+          z-index: 99998 !important;
+        }
+
+        /* Asegurar que los marcadores estén DETRÁS del popup */
+        .mapboxgl-marker {
+          z-index: 100 !important;
+        }
+
+        /* Cuando el popup está activo, forzar z-index aún más alto */
+        .mapboxgl-popup.custom-popup.mapboxgl-popup-anchor-top,
+        .mapboxgl-popup.custom-popup.mapboxgl-popup-anchor-bottom,
+        .mapboxgl-popup.custom-popup.mapboxgl-popup-anchor-left,
+        .mapboxgl-popup.custom-popup.mapboxgl-popup-anchor-right {
+          z-index: 99999 !important;
+        }
+      `}</style>
     </div>
   )
 }

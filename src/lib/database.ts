@@ -228,6 +228,12 @@ export function initializeDatabase() {
     // La columna ya existe
   }
 
+  try {
+    db.exec(`ALTER TABLE package_orders ADD COLUMN boxes TEXT DEFAULT '[]'`)
+  } catch (e) {
+    // La columna ya existe
+  }
+
   // Tabla para órdenes del CRM
   db.exec(`
     CREATE TABLE IF NOT EXISTS crm_orders (

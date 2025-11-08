@@ -45,6 +45,7 @@ import { useNotifications } from '@/contexts/NotificationContext'
 import { DashboardLayout } from '@/components/layout/dashboard-layout'
 import { Button } from '@/components/ui/button'
 import MapboxAddressAutofill from '@/components/ui/MapboxAddressAutofill'
+import { BoxRecipientManager } from '@/components/services/BoxRecipientManager'
 
 interface Customer {
   id: number
@@ -71,6 +72,23 @@ interface CreatedOrder {
   scheduledDate?: string
   timeSlot?: string
   total: number
+}
+
+interface BoxItem {
+  id: string
+  size: 'pequeno' | 'mediano' | 'grande'
+  quantity: number
+  recipient: Customer | null
+  recipientSearchTerm: string
+  isNewRecipient: boolean
+  newRecipientData: {
+    firstName: string
+    lastName: string
+    phone: string
+    email: string
+  } | null
+  packageCodes: string[]
+  needsConstruction: boolean
 }
 
 interface OrderData {
@@ -144,8 +162,8 @@ export default function CreatePackageOrderPage() {
   const [phoneNumber, setPhoneNumber] = useState('')
   const [foundCustomer, setFoundCustomer] = useState<Customer | null>(null)
   const [orderData, setOrderData] = useState<OrderData>({
-    services: [SERVICE_TYPES[0].name], // Seleccionar el primer servicio por defecto
-    serviceQuantities: { [SERVICE_TYPES[0].name]: 1 },
+    services: [], // No default service selection
+    serviceQuantities: {},
     needsBoxConstruction: {},
     boxSizes: {},
     boxSelections: {},
@@ -176,6 +194,12 @@ export default function CreatePackageOrderPage() {
 
   // Coordinates state for mapping
   const [customerCoordinates, setCustomerCoordinates] = useState<{ latitude: number; longitude: number } | null>(null)
+
+  // Boxes state for individual box management
+  const [boxes, setBoxes] = useState<BoxItem[]>([])
+  const [editingBoxId, setEditingBoxId] = useState<string | null>(null)
+  const [searchingRecipient, setSearchingRecipient] = useState<{ [boxId: string]: boolean }>({})
+  const [recipientSearchResults, setRecipientSearchResults] = useState<{ [boxId: string]: Customer[] }>({})
 
   // New customer form state
   const [newCustomer, setNewCustomer] = useState({
@@ -756,8 +780,26 @@ export default function CreatePackageOrderPage() {
         subtotal: calculatedTotal,
         taxAmount: 0, // 7% tax but we can set it to 0 for now
         totalAmount: calculatedTotal,
-        boxCount: orderData.services.filter(s => s.toLowerCase().includes('caja') || s.toLowerCase().includes('box')).length,
+        boxCount: boxes.reduce((sum, b) => sum + b.quantity, 0),
         boxPrice: 65, // Base price, will be calculated per item
+        // Include boxes array with recipient information
+        boxes: boxes.map(box => ({
+          id: box.id,
+          size: box.size,
+          quantity: box.quantity,
+          needsConstruction: box.needsConstruction,
+          recipient: box.recipient ? {
+            id: box.recipient.id,
+            firstName: box.recipient.firstName,
+            lastName: box.recipient.lastName,
+            phone: box.recipient.phone,
+            email: box.recipient.email,
+            address: box.recipient.address
+          } : null,
+          isNewRecipient: box.isNewRecipient,
+          newRecipientData: box.newRecipientData,
+          packageCodes: box.packageCodes || []
+        })),
         additionalServices: JSON.stringify(orderData.services.map(serviceName => {
           const quantity = orderData.serviceQuantities[serviceName] || 1
           const isBoxService = serviceName.toLowerCase().includes('caja') || serviceName.toLowerCase().includes('box')
@@ -2292,7 +2334,7 @@ Estado: Pendiente
                 )}
               >
                 <div className="max-w-3xl mx-auto space-y-6">
-                  <div className="text-center">
+                  <div className="text-center mb-6">
                     <div className={cn(
                     'w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4',
                     theme === 'dark' ? 'bg-blue-100' : 'bg-red-50'
@@ -2303,14 +2345,25 @@ Estado: Pendiente
                       )} />
                     </div>
                     <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">
-                      Seleccionar Servicios
+                      Cajas para Enviar
                     </h2>
                     <p className="text-gray-600 dark:text-gray-400">
-                      El cliente puede necesitar múltiples servicios
+                      Agregue cajas individuales con su tamaño y destinatario
                     </p>
                   </div>
 
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  {/* Box Recipient Manager */}
+                  <BoxRecipientManager
+                    boxes={boxes}
+                    onBoxesChange={setBoxes}
+                    selectedServices={orderData.services}
+                    onServicesChange={(services) => setOrderData(prev => ({ ...prev, services }))}
+                    theme={theme}
+                  />
+
+                  {/* Old service selection removed - keeping placeholder for easier rollback if needed */}
+                  {false && (
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     {SERVICE_TYPES.map((service) => (
                       <motion.div
                         key={service.id}
@@ -2345,6 +2398,7 @@ Estado: Pendiente
                         </motion.div>
                     ))}
                   </div>
+                  )}
 
                   {/* Payment Method Selection */}
                   {orderData.services.length > 0 && (
@@ -2629,7 +2683,7 @@ Estado: Pendiente
                     </Button>
                     <Button
                       onClick={() => setStep('scheduling')}
-                      disabled={orderData.services.length === 0}
+                      disabled={orderData.services.length === 0 && boxes.length === 0}
                       className={cn(
                         "flex-1 text-white transition-colors",
                         theme === 'dark'

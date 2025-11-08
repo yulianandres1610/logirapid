@@ -420,12 +420,24 @@ export async function POST(request: NextRequest) {
           const serviceIndex = parseInt(stop.services[0].split('_')[1]) - 1
           const originalStop = groupedStops[serviceIndex]
 
+          // Usar las coordenadas "snapped" de Mapbox para mejor precisión en el mapa
+          const snappedCoords = stop.location_metadata?.snapped_coordinate
+          const useCoordinates = snappedCoords && snappedCoords.length === 2
+            ? snappedCoords
+            : originalStop.coordinates
+
+          console.log(`  📍 Parada ${index + 1}: Coords originales vs snapped:`, {
+            original: originalStop.coordinates,
+            snapped: snappedCoords,
+            usando: useCoordinates
+          })
+
           return {
             ...originalStop,
             waypointIndex: index,
             sequence: index + 1,
             eta: stop.eta,
-            coordinates: originalStop.coordinates
+            coordinates: useCoordinates // Usar coordenadas optimizadas de Mapbox
           }
         })
 
@@ -436,15 +448,44 @@ export async function POST(request: NextRequest) {
         const endEta = new Date(lastStop.eta)
         const durationMinutes = Math.floor((endEta.getTime() - startEta.getTime()) / 1000 / 60)
 
+        // OBTENER GEOMETRÍA para el mapa usando Directions API
+        let geometry: any = null
+        let routeCoordinates: any = null
+
+        try {
+          const mapboxToken = process.env.NEXT_PUBLIC_MAPBOX_TOKEN || 'pk.eyJ1IjoieXVsaWFuYW5kcmVzMTYxMCIsImEiOiJjbWgycTlsZGsxM200YnNvbnN2d2wwcHJ5In0.wlU7-bazAs2eYjknx7H97Q'
+          const coordinatesString = [
+            warehouseCoordinates,
+            ...orderedStops.map(stop => stop.coordinates),
+            warehouseCoordinates
+          ].map(coord => `${coord[0]},${coord[1]}`).join(';')
+
+          const directionsUrl = `https://api.mapbox.com/directions/v5/mapbox/driving/${coordinatesString}?geometries=geojson&overview=full&access_token=${mapboxToken}`
+          const directionsResponse = await fetch(directionsUrl)
+
+          if (directionsResponse.ok) {
+            const directionsData = await directionsResponse.json()
+            geometry = directionsData.routes[0]?.geometry
+            routeCoordinates = directionsData.routes[0]?.geometry?.coordinates
+            console.log('✅ [Geometría] Obtenida de Directions API para guardar')
+          }
+        } catch (geoError) {
+          console.warn('⚠️ [Geometría] No se pudo obtener, continuando sin ella:', geoError)
+        }
+
         optimizedRouteData = {
-          mapboxJobId, // ✅ Guardar el job_id para uso futuro
+          mapboxJobId, // Guardar job_id solo como referencia
           distance: distanceMiles,
           duration: durationMinutes,
           stops: orderedStops,
-          optimizationResult // Guardar el resultado completo para referencia
+          geometry, // ✅ Guardar geometría para el mapa
+          coordinates: routeCoordinates, // ✅ Guardar coordenadas de la ruta
+          optimizationResult // ✅ Guardar el resultado COMPLETO de Mapbox Optimization API v2
         }
 
         console.log(`📊 [Resultado Final] Job ID: ${mapboxJobId}, ${distanceMiles} mi, ${durationMinutes} min`)
+        console.log(`🗺️ [Geometría] ${geometry ? 'Guardada' : 'No disponible'}`)
+
 
       } catch (error) {
         console.error('❌ [Mapbox] Error:', error)

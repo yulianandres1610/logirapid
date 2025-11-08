@@ -548,20 +548,44 @@ export default function CreateRoutePage() {
    */
   const unifyMultiplePeriods = (periodResults: any[]) => {
     let unifiedStops: any[] = []
+    let unifiedCoordinates: [number, number][] = []
     let totalDistance = 0
     let totalDuration = 0
     let totalOrders = 0
 
+    // Extraer coordenadas del almacén
+    const warehouseCoords = periodResults[0].warehouseCoordinates
+
     periodResults.forEach((period, index) => {
+      console.log(`🔗 Uniendo periodo ${index + 1}/${periodResults.length}`)
+
       // Agregar paradas del periodo
       const periodStops = period.stops.map((stop: any, stopIndex: number) => ({
         ...stop,
         sequence: unifiedStops.length + stopIndex + 1,
         period: period.timeWindow,
-        periodLabel: TIME_WINDOWS.find(tw => tw.value === period.timeWindow)?.label
+        periodLabel: TIME_WINDOWS.find(tw => tw.value === period.timeWindow)?.label,
+        waypointIndex: unifiedStops.length + stopIndex
       }))
 
       unifiedStops = [...unifiedStops, ...periodStops]
+
+      // Unir coordenadas de geometría (omitir primer y último punto que son el almacén)
+      if (period.coordinates && Array.isArray(period.coordinates)) {
+        const coords = period.coordinates
+
+        if (index === 0) {
+          // Primer periodo: agregar todas las coordenadas
+          unifiedCoordinates = [...coords]
+          console.log(`  ✅ Primer periodo: ${coords.length} coordenadas`)
+        } else {
+          // Periodos siguientes: omitir primer punto (almacén) y agregar el resto
+          // Pero mantener el último punto del periodo anterior (almacén) conectado
+          const coordsWithoutFirst = coords.slice(1)
+          unifiedCoordinates = [...unifiedCoordinates.slice(0, -1), ...coordsWithoutFirst]
+          console.log(`  ✅ Periodo ${index + 1}: +${coordsWithoutFirst.length} coordenadas`)
+        }
+      }
 
       // Sumar métricas
       totalDistance += parseFloat(period.distance) || 0
@@ -569,13 +593,28 @@ export default function CreateRoutePage() {
       totalOrders += period.totalOrders || 0
     })
 
+    // Construir geometría unificada tipo LineString
+    const unifiedGeometry = {
+      type: 'LineString' as const,
+      coordinates: unifiedCoordinates
+    }
+
+    console.log('✅ Ruta multi-periodo unificada:', {
+      stops: unifiedStops.length,
+      coordinates: unifiedCoordinates.length,
+      distance: totalDistance.toFixed(1),
+      duration: totalDuration
+    })
+
     return {
       stops: unifiedStops,
       totalStops: unifiedStops.length,
       totalOrders,
       distance: totalDistance.toFixed(1),
-      duration: `${totalDuration}m`,
-      warehouseCoordinates: periodResults[0].warehouseCoordinates,
+      duration: totalDuration.toString(),
+      warehouseCoordinates: warehouseCoords,
+      geometry: unifiedGeometry,
+      coordinates: unifiedCoordinates,
       multiPeriod: true,
       periods: periodResults.length
     }
@@ -641,6 +680,37 @@ export default function CreateRoutePage() {
   // HELPER FUNCTIONS
   // ============================================================================
 
+  // Hook para efecto de conteo animado
+  const useCountUp = (end: number, duration: number = 1000) => {
+    const [count, setCount] = useState(0)
+
+    useEffect(() => {
+      let startTime: number
+      let animationFrame: number
+
+      const animate = (currentTime: number) => {
+        if (!startTime) startTime = currentTime
+        const progress = Math.min((currentTime - startTime) / duration, 1)
+
+        setCount(Math.floor(progress * end))
+
+        if (progress < 1) {
+          animationFrame = requestAnimationFrame(animate)
+        }
+      }
+
+      animationFrame = requestAnimationFrame(animate)
+
+      return () => {
+        if (animationFrame) {
+          cancelAnimationFrame(animationFrame)
+        }
+      }
+    }, [end, duration])
+
+    return count
+  }
+
   const formatDuration = (minutes: number | string): string => {
     const mins = typeof minutes === 'string' ? parseInt(minutes) : minutes
     if (isNaN(mins)) return 'N/A'
@@ -651,6 +721,51 @@ export default function CreateRoutePage() {
     if (hours === 0) return `${remainingMins} min`
     if (remainingMins === 0) return `${hours} h`
     return `${hours} h ${remainingMins} min`
+  }
+
+  // Componente de tarjeta estadística con animación
+  interface StatCardProps {
+    label: string
+    value: number | string
+    color: 'blue' | 'green' | 'purple' | 'orange' | 'red'
+    suffix?: string
+    formatter?: (value: number | string) => string
+    useCountUp: (end: number, duration?: number) => number
+  }
+
+  const StatCard = ({ label, value, color, suffix = '', formatter, useCountUp }: StatCardProps) => {
+    // Convertir valor a número si es string
+    const numValue = typeof value === 'string' ? parseInt(value) : value
+
+    // Usar animación de conteo
+    const displayValue = useCountUp(numValue, 1000)
+
+    // Aplicar formateador si está definido, sino mostrar el número
+    const finalValue = formatter ? formatter(displayValue) : `${displayValue}${suffix}`
+
+    // Mapeo de colores
+    const colorClasses = {
+      blue: 'bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800',
+      green: 'bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800',
+      purple: 'bg-purple-50 dark:bg-purple-900/20 border-purple-200 dark:border-purple-800',
+      orange: 'bg-orange-50 dark:bg-orange-900/20 border-orange-200 dark:border-orange-800',
+      red: 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800'
+    }
+
+    const textColorClasses = {
+      blue: 'text-blue-600 dark:text-blue-400',
+      green: 'text-green-600 dark:text-green-400',
+      purple: 'text-purple-600 dark:text-purple-400',
+      orange: 'text-orange-600 dark:text-orange-400',
+      red: 'text-red-600 dark:text-red-400'
+    }
+
+    return (
+      <div className={`p-4 rounded-lg border ${colorClasses[color]} transition-all duration-300 hover:shadow-md`}>
+        <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">{label}</p>
+        <p className={`text-2xl font-bold ${textColorClasses[color]}`}>{finalValue}</p>
+      </div>
+    )
   }
 
   // Print handlers
@@ -683,8 +798,8 @@ export default function CreateRoutePage() {
   // ============================================================================
 
   const renderStepIndicator = () => (
-    <div className="relative px-6 py-10 bg-white dark:bg-gray-900">
-      <div className="max-w-3xl mx-auto">
+    <div className="relative px-6 py-10">
+      <div className="max-w-6xl mx-auto">
         <div className="flex items-center justify-between relative">
           {/* Background line */}
           <div className="absolute left-0 right-0 top-6 h-0.5 bg-gray-200 dark:bg-gray-700" style={{ zIndex: 0 }} />
@@ -1201,23 +1316,40 @@ export default function CreateRoutePage() {
               Resultado de Optimización
             </h3>
 
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-              <div className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
-                <p className="text-sm text-gray-600 dark:text-gray-400">Paradas</p>
-                <p className="text-2xl font-bold text-blue-600">{optimizationResult.totalStops}</p>
-              </div>
-              <div className="p-4 bg-green-50 dark:bg-green-900/20 rounded-lg">
-                <p className="text-sm text-gray-600 dark:text-gray-400">Órdenes</p>
-                <p className="text-2xl font-bold text-green-600">{optimizationResult.totalOrders}</p>
-              </div>
-              <div className="p-4 bg-purple-50 dark:bg-purple-900/20 rounded-lg">
-                <p className="text-sm text-gray-600 dark:text-gray-400">Distancia</p>
-                <p className="text-2xl font-bold text-purple-600">{optimizationResult.distance} mi</p>
-              </div>
-              <div className="p-4 bg-orange-50 dark:bg-orange-900/20 rounded-lg">
-                <p className="text-sm text-gray-600 dark:text-gray-400">Duración</p>
-                <p className="text-2xl font-bold text-orange-600">{formatDuration(optimizationResult.duration)}</p>
-              </div>
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 mb-6">
+              <StatCard
+                label="Paradas"
+                value={optimizationResult.totalStops}
+                color="blue"
+                useCountUp={useCountUp}
+              />
+              <StatCard
+                label="Órdenes"
+                value={optimizationResult.totalOrders}
+                color="green"
+                useCountUp={useCountUp}
+              />
+              <StatCard
+                label="Distancia"
+                value={optimizationResult.distance}
+                suffix=" mi"
+                color="purple"
+                useCountUp={useCountUp}
+              />
+              <StatCard
+                label="Conducción"
+                value={optimizationResult.duration}
+                formatter={formatDuration}
+                color="orange"
+                useCountUp={useCountUp}
+              />
+              <StatCard
+                label="Duración en Ruta"
+                value={parseInt(optimizationResult.duration) + (optimizationResult.totalOrders * 20)}
+                formatter={formatDuration}
+                color="red"
+                useCountUp={useCountUp}
+              />
             </div>
 
             {optimizationResult.multiPeriod && (
@@ -1393,24 +1525,48 @@ export default function CreateRoutePage() {
         {/* Hidden Print Components */}
         <div style={{ display: 'none' }}>
           {/* QR Print Component */}
-          <div ref={qrPrintRef} style={{ padding: '20mm', textAlign: 'center' }}>
-            <h1 style={{ marginBottom: '10mm', fontSize: '24pt' }}>
+          <div ref={qrPrintRef} style={{
+            padding: '0',
+            margin: '0',
+            textAlign: 'center',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            minHeight: '100vh',
+            width: '100%'
+          }}>
+            <h1 style={{ marginBottom: '20mm', fontSize: '32pt', fontWeight: 'bold', color: '#000' }}>
               {createdRoute.routeNumber}
             </h1>
-            <div style={{ display: 'inline-block', border: '2px solid #000', padding: '5mm' }}>
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              border: '4px solid #000',
+              padding: '15mm',
+              borderRadius: '8mm',
+              backgroundColor: '#fff',
+              boxShadow: '0 10px 40px rgba(0,0,0,0.1)'
+            }}>
               <QRCodeSVG
                 value={createdRoute.qrCode || createdRoute.routeNumber}
-                size={300}
+                size={200}
                 level="H"
                 includeMargin
               />
             </div>
-            <p style={{ marginTop: '10mm', fontSize: '12pt' }}>
-              Escaneé para acceder a la ruta
+            <p style={{ marginTop: '20mm', fontSize: '20pt', fontWeight: 'bold', color: '#000' }}>
+              Escanee para acceder a la ruta
             </p>
-            <p style={{ fontSize: '10pt', color: '#666' }}>
-              {createdRoute.totalStops} paradas • {createdRoute.totalOrders} órdenes
-            </p>
+            <div style={{ marginTop: '10mm', fontSize: '16pt', color: '#444' }}>
+              <p style={{ margin: '5mm 0' }}>
+                <strong>{createdRoute.totalStops}</strong> paradas • <strong>{createdRoute.totalOrders}</strong> órdenes
+              </p>
+              <p style={{ margin: '5mm 0' }}>
+                Distancia: <strong>{createdRoute.distance} mi</strong> • Duración: <strong>{formatDuration(createdRoute.duration)}</strong>
+              </p>
+            </div>
           </div>
 
           {/* Route Print Component */}
@@ -1421,35 +1577,34 @@ export default function CreateRoutePage() {
                 {createdRoute.routeNumber}
               </h1>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: '5mm', marginBottom: '10mm' }}>
-                <div style={{ border: '1px solid #ddd', padding: '5mm', borderRadius: '3mm' }}>
-                  <p style={{ fontSize: '10pt', color: '#666', marginBottom: '2mm' }}>Paradas</p>
-                  <p style={{ fontSize: '18pt', fontWeight: 'bold', color: '#3b82f6' }}>{createdRoute.totalStops}</p>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '4mm', marginBottom: '8mm' }}>
+                <div style={{ border: '1px solid #ddd', padding: '4mm', borderRadius: '3mm', backgroundColor: '#f0f9ff' }}>
+                  <p style={{ fontSize: '9pt', color: '#666', marginBottom: '1mm' }}>Paradas</p>
+                  <p style={{ fontSize: '16pt', fontWeight: 'bold', color: '#3b82f6' }}>{createdRoute.totalStops}</p>
                 </div>
-                <div style={{ border: '1px solid #ddd', padding: '5mm', borderRadius: '3mm' }}>
-                  <p style={{ fontSize: '10pt', color: '#666', marginBottom: '2mm' }}>Órdenes</p>
-                  <p style={{ fontSize: '18pt', fontWeight: 'bold', color: '#10b981' }}>{createdRoute.totalOrders}</p>
+                <div style={{ border: '1px solid #ddd', padding: '4mm', borderRadius: '3mm', backgroundColor: '#f0fdf4' }}>
+                  <p style={{ fontSize: '9pt', color: '#666', marginBottom: '1mm' }}>Órdenes</p>
+                  <p style={{ fontSize: '16pt', fontWeight: 'bold', color: '#10b981' }}>{createdRoute.totalOrders}</p>
                 </div>
-                <div style={{ border: '1px solid #ddd', padding: '5mm', borderRadius: '3mm' }}>
-                  <p style={{ fontSize: '10pt', color: '#666', marginBottom: '2mm' }}>Distancia</p>
-                  <p style={{ fontSize: '18pt', fontWeight: 'bold', color: '#8b5cf6' }}>{createdRoute.distance} mi</p>
+                <div style={{ border: '1px solid #ddd', padding: '4mm', borderRadius: '3mm', backgroundColor: '#faf5ff' }}>
+                  <p style={{ fontSize: '9pt', color: '#666', marginBottom: '1mm' }}>Distancia</p>
+                  <p style={{ fontSize: '16pt', fontWeight: 'bold', color: '#8b5cf6' }}>{createdRoute.distance} mi</p>
                 </div>
-                <div style={{ border: '1px solid #ddd', padding: '5mm', borderRadius: '3mm' }}>
-                  <p style={{ fontSize: '10pt', color: '#666', marginBottom: '2mm' }}>Duración</p>
-                  <p style={{ fontSize: '18pt', fontWeight: 'bold', color: '#f97316' }}>{formatDuration(createdRoute.duration)}</p>
+                <div style={{ border: '1px solid #ddd', padding: '4mm', borderRadius: '3mm', backgroundColor: '#fff7ed' }}>
+                  <p style={{ fontSize: '9pt', color: '#666', marginBottom: '1mm' }}>Conducción</p>
+                  <p style={{ fontSize: '16pt', fontWeight: 'bold', color: '#f97316' }}>{formatDuration(optimizationResult?.duration || createdRoute.duration)}</p>
+                </div>
+                <div style={{ border: '1px solid #ddd', padding: '4mm', borderRadius: '3mm', backgroundColor: '#fef2f2' }}>
+                  <p style={{ fontSize: '9pt', color: '#666', marginBottom: '1mm' }}>Duración en Ruta</p>
+                  <p style={{ fontSize: '16pt', fontWeight: 'bold', color: '#ef4444' }}>{formatDuration(parseInt(optimizationResult?.duration || createdRoute.duration) + ((optimizationResult?.totalOrders || createdRoute.totalOrders) * 20))}</p>
+                </div>
+                <div style={{ border: '1px solid #ddd', padding: '4mm', borderRadius: '3mm', backgroundColor: '#f0fdf4' }}>
+                  <p style={{ fontSize: '9pt', color: '#666', marginBottom: '1mm' }}>Tiempo Estimado</p>
+                  <p style={{ fontSize: '16pt', fontWeight: 'bold', color: '#059669' }}>{formatDuration(parseInt(optimizationResult?.duration || createdRoute.duration) + ((optimizationResult?.totalOrders || createdRoute.totalOrders) * 20))}</p>
                 </div>
               </div>
 
-              {optimizationResult && (
-                <div style={{ height: '150mm', border: '1px solid #ddd', marginBottom: '10mm' }}>
-                  <RouteMap
-                    optimizationResult={optimizationResult}
-                    warehouseCoordinates={optimizationResult.warehouseCoordinates}
-                  />
-                </div>
-              )}
-
-              <div style={{ textAlign: 'center', marginTop: '10mm' }}>
+              <div style={{ textAlign: 'center', marginTop: '8mm' }}>
                 <div style={{ display: 'inline-block', border: '2px solid #000', padding: '3mm' }}>
                   <QRCodeSVG
                     value={createdRoute.qrCode || createdRoute.routeNumber}
@@ -1462,99 +1617,148 @@ export default function CreateRoutePage() {
               </div>
             </div>
 
-            {/* Pages 2+: One order per page */}
+            {/* Pages 2+: One order per page - Modern Minimal Design */}
             {routeOrders.map((order, index) => (
-              <div key={order.id} className="page-break" style={{ padding: '15mm' }}>
-                <div style={{ marginBottom: '5mm', borderBottom: '2px solid #000', paddingBottom: '3mm' }}>
-                  <h2 style={{ fontSize: '18pt', margin: 0 }}>
-                    Orden {index + 1} de {routeOrders.length}
-                  </h2>
-                  <p style={{ fontSize: '12pt', color: '#666', margin: 0 }}>
-                    {order.orderNumber || `ORD-${order.id}`}
-                  </p>
+              <div key={order.id} className="page-break" style={{
+                padding: '12mm 15mm',
+                fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+                position: 'relative',
+                minHeight: '277mm'
+              }}>
+                {/* Header con QR */}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8mm', borderBottom: '1px solid #e5e7eb', paddingBottom: '5mm' }}>
+                  <div style={{ flex: 1 }}>
+                    <p style={{ fontSize: '9pt', color: '#9ca3af', margin: '0 0 1mm 0', letterSpacing: '0.5px' }}>
+                      PARADA {index + 1} DE {routeOrders.length}
+                    </p>
+                    <h1 style={{ fontSize: '24pt', fontWeight: '700', margin: '0', color: '#111827', letterSpacing: '-0.5px' }}>
+                      {order.orderNumber || `#${order.id}`}
+                    </h1>
+                  </div>
+                  <div style={{ textAlign: 'center', marginLeft: '10mm' }}>
+                    <QRCodeSVG
+                      value={order.orderNumber || `ORD-${order.id}`}
+                      size={80}
+                      level="M"
+                    />
+                    <p style={{ fontSize: '7pt', color: '#6b7280', margin: '2mm 0 0 0' }}>Escanear orden</p>
+                  </div>
                 </div>
 
-                <div style={{ marginBottom: '10mm' }}>
-                  <h3 style={{ fontSize: '14pt', marginBottom: '3mm', color: '#3b82f6' }}>
-                    Cliente
-                  </h3>
-                  <p style={{ fontSize: '12pt', marginBottom: '2mm' }}>
-                    <strong>Nombre:</strong> {order.customerName}
+                {/* Cliente */}
+                <div style={{ marginBottom: '6mm', padding: '4mm', backgroundColor: '#f9fafb', borderRadius: '2mm', border: '1px solid #e5e7eb' }}>
+                  <p style={{ fontSize: '8pt', color: '#6b7280', margin: '0 0 2mm 0', textTransform: 'uppercase', letterSpacing: '1px', fontWeight: '600' }}>Cliente</p>
+                  <p style={{ fontSize: '14pt', fontWeight: '600', color: '#111827', margin: '0 0 2mm 0' }}>
+                    {order.firstName} {order.lastName}
                   </p>
-                  <p style={{ fontSize: '12pt', marginBottom: '2mm' }}>
-                    <strong>Teléfono:</strong> {order.customerPhone || 'N/A'}
-                  </p>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '3mm', marginTop: '3mm' }}>
+                    <div>
+                      <p style={{ fontSize: '8pt', color: '#6b7280', margin: '0' }}>📞 Teléfono</p>
+                      <p style={{ fontSize: '11pt', color: '#111827', margin: '1mm 0 0 0', fontWeight: '500' }}>{order.phone || 'N/A'}</p>
+                    </div>
+                    <div>
+                      <p style={{ fontSize: '8pt', color: '#6b7280', margin: '0' }}>✉️ Email</p>
+                      <p style={{ fontSize: '11pt', color: '#111827', margin: '1mm 0 0 0', fontWeight: '500' }}>{order.email || 'N/A'}</p>
+                    </div>
+                  </div>
                 </div>
 
-                <div style={{ marginBottom: '10mm' }}>
-                  <h3 style={{ fontSize: '14pt', marginBottom: '3mm', color: '#10b981' }}>
-                    Dirección de Entrega
-                  </h3>
-                  <p style={{ fontSize: '12pt', lineHeight: 1.5 }}>
-                    {order.customerAddress?.street || order.address || 'N/A'}
+                {/* Dirección */}
+                <div style={{ marginBottom: '6mm', padding: '4mm', backgroundColor: '#ecfdf5', borderRadius: '2mm', border: '1px solid #a7f3d0' }}>
+                  <p style={{ fontSize: '8pt', color: '#065f46', margin: '0 0 2mm 0', textTransform: 'uppercase', letterSpacing: '1px', fontWeight: '600' }}>📍 Dirección de Entrega</p>
+                  <p style={{ fontSize: '13pt', fontWeight: '700', color: '#064e3b', margin: '0', lineHeight: 1.4 }}>
+                    {order.address || order.customerAddress?.street || 'N/A'}
                   </p>
-                  {order.customerAddress?.city && (
-                    <p style={{ fontSize: '12pt' }}>
+                  {order.customerAddress && typeof order.customerAddress === 'object' && order.customerAddress.city && (
+                    <p style={{ fontSize: '10pt', color: '#047857', margin: '2mm 0 0 0' }}>
                       {order.customerAddress.city}, {order.customerAddress.state} {order.customerAddress.zipCode}
                     </p>
                   )}
+                  {order.customerNotes && (
+                    <div style={{ marginTop: '3mm', padding: '3mm', backgroundColor: '#fef3c7', borderLeft: '3px solid #f59e0b', borderRadius: '1mm' }}>
+                      <p style={{ fontSize: '9pt', color: '#92400e', margin: '0' }}>
+                        <strong>💬 Nota:</strong> {order.customerNotes}
+                      </p>
+                    </div>
+                  )}
                 </div>
 
-                <div style={{ marginBottom: '10mm' }}>
-                  <h3 style={{ fontSize: '14pt', marginBottom: '3mm', color: '#8b5cf6' }}>
-                    Servicios
-                  </h3>
-                  <div style={{ fontSize: '11pt' }}>
+                {/* Servicios */}
+                <div style={{ marginBottom: '6mm' }}>
+                  <p style={{ fontSize: '8pt', color: '#6b7280', margin: '0 0 2mm 0', textTransform: 'uppercase', letterSpacing: '1px', fontWeight: '600' }}>📦 Servicios</p>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '2mm' }}>
                     {Array.isArray(order.services) ? (
                       order.services.map((service: string, idx: number) => (
-                        <div key={idx} style={{ padding: '3mm', backgroundColor: '#f3f4f6', marginBottom: '2mm', borderRadius: '2mm' }}>
-                          • {service}
-                        </div>
+                        <span key={idx} style={{
+                          display: 'inline-block',
+                          padding: '2mm 3mm',
+                          backgroundColor: '#ede9fe',
+                          color: '#5b21b6',
+                          fontSize: '9pt',
+                          fontWeight: '500',
+                          borderRadius: '1mm',
+                          border: '1px solid #c4b5fd'
+                        }}>
+                          {service}
+                        </span>
                       ))
                     ) : (
-                      <p style={{ padding: '3mm', backgroundColor: '#f3f4f6', borderRadius: '2mm' }}>
+                      <span style={{
+                        display: 'inline-block',
+                        padding: '2mm 3mm',
+                        backgroundColor: '#ede9fe',
+                        color: '#5b21b6',
+                        fontSize: '9pt',
+                        fontWeight: '500',
+                        borderRadius: '1mm',
+                        border: '1px solid #c4b5fd'
+                      }}>
                         {order.services}
-                      </p>
+                      </span>
                     )}
                   </div>
                 </div>
 
-                <div style={{ marginBottom: '10mm' }}>
-                  <h3 style={{ fontSize: '14pt', marginBottom: '3mm', color: '#f97316' }}>
-                    Detalles de la Orden
-                  </h3>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '5mm' }}>
-                    <div>
-                      <p style={{ fontSize: '10pt', color: '#666' }}>Tiempo de Servicio</p>
-                      <p style={{ fontSize: '12pt', fontWeight: 'bold' }}>5 minutos</p>
-                    </div>
-                    <div>
-                      <p style={{ fontSize: '10pt', color: '#666' }}>Estado</p>
-                      <p style={{ fontSize: '12pt', fontWeight: 'bold' }}>{order.status}</p>
-                    </div>
-                    <div>
-                      <p style={{ fontSize: '10pt', color: '#666' }}>Fecha</p>
-                      <p style={{ fontSize: '12pt', fontWeight: 'bold' }}>{order.date}</p>
-                    </div>
-                    <div>
-                      <p style={{ fontSize: '10pt', color: '#666' }}>Método de Pago</p>
-                      <p style={{ fontSize: '12pt', fontWeight: 'bold' }}>{order.paymentMethod || 'N/A'}</p>
-                    </div>
+                {/* Detalles en Grid */}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '3mm', marginBottom: '6mm' }}>
+                  <div style={{ padding: '3mm', backgroundColor: '#fff7ed', borderRadius: '2mm', border: '1px solid #fed7aa' }}>
+                    <p style={{ fontSize: '8pt', color: '#9a3412', margin: '0' }}>⏱️ Tiempo Servicio</p>
+                    <p style={{ fontSize: '12pt', fontWeight: '700', color: '#7c2d12', margin: '1mm 0 0 0' }}>5 min</p>
+                  </div>
+                  <div style={{ padding: '3mm', backgroundColor: '#dbeafe', borderRadius: '2mm', border: '1px solid #93c5fd' }}>
+                    <p style={{ fontSize: '8pt', color: '#1e3a8a', margin: '0' }}>📊 Estado</p>
+                    <p style={{ fontSize: '12pt', fontWeight: '700', color: '#1e40af', margin: '1mm 0 0 0' }}>{order.status}</p>
+                  </div>
+                  <div style={{ padding: '3mm', backgroundColor: '#f5f3ff', borderRadius: '2mm', border: '1px solid #ddd6fe' }}>
+                    <p style={{ fontSize: '8pt', color: '#5b21b6', margin: '0' }}>📅 Fecha</p>
+                    <p style={{ fontSize: '12pt', fontWeight: '700', color: '#6b21a8', margin: '1mm 0 0 0' }}>{order.scheduledDate || order.date}</p>
+                  </div>
+                  <div style={{ padding: '3mm', backgroundColor: '#f0fdf4', borderRadius: '2mm', border: '1px solid #bbf7d0' }}>
+                    <p style={{ fontSize: '8pt', color: '#14532d', margin: '0' }}>💳 Pago</p>
+                    <p style={{ fontSize: '12pt', fontWeight: '700', color: '#15803d', margin: '1mm 0 0 0' }}>{order.paymentMethod || 'N/A'}</p>
                   </div>
                 </div>
 
+                {/* Notas del conductor */}
                 {order.notes && (
-                  <div style={{ marginTop: '10mm', padding: '5mm', backgroundColor: '#fef3c7', borderLeft: '3px solid #f59e0b', borderRadius: '2mm' }}>
-                    <p style={{ fontSize: '10pt', color: '#92400e', margin: 0 }}>
-                      <strong>Notas:</strong> {order.notes}
+                  <div style={{ padding: '4mm', backgroundColor: '#fef2f2', borderLeft: '3px solid #dc2626', borderRadius: '2mm', marginBottom: '6mm' }}>
+                    <p style={{ fontSize: '8pt', color: '#7f1d1d', margin: '0 0 2mm 0', fontWeight: '600', textTransform: 'uppercase' }}>⚠️ Notas Importantes</p>
+                    <p style={{ fontSize: '10pt', color: '#991b1b', margin: '0', lineHeight: 1.4 }}>
+                      {order.notes}
                     </p>
                   </div>
                 )}
 
-                <div style={{ position: 'absolute', bottom: '15mm', left: '15mm', right: '15mm', borderTop: '1px solid #ddd', paddingTop: '3mm' }}>
-                  <p style={{ fontSize: '9pt', color: '#999', textAlign: 'center' }}>
-                    {createdRoute.routeNumber} • Página {index + 2} de {routeOrders.length + 1}
-                  </p>
+                {/* Footer */}
+                <div style={{ position: 'absolute', bottom: '12mm', left: '15mm', right: '15mm', paddingTop: '3mm', borderTop: '1px solid #e5e7eb' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <p style={{ fontSize: '8pt', color: '#9ca3af', margin: '0', fontWeight: '500' }}>
+                      {createdRoute.routeNumber}
+                    </p>
+                    <p style={{ fontSize: '8pt', color: '#9ca3af', margin: '0', fontWeight: '500' }}>
+                      Página {index + 3} de {routeOrders.length + 2}
+                    </p>
+                  </div>
                 </div>
               </div>
             ))}

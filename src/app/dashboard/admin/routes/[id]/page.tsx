@@ -62,6 +62,7 @@ interface RouteData {
   mechanism: 'automatic' | 'manual'
   timeWindows: string[]
   warehouseId: string
+  mapboxJobId?: string | null
   optimizedRoute?: any
 }
 
@@ -97,6 +98,7 @@ export default function RouteDetailPage() {
           console.log('📦 Total paquetes:', data.data.totalPackages)
           console.log('📍 Waypoints:', data.data.waypoints)
           console.log('🗺️ OptimizedRoute:', data.data.optimizedRoute ? 'SI' : 'NO')
+          console.log('🆔 MapboxJobId:', data.data.mapboxJobId || 'NO')
           console.log('📊 Distancia:', data.data.distance)
           console.log('⏱️ Duración:', data.data.estimatedDuration)
 
@@ -165,7 +167,7 @@ export default function RouteDetailPage() {
     console.log('⏱️ Duración guardada:', route.estimatedDuration)
 
     // Transformar waypoints al formato esperado por el mapa
-    const transformedStops = route.waypoints?.map(waypoint => {
+    const transformedStops = route.waypoints?.map((waypoint, index) => {
       let address = 'Dirección no disponible'
       if (typeof waypoint.address === 'string') {
         address = waypoint.address
@@ -179,18 +181,19 @@ export default function RouteDetailPage() {
         customer: waypoint.customerName || 'Cliente',
         type: 'delivery' as const,
         coordinates: [waypoint.longitude, waypoint.latitude] as [number, number],
-        orderNumber: `#${waypoint.id}`
+        orderNumber: `#${waypoint.id}`,
+        waypointIndex: index
       }
     }) || []
 
-    // USAR SOLAMENTE DATOS GUARDADOS EN LA RUTA
     const result: any = {
       totalOrders: route.totalPackages || 0,
-      pickups: 0, // No hay información en la ruta guardada
+      pickups: 0,
       deliveries: route.deliveredPackages || 0,
       totalDistance: route.distance || 0,
       estimatedDuration: route.estimatedDuration || 'Pendiente',
       optimizedStops: route.waypoints?.length || 0,
+      stops: transformedStops,
       route: {
         start: 'Almacén',
         stops: transformedStops,
@@ -198,18 +201,49 @@ export default function RouteDetailPage() {
       }
     }
 
-    // Si tenemos ruta optimizada guardada, la usamos para el mapa
-    if (route.optimizedRoute && route.optimizedRoute.geometry) {
-      console.log('🗺️ Usando ruta optimizada guardada para el mapa')
-      result.mapboxRoute = route.optimizedRoute
+    // ✅ Usar datos guardados de optimizedRoute (contiene TODA la info de Mapbox)
+    if (route.optimizedRoute) {
+      console.log('🗺️ Usando datos completos guardados de Mapbox Optimization API')
+
+      // Geometría para el mapa
+      if (route.optimizedRoute.geometry) {
+        result.geometry = route.optimizedRoute.geometry
+        result.coordinates = route.optimizedRoute.coordinates
+      }
+
+      // Si hay resultado de optimización de Mapbox guardado, usarlo para info adicional
+      if (route.optimizedRoute.optimizationResult) {
+        const mapboxRoute = route.optimizedRoute.optimizationResult.routes?.[0]
+        if (mapboxRoute) {
+          const serviceStops = mapboxRoute.stops?.filter((stop: any) => stop.type === 'service') || []
+
+          // Enriquecer stops con datos de Mapbox (ETAs, odometer, etc.)
+          result.stops = transformedStops.map((stop: any, index: number) => {
+            const mapboxStop = serviceStops[index]
+            if (mapboxStop) {
+              return {
+                ...stop,
+                eta: mapboxStop.eta,
+                odometer: mapboxStop.odometer,
+                wait: mapboxStop.wait,
+                duration: mapboxStop.duration
+              }
+            }
+            return stop
+          })
+        }
+      }
+
+      result.optimizedRoute = route.optimizedRoute
     }
 
-    console.log('✅ Resultado preparado con datos reales guardados:', {
+    console.log('✅ Resultado preparado con datos guardados en BD:', {
       totalOrders: result.totalOrders,
-      deliveries: result.deliveries,
+      stops: result.stops.length,
       totalDistance: result.totalDistance,
       estimatedDuration: result.estimatedDuration,
-      hasOptimizedRoute: !!result.mapboxRoute
+      hasGeometry: !!result.geometry,
+      hasOptimizationData: !!route.optimizedRoute?.optimizationResult
     })
 
     return result
@@ -516,7 +550,7 @@ export default function RouteDetailPage() {
                     {/* Mostrar SOLAMENTE waypoints guardados en la BD */}
                     {route.waypoints && route.waypoints.length > 0 ? (
                       route.waypoints.map((waypoint, index) => (
-                        <div key={waypoint.id} className="p-4 border-b border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
+                        <div key={waypoint.orderId || `waypoint-${index}`} className="p-4 border-b border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
                           <div className="flex items-start gap-3">
                             <div className={cn(
                               'flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold',
