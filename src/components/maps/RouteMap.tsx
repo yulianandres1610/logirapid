@@ -18,6 +18,9 @@ interface RouteStop {
   timeSlot?: string
   coordinates?: [number, number]
   orderNumber?: string
+  orderIds?: number[]
+  orderNumbers?: string[]
+  totalOrders?: number
 }
 
 interface OptimizationResult {
@@ -372,33 +375,108 @@ export default function RouteMap({
         // Obtener el número de waypoint correcto del stop si existe, si no usar stopIndex + 1
         const waypointNumber = stop?.waypointIndex !== undefined ? stop.waypointIndex + 1 : stopIndex + 1
 
+        // Obtener número de órdenes en esta parada
+        const ordersCount = stop?.totalOrders || stop?.orderIds?.length || 1
+        const hasMultipleOrders = ordersCount > 1
+
         const color = '#3B82F6' // Color azul consistente para todos los waypoints
 
         markerElement = document.createElement('div')
-        markerElement.style.cssText = `
-          width: 28px;
-          height: 28px;
-          background: ${color};
-          border: 2px solid white;
-          border-radius: 50%;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          color: white;
-          font-weight: bold;
-          font-size: 12px;
-          box-shadow: 0 2px 6px rgba(0,0,0,0.3);
-          z-index: 1000;
-        `
-        // Usar el número de waypoint correcto
-        markerElement.innerHTML = `${waypointNumber}`
+
+        if (hasMultipleOrders) {
+          // Diseño especial para paradas con múltiples órdenes
+          markerElement.style.cssText = `
+            position: relative;
+            width: 32px;
+            height: 32px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+          `
+
+          // Círculo principal con el número de waypoint
+          const mainCircle = document.createElement('div')
+          mainCircle.style.cssText = `
+            width: 28px;
+            height: 28px;
+            background: ${color};
+            border: 2px solid white;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: bold;
+            font-size: 11px;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+          `
+          mainCircle.innerHTML = `${waypointNumber}`
+
+          // Badge con el número de órdenes
+          const badge = document.createElement('div')
+          badge.style.cssText = `
+            position: absolute;
+            top: -6px;
+            right: -6px;
+            width: 18px;
+            height: 18px;
+            background: #EF4444;
+            border: 2px solid white;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: bold;
+            font-size: 10px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+          `
+          badge.innerHTML = `${ordersCount}`
+
+          markerElement.appendChild(mainCircle)
+          markerElement.appendChild(badge)
+        } else {
+          // Diseño normal para paradas con una sola orden
+          markerElement.style.cssText = `
+            width: 28px;
+            height: 28px;
+            background: ${color};
+            border: 2px solid white;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: bold;
+            font-size: 12px;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+            z-index: 1000;
+          `
+          markerElement.innerHTML = `${waypointNumber}`
+        }
 
         if (stop) {
           const address = typeof stop.address === 'string'
             ? stop.address
             : stop.address?.street || 'Dirección no disponible'
-          popupText = `${stopIndex + 1}. ${stop.customer}\n${address}`
-          console.log(`✅ Marcador de parada creado - N°${stopIndex + 1}: ${stop.customer} en ${address}`)
+
+          // Construir el texto del popup
+          if (hasMultipleOrders && stop.orderNumbers && stop.orderNumbers.length > 0) {
+            const ordersList = stop.orderNumbers.map((orderNum: string, idx: number) =>
+              `<div style="padding: 2px 0;">📦 ${orderNum}</div>`
+            ).join('')
+            popupText = `
+              <div style="font-weight: 600; margin-bottom: 4px;">Parada ${stopIndex + 1} (${ordersCount} órdenes)</div>
+              <div style="margin-bottom: 6px;">${address}</div>
+              <div style="border-top: 1px solid #e5e7eb; padding-top: 4px; font-size: 11px;">
+                ${ordersList}
+              </div>
+            `
+          } else {
+            popupText = `${stopIndex + 1}. ${stop.customer}\n${address}`
+          }
+          console.log(`✅ Marcador de parada creado - N°${stopIndex + 1}: ${stop.customer} en ${address} (${ordersCount} órdenes)`)
         } else {
           console.log(`⚠️ No se encontró información de la parada para stopIndex ${stopIndex}, usando marcador genérico N°${stopIndex + 1}`)
         }
