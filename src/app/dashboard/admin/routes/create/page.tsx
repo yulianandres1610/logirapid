@@ -683,67 +683,74 @@ export default function CreateRoutePage() {
   // ============================================================================
 
   const renderStepIndicator = () => (
-    <div className="px-8 py-8 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
-      <div className="flex items-center max-w-4xl mx-auto">
-        {STEPS.map((step, index) => (
-          <div key={step.id} className="flex items-center flex-1">
-            {/* Step Number and Title */}
-            <div className="flex flex-col items-center gap-3">
+    <div className="relative px-6 py-10 bg-white dark:bg-gray-900">
+      <div className="max-w-3xl mx-auto">
+        <div className="flex items-center justify-between relative">
+          {/* Background line */}
+          <div className="absolute left-0 right-0 top-6 h-0.5 bg-gray-200 dark:bg-gray-700" style={{ zIndex: 0 }} />
+
+          {/* Progress line */}
+          <div
+            className="absolute left-0 top-6 h-0.5 bg-[#2a5caa] transition-all duration-500 ease-out"
+            style={{
+              width: `${((currentStep - 1) / (STEPS.length - 1)) * 100}%`,
+              zIndex: 1
+            }}
+          />
+
+          {STEPS.map((step, index) => (
+            <div key={step.id} className="flex flex-col items-center relative" style={{ zIndex: 2 }}>
+              {/* Circle */}
               <div className={cn(
-                'w-14 h-14 rounded-lg flex items-center justify-center text-base font-bold transition-all duration-200 border-2',
+                'w-12 h-12 rounded-full flex items-center justify-center font-bold text-base transition-all duration-300 relative',
                 currentStep === step.id
-                  ? 'bg-[#2a5caa] border-[#2a5caa] text-white shadow-lg'
+                  ? 'bg-[#2a5caa] text-white shadow-lg scale-110 animate-pulse-slow'
                   : currentStep > step.id
-                  ? 'bg-[#10b981] border-[#10b981] text-white'
-                  : 'bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600 text-gray-400 dark:text-gray-500'
+                  ? 'bg-[#10b981] text-white'
+                  : 'bg-white dark:bg-gray-800 border-2 border-gray-300 dark:border-gray-600 text-gray-400'
               )}>
                 {currentStep > step.id ? (
-                  <Check className="w-7 h-7" />
+                  <Check className="w-5 h-5" />
                 ) : (
-                  <span>{step.id}</span>
+                  step.id
+                )}
+
+                {/* Ripple effect for active step */}
+                {currentStep === step.id && (
+                  <span className="absolute inset-0 rounded-full bg-[#2a5caa] animate-ping opacity-25" />
                 )}
               </div>
+
+              {/* Label */}
               <span className={cn(
-                'text-sm font-semibold whitespace-nowrap transition-colors',
+                'mt-3 text-xs font-medium transition-colors text-center',
                 currentStep >= step.id
                   ? 'text-gray-900 dark:text-white'
-                  : 'text-gray-400 dark:text-gray-500'
+                  : 'text-gray-400'
               )}>
                 {step.title}
               </span>
             </div>
-
-            {/* Connector Line */}
-            {index < STEPS.length - 1 && (
-              <div className="flex-1 h-1 mx-6 mb-8 rounded-full bg-gray-200 dark:bg-gray-700">
-                <div
-                  className={cn(
-                    'h-full rounded-full transition-all duration-300',
-                    currentStep > step.id
-                      ? 'w-full bg-[#10b981]'
-                      : 'w-0'
-                  )}
-                />
-              </div>
-            )}
-          </div>
-        ))}
+          ))}
+        </div>
       </div>
+
+      <style dangerouslySetInnerHTML={{
+        __html: `
+          @keyframes pulse-slow {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.85; }
+          }
+          .animate-pulse-slow {
+            animation: pulse-slow 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+          }
+        `
+      }} />
     </div>
   )
 
   const renderStep1 = () => (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="bg-white dark:bg-gray-800 rounded-lg p-6 shadow-sm">
-        <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2 flex items-center gap-2">
-          <Package className="w-5 h-5 text-blue-500" />
-          Selecciona Órdenes por Periodo
-        </h3>
-        <p className="text-sm text-gray-600 dark:text-gray-400">
-          Selecciona las órdenes que deseas incluir en la ruta. Los periodos horarios se activan automáticamente.
-        </p>
-      </div>
 
       {/* Time Windows with Orders Inside */}
       <div className="space-y-4">
