@@ -108,8 +108,8 @@ export default function PackageOrderDetailPage() {
 
         // Parsear campos JSON con manejo de corrupción (igual que en database.ts)
         let services = []
-        let serviceQuantities = {}
-        let needsBoxConstruction = {}
+        let serviceQuantities: Record<string, number> = {}
+        let needsBoxConstruction: Record<string, boolean> = {}
 
         if (data.data.services) {
           if (Array.isArray(data.data.services)) {
@@ -441,7 +441,7 @@ export default function PackageOrderDetailPage() {
 
     // If it's a string, try to parse as JSON
     try {
-      return JSON.parse(address)
+      return JSON.parse(address as string)
     } catch {
       return { street: address }
     }
@@ -599,15 +599,6 @@ export default function PackageOrderDetailPage() {
                   <Archive className="w-5 h-5" />
                   Servicios Solicitados
                 </h2>
-
-                {/* Debug information */}
-                {console.log('🔍 Debug - Services Data:', {
-                  services: order.services,
-                  serviceQuantities: order.serviceQuantities,
-                  needsBoxConstruction: order.needsBoxConstruction,
-                  servicesLength: order.services?.length,
-                  servicesType: typeof order.services
-                })}
 
                 <div className="space-y-4">
                   {/* Services badges */}

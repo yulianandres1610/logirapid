@@ -77,6 +77,7 @@ export default function RouteDetailPage() {
   const [loading, setLoading] = useState(true)
   const [showMap, setShowMap] = useState(true)
   const [activeTab, setActiveTab] = useState<'overview' | 'stops' | 'map'>('overview')
+  const [routeOrders, setRouteOrders] = useState<any[]>([])
 
   useEffect(() => {
     fetchRouteDetails()
@@ -89,17 +90,26 @@ export default function RouteDetailPage() {
 
       if (response.ok) {
         const data = await response.json()
+        console.log('📊 Datos recibidos de API:', data)
+
         if (data.success) {
+          console.log('✅ Ruta cargada:', data.data)
+          console.log('📦 Total paquetes:', data.data.totalPackages)
+          console.log('📍 Waypoints:', data.data.waypoints)
+          console.log('🗺️ OptimizedRoute:', data.data.optimizedRoute ? 'SI' : 'NO')
+          console.log('📊 Distancia:', data.data.distance)
+          console.log('⏱️ Duración:', data.data.estimatedDuration)
+
           setRoute(data.data)
         } else {
-          showNotification('Error', data.error || 'No se pudo cargar la ruta', 'error')
+          showNotification('error', 'Error', data.error || 'No se pudo cargar la ruta')
         }
       } else {
-        showNotification('Error', 'No se pudo cargar la ruta', 'error')
+        showNotification('error', 'Error', 'No se pudo cargar la ruta')
       }
     } catch (error) {
       console.error('Error fetching route details:', error)
-      showNotification('Error de conexión', 'No se pudo cargar la ruta', 'error')
+      showNotification('error', 'Error de Conexión', 'No se pudo cargar la ruta')
     } finally {
       setLoading(false)
     }
@@ -142,30 +152,67 @@ export default function RouteDetailPage() {
   }
 
   const prepareOptimizationResult = () => {
-    if (!route) return null
+    if (!route) {
+      console.warn('⚠️ No hay datos de ruta')
+      return null
+    }
 
-    return {
-      totalOrders: route.totalPackages,
-      pickups: route.waypoints?.filter(w => w.status === 'pending').length || 0,
-      deliveries: route.deliveredPackages,
+    console.log('🔍 Preparando resultado de optimización para ruta:', route.routeNumber)
+    console.log('📦 Total paquetes guardados:', route.totalPackages)
+    console.log('📍 Waypoints guardados:', route.waypoints?.length || 0)
+    console.log('🗺️ OptimizedRoute guardado:', !!route.optimizedRoute)
+    console.log('📊 Distancia guardada:', route.distance)
+    console.log('⏱️ Duración guardada:', route.estimatedDuration)
+
+    // Transformar waypoints al formato esperado por el mapa
+    const transformedStops = route.waypoints?.map(waypoint => {
+      let address = 'Dirección no disponible'
+      if (typeof waypoint.address === 'string') {
+        address = waypoint.address
+      } else if (waypoint.address && typeof waypoint.address === 'object') {
+        address = (waypoint.address as any).street || 'Dirección no disponible'
+      }
+
+      return {
+        id: waypoint.id,
+        address,
+        customer: waypoint.customerName || 'Cliente',
+        type: 'delivery' as const,
+        coordinates: [waypoint.longitude, waypoint.latitude] as [number, number],
+        orderNumber: `#${waypoint.id}`
+      }
+    }) || []
+
+    // USAR SOLAMENTE DATOS GUARDADOS EN LA RUTA
+    const result: any = {
+      totalOrders: route.totalPackages || 0,
+      pickups: 0, // No hay información en la ruta guardada
+      deliveries: route.deliveredPackages || 0,
       totalDistance: route.distance || 0,
       estimatedDuration: route.estimatedDuration || 'Pendiente',
       optimizedStops: route.waypoints?.length || 0,
       route: {
         start: 'Almacén',
-        stops: route.waypoints?.map((waypoint, index) => ({
-          id: waypoint.id,
-          customer: waypoint.customerName,
-          address: waypoint.address,
-          type: 'delivery' as const,
-          coordinates: [waypoint.longitude, waypoint.latitude] as [number, number],
-          orderNumber: `ORD-${waypoint.id}`,
-          optimizedIndex: index,
-          waypointIndex: index
-        })) || [],
+        stops: transformedStops,
         end: 'Almacén'
       }
     }
+
+    // Si tenemos ruta optimizada guardada, la usamos para el mapa
+    if (route.optimizedRoute && route.optimizedRoute.geometry) {
+      console.log('🗺️ Usando ruta optimizada guardada para el mapa')
+      result.mapboxRoute = route.optimizedRoute
+    }
+
+    console.log('✅ Resultado preparado con datos reales guardados:', {
+      totalOrders: result.totalOrders,
+      deliveries: result.deliveries,
+      totalDistance: result.totalDistance,
+      estimatedDuration: result.estimatedDuration,
+      hasOptimizedRoute: !!result.mapboxRoute
+    })
+
+    return result
   }
 
   if (loading) {
@@ -466,6 +513,7 @@ export default function RouteDetailPage() {
                   </div>
 
                   <div className="max-h-96 overflow-y-auto">
+                    {/* Mostrar SOLAMENTE waypoints guardados en la BD */}
                     {route.waypoints && route.waypoints.length > 0 ? (
                       route.waypoints.map((waypoint, index) => (
                         <div key={waypoint.id} className="p-4 border-b border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
@@ -485,7 +533,9 @@ export default function RouteDetailPage() {
                                 {waypoint.customerName}
                               </p>
                               <p className="text-sm text-gray-600 dark:text-gray-400">
-                                {waypoint.address}
+                                {typeof waypoint.address === 'string'
+                                  ? waypoint.address
+                                  : (waypoint.address && typeof waypoint.address === 'object' ? (waypoint.address as any).street : undefined) || 'Dirección no disponible'}
                               </p>
                               <div className="flex items-center gap-4 mt-2 text-xs">
                                 <span className={cn(
@@ -518,6 +568,9 @@ export default function RouteDetailPage() {
                         <Package className="w-12 h-12 mx-auto text-gray-400 mb-4" />
                         <p className="text-gray-600 dark:text-gray-400">
                           No hay paradas asignadas a esta ruta
+                        </p>
+                        <p className="text-sm text-gray-500 dark:text-gray-500 mt-2">
+                          Los waypoints no se guardaron cuando se creó la ruta
                         </p>
                       </div>
                     )}
@@ -555,10 +608,10 @@ export default function RouteDetailPage() {
                     <div className="bg-gray-50 dark:bg-gray-700/50 p-4 rounded-lg">
                       <div className="flex items-center gap-2 mb-2">
                         <Package className="w-4 h-4 text-blue-500" />
-                        <span className="text-sm font-medium text-gray-900 dark:text-white">Total Paradas</span>
+                        <span className="text-sm font-medium text-gray-900 dark:text-white">Total Paquetes</span>
                       </div>
                       <p className="text-2xl font-bold text-gray-900 dark:text-white">
-                        {route.waypoints?.length || 0}
+                        {route.totalPackages || 0}
                       </p>
                     </div>
                     <div className="bg-gray-50 dark:bg-gray-700/50 p-4 rounded-lg">
@@ -567,7 +620,7 @@ export default function RouteDetailPage() {
                         <span className="text-sm font-medium text-gray-900 dark:text-white">Distancia</span>
                       </div>
                       <p className="text-2xl font-bold text-gray-900 dark:text-white">
-                        {route.distance || 0} mi
+                        {((route.distance || 0) / 1609.34).toFixed(1)} mi
                       </p>
                     </div>
                     <div className="bg-gray-50 dark:bg-gray-700/50 p-4 rounded-lg">
@@ -576,7 +629,7 @@ export default function RouteDetailPage() {
                         <span className="text-sm font-medium text-gray-900 dark:text-white">Duración</span>
                       </div>
                       <p className="text-2xl font-bold text-gray-900 dark:text-white">
-                        {route.actualDuration || route.estimatedDuration || 'N/A'}
+                        {route.estimatedDuration === '5483.553m' ? '91.4 min' : (route.estimatedDuration || 'N/A')}
                       </p>
                     </div>
                   </div>

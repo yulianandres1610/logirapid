@@ -162,6 +162,12 @@ export async function PUT(
   try {
     const resolvedParams = await params
     const id = parseInt(resolvedParams.id)
+
+    const body = await request.json()
+    console.log('🔧 PUT /api/package-orders/[id] - Actualizando orden')
+    console.log(`📦 ID Orden: ${id}`)
+    console.log(`🔄 Estado solicitado: ${body.status}`)
+    console.log(`📍 Datos completos:`, JSON.stringify(body, null, 2))
     if (isNaN(id)) {
       return NextResponse.json({
         success: false,
@@ -183,8 +189,6 @@ export async function PUT(
         error: 'Orden no encontrada'
       }, { status: 404 })
     }
-
-    const body = await request.json()
 
     // Preparar campos para actualización
     const updateFields = []
@@ -236,6 +240,11 @@ export async function PUT(
     updateValues.push(id)
 
     const updateQuery = `UPDATE package_orders SET ${updateFields.join(', ')} WHERE id = ?`
+
+    console.log('💾 EJECUTANDO ACTUALIZACIÓN:')
+    console.log('📋 Query:', updateQuery)
+    console.log('🔢 Valores:', updateValues)
+    console.log(`📨 Campos a actualizar: ${updateFields.join(', ')}`)
 
     const result = await db.run(updateQuery, updateValues)
 

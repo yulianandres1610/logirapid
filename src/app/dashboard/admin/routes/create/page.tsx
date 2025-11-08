@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
@@ -12,16 +12,18 @@ import {
   Users,
   CheckCircle,
   AlertCircle,
-  BarChart3,
-  Settings,
-  Zap,
-  Edit3,
-  Eye,
-  Save,
   Package,
-  List,
-  ListOrdered,
-  Route
+  Warehouse,
+  Calendar,
+  Zap,
+  QrCode,
+  UserX,
+  Save,
+  Printer,
+  FileText,
+  PartyPopper,
+  MessageSquare,
+  Check
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useTheme } from '@/contexts/theme-context'
@@ -30,22 +32,37 @@ import { useNotifications } from '@/contexts/NotificationContext'
 import { DashboardLayout } from '@/components/layout/dashboard-layout'
 import { Button } from '@/components/ui/button'
 import RouteMap from '@/components/maps/RouteMap'
+import { QRCodeSVG } from 'qrcode.react'
+import { useReactToPrint } from 'react-to-print'
 
-interface RouteCreationData {
-  mechanism: 'automatic' | 'manual'
-  timeWindows: string[]
-  warehouseId: string
-  vehicleId: string
-  driverId: string
-  routeDetails?: any
-  optimizedRoute?: any
+// ============================================================================
+// TYPES & CONSTANTS
+// ============================================================================
+
+interface TimeWindow {
+  id: string
+  label: string
+  value: string
+  startTime: string
+  endTime: string
 }
 
-const TIME_WINDOWS = [
-  { id: 'morning', label: '8:00 AM - 12:00 PM', value: '8-12' },
-  { id: 'afternoon', label: '12:00 PM - 4:00 PM', value: '12-16' },
-  { id: 'evening', label: '4:00 PM - 8:00 PM', value: '16-20' }
+const TIME_WINDOWS: TimeWindow[] = [
+  { id: 'morning', label: 'Mañana', value: '8-12', startTime: '08:00', endTime: '12:00' },
+  { id: 'afternoon', label: 'Tarde', value: '12-16', startTime: '12:00', endTime: '16:00' },
+  { id: 'evening', label: 'Noche', value: '16-20', startTime: '16:00', endTime: '20:00' }
 ]
+
+const STEPS = [
+  { id: 1, title: 'Órdenes y Horarios', icon: Package },
+  { id: 2, title: 'Configuración', icon: Truck },
+  { id: 3, title: 'Confirmación', icon: CheckCircle },
+  { id: 4, title: 'Éxito', icon: PartyPopper }
+]
+
+// ============================================================================
+// MAIN COMPONENT
+// ============================================================================
 
 export default function CreateRoutePage() {
   const { user } = useAuth()
@@ -53,1655 +70,1529 @@ export default function CreateRoutePage() {
   const { showNotification } = useNotifications()
   const router = useRouter()
 
+  // ============================================================================
+  // STATE
+  // ============================================================================
   const [currentStep, setCurrentStep] = useState(1)
   const [loading, setLoading] = useState(false)
-  const [warehouses, setWarehouses] = useState([])
-  const [vehicles, setVehicles] = useState([])
-  const [drivers, setDrivers] = useState([])
-  const [packageOrders, setPackageOrders] = useState([])
+  const [optimizing, setOptimizing] = useState(false)
 
-  const [routeData, setRouteData] = useState<RouteCreationData>({
-    mechanism: 'automatic',
-    timeWindows: [],
-    warehouseId: '',
-    vehicleId: '',
-    driverId: ''
-  })
+  // Data from API
+  const [warehouses, setWarehouses] = useState<any[]>([])
+  const [vehicles, setVehicles] = useState<any[]>([])
+  const [drivers, setDrivers] = useState<any[]>([])
+  const [packageOrders, setPackageOrders] = useState<any[]>([])
 
+  // Form data
+  const [selectedOrders, setSelectedOrders] = useState<number[]>([])
+  const [selectedTimeWindows, setSelectedTimeWindows] = useState<string[]>([])
+  const [warehouseId, setWarehouseId] = useState('')
+  const [vehicleId, setVehicleId] = useState('')
+  const [driverId, setDriverId] = useState('') // Opcional
+  const [routeDate, setRouteDate] = useState(new Date().toISOString().split('T')[0])
+  const [notes, setNotes] = useState('')
+
+  // Optimization result
   const [optimizationResult, setOptimizationResult] = useState<any>(null)
-  const [optimizedRouteData, setOptimizedRouteData] = useState<any>(null)
-  const [showMap, setShowMap] = useState(true)
-  const [selectedRouteData, setSelectedRouteData] = useState<any>(null) // Para guardar la ruta alternativa seleccionada
 
-  const steps = [
-    { id: 1, title: 'Mecanismo', icon: Settings, description: 'Elegir método de creación', color: 'blue' },
-    { id: 2, title: 'Horario', icon: Clock, description: 'Seleccionar ventanas de tiempo', color: 'red' },
-    { id: 3, title: 'Almacén', icon: MapPin, description: 'Punto de partida', color: 'blue' },
-    { id: 4, title: 'Recursos', icon: Truck, description: 'Vehículo y conductor', color: 'red' },
-    { id: 5, title: 'Optimización', icon: Zap, description: 'Procesando ruta', color: 'blue' },
-    { id: 6, title: 'Detalles', icon: BarChart3, description: 'Revisar detalles', color: 'red' },
-    { id: 7, title: 'Lista', icon: List, description: 'Ver paradas', color: 'blue' },
-    { id: 8, title: 'Mapa', icon: Eye, description: 'Visualizar ruta', color: 'red' },
-    { id: 9, title: 'Confirmar', icon: Save, description: 'Guardar ruta', color: 'blue' }
-  ]
+  // Created route data (for step 4)
+  const [createdRoute, setCreatedRoute] = useState<any>(null)
 
-  // Fetch data for dropdowns
+  // Ref para evitar múltiples ejecuciones de optimización
+  const hasOptimizedRef = useRef(false)
+
+  // Refs para impresión
+  const qrPrintRef = useRef<HTMLDivElement>(null)
+  const routePrintRef = useRef<HTMLDivElement>(null)
+
+  // ============================================================================
+  // EFFECTS
+  // ============================================================================
+
   useEffect(() => {
-    fetchWarehouses()
-    fetchVehicles()
-    fetchDrivers()
-    fetchPackageOrders()
+    loadInitialData()
   }, [])
 
-  const fetchWarehouses = async () => {
+  // Auto-optimizar cuando se llega al paso 3
+  useEffect(() => {
+    if (currentStep === 3 && !optimizationResult && !optimizing && !hasOptimizedRef.current) {
+      console.log('📍 Llegando a paso 3, iniciando optimización automática...')
+      hasOptimizedRef.current = true
+      handleOptimizeRoute()
+    }
+
+    // Resetear el flag cuando se sale del paso 3
+    if (currentStep !== 3) {
+      hasOptimizedRef.current = false
+    }
+  }, [currentStep, optimizationResult, optimizing])
+
+  // ============================================================================
+  // DATA LOADING
+  // ============================================================================
+
+  const loadInitialData = async () => {
     try {
-      const response = await fetch('/api/warehouses?limit=1000')
-      if (response.ok) {
-        const data = await response.json()
-        setWarehouses(data.data || [])
+      setLoading(true)
+
+      const [warehousesRes, vehiclesRes, driversRes, ordersRes1, ordersRes2] = await Promise.all([
+        fetch('/api/warehouses?limit=1000'),
+        fetch('/api/vehicles?limit=1000'),
+        fetch('/api/users?role=driver&limit=1000'),
+        fetch('/api/package-orders?status=pending&limit=1000'),
+        fetch('/api/package-orders?status=reprogrammed&limit=1000')
+      ])
+
+      const [warehousesData, vehiclesData, driversData, orders1, orders2] = await Promise.all([
+        warehousesRes.json(),
+        vehiclesRes.json(),
+        driversRes.json(),
+        ordersRes1.json(),
+        ordersRes2.json()
+      ])
+
+      // Manejar formato de respuesta {data: array} o array directo
+      const warehousesList = warehousesData.data || warehousesData || []
+      const vehiclesList = vehiclesData.data || vehiclesData || []
+      const driversList = driversData.data || driversData || []
+
+      setWarehouses(Array.isArray(warehousesList) ? warehousesList : [])
+      setVehicles(Array.isArray(vehiclesList) ? vehiclesList : [])
+      setDrivers(Array.isArray(driversList) ? driversList : [])
+
+      // Combinar pending + reprogrammed - Manejar formato {data: array}
+      const pendingOrders = orders1.data || orders1 || []
+      const reprogrammedOrders = orders2.data || orders2 || []
+      const allOrders = [...pendingOrders, ...reprogrammedOrders]
+
+      console.log('🔍 [Debug] Órdenes cargadas:', {
+        pending: pendingOrders.length,
+        reprogrammed: reprogrammedOrders.length,
+        total: allOrders.length,
+        primeraOrden: allOrders[0] ? {
+          id: allOrders[0].id,
+          orderNumber: allOrders[0].orderNumber,
+          status: allOrders[0].status,
+          hasCoords: !!(allOrders[0].latitude && allOrders[0].longitude)
+        } : null
+      })
+
+      // Filtrar solo órdenes con coordenadas válidas
+      const validOrders = allOrders.filter(order =>
+        order.latitude &&
+        order.longitude &&
+        order.latitude !== 0 &&
+        order.longitude !== 0
+      )
+
+      console.log('✅ [Debug] Órdenes válidas (con coordenadas):', validOrders.length)
+      console.log('📋 [Debug] Ejemplo de orden válida:', validOrders[0] ? {
+        id: validOrders[0].id,
+        orderNumber: validOrders[0].orderNumber,
+        customer: validOrders[0].customerName,
+        status: validOrders[0].status,
+        timeSlot: validOrders[0].timeSlot
+      } : 'No hay órdenes válidas')
+
+      setPackageOrders(validOrders)
+
+      // Auto-select first warehouse if available
+      if (warehousesList.length > 0) {
+        setWarehouseId(warehousesList[0].id.toString())
       }
+
     } catch (error) {
-      console.error('Error fetching warehouses:', error)
+      console.error('Error loading data:', error)
+      showNotification('error', 'Error', 'No se pudo cargar los datos iniciales')
+    } finally {
+      setLoading(false)
     }
   }
 
-  const fetchVehicles = async () => {
-    try {
-      const response = await fetch('/api/vehicles?limit=1000')
-      if (response.ok) {
-        const data = await response.json()
-        setVehicles(data.data || [])
-      }
-    } catch (error) {
-      console.error('Error fetching vehicles:', error)
-    }
-  }
+  // ============================================================================
+  // ORDER SELECTION BY TIME WINDOW
+  // ============================================================================
 
-  const fetchDrivers = async () => {
-    try {
-      const response = await fetch('/api/users?role=driver&limit=1000')
-      if (response.ok) {
-        const data = await response.json()
-        // Filtrar solo usuarios con rol driver
-        const driversOnly = data.data?.users?.filter((user: any) => user.role === 'driver') || []
-        setDrivers(driversOnly)
-      }
-    } catch (error) {
-      console.error('Error fetching drivers:', error)
-    }
-  }
+  const getOrdersByTimeWindow = (timeWindowValue: string) => {
+    const window = TIME_WINDOWS.find(w => w.value === timeWindowValue)
+    if (!window) return []
 
-  const fetchPackageOrders = async () => {
-    try {
-      // Fetch both pending and reprogrammed orders for route creation
-      const response = await fetch('/api/package-orders?status=pending&limit=1000')
-      const response2 = await fetch('/api/package-orders?status=reprogrammed&limit=1000')
-
-      if (response.ok && response2.ok) {
-        const data1 = await response.json()
-        const data2 = await response2.json()
-        // Combine both pending and reprogrammed orders
-        const allOrders = [...(data1.data || []), ...(data2.data || [])]
-        setPackageOrders(allOrders)
-      }
-    } catch (error) {
-      console.error('Error fetching package orders:', error)
-    }
-  }
-
-  // Función para manejar la selección de ruta alternativa
-  const handleRouteSelection = (routeData: any) => {
-    console.log('🛣️ Ruta seleccionada:', routeData)
-    setSelectedRouteData(routeData)
-
-    // Mostrar notificación sobre la ruta seleccionada
-    const routeType = routeData.selectedRouteIndex === 0 ? 'Óptima' : `Alternativa ${routeData.selectedRouteIndex}`
-    showNotification(`Ruta ${routeType} seleccionada`, 'success')
-  }
-
-  const updateRouteData = (key: keyof RouteCreationData, value: any) => {
-    setRouteData(prev => ({
-      ...prev,
-      [key]: value
-    }))
-  }
-
-  const nextStep = () => {
-    if (currentStep < steps.length) {
-      // Si estamos yendo al paso 5 (optimización), ejecutar la optimización
-      if (currentStep === 4) {
-        performOptimization()
-      }
-      setCurrentStep(currentStep + 1)
-    }
-  }
-
-  const performOptimization = async () => {
-    console.log('🚀 Preparando datos para optimización de ruta...')
-    console.log('📦 Órdenes disponibles:', packageOrders.length)
-    console.log('⏰ Ventanas de tiempo seleccionadas:', routeData.timeWindows)
-    console.log('🏪 Almacén seleccionado:', routeData.warehouseId)
-
-    // Inicializar barra de progreso
-    setOptimizationResult({
-      progress: 10,
-      totalOrders: 0,
-      pickups: 0,
-      deliveries: 0,
-      totalDistance: 0,
-      estimatedDuration: 'Calculando...',
-      optimizedStops: 0,
-      timeWindows: routeData.timeWindows,
-      warehouseId: routeData.warehouseId,
-      route: { start: '', stops: [], end: '' }
+    console.log(`🔍 Filtrando órdenes para horario ${timeWindowValue}:`, {
+      totalOrdenes: packageOrders.length,
+      timeWindowValue
     })
 
-    try {
-      // Obtener información del almacén seleccionado
-      const selectedWarehouse = warehouses.find((w: any) => w.id.toString() === routeData.warehouseId)
-      if (!selectedWarehouse) {
-        throw new Error('No se encontró el almacén seleccionado')
+    // Mapeo de diferentes formatos de timeSlot
+    const timeSlotMatches = (orderTimeSlot: string, targetWindow: string) => {
+      if (!orderTimeSlot) return true // Sin timeSlot = incluir en todos
+
+      const slot = orderTimeSlot.toLowerCase()
+
+      // Mapeo directo
+      if (slot === targetWindow) return true
+
+      // Mapeo de nombres a rangos
+      const mappings: Record<string, string[]> = {
+        '8-12': ['morning', 'mañana', '8:00 am - 12:00 pm'],
+        '12-16': ['afternoon', 'tarde', '12:00 pm - 4:00 pm'],
+        '16-20': ['evening', 'noche', '4:00 pm - 8:00 pm']
       }
 
-      console.log('🏭 Almacén:', selectedWarehouse.name)
+      return mappings[targetWindow]?.some(variant => slot.includes(variant)) || false
+    }
 
-      // Filtrar y procesar órdenes con lógica mejorada
-      const relevantOrders = packageOrders.filter(order => {
-        // Si no hay ventanas de tiempo seleccionadas, incluir todas las órdenes pendientes y reprogrammed
-        if (routeData.timeWindows.length === 0) {
-          return order.status === 'pending' || order.status === 'scheduled' || order.status === 'reprogrammed'
+    // Ya filtramos por status en loadInitialData, solo filtramos por timeSlot aquí
+    const filtered = packageOrders.filter(order => {
+      const matches = timeSlotMatches(order.timeSlot, timeWindowValue)
+      console.log(`  - Orden ${order.id} timeSlot="${order.timeSlot}" → match con ${timeWindowValue}:`, matches)
+      return matches
+    })
+
+    console.log(`✅ Resultado filtro ${timeWindowValue}:`, filtered.length, 'órdenes')
+
+    return filtered
+  }
+
+  /**
+   * Calcula cuántas PARADAS habrá en un horario (agrupando por dirección)
+   */
+  const getStopsByTimeWindow = (timeWindowValue: string) => {
+    const orders = getOrdersByTimeWindow(timeWindowValue)
+
+    // Agrupar por dirección (misma lógica que en el backend)
+    const addressMap = new Map<string, number>()
+
+    orders.forEach(order => {
+      if (!order.latitude || !order.longitude) return
+
+      // Clave única basada en coordenadas redondeadas
+      const latKey = order.latitude.toFixed(6)
+      const lngKey = order.longitude.toFixed(6)
+      const addressKey = `${latKey},${lngKey}`
+
+      if (!addressMap.has(addressKey)) {
+        addressMap.set(addressKey, 1)
+      }
+    })
+
+    return addressMap.size
+  }
+
+  // ============================================================================
+  // HANDLERS
+  // ============================================================================
+
+  const toggleTimeWindow = (value: string) => {
+    setSelectedTimeWindows(prev =>
+      prev.includes(value)
+        ? prev.filter(v => v !== value)
+        : [...prev, value].sort()
+    )
+  }
+
+  const toggleOrder = (orderId: number) => {
+    setSelectedOrders(prev => {
+      const isRemoving = prev.includes(orderId)
+      const newSelected = isRemoving
+        ? prev.filter(id => id !== orderId)
+        : [...prev, orderId]
+
+      // Actualizar automáticamente los períodos seleccionados
+      const newTimeWindows: string[] = []
+      TIME_WINDOWS.forEach(window => {
+        const ordersInWindow = getOrdersByTimeWindow(window.value)
+        const hasSelectedOrders = ordersInWindow.some(o => newSelected.includes(o.id))
+        if (hasSelectedOrders) {
+          newTimeWindows.push(window.value)
         }
+      })
+      setSelectedTimeWindows(newTimeWindows.sort())
 
-        // Filtrar por ventanas de tiempo seleccionadas
-        const orderTimeSlot = order.timeSlot
-        const matchesTimeWindow = routeData.timeWindows.some(window => {
-          if (!orderTimeSlot) return false
+      return newSelected
+    })
+  }
 
-          // Mapeo más preciso de ventanas de tiempo
-          if (window === '8-12') {
-            return orderTimeSlot.includes('8:00') || orderTimeSlot.includes('9:00') ||
-                   orderTimeSlot.includes('10:00') || orderTimeSlot.includes('11:00') ||
-                   orderTimeSlot.includes('morning')
+  const toggleAllOrdersInTimeWindow = (timeWindow: string) => {
+    const ordersInWindow = getOrdersByTimeWindow(timeWindow).map(o => o.id)
+    const allSelected = ordersInWindow.every(id => selectedOrders.includes(id))
+
+    if (allSelected) {
+      // Deseleccionar todas del periodo
+      setSelectedOrders(prev => {
+        const newSelected = prev.filter(id => !ordersInWindow.includes(id))
+
+        // Actualizar automáticamente los períodos seleccionados
+        const newTimeWindows: string[] = []
+        TIME_WINDOWS.forEach(window => {
+          const ordersInWindow = getOrdersByTimeWindow(window.value)
+          const hasSelectedOrders = ordersInWindow.some(o => newSelected.includes(o.id))
+          if (hasSelectedOrders) {
+            newTimeWindows.push(window.value)
           }
-          if (window === '12-16') {
-            return orderTimeSlot.includes('12:00') || orderTimeSlot.includes('1:00') ||
-                   orderTimeSlot.includes('2:00') || orderTimeSlot.includes('3:00') ||
-                   orderTimeSlot.includes('afternoon')
+        })
+        setSelectedTimeWindows(newTimeWindows.sort())
+
+        return newSelected
+      })
+    } else {
+      // Seleccionar todas del periodo
+      setSelectedOrders(prev => {
+        const newSelected = [...new Set([...prev, ...ordersInWindow])]
+
+        // Asegurar que el período esté seleccionado
+        setSelectedTimeWindows(prevWindows => {
+          if (!prevWindows.includes(timeWindow)) {
+            return [...prevWindows, timeWindow].sort()
           }
-          if (window === '16-20') {
-            return orderTimeSlot.includes('4:00') || orderTimeSlot.includes('5:00') ||
-                   orderTimeSlot.includes('6:00') || orderTimeSlot.includes('7:00') ||
-                   orderTimeSlot.includes('evening')
-          }
-          return false
+          return prevWindows
         })
 
-        return matchesTimeWindow
+        return newSelected
       })
+    }
+  }
 
-      console.log('📋 Órdenes relevantes filtradas:', relevantOrders.length)
-
-      // Agrupar por tipo de servicio
-      const pickups = relevantOrders.filter(order =>
-        order.services.some((service: string) =>
-          service.toLowerCase().includes('recogida') || service.toLowerCase().includes('pickup')
-        )
-      )
-
-      const deliveries = relevantOrders.filter(order =>
-        order.services.some((service: string) =>
-          service.toLowerCase().includes('entrega') || service.toLowerCase().includes('delivery')
-        )
-      )
-
-      // Preparar paradas para la ruta con coordenadas válidas
-      const routeStops = relevantOrders.map((order, index) => ({
-        id: order.id,
-        address: order.customerAddress || order.address || 'Sin dirección',
-        customer: order.customerName,
-        type: order.services.some((s: string) => s.toLowerCase().includes('recogida')) ? 'pickup' : 'delivery',
-        timeSlot: order.timeSlot,
-        coordinates: order.latitude && order.longitude ? [order.longitude, order.latitude] as [number, number] : undefined,
-        orderNumber: order.orderNumber || `ORD-${order.id}`,
-        // Indices para ordenamiento inicial (serán optimizados por Mapbox en el backend)
-        optimizedIndex: index,
-        waypointIndex: index
-      })).filter(stop => stop.coordinates && stop.coordinates[0] !== 0 && stop.coordinates[1] !== 0)
-
-      console.log('🛣️ Paradas preparadas para ruta:', routeStops.length)
-      console.log('📍 Coordenadas de ejemplo:', routeStops.slice(0, 3).map(s => ({
-        customer: s.customer,
-        coordinates: s.coordinates
-      })))
-
-      // Contar pickups y deliveries en las paradas finales
-      const routePickups = routeStops.filter(stop => stop.type === 'pickup')
-      const routeDeliveries = routeStops.filter(stop => stop.type === 'delivery')
-
-      console.log('📦 Estadísticas:', {
-        total: routeStops.length,
-        pickups: routePickups.length,
-        deliveries: routeDeliveries.length
-      })
-
-      // Actualizar progreso
-      setOptimizationResult(prev => prev ? { ...prev, progress: 30, optimizedStops: routeStops.length } : null)
-
-      // Preparar coordenadas del almacén
-      let warehouseCoordinates: [number, number] = [0, 0]
-
-      if (selectedWarehouse.latitude && selectedWarehouse.longitude) {
-        warehouseCoordinates = [selectedWarehouse.longitude, selectedWarehouse.latitude]
-      } else {
-        // Si no hay coordenadas, usar Miami por defecto
-        warehouseCoordinates = [-80.2395, 25.7548] // Miami coordinates
-        console.warn('⚠️ Almacén sin coordenadas, usando Miami por defecto')
+  const handleNext = () => {
+    if (currentStep === 1) {
+      if (selectedOrders.length === 0) {
+        showNotification('warning', 'Advertencia', 'Selecciona al menos una orden')
+        return
       }
 
-      // Si hay paradas, llamar a la API de optimización del backend
-      if (routeStops.length > 0) {
-        console.log('🗺️ Llamando a API de optimización de rutas...')
+      // Los periodos se seleccionan automáticamente, validar que haya al menos uno
+      if (selectedTimeWindows.length === 0) {
+        showNotification('error', 'Error', 'Las órdenes seleccionadas no tienen horarios válidos')
+        return
+      }
 
-        try {
-          const routePayload = {
-            mechanism: 'automatic',
-            selectedOrders: routeStops.map(stop => stop.id),
-            warehouseId: routeData.warehouseId,
-            driverId: routeData.driverId || '1',
-            vehicleId: routeData.vehicleId || '1',
-            date: new Date().toISOString().split('T')[0],
-            timeWindows: routeData.timeWindows,
-            notes: `Ruta optimizada automática - ${routeStops.length} paradas`
-          }
+      // Validar que los horarios seleccionados tengan órdenes
+      const invalidTimeWindows = selectedTimeWindows.filter(tw => {
+        const ordersInWindow = getOrdersByTimeWindow(tw)
+        return ordersInWindow.length === 0
+      })
 
-          console.log('📤 Enviando a API:', routePayload)
+      if (invalidTimeWindows.length > 0) {
+        showNotification('error', 'Error', 'Hay horarios seleccionados sin órdenes disponibles')
+        // Remover horarios sin órdenes
+        setSelectedTimeWindows(prev => prev.filter(tw => !invalidTimeWindows.includes(tw)))
+        return
+      }
+    }
 
-          const response = await fetch('/api/routes', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify(routePayload)
-          })
+    if (currentStep === 2) {
+      if (!warehouseId) {
+        showNotification('warning', 'Advertencia', 'Selecciona un almacén')
+        return
+      }
+      if (!vehicleId) {
+        showNotification('warning', 'Advertencia', 'Selecciona un vehículo')
+        return
+      }
+      // Driver es opcional
+    }
 
-          if (!response.ok) {
-            throw new Error(`Error en API: ${response.status}`)
-          }
+    setCurrentStep(prev => Math.min(prev + 1, 3))
+  }
 
-          const optimizedRoute = await response.json()
-          console.log('✅ Respuesta de optimización:', optimizedRoute)
+  const handlePrevious = () => {
+    setCurrentStep(prev => Math.max(prev - 1, 1))
+  }
 
-          // Calcular distancia y duración reales basadas en la respuesta del backend
-          const totalDistance = optimizedRoute.distance || optimizedRoute.optimizedRoute?.distance || 0
-          const estimatedDuration = optimizedRoute.estimatedDuration ||
-            (optimizedRoute.optimizedRoute?.duration ? `${Math.floor(optimizedRoute.optimizedRoute.duration / 60)}m` : 'Pendiente')
+  // ============================================================================
+  // OPTIMIZATION (MULTI-PERIOD LOGIC)
+  // ============================================================================
 
-          // Actualizar waypoints con información del backend
-          const updatedStops = optimizedRoute.waypoints?.map((waypoint: any, index: number) => {
-            const originalStop = routeStops.find(stop => stop.id === waypoint.id)
-            if (originalStop) {
-              return {
-                ...originalStop,
-                optimizedIndex: index,
-                waypointIndex: index,
-                latitude: waypoint.latitude,
-                longitude: waypoint.longitude,
-                // Preservar la dirección original, solo usar la del waypoint si es diferente y válida
-                address: waypoint.address && waypoint.address !== originalStop.address ? waypoint.address : originalStop.address
-              }
-            }
-            return originalStop
-          }) || routeStops
+  const handleOptimizeRoute = async () => {
+    try {
+      setOptimizing(true)
 
-          // Crear resultado con datos reales del backend
-          const finalResult = {
-            totalOrders: routeStops.length,
-            pickups: routePickups.length,
-            deliveries: routeDeliveries.length,
-            totalDistance: totalDistance,
-            estimatedDuration: estimatedDuration,
-            optimizedStops: routeStops.length,
-            timeWindows: routeData.timeWindows,
-            warehouseId: routeData.warehouseId,
-            route: {
-              start: selectedWarehouse.name || 'Almacén seleccionado',
-              stops: updatedStops,
-              end: selectedWarehouse.name || 'Almacén seleccionado'
-            },
-            warehouseCoordinates,
-            progress: 100,
-            optimizedRoute: optimizedRoute
-          }
+      console.log('🚀 Iniciando optimización multi-periodo')
+      console.log('⏰ Horarios seleccionados:', selectedTimeWindows)
 
-          setOptimizationResult(finalResult)
-          console.log('✅ Optimización completada con datos reales:', finalResult)
-          showNotification('Ruta optimizada', 'success', `${routeStops.length} paradas, ${totalDistance} mi, ${estimatedDuration}`)
-
-        } catch (apiError) {
-          console.warn('⚠️ Error en API de optimización, usando valores estimados:', apiError)
-
-          // Calcular estimaciones básicas si falla la API
-          const estimatedDistance = Math.round(routeStops.length * 2.5) // ~2.5 millas por parada
-          const estimatedTime = Math.round(routeStops.length * 25 + 30) // 25 min por parada + 30 min base
-          const hours = Math.floor(estimatedTime / 60)
-          const minutes = estimatedTime % 60
-          const formattedTime = hours > 0 ? `${hours}h ${minutes}m` : `${minutes}m`
-
-          const fallbackResult = {
-            totalOrders: routeStops.length,
-            pickups: routePickups.length,
-            deliveries: routeDeliveries.length,
-            totalDistance: estimatedDistance,
-            estimatedDuration: formattedTime,
-            optimizedStops: routeStops.length,
-            timeWindows: routeData.timeWindows,
-            warehouseId: routeData.warehouseId,
-            route: {
-              start: selectedWarehouse.name || 'Almacén seleccionado',
-              stops: routeStops,
-              end: selectedWarehouse.name || 'Almacén seleccionado'
-            },
-            warehouseCoordinates,
-            progress: 100
-          }
-
-          setOptimizationResult(fallbackResult)
-          console.log('✅ Usando estimaciones locales:', fallbackResult)
-          showNotification('Optimización local', 'warning', `${routeStops.length} paradas, ${estimatedDistance} mi estimados`)
-        }
-      } else {
-        // No hay paradas válidas
-        const emptyResult = {
-          totalOrders: 0,
-          pickups: 0,
-          deliveries: 0,
-          totalDistance: 0,
-          estimatedDuration: 'No hay paradas',
-          optimizedStops: 0,
-          timeWindows: routeData.timeWindows,
-          warehouseId: routeData.warehouseId,
-          route: {
-            start: selectedWarehouse.name || 'Almacén seleccionado',
-            stops: [],
-            end: selectedWarehouse.name || 'Almacén seleccionado'
-          },
-          warehouseCoordinates,
-          progress: 100
-        }
-
-        setOptimizationResult(emptyResult)
-        showNotification('Sin paradas', 'info', 'No se encontraron paradas con coordenadas válidas')
+      // CASO 1: Solo un horario → optimización simple
+      if (selectedTimeWindows.length === 1) {
+        console.log('📍 Caso: Un solo horario')
+        await optimizeSinglePeriod(selectedTimeWindows[0])
+      }
+      // CASO 2: Múltiples horarios → optimizar por separado y unir
+      else {
+        console.log('📍 Caso: Múltiples horarios → Optimización por periodos')
+        await optimizeMultiplePeriods()
       }
 
     } catch (error) {
-      console.error('❌ Error en la optimización:', error)
-      showNotification('Error en la optimización de la ruta', 'error')
-
-      // Establecer resultado de error
-      setOptimizationResult({
-        progress: 0,
-        totalOrders: 0,
-        pickups: 0,
-        deliveries: 0,
-        totalDistance: 0,
-        estimatedDuration: 'Error',
-        optimizedStops: 0,
-        timeWindows: routeData.timeWindows,
-        warehouseId: routeData.warehouseId,
-        route: { start: '', stops: [], end: '' }
-      })
+      console.error('Error en optimización:', error)
+      showNotification('error', 'Error', 'No se pudo optimizar la ruta')
+    } finally {
+      setOptimizing(false)
     }
   }
 
-  // Función para manejar el resultado de la optimización del mapa
-  const handleOptimizationComplete = (result: any) => {
-    console.log('🗺️ Optimización completada desde el mapa:', result)
+  /**
+   * Optimización de un solo periodo
+   */
+  const optimizeSinglePeriod = async (timeWindow: string) => {
+    const response = await fetch('/api/routes', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        mechanism: 'automatic',
+        selectedOrders,
+        warehouseId,
+        vehicleId,
+        driverId: driverId || undefined,
+        date: routeDate,
+        timeWindows: [timeWindow],
+        notes: notes || `Ruta optimizada - ${selectedOrders.length} órdenes`,
+        saveRoute: false // Solo preview
+      })
+    })
 
-    if (result && optimizationResult) {
-      // Actualizar el resultado con los datos del mapa
-      const updatedResult = {
-        ...optimizationResult,
-        totalDistance: result.trips?.[0]?.distance ? Math.round(result.trips[0].distance / 1609.34) : optimizationResult.totalDistance,
-        estimatedDuration: result.estimatedDurationWithStops || optimizationResult.estimatedDuration,
-        optimizedRoute: result
+    const data = await response.json()
+
+    console.log('📥 [Frontend] Respuesta de optimización recibida:', data)
+
+    if (data.success && data.data) {
+      console.log('✅ [Frontend] Datos de optimización:', {
+        hasGeometry: !!data.data.geometry,
+        hasCoordinates: !!data.data.coordinates,
+        coordinatesCount: data.data.coordinates?.length || 0,
+        hasRoute: !!data.data.route,
+        stopsCount: data.data.route?.stops?.length || 0,
+        distance: data.data.distance,
+        duration: data.data.duration
+      })
+
+      setOptimizationResult(data.data)
+      showNotification('success', 'Optimización Completa',
+        `Ruta con ${data.data.totalStops} paradas optimizada correctamente`)
+    } else {
+      throw new Error(data.error || 'Error en optimización')
+    }
+  }
+
+  /**
+   * Optimización de múltiples periodos y unión
+   */
+  const optimizeMultiplePeriods = async () => {
+    const periodResults: any[] = []
+
+    // PASO 1: Optimizar cada periodo por separado
+    for (const timeWindow of selectedTimeWindows) {
+      console.log(`🔧 Optimizando periodo: ${timeWindow}`)
+
+      // Filtrar órdenes del periodo
+      const ordersInPeriod = getOrdersByTimeWindow(timeWindow)
+        .filter(order => selectedOrders.includes(order.id))
+        .map(o => o.id)
+
+      if (ordersInPeriod.length === 0) {
+        console.log(`⚠️ No hay órdenes en periodo ${timeWindow}, omitiendo...`)
+        continue
       }
 
-      setOptimizationResult(updatedResult)
-      console.log('✅ Resultado actualizado con datos del mapa:', updatedResult)
+      const response = await fetch('/api/routes', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          mechanism: 'automatic',
+          selectedOrders: ordersInPeriod,
+          warehouseId,
+          vehicleId,
+          driverId: driverId || undefined,
+          date: routeDate,
+          timeWindows: [timeWindow],
+          notes: `Periodo ${timeWindow}`,
+          saveRoute: false
+        })
+      })
+
+      const data = await response.json()
+
+      if (data.success && data.data) {
+        periodResults.push({
+          timeWindow,
+          ...data.data
+        })
+        console.log(`✅ Periodo ${timeWindow} optimizado: ${data.data.totalStops} paradas`)
+      } else {
+        console.error(`❌ Error en periodo ${timeWindow}:`, data.error)
+      }
+    }
+
+    if (periodResults.length === 0) {
+      throw new Error('No se pudo optimizar ningún periodo')
+    }
+
+    // PASO 2: UNIR rutas de todos los periodos
+    console.log('🔗 Uniendo rutas de múltiples periodos...')
+    const unifiedRoute = unifyMultiplePeriods(periodResults)
+
+    setOptimizationResult(unifiedRoute)
+    showNotification('success', 'Rutas Unificadas',
+      `${periodResults.length} periodos optimizados y unidos en 1 ruta continua con ${unifiedRoute.totalStops} paradas`)
+  }
+
+  /**
+   * Unir múltiples rutas optimizadas en una sola secuencia
+   */
+  const unifyMultiplePeriods = (periodResults: any[]) => {
+    let unifiedStops: any[] = []
+    let totalDistance = 0
+    let totalDuration = 0
+    let totalOrders = 0
+
+    periodResults.forEach((period, index) => {
+      // Agregar paradas del periodo
+      const periodStops = period.stops.map((stop: any, stopIndex: number) => ({
+        ...stop,
+        sequence: unifiedStops.length + stopIndex + 1,
+        period: period.timeWindow,
+        periodLabel: TIME_WINDOWS.find(tw => tw.value === period.timeWindow)?.label
+      }))
+
+      unifiedStops = [...unifiedStops, ...periodStops]
+
+      // Sumar métricas
+      totalDistance += parseFloat(period.distance) || 0
+      totalDuration += parseInt(period.duration) || 0
+      totalOrders += period.totalOrders || 0
+    })
+
+    return {
+      stops: unifiedStops,
+      totalStops: unifiedStops.length,
+      totalOrders,
+      distance: totalDistance.toFixed(1),
+      duration: `${totalDuration}m`,
+      warehouseCoordinates: periodResults[0].warehouseCoordinates,
+      multiPeriod: true,
+      periods: periodResults.length
     }
   }
 
+  // ============================================================================
+  // SAVE ROUTE
+  // ============================================================================
 
-  const prevStep = () => {
-    if (currentStep > 1) {
-      setCurrentStep(currentStep - 1)
+  const handleSaveRoute = async () => {
+    try {
+      setLoading(true)
+
+      const response = await fetch('/api/routes', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          mechanism: 'automatic',
+          selectedOrders,
+          warehouseId,
+          vehicleId,
+          driverId: driverId || undefined,
+          date: routeDate,
+          timeWindows: selectedTimeWindows,
+          notes: notes || `Ruta optimizada - ${selectedOrders.length} órdenes`,
+          saveRoute: true // GUARDAR!
+        })
+      })
+
+      const data = await response.json()
+
+      if (data.success) {
+        // Guardar datos de la ruta creada
+        setCreatedRoute({
+          routeId: data.routeId,
+          routeNumber: data.routeNumber,
+          qrCode: data.qrCode,
+          mapboxJobId: data.mapboxJobId,
+          totalStops: data.totalStops,
+          totalOrders: data.totalOrders,
+          distance: data.distance,
+          duration: data.duration
+        })
+
+        showNotification('success', 'Ruta Creada',
+          `Ruta ${data.routeNumber} creada exitosamente`)
+
+        // Ir al paso 4 (éxito)
+        setCurrentStep(4)
+      } else {
+        throw new Error(data.error || 'Error al crear ruta')
+      }
+
+    } catch (error) {
+      console.error('Error saving route:', error)
+      showNotification('error', 'Error', 'No se pudo guardar la ruta')
+    } finally {
+      setLoading(false)
     }
   }
 
-  const canProceed = () => {
-    switch (currentStep) {
-      case 1:
-        return routeData.mechanism === 'automatic' || routeData.mechanism === 'manual'
-      case 2:
-        return routeData.timeWindows.length > 0
-      case 3:
-        return routeData.warehouseId !== ''
-      case 4:
-        return routeData.vehicleId !== '' && routeData.driverId !== ''
-      default:
-        return true
-    }
+  // ============================================================================
+  // HELPER FUNCTIONS
+  // ============================================================================
+
+  const formatDuration = (minutes: number | string): string => {
+    const mins = typeof minutes === 'string' ? parseInt(minutes) : minutes
+    if (isNaN(mins)) return 'N/A'
+
+    const hours = Math.floor(mins / 60)
+    const remainingMins = mins % 60
+
+    if (hours === 0) return `${remainingMins} min`
+    if (remainingMins === 0) return `${hours} h`
+    return `${hours} h ${remainingMins} min`
   }
 
-  const renderStep = () => {
-    switch (currentStep) {
-      case 1:
-        return (
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="space-y-8"
-          >
-            <div className="text-center space-y-4">
-              <div className="mx-auto w-16 h-16 bg-blue-600 rounded-full flex items-center justify-center">
-                <Settings className="w-8 h-8 text-white" />
-              </div>
-              <div>
-                <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
-                  ¿Cómo quieres crear la ruta?
-                </h2>
-                <p className="text-gray-600 dark:text-gray-400 mt-2">
-                  Selecciona el método para generar tu ruta
-                </p>
-              </div>
+  // Print handlers
+  const handlePrintQR = useReactToPrint({
+    contentRef: qrPrintRef,
+    documentTitle: `QR-${createdRoute?.routeNumber || 'Ruta'}`
+  })
+
+  const handlePrintRoute = useReactToPrint({
+    contentRef: routePrintRef,
+    documentTitle: `Ruta-${createdRoute?.routeNumber || 'Completa'}`,
+    pageStyle: `
+      @page {
+        size: letter;
+        margin: 15mm;
+      }
+      @media print {
+        .page-break {
+          page-break-before: always;
+        }
+        .no-print {
+          display: none;
+        }
+      }
+    `
+  })
+
+  // ============================================================================
+  // RENDER FUNCTIONS
+  // ============================================================================
+
+  const renderStepIndicator = () => (
+    <div className="px-6 py-4">
+      <div className="flex items-center gap-4">
+        {STEPS.map((step, index) => (
+          <div key={step.id} className="flex items-center">
+            <div className={cn(
+              'w-10 h-10 rounded-full flex items-center justify-center text-sm font-medium transition-colors',
+              currentStep >= step.id
+                ? 'bg-exa-primary text-white'
+                : theme === 'dark' ? 'bg-gray-700 text-gray-400' : 'bg-gray-200 text-gray-600'
+            )}>
+              {currentStep > step.id ? <Check className="w-5 h-5" /> : step.id}
             </div>
+            {index < STEPS.length - 1 && (
+              <div className={cn(
+                'w-20 h-1 mx-2 transition-colors',
+                currentStep > step.id ? 'bg-exa-primary' : theme === 'dark' ? 'bg-gray-700' : 'bg-gray-200'
+              )} />
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  )
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-4xl mx-auto">
-              <motion.button
-                whileHover={{ scale: 1.02 }}
-                whileTap={{ scale: 0.98 }}
-                onClick={() => updateRouteData('mechanism', 'automatic')}
-                className={cn(
-                  'relative p-8 rounded-2xl border-2 transition-all duration-300 text-left',
-                  routeData.mechanism === 'automatic'
-                    ? 'border-blue-600 bg-blue-50 dark:bg-blue-900/20 shadow-xl'
-                    : 'border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 hover:border-gray-300 dark:hover:border-gray-600'
-                )}
-              >
-                <div className="flex items-center gap-4 mb-4">
-                  <div className={cn(
-                    'p-3 rounded-xl',
-                    routeData.mechanism === 'automatic'
-                      ? 'bg-blue-600 text-white'
-                      : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400'
-                  )}>
-                    <Zap className="w-6 h-6" />
-                  </div>
-                  <div>
-                    <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-                      Automática
-                    </h3>
-                    <p className="text-sm text-gray-600 dark:text-gray-400">
-                      Optimización inteligente
-                    </p>
-                  </div>
-                </div>
-                <p className="text-gray-700 dark:text-gray-300">
-                  El sistema analiza todas las órdenes y crea la ruta más óptima automáticamente usando algoritmos avanzados de optimización.
-                </p>
-                {routeData.mechanism === 'automatic' && (
-                  <div className="absolute top-4 right-4">
-                    <CheckCircle className="w-6 h-6 text-blue-500" />
-                  </div>
-                )}
-              </motion.button>
+  const renderStep1 = () => (
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="bg-white dark:bg-gray-800 rounded-lg p-6 shadow-sm">
+        <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2 flex items-center gap-2">
+          <Package className="w-5 h-5 text-blue-500" />
+          Selecciona Órdenes por Periodo
+        </h3>
+        <p className="text-sm text-gray-600 dark:text-gray-400">
+          Selecciona las órdenes que deseas incluir en la ruta. Los periodos horarios se activan automáticamente.
+        </p>
+      </div>
 
-              <motion.button
-                whileHover={{ scale: 1.02 }}
-                whileTap={{ scale: 0.98 }}
-                onClick={() => updateRouteData('mechanism', 'manual')}
-                className={cn(
-                  'relative p-8 rounded-2xl border-2 transition-all duration-300 text-left',
-                  routeData.mechanism === 'manual'
-                    ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20 shadow-xl'
-                    : 'border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 hover:border-gray-300 dark:hover:border-gray-600'
-                )}
-              >
-                <div className="flex items-center gap-4 mb-4">
-                  <div className={cn(
-                    'p-3 rounded-xl',
-                    routeData.mechanism === 'manual'
-                      ? 'bg-blue-500 text-white'
-                      : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400'
-                  )}>
-                    <Edit3 className="w-6 h-6" />
-                  </div>
-                  <div>
-                    <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-                      Manual
-                    </h3>
-                    <p className="text-sm text-gray-600 dark:text-gray-400">
-                      Control total
-                    </p>
-                  </div>
-                </div>
-                <p className="text-gray-700 dark:text-gray-300">
-                  Tú decides el orden de las paradas y la configuración de la ruta según tu experiencia y conocimiento del terreno.
-                </p>
-                {routeData.mechanism === 'manual' && (
-                  <div className="absolute top-4 right-4">
-                    <CheckCircle className="w-6 h-6 text-blue-500" />
-                  </div>
-                )}
-              </motion.button>
-            </div>
-          </motion.div>
-        )
+      {/* Time Windows with Orders Inside */}
+      <div className="space-y-4">
+        {TIME_WINDOWS.map(window => {
+          const ordersInWindow = getOrdersByTimeWindow(window.value)
+          const stopsCount = getStopsByTimeWindow(window.value)
+          const selectedInWindow = ordersInWindow.filter(o => selectedOrders.includes(o.id)).length
+          const allSelectedInWindow = ordersInWindow.length > 0 && ordersInWindow.every(o => selectedOrders.includes(o.id))
+          const hasOrders = ordersInWindow.length > 0
 
-      case 2:
-        return (
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="space-y-8"
-          >
-            <div className="text-center space-y-4">
-              <div className="mx-auto w-16 h-16 bg-blue-500 rounded-full flex items-center justify-center">
-                <Clock className="w-8 h-8 text-white" />
-              </div>
-              <div>
-                <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
-                  Ventanas de Tiempo
-                </h2>
-                <p className="text-gray-600 dark:text-gray-400 mt-2">
-                  Selecciona los horarios para las entregas
-                </p>
-              </div>
-            </div>
+          return (
+            <div
+              key={window.id}
+              className={cn(
+                'bg-white dark:bg-gray-800 rounded-lg border-2 transition-all overflow-hidden',
+                !hasOrders && 'opacity-50',
+                selectedInWindow > 0 && hasOrders
+                  ? 'border-blue-500 shadow-md'
+                  : 'border-gray-200 dark:border-gray-700'
+              )}
+            >
+              {/* Time Window Header */}
+              <div className="p-4">
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center gap-3">
+                    <div>
+                      <h4 className="font-semibold text-gray-900 dark:text-white">
+                        {window.label}
+                      </h4>
+                      <p className="text-sm text-gray-500 dark:text-gray-400">
+                        {window.startTime} - {window.endTime}
+                      </p>
+                    </div>
+                  </div>
 
-            <div className="max-w-2xl mx-auto">
-              <div className="space-y-4">
-                {TIME_WINDOWS.map((window) => (
-                  <motion.button
-                    key={window.id}
-                    whileHover={{ scale: 1.01 }}
-                    whileTap={{ scale: 0.99 }}
-                    onClick={() => {
-                      const newWindows = routeData.timeWindows.includes(window.value)
-                        ? routeData.timeWindows.filter(w => w !== window.value)
-                        : [...routeData.timeWindows, window.value]
-                      updateRouteData('timeWindows', newWindows)
-                    }}
-                    className={cn(
-                      'w-full p-6 rounded-xl border-2 transition-all duration-300 text-left',
-                      routeData.timeWindows.includes(window.value)
-                        ? 'border-green-500 bg-green-50 dark:bg-green-900/20 shadow-lg'
-                        : 'border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 hover:border-gray-300 dark:hover:border-gray-600'
-                    )}
-                  >
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-4">
+                  <div className="flex items-center gap-2">
+                    {/* Paradas */}
+                    <div className={cn(
+                      'relative overflow-hidden rounded-lg border shadow px-3 py-2',
+                      theme === 'dark'
+                        ? 'bg-gradient-to-br from-gray-800 to-gray-900 border-gray-700'
+                        : 'bg-gradient-to-br from-slate-50 to-white border-slate-200'
+                    )}>
+                      <div className="absolute top-0 left-0 w-full h-0.5 bg-gradient-to-r from-blue-400 to-blue-600"></div>
+                      <div className="flex items-center gap-2">
                         <div className={cn(
-                          'w-12 h-12 rounded-lg flex items-center justify-center',
-                          routeData.timeWindows.includes(window.value)
-                            ? 'bg-green-500 text-white'
-                            : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400'
+                          'p-1.5 rounded-lg',
+                          theme === 'dark'
+                            ? 'bg-blue-900/30 border border-blue-800/50'
+                            : 'bg-gradient-to-br from-blue-50 to-blue-100 border border-blue-200'
                         )}>
-                          <Clock className="w-6 h-6" />
+                          <MapPin className="w-3.5 h-3.5 text-blue-600" />
                         </div>
                         <div>
-                          <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-                            {window.label}
-                          </h3>
-                          <p className="text-sm text-gray-600 dark:text-gray-400">
-                            {window.id === 'morning' && 'Entregas matutinas'}
-                            {window.id === 'afternoon' && 'Entregas de tarde'}
-                            {window.id === 'evening' && 'Entregas nocturnas'}
+                          <p className={cn(
+                            'text-[10px] font-medium uppercase tracking-wide',
+                            theme === 'dark' ? 'text-gray-400' : 'text-gray-600'
+                          )}>Paradas</p>
+                          <p className={cn(
+                            'text-lg font-bold leading-tight',
+                            theme === 'dark' ? 'text-white' : 'text-slate-900'
+                          )}>{stopsCount}</p>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Órdenes */}
+                    <div className={cn(
+                      'relative overflow-hidden rounded-lg border shadow px-3 py-2',
+                      theme === 'dark'
+                        ? 'bg-gradient-to-br from-gray-800 to-gray-900 border-gray-700'
+                        : 'bg-gradient-to-br from-slate-50 to-white border-slate-200'
+                    )}>
+                      <div className="absolute top-0 left-0 w-full h-0.5 bg-gradient-to-r from-green-400 to-emerald-600"></div>
+                      <div className="flex items-center gap-2">
+                        <div className={cn(
+                          'p-1.5 rounded-lg',
+                          theme === 'dark'
+                            ? 'bg-green-900/30 border border-green-800/50'
+                            : 'bg-gradient-to-br from-green-50 to-emerald-100 border border-green-200'
+                        )}>
+                          <Package className="w-3.5 h-3.5 text-green-600" />
+                        </div>
+                        <div>
+                          <p className={cn(
+                            'text-[10px] font-medium uppercase tracking-wide',
+                            theme === 'dark' ? 'text-gray-400' : 'text-gray-600'
+                          )}>Órdenes</p>
+                          <p className={cn(
+                            'text-lg font-bold leading-tight',
+                            theme === 'dark' ? 'text-white' : 'text-slate-900'
+                          )}>
+                            {selectedInWindow}/{ordersInWindow.length}
                           </p>
                         </div>
                       </div>
-                      {routeData.timeWindows.includes(window.value) && (
-                        <CheckCircle className="w-6 h-6 text-green-500" />
-                      )}
                     </div>
-                  </motion.button>
-                ))}
+                  </div>
+                </div>
 
-                <motion.button
-                  whileHover={{ scale: 1.01 }}
-                  whileTap={{ scale: 0.99 }}
-                  onClick={() => {
-                    const allWindows = TIME_WINDOWS.map(w => w.value)
-                    updateRouteData('timeWindows',
-                      routeData.timeWindows.length === TIME_WINDOWS.length ? [] : allWindows
-                    )
-                  }}
-                  className={cn(
-                    'w-full p-4 rounded-xl border-2 transition-all duration-300',
-                    routeData.timeWindows.length === TIME_WINDOWS.length
-                      ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
-                      : 'border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 hover:border-gray-300 dark:hover:border-gray-600'
-                  )}
-                >
-                  <span className="font-medium text-gray-900 dark:text-white">
-                    {routeData.timeWindows.length === TIME_WINDOWS.length
-                      ? 'Deseleccionar todos'
-                      : 'Seleccionar todos los horarios'
-                    }
-                  </span>
-                </motion.button>
-              </div>
-            </div>
-          </motion.div>
-        )
-
-      case 3:
-        return (
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="space-y-8"
-          >
-            <div className="text-center space-y-4">
-              <div className="mx-auto w-16 h-16 bg-red-500 rounded-full flex items-center justify-center">
-                <MapPin className="w-8 h-8 text-white" />
-              </div>
-              <div>
-                <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
-                  Punto de Partida
-                </h2>
-                <p className="text-gray-600 dark:text-gray-400 mt-2">
-                  Selecciona el almacén de donde saldrá la ruta
-                </p>
-              </div>
-            </div>
-
-            <div className="max-w-3xl mx-auto">
-              {warehouses.length === 0 ? (
-                <div className="text-center py-12 bg-gray-50 dark:bg-gray-700 rounded-xl">
-                  <MapPin className="w-12 h-12 mx-auto text-gray-400 mb-4" />
-                  <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">
-                    No hay almacenes disponibles
-                  </h3>
-                  <p className="text-gray-600 dark:text-gray-400 mb-6">
-                    Necesitas crear al menos un almacén antes de generar rutas
-                  </p>
-                  <Button onClick={() => router.push('/dashboard/admin/warehouses/create')}>
-                    Crear Almacén
+                {/* Select All in Period Button */}
+                {hasOrders && (
+                  <Button
+                    onClick={() => toggleAllOrdersInTimeWindow(window.value)}
+                    size="sm"
+                    className="w-full bg-blue-500 hover:bg-blue-600 text-white border-0 focus:ring-0 focus:outline-none"
+                  >
+                    {allSelectedInWindow ? 'Deseleccionar' : 'Seleccionar'} todas en este periodo
                   </Button>
-                </div>
-              ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {warehouses.map((warehouse: any) => (
-                    <motion.button
-                      key={warehouse.id}
-                      whileHover={{ scale: 1.02 }}
-                      whileTap={{ scale: 0.98 }}
-                      onClick={() => updateRouteData('warehouseId', warehouse.id.toString())}
-                      className={cn(
-                        'p-6 rounded-xl border-2 transition-all duration-300 text-left',
-                        routeData.warehouseId === warehouse.id.toString()
-                          ? 'border-purple-500 bg-purple-50 dark:bg-purple-900/20 shadow-lg'
-                          : 'border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 hover:border-gray-300 dark:hover:border-gray-600'
-                      )}
-                    >
-                      <div className="flex items-start justify-between mb-3">
-                        <div className={cn(
-                          'w-10 h-10 rounded-lg flex items-center justify-center',
-                          routeData.warehouseId === warehouse.id.toString()
-                            ? 'bg-purple-500 text-white'
-                            : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400'
-                        )}>
-                          <MapPin className="w-5 h-5" />
-                        </div>
-                        {routeData.warehouseId === warehouse.id.toString() && (
-                          <CheckCircle className="w-6 h-6 text-purple-500" />
-                        )}
-                      </div>
-                      <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
-                        {warehouse.name}
-                      </h3>
-                      <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
-                        {warehouse.address}
-                      </p>
-                      <div className="flex items-center gap-4 text-xs text-gray-500 dark:text-gray-500">
-                        <span>Código: {warehouse.code}</span>
-                        {warehouse.capacity && (
-                          <span>Capacidad: {warehouse.capacity}</span>
-                        )}
-                      </div>
-                    </motion.button>
-                  ))}
-                </div>
-              )}
-            </div>
-          </motion.div>
-        )
-
-      case 4:
-        return (
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="space-y-8"
-          >
-            <div className="text-center space-y-4">
-              <div className="mx-auto w-16 h-16 bg-red-500 rounded-full flex items-center justify-center">
-                <Truck className="w-8 h-8 text-white" />
+                )}
               </div>
-              <div>
-                <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
-                  Asignar Recursos
-                </h2>
-                <p className="text-gray-600 dark:text-gray-400 mt-2">
-                  Selecciona el vehículo y conductor para esta ruta
-                </p>
-              </div>
-            </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 max-w-4xl mx-auto">
-              {/* Vehicle Selection */}
-              <div className="space-y-4">
-                <h3 className="text-lg font-semibold text-gray-900 dark:text-white flex items-center gap-2">
-                  <Truck className="w-5 h-5" />
-                  Vehículo
-                </h3>
-                {vehicles.length === 0 ? (
-                  <div className="text-center py-8 bg-gray-50 dark:bg-gray-700 rounded-xl">
-                    <Truck className="w-8 h-8 mx-auto text-gray-400 mb-3" />
-                    <p className="text-sm text-gray-600 dark:text-gray-400">
-                      No hay vehículos disponibles
-                    </p>
-                  </div>
-                ) : (
-                  <div className="space-y-3">
-                    {vehicles.map((vehicle: any) => (
-                      <motion.button
-                        key={vehicle.id}
-                        whileHover={{ scale: 1.01 }}
-                        whileTap={{ scale: 0.99 }}
-                        onClick={() => updateRouteData('vehicleId', vehicle.id.toString())}
+              {/* Orders in this Time Window */}
+              {ordersInWindow.length > 0 && (
+                <div className="border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/20 p-4">
+                  <div className="space-y-2 max-h-64 overflow-y-auto">
+                    {ordersInWindow.map(order => (
+                      <label
+                        key={order.id}
                         className={cn(
-                          'w-full p-4 rounded-xl border-2 transition-all duration-300 text-left',
-                          routeData.vehicleId === vehicle.id.toString()
-                            ? 'border-orange-500 bg-orange-50 dark:bg-orange-900/20'
-                            : 'border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 hover:border-gray-300 dark:hover:border-gray-600'
+                          'flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-all bg-white dark:bg-gray-800',
+                          selectedOrders.includes(order.id)
+                            ? 'border-green-500 shadow-sm'
+                            : 'border-gray-200 dark:border-gray-700 hover:border-green-300'
                         )}
                       >
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <h4 className="font-medium text-gray-900 dark:text-white">
-                              {vehicle.make} {vehicle.model}
-                            </h4>
-                            <p className="text-sm text-gray-600 dark:text-gray-400">
-                              {vehicle.licensePlate} • {vehicle.type}
-                            </p>
-                            <div className="flex items-center gap-3 mt-2 text-xs text-gray-500 dark:text-gray-500">
-                              <span>{vehicle.year}</span>
-                              {vehicle.capacity && (
-                                <span>Capacidad: {vehicle.capacity.weight_lbs || 0} lbs</span>
-                              )}
-                            </div>
-                          </div>
-                          {routeData.vehicleId === vehicle.id.toString() && (
-                            <CheckCircle className="w-5 h-5 text-orange-500" />
-                          )}
+                        <input
+                          type="checkbox"
+                          checked={selectedOrders.includes(order.id)}
+                          onChange={() => toggleOrder(order.id)}
+                          className="w-4 h-4 text-green-500"
+                        />
+                        <div className="flex-1 min-w-0">
+                          <p className="font-medium text-gray-900 dark:text-white truncate">
+                            {order.orderNumber || `ORD-${order.id}`} - {order.customerName}
+                          </p>
+                          <p className="text-sm text-gray-500 dark:text-gray-400 truncate">
+                            {order.address}
+                          </p>
                         </div>
-                      </motion.button>
+                        <div className="flex items-center gap-2 text-xs text-gray-500">
+                          <MapPin className="w-3 h-3" />
+                          <span className="hidden sm:inline">
+                            {order.latitude?.toFixed(4)}, {order.longitude?.toFixed(4)}
+                          </span>
+                        </div>
+                      </label>
                     ))}
-                  </div>
-                )}
-              </div>
-
-              {/* Driver Selection */}
-              <div className="space-y-4">
-                <h3 className="text-lg font-semibold text-gray-900 dark:text-white flex items-center gap-2">
-                  <Users className="w-5 h-5" />
-                  Conductor
-                </h3>
-                {drivers.length === 0 ? (
-                  <div className="text-center py-8 bg-gray-50 dark:bg-gray-700 rounded-xl">
-                    <Users className="w-8 h-8 mx-auto text-gray-400 mb-3" />
-                    <p className="text-sm text-gray-600 dark:text-gray-400">
-                      No hay conductores disponibles
-                    </p>
-                  </div>
-                ) : (
-                  <div className="space-y-3">
-                    {drivers.map((driver: any) => (
-                      <motion.button
-                        key={driver.id}
-                        whileHover={{ scale: 1.01 }}
-                        whileTap={{ scale: 0.99 }}
-                        onClick={() => updateRouteData('driverId', driver.id.toString())}
-                        className={cn(
-                          'w-full p-4 rounded-xl border-2 transition-all duration-300 text-left',
-                          routeData.driverId === driver.id.toString()
-                            ? 'border-orange-500 bg-orange-50 dark:bg-orange-900/20'
-                            : 'border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 hover:border-gray-300 dark:hover:border-gray-600'
-                        )}
-                      >
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <h4 className="font-medium text-gray-900 dark:text-white">
-                              {driver.firstName} {driver.lastName}
-                            </h4>
-                            <p className="text-sm text-gray-600 dark:text-gray-400">
-                              {driver.email}
-                            </p>
-                            {driver.phone && (
-                              <p className="text-xs text-gray-500 dark:text-gray-500 mt-1">
-                                {driver.phone}
-                              </p>
-                            )}
-                          </div>
-                          {routeData.driverId === driver.id.toString() && (
-                            <CheckCircle className="w-5 h-5 text-orange-500" />
-                          )}
-                        </div>
-                      </motion.button>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </div>
-          </motion.div>
-        )
-
-      case 5:
-        return (
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="space-y-8"
-          >
-            <div className="text-center space-y-4">
-              <div className="mx-auto w-16 h-16 bg-blue-500 rounded-full flex items-center justify-center">
-                <Zap className="w-8 h-8 text-white" />
-              </div>
-              <div>
-                <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
-                  Optimizando Ruta
-                </h2>
-                <p className="text-gray-600 dark:text-gray-400 mt-2">
-                  {routeData.mechanism === 'automatic'
-                    ? 'El sistema está calculando la ruta más óptima...'
-                    : 'Preparando configuración manual...'
-                  }
-                </p>
-              </div>
-            </div>
-
-            <div className="max-w-md mx-auto">
-              <div className="space-y-4">
-                <div className="flex items-center justify-between text-sm">
-                  <span className="text-gray-600 dark:text-gray-400">
-                    {optimizationResult?.progress < 30 ? 'Analizando órdenes...' :
-                     optimizationResult?.progress < 60 ? 'Filtrando por horarios...' :
-                     optimizationResult?.progress < 90 ? 'Optimizando ruta...' :
-                     '¡Completado!'}
-                  </span>
-                  <span className="text-blue-600 dark:text-blue-400">
-                    {optimizationResult?.progress || 0}%
-                  </span>
-                </div>
-                <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
-                  <div
-                    className="h-2 bg-blue-600 rounded-full transition-all duration-500"
-                    style={{ width: `${optimizationResult?.progress || 0}%` }}
-                  ></div>
-                </div>
-              </div>
-
-              {/* Status indicators */}
-              <div className="space-y-3 mt-6">
-                <div className="flex items-center justify-center gap-2">
-                  <div className={`w-2 h-2 rounded-full ${(optimizationResult?.progress || 0) >= 25 ? 'bg-green-600' : 'bg-gray-400'} ${(optimizationResult?.progress || 0) >= 25 ? 'animate-pulse' : ''}`}></div>
-                  <span className={`text-sm ${(optimizationResult?.progress || 0) >= 25 ? 'text-gray-900 dark:text-white' : 'text-gray-500'}`}>
-                    Analizando {packageOrders.length} órdenes disponibles
-                  </span>
-                </div>
-                <div className="flex items-center justify-center gap-2">
-                  <div className={`w-2 h-2 rounded-full ${(optimizationResult?.progress || 0) >= 50 ? 'bg-green-600' : 'bg-gray-400'} ${(optimizationResult?.progress || 0) >= 50 ? 'animate-pulse' : ''}`}></div>
-                  <span className={`text-sm ${(optimizationResult?.progress || 0) >= 50 ? 'text-gray-900 dark:text-white' : 'text-gray-500'}`}>
-                    Ventanas de tiempo: {routeData.timeWindows.length > 0 ? routeData.timeWindows.join(', ') : 'Todas'}
-                  </span>
-                </div>
-                <div className="flex items-center justify-center gap-2">
-                  <div className={`w-2 h-2 rounded-full ${(optimizationResult?.progress || 0) >= 75 ? 'bg-green-600' : 'bg-gray-400'} ${(optimizationResult?.progress || 0) >= 75 ? 'animate-pulse' : ''}`}></div>
-                  <span className={`text-sm ${(optimizationResult?.progress || 0) >= 75 ? 'text-gray-900 dark:text-white' : 'text-gray-500'}`}>
-                    {optimizationResult?.totalOrders || 0} paradas preparadas
-                  </span>
-                </div>
-              </div>
-
-              {/* Show completion message when ready */}
-              {(optimizationResult?.progress || 0) >= 100 && (
-                <motion.div
-                  initial={{ opacity: 0, scale: 0.9 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  className="text-center mt-6"
-                >
-                  <div className="inline-flex items-center gap-2 px-6 py-3 bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-400 rounded-full">
-                    <CheckCircle className="w-5 h-5" />
-                    <span className="font-medium">
-                      ¡Listo! {optimizationResult?.totalOrders || 0} paradas optimizadas
-                    </span>
-                  </div>
-                </motion.div>
-              )}
-            </div>
-          </motion.div>
-        )
-
-      case 6:
-        return (
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="space-y-8"
-          >
-            <div className="text-center space-y-4">
-              <div className="mx-auto w-16 h-16 bg-blue-500 rounded-full flex items-center justify-center">
-                <BarChart3 className="w-8 h-8 text-white" />
-              </div>
-              <div>
-                <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
-                  Detalles de la Ruta
-                </h2>
-                <p className="text-gray-600 dark:text-gray-400 mt-2">
-                  Resumen de la ruta optimizada
-                </p>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 max-w-4xl mx-auto">
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.1 }}
-                className="bg-blue-50 dark:bg-blue-900/20 p-6 rounded-xl border border-blue-200 dark:border-blue-800"
-              >
-                <div className="flex items-center gap-3 mb-4">
-                  <div className="w-10 h-10 bg-blue-500 rounded-lg flex items-center justify-center">
-                    <MapPin className="w-5 h-5 text-white" />
-                  </div>
-                  <h3 className="font-semibold text-blue-900 dark:text-blue-100">Total Paradas</h3>
-                </div>
-                <p className="text-3xl font-bold text-blue-900 dark:text-blue-100">
-                  {optimizationResult?.totalOrders || 0}
-                </p>
-                <p className="text-sm text-blue-700 dark:text-blue-300 mt-2">
-                  {optimizationResult?.deliveries || 0} entregas + {optimizationResult?.pickups || 0} recogidas
-                </p>
-              </motion.div>
-
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.2 }}
-                className="bg-green-50 dark:bg-green-900/20 p-6 rounded-xl border border-green-200 dark:border-green-800"
-              >
-                <div className="flex items-center gap-3 mb-4">
-                  <div className="w-10 h-10 bg-green-500 rounded-lg flex items-center justify-center">
-                    <Truck className="w-5 h-5 text-white" />
-                  </div>
-                  <h3 className="font-semibold text-green-900 dark:text-green-100">Distancia</h3>
-                </div>
-                <p className="text-3xl font-bold text-green-900 dark:text-green-100">
-                  {optimizationResult?.totalDistance === 0 ? 'Pendiente' : optimizationResult?.totalDistance || 'Pendiente'}
-                </p>
-                <p className="text-sm text-green-700 dark:text-green-300 mt-2">millas totales</p>
-              </motion.div>
-
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.3 }}
-                className="bg-purple-50 dark:bg-purple-900/20 p-6 rounded-xl border border-purple-200 dark:border-purple-800"
-              >
-                <div className="flex items-center gap-3 mb-4">
-                  <div className="w-10 h-10 bg-purple-500 rounded-lg flex items-center justify-center">
-                    <Clock className="w-5 h-5 text-white" />
-                  </div>
-                  <h3 className="font-semibold text-purple-900 dark:text-purple-100">Duración</h3>
-                </div>
-                <p className="text-3xl font-bold text-purple-900 dark:text-purple-100">
-                  {optimizationResult?.estimatedDuration === 'Pendiente' ? 'Pendiente' : optimizationResult?.estimatedDuration || 'Pendiente'}
-                </p>
-                <p className="text-sm text-purple-700 dark:text-purple-300 mt-2">tiempo estimado</p>
-              </motion.div>
-
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.4 }}
-                className="bg-orange-50 dark:bg-orange-900/20 p-6 rounded-xl border border-orange-200 dark:border-orange-800"
-              >
-                <div className="flex items-center gap-3 mb-4">
-                  <div className="w-10 h-10 bg-orange-500 rounded-lg flex items-center justify-center">
-                    <Package className="w-5 h-5 text-white" />
-                  </div>
-                  <h3 className="font-semibold text-orange-900 dark:text-orange-100">Paquetes</h3>
-                </div>
-                <p className="text-3xl font-bold text-orange-900 dark:text-orange-100">
-                  {optimizationResult?.totalOrders || 0}
-                </p>
-                <p className="text-sm text-orange-700 dark:text-orange-300 mt-2">total a entregar</p>
-              </motion.div>
-            </div>
-
-            <div className="max-w-2xl mx-auto bg-gray-50 dark:bg-gray-700/50 rounded-xl p-6">
-              <h3 className="font-semibold text-gray-900 dark:text-white mb-4">Resumen de Configuración</h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-                <div>
-                  <span className="text-gray-600 dark:text-gray-400">Método:</span>
-                  <span className="ml-2 font-medium text-gray-900 dark:text-white">
-                    {routeData.mechanism === 'automatic' ? 'Automático' : 'Manual'}
-                  </span>
-                </div>
-                <div>
-                  <span className="text-gray-600 dark:text-gray-400">Horarios:</span>
-                  <span className="ml-2 font-medium text-gray-900 dark:text-white">
-                    {routeData.timeWindows.join(', ')}
-                  </span>
-                </div>
-                <div>
-                  <span className="text-gray-600 dark:text-gray-400">Vehículo:</span>
-                  <span className="ml-2 font-medium text-gray-900 dark:text-white">
-                    {vehicles.find((v: any) => v.id.toString() === routeData.vehicleId)?.make || 'Seleccionado'}
-                  </span>
-                </div>
-                <div>
-                  <span className="text-gray-600 dark:text-gray-400">Conductor:</span>
-                  <span className="ml-2 font-medium text-gray-900 dark:text-white">
-                    {drivers.find((d: any) => d.id.toString() === routeData.driverId)?.firstName || 'Seleccionado'}
-                  </span>
-                </div>
-              </div>
-            </div>
-          </motion.div>
-        )
-
-      case 7:
-        return (
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="space-y-6"
-          >
-            {/* Header */}
-            <div className="text-center space-y-2">
-              <div className="flex items-center justify-center space-x-3">
-                <div className="w-12 h-12 bg-blue-100 dark:bg-blue-900/20 rounded-full flex items-center justify-center">
-                  <List className="w-6 h-6 text-blue-600 dark:text-blue-400" />
-                </div>
-                <h3 className="text-xl font-semibold text-gray-900 dark:text-white">
-                  Lista de Paradas
-                </h3>
-              </div>
-              <p className="text-gray-600 dark:text-gray-400">
-                Revisa el orden de las paradas optimizado
-              </p>
-            </div>
-
-            {/* Lista de paradas */}
-            {optimizationResult && optimizationResult.route && optimizationResult.route.stops && optimizationResult.route.stops.length > 0 ? (
-              <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
-                <div className="p-4 border-b border-gray-200 dark:border-gray-700">
-                  <h4 className="font-medium text-gray-900 dark:text-white flex items-center gap-2">
-                    <ListOrdered className="w-4 h-4" />
-                    Paradas de la Ruta (ordenadas por Mapbox - {optimizationResult.route.stops.length + 2} total)
-                  </h4>
-                </div>
-                <div className="max-h-96 overflow-y-auto">
-                  {/* Almacén (Inicio) */}
-                  <div className="p-4 border-b border-gray-100 dark:border-gray-700 bg-green-50 dark:bg-green-900/10">
-                    <div className="flex items-start gap-3">
-                      <div className="flex-shrink-0 w-8 h-8 bg-green-500 text-white rounded-full flex items-center justify-center text-sm font-bold">
-                        I
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="font-medium text-gray-900 dark:text-white">
-                          {warehouses.find((w: any) => w.id.toString() === routeData.warehouseId)?.name || 'Almacén Seleccionado'}
-                        </p>
-                        <p className="text-sm text-gray-600 dark:text-gray-400">
-                          {warehouses.find((w: any) => w.id.toString() === routeData.warehouseId)?.address || 'Dirección del almacén'}
-                        </p>
-                        <div className="flex items-center gap-4 mt-1 text-xs text-gray-500">
-                          <span className="flex items-center gap-1">
-                            <Package className="w-3 h-3" />
-                            Inicio de ruta
-                          </span>
-                          <span className="flex items-center gap-1">
-                            <Clock className="w-3 h-3" />
-                            08:00 AM
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Paradas optimizadas - Orden REAL de Mapbox */}
-                  {optimizationResult.route.stops
-                    .sort((a: any, b: any) => (a.optimizedIndex || 0) - (b.optimizedIndex || 0))
-                    .map((stop: any, index: number) => (
-                      <div key={stop.id} className="p-4 border-b border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
-                        <div className="flex items-start gap-3">
-                          <div className="flex-shrink-0 w-8 h-8 bg-blue-500 text-white rounded-full flex items-center justify-center text-sm font-bold">
-                            {stop.optimizedIndex !== undefined ? stop.optimizedIndex + 1 : index + 1}
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <p className="font-medium text-gray-900 dark:text-white">
-                              {stop.customer}
-                            </p>
-                            <p className="text-sm text-gray-600 dark:text-gray-400">
-                              {stop.address}
-                            </p>
-                            {stop.orderNumber && (
-                              <p className="text-xs text-gray-500 dark:text-gray-500 mt-1">
-                                Orden: {stop.orderNumber}
-                              </p>
-                            )}
-                            <div className="flex items-center gap-4 mt-1 text-xs text-gray-500">
-                              <span className="flex items-center gap-1">
-                                <Package className="w-3 h-3" />
-                                {stop.type === 'pickup' ? 'Recogida' : 'Entrega'}
-                              </span>
-                              <span className="flex items-center gap-1">
-                                <Clock className="w-3 h-3" />
-                                {stop.timeSlot}
-                              </span>
-                              <span className="flex items-center gap-1">
-                                <MapPin className="w-3 h-3" />
-                                Parada #{stop.optimizedIndex !== undefined ? stop.optimizedIndex + 1 : index + 1}
-                              </span>
-                              <span className="flex items-center gap-1 text-purple-600 dark:text-purple-400 font-medium">
-                                <Zap className="w-3 h-3" />
-                                Mapbox orden #{stop.waypointIndex + 1}
-                              </span>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-
-                  {/* Almacén (Retorno) */}
-                  <div className="p-4 bg-green-50 dark:bg-green-900/10">
-                    <div className="flex items-start gap-3">
-                      <div className="flex-shrink-0 w-8 h-8 bg-green-500 text-white rounded-full flex items-center justify-center text-sm font-bold">
-                        F
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="font-medium text-gray-900 dark:text-white">
-                          {warehouses.find((w: any) => w.id.toString() === routeData.warehouseId)?.name || 'Almacén Seleccionado'}
-                        </p>
-                        <p className="text-sm text-gray-600 dark:text-gray-400">
-                          {warehouses.find((w: any) => w.id.toString() === routeData.warehouseId)?.address || 'Dirección del almacén'}
-                        </p>
-                        <div className="flex items-center gap-4 mt-1 text-xs text-gray-500">
-                          <span className="flex items-center gap-1">
-                            <Package className="w-3 h-3" />
-                            Retorno al almacén
-                          </span>
-                          <span className="flex items-center gap-1">
-                            <Clock className="w-3 h-3" />
-                            {optimizationResult.estimatedDuration}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            ) : (
-              <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-8 text-center">
-                <div className="w-16 h-16 bg-gray-100 dark:bg-gray-700 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <AlertCircle className="w-8 h-8 text-gray-400" />
-                </div>
-                <h4 className="text-lg font-medium text-gray-900 dark:text-white mb-2">
-                  No hay paradas optimizadas
-                </h4>
-                <p className="text-gray-600 dark:text-gray-400">
-                  {optimizationResult ?
-                    `Se encontraron ${optimizationResult.totalOrders || 0} órdenes pero no se pudieron optimizar. Verifica las coordenadas y filtros.` :
-                    'Aún no se ha realizado la optimización. Por favor, completa los pasos anteriores.'
-                  }
-                </p>
-              </div>
-            )}
-          </motion.div>
-        )
-
-      case 8:
-        return (
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="space-y-8"
-          >
-            <div className="text-center space-y-4">
-              <div className="mx-auto w-16 h-16 bg-red-500 rounded-full flex items-center justify-center">
-                <Eye className="w-8 h-8 text-white" />
-              </div>
-              <div>
-                <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
-                  Vista del Mapa
-                </h2>
-                <p className="text-gray-600 dark:text-gray-400 mt-2">
-                  Visualización de la ruta optimizada
-                </p>
-              </div>
-            </div>
-
-            <div className="max-w-6xl mx-auto">
-              {/* Sección de detalles del mecanismo */}
-              {optimizationResult && (
-                <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6 mb-8">
-                  <div className="flex items-center justify-between mb-6">
-                    <h3 className="text-xl font-semibold text-gray-900 dark:text-white flex items-center gap-2">
-                      <Settings className="w-5 h-5" />
-                      Detalles de la Ruta
-                    </h3>
-                    <button
-                      onClick={() => setShowMap(!showMap)}
-                      className="flex items-center gap-2 px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg transition-colors"
-                    >
-                      <MapPin className="w-4 h-4" />
-                      {showMap ? 'Ocultar Mapa' : 'Mostrar Mapa'}
-                    </button>
-                  </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                    {/* Información básica */}
-                    <div className="space-y-4">
-                      <h4 className="font-medium text-gray-900 dark:text-white">Información General</h4>
-                      <div className="space-y-3">
-                        <div className="flex justify-between">
-                          <span className="text-gray-600 dark:text-gray-400">Mecanismo:</span>
-                          <span className="font-medium text-gray-900 dark:text-white capitalize">
-                            {routeData.mechanism === 'automatic' ? 'Automático' : 'Manual'}
-                          </span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span className="text-gray-600 dark:text-gray-400">Total Paradas:</span>
-                          <span className="font-medium text-gray-900 dark:text-white">
-                            {optimizationResult.totalOrders}
-                          </span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span className="text-gray-600 dark:text-gray-400">Distancia:</span>
-                          <span className="font-medium text-gray-900 dark:text-white">
-                            {optimizationResult.totalDistance} mi
-                          </span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span className="text-gray-600 dark:text-gray-400">Duración:</span>
-                          <span className="font-medium text-gray-900 dark:text-white">
-                            {optimizationResult.estimatedDuration}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Ventanas de tiempo */}
-                    <div className="space-y-4">
-                      <h4 className="font-medium text-gray-900 dark:text-white">Ventanas de Tiempo</h4>
-                      <div className="space-y-2">
-                        {routeData.timeWindows.length > 0 ? (
-                          routeData.timeWindows.map((window, index) => (
-                            <div key={index} className="flex items-center gap-2">
-                              <Clock className="w-4 h-4 text-blue-500" />
-                              <span className="text-sm text-gray-600 dark:text-gray-400">
-                                {window === '8-12' && '8:00 AM - 12:00 PM'}
-                                {window === '12-16' && '12:00 PM - 4:00 PM'}
-                                {window === '16-20' && '4:00 PM - 8:00 PM'}
-                              </span>
-                            </div>
-                          ))
-                        ) : (
-                          <span className="text-sm text-gray-500">Sin ventanas específicas</span>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Recursos asignados */}
-                    <div className="space-y-4">
-                      <h4 className="font-medium text-gray-900 dark:text-white">Recursos Asignados</h4>
-                      <div className="space-y-3">
-                        <div className="flex justify-between">
-                          <span className="text-gray-600 dark:text-gray-400">Vehículo:</span>
-                          <span className="font-medium text-gray-900 dark:text-white">
-                            {vehicles.find((v: any) => v.id.toString() === routeData.vehicleId)?.make || 'N/A'} {
-                              vehicles.find((v: any) => v.id.toString() === routeData.vehicleId)?.model || ''
-                            }
-                          </span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span className="text-gray-600 dark:text-gray-400">Conductor:</span>
-                          <span className="font-medium text-gray-900 dark:text-white">
-                            {drivers.find((d: any) => d.id.toString() === routeData.driverId)?.name || 'N/A'}
-                          </span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span className="text-gray-600 dark:text-gray-400">Almacén:</span>
-                          <span className="font-medium text-gray-900 dark:text-white">
-                            {warehouses.find((w: any) => w.id.toString() === routeData.warehouseId)?.name || 'N/A'}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
                   </div>
                 </div>
               )}
 
-              {/* Mapa */}
-              {showMap && (
-                <div className="transition-all duration-300">
-                  <RouteMap
-                    optimizationResult={optimizationResult}
-                    warehouseCoordinates={optimizationResult?.warehouseCoordinates || (() => {
-                      const warehouse = warehouses.find((w: any) => w.id.toString() === routeData.warehouseId)
-                      if (warehouse?.latitude && warehouse?.longitude) {
-                        return [warehouse.longitude, warehouse.latitude] as [number, number]
-                      }
-                      return [-80.2395, 25.7548] // Miami coordinates
-                    })()}
-                    theme={theme}
-                    onOptimizationComplete={handleRouteSelection}
-                  />
+              {/* No Orders Message */}
+              {!hasOrders && (
+                <div className="border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/20 p-4">
+                  <p className="text-sm text-gray-500 dark:text-gray-400 text-center flex items-center justify-center gap-2">
+                    <AlertCircle className="w-4 h-4" />
+                    No hay órdenes pendientes o reprogramadas para este horario
+                  </p>
                 </div>
               )}
             </div>
-          </motion.div>
-        )
+          )
+        })}
+      </div>
 
-      case 9:
-        return (
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="space-y-8"
-          >
-            <div className="text-center space-y-4">
-              <div className="mx-auto w-16 h-16 bg-blue-500 rounded-full flex items-center justify-center">
-                <Save className="w-8 h-8 text-white" />
-              </div>
-              <div>
-                <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
-                  Confirmar y Guardar
-                </h2>
-                <p className="text-gray-600 dark:text-gray-400 mt-2">
-                  Revisa toda la información antes de guardar la ruta
-                </p>
-              </div>
+      {/* Multi-period Info */}
+      {selectedTimeWindows.length > 1 && (
+        <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-4 border border-blue-200 dark:border-blue-800">
+          <p className="text-sm text-blue-700 dark:text-blue-300">
+            <strong>Multi-periodo:</strong> Se crearán {selectedTimeWindows.length} rutas optimizadas individualmente
+            y se unirán en secuencia para formar una ruta continua.
+          </p>
+        </div>
+      )}
+
+      {/* Summary Footer */}
+      <div className="bg-gradient-to-r from-green-50 to-blue-50 dark:from-green-900/20 dark:to-blue-900/20 rounded-lg p-4 border border-green-200 dark:border-green-800">
+        <div className="flex items-center justify-between">
+          <p className="text-sm font-medium text-gray-700 dark:text-gray-300">
+            Total seleccionado:
+          </p>
+          <p className="text-lg font-bold text-gray-900 dark:text-white">
+            {selectedOrders.length} órdenes en {selectedTimeWindows.length} periodo(s)
+          </p>
+        </div>
+      </div>
+    </div>
+  )
+
+  const renderStep2 = () => (
+    <div className="space-y-5">
+      {/* Warehouse */}
+      <div className={cn(
+        'relative overflow-hidden rounded-xl border shadow-lg p-5',
+        theme === 'dark'
+          ? 'bg-gradient-to-br from-gray-800 to-gray-900 border-gray-700'
+          : 'bg-gradient-to-br from-slate-50 to-white border-slate-200'
+      )}>
+        <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-purple-400 to-purple-600"></div>
+        <label className={cn(
+          'block text-sm font-semibold mb-3 flex items-center gap-2',
+          theme === 'dark' ? 'text-white' : 'text-gray-900'
+        )}>
+          <div className="p-2 rounded-lg bg-gradient-to-br from-purple-50 to-purple-100 border border-purple-200 dark:bg-purple-900/30 dark:border-purple-800/50">
+            <Warehouse className="w-5 h-5 text-purple-600 dark:text-purple-400" />
+          </div>
+          Almacén de Salida *
+        </label>
+        <select
+          value={warehouseId}
+          onChange={(e) => setWarehouseId(e.target.value)}
+          className={cn(
+            'w-full px-4 py-3 border rounded-lg transition-all focus:outline-none focus:ring-2 focus:ring-purple-500',
+            theme === 'dark'
+              ? 'bg-gray-700 border-gray-600 text-white'
+              : 'bg-white border-gray-300 text-gray-900'
+          )}
+        >
+          <option value="">Seleccionar almacén...</option>
+          {warehouses.map(wh => (
+            <option key={wh.id} value={wh.id}>
+              {wh.name} - {wh.address}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      {/* Vehicle */}
+      <div className={cn(
+        'relative overflow-hidden rounded-xl border shadow-lg p-5',
+        theme === 'dark'
+          ? 'bg-gradient-to-br from-gray-800 to-gray-900 border-gray-700'
+          : 'bg-gradient-to-br from-slate-50 to-white border-slate-200'
+      )}>
+        <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-400 to-blue-600"></div>
+        <label className={cn(
+          'block text-sm font-semibold mb-3 flex items-center gap-2',
+          theme === 'dark' ? 'text-white' : 'text-gray-900'
+        )}>
+          <div className="p-2 rounded-lg bg-gradient-to-br from-blue-50 to-blue-100 border border-blue-200 dark:bg-blue-900/30 dark:border-blue-800/50">
+            <Truck className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+          </div>
+          Vehículo *
+        </label>
+        <select
+          value={vehicleId}
+          onChange={(e) => setVehicleId(e.target.value)}
+          className={cn(
+            'w-full px-4 py-3 border rounded-lg transition-all focus:outline-none focus:ring-2 focus:ring-blue-500',
+            theme === 'dark'
+              ? 'bg-gray-700 border-gray-600 text-white'
+              : 'bg-white border-gray-300 text-gray-900'
+          )}
+        >
+          <option value="">Seleccionar vehículo...</option>
+          {vehicles.map(v => {
+            const capacityText = typeof v.capacity === 'object' && v.capacity?.weight_kg
+              ? `${v.capacity.weight_kg} kg`
+              : typeof v.capacity === 'number'
+              ? `${v.capacity} kg`
+              : 'Capacidad no especificada'
+
+            return (
+              <option key={v.id} value={v.id}>
+                {v.licensePlate} - {v.model} ({capacityText})
+              </option>
+            )
+          })}
+        </select>
+      </div>
+
+      {/* Driver (Optional) */}
+      <div className={cn(
+        'relative overflow-hidden rounded-xl border shadow-lg p-5',
+        theme === 'dark'
+          ? 'bg-gradient-to-br from-gray-800 to-gray-900 border-gray-700'
+          : 'bg-gradient-to-br from-slate-50 to-white border-slate-200'
+      )}>
+        <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-green-400 to-emerald-600"></div>
+        <label className={cn(
+          'block text-sm font-semibold mb-3 flex items-center gap-2',
+          theme === 'dark' ? 'text-white' : 'text-gray-900'
+        )}>
+          <div className={cn(
+            'p-2 rounded-lg border',
+            driverId
+              ? 'bg-gradient-to-br from-green-50 to-emerald-100 border-green-200 dark:bg-green-900/30 dark:border-green-800/50'
+              : 'bg-gray-100 border-gray-300 dark:bg-gray-700 dark:border-gray-600'
+          )}>
+            {driverId ? <Users className="w-5 h-5 text-green-600 dark:text-green-400" /> : <UserX className="w-5 h-5 text-gray-400" />}
+          </div>
+          Conductor <span className="text-xs font-normal text-gray-500">(Opcional - Asignable después con QR)</span>
+        </label>
+        <select
+          value={driverId}
+          onChange={(e) => setDriverId(e.target.value)}
+          className={cn(
+            'w-full px-4 py-3 border rounded-lg transition-all focus:outline-none focus:ring-2 focus:ring-green-500',
+            theme === 'dark'
+              ? 'bg-gray-700 border-gray-600 text-white'
+              : 'bg-white border-gray-300 text-gray-900'
+          )}
+        >
+          <option value="">Sin asignar (usar QR después)</option>
+          {drivers.map(d => (
+            <option key={d.id} value={d.id}>
+              {d.name} {d.lastName}
+            </option>
+          ))}
+        </select>
+
+        {!driverId && (
+          <div className={cn(
+            'mt-3 p-3 rounded-lg flex items-start gap-2',
+            theme === 'dark' ? 'bg-blue-900/20 border border-blue-800/30' : 'bg-blue-50 border border-blue-200'
+          )}>
+            <QrCode className="w-4 h-4 text-blue-600 dark:text-blue-400 mt-0.5 flex-shrink-0" />
+            <p className="text-xs text-blue-700 dark:text-blue-300">
+              Se generará un código QR para que el conductor se auto-asigne escaneándolo desde su dispositivo móvil
+            </p>
+          </div>
+        )}
+      </div>
+
+      {/* Date */}
+      <div className={cn(
+        'relative overflow-hidden rounded-xl border shadow-lg p-5',
+        theme === 'dark'
+          ? 'bg-gradient-to-br from-gray-800 to-gray-900 border-gray-700'
+          : 'bg-gradient-to-br from-slate-50 to-white border-slate-200'
+      )}>
+        <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-orange-400 to-orange-600"></div>
+        <label className={cn(
+          'block text-sm font-semibold mb-3 flex items-center gap-2',
+          theme === 'dark' ? 'text-white' : 'text-gray-900'
+        )}>
+          <div className="p-2 rounded-lg bg-gradient-to-br from-orange-50 to-orange-100 border border-orange-200 dark:bg-orange-900/30 dark:border-orange-800/50">
+            <Calendar className="w-5 h-5 text-orange-600 dark:text-orange-400" />
+          </div>
+          Fecha de Ruta
+        </label>
+        <input
+          type="date"
+          value={routeDate}
+          onChange={(e) => setRouteDate(e.target.value)}
+          className={cn(
+            'w-full px-4 py-3 border rounded-lg transition-all focus:outline-none focus:ring-2 focus:ring-orange-500',
+            theme === 'dark'
+              ? 'bg-gray-700 border-gray-600 text-white'
+              : 'bg-white border-gray-300 text-gray-900'
+          )}
+        />
+      </div>
+
+      {/* Notes */}
+      <div className={cn(
+        'relative overflow-hidden rounded-xl border shadow-lg p-5',
+        theme === 'dark'
+          ? 'bg-gradient-to-br from-gray-800 to-gray-900 border-gray-700'
+          : 'bg-gradient-to-br from-slate-50 to-white border-slate-200'
+      )}>
+        <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-gray-400 to-gray-600"></div>
+        <label className={cn(
+          'block text-sm font-semibold mb-3 flex items-center gap-2',
+          theme === 'dark' ? 'text-white' : 'text-gray-900'
+        )}>
+          <div className="p-2 rounded-lg bg-gradient-to-br from-gray-50 to-gray-100 border border-gray-200 dark:bg-gray-700 dark:border-gray-600">
+            <MessageSquare className="w-5 h-5 text-gray-600 dark:text-gray-400" />
+          </div>
+          Notas Adicionales
+        </label>
+        <textarea
+          value={notes}
+          onChange={(e) => setNotes(e.target.value)}
+          rows={3}
+          placeholder="Instrucciones especiales, restricciones, etc..."
+          className={cn(
+            'w-full px-4 py-3 border rounded-lg transition-all focus:outline-none focus:ring-2 focus:ring-gray-500',
+            theme === 'dark'
+              ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-400'
+              : 'bg-white border-gray-300 text-gray-900 placeholder-gray-500'
+          )}
+        />
+      </div>
+    </div>
+  )
+
+  const renderStep3 = () => (
+    <div className="space-y-6">
+      {/* Progress Bar de Optimización */}
+      {!optimizationResult && optimizing && (
+        <div className="bg-gradient-to-r from-blue-500 to-purple-600 rounded-lg p-8 text-white">
+          <div className="text-center mb-6">
+            <div className="flex items-center justify-center gap-3 mb-4">
+              <Zap className="w-8 h-8 animate-pulse" />
+              <h3 className="text-2xl font-bold">Optimizando Ruta con Mapbox</h3>
             </div>
-
-            <div className="max-w-2xl mx-auto bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-xl p-6">
-              <div className="flex items-center gap-3 mb-4">
-                <CheckCircle className="w-6 h-6 text-green-600 dark:text-green-400" />
-                <h3 className="text-lg font-semibold text-green-900 dark:text-green-100">
-                  Ruta Lista para Guardar
-                </h3>
-              </div>
-              <p className="text-green-800 dark:text-green-200 mb-6">
-                Todos los parámetros han sido configurados correctamente. La ruta está optimizada y lista para ser asignada al conductor.
-              </p>
-              <div className="space-y-3">
-                <div className="flex items-center justify-between py-2 border-b border-green-200 dark:border-green-700">
-                  <span className="text-gray-600 dark:text-gray-400">Método:</span>
-                  <span className="font-medium text-gray-900 dark:text-white">
-                    {routeData.mechanism === 'automatic' ? 'Automático' : 'Manual'}
-                  </span>
-                </div>
-                <div className="flex items-center justify-between py-2 border-b border-green-200 dark:border-green-700">
-                  <span className="text-gray-600 dark:text-gray-400">Ventanas de Tiempo:</span>
-                  <span className="font-medium text-gray-900 dark:text-white">
-                    {routeData.timeWindows.join(', ') || 'Todas'}
-                  </span>
-                </div>
-                <div className="flex items-center justify-between py-2 border-b border-green-200 dark:border-green-700">
-                  <span className="text-gray-600 dark:text-gray-400">Fecha:</span>
-                  <span className="font-medium text-gray-900 dark:text-white">
-                    {new Date().toLocaleDateString('es-ES')}
-                  </span>
-                </div>
-                <div className="flex items-center justify-between py-2 border-b border-green-200 dark:border-green-700">
-                  <span className="text-gray-600 dark:text-gray-400">Distancia Estimada:</span>
-                  <span className="font-medium text-gray-900 dark:text-white">
-                    {optimizationResult?.totalDistance || 0} millas
-                  </span>
-                </div>
-                <div className="flex items-center justify-between py-2">
-                  <span className="text-gray-600 dark:text-gray-400">Paradas Totales:</span>
-                  <span className="font-medium text-gray-900 dark:text-white">
-                    {optimizationResult?.totalOrders || 0}
-                  </span>
-                </div>
-              </div>
-            </div>
-
-            <div className="text-center">
-              <Button
-                onClick={async () => {
-                  try {
-                    setLoading(true)
-
-                    // Obtener detalles del warehouse seleccionado
-                    const selectedWarehouse = warehouses.find((w: any) => w.id.toString() === routeData.warehouseId)
-                    const selectedVehicle = vehicles.find((v: any) => v.id.toString() === routeData.vehicleId)
-                    const selectedDriver = drivers.find((d: any) => d.id.toString() === routeData.driverId)
-
-                    // Obtener los IDs de las órdenes seleccionadas para la optimización
-                    const selectedOrderIds = optimizationResult?.route?.stops?.map((stop: any) => stop.id) || []
-
-                    console.log('📦 Enviando órdenes seleccionadas:', selectedOrderIds)
-                    console.log('📍 Coordenadas del almacén:', selectedWarehouse)
-
-                    // Preparar datos para la API
-                    const routePayload = {
-                      mechanism: routeData.mechanism,
-                      selectedOrders: selectedOrderIds, // ¡Importante! IDs de órdenes para Mapbox
-                      timeWindows: routeData.timeWindows,
-                      warehouseId: routeData.warehouseId,
-                      vehicleId: routeData.vehicleId,
-                      driverId: routeData.driverId,
-                      driverName: selectedDriver ? `${selectedDriver.firstName} ${selectedDriver.lastName}` : undefined,
-                      vehiclePlate: selectedVehicle ? selectedVehicle.nickname || `${selectedVehicle.make} ${selectedVehicle.model}` : undefined,
-                      totalPackages: selectedOrderIds.length, // Usar cantidad real de órdenes seleccionadas
-                      estimatedDuration: optimizationResult?.estimatedDuration || '4h 30m',
-                      distance: optimizationResult?.totalDistance || 45.2,
-                      date: new Date().toISOString().split('T')[0],
-                      notes: `Ruta ${routeData.mechanism === 'automatic' ? 'automática' : 'manual'} creada el ${new Date().toLocaleDateString('es-ES')} con ${selectedOrderIds.length} paradas`,
-                      optimizedRoute: optimizationResult || {
-                        totalStops: selectedOrderIds.length,
-                        routeDetails: "Optimización completada"
-                      },
-                      selectedRouteData: selectedRouteData // Agregar ruta alternativa seleccionada
-                    }
-
-                    // Guardar ruta en la API
-                    const response = await fetch('/api/routes', {
-                      method: 'POST',
-                      headers: {
-                        'Content-Type': 'application/json',
-                      },
-                      body: JSON.stringify(routePayload)
-                    })
-
-                    if (response.ok) {
-                      const savedRoute = await response.json()
-
-                      // Actualizar estado de las órdenes a "En Ruta"
-                      try {
-                        // Obtener los IDs de las órdenes desde el resultado de la optimización
-                        const selectedOrderIds = optimizationResult?.route?.stops?.map((stop: any) => stop.id) || []
-                        const updatePromises = selectedOrderIds.map(async (orderId) => {
-                          const updateResponse = await fetch(`/api/package-orders/${orderId}`, {
-                            method: 'PUT',
-                            headers: {
-                              'Content-Type': 'application/json',
-                            },
-                            body: JSON.stringify({
-                              status: 'in_route'
-                            })
-                          })
-
-                          if (!updateResponse.ok) {
-                            console.error(`Error updating order ${orderId}:`, updateResponse.statusText)
-                          }
-                          return updateResponse
-                        })
-
-                        await Promise.all(updatePromises)
-                        console.log('✅ Estados de órdenes actualizados a "En Ruta"')
-                      } catch (error) {
-                        console.error('Error updating orders status:', error)
-                      }
-
-                      showNotification('success', 'Ruta Creada', `La ruta ${savedRoute.routeNumber} ha sido guardada exitosamente`)
-                      router.push('/dashboard/admin/routes')
-                    } else {
-                      const errorData = await response.json()
-                      showNotification('error', 'Error', errorData.error || 'No se pudo guardar la ruta')
-                    }
-                  } catch (error) {
-                    console.error('Error saving route:', error)
-                    showNotification('error', 'Error de conexión', 'No se pudo guardar la ruta. Intenta de nuevo.')
-                  } finally {
-                    setLoading(false)
-                  }
-                }}
-                disabled={loading}
-                className="px-8 py-3 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition-all duration-300 flex items-center gap-2 mx-auto shadow-lg"
-              >
-                {loading ? (
-                  <>
-                    <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                    Guardando...
-                  </>
-                ) : (
-                  <>
-                    <Save className="w-5 h-5" />
-                    Guardar Ruta
-                  </>
-                )}
-              </Button>
-            </div>
-          </motion.div>
-        )
-    }
-  }
-
-  return (
-    <DashboardLayout>
-      <div className="min-h-screen p-6">
-        <div className="max-w-6xl mx-auto">
-          {/* Header */}
-          <div className="mb-8">
-            <button
-              onClick={() => router.back()}
-              className="flex items-center gap-2 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white mb-4"
-            >
-              <ArrowLeft className="w-4 h-4" />
-              Volver
-            </button>
-            <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
-              Crear Nueva Ruta
-            </h1>
-            <p className="text-gray-600 dark:text-gray-400 mt-2">
-              Configura y optimiza tu ruta de entregas
+            <p className="text-blue-100 text-lg">
+              {selectedTimeWindows.length === 1
+                ? 'Calculando la mejor ruta para el periodo seleccionado...'
+                : `Optimizando ${selectedTimeWindows.length} periodos y uniéndolos en secuencia...`
+              }
             </p>
           </div>
 
-          {/* Progress Steps */}
-          <div className="mb-8">
-            <div className="flex items-center justify-between relative">
-              {/* Línea de progreso continua */}
-              <div className="absolute top-6 left-0 right-0 h-1 bg-gray-200 dark:bg-gray-700 -z-10" />
-              <div
-                className="absolute top-6 left-0 h-1 bg-blue-600 -z-10 transition-all duration-500"
-                style={{ width: `${((currentStep - 1) / (steps.length - 1)) * 100}%` }}
-              />
+          {/* Progress Bar Animado */}
+          <div className="relative w-full h-3 bg-white/20 rounded-full overflow-hidden">
+            <div className="absolute top-0 left-0 h-full bg-gradient-to-r from-white via-blue-200 to-white rounded-full animate-pulse" style={{ width: '70%' }} />
+            <div className="absolute top-0 left-0 h-full w-full">
+              <div className="h-full bg-white rounded-full opacity-60" style={{
+                width: '100%',
+                animation: 'progressSlide 2s ease-in-out infinite'
+              }} />
+            </div>
+          </div>
 
-              {steps.map((step, index) => (
-                <div key={step.id} className="flex flex-col items-center">
-                  <motion.div
-                    className={cn(
-                      'w-12 h-12 rounded-full flex items-center justify-center transition-all duration-300 border-4 relative z-10',
-                      currentStep > step.id
-                        ? 'bg-green-500 text-white border-green-600 shadow-lg'
-                        : currentStep === step.id
-                        ? step.color === 'blue'
-                          ? 'bg-blue-600 text-white border-blue-700 shadow-xl scale-110'
-                          : 'bg-red-600 text-white border-red-700 shadow-xl scale-110'
-                        : 'bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400 border-gray-300 dark:border-gray-600'
-                    )}
-                    whileHover={{ scale: currentStep === step.id ? 1.15 : 1.05 }}
-                  >
-                    {currentStep > step.id ? (
-                      <CheckCircle className="w-6 h-6" />
+          <style dangerouslySetInnerHTML={{
+            __html: `
+              @keyframes progressSlide {
+                0% { width: 0%; opacity: 0.3; }
+                50% { width: 70%; opacity: 0.8; }
+                100% { width: 95%; opacity: 0.5; }
+              }
+            `
+          }} />
+
+          <p className="text-center text-blue-100 text-sm mt-4 flex items-center justify-center gap-2">
+            <span className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent inline-block"></span>
+            Esto puede tomar unos momentos...
+          </p>
+        </div>
+      )}
+
+      {/* Optimization Result */}
+      {optimizationResult && (
+        <>
+          <div className="bg-white dark:bg-gray-800 rounded-lg p-6 shadow-sm">
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
+              Resultado de Optimización
+            </h3>
+
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+              <div className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
+                <p className="text-sm text-gray-600 dark:text-gray-400">Paradas</p>
+                <p className="text-2xl font-bold text-blue-600">{optimizationResult.totalStops}</p>
+              </div>
+              <div className="p-4 bg-green-50 dark:bg-green-900/20 rounded-lg">
+                <p className="text-sm text-gray-600 dark:text-gray-400">Órdenes</p>
+                <p className="text-2xl font-bold text-green-600">{optimizationResult.totalOrders}</p>
+              </div>
+              <div className="p-4 bg-purple-50 dark:bg-purple-900/20 rounded-lg">
+                <p className="text-sm text-gray-600 dark:text-gray-400">Distancia</p>
+                <p className="text-2xl font-bold text-purple-600">{optimizationResult.distance} mi</p>
+              </div>
+              <div className="p-4 bg-orange-50 dark:bg-orange-900/20 rounded-lg">
+                <p className="text-sm text-gray-600 dark:text-gray-400">Duración</p>
+                <p className="text-2xl font-bold text-orange-600">{formatDuration(optimizationResult.duration)}</p>
+              </div>
+            </div>
+
+            {optimizationResult.multiPeriod && (
+              <div className="p-4 bg-yellow-50 dark:bg-yellow-900/20 rounded-lg mb-4">
+                <p className="text-sm text-yellow-800 dark:text-yellow-200">
+                  <strong>Ruta Multi-Periodo:</strong> {optimizationResult.periods} periodos unidos en secuencia
+                </p>
+              </div>
+            )}
+
+            {/* Map */}
+            <div className="h-96 rounded-lg overflow-hidden">
+              <RouteMap
+                optimizationResult={optimizationResult}
+                warehouseCoordinates={optimizationResult.warehouseCoordinates}
+              />
+            </div>
+          </div>
+
+          {/* Save Button */}
+          <div className="flex gap-4">
+            <Button
+              onClick={() => {
+                setOptimizationResult(null)
+                hasOptimizedRef.current = false // Resetear flag para permitir re-optimización
+              }}
+              variant="outline"
+              className="flex-1"
+            >
+              Recalcular
+            </Button>
+            <Button
+              onClick={handleSaveRoute}
+              disabled={loading}
+              className="flex-1 bg-green-500 hover:bg-green-600 text-white"
+            >
+              <Save className="w-4 h-4 mr-2" />
+              {loading ? 'Guardando...' : 'Guardar Ruta'}
+            </Button>
+          </div>
+        </>
+      )}
+    </div>
+  )
+
+  const renderStep4 = () => {
+    if (!createdRoute) return null
+
+    // Obtener órdenes asociadas a la ruta
+    const routeOrders = packageOrders.filter(order =>
+      selectedOrders.includes(order.id)
+    )
+
+    return (
+      <div className="space-y-6">
+        {/* Success Message */}
+        <div className="bg-gradient-to-r from-green-500 to-emerald-600 rounded-lg p-8 text-white text-center">
+          <div className="flex items-center justify-center mb-4">
+            <div className="bg-white rounded-full p-3">
+              <CheckCircle className="w-12 h-12 text-green-500" />
+            </div>
+          </div>
+          <h2 className="text-3xl font-bold mb-2">¡Ruta Creada Exitosamente!</h2>
+          <p className="text-green-100 text-lg">
+            Ruta <strong>{createdRoute.routeNumber}</strong> lista para ser ejecutada
+          </p>
+        </div>
+
+        {/* Route Summary */}
+        <div className="bg-white dark:bg-gray-800 rounded-lg p-6 shadow-sm">
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
+            Resumen de la Ruta
+          </h3>
+
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+            <div className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
+              <p className="text-sm text-gray-600 dark:text-gray-400">Paradas</p>
+              <p className="text-2xl font-bold text-blue-600">{createdRoute.totalStops}</p>
+            </div>
+            <div className="p-4 bg-green-50 dark:bg-green-900/20 rounded-lg">
+              <p className="text-sm text-gray-600 dark:text-gray-400">Órdenes</p>
+              <p className="text-2xl font-bold text-green-600">{createdRoute.totalOrders}</p>
+            </div>
+            <div className="p-4 bg-purple-50 dark:bg-purple-900/20 rounded-lg">
+              <p className="text-sm text-gray-600 dark:text-gray-400">Distancia</p>
+              <p className="text-2xl font-bold text-purple-600">{createdRoute.distance} mi</p>
+            </div>
+            <div className="p-4 bg-orange-50 dark:bg-orange-900/20 rounded-lg">
+              <p className="text-sm text-gray-600 dark:text-gray-400">Duración</p>
+              <p className="text-2xl font-bold text-orange-600">{formatDuration(createdRoute.duration)}</p>
+            </div>
+          </div>
+        </div>
+
+        {/* QR Code Display */}
+        <div className="bg-white dark:bg-gray-800 rounded-lg p-6 shadow-sm">
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+            <QrCode className="w-5 h-5" />
+            Código QR de la Ruta
+          </h3>
+
+          <div className="flex flex-col md:flex-row gap-6 items-center">
+            <div className="flex-shrink-0 bg-white p-4 rounded-lg shadow-inner">
+              <QRCodeSVG
+                value={createdRoute.qrCode || createdRoute.routeNumber}
+                size={200}
+                level="H"
+                includeMargin
+              />
+            </div>
+
+            <div className="flex-1">
+              <p className="text-gray-600 dark:text-gray-400 mb-4">
+                Este código QR identifica de forma única la ruta. Úsalo para:
+              </p>
+              <ul className="list-disc list-inside space-y-2 text-sm text-gray-600 dark:text-gray-400 mb-4">
+                <li>Escanear en el dispositivo del conductor</li>
+                <li>Imprimir y adjuntar a la documentación</li>
+                <li>Control de acceso y seguimiento</li>
+              </ul>
+
+              <div className="flex gap-3">
+                <Button
+                  onClick={handlePrintQR}
+                  variant="outline"
+                  className="flex items-center gap-2"
+                >
+                  <Printer className="w-4 h-4" />
+                  Imprimir QR
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Action Buttons */}
+        <div className="bg-white dark:bg-gray-800 rounded-lg p-6 shadow-sm">
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+            <FileText className="w-5 h-5" />
+            Documentación
+          </h3>
+
+          <p className="text-gray-600 dark:text-gray-400 mb-4">
+            Imprime la hoja de ruta completa con mapa, información de paradas y órdenes
+          </p>
+
+          <Button
+            onClick={handlePrintRoute}
+            className="bg-blue-500 hover:bg-blue-600 text-white flex items-center gap-2"
+          >
+            <Printer className="w-4 h-4" />
+            Imprimir Hoja de Ruta Completa
+          </Button>
+        </div>
+
+        {/* Navigation */}
+        <div className="flex gap-4">
+          <Button
+            onClick={() => router.push('/dashboard/admin/routes')}
+            className="flex-1 bg-green-500 hover:bg-green-600 text-white"
+          >
+            Ver Todas las Rutas
+          </Button>
+          <Button
+            onClick={() => router.push(`/dashboard/admin/routes/${createdRoute.routeId}`)}
+            variant="outline"
+            className="flex-1"
+          >
+            Ver Detalles de Esta Ruta
+          </Button>
+        </div>
+
+        {/* Hidden Print Components */}
+        <div style={{ display: 'none' }}>
+          {/* QR Print Component */}
+          <div ref={qrPrintRef} style={{ padding: '20mm', textAlign: 'center' }}>
+            <h1 style={{ marginBottom: '10mm', fontSize: '24pt' }}>
+              {createdRoute.routeNumber}
+            </h1>
+            <div style={{ display: 'inline-block', border: '2px solid #000', padding: '5mm' }}>
+              <QRCodeSVG
+                value={createdRoute.qrCode || createdRoute.routeNumber}
+                size={300}
+                level="H"
+                includeMargin
+              />
+            </div>
+            <p style={{ marginTop: '10mm', fontSize: '12pt' }}>
+              Escaneé para acceder a la ruta
+            </p>
+            <p style={{ fontSize: '10pt', color: '#666' }}>
+              {createdRoute.totalStops} paradas • {createdRoute.totalOrders} órdenes
+            </p>
+          </div>
+
+          {/* Route Print Component */}
+          <div ref={routePrintRef}>
+            {/* Page 1: Route Overview with Map */}
+            <div style={{ padding: '15mm' }}>
+              <h1 style={{ fontSize: '20pt', marginBottom: '5mm', borderBottom: '2px solid #000', paddingBottom: '3mm' }}>
+                {createdRoute.routeNumber}
+              </h1>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: '5mm', marginBottom: '10mm' }}>
+                <div style={{ border: '1px solid #ddd', padding: '5mm', borderRadius: '3mm' }}>
+                  <p style={{ fontSize: '10pt', color: '#666', marginBottom: '2mm' }}>Paradas</p>
+                  <p style={{ fontSize: '18pt', fontWeight: 'bold', color: '#3b82f6' }}>{createdRoute.totalStops}</p>
+                </div>
+                <div style={{ border: '1px solid #ddd', padding: '5mm', borderRadius: '3mm' }}>
+                  <p style={{ fontSize: '10pt', color: '#666', marginBottom: '2mm' }}>Órdenes</p>
+                  <p style={{ fontSize: '18pt', fontWeight: 'bold', color: '#10b981' }}>{createdRoute.totalOrders}</p>
+                </div>
+                <div style={{ border: '1px solid #ddd', padding: '5mm', borderRadius: '3mm' }}>
+                  <p style={{ fontSize: '10pt', color: '#666', marginBottom: '2mm' }}>Distancia</p>
+                  <p style={{ fontSize: '18pt', fontWeight: 'bold', color: '#8b5cf6' }}>{createdRoute.distance} mi</p>
+                </div>
+                <div style={{ border: '1px solid #ddd', padding: '5mm', borderRadius: '3mm' }}>
+                  <p style={{ fontSize: '10pt', color: '#666', marginBottom: '2mm' }}>Duración</p>
+                  <p style={{ fontSize: '18pt', fontWeight: 'bold', color: '#f97316' }}>{formatDuration(createdRoute.duration)}</p>
+                </div>
+              </div>
+
+              {optimizationResult && (
+                <div style={{ height: '150mm', border: '1px solid #ddd', marginBottom: '10mm' }}>
+                  <RouteMap
+                    optimizationResult={optimizationResult}
+                    warehouseCoordinates={optimizationResult.warehouseCoordinates}
+                  />
+                </div>
+              )}
+
+              <div style={{ textAlign: 'center', marginTop: '10mm' }}>
+                <div style={{ display: 'inline-block', border: '2px solid #000', padding: '3mm' }}>
+                  <QRCodeSVG
+                    value={createdRoute.qrCode || createdRoute.routeNumber}
+                    size={100}
+                    level="H"
+                    includeMargin
+                  />
+                </div>
+                <p style={{ marginTop: '3mm', fontSize: '10pt' }}>{createdRoute.routeNumber}</p>
+              </div>
+            </div>
+
+            {/* Pages 2+: One order per page */}
+            {routeOrders.map((order, index) => (
+              <div key={order.id} className="page-break" style={{ padding: '15mm' }}>
+                <div style={{ marginBottom: '5mm', borderBottom: '2px solid #000', paddingBottom: '3mm' }}>
+                  <h2 style={{ fontSize: '18pt', margin: 0 }}>
+                    Orden {index + 1} de {routeOrders.length}
+                  </h2>
+                  <p style={{ fontSize: '12pt', color: '#666', margin: 0 }}>
+                    {order.orderNumber || `ORD-${order.id}`}
+                  </p>
+                </div>
+
+                <div style={{ marginBottom: '10mm' }}>
+                  <h3 style={{ fontSize: '14pt', marginBottom: '3mm', color: '#3b82f6' }}>
+                    Cliente
+                  </h3>
+                  <p style={{ fontSize: '12pt', marginBottom: '2mm' }}>
+                    <strong>Nombre:</strong> {order.customerName}
+                  </p>
+                  <p style={{ fontSize: '12pt', marginBottom: '2mm' }}>
+                    <strong>Teléfono:</strong> {order.customerPhone || 'N/A'}
+                  </p>
+                </div>
+
+                <div style={{ marginBottom: '10mm' }}>
+                  <h3 style={{ fontSize: '14pt', marginBottom: '3mm', color: '#10b981' }}>
+                    Dirección de Entrega
+                  </h3>
+                  <p style={{ fontSize: '12pt', lineHeight: 1.5 }}>
+                    {order.customerAddress?.street || order.address || 'N/A'}
+                  </p>
+                  {order.customerAddress?.city && (
+                    <p style={{ fontSize: '12pt' }}>
+                      {order.customerAddress.city}, {order.customerAddress.state} {order.customerAddress.zipCode}
+                    </p>
+                  )}
+                </div>
+
+                <div style={{ marginBottom: '10mm' }}>
+                  <h3 style={{ fontSize: '14pt', marginBottom: '3mm', color: '#8b5cf6' }}>
+                    Servicios
+                  </h3>
+                  <div style={{ fontSize: '11pt' }}>
+                    {Array.isArray(order.services) ? (
+                      order.services.map((service: string, idx: number) => (
+                        <div key={idx} style={{ padding: '3mm', backgroundColor: '#f3f4f6', marginBottom: '2mm', borderRadius: '2mm' }}>
+                          • {service}
+                        </div>
+                      ))
                     ) : (
-                      <step.icon className="w-6 h-6" />
+                      <p style={{ padding: '3mm', backgroundColor: '#f3f4f6', borderRadius: '2mm' }}>
+                        {order.services}
+                      </p>
                     )}
-                  </motion.div>
-                  <div className="mt-3 text-center max-w-20">
-                    <div className={cn(
-                      'text-xs font-medium leading-tight',
-                      currentStep >= step.id
-                        ? 'text-gray-900 dark:text-white'
-                        : 'text-gray-500 dark:text-gray-400'
-                    )}>
-                      {step.title}
+                  </div>
+                </div>
+
+                <div style={{ marginBottom: '10mm' }}>
+                  <h3 style={{ fontSize: '14pt', marginBottom: '3mm', color: '#f97316' }}>
+                    Detalles de la Orden
+                  </h3>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '5mm' }}>
+                    <div>
+                      <p style={{ fontSize: '10pt', color: '#666' }}>Tiempo de Servicio</p>
+                      <p style={{ fontSize: '12pt', fontWeight: 'bold' }}>5 minutos</p>
                     </div>
-                    <div className="text-xs text-gray-500 dark:text-gray-500 mt-1 hidden sm:block">
-                      {step.id}/{steps.length}
+                    <div>
+                      <p style={{ fontSize: '10pt', color: '#666' }}>Estado</p>
+                      <p style={{ fontSize: '12pt', fontWeight: 'bold' }}>{order.status}</p>
+                    </div>
+                    <div>
+                      <p style={{ fontSize: '10pt', color: '#666' }}>Fecha</p>
+                      <p style={{ fontSize: '12pt', fontWeight: 'bold' }}>{order.date}</p>
+                    </div>
+                    <div>
+                      <p style={{ fontSize: '10pt', color: '#666' }}>Método de Pago</p>
+                      <p style={{ fontSize: '12pt', fontWeight: 'bold' }}>{order.paymentMethod || 'N/A'}</p>
                     </div>
                   </div>
                 </div>
-              ))}
-            </div>
-          </div>
 
-          {/* Step Content */}
-          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl border border-gray-200 dark:border-gray-700 p-8 mb-8">
-            <AnimatePresence mode="wait">
-              {renderStep()}
-            </AnimatePresence>
-          </div>
+                {order.notes && (
+                  <div style={{ marginTop: '10mm', padding: '5mm', backgroundColor: '#fef3c7', borderLeft: '3px solid #f59e0b', borderRadius: '2mm' }}>
+                    <p style={{ fontSize: '10pt', color: '#92400e', margin: 0 }}>
+                      <strong>Notas:</strong> {order.notes}
+                    </p>
+                  </div>
+                )}
 
-          {/* Navigation */}
-          <div className="flex justify-between items-center">
-            <Button
-              onClick={prevStep}
-              disabled={currentStep === 1}
-              variant="outline"
-              className={cn(
-                'flex items-center gap-2',
-                currentStep === 1 && 'opacity-50 cursor-not-allowed'
-              )}
-            >
-              <ArrowLeft className="w-4 h-4" />
-              Anterior
-            </Button>
-
-            <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
-              Paso {currentStep} de {steps.length}
-            </div>
-
-            <Button
-              onClick={nextStep}
-              disabled={!canProceed() || currentStep === steps.length}
-              className={cn(
-                'flex items-center gap-2',
-                (!canProceed() || currentStep === steps.length) && 'opacity-50 cursor-not-allowed'
-              )}
-            >
-              {currentStep === steps.length ? 'Finalizar' : 'Siguiente'}
-              <ArrowRight className="w-4 h-4" />
-            </Button>
+                <div style={{ position: 'absolute', bottom: '15mm', left: '15mm', right: '15mm', borderTop: '1px solid #ddd', paddingTop: '3mm' }}>
+                  <p style={{ fontSize: '9pt', color: '#999', textAlign: 'center' }}>
+                    {createdRoute.routeNumber} • Página {index + 2} de {routeOrders.length + 1}
+                  </p>
+                </div>
+              </div>
+            ))}
           </div>
         </div>
+      </div>
+    )
+  }
+
+  // ============================================================================
+  // MAIN RENDER
+  // ============================================================================
+
+  if (loading && currentStep === 1) {
+    return (
+      <DashboardLayout user={user}>
+        <div className="flex items-center justify-center h-96">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
+            <p className="text-gray-600 dark:text-gray-400">Cargando datos...</p>
+          </div>
+        </div>
+      </DashboardLayout>
+    )
+  }
+
+  return (
+    <DashboardLayout user={user}>
+      <div className="max-w-6xl mx-auto">
+        {/* Close Button */}
+        <div className="flex justify-end mb-4">
+          <button
+            onClick={() => router.push('/dashboard/admin/routes')}
+            className="p-2 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+
+        {/* Step Indicator - Centered */}
+        <div className="flex justify-center mb-8">
+          <div className="w-full max-w-2xl">
+            {renderStepIndicator()}
+          </div>
+        </div>
+
+        {/* Step Content */}
+        <div className="mb-6">
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={currentStep}
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -20 }}
+              transition={{ duration: 0.2 }}
+            >
+              {currentStep === 1 && renderStep1()}
+              {currentStep === 2 && renderStep2()}
+              {currentStep === 3 && renderStep3()}
+              {currentStep === 4 && renderStep4()}
+            </motion.div>
+          </AnimatePresence>
+        </div>
+
+        {/* Navigation Buttons */}
+        {currentStep < 3 && (
+          <div className="flex gap-4">
+            {currentStep > 1 && (
+              <Button
+                onClick={handlePrevious}
+                variant="outline"
+                className="flex-1"
+              >
+                <ArrowLeft className="w-4 h-4 mr-2" />
+                Anterior
+              </Button>
+            )}
+            <Button
+              onClick={handleNext}
+              className="flex-1"
+            >
+              Siguiente
+              <ArrowRight className="w-4 h-4 ml-2" />
+            </Button>
+          </div>
+        )}
       </div>
     </DashboardLayout>
   )

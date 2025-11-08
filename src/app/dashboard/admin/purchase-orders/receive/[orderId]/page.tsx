@@ -111,13 +111,13 @@ export default function ReceiveOrderPage() {
         ]
 
         setReceiveItems(mockItems)
-        showNotification('Orden cargada exitosamente', 'success')
+        showNotification('success', 'Title', 'Orden cargada exitosamente')
       } else {
-        showNotification('Error al cargar la orden', 'error')
+        showNotification('error', 'Title', 'Error al cargar la orden')
       }
     } catch (error) {
       console.error('Error loading order:', error)
-      showNotification('Error al cargar la orden', 'error')
+      showNotification('error', 'Title', 'Error al cargar la orden')
     }
   }
 
@@ -129,14 +129,14 @@ export default function ReceiveOrderPage() {
 
   const generateBarcodesForItem = (itemIndex: number, barcodeCount: number) => {
     if (barcodeCount <= 0 || receiveItems[itemIndex].quantityWithoutBarcode < barcodeCount) {
-      showNotification('Cantidad de códigos de barras inválida', 'error')
+      showNotification('error', 'Title', 'Cantidad de códigos de barras inválida')
       return
     }
 
     setGeneratingBarcodes(true)
 
     setTimeout(() => {
-      const newBoxes = []
+      const newBoxes: any[] = []
       const item = receiveItems[itemIndex]
 
       for (let i = 0; i < barcodeCount; i++) {
@@ -168,7 +168,7 @@ export default function ReceiveOrderPage() {
       setGeneratedBoxes(prev => [...prev, ...newBoxes])
 
       setGeneratingBarcodes(false)
-      showNotification(`✅ Se generaron ${barcodeCount} códigos de barras exitosamente`, 'success')
+      showNotification('success', 'Title', `✅ Se generaron ${barcodeCount} códigos de barras exitosamente`)
     }, 1000)
   }
 
@@ -179,7 +179,7 @@ export default function ReceiveOrderPage() {
 
       if (field === 'barcodeCount') {
         if (value > item.quantityWithoutBarcode) {
-          showNotification('La cantidad no puede exceder el stock sin código de barras', 'error')
+          showNotification('error', 'Title', 'La cantidad no puede exceder el stock sin código de barras')
           return prev
         }
         updated[index] = { ...item, [field]: value }
@@ -202,9 +202,9 @@ export default function ReceiveOrderPage() {
     })
 
     if (totalGenerated > 0) {
-      showNotification(`🔄 Generando ${totalGenerated} códigos de barras para todos los items...`, 'info')
+      showNotification('info', 'Title', `🔄 Generando ${totalGenerated} códigos de barras para todos los items...`)
     } else {
-      showNotification('⚠️ No hay cajas sin código de barras para generar', 'warning')
+      showNotification('warning', 'Title', '⚠️ No hay cajas sin código de barras para generar')
     }
   }
 
@@ -219,16 +219,16 @@ export default function ReceiveOrderPage() {
       const totalExpected = receiveItems.reduce((sum, item) => sum + item.totalQuantity, 0)
 
       if (totalReceived !== totalExpected) {
-        showNotification('Las cantidades recibidas no coinciden con las esperadas', 'error')
+        showNotification('error', 'Title', 'Las cantidades recibidas no coinciden con las esperadas')
         return
       }
 
-      showNotification('✅ Orden recibida exitosamente', 'success')
+      showNotification('success', 'Title', '✅ Orden recibida exitosamente')
       router.push('/dashboard/admin/purchase-orders')
 
     } catch (error) {
       console.error('Error receiving order:', error)
-      showNotification('Error al recibir la orden', 'error')
+      showNotification('error', 'Title', 'Error al recibir la orden')
     } finally {
       setLoading(false)
     }

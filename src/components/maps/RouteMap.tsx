@@ -2,6 +2,7 @@
 
 import React, { useEffect, useRef, useState } from 'react'
 import mapboxgl from 'mapbox-gl'
+import { MapPin, Navigation, Clock, Info } from 'lucide-react'
 
 // Importar CSS de Mapbox
 import 'mapbox-gl/dist/mapbox-gl.css'
@@ -53,6 +54,8 @@ export default function RouteMap({
   const [loading, setLoading] = useState(true)
   const [allCoordinates, setAllCoordinates] = useState<[number, number][]>([])
   const markersRef = useRef<mapboxgl.Marker[]>([])
+  const onOptimizationCompleteRef = useRef(onOptimizationComplete)
+  const lastNotifiedRoute = useRef<number>(-1)
 
   // Limpiar marcadores existentes
   const clearMarkers = () => {
@@ -72,6 +75,11 @@ export default function RouteMap({
     markersRef.current = []
     console.log('✅ Todos los marcadores han sido limpiados')
   }
+
+  // Update ref when callback changes
+  useEffect(() => {
+    onOptimizationCompleteRef.current = onOptimizationComplete
+  }, [onOptimizationComplete])
 
   useEffect(() => {
     // Crear mapa
@@ -96,28 +104,175 @@ export default function RouteMap({
     }
   }, [warehouseCoordinates, theme])
 
-  // Cuando hay resultados de optimización, obtener rutas de Mapbox
+  // Cuando hay resultados de optimización, procesar las rutas
   useEffect(() => {
-    if (!optimizationResult || !optimizationResult.route || !optimizationResult.route.stops) {
+    if (!optimizationResult) {
+      console.log('⚠️ No hay resultados de optimización')
+      return
+    }
+
+    console.log('🔍 [RouteMap] Datos recibidos:', {
+      hasGeometry: !!optimizationResult.geometry,
+      hasCoordinates: !!optimizationResult.coordinates,
+      coordinatesLength: optimizationResult.coordinates?.length,
+      hasStops: !!optimizationResult.stops,
+      stopsLength: optimizationResult.stops?.length,
+      hasRoute: !!optimizationResult.route,
+      routeStopsLength: optimizationResult.route?.stops?.length
+    })
+
+    // Si ya hay datos de ruta optimizada con geometría, usarlos directamente
+    if (optimizationResult.geometry || (optimizationResult.optimizedRoute && optimizationResult.optimizedRoute.data)) {
+      console.log('📊 Usando rutas optimizadas existentes')
+
+      // Obtener geometría y coordenadas de diferentes posibles fuentes
+      const geometry = optimizationResult.geometry ||
+                     optimizationResult.optimizedRoute?.data?.route?.geometry ||
+                     optimizationResult.optimizedRoute?.geometry
+
+      const distance = optimizationResult.distance ||
+                      optimizationResult.optimizedRoute?.data?.route?.distance ||
+                      optimizationResult.optimizedRoute?.distance ||
+                      0
+
+      const duration = optimizationResult.duration ||
+                      optimizationResult.optimizedRoute?.data?.route?.duration ||
+                      optimizationResult.optimizedRoute?.duration ||
+                      0
+
+      const coordinates = optimizationResult.coordinates ||
+                         optimizationResult.optimizedRoute?.data?.route?.coordinates ||
+                         optimizationResult.optimizedRoute?.coordinates ||
+                         []
+
+      console.log(`🛣️ Datos de ruta: ${distance} mi, ${duration} min`)
+
+      if (geometry && coordinates.length > 0) {
+        // Construir ruta principal
+        const allRoutes = [
+          {
+            geometry: geometry,
+            distance: distance * 1609.34, // Convertir millas a metros
+            duration: duration * 60, // Convertir minutos a segundos
+            coordinates: coordinates
+          }
+        ]
+
+        setRoutes(allRoutes)
+
+        // Preparar coordenadas para los marcadores
+        const markerCoordinates: [number, number][] = [warehouseCoordinates]
+
+        // Buscar paradas en múltiples ubicaciones posibles
+        const stops = optimizationResult.stops ||
+                     optimizationResult.route?.stops ||
+                     []
+
+        console.log('📍 [RouteMap] Paradas encontradas:', stops.length)
+
+        // Agregar coordenadas de cada parada
+        if (stops.length > 0) {
+          stops.forEach((stop: any, index: number) => {
+            console.log(`  Parada ${index}:`, {
+              hasCoords: !!stop.coordinates,
+              coords: stop.coordinates,
+              latitude: stop.latitude,
+              longitude: stop.longitude
+            })
+
+            // Intentar obtener coordenadas de diferentes formatos
+            let stopCoords: [number, number] | null = null
+
+            if (stop.coordinates && Array.isArray(stop.coordinates) && stop.coordinates.length === 2) {
+              stopCoords = stop.coordinates as [number, number]
+            } else if (stop.longitude && stop.latitude) {
+              stopCoords = [stop.longitude, stop.latitude]
+            }
+
+            if (stopCoords) {
+              markerCoordinates.push(stopCoords)
+              console.log(`  ✅ Agregada coordenada: [${stopCoords[0]}, ${stopCoords[1]}]`)
+            } else {
+              console.warn(`  ⚠️ Parada ${index} sin coordenadas válidas`)
+            }
+          })
+        }
+
+        // Volver al almacén
+        markerCoordinates.push(warehouseCoordinates)
+
+        console.log('📍 Total coordenadas para marcadores:', markerCoordinates.length)
+        setAllCoordinates(markerCoordinates)
+        return
+      }
+    }
+
+    // Si no hay rutas pre-procesadas, obtenerlas de la API
+    if (!optimizationResult.route || !optimizationResult.route.stops) {
+      console.log('⚠️ No hay paradas en los resultados de optimización')
       return
     }
 
     const fetchRoutes = async () => {
       try {
         const stops = optimizationResult.route.stops
+        console.log(`📦 Procesando ${stops.length} paradas`)
 
         // Preparar coordenadas: almacén -> paradas -> almacén
         const coordinates: [number, number][] = [warehouseCoordinates]
 
         // Añadir paradas válidas con coordenadas
-        const validStops = stops.filter(stop =>
-          stop.coordinates &&
-          stop.coordinates[0] !== 0 &&
-          stop.coordinates[1] !== 0
-        )
+        console.log('🔍 DEBUG - Análisis detallado de paradas:')
+        stops.forEach((stop, index) => {
+          console.log(`📦 Parada ${index}:`, {
+            id: stop.id,
+            customerName: stop.customerName,
+            coordinates: stop.coordinates,
+            hasCoords: stop.coordinates && Array.isArray(stop.coordinates) && stop.coordinates.length === 2,
+            coordsValid: stop.coordinates &&
+              Array.isArray(stop.coordinates) &&
+              stop.coordinates.length === 2 &&
+              stop.coordinates[0] !== 0 &&
+              stop.coordinates[1] !== 0 &&
+              !isNaN(stop.coordinates[0]) &&
+              !isNaN(stop.coordinates[1])
+          })
+        })
 
-        validStops.forEach(stop => {
-          coordinates.push(stop.coordinates!)
+        const validStops = stops.filter((stop, index) => {
+          const isValid = stop.coordinates &&
+            Array.isArray(stop.coordinates) &&
+            stop.coordinates.length === 2 &&
+            stop.coordinates[0] !== 0 &&
+            stop.coordinates[1] !== 0 &&
+            !isNaN(stop.coordinates[0]) &&
+            !isNaN(stop.coordinates[1])
+
+          if (!isValid) {
+            console.log(`❌ Parada ${index} (ID: ${stop.id}) INVÁLIDA:`, {
+              customerName: stop.customerName,
+              coordinates: stop.coordinates,
+              reason: !stop.coordinates ? 'Sin coordenadas' :
+                !Array.isArray(stop.coordinates) ? 'No es array' :
+                stop.coordinates.length !== 2 ? 'Longitud incorrecta' :
+                stop.coordinates[0] === 0 || stop.coordinates[1] === 0 ? 'Coordenadas cero' :
+                isNaN(stop.coordinates[0]) || isNaN(stop.coordinates[1]) ? 'Coordenadas NaN' : 'Desconocido'
+            })
+          } else {
+            console.log(`✅ Parada ${index} (ID: ${stop.id}) VÁLIDA:`, {
+              customerName: stop.customerName,
+              coordinates: stop.coordinates
+            })
+          }
+
+          return isValid
+        })
+
+        console.log(`📊 Resumen: ${validStops.length} de ${stops.length} paradas con coordenadas válidas`)
+
+        validStops.forEach((stop, index) => {
+          console.log(`📍 Agregando coordenadas de parada ${index}:`, stop.coordinates)
+          coordinates.push(stop.coordinates as [number, number])
         })
 
         // Volver al almacén
@@ -130,15 +285,24 @@ export default function RouteMap({
           return
         }
 
+        console.log('📍 Coordenadas totales:', coordinates.length)
+
         // Construir URL para Mapbox Directions API
         const coordinatesString = coordinates.map(coord => `${coord[0]},${coord[1]}`).join(';')
         const apiUrl = `https://api.mapbox.com/directions/v5/mapbox/driving/${coordinatesString}?alternatives=true&geometries=geojson&overview=full&steps=true&access_token=${mapboxgl.accessToken}`
 
         console.log('📤 Obteniendo rutas de Mapbox API...')
         const response = await fetch(apiUrl)
+
+        if (!response.ok) {
+          throw new Error(`Mapbox API error: ${response.status}`)
+        }
+
         const data = await response.json()
 
         console.log('✅ Rutas obtenidas:', data.routes.length)
+        console.log('📊 Distancias:', data.routes.map((r: any) => `${(r.distance / 1609.34).toFixed(1)}mi`).join(', '))
+
         setRoutes(data.routes)
 
       } catch (error) {
@@ -162,14 +326,20 @@ export default function RouteMap({
       return
     }
 
+    // Obtener las paradas desde múltiples ubicaciones posibles
+    const stops = optimizationResult?.stops || optimizationResult?.route?.stops || []
+
     console.log('📍 Creando marcadores. Coordenadas:', allCoordinates.length)
-    console.log('📍 Paradas disponibles:', optimizationResult?.route?.stops?.length || 0)
+    console.log('📍 Paradas disponibles:', stops.length)
 
     // Limpiar marcadores anteriores
     clearMarkers()
 
     // Crear marcadores simples y robustos
     const createMarker = (coord: [number, number], index: number, isWarehouse: boolean = false, isStart: boolean = false, isEnd: boolean = false) => {
+      console.log(`🎯 createMarker llamado - index: ${index}, isWarehouse: ${isWarehouse}, isStart: ${isStart}, isEnd: ${isEnd}`)
+      console.log(`📍 Coordenadas:`, coord)
+
       let markerElement: HTMLDivElement
       let popupText = ''
 
@@ -191,11 +361,18 @@ export default function RouteMap({
         `
         markerElement.innerHTML = '🏢'
         popupText = isStart ? 'Almacén (Inicio)' : 'Almacén (Fin)'
+        console.log(`🏢 Marcador de almacén creado: ${popupText}`)
       } else {
         // Marcadores de paradas
-        const stop = optimizationResult?.route?.stops?.[index - 1]
-        const isPickup = stop?.type === 'pickup'
-        const color = isPickup ? '#F59E0B' : '#3B82F6'
+        // El índice de la parada real es index - 1 (porque index 0 es el almacén)
+        const stopIndex = index - 1
+        const stop = stops[stopIndex]
+        console.log(`🔍 Buscando parada con stopIndex ${stopIndex}:`, stop)
+
+        // Obtener el número de waypoint correcto del stop si existe, si no usar stopIndex + 1
+        const waypointNumber = stop?.waypointIndex !== undefined ? stop.waypointIndex + 1 : stopIndex + 1
+
+        const color = '#3B82F6' // Color azul consistente para todos los waypoints
 
         markerElement = document.createElement('div')
         markerElement.style.cssText = `
@@ -213,10 +390,17 @@ export default function RouteMap({
           box-shadow: 0 2px 6px rgba(0,0,0,0.3);
           z-index: 1000;
         `
-        markerElement.innerHTML = `${index}`
+        // Usar el número de waypoint correcto
+        markerElement.innerHTML = `${waypointNumber}`
 
         if (stop) {
-          popupText = `${index}. ${stop.customer}\n${stop.address}`
+          const address = typeof stop.address === 'string'
+            ? stop.address
+            : stop.address?.street || 'Dirección no disponible'
+          popupText = `${stopIndex + 1}. ${stop.customer}\n${address}`
+          console.log(`✅ Marcador de parada creado - N°${stopIndex + 1}: ${stop.customer} en ${address}`)
+        } else {
+          console.log(`⚠️ No se encontró información de la parada para stopIndex ${stopIndex}, usando marcador genérico N°${stopIndex + 1}`)
         }
       }
 
@@ -257,15 +441,20 @@ export default function RouteMap({
     }
 
     // Agregar marcadores para cada coordenada
+    console.log('🚀 Iniciando creación de marcadores para allCoordinates:', allCoordinates.length)
     allCoordinates.forEach((coord, index) => {
+      console.log(`📍 Procesando coordenada index ${index}:`, coord)
       if (index === 0) {
         // Almacén inicio
+        console.log('🏢 Creando marcador de almacén inicio')
         createMarker(coord, index, true, true, false)
       } else if (index === allCoordinates.length - 1 && allCoordinates.length > 1) {
         // Almacén fin (solo si hay más de un punto)
+        console.log('🏢 Creando marcador de almacén fin')
         createMarker(coord, index, true, false, true)
       } else {
         // Paradas intermedias
+        console.log(`📦 Creando marcador de parada intermedia index ${index}`)
         createMarker(coord, index, false, false, false)
       }
     })
@@ -368,20 +557,49 @@ export default function RouteMap({
     // Usar setTimeout para evitar condiciones de carrera
     const timeoutId = setTimeout(recreateMarkers, 100)
 
-    // Notificar al componente padre sobre la ruta seleccionada
-    if (onOptimizationComplete && routes[selectedRoute]) {
-      onOptimizationComplete({
+    // Notificar al componente padre sobre la ruta seleccionada SOLO si ha cambiado realmente
+    if (onOptimizationCompleteRef.current && routes[selectedRoute] && lastNotifiedRoute.current !== selectedRoute) {
+      const routeData = {
         selectedRouteIndex: selectedRoute,
         selectedRoute: routes[selectedRoute],
         allRoutes: routes
-      })
+      }
+
+      // Marcar como notificado para evitar bucles
+      lastNotifiedRoute.current = selectedRoute
+
+      // Usar setTimeout para evitar el bucle infinito
+      setTimeout(() => {
+        if (onOptimizationCompleteRef.current) {
+          onOptimizationCompleteRef.current(routeData)
+        }
+      }, 0)
     }
 
     // Limpiar timeout
     return () => {
       clearTimeout(timeoutId)
     }
-  }, [selectedRoute, routes, onOptimizationComplete])
+  }, [selectedRoute, routes])
+
+  // Reset last notified route when routes array changes
+  useEffect(() => {
+    lastNotifiedRoute.current = -1
+  }, [routes])
+
+  // Función para formatear duración en horas y minutos
+  const formatDuration = (seconds: number) => {
+    const hours = Math.floor(seconds / 3600)
+    const minutes = Math.floor((seconds % 3600) / 60)
+
+    if (hours === 0) {
+      return `${minutes} min`
+    } else if (minutes === 0) {
+      return `${hours}h`
+    } else {
+      return `${hours}h ${minutes}min`
+    }
+  }
 
   const highlightRoute = (index: number) => {
     if (selectedRoute !== index) {
@@ -399,77 +617,80 @@ export default function RouteMap({
 
       {/* Panel lateral de rutas alternativas */}
       {routes.length > 0 && (
-        <div className="absolute top-4 left-4 bg-white dark:bg-gray-800 rounded-lg shadow-lg p-4 border border-gray-200 dark:border-gray-700 max-w-xs">
-          <h3 className="font-semibold text-gray-900 dark:text-white mb-3">Rutas alternativas</h3>
+        <div className="absolute top-4 left-4 bg-white dark:bg-gray-800 rounded-lg shadow-xl p-4 border border-gray-200 dark:border-gray-700 max-w-xs z-10">
+          <div className="flex items-center gap-2 mb-3">
+            <MapPin className="w-4 h-4 text-blue-600" />
+            <h3 className="font-semibold text-gray-900 dark:text-white">Rutas disponibles</h3>
+          </div>
+
           {routes.map((route, i) => {
-            const distanceKm = (route.distance / 1000).toFixed(2)
-            const durationMin = Math.round(route.duration / 60)
+            const distanceMi = (route.distance / 1609.34).toFixed(1)
+            const durationFormatted = formatDuration(route.duration)
+            const isOptimal = i === 0
+            const isSelected = selectedRoute === i
+
             return (
               <button
                 key={i}
                 onClick={() => highlightRoute(i)}
-                className={`w-full text-left p-2 mb-2 rounded-md transition-colors ${
-                  selectedRoute === i
-                    ? 'bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 border-2 border-red-500'
-                    : 'bg-gray-50 dark:bg-gray-700 text-gray-700 dark:text-gray-300 border-2 border-transparent hover:bg-gray-100 dark:hover:bg-gray-600'
+                className={`w-full text-left p-3 mb-2 rounded-lg transition-all transform hover:scale-[1.02] ${
+                  isSelected
+                    ? 'bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/30 dark:to-indigo-900/30 text-blue-700 dark:text-blue-300 border-2 border-blue-500 shadow-md'
+                    : isOptimal
+                      ? 'bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-900/20 dark:to-emerald-900/20 text-green-700 dark:text-green-300 border-2 border-green-400 hover:border-green-500'
+                      : 'bg-gray-50 dark:bg-gray-700 text-gray-700 dark:text-gray-300 border-2 border-gray-200 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-600'
                 }`}
               >
-                <div className="flex justify-between items-center">
+                <div className="flex justify-between items-start mb-1">
                   <span className="font-medium">Ruta {i + 1}</span>
-                  <span className={`text-xs px-2 py-1 rounded ${
-                    selectedRoute === i
-                      ? 'bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300'
-                      : 'bg-gray-100 dark:bg-gray-600 text-gray-600 dark:text-gray-400'
+                  <span className={`text-xs px-2 py-1 rounded-full font-medium ${
+                    isSelected
+                      ? 'bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300'
+                      : isOptimal
+                        ? 'bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-300'
+                        : 'bg-gray-100 dark:bg-gray-600 text-gray-600 dark:text-gray-400'
                   }`}>
-                    {i === 0 ? 'Óptima' : `Alt ${i}`}
+                    {isOptimal ? '⭐ Óptima' : `Alt ${i}`}
                   </span>
                 </div>
-                <div className="text-xs text-gray-600 dark:text-gray-400 mt-1">
-                  {distanceKm} km • {durationMin} min
+
+                <div className="flex items-center gap-3 text-xs">
+                  <div className="flex items-center gap-1">
+                    <Navigation className="w-3 h-3" />
+                    <span>{distanceMi} mi</span>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <Clock className="w-3 h-3" />
+                    <span>{durationFormatted}</span>
+                  </div>
                 </div>
+
+                {isOptimal && (
+                  <div className="mt-2 text-xs text-green-600 dark:text-green-400 font-medium">
+                    Ruta más eficiente
+                  </div>
+                )}
               </button>
             )
           })}
-        </div>
-      )}
 
-      {/* Información de la ruta optimizada */}
-      {optimizationResult && (
-        <div className="absolute top-4 right-4 bg-white dark:bg-gray-800 rounded-lg shadow-lg p-4 border border-gray-200 dark:border-gray-700 max-w-xs">
-          <h3 className="font-semibold text-gray-900 dark:text-white mb-3">Resumen de Ruta</h3>
-          <div className="space-y-2 text-sm">
-            <div className="flex justify-between gap-4">
-              <span className="text-gray-600 dark:text-gray-400">Total Paradas:</span>
-              <span className="font-medium text-gray-900 dark:text-white">{optimizationResult.totalOrders}</span>
-            </div>
-            <div className="flex justify-between gap-4">
-              <span className="text-gray-600 dark:text-gray-400">Recogidas:</span>
-              <span className="font-medium text-amber-600">{optimizationResult.pickups}</span>
-            </div>
-            <div className="flex justify-between gap-4">
-              <span className="text-gray-600 dark:text-gray-400">Entregas:</span>
-              <span className="font-medium text-blue-600">{optimizationResult.deliveries}</span>
-            </div>
-            {routes[selectedRoute] && (
-              <>
-                <div className="flex justify-between gap-4">
-                  <span className="text-gray-600 dark:text-gray-400">Distancia:</span>
-                  <span className="font-medium text-gray-900 dark:text-white">
-                    {(routes[selectedRoute].distance / 1000).toFixed(2)} km
-                  </span>
+          <div className="mt-3 pt-3 border-t border-gray-200 dark:border-gray-600">
+            <div className="text-xs text-gray-500 dark:text-gray-400">
+              <div className="flex items-center gap-1 mb-1">
+                <Info className="w-3 h-3" />
+                <span>La ruta óptima minimiza distancia y tiempo</span>
+              </div>
+              {routes.length > 1 && (
+                <div>
+                  {routes.length - 1} alternativa{routes.length - 1 !== 1 ? 's' : ''} disponible{routes.length - 1 !== 1 ? 's' : ''}
                 </div>
-                <div className="flex justify-between gap-4">
-                  <span className="text-gray-600 dark:text-gray-400">Duración:</span>
-                  <span className="font-medium text-gray-900 dark:text-white">
-                    {Math.round(routes[selectedRoute].duration / 60)} min
-                  </span>
-                </div>
-              </>
-            )}
+              )}
+            </div>
           </div>
         </div>
       )}
 
+  
       {/* Estado de carga */}
       {loading && (
         <div className="absolute inset-0 bg-gray-100 dark:bg-gray-800 flex items-center justify-center rounded-lg">

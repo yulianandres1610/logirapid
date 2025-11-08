@@ -5,12 +5,14 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Search, Truck, Package, AlertCircle, CheckCircle, Camera, Settings, FileText, Upload, FileImage } from 'lucide-react';
+import { Search, Truck, Package, AlertCircle, CheckCircle, Camera, Settings, FileText, Upload, FileImage, Check } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card } from '@/components/ui/card';
 import { decodeVinWithPhotos, validateVin, formatVin, calculateCargoCapacity } from '@/services/vehicleService';
 import { VehicleFormData, VinDecodeResponse } from '@/types/vehicle';
+import { cn } from '@/lib/utils';
+import { useTheme } from '@/contexts/theme-context';
 
 // Schema de validación para el paso inicial de VIN
 const initialVinSchema = z.object({
@@ -60,6 +62,7 @@ interface VehicleRegistrationFormProps {
 }
 
 export function VehicleRegistrationForm({ onSubmit, isLoading = false }: VehicleRegistrationFormProps) {
+  const { theme } = useTheme();
   const [registrationPath, setRegistrationPath] = useState<'vin' | 'manual' | null>(null);
   const [isDecodingVin, setIsDecodingVin] = useState(false);
   const [vinData, setVinData] = useState<VinDecodeResponse | null>(null);
@@ -311,14 +314,48 @@ export function VehicleRegistrationForm({ onSubmit, isLoading = false }: Vehicle
     return makeValue && modelValue && yearValue && bodyTypeValue;
   };
 
+  // Mapeo de pasos para el stepper
+  const getStepNumber = () => {
+    if (currentStep === 'vin-input') return 1;
+    if (currentStep === 'manual-info') return 2;
+    if (currentStep === 'final-registration') return registrationPath === 'vin' ? 2 : 3;
+    return 1;
+  };
+
+  const totalSteps = registrationPath === 'vin' ? 2 : 3;
+
   return (
     <div className="w-full max-w-4xl mx-auto">
       <Card className="backdrop-blur-lg bg-white/10 border-white/20 p-6">
-        <div className="mb-8">
+        <div className="mb-6">
           <h2 className="text-2xl font-bold text-white mb-2">Registrar Nuevo Vehículo</h2>
           <p className="text-gray-300">
             Ingrese el número VIN para comenzar el registro del vehículo
           </p>
+        </div>
+
+        {/* Progress Bar / Stepper */}
+        <div className="px-6 py-4 mb-6">
+          <div className="flex items-center gap-4">
+            {Array.from({ length: totalSteps }, (_, i) => i + 1).map((step, index) => (
+              <div key={step} className="flex items-center">
+                <div className={cn(
+                  'w-10 h-10 rounded-full flex items-center justify-center text-sm font-medium transition-colors',
+                  getStepNumber() >= step
+                    ? 'bg-exa-primary text-white'
+                    : theme === 'dark' ? 'bg-gray-700 text-gray-400' : 'bg-gray-200 text-gray-600'
+                )}>
+                  {getStepNumber() > step ? <Check className="w-5 h-5" /> : step}
+                </div>
+                {index < totalSteps - 1 && (
+                  <div className={cn(
+                    'w-20 h-1 mx-2 transition-colors',
+                    getStepNumber() > step ? 'bg-exa-primary' : theme === 'dark' ? 'bg-gray-700' : 'bg-gray-200'
+                  )} />
+                )}
+              </div>
+            ))}
+          </div>
         </div>
 
         <form onSubmit={handleSubmit(onFormSubmit)} className="space-y-6">

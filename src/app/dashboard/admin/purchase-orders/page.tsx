@@ -138,6 +138,8 @@ export default function PurchaseOrdersPage() {
 
       const orderData = {
         ...formData,
+        status: editingOrder?.status || 'BORRADOR',
+        order_date: editingOrder?.order_date || new Date().toISOString(),
         items: formData.items.map(item => ({
           ...item,
           total_price: item.quantity * item.unit_price
@@ -146,10 +148,10 @@ export default function PurchaseOrdersPage() {
 
       if (editingOrder) {
         await updatePurchaseOrder(editingOrder.id, orderData)
-        showNotification('Orden actualizada exitosamente', 'success')
+        showNotification('success', 'Orden Actualizada', 'Orden actualizada exitosamente')
       } else {
         await createPurchaseOrder(orderData)
-        showNotification('Orden creada exitosamente', 'success')
+        showNotification('success', 'Orden Creada', 'Orden creada exitosamente')
       }
 
       await loadOrders()
@@ -158,7 +160,7 @@ export default function PurchaseOrdersPage() {
       resetForm()
     } catch (error) {
       console.error('Error saving order:', error)
-      showNotification('Error al guardar la orden', 'error')
+      showNotification('error', 'Error al Guardar', 'Error al guardar la orden')
     } finally {
       setLoading(false)
     }
@@ -215,11 +217,11 @@ export default function PurchaseOrdersPage() {
         // Para estado RECIBIDA, usamos la función especializada que crea cajas
         const result = await receivePurchaseOrder(orderId)
         if (result) {
-          showNotification(result.message, 'success')
+          showNotification('success', 'Orden Recibida', result.message)
           await loadOrders()
           return
         } else {
-          showNotification('Error al recibir la orden', 'error')
+          showNotification('error', 'Error al Recibir', 'Error al recibir la orden')
           return
         }
       }
@@ -234,14 +236,14 @@ export default function PurchaseOrdersPage() {
       })
 
       if (response.ok) {
-        showNotification('Estado actualizado exitosamente', 'success')
+        showNotification('success', 'Estado Actualizado', 'Estado actualizado exitosamente')
         await loadOrders()
       } else {
-        showNotification('Error al actualizar el estado', 'error')
+        showNotification('error', 'Error al Actualizar', 'Error al actualizar el estado')
       }
     } catch (error) {
       console.error('Error updating status:', error)
-      showNotification('Error al actualizar el estado', 'error')
+      showNotification('error', 'Error al Actualizar', 'Error al actualizar el estado')
     } finally {
       setLoading(false)
     }

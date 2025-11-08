@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 
 import { useRouter, useSearchParams } from 'next/navigation'
 import { motion } from 'framer-motion'
@@ -91,6 +91,19 @@ export default function RoutesPage() {
     return viewFromUrl === 'map' ? 'map' : viewFromUrl === 'statistics' ? 'statistics' : 'table'
   })
   const [allRoutes, setAllRoutes] = useState<Route[]>([])
+
+  // Calculate stats from routes data
+  const stats = useMemo(() => {
+    const active = routes.filter(route => route.status === 'active').length
+    const completed = routes.filter(route => route.status === 'completed').length
+    const planning = routes.filter(route => route.status === 'planning').length
+
+    return {
+      active,
+      delivered: completed,
+      pending: planning
+    }
+  }, [routes])
 
   // Fetch routes
   const fetchData = async () => {
@@ -261,115 +274,204 @@ export default function RoutesPage() {
         </div>
 
         {/* Stats Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
+          {/* Rutas Activas */}
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.3 }}
+            transition={{ delay: 0.1 }}
             className={cn(
-              "rounded-xl p-6 border transition-all duration-300 hover:shadow-lg hover:-translate-y-1",
-              theme === 'dark' ? "bg-gray-800/80 border-gray-700" : "bg-white border-gray-200"
+              'relative overflow-hidden',
+              theme === 'dark'
+                ? 'bg-gradient-to-br from-gray-800 to-gray-900 border-gray-700'
+                : 'bg-gradient-to-br from-slate-50 to-white border-slate-200',
+              'rounded-2xl border shadow-xl'
             )}
-            style={{
-              background: 'var(--gradient-brand-red)',
-            }}
           >
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-white/80 text-sm font-medium">Rutas Activas</p>
-                <p className="text-white text-2xl font-bold mt-1">12</p>
+            <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-red-400 to-red-600"></div>
+            <div className="p-6">
+              <div className="flex items-start justify-between mb-4">
+                <div className="flex items-center gap-3">
+                  <div className={cn(
+                    'p-3 rounded-xl shadow-sm',
+                    theme === 'dark'
+                      ? 'bg-red-900/30 border border-red-800/50'
+                      : 'bg-gradient-to-br from-red-50 to-red-100 border border-red-200'
+                  )}>
+                    <Truck className="w-6 h-6 text-red-600" />
+                  </div>
+                  <div>
+                    <p className={cn(
+                      'text-sm font-medium',
+                      theme === 'dark' ? 'text-gray-400' : 'text-black'
+                    )}>Rutas Activas</p>
+                    <p className={cn(
+                      'text-3xl font-bold mt-1',
+                      theme === 'dark' ? 'text-white' : 'text-slate-900'
+                    )}>{stats.active}</p>
+                  </div>
+                </div>
               </div>
-              <div className="bg-white/20 rounded-lg p-3">
-                <Truck className="w-6 h-6 text-white" />
+              <div className="flex items-center gap-2">
+                <div className="flex items-center gap-1">
+                  <div className="w-2 h-2 bg-red-400 rounded-full animate-pulse"></div>
+                  <span className={cn(
+                    'text-xs font-medium',
+                    theme === 'dark' ? 'text-gray-500' : 'text-black'
+                  )}>En ruta</span>
+                </div>
               </div>
             </div>
           </motion.div>
 
+          {/* Entregadas Hoy */}
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.3, delay: 0.1 }}
+            transition={{ delay: 0.2 }}
             className={cn(
-              "rounded-xl p-6 border transition-all duration-300 hover:shadow-lg hover:-translate-y-1",
-              theme === 'dark' ? "bg-gray-800/80 border-gray-700" : "bg-white border-gray-200"
+              'relative overflow-hidden',
+              theme === 'dark'
+                ? 'bg-gradient-to-br from-gray-800 to-gray-900 border-gray-700'
+                : 'bg-gradient-to-br from-slate-50 to-white border-slate-200',
+              'rounded-2xl border shadow-xl'
             )}
-            style={{
-              background: 'var(--gradient-brand-blue)',
-            }}
           >
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-white/80 text-sm font-medium">Entregadas Hoy</p>
-                <p className="text-white text-2xl font-bold mt-1">45</p>
+            <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-green-400 to-green-600"></div>
+            <div className="p-6">
+              <div className="flex items-start justify-between mb-4">
+                <div className="flex items-center gap-3">
+                  <div className={cn(
+                    'p-3 rounded-xl shadow-sm',
+                    theme === 'dark'
+                      ? 'bg-green-900/30 border border-green-800/50'
+                      : 'bg-gradient-to-br from-green-50 to-green-100 border border-green-200'
+                  )}>
+                    <CheckCircle className="w-6 h-6 text-green-600" />
+                  </div>
+                  <div>
+                    <p className={cn(
+                      'text-sm font-medium',
+                      theme === 'dark' ? 'text-gray-400' : 'text-black'
+                    )}>Entregadas Hoy</p>
+                    <p className={cn(
+                      'text-3xl font-bold mt-1',
+                      theme === 'dark' ? 'text-white' : 'text-slate-900'
+                    )}>{stats.delivered}</p>
+                  </div>
+                </div>
               </div>
-              <div className="bg-white/20 rounded-lg p-3">
-                <Package className="w-6 h-6 text-white" />
+              <div className="flex items-center gap-2">
+                <div className="flex items-center gap-1">
+                  <div className="w-2 h-2 bg-green-400 rounded-full"></div>
+                  <span className={cn(
+                    'text-xs font-medium',
+                    theme === 'dark' ? 'text-gray-500' : 'text-black'
+                  )}>Completadas</span>
+                </div>
               </div>
             </div>
           </motion.div>
 
+          {/* Pendientes */}
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.3, delay: 0.2 }}
+            transition={{ delay: 0.3 }}
             className={cn(
-              "rounded-xl p-6 border transition-all duration-300 hover:shadow-lg hover:-translate-y-1",
-              theme === 'dark' ? "bg-gray-800/80 border-gray-700" : "bg-white border-gray-200"
+              'relative overflow-hidden',
+              theme === 'dark'
+                ? 'bg-gradient-to-br from-gray-800 to-gray-900 border-gray-700'
+                : 'bg-gradient-to-br from-slate-50 to-white border-slate-200',
+              'rounded-2xl border shadow-xl'
             )}
           >
-            <div className="flex items-center justify-between">
-              <div>
-                <p className={cn(
-                  "text-sm font-medium",
-                  theme === 'dark' ? "text-gray-400" : "text-gray-600"
+            <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-amber-400 to-orange-600"></div>
+            <div className="p-6">
+              <div className="flex items-start justify-between mb-4">
+                <div className="flex items-center gap-3">
+                  <div className={cn(
+                    'p-3 rounded-xl shadow-sm',
+                    theme === 'dark'
+                      ? 'bg-amber-900/30 border border-amber-800/50'
+                      : 'bg-gradient-to-br from-amber-50 to-orange-100 border border-amber-200'
+                  )}>
+                    <Clock className="w-6 h-6 text-amber-600" />
+                  </div>
+                  <div>
+                    <p className={cn(
+                      'text-sm font-medium',
+                      theme === 'dark' ? 'text-gray-400' : 'text-black'
+                    )}>Pendientes</p>
+                    <p className={cn(
+                      'text-3xl font-bold mt-1',
+                      theme === 'dark' ? 'text-white' : 'text-slate-900'
+                    )}>{stats.pending}</p>
+                  </div>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="flex items-center gap-1">
+                  <div className="w-2 h-2 bg-amber-400 rounded-full animate-pulse"></div>
+                  <span className={cn(
+                    'text-xs font-medium',
+                    theme === 'dark' ? 'text-gray-500' : 'text-black'
+                  )}>Esperando</span>
+                </div>
+              </div>
+            </div>
+          </motion.div>
+
+          {/* Eficiencia */}
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.3 }}
+            className={cn(
+              'relative overflow-hidden rounded-2xl border shadow-xl',
+              theme === 'dark'
+                ? 'bg-gradient-to-br from-gray-800 to-gray-900 border-gray-700'
+                : 'bg-gradient-to-br from-slate-50 to-white border-slate-200'
+            )}
+          >
+            <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-purple-400 to-indigo-600"></div>
+            <div className="p-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className={cn(
+                    'text-sm font-medium',
+                    theme === 'dark' ? 'text-gray-400' : 'text-slate-600'
+                  )}>
+                    Eficiencia
+                  </p>
+                  <p className={cn(
+                    'text-2xl font-bold mt-1',
+                    theme === 'dark' ? 'text-white' : 'text-slate-900'
+                  )}>
+                    {totalRoutes > 0 ? Math.round((stats.active / totalRoutes) * 100) : 0}%
+                  </p>
+                </div>
+                <div className={cn(
+                  'relative overflow-hidden rounded-2xl p-3 shadow-lg border',
+                  theme === 'dark'
+                    ? 'bg-gradient-to-br from-purple-600/20 to-indigo-600/20 border-purple-500/30'
+                    : 'bg-gradient-to-br from-purple-50 to-indigo-50 border-purple-200'
                 )}>
-                  Pendientes
-                </p>
-                <p className={cn(
-                  "text-2xl font-bold mt-1",
-                  theme === 'dark' ? "text-white" : "text-gray-900"
-                )}>
-                  8
-                </p>
+                  <div className={cn(
+                    'absolute top-0 right-0 w-16 h-16 rounded-full opacity-20 -mr-8 -mt-8',
+                    theme === 'dark' ? 'bg-purple-400' : 'bg-purple-600'
+                  )}></div>
+                  <BarChart3 className={cn(
+                    'relative w-6 h-6',
+                    theme === 'dark' ? 'text-purple-400' : 'text-purple-600'
+                  )} />
+                </div>
               </div>
               <div className={cn(
-                "rounded-lg p-3",
-                theme === 'dark' ? "bg-gray-700" : "bg-gray-100"
+                'text-xs mt-4',
+                theme === 'dark' ? 'text-gray-500' : 'text-slate-500'
               )}>
-                <Clock className="w-6 h-6 text-yellow-600" />
-              </div>
-            </div>
-          </motion.div>
-
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.3, delay: 0.3 }}
-            className={cn(
-              "rounded-xl p-6 border transition-all duration-300 hover:shadow-lg hover:-translate-y-1",
-              theme === 'dark' ? "bg-gray-800/80 border-gray-700" : "bg-white border-gray-200"
-            )}
-          >
-            <div className="flex items-center justify-between">
-              <div>
-                <p className={cn(
-                  "text-sm font-medium",
-                  theme === 'dark' ? "text-gray-400" : "text-gray-600"
-                )}>
-                  Eficiencia
-                </p>
-                <p className={cn(
-                  "text-2xl font-bold mt-1",
-                  theme === 'dark' ? "text-white" : "text-gray-900"
-                )}>
-                  94%
-                </p>
-              </div>
-              <div className={cn(
-                "rounded-lg p-3",
-                theme === 'dark' ? "bg-gray-700" : "bg-gray-100"
-              )}>
-                <BarChart3 className="w-6 h-6 text-green-600" />
+                Rutas activas vs total
               </div>
             </div>
           </motion.div>

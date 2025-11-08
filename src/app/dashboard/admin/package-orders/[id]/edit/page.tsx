@@ -470,7 +470,7 @@ export default function EditPackageOrderPage() {
 
     // If it's a string, try to parse as JSON
     try {
-      return JSON.parse(address)
+      return JSON.parse(address as string)
     } catch {
       return { street: address }
     }
