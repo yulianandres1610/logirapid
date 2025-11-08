@@ -63,8 +63,15 @@ function groupOrdersByAddress(orders: any[]) {
   const addressMap = new Map<string, any>()
 
   orders.forEach(order => {
+    // Obtener dirección como string (manejar tanto string como objeto)
+    let addressText = 'Dirección no disponible'
+    if (typeof order.customerAddress === 'string') {
+      addressText = order.customerAddress
+    } else if (order.customerAddress?.street) {
+      addressText = order.customerAddress.street
+    }
+
     // Normalizar dirección de texto para agrupar
-    const addressText = order.customerAddress?.street || order.address || 'Dirección no disponible'
     const normalizedAddress = addressText
       .toLowerCase()
       .trim()

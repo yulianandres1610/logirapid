@@ -263,8 +263,16 @@ export default function CreateRoutePage() {
     const addressMap = new Map<string, number>()
 
     orders.forEach(order => {
+      // Obtener dirección como string (manejar tanto string como objeto)
+      let addressText = ''
+      if (typeof order.customerAddress === 'string') {
+        addressText = order.customerAddress
+      } else if (order.customerAddress?.street) {
+        addressText = order.customerAddress.street
+      }
+
       // Normalizar dirección: minúsculas, sin espacios extras, sin puntuación
-      const normalizedAddress = (order.customerAddress?.street || order.address || '')
+      const normalizedAddress = addressText
         .toLowerCase()
         .trim()
         .replace(/[.,\/#!$%\^&\*;:{}=\-_`~()]/g, '')
