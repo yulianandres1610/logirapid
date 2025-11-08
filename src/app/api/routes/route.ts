@@ -63,21 +63,24 @@ function groupOrdersByAddress(orders: any[]) {
   const addressMap = new Map<string, any>()
 
   orders.forEach(order => {
-    // Crear clave única basada en coordenadas redondeadas (6 decimales ≈ 0.1 metros)
-    const latKey = order.latitude.toFixed(6)
-    const lngKey = order.longitude.toFixed(6)
-    const addressKey = `${latKey},${lngKey}`
+    // Normalizar dirección de texto para agrupar
+    const addressText = order.customerAddress?.street || order.address || 'Dirección no disponible'
+    const normalizedAddress = addressText
+      .toLowerCase()
+      .trim()
+      .replace(/[.,\/#!$%\^&\*;:{}=\-_`~()]/g, '')
+      .replace(/\s+/g, ' ')
 
-    if (addressMap.has(addressKey)) {
+    if (addressMap.has(normalizedAddress)) {
       // Dirección ya existe, agregar orden al grupo
-      const existing = addressMap.get(addressKey)
+      const existing = addressMap.get(normalizedAddress)
       existing.orderIds.push(order.id)
       existing.orderNumbers.push(order.orderNumber || `ORD-${order.id}`)
       existing.totalOrders++
     } else {
       // Nueva dirección
-      addressMap.set(addressKey, {
-        address: order.customerAddress?.street || order.address || 'Dirección no disponible',
+      addressMap.set(normalizedAddress, {
+        address: addressText,
         latitude: order.latitude,
         longitude: order.longitude,
         customer: order.customerName,

@@ -259,19 +259,21 @@ export default function CreateRoutePage() {
   const getStopsByTimeWindow = (timeWindowValue: string) => {
     const orders = getOrdersByTimeWindow(timeWindowValue)
 
-    // Agrupar por dirección (misma lógica que en el backend)
+    // Agrupar por dirección de texto normalizada
     const addressMap = new Map<string, number>()
 
     orders.forEach(order => {
-      if (!order.latitude || !order.longitude) return
+      // Normalizar dirección: minúsculas, sin espacios extras, sin puntuación
+      const normalizedAddress = (order.customerAddress?.street || order.address || '')
+        .toLowerCase()
+        .trim()
+        .replace(/[.,\/#!$%\^&\*;:{}=\-_`~()]/g, '')
+        .replace(/\s+/g, ' ')
 
-      // Clave única basada en coordenadas redondeadas
-      const latKey = order.latitude.toFixed(6)
-      const lngKey = order.longitude.toFixed(6)
-      const addressKey = `${latKey},${lngKey}`
+      if (!normalizedAddress) return
 
-      if (!addressMap.has(addressKey)) {
-        addressMap.set(addressKey, 1)
+      if (!addressMap.has(normalizedAddress)) {
+        addressMap.set(normalizedAddress, 1)
       }
     })
 
