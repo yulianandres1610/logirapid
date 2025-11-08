@@ -856,7 +856,9 @@ export default function CreateRoutePage() {
                             {order.orderNumber || `ORD-${order.id}`} - {order.customerName}
                           </p>
                           <p className="text-sm text-gray-500 dark:text-gray-400 truncate">
-                            {order.address}
+                            {typeof order.customerAddress === 'string'
+                              ? order.customerAddress
+                              : order.customerAddress?.street || 'Dirección no disponible'}
                           </p>
                         </div>
                         <div className="flex items-center gap-2 text-xs text-gray-500">
