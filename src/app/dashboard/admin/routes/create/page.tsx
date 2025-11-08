@@ -683,77 +683,52 @@ export default function CreateRoutePage() {
   // ============================================================================
 
   const renderStepIndicator = () => (
-    <div className="px-6 py-6 bg-gradient-to-r from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800">
-      <div className="flex items-center justify-between max-w-3xl mx-auto">
+    <div className="px-8 py-8 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
+      <div className="flex items-center max-w-4xl mx-auto">
         {STEPS.map((step, index) => (
           <div key={step.id} className="flex items-center flex-1">
-            {/* Step Circle */}
-            <div className="relative group">
+            {/* Step Number and Title */}
+            <div className="flex flex-col items-center gap-3">
               <div className={cn(
-                'w-12 h-12 rounded-full flex items-center justify-center text-sm font-bold transition-all duration-300 relative z-10',
+                'w-14 h-14 rounded-lg flex items-center justify-center text-base font-bold transition-all duration-200 border-2',
                 currentStep === step.id
-                  ? 'bg-gradient-to-br from-blue-500 via-purple-500 to-pink-500 text-white shadow-lg shadow-purple-500/50 scale-110'
+                  ? 'bg-[#2a5caa] border-[#2a5caa] text-white shadow-lg'
                   : currentStep > step.id
-                  ? 'bg-gradient-to-br from-green-400 to-emerald-500 text-white shadow-md'
-                  : 'bg-gray-200 dark:bg-gray-700 text-gray-500 dark:text-gray-400'
+                  ? 'bg-[#10b981] border-[#10b981] text-white'
+                  : 'bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600 text-gray-400 dark:text-gray-500'
               )}>
                 {currentStep > step.id ? (
-                  <Check className="w-6 h-6 animate-in zoom-in duration-300" />
+                  <Check className="w-7 h-7" />
                 ) : (
-                  <span className={currentStep === step.id ? 'animate-pulse' : ''}>{step.id}</span>
+                  <span>{step.id}</span>
                 )}
               </div>
-
-              {/* Glow effect para paso activo */}
-              {currentStep === step.id && (
-                <div className="absolute inset-0 rounded-full bg-gradient-to-br from-blue-400 to-purple-600 animate-ping opacity-75" />
-              )}
-
-              {/* Step Label */}
-              <div className="absolute -bottom-8 left-1/2 -translate-x-1/2 whitespace-nowrap">
-                <span className={cn(
-                  'text-xs font-medium transition-colors',
-                  currentStep >= step.id
-                    ? 'text-blue-600 dark:text-blue-400'
-                    : 'text-gray-500 dark:text-gray-400'
-                )}>
-                  {step.title}
-                </span>
-              </div>
+              <span className={cn(
+                'text-sm font-semibold whitespace-nowrap transition-colors',
+                currentStep >= step.id
+                  ? 'text-gray-900 dark:text-white'
+                  : 'text-gray-400 dark:text-gray-500'
+              )}>
+                {step.title}
+              </span>
             </div>
 
             {/* Connector Line */}
             {index < STEPS.length - 1 && (
-              <div className="flex-1 h-1 mx-3 relative overflow-hidden rounded-full bg-gray-200 dark:bg-gray-700">
+              <div className="flex-1 h-1 mx-6 mb-8 rounded-full bg-gray-200 dark:bg-gray-700">
                 <div
                   className={cn(
-                    'absolute top-0 left-0 h-full transition-all duration-500 ease-out',
+                    'h-full rounded-full transition-all duration-300',
                     currentStep > step.id
-                      ? 'w-full bg-gradient-to-r from-green-400 to-emerald-500'
-                      : 'w-0 bg-gray-300 dark:bg-gray-600'
+                      ? 'w-full bg-[#10b981]'
+                      : 'w-0'
                   )}
-                >
-                  {currentStep > step.id && (
-                    <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white to-transparent opacity-50 animate-shimmer" />
-                  )}
-                </div>
+                />
               </div>
             )}
           </div>
         ))}
       </div>
-
-      <style dangerouslySetInnerHTML={{
-        __html: `
-          @keyframes shimmer {
-            0% { transform: translateX(-100%); }
-            100% { transform: translateX(100%); }
-          }
-          .animate-shimmer {
-            animation: shimmer 2s infinite;
-          }
-        `
-      }} />
     </div>
   )
 
@@ -883,72 +858,46 @@ export default function CreateRoutePage() {
 
               {/* Orders in this Time Window */}
               {ordersInWindow.length > 0 && (
-                <div className="border-t border-gray-200 dark:border-gray-700 bg-gradient-to-b from-gray-50 to-white dark:from-gray-900/20 dark:to-gray-900/10 p-4">
-                  <div className="space-y-3 max-h-64 overflow-y-auto pr-2">
+                <div className="border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50 p-6">
+                  <div className="space-y-3 max-h-80 overflow-y-auto pr-3">
                     {ordersInWindow.map(order => (
                       <label
                         key={order.id}
                         className={cn(
-                          'group flex items-center gap-3 p-4 rounded-xl border cursor-pointer transition-all duration-300 relative overflow-hidden',
+                          'flex items-center gap-4 p-5 rounded-lg border-2 cursor-pointer transition-all duration-200',
                           selectedOrders.includes(order.id)
-                            ? 'bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-900/20 dark:to-emerald-900/20 border-green-400 dark:border-green-600 shadow-lg shadow-green-500/20 scale-[1.02]'
-                            : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 hover:border-blue-300 dark:hover:border-blue-600 hover:shadow-md hover:scale-[1.01]'
+                            ? 'bg-blue-50 dark:bg-blue-900/20 border-[#2a5caa] shadow-lg'
+                            : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 hover:border-[#2a5caa] hover:shadow-md'
                         )}
                       >
-                        {/* Gradient overlay on hover */}
-                        <div className={cn(
-                          'absolute inset-0 bg-gradient-to-r from-blue-500/5 to-purple-500/5 opacity-0 group-hover:opacity-100 transition-opacity duration-300',
-                          selectedOrders.includes(order.id) && 'from-green-500/10 to-emerald-500/10'
-                        )} />
-
-                        {/* Custom checkbox */}
-                        <div className="relative">
+                        {/* Checkbox */}
+                        <div className="flex-shrink-0">
                           <input
                             type="checkbox"
                             checked={selectedOrders.includes(order.id)}
                             onChange={() => toggleOrder(order.id)}
-                            className="peer sr-only"
+                            className="w-5 h-5 rounded border-gray-300 text-[#2a5caa] focus:ring-[#2a5caa] cursor-pointer"
                           />
-                          <div className={cn(
-                            'w-5 h-5 rounded-md border-2 flex items-center justify-center transition-all duration-300',
-                            selectedOrders.includes(order.id)
-                              ? 'bg-gradient-to-br from-green-400 to-emerald-500 border-green-500 shadow-lg shadow-green-500/50'
-                              : 'bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 group-hover:border-blue-400'
-                          )}>
-                            {selectedOrders.includes(order.id) && (
-                              <Check className="w-3.5 h-3.5 text-white animate-in zoom-in duration-200" />
-                            )}
-                          </div>
                         </div>
 
                         {/* Content */}
-                        <div className="flex-1 min-w-0 relative z-10">
-                          <p className={cn(
-                            'font-semibold truncate transition-colors',
-                            selectedOrders.includes(order.id)
-                              ? 'text-green-900 dark:text-green-100'
-                              : 'text-gray-900 dark:text-white'
-                          )}>
+                        <div className="flex-1 min-w-0">
+                          <p className="font-semibold text-gray-900 dark:text-white mb-1">
                             {order.orderNumber || `ORD-${order.id}`} - {order.customerName}
                           </p>
-                          <p className="text-sm text-gray-600 dark:text-gray-400 truncate mt-0.5 flex items-center gap-1.5">
-                            <MapPin className="w-3.5 h-3.5 flex-shrink-0" />
-                            {typeof order.customerAddress === 'string'
-                              ? order.customerAddress
-                              : order.customerAddress?.street || 'Dirección no disponible'}
+                          <p className="text-sm text-gray-600 dark:text-gray-400 flex items-center gap-2">
+                            <MapPin className="w-4 h-4 flex-shrink-0 text-[#cc0a46]" />
+                            <span className="truncate">
+                              {typeof order.customerAddress === 'string'
+                                ? order.customerAddress
+                                : order.customerAddress?.street || 'Dirección no disponible'}
+                            </span>
                           </p>
                         </div>
 
-                        {/* Coordinates badge */}
-                        <div className={cn(
-                          'hidden sm:flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors relative z-10',
-                          selectedOrders.includes(order.id)
-                            ? 'bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-300'
-                            : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400'
-                        )}>
-                          <span className="font-mono">
-                            {order.latitude?.toFixed(4)}, {order.longitude?.toFixed(4)}
-                          </span>
+                        {/* Coordinates */}
+                        <div className="hidden lg:flex items-center gap-2 px-3 py-2 rounded-md bg-gray-100 dark:bg-gray-700 text-xs font-mono text-gray-600 dark:text-gray-400 flex-shrink-0">
+                          {order.latitude?.toFixed(4)}, {order.longitude?.toFixed(4)}
                         </div>
                       </label>
                     ))}
@@ -1196,96 +1145,44 @@ export default function CreateRoutePage() {
     <div className="space-y-6">
       {/* Progress Bar de Optimización */}
       {!optimizationResult && optimizing && (
-        <div className="relative bg-gradient-to-br from-indigo-600 via-purple-600 to-pink-600 rounded-2xl p-10 text-white overflow-hidden shadow-2xl">
-          {/* Animated background pattern */}
-          <div className="absolute inset-0 opacity-10">
-            <div className="absolute top-0 left-0 w-72 h-72 bg-white rounded-full mix-blend-overlay filter blur-3xl animate-blob" />
-            <div className="absolute top-0 right-0 w-72 h-72 bg-yellow-200 rounded-full mix-blend-overlay filter blur-3xl animate-blob animation-delay-2000" />
-            <div className="absolute bottom-0 left-1/2 w-72 h-72 bg-pink-200 rounded-full mix-blend-overlay filter blur-3xl animate-blob animation-delay-4000" />
+        <div className="bg-[#2a5caa] rounded-lg p-8 text-white shadow-lg">
+          <div className="text-center mb-6">
+            <div className="flex items-center justify-center gap-3 mb-4">
+              <Zap className="w-10 h-10 animate-pulse" />
+              <h3 className="text-2xl font-bold">Optimizando Ruta con Mapbox</h3>
+            </div>
+            <p className="text-blue-100 text-base">
+              {selectedTimeWindows.length === 1
+                ? 'Calculando la mejor ruta para el periodo seleccionado...'
+                : `Optimizando ${selectedTimeWindows.length} periodos y uniéndolos en secuencia...`
+              }
+            </p>
           </div>
 
-          <div className="relative z-10">
-            <div className="text-center mb-8">
-              <div className="flex items-center justify-center gap-4 mb-6">
-                <div className="relative">
-                  <Zap className="w-12 h-12 text-yellow-300 animate-pulse" />
-                  <div className="absolute inset-0 w-12 h-12 bg-yellow-300 rounded-full animate-ping opacity-30" />
-                </div>
-                <h3 className="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-white to-blue-200">
-                  Optimizando Ruta con Mapbox
-                </h3>
-              </div>
-              <p className="text-blue-100 text-lg font-medium">
-                {selectedTimeWindows.length === 1
-                  ? 'Calculando la mejor ruta para el periodo seleccionado...'
-                  : `Optimizando ${selectedTimeWindows.length} periodos y uniéndolos en secuencia...`
-                }
-              </p>
-            </div>
-
-            {/* Modern Progress Bar */}
-            <div className="relative w-full h-4 bg-black/20 backdrop-blur-sm rounded-full overflow-hidden shadow-inner mb-6">
-              {/* Base gradient bar */}
-              <div className="absolute inset-0 bg-gradient-to-r from-cyan-400 via-blue-500 to-purple-500 opacity-40" style={{ width: '100%' }} />
-
-              {/* Animated shimmer effect */}
-              <div
-                className="absolute inset-0 bg-gradient-to-r from-transparent via-white to-transparent opacity-60"
-                style={{
-                  animation: 'progressShimmer 2s cubic-bezier(0.4, 0, 0.6, 1) infinite'
-                }}
-              />
-
-              {/* Glowing progress fill */}
-              <div
-                className="absolute inset-0 bg-gradient-to-r from-cyan-300 via-blue-400 to-purple-400 shadow-lg shadow-blue-500/50"
-                style={{
-                  animation: 'progressFill 2.5s ease-in-out infinite',
-                  filter: 'brightness(1.2)'
-                }}
-              />
-
-              {/* Top highlight */}
-              <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-transparent via-white to-transparent opacity-60" />
-            </div>
-
-            <style dangerouslySetInnerHTML={{
-              __html: `
-                @keyframes progressShimmer {
-                  0% { transform: translateX(-100%); }
-                  100% { transform: translateX(100%); }
-                }
-                @keyframes progressFill {
-                  0%, 100% { width: 45%; }
-                  50% { width: 85%; }
-                }
-                @keyframes blob {
-                  0%, 100% { transform: translate(0, 0) scale(1); }
-                  25% { transform: translate(20px, -50px) scale(1.1); }
-                  50% { transform: translate(-20px, 20px) scale(0.9); }
-                  75% { transform: translate(50px, 10px) scale(1.05); }
-                }
-                .animate-blob {
-                  animation: blob 7s infinite;
-                }
-                .animation-delay-2000 {
-                  animation-delay: 2s;
-                }
-                .animation-delay-4000 {
-                  animation-delay: 4s;
-                }
-              `
-            }} />
-
-            {/* Status text */}
-            <div className="flex items-center justify-center gap-3 text-blue-100">
-              <div className="relative">
-                <div className="w-5 h-5 rounded-full border-3 border-white border-t-transparent animate-spin" />
-                <div className="absolute inset-0 w-5 h-5 rounded-full border-3 border-blue-300 border-t-transparent animate-spin animation-delay-200" style={{ animationDirection: 'reverse' }} />
-              </div>
-              <span className="text-sm font-medium">Procesando con algoritmos de optimización...</span>
-            </div>
+          {/* Progress Bar */}
+          <div className="relative w-full h-3 bg-blue-900/50 rounded-full overflow-hidden mb-4">
+            <div
+              className="absolute inset-0 bg-white rounded-full"
+              style={{
+                animation: 'progressMove 2s ease-in-out infinite',
+              }}
+            />
           </div>
+
+          <style dangerouslySetInnerHTML={{
+            __html: `
+              @keyframes progressMove {
+                0% { width: 30%; }
+                50% { width: 70%; }
+                100% { width: 30%; }
+              }
+            `
+          }} />
+
+          <p className="text-center text-blue-100 text-sm flex items-center justify-center gap-2">
+            <span className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"></span>
+            Procesando con algoritmos de optimización...
+          </p>
         </div>
       )}
 
