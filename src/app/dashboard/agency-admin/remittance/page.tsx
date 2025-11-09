@@ -330,8 +330,8 @@ export default function RemesaPage() {
           </div>
           <input
             type="number"
-            value={remesaData.amount || ''}
-            onChange={(e) => updateData('amount', parseFloat(e.target.value) || 0)}
+            value={remesaData.amount === 0 ? '' : remesaData.amount}
+            onChange={(e) => updateData('amount', e.target.value === '' ? 0 : parseFloat(e.target.value))}
             placeholder="0.00"
             className={cn(
               "w-full pl-10 pr-4 py-4 text-3xl font-bold border-2 rounded-xl focus:outline-none focus:ring-2 focus:ring-exa-primary focus:border-transparent",

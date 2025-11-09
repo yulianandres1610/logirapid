@@ -112,19 +112,46 @@ export async function GET(request: NextRequest) {
     const type = searchParams.get('type');
     const page = parseInt(searchParams.get('page') || '1');
     const limit = parseInt(searchParams.get('limit') || '20');
+    const searchTerm = searchParams.get('search');
+    const warehouseFilter = searchParams.get('warehouse');
+    const sizeFilter = searchParams.get('size');
 
     const db = readPackageDatabase();
 
     switch (type) {
       case 'boxes': {
-        const sortedBoxes = db.boxes.sort((a: Box, b: Box) =>
+        let boxes = db.boxes.sort((a: Box, b: Box) =>
           new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
         );
+
+        // Apply search filter
+        if (searchTerm) {
+          const searchLower = searchTerm.toLowerCase();
+          boxes = boxes.filter((box: Box) =>
+            box.barcode?.toLowerCase().includes(searchLower) ||
+            box.size?.toLowerCase().includes(searchLower) ||
+            box.supplier?.toLowerCase().includes(searchLower)
+          );
+        }
+
+        // Apply warehouse filter
+        if (warehouseFilter) {
+          boxes = boxes.filter((box: Box) => {
+            // Compare with current_location - could be warehouse name, city, or ID
+            return box.current_location?.includes(warehouseFilter) ||
+                   box.current_location === `Almacén ID: ${warehouseFilter}`;
+          });
+        }
+
+        // Apply size filter
+        if (sizeFilter) {
+          boxes = boxes.filter((box: Box) => box.size === sizeFilter);
+        }
 
         // Apply pagination
         const startIndex = (page - 1) * limit;
         const endIndex = startIndex + limit;
-        const paginatedBoxes = sortedBoxes.slice(startIndex, endIndex);
+        const paginatedBoxes = boxes.slice(startIndex, endIndex);
 
         // Convert to format expected by frontend
         const formattedBoxes = paginatedBoxes.map((box: Box) => ({
@@ -137,8 +164,8 @@ export async function GET(request: NextRequest) {
           boxes: formattedBoxes,
           page,
           limit,
-          total: sortedBoxes.length,
-          totalPages: Math.ceil(sortedBoxes.length / limit)
+          total: boxes.length,
+          totalPages: Math.ceil(boxes.length / limit)
         });
       }
       case 'prices':

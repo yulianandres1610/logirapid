@@ -91,26 +91,49 @@ export async function POST(request: NextRequest) {
 
     // Handle address validation - accept both string and object format
     let address = ''
+    let city = ''
+    let state = ''
+    let zipCode = ''
+    let country = ''
+
     if (typeof body.address === 'string') {
       address = body.address
     } else if (body.address?.street) {
       address = body.address.street
+      city = body.address.city || ''
+      state = body.address.state || ''
+      zipCode = body.address.zipCode || ''
+      country = body.address.country || ''
     } else if (body.address && typeof body.address === 'object') {
       // For backwards compatibility, try to construct address from object
-      const parts = [
-        body.address.street || '',
-        body.address.apartment || '',
-        body.address.city || '',
-        body.address.state || '',
-        body.address.country || ''
-      ].filter(Boolean)
-      address = parts.join(', ')
+      address = body.address.street || ''
+      city = body.address.city || ''
+      state = body.address.state || ''
+      zipCode = body.address.zipCode || ''
+      country = body.address.country || ''
     }
 
     if (!body || !fullName || !body.phone || !address) {
       return NextResponse.json({
         success: false,
         error: 'Faltan campos requeridos (fullName, phone, address)'
+      }, { status: 400 })
+    }
+
+    // ✅ VALIDACIÓN CRÍTICA: Asegurar dirección completa para geocodificación precisa
+    if (!city || !state || !zipCode) {
+      console.error('❌ Validación fallida: dirección incompleta', { address, city, state, zipCode })
+      return NextResponse.json({
+        success: false,
+        error: 'La dirección debe incluir ciudad, estado y código postal para garantizar coordenadas precisas en la entrega'
+      }, { status: 400 })
+    }
+
+    // Validar formato de código postal (5 dígitos para US)
+    if (!/^\d{5}(-\d{4})?$/.test(zipCode)) {
+      return NextResponse.json({
+        success: false,
+        error: 'El código postal debe tener 5 dígitos (ej: 33012)'
       }, { status: 400 })
     }
 
@@ -123,11 +146,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Validar formato de teléfono según el país
-    let country = body.country
-    if (body.address && typeof body.address === 'object') {
-      country = body.address.country || country
-    }
-    const phoneValidation = validatePhoneNumber(body.phone, country)
+    const phoneValidation = validatePhoneNumber(body.phone, country || body.country)
     if (!phoneValidation.valid) {
       return NextResponse.json({
         success: false,
@@ -141,6 +160,7 @@ export async function POST(request: NextRequest) {
     const lastName = nameParts.slice(1).join(' ') || ''
 
     console.log('🔝 NAME SPLITTING:', { fullName, firstName, lastName })
+    console.log('📍 ADDRESS FIELDS:', { address, city, state, zipCode, country })
 
     const newCustomer = saveCustomer({
       firstName: firstName, // Use split firstName
@@ -150,9 +170,15 @@ export async function POST(request: NextRequest) {
       phone: body.phone,
       email: body.email,
       address: address,
+      city: city,
+      state: state,
+      zipCode: zipCode,
+      country: country,
       notes: body.notes,
       createdBy: body.createdBy || 'system'
     })
+
+    console.log('✅ CUSTOMER CREATED:', newCustomer)
 
     return NextResponse.json({
       success: true,

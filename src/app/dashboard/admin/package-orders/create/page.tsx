@@ -201,6 +201,40 @@ export default function CreatePackageOrderPage() {
   const [searchingRecipient, setSearchingRecipient] = useState<{ [boxId: string]: boolean }>({})
   const [recipientSearchResults, setRecipientSearchResults] = useState<{ [boxId: string]: Customer[] }>({})
 
+  // Sync boxes with orderData.boxSelections for correct price calculation
+  useEffect(() => {
+    if (boxes.length > 0 && orderData.services.length > 0) {
+      // Group boxes by service type based on selected services
+      const newBoxSelections: { [key: string]: Array<{size: string, quantity: number, needsConstruction: boolean}> } = {}
+
+      orderData.services.forEach(serviceName => {
+        const isBoxService = serviceName.toLowerCase().includes('caja') || serviceName.toLowerCase().includes('box')
+
+        if (isBoxService) {
+          // Map boxes to selections for this service
+          newBoxSelections[serviceName] = boxes.map(box => ({
+            size: box.size,
+            quantity: box.quantity,
+            needsConstruction: box.needsConstruction
+          }))
+        }
+      })
+
+      // Update orderData with new box selections
+      setOrderData(prev => ({
+        ...prev,
+        boxSelections: newBoxSelections
+      }))
+    } else if (boxes.length === 0 && orderData.services.length > 0) {
+      // Clear box selections if no boxes
+      setOrderData(prev => ({
+        ...prev,
+        boxSelections: {}
+      }))
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [boxes, orderData.services]) // Only depend on boxes and services array
+
   // New customer form state
   const [newCustomer, setNewCustomer] = useState({
     firstName: '',
@@ -286,13 +320,34 @@ export default function CreatePackageOrderPage() {
 
     switch (addressOption) {
       case 'same':
-        return formatAddressString(customer.address)
+        // Construct complete address object from customer fields
+        const customerAddressObj = {
+          street: customer.address,
+          city: (customer as any).city,
+          state: (customer as any).state,
+          zipCode: (customer as any).zipCode,
+          country: (customer as any).country
+        }
+        return formatAddressString(customerAddressObj)
       case 'existing':
-        return formatAddressString(selectedAddress) || formatAddressString(customer.address)
+        return formatAddressString(selectedAddress) || formatAddressString({
+          street: customer.address,
+          city: (customer as any).city,
+          state: (customer as any).state,
+          zipCode: (customer as any).zipCode,
+          country: (customer as any).country
+        })
       case 'new':
         return formatAddressString(newAddress)
       default:
-        return formatAddressString(customer.address)
+        const defaultAddressObj = {
+          street: customer.address,
+          city: (customer as any).city,
+          state: (customer as any).state,
+          zipCode: (customer as any).zipCode,
+          country: (customer as any).country
+        }
+        return formatAddressString(defaultAddressObj)
     }
   }
 
@@ -317,6 +372,28 @@ export default function CreatePackageOrderPage() {
     if (!address || typeof address !== 'string' || address.trim() === '') {
       console.warn('⚠️ Invalid address provided for geocoding:', address)
       return null
+    }
+
+    // ✅ VALIDACIÓN CRÍTICA: Asegurar que la dirección tenga componentes completos
+    // Una dirección debe tener: número de calle, ciudad, estado Y código postal
+    const hasStreetNumber = /\d+/.test(address)
+    const hasCity = /,\s*[A-Z][a-z]+/.test(address) // Detecta ", Ciudad"
+    const hasState = /,\s*[A-Z]{2}\s/.test(address) || /,\s*[A-Z]{2},/.test(address) // Detecta ", FL " o ", FL,"
+    const hasZipCode = /\d{5}/.test(address) // Detecta código postal de 5 dígitos
+
+    if (!hasStreetNumber) {
+      console.error('❌ Dirección inválida: falta número de calle')
+      console.error('   Dirección recibida:', address)
+      showNotification('error', 'Dirección Incompleta', 'La dirección debe incluir el número de calle')
+      return null
+    }
+
+    if (!hasCity || !hasState || !hasZipCode) {
+      console.warn('⚠️ Dirección puede estar incompleta - intentando geocodificar de todos modos')
+      console.warn('   Dirección recibida:', address)
+      console.warn('   Validación:', { hasStreetNumber, hasCity, hasState, hasZipCode })
+      // No retornar null - intentar geocodificar de todos modos
+      // Mapbox puede encontrar la dirección incluso si no está en formato perfecto
     }
 
     try {
@@ -346,7 +423,10 @@ export default function CreatePackageOrderPage() {
 
       if (data.features && data.features.length > 0) {
         const [longitude, latitude] = data.features[0].center
+        const matchedPlace = data.features[0].place_name
         console.log(`✅ Geocoded "${address}" to coordinates: [${longitude}, ${latitude}]`)
+        console.log(`   Mapbox matched: "${matchedPlace}"`)
+
         return { latitude, longitude }
       } else {
         console.warn('⚠️ No geocoding results for address:', address)
@@ -370,10 +450,24 @@ export default function CreatePackageOrderPage() {
           if (selectedAddress) {
             return formatAddressString(selectedAddress)
           }
-          return formatAddressString(foundCustomer.address)
+          // Construct complete address from customer fields
+          return formatAddressString({
+            street: foundCustomer.address,
+            city: (foundCustomer as any).city,
+            state: (foundCustomer as any).state,
+            zipCode: (foundCustomer as any).zipCode,
+            country: (foundCustomer as any).country
+          })
         case 'same':
         default:
-          return formatAddressString(foundCustomer.address)
+          // Construct complete address from customer fields
+          return formatAddressString({
+            street: foundCustomer.address,
+            city: (foundCustomer as any).city,
+            state: (foundCustomer as any).state,
+            zipCode: (foundCustomer as any).zipCode,
+            country: (foundCustomer as any).country
+          })
       }
     }
 
@@ -444,9 +538,16 @@ export default function CreatePackageOrderPage() {
         if (customerAddresses.length > 0) {
           console.log('⚠️  User chose primary address despite having', customerAddresses.length, 'other addresses available')
         }
-        // Use primary address
-        addressToUse = formatAddressString(foundCustomer.address)
-        addressObjectToUse = foundCustomer.address
+        // Use primary address - construct complete address from customer fields
+        const primaryAddressObj = {
+          street: foundCustomer.address,
+          city: (foundCustomer as any).city,
+          state: (foundCustomer as any).state,
+          zipCode: (foundCustomer as any).zipCode,
+          country: (foundCustomer as any).country
+        }
+        addressToUse = formatAddressString(primaryAddressObj)
+        addressObjectToUse = primaryAddressObj
         console.log('✅ Using primary address:', addressToUse)
       } else {
         // This should not happen with proper UI validation
@@ -466,6 +567,18 @@ export default function CreatePackageOrderPage() {
         customerAddress: addressToUse,
         customerAddressObject: addressObjectToUse
       }))
+
+      // Geocode the address immediately before moving to next step
+      console.log('🔍 Geocoding selected address:', addressToUse)
+      const coords = await geocodeAddress(addressToUse)
+      if (coords) {
+        console.log('✅ Selected address geocoded:', coords)
+        setCustomerCoordinates(coords)
+      } else {
+        console.warn('⚠️ Could not geocode selected address:', addressToUse)
+        showNotification('warning', 'Atención', 'No se pudieron obtener las coordenadas de la dirección. Verifica que sea completa.')
+      }
+
       setStep('services')
     }
   }
@@ -488,19 +601,52 @@ export default function CreatePackageOrderPage() {
 
       if (response.ok) {
         const createdCustomer = await response.json()
-        const completeAddress = formatAddressString(createdCustomer.data.address)
+
+        // Build complete address object from separate fields
+        const addressObject = {
+          street: createdCustomer.data.address,
+          city: createdCustomer.data.city,
+          state: createdCustomer.data.state,
+          zipCode: createdCustomer.data.zipCode,
+          country: createdCustomer.data.country
+        }
+
+        const completeAddress = formatAddressString(addressObject)
         console.log('=== handleCreateCustomer DEBUG ===')
-        console.log('Created customer address:', createdCustomer.data.address)
+        console.log('Created customer fields:', {
+          address: createdCustomer.data.address,
+          city: createdCustomer.data.city,
+          state: createdCustomer.data.state,
+          zipCode: createdCustomer.data.zipCode,
+          country: createdCustomer.data.country
+        })
         console.log('Formatted complete address:', completeAddress)
         console.log('==================================')
+
+        // CRITICAL: Update foundCustomer so the geocoding useEffect triggers
+        setFoundCustomer(createdCustomer.data)
+
+        // Set address option to 'same' to use the customer's primary address
+        setAddressOption('same')
 
         setOrderData(prev => ({
           ...prev,
           customerId: createdCustomer.data.id,
           customerName: `${createdCustomer.data.firstName} ${createdCustomer.data.lastName}`,
           customerAddress: completeAddress,
-          customerAddressObject: createdCustomer.data.address
+          customerAddressObject: addressObject
         }))
+
+        // Geocode the address immediately before moving to next step
+        const coords = await geocodeAddress(completeAddress)
+        if (coords) {
+          console.log('✅ New customer address geocoded:', coords)
+          setCustomerCoordinates(coords)
+        } else {
+          console.warn('⚠️ Could not geocode new customer address:', completeAddress)
+          showNotification('warning', 'Atención', 'No se pudieron obtener las coordenadas. Verifica que la dirección sea completa.')
+        }
+
         setStep('services')
         showNotification('success', 'Cliente Creado', 'El cliente ha sido creado exitosamente')
       } else {
@@ -748,6 +894,18 @@ export default function CreatePackageOrderPage() {
       if (!orderData.timeSlot) {
         console.error('Missing timeSlot:', orderData.timeSlot)
         showNotification('error', 'Error', 'Debes seleccionar una hora de entrega')
+        return
+      }
+
+      // Validate that coordinates are available for route planning
+      if (!customerCoordinates || !customerCoordinates.latitude || !customerCoordinates.longitude) {
+        console.error('Missing coordinates for address:', orderData.customerAddress)
+        console.error('Coordinates:', customerCoordinates)
+        showNotification(
+          'error',
+          'Dirección Incompleta',
+          'No se pudieron obtener las coordenadas de la dirección. Por favor verifica que la dirección incluya calle, ciudad, estado y código postal.'
+        )
         return
       }
 

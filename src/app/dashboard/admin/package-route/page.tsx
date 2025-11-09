@@ -131,11 +131,22 @@ export default function PackageRoute() {
     }
   }
 
-  // Load boxes with pagination
+  // Load boxes with pagination and filters
   const loadBoxes = async (page: number = 1) => {
     try {
       setLoading(true)
-      const response = await fetch(`/api/packages?type=boxes&page=${page}&limit=${pagination.limit}`)
+
+      // Build query parameters including search filters
+      const params = new URLSearchParams({
+        type: 'boxes',
+        page: page.toString(),
+        limit: pagination.limit.toString(),
+        ...(searchTerm && { search: searchTerm }),
+        ...(selectedWarehouse && { warehouse: selectedWarehouse }),
+        ...(selectedSize && { size: selectedSize })
+      })
+
+      const response = await fetch(`/api/packages?${params}`)
       if (response.ok) {
         const data = await response.json()
         console.log('Cajas cargadas:', data.boxes?.[0]) // Debug
@@ -1033,36 +1044,8 @@ export default function PackageRoute() {
     }
   }
 
-  // Filtrar cajas
-  const filteredBoxes = boxes.filter(box => {
-    // Filtro de búsqueda general
-    const matchesSearch =
-      box.barcode.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      box.size.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      box.supplier.toLowerCase().includes(searchTerm.toLowerCase())
-
-    // Filtro por almacén
-    const matchesWarehouse = !selectedWarehouse || (() => {
-      // Si no hay almacén seleccionado, mostrar todos
-      if (!selectedWarehouse) return true
-
-      // Buscar el almacén seleccionado por ID
-      const selectedWarehouseData = warehouses.find(w => w.id.toString() === selectedWarehouse)
-
-      if (!selectedWarehouseData) return true
-
-      // Comparar con el current_location de la caja por nombre, ciudad o código
-      return box.current_location === selectedWarehouseData.name ||
-             box.current_location === selectedWarehouseData.city ||
-             box.current_location === selectedWarehouseData.code ||
-             box.current_location === `Almacén ID: ${selectedWarehouse}`
-    })()
-
-    // Filtro por tamaño
-    const matchesSize = !selectedSize || box.size === selectedSize
-
-    return matchesSearch && matchesWarehouse && matchesSize
-  })
+  // No need for local filtering anymore - done on the server side
+  const filteredBoxes = boxes
 
   // Paginación
   const goToPage = (page: number) => {
@@ -1076,6 +1059,11 @@ export default function PackageRoute() {
     loadBoxes(1)
     loadWarehouses()
   }, [])
+
+  // Reload boxes when filters change
+  useEffect(() => {
+    loadBoxes(1) // Reset to first page when filters change
+  }, [searchTerm, selectedWarehouse, selectedSize])
 
   if (!user) {
     return <div>Cargando...</div>

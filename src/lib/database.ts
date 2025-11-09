@@ -902,15 +902,16 @@ export function saveCustomer(customer: {
   address?: string
   city?: string
   state?: string
+  zipCode?: string
   country?: string
   notes?: string
   createdBy: string
 }) {
   const stmt = db.prepare(`
     INSERT INTO customers (
-      firstName, lastName, idNumber, idType, phone, email, address, city, state, country, notes, createdBy, createdAt
+      firstName, lastName, idNumber, idType, phone, email, address, city, state, zipCode, country, notes, createdBy, createdAt
     )
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `)
 
   const result = stmt.run(
@@ -923,6 +924,7 @@ export function saveCustomer(customer: {
     customer.address || null,
     customer.city || null,
     customer.state || null,
+    customer.zipCode || null,
     customer.country || null,
     customer.notes || null,
     customer.createdBy,

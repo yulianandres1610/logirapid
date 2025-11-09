@@ -63,6 +63,22 @@ export async function POST(request: NextRequest) {
       }, { status: 400 })
     }
 
+    // ✅ VALIDACIÓN CRÍTICA: Asegurar dirección completa para geocodificación precisa
+    if (!body.state || !body.zipCode) {
+      return NextResponse.json({
+        success: false,
+        error: 'La dirección debe incluir estado y código postal para garantizar coordenadas precisas'
+      }, { status: 400 })
+    }
+
+    // Validar formato de código postal (5 dígitos para US)
+    if (!/^\d{5}(-\d{4})?$/.test(body.zipCode)) {
+      return NextResponse.json({
+        success: false,
+        error: 'El código postal debe tener 5 dígitos (ej: 33012)'
+      }, { status: 400 })
+    }
+
     const newAddress = addCustomerAddress(body.customerId, {
       street: body.street,
       apartment: body.apartment,

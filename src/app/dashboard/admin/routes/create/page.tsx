@@ -628,6 +628,14 @@ export default function CreateRoutePage() {
     try {
       setLoading(true)
 
+      // Obtener nombre del conductor y placa del vehículo
+      const selectedVehicle = vehicles.find(v => v.id === parseInt(vehicleId))
+      const selectedDriver = drivers.find(d => d.id === parseInt(driverId))
+
+      // Calcular hora de inicio estimada (8:00 AM de la fecha seleccionada)
+      const startDateTime = new Date(routeDate + 'T08:00:00')
+      const startTime = startDateTime.toISOString()
+
       const response = await fetch('/api/routes', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -636,10 +644,13 @@ export default function CreateRoutePage() {
           selectedOrders,
           warehouseId,
           vehicleId,
+          vehiclePlate: selectedVehicle?.plate || selectedVehicle?.licensePlate || null,
           driverId: driverId || undefined,
+          driverName: selectedDriver ? `${selectedDriver.firstName} ${selectedDriver.lastName}`.trim() : null,
           date: routeDate,
           timeWindows: selectedTimeWindows,
           notes: notes || `Ruta optimizada - ${selectedOrders.length} órdenes`,
+          startTime: startTime, // Enviar hora de inicio
           saveRoute: true // GUARDAR!
         })
       })
@@ -680,35 +691,9 @@ export default function CreateRoutePage() {
   // HELPER FUNCTIONS
   // ============================================================================
 
-  // Hook para efecto de conteo animado
+  // Sin animación para evitar parpadeo - mostrar valor directo
   const useCountUp = (end: number, duration: number = 1000) => {
-    const [count, setCount] = useState(0)
-
-    useEffect(() => {
-      let startTime: number
-      let animationFrame: number
-
-      const animate = (currentTime: number) => {
-        if (!startTime) startTime = currentTime
-        const progress = Math.min((currentTime - startTime) / duration, 1)
-
-        setCount(Math.floor(progress * end))
-
-        if (progress < 1) {
-          animationFrame = requestAnimationFrame(animate)
-        }
-      }
-
-      animationFrame = requestAnimationFrame(animate)
-
-      return () => {
-        if (animationFrame) {
-          cancelAnimationFrame(animationFrame)
-        }
-      }
-    }, [end, duration])
-
-    return count
+    return end
   }
 
   const formatDuration = (minutes: number | string): string => {
@@ -743,13 +728,13 @@ export default function CreateRoutePage() {
     // Aplicar formateador si está definido, sino mostrar el número
     const finalValue = formatter ? formatter(displayValue) : `${displayValue}${suffix}`
 
-    // Mapeo de colores
-    const colorClasses = {
-      blue: 'bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800',
-      green: 'bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800',
-      purple: 'bg-purple-50 dark:bg-purple-900/20 border-purple-200 dark:border-purple-800',
-      orange: 'bg-orange-50 dark:bg-orange-900/20 border-orange-200 dark:border-orange-800',
-      red: 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800'
+    // Mapeo de colores para iconos y acentos
+    const iconColorClasses = {
+      blue: 'bg-gradient-to-br from-blue-50 to-blue-100 border border-blue-200 dark:bg-blue-900/30 dark:border-blue-800/50',
+      green: 'bg-gradient-to-br from-green-50 to-green-100 border border-green-200 dark:bg-green-900/30 dark:border-green-800/50',
+      purple: 'bg-gradient-to-br from-purple-50 to-purple-100 border border-purple-200 dark:bg-purple-900/30 dark:border-purple-800/50',
+      orange: 'bg-gradient-to-br from-orange-50 to-orange-100 border border-orange-200 dark:bg-orange-900/30 dark:border-orange-800/50',
+      red: 'bg-gradient-to-br from-red-50 to-red-100 border border-red-200 dark:bg-red-900/30 dark:border-red-800/50'
     }
 
     const textColorClasses = {
@@ -760,10 +745,55 @@ export default function CreateRoutePage() {
       red: 'text-red-600 dark:text-red-400'
     }
 
+    const accentColorClasses = {
+      blue: 'bg-gradient-to-r from-blue-400 to-blue-600',
+      green: 'bg-gradient-to-r from-green-400 to-emerald-600',
+      purple: 'bg-gradient-to-r from-purple-400 to-purple-600',
+      orange: 'bg-gradient-to-r from-orange-400 to-orange-600',
+      red: 'bg-gradient-to-r from-red-400 to-red-600'
+    }
+
+    const icons = {
+      blue: MapPin,
+      green: Package,
+      purple: Truck,
+      orange: Clock,
+      red: Calendar
+    }
+
+    const Icon = icons[color]
+
     return (
-      <div className={`p-4 rounded-lg border ${colorClasses[color]} transition-all duration-300 hover:shadow-md`}>
-        <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">{label}</p>
-        <p className={`text-2xl font-bold ${textColorClasses[color]}`}>{finalValue}</p>
+      <div className={cn(
+        'relative overflow-hidden rounded-xl border shadow-lg p-5 transition-all duration-300 hover:shadow-xl',
+        theme === 'dark'
+          ? 'bg-gradient-to-br from-gray-800 to-gray-900 border-gray-700'
+          : 'bg-gradient-to-br from-slate-50 to-white border-slate-200'
+      )}>
+        {/* Accent bar at top */}
+        <div className={`absolute top-0 left-0 w-full h-1 ${accentColorClasses[color]}`}></div>
+
+        <div className="flex items-center gap-3">
+          {/* Icon */}
+          <div className={cn(
+            'p-2 rounded-lg flex-shrink-0',
+            iconColorClasses[color]
+          )}>
+            <Icon className={cn('w-5 h-5', textColorClasses[color])} />
+          </div>
+
+          {/* Content */}
+          <div className="flex-1">
+            <p className={cn(
+              'text-xs font-medium uppercase tracking-wide mb-1',
+              theme === 'dark' ? 'text-gray-400' : 'text-gray-600'
+            )}>{label}</p>
+            <p className={cn(
+              'text-2xl font-bold leading-tight',
+              theme === 'dark' ? 'text-white' : 'text-slate-900'
+            )}>{finalValue}</p>
+          </div>
+        </div>
       </div>
     )
   }

@@ -20,6 +20,13 @@ interface RouteStop {
   orderNumber?: string
   orderIds?: number[]
   orderNumbers?: string[]
+  orders?: Array<{
+    id: number
+    orderNumber: string
+    timeSlot?: string
+    customerName?: string
+    type?: string
+  }>
   totalOrders?: number
 }
 
@@ -79,6 +86,19 @@ export default function RouteMap({
 
     markersRef.current = []
     console.log('✅ Todos los marcadores han sido limpiados')
+  }
+
+  // Formatear el horario de la parada
+  const formatTimeSlot = (timeSlot: string): string => {
+    const timeSlotMap: { [key: string]: string } = {
+      'morning': '8:00 AM - 12:00 PM',
+      'afternoon': '12:00 PM - 4:00 PM',
+      'evening': '4:00 PM - 8:00 PM',
+      '8-12': '8:00 AM - 12:00 PM',
+      '12-16': '12:00 PM - 4:00 PM',
+      '16-20': '4:00 PM - 8:00 PM'
+    }
+    return timeSlotMap[timeSlot] || timeSlot
   }
 
   // Manejar fullscreen
@@ -458,29 +478,28 @@ export default function RouteMap({
           // Diseño especial para paradas con múltiples órdenes
           markerElement.style.cssText = `
             position: relative;
-            width: 32px;
-            height: 32px;
+            width: 36px;
+            height: 36px;
             display: flex;
             align-items: center;
             justify-content: center;
-            z-index: 1000;
           `
 
-          // Círculo principal con el número de waypoint
+          // Círculo principal con gradiente y sombra
           const mainCircle = document.createElement('div')
           mainCircle.style.cssText = `
-            width: 28px;
-            height: 28px;
-            background: ${color};
-            border: 2px solid white;
+            width: 32px;
+            height: 32px;
+            background: linear-gradient(135deg, ${color} 0%, #2563EB 100%);
+            border: 3px solid white;
             border-radius: 50%;
             display: flex;
             align-items: center;
             justify-content: center;
             color: white;
             font-weight: bold;
-            font-size: 11px;
-            box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+            font-size: 13px;
+            box-shadow: 0 3px 8px rgba(0,0,0,0.3);
           `
           mainCircle.innerHTML = `${waypointNumber}`
 
@@ -488,11 +507,11 @@ export default function RouteMap({
           const badge = document.createElement('div')
           badge.style.cssText = `
             position: absolute;
-            top: -6px;
-            right: -6px;
-            width: 18px;
-            height: 18px;
-            background: #EF4444;
+            top: -4px;
+            right: -4px;
+            width: 20px;
+            height: 20px;
+            background: linear-gradient(135deg, #EF4444 0%, #DC2626 100%);
             border: 2px solid white;
             border-radius: 50%;
             display: flex;
@@ -501,28 +520,27 @@ export default function RouteMap({
             color: white;
             font-weight: bold;
             font-size: 10px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+            box-shadow: 0 2px 6px rgba(239,68,68,0.4);
           `
           badge.innerHTML = `${ordersCount}`
 
           markerElement.appendChild(mainCircle)
           markerElement.appendChild(badge)
         } else {
-          // Diseño normal para paradas con una sola orden
+          // Diseño normal para paradas con una sola orden - con gradiente
           markerElement.style.cssText = `
-            width: 28px;
-            height: 28px;
-            background: ${color};
-            border: 2px solid white;
+            width: 32px;
+            height: 32px;
+            background: linear-gradient(135deg, ${color} 0%, #2563EB 100%);
+            border: 3px solid white;
             border-radius: 50%;
             display: flex;
             align-items: center;
             justify-content: center;
             color: white;
             font-weight: bold;
-            font-size: 12px;
-            box-shadow: 0 2px 6px rgba(0,0,0,0.3);
-            z-index: 1000;
+            font-size: 13px;
+            box-shadow: 0 3px 8px rgba(0,0,0,0.3);
           `
           markerElement.innerHTML = `${waypointNumber}`
         }
@@ -533,22 +551,84 @@ export default function RouteMap({
             : stop.address?.street || 'Dirección no disponible'
 
           // Construir el texto del popup
-          if (hasMultipleOrders && stop.orderNumbers && stop.orderNumbers.length > 0) {
-            const ordersList = stop.orderNumbers.map((orderNum: string, idx: number) =>
+          if (hasMultipleOrders && stop.orders && stop.orders.length > 0) {
+            // Mostrar cada orden con su horario individual
+            const ordersList = stop.orders.map((order: any) => {
+              const orderTimeSlot = order.timeSlot ? `
+                <span style="font-size: 10px; opacity: 0.8; margin-left: 8px;">
+                  🕐 ${formatTimeSlot(order.timeSlot)}
+                </span>
+              ` : ''
+
+              return `
+                <div style="padding: 4px 0; border-bottom: 1px solid rgba(255,255,255,0.1);">
+                  <div style="display: flex; align-items: center; gap: 6px;">
+                    <span style="font-size: 11px;">📦</span>
+                    <span style="font-size: 11px; font-weight: 500;">${order.orderNumber}</span>
+                  </div>
+                  ${orderTimeSlot}
+                </div>
+              `
+            }).join('')
+
+            popupText = `
+              <div style="font-weight: 600; margin-bottom: 4px; font-size: 13px;">Parada ${waypointNumber} (${ordersCount} órdenes)</div>
+              <div style="font-size: 12px; opacity: 0.9; margin-bottom: 4px;">${stop.customer || 'Cliente'}</div>
+              <div style="font-size: 11px; opacity: 0.7; margin-bottom: 8px;">${address}</div>
+              <div style="border-top: 1px solid rgba(255,255,255,0.2); padding-top: 6px; margin-top: 6px;">
+                ${ordersList}
+              </div>
+            `
+          } else if (hasMultipleOrders && stop.orderNumbers && stop.orderNumbers.length > 0) {
+            // Fallback: si no hay datos de orders, mostrar solo números
+            const ordersList = stop.orderNumbers.map((orderNum: string) =>
               `<div style="padding: 2px 0;">📦 ${orderNum}</div>`
             ).join('')
+
+            const timeSlotText = stop.timeSlot ? `
+              <div style="display: flex; align-items: center; gap: 6px; margin-top: 6px; padding: 4px 0; border-top: 1px solid rgba(255,255,255,0.15);">
+                <span style="font-size: 12px;">🕐</span>
+                <span style="font-size: 11px; opacity: 0.9;">${formatTimeSlot(stop.timeSlot)}</span>
+              </div>
+            ` : ''
+
             popupText = `
               <div style="font-weight: 600; margin-bottom: 4px;">Parada ${waypointNumber} (${ordersCount} órdenes)</div>
-              <div style="margin-bottom: 6px;">${address}</div>
-              <div style="border-top: 1px solid rgba(255,255,255,0.2); padding-top: 4px; font-size: 11px;">
+              <div style="font-size: 12px; opacity: 0.9; margin-bottom: 4px;">${stop.customer || 'Cliente'}</div>
+              <div style="font-size: 11px; opacity: 0.7; margin-bottom: 6px;">${address}</div>
+              ${timeSlotText}
+              <div style="border-top: 1px solid rgba(255,255,255,0.2); padding-top: 6px; margin-top: 6px; font-size: 11px;">
                 ${ordersList}
               </div>
             `
           } else {
+            // Orden individual
+            const orderData = stop.orders && stop.orders[0] ? stop.orders[0] : null
+            const timeSlotText = orderData?.timeSlot ? `
+              <div style="display: flex; align-items: center; gap: 6px; margin-top: 6px; padding: 4px 0; border-top: 1px solid rgba(255,255,255,0.15);">
+                <span style="font-size: 12px;">🕐</span>
+                <span style="font-size: 11px; opacity: 0.9;">${formatTimeSlot(orderData.timeSlot)}</span>
+              </div>
+            ` : (stop.timeSlot ? `
+              <div style="display: flex; align-items: center; gap: 6px; margin-top: 6px; padding: 4px 0; border-top: 1px solid rgba(255,255,255,0.15);">
+                <span style="font-size: 12px;">🕐</span>
+                <span style="font-size: 11px; opacity: 0.9;">${formatTimeSlot(stop.timeSlot)}</span>
+              </div>
+            ` : '')
+
+            const servicesText = (orderData?.type || stop.type) ? `
+              <div style="display: flex; align-items: center; gap: 6px; margin-top: 4px;">
+                <span style="font-size: 12px;">📋</span>
+                <span style="font-size: 11px; opacity: 0.9;">${(orderData?.type || stop.type) === 'delivery' ? 'Entrega' : 'Recogida'}</span>
+              </div>
+            ` : ''
+
             popupText = `
               <div style="font-weight: 600; margin-bottom: 2px;">Parada ${waypointNumber}</div>
               <div style="font-size: 12px; opacity: 0.9;">${stop.customer || 'Cliente'}</div>
               <div style="font-size: 11px; opacity: 0.7; margin-top: 2px;">${address}</div>
+              ${timeSlotText}
+              ${servicesText}
             `
           }
           console.log(`✅ Marcador de parada creado - Waypoint ${waypointNumber}: ${stop.customer} en ${address} (${ordersCount} órdenes)`)

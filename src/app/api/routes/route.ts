@@ -83,6 +83,13 @@ function groupOrdersByAddress(orders: any[]) {
       const existing = addressMap.get(normalizedAddress)
       existing.orderIds.push(order.id)
       existing.orderNumbers.push(order.orderNumber || `ORD-${order.id}`)
+      existing.orders.push({
+        id: order.id,
+        orderNumber: order.orderNumber || `ORD-${order.id}`,
+        timeSlot: order.timeSlot,
+        customerName: order.customerName,
+        type: 'delivery'
+      })
       existing.totalOrders++
     } else {
       // Nueva dirección
@@ -93,8 +100,16 @@ function groupOrdersByAddress(orders: any[]) {
         customer: order.customerName,
         orderIds: [order.id],
         orderNumbers: [order.orderNumber || `ORD-${order.id}`],
+        orders: [{
+          id: order.id,
+          orderNumber: order.orderNumber || `ORD-${order.id}`,
+          timeSlot: order.timeSlot,
+          customerName: order.customerName,
+          type: 'delivery'
+        }],
         totalOrders: 1,
         type: 'delivery',
+        timeSlot: order.timeSlot, // Agregar timeSlot a nivel de parada
         coordinates: [order.longitude, order.latitude]
       })
     }
@@ -264,15 +279,47 @@ export async function POST(request: NextRequest) {
     }
 
     // ==============================
-    // PASO 3: AGRUPAR POR DIRECCIÓN (Clave!)
+    // PASO 3: AGRUPAR PRIMERO POR HORARIO, LUEGO POR DIRECCIÓN
     // ==============================
-    console.log('🗺️ [Agrupación] Consolidando órdenes por dirección...')
-    const groupedStops = groupOrdersByAddress(selectedOrders)
-    console.log(`📍 [Resultado] ${groupedStops.length} paradas únicas (de ${selectedOrders.length} órdenes)`)
+    console.log('⏰ [Agrupación] Paso 1: Agrupar por horarios...')
 
-    groupedStops.forEach((stop, index) => {
-      console.log(`   Parada ${index + 1}: ${stop.totalOrders} orden(es) en ${stop.address}`)
+    // Definir orden cronológico de horarios
+    const timeSlotOrder = ['morning', 'afternoon', 'evening', '8-12', '12-16', '16-20']
+
+    // Agrupar órdenes por timeSlot
+    const ordersByTimeSlot = new Map<string, any[]>()
+    selectedOrders.forEach(order => {
+      const timeSlot = order.timeSlot || 'morning'
+      if (!ordersByTimeSlot.has(timeSlot)) {
+        ordersByTimeSlot.set(timeSlot, [])
+      }
+      ordersByTimeSlot.get(timeSlot)!.push(order)
     })
+
+    console.log('📊 [Horarios] Distribución:')
+    ordersByTimeSlot.forEach((orders, timeSlot) => {
+      console.log(`   ${timeSlot}: ${orders.length} órdenes`)
+    })
+
+    console.log('🗺️ [Agrupación] Paso 2: Consolidar por dirección dentro de cada horario...')
+
+    // Agrupar por dirección dentro de cada timeSlot
+    const groupedStopsByTimeSlot = new Map<string, any[]>()
+    ordersByTimeSlot.forEach((orders, timeSlot) => {
+      const stops = groupOrdersByAddress(orders)
+      groupedStopsByTimeSlot.set(timeSlot, stops)
+      console.log(`   ${timeSlot}: ${stops.length} paradas únicas (de ${orders.length} órdenes)`)
+    })
+
+    // ✅ Crear array plano en ORDEN CRONOLÓGICO (no en orden de inserción)
+    const groupedStops: any[] = []
+    for (const timeSlot of timeSlotOrder) {
+      const stopsForTimeSlot = groupedStopsByTimeSlot.get(timeSlot)
+      if (stopsForTimeSlot && stopsForTimeSlot.length > 0) {
+        groupedStops.push(...stopsForTimeSlot)
+      }
+    }
+    console.log(`📍 [Total] ${groupedStops.length} paradas únicas en orden cronológico (de ${selectedOrders.length} órdenes)`)
 
     // ==============================
     // PASO 4: Obtener coordenadas del almacén
@@ -296,200 +343,297 @@ export async function POST(request: NextRequest) {
     let mapboxJobId: string | null = null
 
     if (body.mechanism === 'automatic') {
-      console.log('🔧 [Optimización] Usando Mapbox Optimization API v2 con Job ID')
+      console.log('🔧 [Optimización] Usando optimización por horarios + distancia')
 
       try {
         const mapboxToken = process.env.NEXT_PUBLIC_MAPBOX_TOKEN || 'pk.eyJ1IjoieXVsaWFuYW5kcmVzMTYxMCIsImEiOiJjbWgycTlsZGsxM200YnNvbnN2d2wwcHJ5In0.wlU7-bazAs2eYjknx7H97Q'
 
-        // Construir payload para Optimization API v2
-        const today = new Date()
-        const earliestStart = new Date(today.setHours(8, 0, 0, 0)).toISOString()
-        const latestEnd = new Date(today.setHours(20, 0, 0, 0)).toISOString()
+        // Array para almacenar las paradas ordenadas finales
+        let allOrderedStops: any[] = []
+        let totalDistance = 0
+        let totalDuration = 0
+        let allCoordinates: [number, number][] = [warehouseCoordinates]
 
-        // Locations: warehouse + todas las paradas
-        const locations = [
-          {
-            name: 'warehouse',
-            coordinates: warehouseCoordinates
-          },
-          ...groupedStops.map((stop, index) => ({
-            name: `stop_${index + 1}`,
-            coordinates: stop.coordinates
-          }))
-        ]
+        // OPTIMIZAR CADA HORARIO POR SEPARADO
+        for (const timeSlot of timeSlotOrder) {
+          const stopsForTimeSlot = groupedStopsByTimeSlot.get(timeSlot)
 
-        // Services: una por cada parada
-        const services = groupedStops.map((stop, index) => ({
-          name: `service_${index + 1}`,
-          location: `stop_${index + 1}`,
-          duration: 300 // 5 minutos por parada
-        }))
-
-        const optimizationPayload = {
-          version: 1,
-          locations,
-          vehicles: [
-            {
-              name: 'vehicle_1',
-              routing_profile: 'mapbox/driving-traffic',
-              start_location: 'warehouse',
-              end_location: 'warehouse',
-              earliest_start: earliestStart,
-              latest_end: latestEnd
-            }
-          ],
-          services
-        }
-
-        console.log(`📍 [Payload] ${locations.length} locations, ${services.length} services`)
-
-        // PASO 5.1: POST para crear el job
-        const optimizationUrl = `https://api.mapbox.com/optimized-trips/v2?access_token=${mapboxToken}`
-        console.log('📤 [Mapbox] Enviando solicitud de optimización...')
-
-        const createJobResponse = await fetch(optimizationUrl, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(optimizationPayload)
-        })
-
-        if (!createJobResponse.ok) {
-          const errorText = await createJobResponse.text()
-          console.error('❌ [Mapbox] Error creando job:', errorText)
-          throw new Error(`Mapbox Optimization error: ${createJobResponse.status}`)
-        }
-
-        const createJobResult = await createJobResponse.json()
-        mapboxJobId = createJobResult.id
-
-        console.log(`✅ [Mapbox] Job creado: ${mapboxJobId}`)
-
-        // PASO 5.2: Polling para obtener el resultado (máximo 60 segundos)
-        let attempts = 0
-        const maxAttempts = 60
-        let optimizationResult: any = null
-
-        console.log('⏳ [Mapbox] Esperando resultado de optimización...')
-
-        while (attempts < maxAttempts) {
-          await new Promise(resolve => setTimeout(resolve, 1000)) // Esperar 1 segundo
-          attempts++
-
-          const resultUrl = `https://api.mapbox.com/optimized-trips/v2/${mapboxJobId}?access_token=${mapboxToken}`
-          const resultResponse = await fetch(resultUrl)
-
-          console.log(`[Polling ${attempts}/${maxAttempts}] Status: ${resultResponse.status}`)
-
-          if (resultResponse.status === 200) {
-            optimizationResult = await resultResponse.json()
-            console.log(`✅ [Mapbox] Resultado obtenido después de ${attempts} intentos`)
-            break
-          } else if (resultResponse.status === 202) {
-            // Job aún en proceso
-            console.log(`⏳ [Polling] Job aún procesando (intento ${attempts})`)
-          } else if (resultResponse.status === 404) {
-            console.log(`⏳ [Polling] Job aún no disponible (intento ${attempts})`)
-          } else {
-            const errorText = await resultResponse.text()
-            console.error('❌ [Mapbox] Error inesperado:', resultResponse.status, errorText)
-            throw new Error(`Mapbox result error: ${resultResponse.status} - ${errorText}`)
+          if (!stopsForTimeSlot || stopsForTimeSlot.length === 0) {
+            console.log(`⏭️ [${timeSlot}] Sin paradas, omitiendo...`)
+            continue
           }
-        }
 
-        if (!optimizationResult) {
-          console.error(`❌ [Mapbox] Timeout después de ${maxAttempts} segundos`)
-          console.error(`Job ID: ${mapboxJobId}`)
-          throw new Error(`Timeout esperando resultado de optimización. Intenta recuperar el resultado usando el Job ID: ${mapboxJobId}`)
-        }
+          console.log(`\n📍 [${timeSlot}] Optimizando ${stopsForTimeSlot.length} paradas...`)
 
-        console.log('📊 [Mapbox] Estructura del resultado:', JSON.stringify(optimizationResult, null, 2))
+          // Determinar ventana horaria
+          let earliestStart: string
+          let latestEnd: string
+          const today = new Date()
 
-        // PASO 5.3: Procesar resultado
-        const route = optimizationResult.routes[0]
-        if (!route) {
-          console.error('❌ [Mapbox] No routes en resultado:', optimizationResult)
-          throw new Error('No se encontraron rutas en el resultado de optimización')
-        }
+          switch (timeSlot) {
+            case 'morning':
+            case '8-12':
+              earliestStart = new Date(today.setHours(8, 0, 0, 0)).toISOString()
+              latestEnd = new Date(today.setHours(12, 0, 0, 0)).toISOString()
+              break
+            case 'afternoon':
+            case '12-16':
+              earliestStart = new Date(today.setHours(12, 0, 0, 0)).toISOString()
+              latestEnd = new Date(today.setHours(16, 0, 0, 0)).toISOString()
+              break
+            case 'evening':
+            case '16-20':
+              earliestStart = new Date(today.setHours(16, 0, 0, 0)).toISOString()
+              latestEnd = new Date(today.setHours(20, 0, 0, 0)).toISOString()
+              break
+            default:
+              earliestStart = new Date(today.setHours(8, 0, 0, 0)).toISOString()
+              latestEnd = new Date(today.setHours(20, 0, 0, 0)).toISOString()
+          }
 
-        const stops = route.stops.filter((stop: any) => stop.type === 'service')
+          // Construir payload para este horario
+          const locations = [
+            {
+              name: 'warehouse',
+              coordinates: warehouseCoordinates
+            },
+            ...stopsForTimeSlot.map((stop, index) => ({
+              name: `stop_${index + 1}`,
+              coordinates: stop.coordinates
+            }))
+          ]
 
-        console.log(`📍 [Resultado] ${stops.length} paradas optimizadas`)
+          const services = stopsForTimeSlot.map((stop, index) => ({
+            name: `service_${index + 1}`,
+            location: `stop_${index + 1}`,
+            duration: 300 // 5 minutos por parada
+          }))
 
-        // Mapear las paradas optimizadas a nuestras órdenes
-        orderedStops = stops.map((stop: any, index: number) => {
-          const serviceIndex = parseInt(stop.services[0].split('_')[1]) - 1
-          const originalStop = groupedStops[serviceIndex]
+          const optimizationPayload = {
+            version: 1,
+            locations,
+            vehicles: [
+              {
+                name: 'vehicle_1',
+                routing_profile: 'mapbox/driving-traffic',
+                start_location: 'warehouse',
+                end_location: 'warehouse',
+                earliest_start: earliestStart,
+                latest_end: latestEnd
+              }
+            ],
+            services
+          }
 
-          // Usar las coordenadas "snapped" de Mapbox para mejor precisión en el mapa
-          const snappedCoords = stop.location_metadata?.snapped_coordinate
-          const useCoordinates = snappedCoords && snappedCoords.length === 2
-            ? snappedCoords
-            : originalStop.coordinates
+          console.log(`📤 [${timeSlot}] ${locations.length} locations, ${services.length} services`)
 
-          console.log(`  📍 Parada ${index + 1}: Coords originales vs snapped:`, {
-            original: originalStop.coordinates,
-            snapped: snappedCoords,
-            usando: useCoordinates
+          // PASO 5.1: POST para crear el job
+          const optimizationUrl = `https://api.mapbox.com/optimized-trips/v2?access_token=${mapboxToken}`
+          console.log(`📤 [${timeSlot}] Enviando solicitud de optimización a Mapbox...`)
+
+          const createJobResponse = await fetch(optimizationUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(optimizationPayload)
           })
 
-          return {
-            ...originalStop,
-            waypointIndex: index,
-            sequence: index + 1,
-            eta: stop.eta,
-            coordinates: useCoordinates // Usar coordenadas optimizadas de Mapbox
+          if (!createJobResponse.ok) {
+            const errorText = await createJobResponse.text()
+            console.error(`❌ [${timeSlot}] Error creando job:`, errorText)
+            throw new Error(`Mapbox Optimization error for ${timeSlot}: ${createJobResponse.status}`)
           }
-        })
 
-        // Calcular distancia y duración del último stop
-        const lastStop = route.stops[route.stops.length - 1]
-        const distanceMiles = (lastStop.odometer / 1609.34).toFixed(1)
-        const startEta = new Date(route.stops[0].eta)
-        const endEta = new Date(lastStop.eta)
-        const durationMinutes = Math.floor((endEta.getTime() - startEta.getTime()) / 1000 / 60)
+          const createJobResult = await createJobResponse.json()
+          const timeSlotJobId = createJobResult.id
 
-        // OBTENER GEOMETRÍA para el mapa usando Directions API
-        let geometry: any = null
-        let routeCoordinates: any = null
+          console.log(`✅ [${timeSlot}] Job creado: ${timeSlotJobId}`)
 
-        try {
-          const mapboxToken = process.env.NEXT_PUBLIC_MAPBOX_TOKEN || 'pk.eyJ1IjoieXVsaWFuYW5kcmVzMTYxMCIsImEiOiJjbWgycTlsZGsxM200YnNvbnN2d2wwcHJ5In0.wlU7-bazAs2eYjknx7H97Q'
-          const coordinatesString = [
-            warehouseCoordinates,
-            ...orderedStops.map(stop => stop.coordinates),
-            warehouseCoordinates
-          ].map(coord => `${coord[0]},${coord[1]}`).join(';')
+          // PASO 5.2: Polling para obtener el resultado (máximo 60 segundos)
+          let attempts = 0
+          const maxAttempts = 60
+          let optimizationResult: any = null
 
-          const directionsUrl = `https://api.mapbox.com/directions/v5/mapbox/driving/${coordinatesString}?geometries=geojson&overview=full&access_token=${mapboxToken}`
-          const directionsResponse = await fetch(directionsUrl)
+          console.log(`⏳ [${timeSlot}] Esperando resultado de optimización...`)
 
-          if (directionsResponse.ok) {
-            const directionsData = await directionsResponse.json()
-            geometry = directionsData.routes[0]?.geometry
-            routeCoordinates = directionsData.routes[0]?.geometry?.coordinates
-            console.log('✅ [Geometría] Obtenida de Directions API para guardar')
+          while (attempts < maxAttempts) {
+            await new Promise(resolve => setTimeout(resolve, 1000)) // Esperar 1 segundo
+            attempts++
+
+            const resultUrl = `https://api.mapbox.com/optimized-trips/v2/${timeSlotJobId}?access_token=${mapboxToken}`
+            const resultResponse = await fetch(resultUrl)
+
+            console.log(`[${timeSlot} - Polling ${attempts}/${maxAttempts}] Status: ${resultResponse.status}`)
+
+            if (resultResponse.status === 200) {
+              optimizationResult = await resultResponse.json()
+              console.log(`✅ [${timeSlot}] Resultado obtenido después de ${attempts} intentos`)
+              break
+            } else if (resultResponse.status === 202) {
+              // Job aún en proceso
+              console.log(`⏳ [${timeSlot}] Job aún procesando (intento ${attempts})`)
+            } else if (resultResponse.status === 404) {
+              console.log(`⏳ [${timeSlot}] Job aún no disponible (intento ${attempts})`)
+            } else {
+              const errorText = await resultResponse.text()
+              console.error(`❌ [${timeSlot}] Error inesperado:`, resultResponse.status, errorText)
+              throw new Error(`Mapbox result error for ${timeSlot}: ${resultResponse.status} - ${errorText}`)
+            }
           }
-        } catch (geoError) {
-          console.warn('⚠️ [Geometría] No se pudo obtener, continuando sin ella:', geoError)
+
+          if (!optimizationResult) {
+            console.error(`❌ [${timeSlot}] Timeout después de ${maxAttempts} segundos`)
+            console.error(`Job ID: ${timeSlotJobId}`)
+            throw new Error(`Timeout esperando resultado de optimización para ${timeSlot}. Job ID: ${timeSlotJobId}`)
+          }
+
+          console.log(`📊 [${timeSlot}] Estructura del resultado:`, JSON.stringify(optimizationResult, null, 2))
+
+          // PASO 5.3: Procesar resultado
+          const route = optimizationResult.routes[0]
+          if (!route) {
+            console.error(`❌ [${timeSlot}] No routes en resultado:`, optimizationResult)
+            throw new Error(`No se encontraron rutas en el resultado de optimización para ${timeSlot}`)
+          }
+
+          const stops = route.stops.filter((stop: any) => stop.type === 'service')
+
+          console.log(`📍 [${timeSlot}] ${stops.length} paradas optimizadas`)
+
+          // Mapear las paradas optimizadas a nuestras órdenes
+          const timeSlotOrderedStops = stops.map((stop: any, index: number) => {
+            const serviceIndex = parseInt(stop.services[0].split('_')[1]) - 1
+            const originalStop = stopsForTimeSlot[serviceIndex]
+
+            // Usar las coordenadas "snapped" de Mapbox para mejor precisión en el mapa
+            const snappedCoords = stop.location_metadata?.snapped_coordinate
+            const useCoordinates = snappedCoords && snappedCoords.length === 2
+              ? snappedCoords
+              : originalStop.coordinates
+
+            console.log(`  📍 [${timeSlot}] Parada ${index + 1}: Coords originales vs snapped:`, {
+              original: originalStop.coordinates,
+              snapped: snappedCoords,
+              usando: useCoordinates
+            })
+
+            return {
+              ...originalStop,
+              waypointIndex: allOrderedStops.length + index,
+              sequence: allOrderedStops.length + index + 1,
+              eta: stop.eta,
+              coordinates: useCoordinates,
+              timeSlot // Agregar el timeSlot para referencia
+            }
+          })
+
+          // Agregar las paradas de este horario al array total
+          allOrderedStops.push(...timeSlotOrderedStops)
+
+          // Calcular distancia y duración de este segmento
+          const lastStop = route.stops[route.stops.length - 1]
+          const segmentDistance = lastStop.odometer / 1609.34 // Convertir a millas
+          const startEta = new Date(route.stops[0].eta)
+          const endEta = new Date(lastStop.eta)
+          const segmentDuration = Math.floor((endEta.getTime() - startEta.getTime()) / 1000 / 60)
+
+          totalDistance += segmentDistance
+          totalDuration += segmentDuration
+
+          console.log(`📊 [${timeSlot}] Segmento: ${segmentDistance.toFixed(1)} mi, ${segmentDuration} min`)
+
+          // OBTENER GEOMETRÍA para el mapa usando Directions API
+          try {
+            const coordinatesString = [
+              warehouseCoordinates,
+              ...timeSlotOrderedStops.map(stop => stop.coordinates),
+              warehouseCoordinates
+            ].map(coord => `${coord[0]},${coord[1]}`).join(';')
+
+            const directionsUrl = `https://api.mapbox.com/directions/v5/mapbox/driving/${coordinatesString}?geometries=geojson&overview=full&access_token=${mapboxToken}`
+            const directionsResponse = await fetch(directionsUrl)
+
+            if (directionsResponse.ok) {
+              const directionsData = await directionsResponse.json()
+              const segmentGeometry = directionsData.routes[0]?.geometry
+              const segmentCoordinates = segmentGeometry?.coordinates || []
+
+              // Agregar coordenadas del segmento (sin duplicar el warehouse del final)
+              if (segmentCoordinates.length > 0) {
+                // Si no es el primer segmento, quitar el primer punto (warehouse) para evitar duplicados
+                const coordsToAdd = allCoordinates.length > 1
+                  ? segmentCoordinates.slice(1)
+                  : segmentCoordinates
+                allCoordinates.push(...coordsToAdd)
+              }
+
+              console.log(`✅ [${timeSlot}] Geometría obtenida de Directions API`)
+            }
+          } catch (geoError) {
+            console.warn(`⚠️ [${timeSlot}] No se pudo obtener geometría:`, geoError)
+          }
+
+          // Guardar el último job ID (para referencia)
+          mapboxJobId = timeSlotJobId
+
+          console.log(`✅ [${timeSlot}] Completado: ${timeSlotOrderedStops.length} paradas agregadas`)
         }
+
+        // DESPUÉS DEL LOOP: Consolidar resultados
+        console.log('\n📊 [Consolidación] Resultados finales:')
+        console.log(`  Total paradas: ${allOrderedStops.length}`)
+        console.log(`  Distancia total: ${totalDistance.toFixed(1)} mi`)
+        console.log(`  Duración total: ${totalDuration} min`)
+        console.log(`  Coordenadas totales: ${allCoordinates.length} puntos`)
+
+        // Usar las paradas ordenadas consolidadas
+        orderedStops = allOrderedStops
+
+        // Construir geometría final uniendo todas las coordenadas
+        const geometry = allCoordinates.length > 0 ? {
+          type: 'LineString',
+          coordinates: allCoordinates
+        } : null
 
         optimizedRouteData = {
-          mapboxJobId, // Guardar job_id solo como referencia
-          distance: distanceMiles,
-          duration: durationMinutes,
+          mapboxJobId, // Último job_id como referencia
+          distance: totalDistance.toFixed(1),
+          duration: totalDuration,
           stops: orderedStops,
-          geometry, // ✅ Guardar geometría para el mapa
-          coordinates: routeCoordinates, // ✅ Guardar coordenadas de la ruta
-          optimizationResult // ✅ Guardar el resultado COMPLETO de Mapbox Optimization API v2
+          geometry,
+          coordinates: allCoordinates,
+          optimizationResult: {
+            message: 'Multi-timeslot optimization',
+            timeSlots: Array.from(groupedStopsByTimeSlot.keys()),
+            totalStops: allOrderedStops.length
+          }
         }
 
-        console.log(`📊 [Resultado Final] Job ID: ${mapboxJobId}, ${distanceMiles} mi, ${durationMinutes} min`)
-        console.log(`🗺️ [Geometría] ${geometry ? 'Guardada' : 'No disponible'}`)
+        console.log(`📊 [Resultado Final] ${totalDistance.toFixed(1)} mi, ${totalDuration} min`)
+        console.log(`🗺️ [Geometría] ${geometry ? 'Consolidada' : 'No disponible'}`)
 
 
       } catch (error) {
         console.error('❌ [Mapbox] Error:', error)
-        console.log('⚠️ Continuando sin optimización')
+        console.log('⚠️ Usando fallback: ordenar por horarios sin optimización de Mapbox')
+
+        // FALLBACK: Ordenar manualmente por horarios
+        orderedStops = []
+        for (const timeSlot of timeSlotOrder) {
+          const stopsForTimeSlot = groupedStopsByTimeSlot.get(timeSlot)
+          if (stopsForTimeSlot && stopsForTimeSlot.length > 0) {
+            console.log(`  📍 [Fallback ${timeSlot}] Agregando ${stopsForTimeSlot.length} paradas`)
+            stopsForTimeSlot.forEach((stop, index) => {
+              orderedStops.push({
+                ...stop,
+                waypointIndex: orderedStops.length,
+                sequence: orderedStops.length + 1,
+                timeSlot: timeSlot
+              })
+            })
+          }
+        }
+
+        console.log(`✅ [Fallback] ${orderedStops.length} paradas ordenadas por horario`)
         mapboxJobId = null
       }
     }
@@ -597,7 +741,7 @@ export async function POST(request: NextRequest) {
       estimatedDuration: optimizedRouteData ? `${optimizedRouteData.duration}m` : body.estimatedDuration,
       actualDuration: null,
       distance: optimizedRouteData ? parseFloat(optimizedRouteData.distance) : (body.distance || 0),
-      startTime: null,
+      startTime: body.startTime || null,
       endTime: null,
       date: body.date || new Date().toISOString().split('T')[0],
       notes: body.notes || `${orderedStops.length} paradas, ${selectedOrders.length} órdenes`,
