@@ -27,17 +27,16 @@ export function ThemeProvider({ children }: ThemeProviderProps) {
   const [theme, setTheme] = useState<Theme>('dark')
 
   useEffect(() => {
-    // Check for saved theme preference or system preference
+    // Solo verificar el tema guardado, NO las preferencias del sistema
     if (typeof window !== 'undefined') {
       const savedTheme = localStorage.getItem('theme') as Theme
       if (savedTheme) {
         setTheme(savedTheme)
       } else {
-        // Check system preference
-        const systemPreference = window.matchMedia('(prefers-color-scheme: light)').matches
-          ? 'light'
-          : 'dark'
-        setTheme(systemPreference)
+        // Siempre usar 'dark' como tema por defecto
+        // NO depender del sistema operativo
+        setTheme('dark')
+        localStorage.setItem('theme', 'dark')
       }
     }
   }, [])

@@ -398,6 +398,41 @@ export function initializeDatabase() {
     )
   `)
 
+  // Tabla de zonas para paquetería
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS zones (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      companyId INTEGER NOT NULL,
+      name TEXT NOT NULL,
+      description TEXT,
+      zipCodes TEXT NOT NULL, -- JSON array of zip codes
+      color TEXT,
+      timeSlot TEXT, -- e.g., "8:00 AM - 12:00 PM"
+      status TEXT NOT NULL DEFAULT 'active',
+      createdAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updatedAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (companyId) REFERENCES companies (id) ON DELETE CASCADE
+    )
+  `)
+
+  // Tabla de tamaños de empaques predeterminados
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS package_sizes (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      companyId INTEGER NOT NULL,
+      name TEXT NOT NULL,
+      dimensions TEXT NOT NULL, -- e.g., "12x10x8"
+      weight REAL, -- peso máximo en libras
+      price REAL NOT NULL DEFAULT 0,
+      description TEXT,
+      isDefault INTEGER DEFAULT 0,
+      status TEXT NOT NULL DEFAULT 'active',
+      createdAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updatedAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (companyId) REFERENCES companies (id) ON DELETE CASCADE
+    )
+  `)
+
   console.log('Database initialized successfully')
 }
 
