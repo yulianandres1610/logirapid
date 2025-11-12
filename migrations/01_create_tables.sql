@@ -215,13 +215,35 @@ CREATE TABLE call_center_notes (
 CREATE TABLE customer_change_history (
     id SERIAL PRIMARY KEY,
     customerId INTEGER NOT NULL,
-    fieldName VARCHAR(100) NOT NULL,
-    oldValue TEXT,
-    newValue TEXT,
+    changeDate TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     changedBy VARCHAR(255) NOT NULL,
-    changedAt TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    changeType VARCHAR(50) NOT NULL DEFAULT 'update',
-    FOREIGN KEY (customerId) REFERENCES customers (id)
+    oldFirstName VARCHAR(100),
+    newFirstName VARCHAR(100),
+    oldLastName VARCHAR(100),
+    newLastName VARCHAR(100),
+    oldIdNumber VARCHAR(50),
+    newIdNumber VARCHAR(50),
+    oldIdType VARCHAR(50),
+    newIdType VARCHAR(50),
+    oldPhone VARCHAR(50),
+    newPhone VARCHAR(50),
+    oldEmail VARCHAR(255),
+    newEmail VARCHAR(255),
+    oldAddress TEXT,
+    newAddress TEXT,
+    oldCity VARCHAR(100),
+    newCity VARCHAR(100),
+    oldState VARCHAR(100),
+    newState VARCHAR(100),
+    oldCountry VARCHAR(100),
+    newCountry VARCHAR(100),
+    oldNotes TEXT,
+    newNotes TEXT,
+    oldZipCode VARCHAR(20),
+    newZipCode VARCHAR(20),
+    oldApartment VARCHAR(50),
+    newApartment VARCHAR(50),
+    FOREIGN KEY (customerId) REFERENCES customers (id) ON DELETE CASCADE
 );
 
 -- Create package_orders table
@@ -387,3 +409,5 @@ CREATE INDEX idx_routes_status ON routes(status);
 CREATE INDEX idx_routes_date ON routes(date);
 CREATE INDEX idx_zones_company ON zones(companyId);
 CREATE INDEX idx_package_sizes_company ON package_sizes(companyId);
+CREATE INDEX idx_customer_change_history_customer ON customer_change_history(customerId);
+CREATE INDEX idx_customer_change_history_date ON customer_change_history(changeDate DESC);

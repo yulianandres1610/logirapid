@@ -81,10 +81,10 @@ function groupOrdersByAddress(orders: any[]) {
       // Dirección ya existe, agregar orden al grupo
       const existing = addressMap.get(normalizedAddress)
       existing.orderIds.push(order.id)
-      existing.orderNumbers.push(order.orderNumber || `ORD-${order.id}`)
+      existing.orderNumbers.push(order.orderNumber || `PACK-${String(order.id).padStart(6, '0')}`)
       existing.orders.push({
         id: order.id,
-        orderNumber: order.orderNumber || `ORD-${order.id}`,
+        orderNumber: order.orderNumber || `PACK-${String(order.id).padStart(6, '0')}`,
         timeSlot: order.timeSlot,
         customerName: order.customerName,
         type: 'delivery'
@@ -98,10 +98,10 @@ function groupOrdersByAddress(orders: any[]) {
         longitude: order.longitude,
         customer: order.customerName,
         orderIds: [order.id],
-        orderNumbers: [order.orderNumber || `ORD-${order.id}`],
+        orderNumbers: [order.orderNumber || `PACK-${String(order.id).padStart(6, '0')}`],
         orders: [{
           id: order.id,
-          orderNumber: order.orderNumber || `ORD-${order.id}`,
+          orderNumber: order.orderNumber || `PACK-${String(order.id).padStart(6, '0')}`,
           timeSlot: order.timeSlot,
           customerName: order.customerName,
           type: 'delivery'

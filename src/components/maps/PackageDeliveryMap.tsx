@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useEffect, useRef, useState } from 'react'
+import React, { useEffect, useRef, useState, useMemo } from 'react'
 import mapboxgl from 'mapbox-gl'
 import { Package, MapPin, Navigation, User, Clock, Truck } from 'lucide-react'
 
@@ -27,14 +27,23 @@ interface PackageOrder {
   longitude?: number | null
 }
 
+interface Zone {
+  id: number
+  name: string
+  color: string
+  zipCodes: string[]
+}
+
 interface PackageDeliveryMapProps {
   orders: PackageOrder[]
+  zones?: Zone[]
   theme?: 'light' | 'dark'
   onOrderClick?: (order: PackageOrder) => void
 }
 
 export default function PackageDeliveryMap({
   orders,
+  zones = [],
   theme = 'light',
   onOrderClick
 }: PackageDeliveryMapProps) {
@@ -42,6 +51,55 @@ export default function PackageDeliveryMap({
   const mapRef = useRef<mapboxgl.Map>()
   const markersRef = useRef<mapboxgl.Marker[]>([])
   const [selectedOrder, setSelectedOrder] = useState<PackageOrder | null>(null)
+
+  // Helper function to extract zipcode from address
+  const extractZipcode = (address: any): string | null => {
+    if (!address) return null
+
+    let addressText = ''
+    if (typeof address === 'string') {
+      addressText = address
+    } else if (address?.street) {
+      addressText = address.street
+    } else {
+      return null
+    }
+
+    // Intentar múltiples patrones para extraer zipcode:
+    // 1. Patrón "STATE zipcode" (ej: "FL 33186")
+    let zipcodeMatch = addressText.match(/\b[A-Z]{2}\s+(\d{5})(?:-\d{4})?\b/)
+    if (zipcodeMatch) return zipcodeMatch[1]
+
+    // 2. Patrón "state_name zipcode" (ej: "florida 33186", "miami florida 33186")
+    zipcodeMatch = addressText.match(/(?:florida|miami|kentucky|texas|california|new york)\s+(\d{5})(?:-\d{4})?\b/i)
+    if (zipcodeMatch) return zipcodeMatch[1]
+
+    // 3. Cualquier secuencia de 5 dígitos al final o en medio de la dirección
+    zipcodeMatch = addressText.match(/\b(\d{5})(?:-\d{4})?\b/)
+    if (zipcodeMatch) return zipcodeMatch[1]
+
+    return null
+  }
+
+  // Helper function to get zone color for an order
+  const getZoneColor = (order: PackageOrder): string | null => {
+    try {
+      if (!zones || zones.length === 0) return null
+
+      const zipcode = extractZipcode(order.customerAddress)
+      if (!zipcode) return null
+
+      const zone = zones.find(z => {
+        const zipCodes = Array.isArray(z.zipCodes) ? z.zipCodes : []
+        return zipCodes.includes(zipcode)
+      })
+
+      return zone?.color || null
+    } catch (error) {
+      console.error('Error en getZoneColor:', error)
+      return null
+    }
+  }
 
   // Helper function to format address object to string
   const formatAddress = (address: any) => {
@@ -118,12 +176,12 @@ export default function PackageDeliveryMap({
     mapRef.current.on('load', () => {
       console.log('🎯 Mapa completamente cargado y listo para añadir marcadores')
 
-      // Agregar event listener para cerrar tooltips estáticos al hacer click en el mapa
+      // Agregar event listener para cerrar info panel al hacer click en el mapa
       mapRef.current!.on('click', () => {
-        document.querySelectorAll('.marker-container.clicked').forEach(marker => {
-          marker.classList.remove('clicked')
-          marker.classList.remove('active')
+        document.querySelectorAll('.marker-container.selected').forEach(marker => {
+          marker.classList.remove('selected')
         })
+        setSelectedOrder(null)
       })
     })
 
@@ -278,6 +336,10 @@ export default function PackageDeliveryMap({
 
     const config = statusConfig[order.status as keyof typeof statusConfig] || statusConfig.pending
 
+    // Usar color de zona si está disponible, sino usar color de estado
+    const zoneColor = getZoneColor(order)
+    const markerColor = zoneColor || config.color
+
     el.innerHTML = `
       <div class="marker-container" style="
         position: relative;
@@ -289,7 +351,7 @@ export default function PackageDeliveryMap({
         <div class="marker-pin" style="
           width: 40px;
           height: 40px;
-          background: linear-gradient(135deg, ${config.color} 0%, ${config.color}dd 100%);
+          background: ${markerColor};
           border-radius: 50% 50% 50% 15%;
           transform: rotate(-45deg);
           display: flex;
@@ -315,117 +377,11 @@ export default function PackageDeliveryMap({
           transform: translate(-50%, -50%);
           width: 60px;
           height: 60px;
-          border: 2px solid ${config.color};
+          border: 2px solid ${markerColor};
           border-radius: 50%;
           opacity: 0;
           animation: pulseAnimation 2s infinite;
         "></div>
-
-        <!-- Tooltip mejorado responsivo -->
-        <div class="marker-tooltip" style="
-          position: absolute;
-          top: 20px;
-          left: 50%;
-          transform: translateX(-50%);
-          background: linear-gradient(135deg, #1F2937 0%, #374151 100%);
-          color: white;
-          padding: 12px 16px;
-          border-radius: 12px;
-          font-size: 12px;
-          white-space: nowrap;
-          opacity: 0;
-          visibility: hidden;
-          transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
-          box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
-          z-index: 10000;
-          min-width: 240px;
-          max-width: 280px;
-          border: 2px solid rgba(255, 255, 255, 0.15);
-          backdrop-filter: blur(10px);
-        ">
-          <!-- Header del tooltip -->
-          <div style="
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            margin-bottom: 8px;
-            padding-bottom: 8px;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.15);
-          ">
-            <span style="font-size: 18px; filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3));">${config.icon}</span>
-            <div style="flex: 1;">
-              <div style="font-weight: 700; font-size: 13px; margin-bottom: 2px;">${order.orderNumber}</div>
-              <div style="font-size: 9px; opacity: 0.8; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 500;">${config.label}</div>
-            </div>
-          </div>
-
-          <!-- Contenido del tooltip -->
-          <div style="space-y: 6px;">
-            <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 6px;">
-              <span style="opacity: 0.8; font-size: 12px;">👤</span>
-              <div>
-                <div style="font-weight: 600; font-size: 11px;">${order.customerName}</div>
-              </div>
-            </div>
-            <div style="display: flex; align-items: start; gap: 6px; margin-bottom: 6px;">
-              <span style="opacity: 0.8; font-size: 12px; margin-top: 1px;">📍</span>
-              <div>
-                <div style="font-size: 10px; opacity: 0.9; line-height: 1.3;">${formatAddress(order.customerAddress)}</div>
-              </div>
-            </div>
-            <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 6px;">
-              <span style="opacity: 0.8; font-size: 12px;">📅</span>
-              <div>
-                <div style="font-size: 10px;">${order.scheduledDate || 'Sin fecha'}</div>
-                ${order.timeSlot ? `<div style="font-size: 9px; opacity: 0.8; margin-top: 1px;">${formatTimeSlot(order.timeSlot)}</div>` : ''}
-              </div>
-            </div>
-            <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 6px;">
-              <span style="opacity: 0.8; font-size: 12px;">📦</span>
-              <div>
-                <div style="font-size: 10px;">${order.services.join(', ')}</div>
-              </div>
-            </div>
-            {/* Driver asignado */}
-            ${order.driverName ? `
-              <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 6px;">
-                <span style="opacity: 0.8; font-size: 12px;">🚚</span>
-                <div>
-                  <div style="font-size: 10px; font-weight: 600;">${order.driverName}</div>
-                </div>
-              </div>
-            ` : ''}
-            <div style="margin-top: 10px; padding-top: 8px; border-top: 1px solid rgba(255, 255, 255, 0.15); display: flex; align-items: center; justify-content: space-between; gap: 8px;">
-              <div style="display: flex; flex-direction: column; gap: 2px;">
-                <span style="font-size: 9px; opacity: 0.7;">Total</span>
-                <span style="font-weight: 700; font-size: 14px; color: #10B981;">
-                  $${Number(order.totalAmount || order.total || 0).toFixed(2)}
-                </span>
-              </div>
-              <button
-                onclick="window.location.href='/dashboard/admin/package-orders/${order.id}'"
-                style="
-                  background: linear-gradient(135deg, #10B981 0%, #059669 100%);
-                  color: white;
-                  border: none;
-                  padding: 6px 10px;
-                  border-radius: 6px;
-                  font-size: 9px;
-                  font-weight: 600;
-                  cursor: pointer;
-                  transition: all 0.3s ease;
-                  box-shadow: 0 2px 6px rgba(16, 185, 129, 0.3);
-                  text-transform: uppercase;
-                  letter-spacing: 0.3px;
-                "
-                onmouseover="this.style.transform='translateY(-1px) scale(1.05)'; this.style.boxShadow='0 4px 12px rgba(16, 185, 129, 0.4)'"
-                onmouseout="this.style.transform='translateY(0) scale(1)'; this.style.boxShadow='0 2px 6px rgba(16, 185, 129, 0.3)'"
-              >
-                Ver Detalles
-              </button>
-            </div>
-          </div>
-        </div>
 
         <!-- Estado activo visual -->
         <div class="active-indicator" style="
@@ -460,86 +416,29 @@ export default function PackageDeliveryMap({
           }
         }
 
-        @keyframes tooltipFadeIn {
-          0% {
-            opacity: 0;
-            visibility: hidden;
-            transform: translateX(-50%) translateY(-10px) scale(0.9);
-          }
-          100% {
-            opacity: 1;
-            visibility: visible;
-            transform: translateX(-50%) translateY(0) scale(1);
-          }
+        .marker-container.selected .marker-pin {
+          transform: rotate(-45deg) scale(1.25);
+          box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
         }
 
-        .marker-container:hover .marker-pin {
-          transform: rotate(-45deg) scale(1.3);
-          background: linear-gradient(135deg, ${config.color} 0%, ${config.color}ff 100%);
-        }
-
-        .marker-container:hover .marker-tooltip {
+        .marker-container.selected .active-indicator {
           opacity: 1;
-          visibility: visible;
-          animation: tooltipFadeIn 0.4s cubic-bezier(0.4, 0, 0.2, 1) forwards;
-        }
-
-        .marker-container:hover .pulse-ring {
-          animation-duration: 1s;
-        }
-
-        .marker-container:hover .active-indicator {
-          opacity: 0.3;
-        }
-
-        .marker-container.active .marker-tooltip {
-          opacity: 1;
-          visibility: visible;
-          animation: tooltipFadeIn 0.4s cubic-bezier(0.4, 0, 0.2, 1) forwards;
-        }
-
-        .marker-container.active .marker-pin {
-          transform: rotate(-45deg) scale(1.2);
-          background: linear-gradient(135deg, ${config.color} 0%, ${config.color}ff 100%);
-        }
-
-        .marker-container.active .active-indicator {
-          opacity: 0.5;
         }
       </style>
     `
 
     el.addEventListener('click', (e) => {
       e.stopPropagation()
+
+      // Remover selección de otros marcadores
+      document.querySelectorAll('.marker-container.selected').forEach(other => {
+        other.classList.remove('selected')
+      })
+
+      // Marcar este marcador como seleccionado
+      el.classList.add('selected')
       setSelectedOrder(order)
       onOrderClick?.(order)
-
-      // Toggle para estado activo (tooltip estático)
-      if (el.classList.contains('clicked')) {
-        el.classList.remove('clicked')
-        el.classList.remove('active')
-      } else {
-        // Cerrar otros tooltips
-        document.querySelectorAll('.marker-container.clicked').forEach(other => {
-          other.classList.remove('clicked')
-          other.classList.remove('active')
-        })
-        el.classList.add('clicked')
-        el.classList.add('active')
-      }
-    })
-
-    // Manejar estado activo para tooltip hover
-    el.addEventListener('mouseenter', () => {
-      if (!el.classList.contains('clicked')) {
-        el.classList.add('active')
-      }
-    })
-
-    el.addEventListener('mouseleave', () => {
-      if (!el.classList.contains('clicked')) {
-        el.classList.remove('active')
-      }
     })
 
     return el
@@ -654,6 +553,9 @@ export default function PackageDeliveryMap({
     }
   }, [orders, onOrderClick])
 
+  // Calcular color de zona para el panel seleccionado
+  const selectedZoneColor = selectedOrder ? (getZoneColor(selectedOrder) || '#3B82F6') : '#3B82F6'
+
   return (
     <div className="relative w-full h-full">
       {/* Contenedor del mapa */}
@@ -663,28 +565,118 @@ export default function PackageDeliveryMap({
         style={{ minHeight: '70vh', height: '70vh' }}
       />
 
-      {/* Leyenda */}
-      <div className="absolute bottom-4 left-4 bg-white dark:bg-gray-800 rounded-lg shadow-lg p-3 border border-gray-200 dark:border-gray-700">
-        <h4 className="text-xs font-semibold text-gray-700 dark:text-gray-300 mb-2">Estado de entregas - South Florida</h4>
-        <div className="space-y-1">
-          <div className="flex items-center gap-2 text-xs">
-            <div className="w-3 h-3 bg-yellow-500 rounded-full"></div>
-            <span className="text-gray-600 dark:text-gray-400">Pendiente</span>
+      {/* Panel de información de orden seleccionada - Superior izquierdo */}
+      {selectedOrder && (
+        <div className="absolute top-4 left-4 bg-white dark:bg-gray-800 rounded-lg shadow-2xl border border-gray-200 dark:border-gray-700 overflow-hidden max-w-sm w-80" style={{ zIndex: 10000 }}>
+          {/* Header con color dinámico de zona */}
+          <div
+            className="px-4 py-3 flex items-center justify-between"
+            style={{
+              background: `linear-gradient(135deg, ${selectedZoneColor} 0%, ${selectedZoneColor}dd 100%)`
+            }}
+          >
+            <div className="flex items-center gap-2">
+              <Package className="w-5 h-5 text-white" />
+              <div>
+                <h3 className="text-sm font-bold text-white">{selectedOrder.orderNumber}</h3>
+                <p className="text-xs text-white opacity-90">Información de la orden</p>
+              </div>
+            </div>
+            <button
+              onClick={(e) => {
+                e.stopPropagation()
+                setSelectedOrder(null)
+                document.querySelectorAll('.marker-container.selected').forEach(marker => {
+                  marker.classList.remove('selected')
+                })
+              }}
+              className="text-white hover:bg-white/20 rounded-full p-1 transition-colors"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
           </div>
-          <div className="flex items-center gap-2 text-xs">
-            <div className="w-3 h-3 bg-blue-500 rounded-full"></div>
-            <span className="text-gray-600 dark:text-gray-400">En progreso</span>
-          </div>
-          <div className="flex items-center gap-2 text-xs">
-            <div className="w-3 h-3 bg-green-500 rounded-full"></div>
-            <span className="text-gray-600 dark:text-gray-400">Completado</span>
-          </div>
-          <div className="flex items-center gap-2 text-xs">
-            <div className="w-3 h-3 bg-red-500 rounded-full"></div>
-            <span className="text-gray-600 dark:text-gray-400">Cancelado</span>
+
+          {/* Contenido */}
+          <div className="p-4 space-y-3">
+            {/* Cliente */}
+            <div className="flex items-start gap-3">
+              <User className="w-4 h-4 text-gray-500 dark:text-gray-400 mt-0.5" />
+              <div className="flex-1">
+                <p className="text-xs text-gray-500 dark:text-gray-400">Cliente</p>
+                <p className="text-sm font-semibold text-gray-900 dark:text-white">{selectedOrder.customerName}</p>
+              </div>
+            </div>
+
+            {/* Dirección */}
+            <div className="flex items-start gap-3">
+              <MapPin className="w-4 h-4 text-gray-500 dark:text-gray-400 mt-0.5" />
+              <div className="flex-1">
+                <p className="text-xs text-gray-500 dark:text-gray-400">Dirección</p>
+                <p className="text-sm text-gray-900 dark:text-white leading-relaxed">{formatAddress(selectedOrder.customerAddress)}</p>
+              </div>
+            </div>
+
+            {/* Fecha y Hora */}
+            <div className="flex items-start gap-3">
+              <Clock className="w-4 h-4 text-gray-500 dark:text-gray-400 mt-0.5" />
+              <div className="flex-1">
+                <p className="text-xs text-gray-500 dark:text-gray-400">Fecha programada</p>
+                <p className="text-sm text-gray-900 dark:text-white">{selectedOrder.scheduledDate || 'Sin fecha'}</p>
+                {selectedOrder.timeSlot && (
+                  <p className="text-xs text-gray-600 dark:text-gray-300 mt-0.5">{formatTimeSlot(selectedOrder.timeSlot)}</p>
+                )}
+              </div>
+            </div>
+
+            {/* Servicios */}
+            <div className="flex items-start gap-3">
+              <Package className="w-4 h-4 text-gray-500 dark:text-gray-400 mt-0.5" />
+              <div className="flex-1">
+                <p className="text-xs text-gray-500 dark:text-gray-400">Servicios</p>
+                <p className="text-sm text-gray-900 dark:text-white">{selectedOrder.services.join(', ')}</p>
+              </div>
+            </div>
+
+            {/* Driver si está asignado */}
+            {selectedOrder.driverName && (
+              <div className="flex items-start gap-3">
+                <Truck className="w-4 h-4 text-gray-500 dark:text-gray-400 mt-0.5" />
+                <div className="flex-1">
+                  <p className="text-xs text-gray-500 dark:text-gray-400">Conductor</p>
+                  <p className="text-sm font-semibold text-gray-900 dark:text-white">{selectedOrder.driverName}</p>
+                </div>
+              </div>
+            )}
+
+            {/* Total y botón */}
+            <div className="pt-3 border-t border-gray-200 dark:border-gray-700 flex items-center justify-between">
+              <div>
+                <p className="text-xs text-gray-500 dark:text-gray-400">Total</p>
+                <p className="text-lg font-bold text-green-600 dark:text-green-400">
+                  ${Number(selectedOrder.totalAmount || selectedOrder.total || 0).toFixed(2)}
+                </p>
+              </div>
+              <button
+                onClick={() => window.location.href = `/dashboard/admin/package-orders/${selectedOrder.id}`}
+                className="text-white px-4 py-2 rounded-lg text-sm font-semibold transition-all shadow-md hover:shadow-lg"
+                style={{
+                  background: `linear-gradient(135deg, ${selectedZoneColor} 0%, ${selectedZoneColor}dd 100%)`
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.background = `linear-gradient(135deg, ${selectedZoneColor}dd 0%, ${selectedZoneColor}bb 100%)`
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = `linear-gradient(135deg, ${selectedZoneColor} 0%, ${selectedZoneColor}dd 100%)`
+                }}
+              >
+                Ver Detalles
+              </button>
+            </div>
           </div>
         </div>
-      </div>
+      )}
 
       {/* Contador de órdenes */}
       <div className="absolute top-4 right-4 bg-white dark:bg-gray-800 rounded-lg shadow-lg px-3 py-2 border border-gray-200 dark:border-gray-700">

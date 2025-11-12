@@ -182,6 +182,22 @@ export default function CreateRoutePage() {
         } : null
       })
 
+      console.log('📊 [Debug] Detalle de órdenes reprogramadas:', reprogrammedOrders.map(o => ({
+        id: o.id,
+        orderNumber: o.orderNumber,
+        status: o.status,
+        hasCoords: !!(o.latitude && o.longitude),
+        lat: o.latitude,
+        lng: o.longitude
+      })))
+
+      console.log('📊 [Debug] Detalle de órdenes pendientes:', pendingOrders.slice(0, 3).map(o => ({
+        id: o.id,
+        orderNumber: o.orderNumber,
+        status: o.status,
+        hasCoords: !!(o.latitude && o.longitude)
+      })))
+
       // Filtrar solo órdenes con coordenadas válidas
       const validOrders = allOrders.filter(order =>
         order.latitude &&
@@ -191,6 +207,11 @@ export default function CreateRoutePage() {
       )
 
       console.log('✅ [Debug] Órdenes válidas (con coordenadas):', validOrders.length)
+      console.log('📊 [Debug] Órdenes válidas por estado:', {
+        pending: validOrders.filter(o => o.status === 'pending').length,
+        reprogrammed: validOrders.filter(o => o.status === 'reprogrammed').length,
+        otros: validOrders.filter(o => o.status !== 'pending' && o.status !== 'reprogrammed').length
+      })
       console.log('📋 [Debug] Ejemplo de orden válida:', validOrders[0] ? {
         id: validOrders[0].id,
         orderNumber: validOrders[0].orderNumber,
@@ -311,6 +332,43 @@ export default function CreateRoutePage() {
   }
 
   /**
+   * Enriquece las paradas con información de color de zona
+   */
+  const enrichStopsWithZoneColor = (result: any) => {
+    if (!result || !result.stops) return result
+
+    const enrichedStops = result.stops.map((stop: any) => {
+      // Extraer zipcode de la parada
+      const zipcode = extractZipcode(stop)
+
+      if (!zipcode) {
+        return stop
+      }
+
+      // Buscar la zona que contiene este zipcode
+      const zone = zones.find(z => {
+        const zipCodes = Array.isArray(z.zipCodes) ? z.zipCodes : []
+        return zipCodes.includes(zipcode)
+      })
+
+      if (zone) {
+        return {
+          ...stop,
+          zoneColor: zone.color,
+          zoneName: zone.name
+        }
+      }
+
+      return stop
+    })
+
+    return {
+      ...result,
+      stops: enrichedStops
+    }
+  }
+
+  /**
    * Encuentra la zona que contiene el zipcode dado
    */
   const getZoneForZipcode = (zipcode: string): any | null => {
@@ -337,10 +395,19 @@ export default function CreateRoutePage() {
     const zipCodes = Array.isArray(zone.zipCodes) ? zone.zipCodes : []
 
     // Paso 3: Filtrar las órdenes del horario que tengan zipcodes de esta zona
-    return ordersInTimeWindow.filter(order => {
+    const filtered = ordersInTimeWindow.filter(order => {
       const orderZipcode = extractZipcode(order)
       return orderZipcode && zipCodes.includes(orderZipcode)
     })
+
+    // Log para debug de órdenes reprogramadas
+    const reprogrammedInFiltered = filtered.filter(o => o.status === 'reprogrammed')
+    if (reprogrammedInFiltered.length > 0) {
+      console.log(`🔍 [Debug] Zona ${zone.name} (${timeWindowValue}): ${reprogrammedInFiltered.length} reprogramadas`,
+        reprogrammedInFiltered.map(o => o.orderNumber))
+    }
+
+    return filtered
   }
 
   /**
@@ -349,6 +416,17 @@ export default function CreateRoutePage() {
    */
   const getZonesWithOrders = () => {
     const zonesMap = new Map<number, { zone: any; totalOrders: number }>()
+
+    console.log('🔍 [Debug getZonesWithOrders] Total packageOrders:', packageOrders.length)
+    console.log('🔍 [Debug getZonesWithOrders] Reprogramadas en packageOrders:',
+      packageOrders.filter(o => o.status === 'reprogrammed').map(o => ({
+        id: o.id,
+        orderNumber: o.orderNumber,
+        zipcode: extractZipcode(o),
+        address: o.customerAddress,
+        timeSlot: o.timeSlot
+      }))
+    )
 
     zones.forEach(zone => {
       // Si ya procesamos esta zona, saltarla
@@ -608,7 +686,10 @@ export default function CreateRoutePage() {
         typeofDuration: typeof resultWithNumbers.duration
       })
 
-      setOptimizationResult(resultWithNumbers)
+      // Enriquecer paradas con color de zona
+      const enrichedResult = enrichStopsWithZoneColor(resultWithNumbers)
+
+      setOptimizationResult(enrichedResult)
       showNotification('success', 'Optimización Completa',
         `Ruta con ${data.data.totalStops} paradas optimizada correctamente`)
     } else {
@@ -673,9 +754,12 @@ export default function CreateRoutePage() {
     console.log('🔗 Uniendo rutas de múltiples periodos...')
     const unifiedRoute = unifyMultiplePeriods(periodResults)
 
-    setOptimizationResult(unifiedRoute)
+    // Enriquecer paradas con color de zona
+    const enrichedUnifiedRoute = enrichStopsWithZoneColor(unifiedRoute)
+
+    setOptimizationResult(enrichedUnifiedRoute)
     showNotification('success', 'Rutas Unificadas',
-      `${periodResults.length} periodos optimizados y unidos en 1 ruta continua con ${unifiedRoute.totalStops} paradas`)
+      `${periodResults.length} periodos optimizados y unidos en 1 ruta continua con ${enrichedUnifiedRoute.totalStops} paradas`)
   }
 
   /**
@@ -1197,9 +1281,19 @@ export default function CreateRoutePage() {
                                     className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
                                   />
                                   <div className="flex-1 min-w-0">
-                                    <p className="font-medium text-gray-900 dark:text-white text-sm">
-                                      {order.orderNumber || `ORD-${order.id}`} - {order.customerName}
-                                    </p>
+                                    <div className="flex items-center gap-2 mb-1">
+                                      <p className="font-medium text-gray-900 dark:text-white text-sm">
+                                        {order.orderNumber || `PACK-${String(order.id).padStart(6, '0')}`} - {order.customerName}
+                                      </p>
+                                      <span className={cn(
+                                        "inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium",
+                                        order.status === 'reprogrammed'
+                                          ? "bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-400 border border-orange-200 dark:border-orange-800"
+                                          : "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400 border border-green-200 dark:border-green-800"
+                                      )}>
+                                        {order.status === 'reprogrammed' ? 'Reprogramada' : 'Pendiente'}
+                                      </span>
+                                    </div>
                                     <p className="text-xs text-gray-500 dark:text-gray-400 truncate flex items-center gap-1">
                                       <MapPin className="w-3 h-3" />
                                       {typeof order.customerAddress === 'string'
@@ -1821,12 +1915,12 @@ export default function CreateRoutePage() {
                       PARADA {index + 1} DE {routeOrders.length}
                     </p>
                     <h1 style={{ fontSize: '24pt', fontWeight: '700', margin: '0', color: '#111827', letterSpacing: '-0.5px' }}>
-                      {order.orderNumber || `#${order.id}`}
+                      {order.orderNumber || `PACK-${String(order.id).padStart(6, '0')}`}
                     </h1>
                   </div>
                   <div style={{ textAlign: 'center', marginLeft: '10mm' }}>
                     <QRCodeSVG
-                      value={order.orderNumber || `ORD-${order.id}`}
+                      value={order.orderNumber || `PACK-${String(order.id).padStart(6, '0')}`}
                       size={80}
                       level="M"
                     />

@@ -28,6 +28,8 @@ interface RouteStop {
     type?: string
   }>
   totalOrders?: number
+  zoneColor?: string
+  zoneName?: string
 }
 
 interface OptimizationResult {
@@ -486,7 +488,8 @@ export default function RouteMap({
         const ordersCount = stop?.totalOrders || stop?.orderIds?.length || 1
         const hasMultipleOrders = ordersCount > 1
 
-        const color = '#3B82F6' // Color azul consistente para todos los waypoints
+        // Usar el color de la zona si está disponible, sino usar azul por defecto
+        const color = stop?.zoneColor || '#3B82F6'
 
         markerElement = document.createElement('div')
 
@@ -501,12 +504,12 @@ export default function RouteMap({
             justify-content: center;
           `
 
-          // Círculo principal con gradiente y sombra
+          // Círculo principal con color de zona
           const mainCircle = document.createElement('div')
           mainCircle.style.cssText = `
             width: 32px;
             height: 32px;
-            background: linear-gradient(135deg, ${color} 0%, #2563EB 100%);
+            background: ${color};
             border: 3px solid white;
             border-radius: 50%;
             display: flex;
@@ -543,11 +546,11 @@ export default function RouteMap({
           markerElement.appendChild(mainCircle)
           markerElement.appendChild(badge)
         } else {
-          // Diseño normal para paradas con una sola orden - con gradiente
+          // Diseño normal para paradas con una sola orden - color de zona
           markerElement.style.cssText = `
             width: 32px;
             height: 32px;
-            background: linear-gradient(135deg, ${color} 0%, #2563EB 100%);
+            background: ${color};
             border: 3px solid white;
             border-radius: 50%;
             display: flex;

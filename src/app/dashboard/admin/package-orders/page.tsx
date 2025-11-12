@@ -87,6 +87,7 @@ export default function PackageOrdersPage() {
     return viewFromUrl === 'map' ? 'map' : viewFromUrl === 'statistics' ? 'statistics' : 'table'
   })
   const [allOrders, setAllOrders] = useState<PackageOrder[]>([])
+  const [zones, setZones] = useState<any[]>([])
 
   // Fetch orders
   const fetchData = async () => {
@@ -170,10 +171,19 @@ export default function PackageOrdersPage() {
   // Fetch all orders for map view
   const fetchAllOrders = async () => {
     try {
-      const response = await fetch('/api/package-orders?limit=1000')
-      if (response.ok) {
-        const data = await response.json()
+      const [ordersResponse, zonesResponse] = await Promise.all([
+        fetch('/api/package-orders?limit=1000'),
+        fetch('/api/zones')
+      ])
+
+      if (ordersResponse.ok) {
+        const data = await ordersResponse.json()
         setAllOrders(data.data || [])
+      }
+
+      if (zonesResponse.ok) {
+        const zonesData = await zonesResponse.json()
+        setZones(zonesData.data || zonesData || [])
       }
     } catch (error) {
       console.error('Error fetching all orders:', error)
@@ -1325,6 +1335,7 @@ export default function PackageOrdersPage() {
               <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700">
                 <PackageDeliveryMap
                   orders={allOrders}
+                  zones={zones}
                   theme={theme}
                 />
               </div>
