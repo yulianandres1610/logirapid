@@ -58,7 +58,9 @@ export async function GET() {
     const result = await db.query(`
       SELECT * FROM zones
       WHERE companyid = $1 AND status = 'active'
-      ORDER BY name
+      ORDER BY
+        CAST(NULLIF(regexp_replace(name, '[^0-9]', '', 'g'), '') AS INTEGER) NULLS LAST,
+        name
     `, [parseInt(companyId)])
 
     const zones = result.rows
