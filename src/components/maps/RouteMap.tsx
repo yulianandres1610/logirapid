@@ -46,18 +46,29 @@ interface OptimizationResult {
   }
 }
 
+interface Zone {
+  id: number
+  name: string
+  color: string
+  zipCodes: string[]
+}
+
 interface RouteMapProps {
   optimizationResult: OptimizationResult | null
   warehouseCoordinates?: [number, number]
   theme?: 'light' | 'dark'
   onOptimizationComplete?: (result: any) => void
+  routeType?: 'orders' | 'warehouses' | null
+  zones?: Zone[]
 }
 
 export default function RouteMap({
   optimizationResult,
   warehouseCoordinates = [-80.2395, 25.7548], // Miami coordinates
   theme = 'light',
-  onOptimizationComplete
+  onOptimizationComplete,
+  routeType = 'orders',
+  zones = []
 }: RouteMapProps) {
   const mapContainerRef = useRef<HTMLDivElement>(null)
   const mapRef = useRef<mapboxgl.Map>()
@@ -101,6 +112,28 @@ export default function RouteMap({
       '16-20': '4:00 PM - 8:00 PM'
     }
     return timeSlotMap[timeSlot] || timeSlot
+  }
+
+  // Asignar color de zona a stops basado en zipCode
+  const enrichStopsWithZoneColor = (stops: any[]) => {
+    return stops.map(stop => {
+      // Si ya tiene color de zona, no lo sobreescribimos
+      if (stop.zoneColor) return stop
+
+      // Buscar zona por zipCode
+      const zipCode = stop.zipCode || stop.zipcode
+      if (!zipCode) return { ...stop, zoneColor: '#3B82F6', zoneName: 'Sin zona' }
+
+      const zone = zones.find(z =>
+        Array.isArray(z.zipCodes) && z.zipCodes.includes(zipCode)
+      )
+
+      return {
+        ...stop,
+        zoneColor: zone?.color || '#3B82F6',
+        zoneName: zone?.name || 'Sin zona'
+      }
+    })
   }
 
   // Manejar fullscreen
@@ -428,7 +461,13 @@ export default function RouteMap({
     }
 
     // Obtener las paradas desde múltiples ubicaciones posibles
-    const stops = optimizationResult?.stops || optimizationResult?.route?.stops || []
+    let stops = optimizationResult?.stops || optimizationResult?.route?.stops || []
+
+    // Enriquecer stops con colores de zona si es ruta de almacenes
+    if (routeType === 'warehouses' && zones.length > 0) {
+      stops = enrichStopsWithZoneColor(stops)
+      console.log('🎨 Stops enriquecidos con colores de zona para warehouses')
+    }
 
     console.log('📍 Creando marcadores. Coordenadas:', allCoordinates.length)
     console.log('📍 Paradas disponibles:', stops.length)
@@ -569,8 +608,44 @@ export default function RouteMap({
             ? stop.address
             : stop.address?.street || 'Dirección no disponible'
 
-          // Construir el texto del popup
-          if (hasMultipleOrders && stop.orders && stop.orders.length > 0) {
+          // Popup para almacenes
+          if (stop.type === 'warehouse') {
+            popupText = `
+              <div style="font-weight: 600; margin-bottom: 8px; font-size: 14px; color: ${stop.zoneColor || '#3B82F6'};">
+                🏭 ${stop.name || 'Almacén'}
+              </div>
+              <div style="font-size: 11px; opacity: 0.9; margin-bottom: 6px; padding: 4px 8px; background: rgba(255,255,255,0.1); border-radius: 4px;">
+                <strong>Código:</strong> ${stop.code || 'N/A'}
+              </div>
+              <div style="font-size: 11px; opacity: 0.8; margin-bottom: 8px;">
+                📍 ${address}
+              </div>
+              ${stop.managerPhone ? `
+                <div style="font-size: 11px; opacity: 0.9; margin-bottom: 4px; display: flex; align-items: center; gap: 4px;">
+                  <span>📞</span>
+                  <span>${stop.managerName || 'Encargado'}: ${stop.managerPhone}</span>
+                </div>
+              ` : ''}
+              ${stop.availableCapacity !== undefined ? `
+                <div style="margin-top: 8px; padding-top: 8px; border-top: 1px solid rgba(255,255,255,0.2);">
+                  <div style="font-size: 11px; margin-bottom: 4px;">
+                    <strong>Capacidad:</strong>
+                  </div>
+                  <div style="font-size: 11px; opacity: 0.9;">
+                    📦 Disponible: ${stop.availableCapacity} / ${stop.capacity || 0}
+                  </div>
+                </div>
+              ` : ''}
+              ${stop.zoneName ? `
+                <div style="margin-top: 6px; padding: 4px 8px; background: ${stop.zoneColor || '#3B82F6'}; border-radius: 4px; font-size: 10px; text-align: center;">
+                  ${stop.zoneName}
+                </div>
+              ` : ''}
+            `
+            console.log(`✅ Marcador de almacén creado - ${stop.name || 'Almacén'}`)
+          }
+          // Construir el texto del popup para órdenes
+          else if (hasMultipleOrders && stop.orders && stop.orders.length > 0) {
             // Mostrar cada orden con su horario individual
             const ordersList = stop.orders.map((order: any) => {
               const orderTimeSlot = order.timeSlot ? `
@@ -698,14 +773,26 @@ export default function RouteMap({
 
       console.log(`✅ Marcador creado para índice ${index} en coordenadas:`, coord)
 
-      // Mostrar popup al pasar el mouse
-      markerElement.addEventListener('mouseenter', () => {
-        popup.addTo(map)
+      // Mostrar/ocultar popup al hacer click
+      markerElement.addEventListener('click', (e) => {
+        e.stopPropagation()
+        // Toggle popup
+        if (popup.isOpen()) {
+          popup.remove()
+        } else {
+          // Cerrar todos los otros popups primero
+          markersRef.current.forEach(m => {
+            const p = m.getPopup()
+            if (p && p.isOpen()) {
+              p.remove()
+            }
+          })
+          popup.addTo(map)
+        }
       })
 
-      markerElement.addEventListener('mouseleave', () => {
-        popup.remove()
-      })
+      // Estilo de cursor para indicar que es clickeable
+      markerElement.style.cursor = 'pointer'
 
       return marker
     }
@@ -949,7 +1036,45 @@ export default function RouteMap({
         </div>
       )}
 
-  
+      {/* Leyenda de Zonas para rutas de almacenes */}
+      {routeType === 'warehouses' && zones.length > 0 && !loading && (
+        <div className="absolute top-4 left-4 bg-white dark:bg-gray-800 rounded-lg shadow-xl p-4 border border-gray-200 dark:border-gray-700 max-w-xs z-10">
+          <div className="flex items-center gap-2 mb-3">
+            <MapPin className="w-4 h-4 text-purple-600" />
+            <h3 className="font-semibold text-gray-900 dark:text-white">Zonas de Entrega</h3>
+          </div>
+
+          <div className="space-y-2">
+            {zones.map((zone) => (
+              <div
+                key={zone.id}
+                className="flex items-center gap-2 p-2 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+              >
+                <div
+                  className="w-4 h-4 rounded-full border-2 border-white shadow-sm flex-shrink-0"
+                  style={{ backgroundColor: zone.color }}
+                />
+                <div className="flex-1 min-w-0">
+                  <div className="text-sm font-medium text-gray-900 dark:text-white truncate">
+                    {zone.name}
+                  </div>
+                  <div className="text-xs text-gray-500 dark:text-gray-400">
+                    {zone.zipCodes?.length || 0} códigos postales
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div className="mt-3 pt-3 border-t border-gray-200 dark:border-gray-600">
+            <div className="text-xs text-gray-500 dark:text-gray-400 flex items-center gap-1">
+              <Info className="w-3 h-3" />
+              <span>Haz clic en los marcadores para más info</span>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Estado de carga */}
       {loading && (
         <div className="absolute inset-0 bg-gray-100 dark:bg-gray-800 flex items-center justify-center rounded-lg">

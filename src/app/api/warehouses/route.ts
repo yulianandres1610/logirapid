@@ -40,7 +40,31 @@ export async function GET(request: NextRequest) {
     const offset = (page - 1) * limit
     params.push(limit, offset)
     const dataQuery = `
-      SELECT * FROM warehouses
+      SELECT
+        id,
+        name,
+        code,
+        address,
+        city,
+        state,
+        zip_code as "zipCode",
+        country,
+        type,
+        status,
+        manager_name as "managerName",
+        manager_email as "managerEmail",
+        manager_phone as "managerPhone",
+        operating_hours as "operatingHours",
+        custom_operating_hours as "customOperatingHours",
+        total_area as "totalArea",
+        capacity,
+        opening_date as "openingDate",
+        notes,
+        latitude,
+        longitude,
+        created_at as "createdAt",
+        updated_at as "updatedAt"
+      FROM warehouses
       ${whereClause}
       ORDER BY created_at DESC
       LIMIT $${params.length - 1} OFFSET $${params.length}

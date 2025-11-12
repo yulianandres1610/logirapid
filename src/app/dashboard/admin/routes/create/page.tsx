@@ -54,11 +54,14 @@ const TIME_WINDOWS: TimeWindow[] = [
 ]
 
 const STEPS = [
-  { id: 1, title: 'Órdenes y Horarios', icon: Package },
-  { id: 2, title: 'Configuración', icon: Truck },
-  { id: 3, title: 'Confirmación', icon: CheckCircle },
-  { id: 4, title: 'Éxito', icon: PartyPopper }
+  { id: 1, title: 'Tipo de Ruta', icon: MapPin },
+  { id: 2, title: 'Selección y Horarios', icon: Package },
+  { id: 3, title: 'Configuración', icon: Truck },
+  { id: 4, title: 'Confirmación', icon: CheckCircle },
+  { id: 5, title: 'Éxito', icon: PartyPopper }
 ]
+
+type RouteType = 'orders' | 'warehouses'
 
 // ============================================================================
 // MAIN COMPONENT
@@ -77,6 +80,9 @@ export default function CreateRoutePage() {
   const [loading, setLoading] = useState(false)
   const [optimizing, setOptimizing] = useState(false)
 
+  // Route type selection
+  const [routeType, setRouteType] = useState<RouteType | null>(null)
+
   // Data from API
   const [warehouses, setWarehouses] = useState<any[]>([])
   const [vehicles, setVehicles] = useState<any[]>([])
@@ -86,6 +92,7 @@ export default function CreateRoutePage() {
 
   // Form data
   const [selectedOrders, setSelectedOrders] = useState<number[]>([])
+  const [selectedWarehouses, setSelectedWarehouses] = useState<number[]>([])
   const [selectedTimeWindows, setSelectedTimeWindows] = useState<string[]>([])
   const [warehouseId, setWarehouseId] = useState('')
   const [vehicleId, setVehicleId] = useState('')
@@ -96,7 +103,7 @@ export default function CreateRoutePage() {
   // Optimization result
   const [optimizationResult, setOptimizationResult] = useState<any>(null)
 
-  // Created route data (for step 4)
+  // Created route data (for step 5)
   const [createdRoute, setCreatedRoute] = useState<any>(null)
 
   // Ref para evitar múltiples ejecuciones de optimización
@@ -114,16 +121,16 @@ export default function CreateRoutePage() {
     loadInitialData()
   }, [])
 
-  // Auto-optimizar cuando se llega al paso 3
+  // Auto-optimizar cuando se llega al paso 4 (confirmación)
   useEffect(() => {
-    if (currentStep === 3 && !optimizationResult && !optimizing && !hasOptimizedRef.current) {
-      console.log('📍 Llegando a paso 3, iniciando optimización automática...')
+    if (currentStep === 4 && !optimizationResult && !optimizing && !hasOptimizedRef.current) {
+      console.log('📍 Llegando a paso 4, iniciando optimización automática...')
       hasOptimizedRef.current = true
       handleOptimizeRoute()
     }
 
-    // Resetear el flag cuando se sale del paso 3
-    if (currentStep !== 3) {
+    // Resetear el flag cuando se sale del paso 4
+    if (currentStep !== 4) {
       hasOptimizedRef.current = false
     }
   }, [currentStep, optimizationResult, optimizing])
@@ -452,6 +459,94 @@ export default function CreateRoutePage() {
   }
 
   /**
+   * Helper para extraer zipcode de almacenes
+   */
+  const extractZipcodeFromWarehouse = (warehouse: any): string | null => {
+    // Intentar múltiples campos de zipcode
+    if (warehouse.zipCode) {
+      console.log(`✅ Zipcode directo (zipCode): ${warehouse.zipCode} para warehouse ${warehouse.name}`)
+      return warehouse.zipCode
+    }
+    if (warehouse.zipcode) {
+      console.log(`✅ Zipcode directo (zipcode): ${warehouse.zipcode} para warehouse ${warehouse.name}`)
+      return warehouse.zipcode
+    }
+    if (warehouse.zip_code) {
+      console.log(`✅ Zipcode directo (zip_code): ${warehouse.zip_code} para warehouse ${warehouse.name}`)
+      return warehouse.zip_code
+    }
+
+    // Si no existe, intentar extraer de la dirección
+    const address = warehouse.address
+    let addressText = ''
+    if (typeof address === 'string') {
+      addressText = address
+    } else if (address?.street) {
+      addressText = address.street
+    } else {
+      console.warn(`⚠️ No se pudo encontrar zipcode para warehouse ${warehouse.name}:`, {
+        zipCode: warehouse.zipCode,
+        zipcode: warehouse.zipcode,
+        zip_code: warehouse.zip_code,
+        address: warehouse.address
+      })
+      return null
+    }
+
+    // Buscar patrón STATE zipcode (ej: "FL 33186")
+    const zipcodeMatch = addressText.match(/\b[A-Z]{2}\s+(\d{5})(?:-\d{4})?\b/)
+    if (zipcodeMatch) {
+      console.log(`✅ Zipcode extraído de dirección: ${zipcodeMatch[1]} para warehouse ${warehouse.name}`)
+      return zipcodeMatch[1]
+    }
+
+    console.warn(`⚠️ No se pudo extraer zipcode de la dirección para warehouse ${warehouse.name}: ${addressText}`)
+    return null
+  }
+
+  /**
+   * Obtiene zonas que tienen almacenes
+   */
+  const getZonesWithWarehouses = () => {
+    const zonesMap = new Map<number, { zone: any; totalWarehouses: number }>()
+
+    zones.forEach(zone => {
+      if (zonesMap.has(zone.id)) return
+
+      let totalWarehouses = 0
+      const zipCodes = Array.isArray(zone.zipCodes) ? zone.zipCodes : []
+
+      warehouses.forEach(warehouse => {
+        const warehouseZipcode = extractZipcodeFromWarehouse(warehouse)
+        if (warehouseZipcode && zipCodes.includes(warehouseZipcode)) {
+          totalWarehouses++
+        }
+      })
+
+      if (totalWarehouses > 0) {
+        zonesMap.set(zone.id, { zone, totalWarehouses })
+      }
+    })
+
+    return Array.from(zonesMap.values())
+  }
+
+  /**
+   * Obtiene almacenes por zona
+   */
+  const getWarehousesByZone = (zoneId: number) => {
+    const zone = zones.find(z => z.id === zoneId)
+    if (!zone) return []
+
+    const zipCodes = Array.isArray(zone.zipCodes) ? zone.zipCodes : []
+
+    return warehouses.filter(warehouse => {
+      const warehouseZipcode = extractZipcodeFromWarehouse(warehouse)
+      return warehouseZipcode && zipCodes.includes(warehouseZipcode)
+    })
+  }
+
+  /**
    * Calcula cuántas PARADAS habrá en una zona y horario específico
    */
   const getStopsByZoneAndTimeWindow = (zoneId: number, timeWindowValue: string) => {
@@ -559,34 +654,51 @@ export default function CreateRoutePage() {
   }
 
   const handleNext = () => {
+    // Step 1: Validate route type selection
     if (currentStep === 1) {
-      if (selectedOrders.length === 0) {
-        showNotification('warning', 'Advertencia', 'Selecciona al menos una orden')
-        return
-      }
-
-      // Los periodos se seleccionan automáticamente, validar que haya al menos uno
-      if (selectedTimeWindows.length === 0) {
-        showNotification('error', 'Error', 'Las órdenes seleccionadas no tienen horarios válidos')
-        return
-      }
-
-      // Validar que los horarios seleccionados tengan órdenes SELECCIONADAS
-      const invalidTimeWindows = selectedTimeWindows.filter(tw => {
-        const ordersInWindow = getOrdersByTimeWindow(tw)
-        const hasSelectedOrders = ordersInWindow.some(o => selectedOrders.includes(o.id))
-        return !hasSelectedOrders
-      })
-
-      if (invalidTimeWindows.length > 0) {
-        showNotification('error', 'Error', 'Hay horarios seleccionados sin órdenes seleccionadas')
-        // Remover horarios sin órdenes seleccionadas
-        setSelectedTimeWindows(prev => prev.filter(tw => !invalidTimeWindows.includes(tw)))
+      if (!routeType) {
+        showNotification('warning', 'Advertencia', 'Selecciona un tipo de ruta')
         return
       }
     }
 
+    // Step 2: Validate orders or warehouses selection
     if (currentStep === 2) {
+      if (routeType === 'orders') {
+        if (selectedOrders.length === 0) {
+          showNotification('warning', 'Advertencia', 'Selecciona al menos una orden')
+          return
+        }
+
+        // Los periodos se seleccionan automáticamente, validar que haya al menos uno
+        if (selectedTimeWindows.length === 0) {
+          showNotification('error', 'Error', 'Las órdenes seleccionadas no tienen horarios válidos')
+          return
+        }
+
+        // Validar que los horarios seleccionados tengan órdenes SELECCIONADAS
+        const invalidTimeWindows = selectedTimeWindows.filter(tw => {
+          const ordersInWindow = getOrdersByTimeWindow(tw)
+          const hasSelectedOrders = ordersInWindow.some(o => selectedOrders.includes(o.id))
+          return !hasSelectedOrders
+        })
+
+        if (invalidTimeWindows.length > 0) {
+          showNotification('error', 'Error', 'Hay horarios seleccionados sin órdenes seleccionadas')
+          // Remover horarios sin órdenes seleccionadas
+          setSelectedTimeWindows(prev => prev.filter(tw => !invalidTimeWindows.includes(tw)))
+          return
+        }
+      } else if (routeType === 'warehouses') {
+        if (selectedWarehouses.length === 0) {
+          showNotification('warning', 'Advertencia', 'Selecciona al menos un almacén')
+          return
+        }
+      }
+    }
+
+    // Step 3: Validate configuration (warehouse, vehicle, driver optional)
+    if (currentStep === 3) {
       if (!warehouseId) {
         showNotification('warning', 'Advertencia', 'Selecciona un almacén')
         return
@@ -598,7 +710,7 @@ export default function CreateRoutePage() {
       // Driver es opcional
     }
 
-    setCurrentStep(prev => Math.min(prev + 1, 3))
+    setCurrentStep(prev => Math.min(prev + 1, 5))
   }
 
   const handlePrevious = () => {
@@ -613,6 +725,14 @@ export default function CreateRoutePage() {
     try {
       setOptimizing(true)
 
+      // Handle warehouse routes differently
+      if (routeType === 'warehouses') {
+        console.log('🏭 Iniciando optimización de ruta de almacenes')
+        await optimizeWarehouseRoute()
+        return
+      }
+
+      // Order routes logic
       console.log('🚀 Iniciando optimización multi-periodo')
       console.log('⏰ Horarios seleccionados:', selectedTimeWindows)
 
@@ -694,6 +814,57 @@ export default function CreateRoutePage() {
         `Ruta con ${data.data.totalStops} paradas optimizada correctamente`)
     } else {
       throw new Error(data.error || 'Error en optimización')
+    }
+  }
+
+  /**
+   * Optimización de ruta de almacenes
+   */
+  const optimizeWarehouseRoute = async () => {
+    const response = await fetch('/api/routes', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        mechanism: 'automatic',
+        routeType: 'warehouses',
+        selectedWarehouses,
+        warehouseId, // Origin warehouse
+        vehicleId,
+        driverId: driverId || undefined,
+        date: routeDate,
+        notes: notes || `Ruta de almacenes - ${selectedWarehouses.length} destinos`,
+        saveRoute: false // Solo preview
+      })
+    })
+
+    const data = await response.json()
+
+    console.log('📥 [Frontend] Respuesta de optimización de almacenes recibida:', data)
+
+    if (data.success && data.data) {
+      console.log('✅ [Frontend] Datos de optimización:', {
+        hasGeometry: !!data.data.geometry,
+        hasCoordinates: !!data.data.coordinates,
+        coordinatesCount: data.data.coordinates?.length || 0,
+        hasRoute: !!data.data.route,
+        stopsCount: data.data.route?.stops?.length || 0,
+        distance: data.data.distance,
+        duration: data.data.duration
+      })
+
+      // Asegurar que distance y duration son números
+      const resultWithNumbers = {
+        ...data.data,
+        distance: Number(data.data.distance) || 0,
+        duration: Number(data.data.duration) || 0
+      }
+
+      // Para rutas de almacenes, no necesitamos enriquecer con colores de zona
+      setOptimizationResult(resultWithNumbers)
+      showNotification('success', 'Optimización Completa',
+        `Ruta de almacenes con ${data.data.totalStops} paradas optimizada correctamente`)
+    } else {
+      throw new Error(data.error || 'Error en optimización de ruta de almacenes')
     }
   }
 
@@ -1112,7 +1283,281 @@ export default function CreateRoutePage() {
     </div>
   )
 
+  // ============================================================================
+  // RENDER STEP 1: Route Type Selection
+  // ============================================================================
   const renderStep1 = () => {
+    return (
+      <div className="max-w-4xl mx-auto">
+        <div className="text-center mb-8">
+          <h2 className="text-3xl font-bold text-gray-900 dark:text-white mb-3">
+            Selecciona el Tipo de Ruta
+          </h2>
+          <p className="text-gray-600 dark:text-gray-400">
+            Elige si deseas crear una ruta de reparto de órdenes o una ruta entre almacenes
+          </p>
+        </div>
+
+        <div className="grid md:grid-cols-2 gap-6">
+          {/* Ruta de Órdenes */}
+          <motion.div
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
+            onClick={() => {
+              setRouteType('orders')
+              setCurrentStep(2)
+            }}
+            className={cn(
+              "relative bg-white dark:bg-gray-800 rounded-2xl p-8 border-2 cursor-pointer transition-all",
+              routeType === 'orders'
+                ? 'border-blue-500 shadow-xl shadow-blue-500/20'
+                : 'border-gray-200 dark:border-gray-700 hover:border-blue-300 dark:hover:border-blue-600 hover:shadow-lg'
+            )}
+          >
+            <div className="text-center space-y-4">
+              <div className="w-20 h-20 mx-auto bg-gradient-to-br from-blue-500 to-blue-600 rounded-2xl flex items-center justify-center">
+                <Package className="w-10 h-10 text-white" />
+              </div>
+              <h3 className="text-2xl font-bold text-gray-900 dark:text-white">
+                Ruta de Órdenes
+              </h3>
+              <p className="text-gray-600 dark:text-gray-400">
+                Crea una ruta optimizada para la entrega de órdenes de paquetería a clientes
+              </p>
+              <ul className="text-sm text-gray-500 dark:text-gray-400 space-y-2 text-left">
+                <li className="flex items-center gap-2">
+                  <Check className="w-4 h-4 text-green-500" />
+                  Selecciona órdenes pendientes
+                </li>
+                <li className="flex items-center gap-2">
+                  <Check className="w-4 h-4 text-green-500" />
+                  Filtra por zonas y horarios
+                </li>
+                <li className="flex items-center gap-2">
+                  <Check className="w-4 h-4 text-green-500" />
+                  Optimización automática de ruta
+                </li>
+              </ul>
+            </div>
+          </motion.div>
+
+          {/* Ruta de Almacenes */}
+          <motion.div
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
+            onClick={() => {
+              setRouteType('warehouses')
+              setCurrentStep(2)
+            }}
+            className={cn(
+              "relative bg-white dark:bg-gray-800 rounded-2xl p-8 border-2 cursor-pointer transition-all",
+              routeType === 'warehouses'
+                ? 'border-purple-500 shadow-xl shadow-purple-500/20'
+                : 'border-gray-200 dark:border-gray-700 hover:border-purple-300 dark:hover:border-purple-600 hover:shadow-lg'
+            )}
+          >
+            <div className="text-center space-y-4">
+              <div className="w-20 h-20 mx-auto bg-gradient-to-br from-purple-500 to-purple-600 rounded-2xl flex items-center justify-center">
+                <Warehouse className="w-10 h-10 text-white" />
+              </div>
+              <h3 className="text-2xl font-bold text-gray-900 dark:text-white">
+                Ruta de Almacenes
+              </h3>
+              <p className="text-gray-600 dark:text-gray-400">
+                Crea una ruta entre almacenes para consolidación y transferencia de carga
+              </p>
+              <ul className="text-sm text-gray-500 dark:text-gray-400 space-y-2 text-left">
+                <li className="flex items-center gap-2">
+                  <Check className="w-4 h-4 text-green-500" />
+                  Selecciona almacenes
+                </li>
+                <li className="flex items-center gap-2">
+                  <Check className="w-4 h-4 text-green-500" />
+                  Consolidación de carga
+                </li>
+                <li className="flex items-center gap-2">
+                  <Check className="w-4 h-4 text-green-500" />
+                  Ruta optimizada entre depósitos
+                </li>
+              </ul>
+            </div>
+          </motion.div>
+        </div>
+      </div>
+    )
+  }
+
+  // ============================================================================
+  // RENDER WAREHOUSES SELECTION (for route type: warehouses)
+  // ============================================================================
+  const renderWarehousesSelection = () => {
+    const zonesWithWarehouses = getZonesWithWarehouses()
+
+    return (
+      <div className="space-y-6">
+        {/* Zonas con almacenes agrupados */}
+        {zonesWithWarehouses.length === 0 ? (
+          <div className="bg-yellow-50 dark:bg-yellow-900/20 rounded-lg p-6 border border-yellow-200 dark:border-yellow-800">
+            <p className="text-sm text-yellow-700 dark:text-yellow-300 text-center flex items-center justify-center gap-2">
+              <AlertCircle className="w-5 h-5" />
+              No hay almacenes registrados en ninguna zona
+            </p>
+          </div>
+        ) : (
+          <div className="space-y-6">
+            {zonesWithWarehouses.map(({ zone, totalWarehouses }) => {
+              const zipCodes = Array.isArray(zone.zipCodes) ? zone.zipCodes : []
+              const warehousesInZone = getWarehousesByZone(zone.id)
+              const selectedInZone = warehousesInZone.filter(w => selectedWarehouses.includes(w.id)).length
+              const allSelectedInZone = warehousesInZone.length > 0 && warehousesInZone.every(w => selectedWarehouses.includes(w.id))
+
+              return (
+                <div
+                  key={zone.id}
+                  className="bg-white dark:bg-gray-800 rounded-xl border-2 border-gray-200 dark:border-gray-700 overflow-hidden shadow-lg"
+                >
+                  {/* Zone Header */}
+                  <div
+                    className="p-5"
+                    style={{
+                      background: `linear-gradient(135deg, ${zone.color || '#8B5CF6'}15 0%, ${zone.color || '#8B5CF6'}05 100%)`
+                    }}
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <div
+                          className="w-12 h-12 rounded-lg flex items-center justify-center text-white font-bold text-xl shadow-lg"
+                          style={{ backgroundColor: zone.color || '#8B5CF6' }}
+                        >
+                          {zone.name.charAt(0)}
+                        </div>
+                        <div>
+                          <h3 className="text-xl font-bold text-gray-900 dark:text-white">
+                            {zone.name}
+                          </h3>
+                          <p className="text-sm text-gray-600 dark:text-gray-400">
+                            {zone.description || `Códigos postales: ${zipCodes.join(', ')}`}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-sm text-gray-500 dark:text-gray-400">Almacenes en zona</p>
+                        <p className="text-2xl font-bold text-gray-900 dark:text-white">
+                          {totalWarehouses}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Almacenes en esta zona */}
+                  <div className="p-5">
+                    <div className="flex items-center justify-between mb-4">
+                      <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300">
+                        Selecciona almacenes ({selectedInZone}/{warehousesInZone.length})
+                      </h4>
+                      <button
+                        onClick={() => {
+                          if (allSelectedInZone) {
+                            // Deseleccionar todos
+                            setSelectedWarehouses(prev => prev.filter(id => !warehousesInZone.some(w => w.id === id)))
+                          } else {
+                            // Seleccionar todos
+                            const allIds = warehousesInZone.map(w => w.id)
+                            setSelectedWarehouses(prev => [...new Set([...prev, ...allIds])])
+                          }
+                        }}
+                        className={cn(
+                          "text-xs px-3 py-1.5 rounded-lg transition-colors",
+                          allSelectedInZone
+                            ? "bg-red-100 text-red-700 hover:bg-red-200 dark:bg-red-900/30 dark:text-red-400"
+                            : "bg-blue-100 text-blue-700 hover:bg-blue-200 dark:bg-blue-900/30 dark:text-blue-400"
+                        )}
+                      >
+                        {allSelectedInZone ? 'Deseleccionar todos' : 'Seleccionar todos'}
+                      </button>
+                    </div>
+
+                    {/* Lista de almacenes */}
+                    <div className="grid gap-3">
+                      {warehousesInZone.map(warehouse => {
+                        const isSelected = selectedWarehouses.includes(warehouse.id)
+
+                        return (
+                          <div
+                            key={warehouse.id}
+                            onClick={() => {
+                              setSelectedWarehouses(prev =>
+                                isSelected
+                                  ? prev.filter(id => id !== warehouse.id)
+                                  : [...prev, warehouse.id]
+                              )
+                            }}
+                            className={cn(
+                              "p-4 rounded-lg border-2 cursor-pointer transition-all",
+                              isSelected
+                                ? "border-purple-500 bg-purple-50/50 dark:bg-purple-900/20 shadow-md"
+                                : "border-gray-200 dark:border-gray-700 hover:border-purple-300 dark:hover:border-purple-600"
+                            )}
+                          >
+                            <div className="flex items-start justify-between">
+                              <div className="flex items-start gap-3 flex-1">
+                                <div className={cn(
+                                  "w-10 h-10 rounded-lg flex items-center justify-center",
+                                  isSelected
+                                    ? "bg-purple-500 text-white"
+                                    : "bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-300"
+                                )}>
+                                  <Warehouse className="w-5 h-5" />
+                                </div>
+                                <div className="flex-1">
+                                  <h5 className="font-semibold text-gray-900 dark:text-white">
+                                    {warehouse.name}
+                                  </h5>
+                                  <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                                    {typeof warehouse.address === 'string'
+                                      ? warehouse.address
+                                      : warehouse.address?.street || 'Sin dirección'}
+                                  </p>
+                                  {warehouse.phone && (
+                                    <p className="text-xs text-gray-500 dark:text-gray-500 mt-1">
+                                      📞 {warehouse.phone}
+                                    </p>
+                                  )}
+                                </div>
+                              </div>
+                              <div className={cn(
+                                "w-6 h-6 rounded-full border-2 flex items-center justify-center",
+                                isSelected
+                                  ? "border-purple-500 bg-purple-500"
+                                  : "border-gray-300 dark:border-gray-600"
+                              )}>
+                                {isSelected && <Check className="w-4 h-4 text-white" />}
+                              </div>
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        )}
+      </div>
+    )
+  }
+
+  // ============================================================================
+  // RENDER STEP 2: Orders/Warehouses Selection
+  // ============================================================================
+  const renderStep2 = () => {
+    // Si es ruta de almacenes, mostrar vista de almacenes
+    if (routeType === 'warehouses') {
+      return renderWarehousesSelection()
+    }
+
+    // Si es ruta de órdenes, mostrar vista de órdenes
     const zonesWithOrders = getZonesWithOrders()
 
     return (
@@ -1348,7 +1793,7 @@ export default function CreateRoutePage() {
     )
   }
 
-  const renderStep2 = () => (
+  const renderStep3 = () => (
     <div className="space-y-5">
       {/* Warehouse */}
       <div className={cn(
@@ -1365,7 +1810,7 @@ export default function CreateRoutePage() {
           <div className="p-2 rounded-lg bg-gradient-to-br from-purple-50 to-purple-100 border border-purple-200 dark:bg-purple-900/30 dark:border-purple-800/50">
             <Warehouse className="w-5 h-5 text-purple-600 dark:text-purple-400" />
           </div>
-          Almacén de Salida *
+          {routeType === 'warehouses' ? 'Almacén de Origen *' : 'Almacén de Salida *'}
         </label>
         <select
           value={warehouseId}
@@ -1546,7 +1991,7 @@ export default function CreateRoutePage() {
     </div>
   )
 
-  const renderStep3 = () => (
+  const renderStep4 = () => (
     <div className="space-y-6">
       {/* Progress Bar de Optimización */}
       {!optimizationResult && optimizing && (
@@ -1557,7 +2002,9 @@ export default function CreateRoutePage() {
               <h3 className="text-2xl font-bold">Optimizando Ruta con Mapbox</h3>
             </div>
             <p className="text-blue-100 text-base">
-              {selectedTimeWindows.length === 1
+              {routeType === 'warehouses'
+                ? 'Calculando la mejor ruta entre almacenes...'
+                : selectedTimeWindows.length === 1
                 ? 'Calculando la mejor ruta para el periodo seleccionado...'
                 : `Optimizando ${selectedTimeWindows.length} periodos y uniéndolos en secuencia...`
               }
@@ -1607,7 +2054,7 @@ export default function CreateRoutePage() {
                 useCountUp={useCountUp}
               />
               <StatCard
-                label="Órdenes"
+                label={routeType === 'warehouses' ? 'Destinos' : 'Órdenes'}
                 value={optimizationResult.totalOrders}
                 color="green"
                 useCountUp={useCountUp}
@@ -1648,6 +2095,8 @@ export default function CreateRoutePage() {
               <RouteMap
                 optimizationResult={optimizationResult}
                 warehouseCoordinates={optimizationResult.warehouseCoordinates}
+                routeType={routeType}
+                zones={zones}
               />
             </div>
           </div>
@@ -1678,7 +2127,7 @@ export default function CreateRoutePage() {
     </div>
   )
 
-  const renderStep4 = () => {
+  const renderStep5 = () => {
     if (!createdRoute) return null
 
     // Obtener órdenes asociadas a la ruta
@@ -2104,12 +2553,13 @@ export default function CreateRoutePage() {
               {currentStep === 2 && renderStep2()}
               {currentStep === 3 && renderStep3()}
               {currentStep === 4 && renderStep4()}
+              {currentStep === 5 && renderStep5()}
             </motion.div>
           </AnimatePresence>
         </div>
 
         {/* Navigation Buttons */}
-        {currentStep < 3 && (
+        {currentStep < 4 && (
           <div className="flex gap-4">
             {currentStep > 1 && (
               <Button

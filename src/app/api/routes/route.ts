@@ -280,6 +280,138 @@ export async function GET(request: NextRequest) {
   }
 }
 
+/**
+ * Handle warehouse route optimization
+ */
+async function handleWarehouseRoute(body: any, shouldSaveRoute: boolean) {
+  try {
+    console.log('🏭 [Warehouse Route] Iniciando optimización de ruta de almacenes')
+
+    // Fetch all warehouses
+    const warehousesResponse = await fetch(`${process.env.NEXTAUTH_URL || 'http://localhost:3000'}/api/warehouses?limit=1000`)
+    const warehousesData = await warehousesResponse.json()
+
+    // Filter selected warehouses with valid coordinates
+    const selectedWarehouses = warehousesData.data?.filter((wh: any) => {
+      const isSelected = body.selectedWarehouses && body.selectedWarehouses.includes(wh.id)
+      const hasCoords = wh.longitude && wh.latitude &&
+                       wh.longitude !== 0 && wh.latitude !== 0
+      return isSelected && hasCoords
+    }) || []
+
+    console.log(`✅ [Warehouse Route] ${selectedWarehouses.length} almacenes seleccionados`)
+
+    if (selectedWarehouses.length === 0) {
+      return NextResponse.json(
+        { error: 'No hay almacenes válidos con coordenadas para crear la ruta' },
+        { status: 400 }
+      )
+    }
+
+    // Get origin warehouse coordinates
+    const originWarehouseResponse = await fetch(`${process.env.NEXTAUTH_URL || 'http://localhost:3000'}/api/warehouses/${body.warehouseId}`)
+    let originCoordinates: [number, number] = [-80.2395, 25.7548] // Miami default
+
+    if (originWarehouseResponse.ok) {
+      const originData = await originWarehouseResponse.json()
+      if (originData.longitude && originData.latitude) {
+        originCoordinates = [Number(originData.longitude), Number(originData.latitude)]
+        console.log(`🏭 [Origin] Coordenadas: ${originCoordinates}`)
+      }
+    }
+
+    // Build stops from warehouses with complete data
+    const stops = selectedWarehouses.map((wh: any, index: number) => {
+      // Calculate available capacity
+      const totalCapacity = wh.capacity || 0
+      const currentUsage = 0 // TODO: Calculate from actual stored items
+      const availableCapacity = totalCapacity - currentUsage
+
+      return {
+        id: wh.id,
+        name: wh.name,
+        code: wh.code,
+        address: `${wh.address || ''}, ${wh.city || ''}, ${wh.state || ''} ${wh.zipCode || ''}`.trim(),
+        coordinates: [Number(wh.longitude), Number(wh.latitude)] as [number, number],
+        latitude: Number(wh.latitude),
+        longitude: Number(wh.longitude),
+        sequence: index + 1,
+        type: 'warehouse',
+        // Additional warehouse data
+        managerPhone: wh.managerPhone,
+        managerName: wh.managerName,
+        capacity: totalCapacity,
+        availableCapacity,
+        warehouseType: wh.type,
+        // Extract zipcode for zone color matching
+        zipCode: wh.zipCode || wh.zipcode || wh.zip_code
+      }
+    })
+
+    // Call Mapbox Directions API for optimization
+    const mapboxToken = process.env.NEXT_PUBLIC_MAPBOX_TOKEN || 'pk.eyJ1IjoieXVsaWFuYW5kcmVzMTYxMCIsImEiOiJjbWgycTlsZGsxM200YnNvbnN2d2wwcHJ5In0.wlU7-bazAs2eYjknx7H97Q'
+
+    // Build coordinates string: origin → warehouses → origin
+    const coordinatesString = [
+      originCoordinates,
+      ...stops.map(stop => stop.coordinates),
+      originCoordinates
+    ].map(coord => `${coord[0]},${coord[1]}`).join(';')
+
+    const directionsUrl = `https://api.mapbox.com/directions/v5/mapbox/driving/${coordinatesString}?geometries=geojson&overview=full&steps=true&access_token=${mapboxToken}`
+    const directionsResponse = await fetch(directionsUrl)
+
+    if (!directionsResponse.ok) {
+      throw new Error('Error calling Mapbox Directions API')
+    }
+
+    const directionsData = await directionsResponse.json()
+    const route = directionsData.routes[0]
+    const geometry = route?.geometry
+    const coordinates = geometry?.coordinates || []
+
+    // Calculate distance (convert meters to miles) and duration (convert seconds to minutes)
+    const distanceMeters = route?.distance || 0
+    const distanceMiles = (distanceMeters / 1609.34).toFixed(1)
+    const durationSeconds = route?.duration || 0
+    const durationMinutes = Math.round(durationSeconds / 60)
+
+    console.log(`📊 [Warehouse Route] Distancia: ${distanceMiles} mi, Duración: ${durationMinutes} min`)
+
+    // Build result
+    const result = {
+      success: true,
+      data: {
+        distance: Number(distanceMiles),
+        duration: durationMinutes,
+        totalStops: stops.length,
+        totalOrders: stops.length, // For consistency with order routes
+        stops,
+        geometry,
+        coordinates,
+        warehouseCoordinates: originCoordinates,
+        routeType: 'warehouses'
+      }
+    }
+
+    // If saving, create route in database
+    if (shouldSaveRoute) {
+      // TODO: Implement database save for warehouse routes
+      // For now, just return preview
+      console.log('⚠️ [Warehouse Route] Database save not yet implemented')
+    }
+
+    return NextResponse.json(result)
+
+  } catch (error) {
+    console.error('❌ [Warehouse Route] Error:', error)
+    return NextResponse.json(
+      { error: 'Error optimizing warehouse route' },
+      { status: 500 }
+    )
+  }
+}
+
 // Mapbox Optimization API v2 Integration - Complete with job_id storage
 // Updated: 2025-11-07 - Full ISO 8601 timestamps + mapbox/driving-traffic + job_id
 export async function POST(request: NextRequest) {
@@ -308,6 +440,14 @@ export async function POST(request: NextRequest) {
 
     const shouldSaveRoute = body.saveRoute !== false
     console.log(`💾 [Modo]: ${shouldSaveRoute ? 'Guardar ruta' : 'Solo preview'}`)
+
+    // ==============================
+    // HANDLE WAREHOUSE ROUTES SEPARATELY
+    // ==============================
+    if (body.routeType === 'warehouses') {
+      console.log('🏭 [Warehouse Route] Procesando ruta de almacenes...')
+      return await handleWarehouseRoute(body, shouldSaveRoute)
+    }
 
     // ==============================
     // PASO 2: Obtener y agrupar órdenes por dirección

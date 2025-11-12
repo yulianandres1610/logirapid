@@ -616,7 +616,7 @@ export default function WarehousesPage() {
                             <td className="px-6 py-4">
                               <div className="text-sm text-black dark:text-gray-400">
                                 <div className="font-medium text-black dark:text-gray-100">
-                                  {warehouse.city}, {warehouse.state}
+                                  {warehouse.city}, {warehouse.state} {warehouse.zipCode}
                                 </div>
                                 <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
                                   {warehouse.address}

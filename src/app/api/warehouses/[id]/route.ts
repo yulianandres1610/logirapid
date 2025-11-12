@@ -9,7 +9,31 @@ export async function GET(
     const { id } = await params
 
     const result = await db.query(
-      'SELECT * FROM warehouses WHERE id = $1',
+      `SELECT
+        id,
+        name,
+        code,
+        address,
+        city,
+        state,
+        zip_code as "zipCode",
+        country,
+        type,
+        status,
+        manager_name as "managerName",
+        manager_email as "managerEmail",
+        manager_phone as "managerPhone",
+        operating_hours as "operatingHours",
+        custom_operating_hours as "customOperatingHours",
+        total_area as "totalArea",
+        capacity,
+        opening_date as "openingDate",
+        notes,
+        latitude,
+        longitude,
+        created_at as "createdAt",
+        updated_at as "updatedAt"
+      FROM warehouses WHERE id = $1`,
       [id]
     )
 
