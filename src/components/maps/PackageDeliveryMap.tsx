@@ -16,6 +16,7 @@ interface PackageOrder {
   customerName: string
   customerAddress?: string
   services: string[]
+  boxes?: any[]
   status: string
   scheduledDate?: string
   timeSlot?: string
@@ -635,7 +636,106 @@ export default function PackageDeliveryMap({
               <Package className="w-4 h-4 text-gray-500 dark:text-gray-400 mt-0.5" />
               <div className="flex-1">
                 <p className="text-xs text-gray-500 dark:text-gray-400">Servicios</p>
-                <p className="text-sm text-gray-900 dark:text-white">{selectedOrder.services.join(', ')}</p>
+                <div className="space-y-1">
+                  {selectedOrder.services.map((service, index) => (
+                    <div key={index} className="text-sm text-gray-900 dark:text-white">
+                      {service}
+                    </div>
+                  ))}
+                  {(() => {
+                    // Parsear boxes si es string JSON
+                    let boxes = selectedOrder.boxes
+                    if (typeof boxes === 'string') {
+                      try {
+                        boxes = JSON.parse(boxes)
+                      } catch (e) {
+                        boxes = []
+                      }
+                    }
+
+                    return boxes && Array.isArray(boxes) && boxes.length > 0 && (
+                      <div className="mt-2 space-y-1">
+                        {boxes.map((box: any, index: number) => (
+                          <div key={index} className="flex items-center gap-2 text-xs text-gray-600 dark:text-gray-400">
+                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+                            </svg>
+                            <span className="font-medium">{box.quantity || 1}x</span>
+                            <span className="capitalize">{box.size || box.name || 'Caja'}</span>
+                            {box.type && box.type !== 'empty' && (
+                              <span className="text-xs bg-gray-100 dark:bg-gray-700 px-1.5 py-0.5 rounded capitalize">
+                                {box.type === 'full' ? 'Llena' : box.type}
+                              </span>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    )
+                  })()}
+                </div>
+              </div>
+            </div>
+
+            {/* Zona */}
+            <div className="flex items-start gap-3">
+              <svg className="w-4 h-4 text-gray-500 dark:text-gray-400 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
+              </svg>
+              <div className="flex-1">
+                <p className="text-xs text-gray-500 dark:text-gray-400">Zona</p>
+                {(() => {
+                  const zipcode = extractZipcode(selectedOrder.customerAddress)
+                  const zone = zones.find(z => {
+                    const zipCodes = Array.isArray(z.zipCodes) ? z.zipCodes : []
+                    return zipCodes.includes(zipcode || '')
+                  })
+                  return zone ? (
+                    <div className="flex items-center gap-2">
+                      <div
+                        className="w-3 h-3 rounded-full"
+                        style={{ backgroundColor: zone.color }}
+                      />
+                      <p className="text-sm font-semibold text-gray-900 dark:text-white">{zone.name}</p>
+                    </div>
+                  ) : (
+                    <p className="text-sm text-gray-500 dark:text-gray-400">Sin zona asignada</p>
+                  )
+                })()}
+              </div>
+            </div>
+
+            {/* Estado */}
+            <div className="flex items-start gap-3">
+              <svg className="w-4 h-4 text-gray-500 dark:text-gray-400 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <div className="flex-1">
+                <p className="text-xs text-gray-500 dark:text-gray-400">Estado</p>
+                {(() => {
+                  const statusLabels: Record<string, string> = {
+                    pending: 'Pendiente',
+                    scheduled: 'Programado',
+                    picked_up: 'Recogido',
+                    in_transit: 'En Tránsito',
+                    delivered: 'Entregado',
+                    cancelled: 'Cancelado',
+                    reprogrammed: 'Reprogramada'
+                  }
+                  const statusColors: Record<string, string> = {
+                    pending: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400 border-yellow-200 dark:border-yellow-800',
+                    scheduled: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400 border-blue-200 dark:border-blue-800',
+                    picked_up: 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-400 border-purple-200 dark:border-purple-800',
+                    in_transit: 'bg-cyan-100 text-cyan-800 dark:bg-cyan-900/30 dark:text-cyan-400 border-cyan-200 dark:border-cyan-800',
+                    delivered: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400 border-green-200 dark:border-green-800',
+                    cancelled: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400 border-red-200 dark:border-red-800',
+                    reprogrammed: 'bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-400 border-orange-200 dark:border-orange-800'
+                  }
+                  return (
+                    <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium border ${statusColors[selectedOrder.status] || statusColors.pending}`}>
+                      {statusLabels[selectedOrder.status] || selectedOrder.status}
+                    </span>
+                  )
+                })()}
               </div>
             </div>
 
