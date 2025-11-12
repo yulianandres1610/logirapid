@@ -41,12 +41,12 @@ export async function PUT(
   try {
     const { id } = await params;
     const body = await request.json();
-    const { status, availability, driver_id, current_route_id } = body;
+    const { status, availability, driverid, current_route_id } = body;
 
     const vehicle = updateVehicle(id, {
       status,
       availability,
-      driver_id,
+      driverid,
       current_route_id,
       updated_at: new Date().toISOString()
     });

@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { Database } from 'sqlite3'
-import { open } from 'sqlite'
+import { db } from '@/lib/database'
 
 export async function GET(
   request: NextRequest,
@@ -9,26 +8,19 @@ export async function GET(
   try {
     const { id } = await params
 
-    const db = await open({
-      filename: './data/cubarapid.db',
-      driver: Database
-    })
-
-    const warehouse = await db.get(
-      'SELECT * FROM warehouses WHERE id = ?',
+    const result = await db.query(
+      'SELECT * FROM warehouses WHERE id = $1',
       [id]
     )
 
-    await db.close()
-
-    if (!warehouse) {
+    if (result.rows.length === 0) {
       return NextResponse.json(
         { error: 'Warehouse not found' },
         { status: 404 }
       )
     }
 
-    return NextResponse.json(warehouse)
+    return NextResponse.json(result.rows[0])
   } catch (error) {
     console.error('Error fetching warehouse:', error)
     return NextResponse.json(

@@ -29,39 +29,39 @@ export async function PUT(
 
     // If this is being set as default, unset all other defaults
     if (isDefault) {
-      db.prepare(`
+      await db.query(`
         UPDATE package_sizes
-        SET isDefault = 0
-        WHERE companyId = ? AND status = 'active' AND id != ?
-      `).run(companyId, id)
+        SET isdefault = false
+        WHERE companyid = $1 AND status = 'active' AND id != $2
+      `, [companyId, id])
     }
 
-    const stmt = db.prepare(`
+    const result = await db.query(`
       UPDATE package_sizes
-      SET name = ?, dimensions = ?, weight = ?, price = ?, description = ?, isDefault = ?, status = ?, updatedAt = datetime('now')
-      WHERE id = ? AND companyId = ?
-    `)
-
-    const result = stmt.run(
+      SET name = $1, dimensions = $2, weight = $3, price = $4, description = $5,
+          isdefault = $6, status = $7, updatedat = CURRENT_TIMESTAMP
+      WHERE id = $8 AND companyid = $9
+      RETURNING *
+    `, [
       name,
       dimensions,
       weight || 0,
       price,
       description || '',
-      isDefault ? 1 : 0,
+      isDefault ? true : false,
       status || 'active',
       id,
       companyId
-    )
+    ])
 
-    if (result.changes === 0) {
+    if (result.rowCount === 0) {
       return NextResponse.json(
         { success: false, error: 'Package size not found or unauthorized' },
         { status: 404 }
       )
     }
 
-    return NextResponse.json({ success: true })
+    return NextResponse.json({ success: true, data: result.rows[0] })
   } catch (error) {
     console.error('Error updating package size:', error)
     return NextResponse.json(
@@ -87,15 +87,14 @@ export async function DELETE(
     }
 
     // Soft delete - just update status
-    const stmt = db.prepare(`
+    const result = await db.query(`
       UPDATE package_sizes
-      SET status = 'deleted', updatedAt = datetime('now')
-      WHERE id = ? AND companyId = ?
-    `)
+      SET status = 'deleted', updatedat = CURRENT_TIMESTAMP
+      WHERE id = $1 AND companyid = $2
+      RETURNING *
+    `, [id, companyId])
 
-    const result = stmt.run(id, companyId)
-
-    if (result.changes === 0) {
+    if (result.rowCount === 0) {
       return NextResponse.json(
         { success: false, error: 'Package size not found or unauthorized' },
         { status: 404 }

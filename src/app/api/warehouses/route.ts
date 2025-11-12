@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { db } from '@/lib/database'
 
 export async function GET(request: NextRequest) {
   try {
@@ -9,98 +10,51 @@ export async function GET(request: NextRequest) {
     const status = searchParams.get('status') || ''
     const type = searchParams.get('type') || ''
 
-    // Import database connection locally
-    const Database = require('better-sqlite3')
-    const path = require('path')
-    const fs = require('fs')
-
-    const DB_PATH = path.join(process.cwd(), 'data', 'cubarapid.db')
-
-    // Create directory if it doesn't exist
-    if (!fs.existsSync(path.dirname(DB_PATH))) {
-      fs.mkdirSync(path.dirname(DB_PATH), { recursive: true })
-    }
-
-    // Open database connection
-    const db = new Database(DB_PATH)
-
-    // Create warehouses table if it doesn't exist
-    db.exec(`
-      CREATE TABLE IF NOT EXISTS warehouses (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        name TEXT NOT NULL,
-        code TEXT NOT NULL UNIQUE,
-        address TEXT NOT NULL,
-        city TEXT NOT NULL,
-        state TEXT NOT NULL,
-        zip_code TEXT NOT NULL,
-        country TEXT NOT NULL DEFAULT 'Estados Unidos',
-        type TEXT NOT NULL,
-        status TEXT NOT NULL DEFAULT 'active',
-        manager_name TEXT,
-        manager_email TEXT,
-        manager_phone TEXT,
-        operating_hours TEXT NOT NULL DEFAULT 'standard',
-        custom_operating_hours TEXT,
-        total_area REAL DEFAULT 0,
-        capacity INTEGER DEFAULT 0,
-        current_stock INTEGER DEFAULT 0,
-        opening_date TEXT,
-        notes TEXT,
-        latitude REAL,
-        longitude REAL,
-        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-      )
-    `)
-
     // Build WHERE conditions
     const conditions = []
     const params = []
 
     if (search) {
-      conditions.push('(name LIKE ? OR code LIKE ? OR address LIKE ? OR city LIKE ?)')
+      conditions.push('(name ILIKE $' + (params.length + 1) + ' OR code ILIKE $' + (params.length + 2) + ' OR address ILIKE $' + (params.length + 3) + ' OR city ILIKE $' + (params.length + 4) + ')')
       const searchTerm = `%${search}%`
       params.push(searchTerm, searchTerm, searchTerm, searchTerm)
     }
 
     if (status && status !== 'all') {
-      conditions.push('status = ?')
       params.push(status)
+      conditions.push('status = $' + params.length)
     }
 
     if (type && type !== 'all') {
-      conditions.push('type = ?')
       params.push(type)
+      conditions.push('type = $' + params.length)
     }
 
     const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : ''
 
     // Count total records
     const countQuery = `SELECT COUNT(*) as total FROM warehouses ${whereClause}`
-    const countResult = db.prepare(countQuery).get(...params) as { total: number }
+    const countResult = await db.query(countQuery, params)
 
     // Get paginated results
     const offset = (page - 1) * limit
+    params.push(limit, offset)
     const dataQuery = `
       SELECT * FROM warehouses
       ${whereClause}
       ORDER BY created_at DESC
-      LIMIT ? OFFSET ?
+      LIMIT $${params.length - 1} OFFSET $${params.length}
     `
-    const warehouses = db.prepare(dataQuery).all(...params, limit, offset)
-
-    // Close database connection
-    db.close()
+    const result = await db.query(dataQuery, params)
 
     return NextResponse.json({
       success: true,
-      data: warehouses,
+      data: result.rows,
       pagination: {
         page,
         limit,
-        total: countResult.total,
-        totalPages: Math.ceil(countResult.total / limit)
+        total: parseInt(countResult.rows[0].total),
+        totalPages: Math.ceil(parseInt(countResult.rows[0].total) / limit)
       }
     })
   } catch (error) {
@@ -116,58 +70,12 @@ export async function POST(request: NextRequest) {
   try {
     const warehouseData = await request.json()
 
-    // Import database connection locally
-    const Database = require('better-sqlite3')
-    const path = require('path')
-    const fs = require('fs')
-
-    const DB_PATH = path.join(process.cwd(), 'data', 'cubarapid.db')
-
-    // Create directory if it doesn't exist
-    if (!fs.existsSync(path.dirname(DB_PATH))) {
-      fs.mkdirSync(path.dirname(DB_PATH), { recursive: true })
-    }
-
-    // Open database connection
-    const db = new Database(DB_PATH)
-
-    // Create warehouses table if it doesn't exist
-    db.exec(`
-      CREATE TABLE IF NOT EXISTS warehouses (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        name TEXT NOT NULL,
-        code TEXT NOT NULL UNIQUE,
-        address TEXT NOT NULL,
-        city TEXT NOT NULL,
-        state TEXT NOT NULL,
-        zip_code TEXT NOT NULL,
-        country TEXT NOT NULL DEFAULT 'Estados Unidos',
-        type TEXT NOT NULL,
-        status TEXT NOT NULL DEFAULT 'active',
-        manager_name TEXT,
-        manager_email TEXT,
-        manager_phone TEXT,
-        operating_hours TEXT NOT NULL DEFAULT 'standard',
-        custom_operating_hours TEXT,
-        total_area REAL DEFAULT 0,
-        capacity INTEGER DEFAULT 0,
-        current_stock INTEGER DEFAULT 0,
-        opening_date TEXT,
-        notes TEXT,
-        latitude REAL,
-        longitude REAL,
-        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-      )
-    `)
-
     // Validate required fields
     const requiredFields = ['name', 'code', 'type', 'address', 'city', 'state', 'zipCode']
     for (const field of requiredFields) {
       const value = warehouseData[field]
       if (!value || (typeof value === 'string' && value.trim() === '')) {
         console.error(`❌ Campo requerido faltante o vacío: ${field}`, value)
-        db.close()
         return NextResponse.json(
           { success: false, error: `Field ${field} is required` },
           { status: 400 }
@@ -176,9 +84,10 @@ export async function POST(request: NextRequest) {
     }
 
     // Check if warehouse code already exists
-    const existingWarehouse = db.prepare('SELECT id FROM warehouses WHERE code = ?').get(warehouseData.code)
-    if (existingWarehouse) {
-      db.close()
+    const existingQuery = 'SELECT id FROM warehouses WHERE code = $1'
+    const existingResult = await db.query(existingQuery, [warehouseData.code])
+
+    if (existingResult.rows.length > 0) {
       return NextResponse.json(
         { success: false, error: 'Warehouse code already exists' },
         { status: 400 }
@@ -191,89 +100,45 @@ export async function POST(request: NextRequest) {
         name, code, address, city, state, zip_code, country,
         type, status, manager_name, manager_email, manager_phone,
         operating_hours, custom_operating_hours, total_area, capacity,
-        opening_date, notes, latitude, longitude, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))
+        opening_date, notes, latitude, longitude
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20)
+      RETURNING *
     `
 
     console.log('🗄️ Insertando warehouse con datos:', warehouseData)
 
-    let result: any = null
+    const values = [
+      warehouseData.name,
+      warehouseData.code,
+      warehouseData.address,
+      warehouseData.city,
+      warehouseData.state,
+      warehouseData.zipCode,
+      warehouseData.country || 'Estados Unidos',
+      warehouseData.type,
+      warehouseData.status || 'active',
+      warehouseData.managerName,
+      warehouseData.managerEmail,
+      warehouseData.managerPhone,
+      warehouseData.operatingHours,
+      warehouseData.customOperatingHours || null,
+      warehouseData.totalArea,
+      warehouseData.capacity,
+      warehouseData.openingDate || null,
+      warehouseData.notes || null,
+      warehouseData.latitude || null,
+      warehouseData.longitude || null
+    ]
 
-    try {
-      console.log('📋 Valores a insertar:', [
-        warehouseData.name,
-        warehouseData.code,
-        warehouseData.address,
-        warehouseData.city,
-        warehouseData.state,
-        warehouseData.zipCode,
-        warehouseData.country || 'Estados Unidos',
-        warehouseData.type,
-        warehouseData.status || 'active',
-        warehouseData.managerName,
-        warehouseData.managerEmail,
-        warehouseData.managerPhone,
-        warehouseData.operatingHours,
-        warehouseData.customOperatingHours || null,
-        warehouseData.totalArea,
-        warehouseData.capacity,
-        warehouseData.openingDate || null,
-        warehouseData.notes || null,
-        warehouseData.latitude || null,
-        warehouseData.longitude || null
-      ])
+    console.log('📋 Valores a insertar:', values)
 
-      result = db.prepare(insertQuery).run(
-        warehouseData.name,
-        warehouseData.code,
-        warehouseData.address,
-        warehouseData.city,
-        warehouseData.state,
-        warehouseData.zipCode,
-        warehouseData.country || 'Estados Unidos',
-        warehouseData.type,
-        warehouseData.status || 'active',
-        warehouseData.managerName,
-        warehouseData.managerEmail,
-        warehouseData.managerPhone,
-        warehouseData.operatingHours,
-        warehouseData.customOperatingHours || null,
-        warehouseData.totalArea,
-        warehouseData.capacity,
-        warehouseData.openingDate || null,
-        warehouseData.notes || null,
-        warehouseData.latitude || null,
-        warehouseData.longitude || null
-      )
-      console.log('✅ Warehouse insertado exitosamente con ID:', result.lastInsertRowid)
-    } catch (dbError) {
-      console.error('❌ Error en base de datos:', dbError)
-      console.error('❌ Stack trace:', dbError instanceof Error ? dbError.stack : 'No stack trace available')
-      db.close()
-      return NextResponse.json(
-        { success: false, error: `Database error: ${dbError instanceof Error ? dbError.message : 'Unknown error'}` },
-        { status: 500 }
-      )
-    }
-
-    // Close database connection
-    db.close()
-
-    // Verify that result exists before using it
-    if (!result) {
-      return NextResponse.json(
-        { success: false, error: 'Failed to create warehouse - no result from database' },
-        { status: 500 }
-      )
-    }
+    const result = await db.query(insertQuery, values)
+    console.log('✅ Warehouse insertado exitosamente con ID:', result.rows[0].id)
 
     return NextResponse.json({
       success: true,
       message: 'Warehouse created successfully',
-      data: {
-        id: result.lastInsertRowid,
-        ...warehouseData
-      }
+      data: result.rows[0]
     })
   } catch (error) {
     console.error('Error creating warehouse:', error)

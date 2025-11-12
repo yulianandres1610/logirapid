@@ -1,33 +1,30 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { Database } from 'sqlite3'
-import { open } from 'sqlite'
+import { db } from '@/lib/database'
 
 export async function POST(
   request: NextRequest,
   context: { params: Promise<{ id: string }> }
 ) {
   const params = await context.params
-  try {
-    const db = await open({
-      filename: './data/cubarapid.db',
-      driver: Database
-    })
 
+  try {
     const orderId = params.id
     const body = await request.json()
     const { newScheduledDate, newTimeSlot } = body
 
     // Get the current order with route information
-    const order = await db.get(`
-      SELECT po.*, proute.id as routeId, proute.stops
+    const orderResult = await db.query(`
+      SELECT po.*, proute.id as routeid, proute.stops
       FROM package_orders po
-      LEFT JOIN routes proute ON po.routeId = proute.id
-      WHERE po.id = ?
+      LEFT JOIN routes proute ON po.routeid = proute.id
+      WHERE po.id = $1
     `, [orderId])
 
-    if (!order) {
+    if (orderResult.rows.length === 0) {
       return NextResponse.json({ error: 'Order not found' }, { status: 404 })
     }
+
+    const order = orderResult.rows[0]
 
     if (order.status !== 'in_transit') {
       return NextResponse.json({ error: 'Order must be in transit to be reprogrammed' }, { status: 400 })
@@ -37,19 +34,17 @@ export async function POST(
       return NextResponse.json({ error: 'New scheduled date and time slot are required' }, { status: 400 })
     }
 
-    if (!order.routeId || !order.stops) {
+    if (!order.routeid || !order.stops) {
       return NextResponse.json({ error: 'Order is not assigned to a route' }, { status: 400 })
     }
 
-    // Start transaction
-    await db.run('BEGIN TRANSACTION')
-
-    try {
+    // Use transaction
+    const result = await db.transaction(async () => {
       // 1. Change order status to 'reprogrammed' and update scheduled date and time
-      await db.run(`
+      await db.query(`
         UPDATE package_orders
-        SET status = 'reprogrammed', routeId = NULL, scheduledDate = ?, timeSlot = ?, updatedAt = datetime('now')
-        WHERE id = ?
+        SET status = 'reprogrammed', routeid = NULL, scheduleddate = $1, timeslot = $2, updatedat = NOW()
+        WHERE id = $3
       `, [newScheduledDate, newTimeSlot, orderId])
 
       // 2. Parse stops JSON and remove the reprogrammed order
@@ -70,39 +65,35 @@ export async function POST(
       }))
 
       // 4. Update the route with new stops
-      await db.run(`
+      await db.query(`
         UPDATE routes
-        SET stops = ?, updatedAt = datetime('now')
-        WHERE id = ?
-      `, [JSON.stringify(stops), order.routeId])
+        SET stops = $1, updatedat = NOW()
+        WHERE id = $2
+      `, [JSON.stringify(stops), order.routeid])
 
       // 5. Update other orders in the route to remove routeId if needed
       for (const stop of stops) {
-        await db.run(`
+        await db.query(`
           UPDATE package_orders
-          SET stopNumber = ?
-          WHERE id = ?
+          SET stopnumber = $1
+          WHERE id = $2
         `, [stop.stopNumber, stop.orderId])
       }
 
-      await db.run('COMMIT')
+      return stops
+    })
 
-      return NextResponse.json({
-        success: true,
-        message: 'Order reprogrammed successfully',
-        data: {
-          orderId: parseInt(orderId),
-          previousRouteId: order.routeId,
-          newStopsCount: stops.length,
-          newScheduledDate,
-          newTimeSlot
-        }
-      })
-
-    } catch (error) {
-      await db.run('ROLLBACK')
-      throw error
-    }
+    return NextResponse.json({
+      success: true,
+      message: 'Order reprogrammed successfully',
+      data: {
+        orderId: parseInt(orderId),
+        previousRouteId: order.routeid,
+        newStopsCount: result.length,
+        newScheduledDate,
+        newTimeSlot
+      }
+    })
 
   } catch (error) {
     console.error('Error reprogramming order:', error)

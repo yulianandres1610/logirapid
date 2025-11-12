@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { Database } from 'sqlite3'
-import { open } from 'sqlite'
+import { db } from '@/lib/database'
 import crypto from 'crypto'
 
 // Mapbox Optimization API v2 + Directions API Integration - Updated 2025-11-07
@@ -110,7 +109,7 @@ function groupOrdersByAddress(orders: any[]) {
         totalOrders: 1,
         type: 'delivery',
         timeSlot: order.timeSlot, // Agregar timeSlot a nivel de parada
-        coordinates: [order.longitude, order.latitude]
+        coordinates: [Number(order.longitude), Number(order.latitude)]
       })
     }
   })
@@ -128,30 +127,29 @@ export async function GET(request: NextRequest) {
     const dayFilter = searchParams.get('dayFilter') || ''
     const driver = searchParams.get('driver') || ''
 
-    const db = await open({
-      filename: './data/cubarapid.db',
-      driver: Database
-    })
-
-    let whereConditions = []
-    let params = []
+    // Build WHERE conditions for PostgreSQL
+    const conditions = []
+    const params = []
 
     if (search) {
-      whereConditions.push(`
-        (routeNumber LIKE ? OR name LIKE ? OR driverName LIKE ? OR vehiclePlate LIKE ?)
-      `)
-      const searchTerm = `%${search}%`
-      params.push(searchTerm, searchTerm, searchTerm, searchTerm)
+      const searchPattern = `%${search}%`
+      params.push(searchPattern, searchPattern, searchPattern, searchPattern)
+      conditions.push(`(
+        routenumber ILIKE $${params.length - 3} OR
+        name ILIKE $${params.length - 2} OR
+        drivername ILIKE $${params.length - 1} OR
+        vehicleplate ILIKE $${params.length}
+      )`)
     }
 
     if (status && status !== 'all') {
-      whereConditions.push('status = ?')
       params.push(status)
+      conditions.push(`status = $${params.length}`)
     }
 
     if (driver && driver !== 'all') {
-      whereConditions.push('driverId = ?')
       params.push(driver)
+      conditions.push(`driverid = $${params.length}`)
     }
 
     if (dayFilter && dayFilter !== 'all') {
@@ -160,51 +158,111 @@ export async function GET(request: NextRequest) {
 
       switch (dayFilter) {
         case 'today':
-          whereConditions.push('date >= ? AND date < ?')
           const tomorrow = new Date(today)
           tomorrow.setDate(tomorrow.getDate() + 1)
           params.push(today.toISOString().split('T')[0], tomorrow.toISOString().split('T')[0])
+          conditions.push(`date >= $${params.length - 1} AND date < $${params.length}`)
           break
         case 'tomorrow':
-          whereConditions.push('date >= ? AND date < ?')
           const tomorrowDate = new Date(today)
           tomorrowDate.setDate(tomorrowDate.getDate() + 1)
           const dayAfter = new Date(tomorrowDate)
           dayAfter.setDate(dayAfter.getDate() + 1)
           params.push(tomorrowDate.toISOString().split('T')[0], dayAfter.toISOString().split('T')[0])
+          conditions.push(`date >= $${params.length - 1} AND date < $${params.length}`)
           break
         case 'week':
-          whereConditions.push('date >= ? AND date < ?')
           const weekEnd = new Date(today)
           weekEnd.setDate(weekEnd.getDate() + 7)
           params.push(today.toISOString().split('T')[0], weekEnd.toISOString().split('T')[0])
+          conditions.push(`date >= $${params.length - 1} AND date < $${params.length}`)
           break
       }
     }
 
-    const whereClause = whereConditions.length > 0 ? `WHERE ${whereConditions.join(' AND ')}` : ''
+    const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : ''
 
+    // Count total records
     const countQuery = `SELECT COUNT(*) as total FROM routes ${whereClause}`
-    const countResult = await db.get(countQuery, params)
-    const total = countResult.total
+    const countResult = await db.query(countQuery, params)
+    const total = parseInt(countResult.rows[0].total)
 
-    const query = `
-      SELECT * FROM routes
+    // Get paginated results
+    const offset = (page - 1) * limit
+    params.push(limit, offset)
+    const dataQuery = `
+      SELECT
+        id,
+        routenumber as "routeNumber",
+        name,
+        driverid as "driverId",
+        drivername as "driverName",
+        vehicleid as "vehicleId",
+        vehicleplate as "vehiclePlate",
+        status,
+        totalpackages as "totalPackages",
+        deliveredpackages as "deliveredPackages",
+        estimatedduration as "estimatedDuration",
+        actualduration as "actualDuration",
+        distance,
+        starttime as "startTime",
+        endtime as "endTime",
+        date,
+        notes,
+        mechanism,
+        timewindows as "timeWindows",
+        warehouseid as "warehouseId",
+        mapboxjobid as "mapboxJobId",
+        optimizedroute as "optimizedRoute",
+        stops,
+        createdat as "createdAt",
+        updatedat as "updatedAt"
+      FROM routes
       ${whereClause}
-      ORDER BY date DESC, createdAt DESC
-      LIMIT ? OFFSET ?
+      ORDER BY date DESC, createdat DESC
+      LIMIT $${params.length - 1} OFFSET $${params.length}
     `
 
-    const routes = await db.all(query, [...params, limit, (page - 1) * limit])
+    const result = await db.query(dataQuery, params)
 
-    const processedRoutes = routes.map(route => ({
-      ...route,
-      waypoints: route.stops ? JSON.parse(route.stops) : [],
-      optimizedRoute: route.optimizedRoute ? JSON.parse(route.optimizedRoute) : null,
-      timeWindows: route.timeWindows ? JSON.parse(route.timeWindows) : []
-    }))
+    // Process the routes to parse JSON fields with error handling
+    const processedRoutes = result.rows.map(route => {
+      // Helper function to safely parse JSON
+      const safeJSONParse = (data: any, defaultValue: any = null) => {
+        // If data is null or undefined, return default
+        if (data == null) return defaultValue
 
-    await db.close()
+        // If data is already an object or array, return it as is
+        if (typeof data === 'object') {
+          return data
+        }
+
+        // If data is not a string, convert to string first
+        if (typeof data !== 'string') {
+          return defaultValue
+        }
+
+        try {
+          // Check if the string is corrupted (e.g., "[object Object]")
+          if (data.includes('[object Object]') || data === '[object Object]') {
+            return defaultValue
+          }
+
+          // Try to parse as JSON
+          return JSON.parse(data)
+        } catch (error) {
+          // Silent fail - return default value
+          return defaultValue
+        }
+      }
+
+      return {
+        ...route,
+        waypoints: safeJSONParse(route.stops, []),
+        optimizedRoute: safeJSONParse(route.optimizedRoute, null),
+        timeWindows: safeJSONParse(route.timeWindows, [])
+      }
+    })
 
     return NextResponse.json({
       routes: processedRoutes,
@@ -330,7 +388,7 @@ export async function POST(request: NextRequest) {
     if (warehouseResponse.ok) {
       const warehouseData = await warehouseResponse.json()
       if (warehouseData.longitude && warehouseData.latitude) {
-        warehouseCoordinates = [warehouseData.longitude, warehouseData.latitude]
+        warehouseCoordinates = [Number(warehouseData.longitude), Number(warehouseData.latitude)]
         console.log(`🏭 [Almacén] Coordenadas: ${warehouseCoordinates}`)
       }
     }
@@ -341,17 +399,23 @@ export async function POST(request: NextRequest) {
     let optimizedRouteData: any = null
     let orderedStops = groupedStops
     let mapboxJobId: string | null = null
+    // Declarar variables de distancia/duración aquí para que estén disponibles en preview
+    let totalDistance = 0
+    let totalDuration = 0
 
     if (body.mechanism === 'automatic') {
-      console.log('🔧 [Optimización] Usando optimización por horarios + distancia')
+      console.log('🔧 [Optimización] Usando ordenamiento manual por horarios (Mapbox Optimization deshabilitada temporalmente)')
+
+      // Token de Mapbox
+      const mapboxToken = process.env.NEXT_PUBLIC_MAPBOX_TOKEN || 'pk.eyJ1IjoieXVsaWFuYW5kcmVzMTYxMCIsImEiOiJjbWgycTlsZGsxM200YnNvbnN2d2wwcHJ5In0.wlU7-bazAs2eYjknx7H97Q'
 
       try {
-        const mapboxToken = process.env.NEXT_PUBLIC_MAPBOX_TOKEN || 'pk.eyJ1IjoieXVsaWFuYW5kcmVzMTYxMCIsImEiOiJjbWgycTlsZGsxM200YnNvbnN2d2wwcHJ5In0.wlU7-bazAs2eYjknx7H97Q'
-
+        // ⚠️ DESHABILITADO: Mapbox Optimization API causaba timeouts
+        // En su lugar, usamos ordenamiento manual por horarios
+        console.warn('⚠️ [Optimización] Mapbox Optimization API deshabilitada - usando fallback')
+        throw new Error('Using fallback - Mapbox Optimization disabled')
         // Array para almacenar las paradas ordenadas finales
         let allOrderedStops: any[] = []
-        let totalDistance = 0
-        let totalDuration = 0
         let allCoordinates: [number, number][] = [warehouseCoordinates]
 
         // OPTIMIZAR CADA HORARIO POR SEPARADO
@@ -406,7 +470,7 @@ export async function POST(request: NextRequest) {
           const services = stopsForTimeSlot.map((stop, index) => ({
             name: `service_${index + 1}`,
             location: `stop_${index + 1}`,
-            duration: 300 // 5 minutos por parada
+            duration: 1500 // 25 minutos por parada (1500 segundos)
           }))
 
           const optimizationPayload = {
@@ -489,11 +553,16 @@ export async function POST(request: NextRequest) {
           console.log(`📊 [${timeSlot}] Estructura del resultado:`, JSON.stringify(optimizationResult, null, 2))
 
           // PASO 5.3: Procesar resultado
-          const route = optimizationResult.routes[0]
+          const route = optimizationResult.routes?.[0]
           if (!route) {
             console.error(`❌ [${timeSlot}] No routes en resultado:`, optimizationResult)
             throw new Error(`No se encontraron rutas en el resultado de optimización para ${timeSlot}`)
           }
+
+          // DEBUG: Mostrar estructura de stops
+          console.log(`🔍 [${timeSlot}] Total stops en respuesta:`, route.stops.length)
+          console.log(`🔍 [${timeSlot}] Primer stop:`, JSON.stringify(route.stops[0], null, 2))
+          console.log(`🔍 [${timeSlot}] Último stop:`, JSON.stringify(route.stops[route.stops.length - 1], null, 2))
 
           const stops = route.stops.filter((stop: any) => stop.type === 'service')
 
@@ -529,17 +598,28 @@ export async function POST(request: NextRequest) {
           // Agregar las paradas de este horario al array total
           allOrderedStops.push(...timeSlotOrderedStops)
 
-          // Calcular distancia y duración de este segmento
+          // Calcular distancia y duración de este segmento desde la respuesta de Mapbox
+          // La Optimization API v2 devuelve la distancia en el campo 'odometer' del último stop (en metros)
           const lastStop = route.stops[route.stops.length - 1]
-          const segmentDistance = lastStop.odometer / 1609.34 // Convertir a millas
-          const startEta = new Date(route.stops[0].eta)
+          const firstStop = route.stops[0]
+
+          // Distancia total del segmento (odometer viene en metros)
+          const segmentDistanceMeters = Number(lastStop.odometer || 0)
+          const segmentDistance = segmentDistanceMeters / 1609.34 // Convertir a millas
+
+          // Duración total del segmento (calcular desde ETAs)
+          const startEta = new Date(firstStop.eta)
           const endEta = new Date(lastStop.eta)
-          const segmentDuration = Math.floor((endEta.getTime() - startEta.getTime()) / 1000 / 60)
+          const segmentDuration = Math.floor((endEta.getTime() - startEta.getTime()) / 1000 / 60) // Convertir a minutos
 
           totalDistance += segmentDistance
           totalDuration += segmentDuration
 
-          console.log(`📊 [${timeSlot}] Segmento: ${segmentDistance.toFixed(1)} mi, ${segmentDuration} min`)
+          console.log(`📊 [${timeSlot}] Segmento desde Mapbox:`)
+          console.log(`  - Odómetro último stop: ${segmentDistanceMeters}m → ${segmentDistance.toFixed(1)} mi`)
+          console.log(`  - ETA inicio: ${firstStop.eta}, ETA fin: ${lastStop.eta}`)
+          console.log(`  - Duración calculada: ${segmentDuration} min`)
+          console.log(`  - Total acumulado: ${totalDistance.toFixed(1)} mi, ${totalDuration} min`)
 
           // OBTENER GEOMETRÍA para el mapa usando Directions API
           try {
@@ -596,7 +676,7 @@ export async function POST(request: NextRequest) {
 
         optimizedRouteData = {
           mapboxJobId, // Último job_id como referencia
-          distance: totalDistance.toFixed(1),
+          distance: totalDistance,
           duration: totalDuration,
           stops: orderedStops,
           geometry,
@@ -610,7 +690,6 @@ export async function POST(request: NextRequest) {
 
         console.log(`📊 [Resultado Final] ${totalDistance.toFixed(1)} mi, ${totalDuration} min`)
         console.log(`🗺️ [Geometría] ${geometry ? 'Consolidada' : 'No disponible'}`)
-
 
       } catch (error) {
         console.error('❌ [Mapbox] Error:', error)
@@ -635,6 +714,35 @@ export async function POST(request: NextRequest) {
 
         console.log(`✅ [Fallback] ${orderedStops.length} paradas ordenadas por horario`)
         mapboxJobId = null
+
+        // Calcular distancia y duración usando Directions API
+        try {
+          const coordinatesString = [
+            warehouseCoordinates,
+            ...orderedStops.map(stop => stop.coordinates),
+            warehouseCoordinates
+          ].map(coord => `${coord[0]},${coord[1]}`).join(';')
+
+          const directionsUrl = `https://api.mapbox.com/directions/v5/mapbox/driving/${coordinatesString}?overview=full&access_token=${mapboxToken}`
+          const directionsResponse = await fetch(directionsUrl)
+
+          if (directionsResponse.ok) {
+            const directionsData = await directionsResponse.json()
+            const route = directionsData.routes[0]
+
+            // Distancia en metros, convertir a millas
+            totalDistance = (route.distance / 1609.34)
+            // Duración en segundos, convertir a minutos
+            totalDuration = Math.floor(route.duration / 60)
+
+            console.log(`📊 [Fallback] Distancia: ${totalDistance.toFixed(1)} mi, Duración: ${totalDuration} min`)
+          }
+        } catch (distError) {
+          console.warn('⚠️ [Fallback] No se pudo calcular distancia/duración:', distError)
+          // Estimación básica: 0.5 millas por parada + 5 minutos por parada
+          totalDistance = orderedStops.length * 0.5
+          totalDuration = orderedStops.length * 5
+        }
       }
     }
 
@@ -674,12 +782,19 @@ export async function POST(request: NextRequest) {
       }
 
       // Construir datos para RouteMap
+      console.log(`🔍 [Preview] optimizedRouteData:`, {
+        distance: optimizedRouteData?.distance,
+        duration: optimizedRouteData?.duration,
+        typeDistance: typeof optimizedRouteData?.distance,
+        typeDuration: typeof optimizedRouteData?.duration
+      })
+
       const previewData = {
         stops: orderedStops,
         totalStops: orderedStops.length,
         totalOrders: selectedOrders.length,
-        distance: optimizedRouteData?.distance || 'N/A',
-        duration: optimizedRouteData?.duration || 'N/A',
+        distance: Math.round((Number(optimizedRouteData?.distance || totalDistance) || 0) * 10) / 10,
+        duration: Math.round(Number(optimizedRouteData?.duration || totalDuration) || 0),
         warehouseCoordinates,
         mapboxJobId, // Incluir job_id si existe
         // Estructura para RouteMap
@@ -720,72 +835,64 @@ export async function POST(request: NextRequest) {
     // ==============================
     console.log('💾 [DB] Guardando ruta...')
 
-    const db = await open({
-      filename: './data/cubarapid.db',
-      driver: Database
-    })
+    // Get the last route ID for numbering
+    const lastRouteResult = await db.query('SELECT id FROM routes ORDER BY id DESC LIMIT 1')
+    const lastRouteId = lastRouteResult.rows[0]?.id || 0
+    const routeNumber = `RUT-${new Date().getFullYear()}-${String(lastRouteId + 1).padStart(4, '0')}`
 
-    const lastRoute = await db.get('SELECT id FROM routes ORDER BY id DESC LIMIT 1')
-    const routeNumber = `RUT-${new Date().getFullYear()}-${String((lastRoute?.id || 0) + 1).padStart(4, '0')}`
+    const insertQuery = `
+      INSERT INTO routes (
+        routenumber, name, driverid, drivername, vehicleid, vehicleplate,
+        status, totalpackages, deliveredpackages, estimatedduration,
+        actualduration, distance, starttime, endtime, date, notes,
+        mechanism, timewindows, warehouseid, mapboxjobid, optimizedroute, stops,
+        createdat, updatedat
+      ) VALUES (
+        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10,
+        $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22,
+        NOW(), NOW()
+      )
+      RETURNING id
+    `
 
-    const newRoute = {
+    const values = [
       routeNumber,
-      name: `Ruta ${body.mechanism === 'automatic' ? 'Automática' : 'Manual'} - ${new Date().toLocaleDateString('es-ES')}`,
-      driverId: body.driverId ? parseInt(body.driverId) : null,
-      driverName: body.driverName || null,
-      vehicleId: parseInt(body.vehicleId),
-      vehiclePlate: body.vehiclePlate || null,
-      status: 'planning',
-      totalPackages: selectedOrders.length,
-      deliveredPackages: 0,
-      estimatedDuration: optimizedRouteData ? `${optimizedRouteData.duration}m` : body.estimatedDuration,
-      actualDuration: null,
-      distance: optimizedRouteData ? parseFloat(optimizedRouteData.distance) : (body.distance || 0),
-      startTime: body.startTime || null,
-      endTime: null,
-      date: body.date || new Date().toISOString().split('T')[0],
-      notes: body.notes || `${orderedStops.length} paradas, ${selectedOrders.length} órdenes`,
-      mechanism: body.mechanism,
-      timeWindows: JSON.stringify(body.timeWindows || []),
-      warehouseId: body.warehouseId,
-      mapboxJobId: mapboxJobId, // ✅ Guardar job_id de Mapbox para recuperar ruta después
-      optimizedRoute: optimizedRouteData ? JSON.stringify(optimizedRouteData) : null,
-      stops: JSON.stringify(orderedStops.map((stop, index) => ({
+      `Ruta ${body.mechanism === 'automatic' ? 'Automática' : 'Manual'} - ${new Date().toLocaleDateString('es-ES')}`,
+      body.driverId ? parseInt(body.driverId) : null,
+      body.driverName || null,
+      body.vehicleId || null,  // vehicleId es string, no convertir a int
+      body.vehiclePlate || null,
+      'planning',
+      selectedOrders.length,
+      0,
+      optimizedRouteData?.duration ? `${optimizedRouteData.duration}m` : body.estimatedDuration,
+      null,
+      // Usar totalDistance/totalDuration si optimizedRouteData no tiene valores válidos
+      optimizedRouteData?.distance ? parseFloat(optimizedRouteData.distance) : (totalDistance || body.distance || 0),
+      body.startTime || null,
+      null,
+      body.date || new Date().toISOString().split('T')[0],
+      body.notes || `${orderedStops.length} paradas, ${selectedOrders.length} órdenes`,
+      body.mechanism,
+      JSON.stringify(body.timeWindows || []),
+      body.warehouseId,
+      mapboxJobId,
+      optimizedRouteData ? JSON.stringify(optimizedRouteData) : null,
+      JSON.stringify(orderedStops.map((stop, index) => ({
         ...stop,
         sequence: index + 1,
         status: 'pending'
-      }))),
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-      qrCode: null // Se genera después de insertar
-    }
+      })))
+    ]
 
-    const result = await db.run(`
-      INSERT INTO routes (
-        routeNumber, name, driverId, driverName, vehicleId, vehiclePlate,
-        status, totalPackages, deliveredPackages, estimatedDuration,
-        actualDuration, distance, startTime, endTime, date, notes,
-        mechanism, timeWindows, warehouseId, mapboxJobId, optimizedRoute, stops,
-        createdAt, updatedAt, qrCode
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `, [
-      newRoute.routeNumber, newRoute.name, newRoute.driverId, newRoute.driverName,
-      newRoute.vehicleId, newRoute.vehiclePlate, newRoute.status,
-      newRoute.totalPackages, newRoute.deliveredPackages, newRoute.estimatedDuration,
-      newRoute.actualDuration, newRoute.distance, newRoute.startTime,
-      newRoute.endTime, newRoute.date, newRoute.notes, newRoute.mechanism,
-      newRoute.timeWindows, newRoute.warehouseId, newRoute.mapboxJobId,
-      newRoute.optimizedRoute, newRoute.stops, newRoute.createdAt,
-      newRoute.updatedAt, newRoute.qrCode
-    ])
+    const result = await db.query(insertQuery, values)
+    const routeId = result.rows[0].id
 
-    const routeId = result.lastID
+    // QR code generation disabled for SQLite (column doesn't exist)
+    // const qrCode = generateQRCode(routeId, routeNumber)
+    // await db.query('UPDATE routes SET qrcode = $1 WHERE id = $2', [qrCode, routeId])
 
-    // Generar y actualizar QR code
-    const qrCode = generateQRCode(routeId as number, routeNumber)
-    await db.run('UPDATE routes SET qrCode = ? WHERE id = ?', [qrCode, routeId])
-
-    console.log(`✅ [DB] Ruta creada: ${routeNumber} (ID: ${routeId}, QR: ${qrCode})`)
+    console.log(`✅ [DB] Ruta creada: ${routeNumber} (ID: ${routeId})`)
 
     // ==============================
     // PASO 8: Actualizar estados de órdenes a "in_transit"
@@ -794,9 +901,9 @@ export async function POST(request: NextRequest) {
 
     try {
       for (const order of selectedOrders) {
-        await db.run(
-          'UPDATE package_orders SET status = ?, updatedAt = ? WHERE id = ?',
-          ['in_transit', new Date().toISOString(), order.id]
+        await db.query(
+          'UPDATE package_orders SET status = $1, updatedat = NOW() WHERE id = $2',
+          ['in_transit', order.id]
         )
       }
       console.log(`✅ [Órdenes] ${selectedOrders.length} órdenes actualizadas`)
@@ -804,23 +911,29 @@ export async function POST(request: NextRequest) {
       console.error('❌ [Órdenes] Error actualizando estados:', error)
     }
 
-    await db.close()
-
     // ==============================
     // PASO 9: Retornar respuesta
     // ==============================
     console.log('✅ [Completado] Ruta creada exitosamente')
 
+    // Calcular distancia y duración finales con redondeo apropiado
+    const finalDistance = optimizedRouteData?.distance
+      ? Math.round(parseFloat(optimizedRouteData.distance) * 10) / 10
+      : Math.round((totalDistance || body.distance || 0) * 10) / 10;
+
+    const finalDuration = optimizedRouteData?.duration
+      ? Math.round(optimizedRouteData.duration)
+      : Math.round(totalDuration || 0);
+
     return NextResponse.json({
       success: true,
       routeId,
       routeNumber,
-      qrCode,
-      mapboxJobId, // ✅ Retornar job_id para uso futuro
+      mapboxJobId,
       totalStops: orderedStops.length,
       totalOrders: selectedOrders.length,
-      distance: newRoute.distance,
-      duration: newRoute.estimatedDuration,
+      distance: finalDistance,
+      duration: `${finalDuration}m`,
       message: `Ruta ${routeNumber} creada con ${orderedStops.length} paradas y ${selectedOrders.length} órdenes`
     }, { status: 201 })
 

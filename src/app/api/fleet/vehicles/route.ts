@@ -74,7 +74,7 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const {
       vin,
-      license_plate,
+      licenseplate,
       make,
       model,
       year,
@@ -90,9 +90,9 @@ export async function POST(request: NextRequest) {
     } = body;
 
     // Validate required fields
-    if (!vin || !license_plate || !make || !model || !year) {
+    if (!vin || !licenseplate || !make || !model || !year) {
       return NextResponse.json(
-        { error: 'Missing required fields: vin, license_plate, make, model, year' },
+        { error: 'Missing required fields: vin, licenseplate, make, model, year' },
         {
           status: 400,
           headers: {
@@ -123,7 +123,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Check if license plate already exists
-    const existingPlate = existingVehicles.find(v => v.license_plate.toUpperCase() === license_plate.toUpperCase());
+    const existingPlate = existingVehicles.find(v => v.licenseplate.toUpperCase() === license_plate.toUpperCase());
 
     if (existingPlate) {
       return NextResponse.json(

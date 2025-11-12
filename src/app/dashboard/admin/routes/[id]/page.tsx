@@ -654,7 +654,7 @@ export default function RouteDetailPage() {
                         <span className="text-sm font-medium text-gray-900 dark:text-white">Distancia</span>
                       </div>
                       <p className="text-2xl font-bold text-gray-900 dark:text-white">
-                        {((route.distance || 0) / 1609.34).toFixed(1)} mi
+                        {(Number(route.distance || 0) / 1609.34).toFixed(1)} mi
                       </p>
                     </div>
                     <div className="bg-gray-50 dark:bg-gray-700/50 p-4 rounded-lg">

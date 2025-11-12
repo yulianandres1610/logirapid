@@ -399,7 +399,7 @@ export default function PackageDeliveryMap({
               <div style="display: flex; flex-direction: column; gap: 2px;">
                 <span style="font-size: 9px; opacity: 0.7;">Total</span>
                 <span style="font-weight: 700; font-size: 14px; color: #10B981;">
-                  $${(order.totalAmount || order.total || 0).toFixed(2)}
+                  $${Number(order.totalAmount || order.total || 0).toFixed(2)}
                 </span>
               </div>
               <button

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { db, getCustomerByIdGlobal, updateCustomer, deleteCustomer } from '@/lib/database'
+import { db } from '@/lib/database'
 
 // Get a single customer by ID
 export async function GET(
@@ -17,9 +17,31 @@ export async function GET(
       )
     }
 
-    const customer = await getCustomerByIdGlobal(id)
+    const query = `
+      SELECT
+        id,
+        firstname as "firstName",
+        lastname as "lastName",
+        idnumber as "idNumber",
+        idtype as "idType",
+        phone,
+        email,
+        address,
+        city,
+        state,
+        country,
+        notes,
+        createdby as "createdBy",
+        createdat as "createdAt",
+        zipcode as "zipCode",
+        apartment
+      FROM customers
+      WHERE id = $1
+    `
 
-    if (!customer) {
+    const result = await db.query(query, [id])
+
+    if (result.rows.length === 0) {
       return NextResponse.json(
         { error: 'Customer not found' },
         { status: 404 }
@@ -28,7 +50,7 @@ export async function GET(
 
     return NextResponse.json({
       success: true,
-      data: customer
+      data: result.rows[0]
     })
   } catch (error) {
     console.error('Error fetching customer:', error)
@@ -56,7 +78,7 @@ export async function PUT(
     }
 
     const body = await request.json()
-    const { firstName, lastName, phone, email, address, notes } = body
+    const { firstName, lastName, phone, email, address, city, state, country, zipCode, apartment, notes, idNumber, idType } = body
 
     console.log('Updating customer:', { id, firstName, lastName, phone, email, address, notes })
 
@@ -82,29 +104,82 @@ export async function PUT(
       )
     }
 
-    // Update customer with partial data
-    const updateData: any = {}
-    if (firstName !== undefined) updateData.firstName = firstName
-    if (lastName !== undefined) updateData.lastName = lastName
-    if (phone !== undefined) updateData.phone = phone
-    if (email !== undefined) updateData.email = email
-    if (address !== undefined) updateData.address = address
-    if (notes !== undefined) updateData.notes = notes
+    // Build dynamic UPDATE query
+    const updateFields = []
+    const values = []
+    let valueIndex = 1
 
-    const updatedCustomer = await updateCustomer(id, updateData)
+    const fieldMapping: { [key: string]: string } = {
+      firstName: 'firstname',
+      lastName: 'lastname',
+      idNumber: 'idnumber',
+      idType: 'idtype',
+      phone: 'phone',
+      email: 'email',
+      address: 'address',
+      city: 'city',
+      state: 'state',
+      country: 'country',
+      notes: 'notes',
+      zipCode: 'zipcode',
+      apartment: 'apartment'
+    }
 
-    if (!updatedCustomer) {
+    // Build update fields dynamically
+    for (const [key, value] of Object.entries(body)) {
+      if (fieldMapping[key] && value !== undefined) {
+        updateFields.push(`${fieldMapping[key]} = $${valueIndex}`)
+        values.push(value)
+        valueIndex++
+      }
+    }
+
+    if (updateFields.length === 0) {
+      return NextResponse.json(
+        { error: 'No fields to update' },
+        { status: 400 }
+      )
+    }
+
+    values.push(id)
+
+    const updateQuery = `
+      UPDATE customers
+      SET ${updateFields.join(', ')}
+      WHERE id = $${valueIndex}
+      RETURNING
+        id,
+        firstname as "firstName",
+        lastname as "lastName",
+        idnumber as "idNumber",
+        idtype as "idType",
+        phone,
+        email,
+        address,
+        city,
+        state,
+        country,
+        notes,
+        createdby as "createdBy",
+        createdat as "createdAt",
+        zipcode as "zipCode",
+        apartment
+    `
+
+    const result = await db.query(updateQuery, values)
+
+    if (result.rows.length === 0) {
       return NextResponse.json(
         { error: 'Customer not found' },
         { status: 404 }
       )
     }
 
-    console.log('Customer updated successfully:', updatedCustomer)
+    console.log('Customer updated successfully:', result.rows[0])
 
     return NextResponse.json({
       success: true,
-      data: updatedCustomer
+      data: result.rows[0]
     })
   } catch (error) {
     console.error('Error updating customer:', error)
@@ -131,9 +206,28 @@ export async function DELETE(
       )
     }
 
-    const deleted = await deleteCustomer(id)
+    // Verify if customer has associated orders
+    const ordersQuery = 'SELECT COUNT(*) as count FROM package_orders WHERE customerid = $1'
+    const ordersResult = await db.query(ordersQuery, [id])
 
-    if (!deleted) {
+    if (parseInt(ordersResult.rows[0].count) > 0) {
+      return NextResponse.json(
+        { error: 'Cannot delete customer with associated orders' },
+        { status: 400 }
+      )
+    }
+
+    // Delete associated addresses first
+    await db.query('DELETE FROM customer_addresses WHERE customer_id = $1', [id])
+
+    // Delete change history
+    await db.query('DELETE FROM customer_change_history WHERE customerid = $1', [id])
+
+    // Delete the customer
+    const deleteQuery = 'DELETE FROM customers WHERE id = $1 RETURNING id'
+    const result = await db.query(deleteQuery, [id])
+
+    if (result.rows.length === 0) {
       return NextResponse.json(
         { error: 'Customer not found' },
         { status: 404 }

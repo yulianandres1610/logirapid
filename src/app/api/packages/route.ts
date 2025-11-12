@@ -121,7 +121,7 @@ export async function GET(request: NextRequest) {
     switch (type) {
       case 'boxes': {
         let boxes = db.boxes.sort((a: Box, b: Box) =>
-          new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+          new Date(b.createdat).getTime() - new Date(a.createdat).getTime()
         );
 
         // Apply search filter
@@ -137,9 +137,9 @@ export async function GET(request: NextRequest) {
         // Apply warehouse filter
         if (warehouseFilter) {
           boxes = boxes.filter((box: Box) => {
-            // Compare with current_location - could be warehouse name, city, or ID
-            return box.current_location?.includes(warehouseFilter) ||
-                   box.current_location === `Almacén ID: ${warehouseFilter}`;
+            // Compare with currentlocation - could be warehouse name, city, or ID
+            return box.currentlocation?.includes(warehouseFilter) ||
+                   box.currentlocation === `Almacén ID: ${warehouseFilter}`;
           });
         }
 
@@ -170,15 +170,15 @@ export async function GET(request: NextRequest) {
       }
       case 'prices':
         return NextResponse.json(db.prices.sort((a: PackagePrice, b: PackagePrice) =>
-          new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+          new Date(b.createdat).getTime() - new Date(a.createdat).getTime()
         ));
       case 'orders':
         return NextResponse.json(db.orders.sort((a: PurchaseOrder, b: PurchaseOrder) =>
-          new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+          new Date(b.createdat).getTime() - new Date(a.createdat).getTime()
         ));
       case 'shipments':
         return NextResponse.json(db.shipments.sort((a: Shipment, b: Shipment) =>
-          new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+          new Date(b.createdat).getTime() - new Date(a.createdat).getTime()
         ));
       default:
         return NextResponse.json(db);
@@ -205,7 +205,7 @@ export async function POST(request: NextRequest) {
         // Creación masiva de cajas
         const { boxes: newBoxes, batch } = body;
 
-        console.log('API DEBUG: First box current_location:', newBoxes?.[0]?.current_location);
+        console.log('API DEBUG: First box current_location:', newBoxes?.[0]?.currentlocation);
         console.log('API DEBUG: Warehouses count:', newBoxes?.length);
 
         if (!newBoxes || !Array.isArray(newBoxes)) {
@@ -228,7 +228,7 @@ export async function POST(request: NextRequest) {
             cost: newBox.cost,
             supplier: newBox.supplier,
             status: 'AVAILABLE',
-            current_location: newBox.current_location, // Agregar ubicación del almacén
+            current_location: newBox.currentlocation, // Agregar ubicación del almacén
             created_at: new Date().toISOString(),
             updated_at: new Date().toISOString()
           };
@@ -274,14 +274,14 @@ export async function POST(request: NextRequest) {
         return NextResponse.json(newPrice);
       }
       case 'order': {
-        const order_number = `PO${Date.now()}${Math.random().toString(36).substr(2, 4).toUpperCase()}`;
-        const total_amount = body.items.reduce((sum: number, item: any) => sum + item.total_price, 0);
+        const ordernumber = `PO${Date.now()}${Math.random().toString(36).substr(2, 4).toUpperCase()}`;
+        const totalamount = body.items.reduce((sum: number, item: any) => sum + item.total_price, 0);
 
         const newOrder: PurchaseOrder = {
           ...body,
           id: `order_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-          order_number,
-          total_amount,
+          ordernumber,
+          totalamount,
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString()
         };
@@ -304,8 +304,8 @@ export async function POST(request: NextRequest) {
             const boxIndex = db.boxes.findIndex((b: Box) => b.id === boxId);
             if (boxIndex !== -1 && db.boxes[boxIndex].status === 'AVAILABLE') {
               db.boxes[boxIndex].status = 'IN_USE';
-              db.boxes[boxIndex].current_route_id = newShipment.route_id;
-              db.boxes[boxIndex].updated_at = new Date().toISOString();
+              db.boxes[boxIndex].current_route_id = newShipment.routeid;
+              db.boxes[boxIndex].updatedat = new Date().toISOString();
             }
           });
         }
@@ -383,7 +383,7 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({
           order: db.orders[orderIndex],
           created_boxes: createdBoxes,
-          message: `Order ${order.order_number} received. ${createdBoxes.length} boxes added to inventory.`
+          message: `Order ${order.ordernumber} received. ${createdBoxes.length} boxes added to inventory.`
         });
       }
       default:

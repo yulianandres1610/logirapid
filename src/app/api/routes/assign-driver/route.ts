@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { Database } from 'sqlite3'
-import { open } from 'sqlite'
+import { db } from '@/lib/database'
 
 /**
  * POST /api/routes/assign-driver
@@ -33,30 +32,25 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const db = await open({
-      filename: './data/cubarapid.db',
-      driver: Database
-    })
-
     // Buscar ruta por QR code
-    const route = await db.get(
-      'SELECT * FROM routes WHERE qrCode = ?',
+    const routeResult = await db.query(
+      'SELECT * FROM routes WHERE qrcode = $1',
       [body.qrCode]
     )
 
-    if (!route) {
-      await db.close()
+    if (routeResult.rows.length === 0) {
       return NextResponse.json(
         { error: 'Ruta no encontrada con ese código QR' },
         { status: 404 }
       )
     }
 
-    console.log(`✅ [Ruta Encontrada] ${route.routeNumber} (ID: ${route.id})`)
+    const route = routeResult.rows[0]
+
+    console.log(`✅ [Ruta Encontrada] ${route.routenumber} (ID: ${route.id})`)
 
     // Verificar que la ruta esté en estado planning
     if (route.status !== 'planning') {
-      await db.close()
       return NextResponse.json(
         {
           error: `La ruta está en estado "${route.status}" y no puede ser asignada. Solo rutas en "planning" pueden ser asignadas.`,
@@ -67,45 +61,38 @@ export async function POST(request: NextRequest) {
     }
 
     // Actualizar driver en la ruta
-    const result = await db.run(
-      'UPDATE routes SET driverId = ?, driverName = ?, updatedAt = ? WHERE id = ?',
-      [body.driverId, body.driverName || 'Driver', new Date().toISOString(), route.id]
+    const updateResult = await db.query(
+      'UPDATE routes SET driverid = $1, drivername = $2, updatedat = NOW() WHERE id = $3 RETURNING *',
+      [body.driverId, body.driverName || 'Driver', route.id]
     )
 
-    if (result.changes === 0) {
-      await db.close()
+    if (updateResult.rows.length === 0) {
       return NextResponse.json(
         { error: 'No se pudo actualizar la ruta' },
         { status: 500 }
       )
     }
 
-    console.log(`✅ [Driver Asignado] ${body.driverName} (ID: ${body.driverId}) → Ruta ${route.routeNumber}`)
+    const updatedRoute = updateResult.rows[0]
 
-    // Obtener ruta actualizada
-    const updatedRoute = await db.get(
-      'SELECT * FROM routes WHERE id = ?',
-      [route.id]
-    )
-
-    await db.close()
+    console.log(`✅ [Driver Asignado] ${body.driverName} (ID: ${body.driverId}) → Ruta ${route.routenumber}`)
 
     return NextResponse.json({
       success: true,
-      message: `Driver ${body.driverName} asignado exitosamente a la ruta ${route.routeNumber}`,
+      message: `Driver ${body.driverName} asignado exitosamente a la ruta ${route.routenumber}`,
       route: {
         id: updatedRoute.id,
-        routeNumber: updatedRoute.routeNumber,
+        routeNumber: updatedRoute.routenumber,
         name: updatedRoute.name,
-        driverId: updatedRoute.driverId,
-        driverName: updatedRoute.driverName,
-        vehicleId: updatedRoute.vehicleId,
-        vehiclePlate: updatedRoute.vehiclePlate,
+        driverId: updatedRoute.driverid,
+        driverName: updatedRoute.drivername,
+        vehicleId: updatedRoute.vehicleid,
+        vehiclePlate: updatedRoute.vehicleplate,
         status: updatedRoute.status,
-        totalPackages: updatedRoute.totalPackages,
+        totalPackages: updatedRoute.totalpackages,
         date: updatedRoute.date,
         distance: updatedRoute.distance,
-        estimatedDuration: updatedRoute.estimatedDuration
+        estimatedDuration: updatedRoute.estimatedduration
       }
     })
 
@@ -137,42 +124,37 @@ export async function GET(request: NextRequest) {
       )
     }
 
-    const db = await open({
-      filename: './data/cubarapid.db',
-      driver: Database
-    })
-
-    const route = await db.get(
-      'SELECT * FROM routes WHERE qrCode = ?',
+    const result = await db.query(
+      'SELECT * FROM routes WHERE qrcode = $1',
       [qrCode]
     )
 
-    await db.close()
-
-    if (!route) {
+    if (result.rows.length === 0) {
       return NextResponse.json(
         { error: 'Ruta no encontrada' },
         { status: 404 }
       )
     }
 
+    const route = result.rows[0]
+
     return NextResponse.json({
       success: true,
       route: {
         id: route.id,
-        routeNumber: route.routeNumber,
+        routeNumber: route.routenumber,
         name: route.name,
-        driverId: route.driverId,
-        driverName: route.driverName,
-        vehicleId: route.vehicleId,
-        vehiclePlate: route.vehiclePlate,
+        driverId: route.driverid,
+        driverName: route.drivername,
+        vehicleId: route.vehicleid,
+        vehiclePlate: route.vehicleplate,
         status: route.status,
-        totalPackages: route.totalPackages,
+        totalPackages: route.totalpackages,
         date: route.date,
         distance: route.distance,
-        estimatedDuration: route.estimatedDuration,
+        estimatedDuration: route.estimatedduration,
         stops: route.stops ? JSON.parse(route.stops) : [],
-        canAssignDriver: route.status === 'planning' && !route.driverId
+        canAssignDriver: route.status === 'planning' && !route.driverid
       }
     })
 

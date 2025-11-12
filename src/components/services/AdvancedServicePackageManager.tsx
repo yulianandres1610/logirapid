@@ -46,6 +46,7 @@ export function AdvancedServicePackageManager({
   onServiceConfigurationsChange
 }: AdvancedServicePackageManagerProps) {
   const [availablePackages, setAvailablePackages] = useState<any[]>([])
+  const [isLoading, setIsLoading] = useState(true)
   const [scannedCode, setScannedCode] = useState('')
   const [codeValidation, setCodeValidation] = useState<'valid' | 'invalid' | 'checking' | null>(null)
   const [selectedSizeForScanning, setSelectedSizeForScanning] = useState<string>('')
@@ -58,6 +59,7 @@ export function AdvancedServicePackageManager({
 
   const loadAvailablePackages = async () => {
     try {
+      setIsLoading(true)
       const response = await fetch('/api/empaques?disponibilidad=disponible')
       const data = await response.json()
       if (data.success) {
@@ -65,6 +67,8 @@ export function AdvancedServicePackageManager({
       }
     } catch (error) {
       console.error('Error al cargar empaques:', error)
+    } finally {
+      setIsLoading(false)
     }
   }
 
@@ -258,35 +262,59 @@ export function AdvancedServicePackageManager({
   return (
     <Card className="w-full bg-gray-800 border-gray-700 text-white">
       <CardHeader className="border-b border-gray-700">
-        <h3 className="text-lg font-semibold text-white">Gestión Avanzada de Empaques</h3>
-        <p className="text-sm text-gray-400">Configura múltiples tamaños y cantidades de cajas por servicio</p>
+        <div className="flex items-center justify-between">
+          <div>
+            <h3 className="text-lg font-semibold text-white">Gestión Avanzada de Empaques</h3>
+            <p className="text-sm text-gray-400">Configura múltiples tamaños y cantidades de cajas por servicio</p>
+          </div>
+          {isLoading && (
+            <div className="flex items-center gap-2 text-blue-400">
+              <div className="w-5 h-5 border-2 border-blue-400 border-t-transparent rounded-full animate-spin"></div>
+              <span className="text-sm">Cargando empaques...</span>
+            </div>
+          )}
+        </div>
       </CardHeader>
       <CardContent className="space-y-6 pt-6">
-
-        {/* Selección de Servicios */}
-        <div className="space-y-3">
-          <label className="block text-sm font-medium text-gray-300">
-            Seleccionar Servicios
-          </label>
-          <div className="flex flex-wrap gap-2">
-            {SERVICES_LIST.map((service) => (
-              <Button
-                key={service}
-                type="button"
-                variant={services.includes(service) ? "default" : "outline"}
-                size="sm"
-                onClick={() => toggleService(service)}
-                className={`rounded-full transition-colors ${
-                  services.includes(service)
-                    ? 'bg-blue-600 hover:bg-blue-700 text-white border-blue-600'
-                    : 'border-gray-600 bg-gray-700 text-gray-300 hover:bg-gray-600 hover:text-white'
-                }`}
-              >
-                {service}
-              </Button>
-            ))}
+        {isLoading ? (
+          <div className="flex flex-col items-center justify-center py-12">
+            <div className="relative mb-4">
+              <div className="w-16 h-16 border-4 border-blue-600/20 rounded-full"></div>
+              <div className="w-16 h-16 border-4 border-blue-600 border-t-transparent rounded-full animate-spin absolute top-0 left-0"></div>
+            </div>
+            <p className="text-lg font-medium text-white mb-2">
+              Cargando empaques disponibles...
+            </p>
+            <p className="text-sm text-gray-400">
+              Obteniendo información desde la base de datos
+            </p>
           </div>
-        </div>
+        ) : (
+          <>
+            {/* Selección de Servicios */}
+            <div className="space-y-3">
+              <label className="block text-sm font-medium text-gray-300">
+                Seleccionar Servicios
+              </label>
+              <div className="flex flex-wrap gap-2">
+                {SERVICES_LIST.map((service) => (
+                  <Button
+                    key={service}
+                    type="button"
+                    variant={services.includes(service) ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => toggleService(service)}
+                    className={`rounded-full transition-colors ${
+                      services.includes(service)
+                        ? 'bg-blue-600 hover:bg-blue-700 text-white border-blue-600'
+                        : 'border-gray-600 bg-gray-700 text-gray-300 hover:bg-gray-600 hover:text-white'
+                    }`}
+                  >
+                    {service}
+                  </Button>
+                ))}
+              </div>
+            </div>
 
         {/* Configuración por Servicio */}
         {services.length > 0 && (
@@ -521,7 +549,8 @@ export function AdvancedServicePackageManager({
             <p>Selecciona al menos un servicio para configurar los empaques</p>
           </div>
         )}
-
+          </>
+        )}
       </CardContent>
     </Card>
   )

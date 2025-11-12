@@ -2,6 +2,48 @@ import { NextResponse } from 'next/server'
 import { db } from '@/lib/database'
 import { cookies } from 'next/headers'
 
+// Helper function to check for duplicate zipcodes in other zones
+async function checkDuplicateZipCodes(
+  zipCodes: string[],
+  companyId: number,
+  excludeZoneId?: number
+): Promise<{ hasDuplicates: boolean; duplicates: Array<{ zipCode: string; zoneName: string }> }> {
+  const duplicates: Array<{ zipCode: string; zoneName: string }> = []
+
+  try {
+    // Get all active zones for this company
+    const zonesResult = await db.query(`
+      SELECT id, name, zipcodes
+      FROM zones
+      WHERE companyid = $1 AND status = 'active'
+      ${excludeZoneId ? 'AND id != $2' : ''}
+    `, excludeZoneId ? [companyId, excludeZoneId] : [companyId])
+
+    // Check each zipcode against existing zones
+    for (const zone of zonesResult.rows) {
+      const existingZipCodes = typeof zone.zipcodes === 'string'
+        ? JSON.parse(zone.zipcodes || '[]')
+        : (zone.zipcodes || [])
+
+      for (const zipCode of zipCodes) {
+        if (existingZipCodes.includes(zipCode)) {
+          duplicates.push({
+            zipCode,
+            zoneName: zone.name
+          })
+        }
+      }
+    }
+  } catch (error) {
+    console.error('Error checking duplicate zipcodes:', error)
+  }
+
+  return {
+    hasDuplicates: duplicates.length > 0,
+    duplicates
+  }
+}
+
 export async function GET() {
   try {
     const cookieStore = await cookies()
@@ -13,16 +55,21 @@ export async function GET() {
       companyId = '1'
     }
 
-    const zones = db.prepare(`
+    const result = await db.query(`
       SELECT * FROM zones
-      WHERE companyId = ? AND status = 'active'
+      WHERE companyid = $1 AND status = 'active'
       ORDER BY name
-    `).all(companyId)
+    `, [parseInt(companyId)])
 
-    // Parse zipCodes from JSON string
+    const zones = result.rows
+
+    // Parse zipCodes and timeSlots from JSON string
     const formattedZones = zones.map((zone: any) => ({
       ...zone,
-      zipCodes: JSON.parse(zone.zipCodes || '[]')
+      zipCodes: typeof zone.zipcodes === 'string' ? JSON.parse(zone.zipcodes || '[]') : (zone.zipcodes || []),
+      timeSlots: typeof zone.timeslot === 'string' && (zone.timeslot.startsWith('[') || zone.timeslot.startsWith('{'))
+        ? JSON.parse(zone.timeslot || '[]')
+        : (Array.isArray(zone.timeslot) ? zone.timeslot : [])
     }))
 
     return NextResponse.json({ success: true, data: formattedZones })
@@ -49,7 +96,7 @@ export async function POST(request: Request) {
     const data = await request.json()
     console.log('Received data:', data)
 
-    const { name, description, zipCodes, color, timeSlot } = data
+    const { name, description, zipCodes, color, timeSlots } = data
 
     if (!name || !zipCodes || zipCodes.length === 0) {
       console.error('Validation failed:', { name, zipCodes })
@@ -59,35 +106,53 @@ export async function POST(request: Request) {
       )
     }
 
+    // Check for duplicate zipcodes in other zones
+    const { hasDuplicates, duplicates } = await checkDuplicateZipCodes(
+      zipCodes,
+      parseInt(companyId)
+    )
+
+    if (hasDuplicates) {
+      const duplicateList = duplicates
+        .map(d => `${d.zipCode} (ya en "${d.zoneName}")`)
+        .join(', ')
+      return NextResponse.json(
+        {
+          success: false,
+          error: `Los siguientes códigos postales ya están asignados a otras zonas: ${duplicateList}`
+        },
+        { status: 409 } // 409 Conflict
+      )
+    }
+
     console.log('Attempting to insert zone with data:', {
       companyId,
       name,
       description: description || '',
       zipCodes: JSON.stringify(zipCodes),
       color: color || '#8B5CF6',
-      timeSlot: timeSlot || '8:00 AM - 12:00 PM'
+      timeSlots: JSON.stringify(timeSlots || [])
     })
 
     try {
-      const stmt = db.prepare(`
-        INSERT INTO zones (companyId, name, description, zipCodes, color, timeSlot, status, createdAt, updatedAt)
-        VALUES (?, ?, ?, ?, ?, ?, 'active', datetime('now'), datetime('now'))
-      `)
-
-      const result = stmt.run(
-        parseInt(companyId), // Asegurar que es número
+      const result = await db.query(`
+        INSERT INTO zones (companyid, name, description, zipcodes, color, timeslot, status, createdat, updatedat)
+        VALUES ($1, $2, $3, $4, $5, $6, 'active', NOW(), NOW())
+        RETURNING id
+      `, [
+        parseInt(companyId),
         name,
         description || '',
         JSON.stringify(zipCodes),
         color || '#8B5CF6',
-        timeSlot || '8:00 AM - 12:00 PM'
-      )
+        JSON.stringify(timeSlots || [])
+      ])
 
       console.log('Insert successful. Result:', result)
 
       return NextResponse.json({
         success: true,
-        data: { id: result.lastInsertRowid }
+        data: { id: result.rows[0].id }
       })
     } catch (dbError) {
       console.error('Database error:', dbError)

@@ -204,15 +204,29 @@ export default function RouteMap({
                      optimizationResult.optimizedRoute?.data?.route?.geometry ||
                      optimizationResult.optimizedRoute?.geometry
 
-      const distance = optimizationResult.distance ||
+      // DEBUG: Ver todos los valores posibles
+      console.log('🔍 [RouteMap] DEBUG valores distance:', {
+        direct: optimizationResult.distance,
+        optimizedData: optimizationResult.optimizedRoute?.data?.route?.distance,
+        optimized: optimizationResult.optimizedRoute?.distance,
+        typeofDirect: typeof optimizationResult.distance
+      })
+      console.log('🔍 [RouteMap] DEBUG valores duration:', {
+        direct: optimizationResult.duration,
+        optimizedData: optimizationResult.optimizedRoute?.data?.route?.duration,
+        optimized: optimizationResult.optimizedRoute?.duration,
+        typeofDirect: typeof optimizationResult.duration
+      })
+
+      const distance = Number(optimizationResult.distance ||
                       optimizationResult.optimizedRoute?.data?.route?.distance ||
                       optimizationResult.optimizedRoute?.distance ||
-                      0
+                      0)
 
-      const duration = optimizationResult.duration ||
+      const duration = Number(optimizationResult.duration ||
                       optimizationResult.optimizedRoute?.data?.route?.duration ||
                       optimizationResult.optimizedRoute?.duration ||
-                      0
+                      0)
 
       const coordinates = optimizationResult.coordinates ||
                          optimizationResult.optimizedRoute?.data?.route?.coordinates ||
@@ -266,9 +280,11 @@ export default function RouteMap({
             let stopCoords: [number, number] | null = null
 
             if (stop.coordinates && Array.isArray(stop.coordinates) && stop.coordinates.length === 2) {
-              stopCoords = stop.coordinates as [number, number]
+              // Asegurar que las coordenadas son números (PostgreSQL puede devolver strings)
+              stopCoords = [Number(stop.coordinates[0]), Number(stop.coordinates[1])]
             } else if (stop.longitude && stop.latitude) {
-              stopCoords = [stop.longitude, stop.latitude]
+              // Asegurar que las coordenadas son números
+              stopCoords = [Number(stop.longitude), Number(stop.latitude)]
             }
 
             if (stopCoords) {
@@ -384,7 +400,7 @@ export default function RouteMap({
         const data = await response.json()
 
         console.log('✅ Rutas obtenidas:', data.routes.length)
-        console.log('📊 Distancias:', data.routes.map((r: any) => `${(r.distance / 1609.34).toFixed(1)}mi`).join(', '))
+        console.log('📊 Distancias:', data.routes.map((r: any) => `${(Number(r.distance) / 1609.34).toFixed(1)}mi`).join(', '))
 
         setRoutes(data.routes)
 
@@ -720,13 +736,13 @@ export default function RouteMap({
     console.log(`🎯 Paradas SIN contar almacén: ${stops.length}`)
   }
 
-  // Dibujar rutas en el mapa
+  // Dibujar rutas en el mapa - SOLO MARCADORES (sin líneas de ruta)
   useEffect(() => {
     const map = mapRef.current
     if (!map || routes.length === 0) return
 
     const updateMap = () => {
-      // Limpiar capas de rutas anteriores
+      // Limpiar capas de rutas anteriores (por si acaso)
       routes.forEach((_, i) => {
         const id = `route-${i}`
         if (map.getLayer(id)) {
@@ -737,35 +753,11 @@ export default function RouteMap({
         }
       })
 
-      // Añadir cada ruta como una capa
-      routes.forEach((route, i) => {
-        const id = `route-${i}`
+      // ⚠️ NO RENDERIZAR LÍNEAS DE RUTA - Solo mostrar waypoints
+      // Código de route lines comentado según solicitud del usuario
+      // Solo se mostrarán los marcadores numerados de las paradas
 
-        map.addSource(id, {
-          type: 'geojson',
-          data: {
-            type: 'Feature',
-            geometry: route.geometry,
-          },
-        })
-
-        map.addLayer({
-          id,
-          type: 'line',
-          source: id,
-          layout: {
-            'line-join': 'round',
-            'line-cap': 'round',
-          },
-          paint: {
-            'line-color': i === selectedRoute ? '#DC2626' : '#888',
-            'line-width': i === selectedRoute ? 6 : 3,
-            'line-opacity': i === selectedRoute ? 0.9 : 0.4,
-          },
-        })
-      })
-
-      // Ajustar vista para mostrar toda la ruta
+      // Ajustar vista para mostrar todos los waypoints
       if (allCoordinates.length > 0) {
         const bounds = new mapboxgl.LngLatBounds()
         allCoordinates.forEach(coord => bounds.extend(coord))
@@ -796,15 +788,8 @@ export default function RouteMap({
 
     console.log('🔄 Actualizando ruta seleccionada:', selectedRoute)
 
-    // Actualizar colores de rutas
-    routes.forEach((_, i) => {
-      const id = `route-${i}`
-      if (map.getLayer(id)) {
-        map.setPaintProperty(id, 'line-color', i === selectedRoute ? '#DC2626' : '#888')
-        map.setPaintProperty(id, 'line-width', i === selectedRoute ? 6 : 3)
-        map.setPaintProperty(id, 'line-opacity', i === selectedRoute ? 0.9 : 0.4)
-      }
-    })
+    // ⚠️ NO actualizar colores de líneas de ruta (ya no se muestran)
+    // Solo recrear marcadores
 
     // Recrear marcadores con un pequeño retraso para asegurar que el mapa esté listo
     const recreateMarkers = () => {
@@ -895,8 +880,8 @@ export default function RouteMap({
           </div>
 
           {routes.map((route, i) => {
-            const distanceMi = (route.distance / 1609.34).toFixed(1)
-            const durationFormatted = formatDuration(route.duration)
+            const distanceMi = (Number(route.distance) / 1609.34).toFixed(1)
+            const durationFormatted = formatDuration(Number(route.duration))
             const isOptimal = i === 0
             const isSelected = selectedRoute === i
 

@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { Database } from 'sqlite3'
-import { open } from 'sqlite'
+import { db } from '@/lib/database'
 
 // GET: Obtener una orden específica por ID
 export async function GET(
@@ -17,20 +16,56 @@ export async function GET(
       }, { status: 400 })
     }
 
-    const db = await open({
-      filename: './data/cubarapid.db',
-      driver: Database
-    })
+    const query = `
+      SELECT
+        id,
+        customerid as "customerId",
+        customername as "customerName",
+        customeraddress as "customerAddress",
+        ordernumber as "orderNumber",
+        services,
+        notes,
+        scheduleddate as "scheduledDate",
+        timeslot as "timeSlot",
+        status,
+        createdby as "createdBy",
+        latitude,
+        longitude,
+        subtotal,
+        taxamount as "taxAmount",
+        totalamount as "totalAmount",
+        boxcount as "boxCount",
+        boxprice as "boxPrice",
+        additionalservices as "additionalServices",
+        boxes,
+        firstname as "firstName",
+        lastname as "lastName",
+        phone,
+        email,
+        address,
+        customernotes as "customerNotes",
+        servicepackages as "servicePackages",
+        servicequantities as "serviceQuantities",
+        needsboxconstruction as "needsBoxConstruction",
+        routeid as "routeId",
+        stopnumber as "stopNumber",
+        paymentmethod as "paymentMethod",
+        createdat as "createdAt",
+        updatedat as "updatedAt"
+      FROM package_orders
+      WHERE id = $1
+    `
 
-    const order = await db.get('SELECT * FROM package_orders WHERE id = ?', [id])
-    await db.close()
+    const result = await db.query(query, [id])
 
-    if (!order) {
+    if (result.rows.length === 0) {
       return NextResponse.json({
         success: false,
         error: 'Orden no encontrada'
       }, { status: 404 })
     }
+
+    const order = result.rows[0]
 
     // Parsear JSON fields
     if (order.customerAddress && typeof order.customerAddress === 'string') {
@@ -168,6 +203,7 @@ export async function PUT(
     console.log(`📦 ID Orden: ${id}`)
     console.log(`🔄 Estado solicitado: ${body.status}`)
     console.log(`📍 Datos completos:`, JSON.stringify(body, null, 2))
+
     if (isNaN(id)) {
       return NextResponse.json({
         success: false,
@@ -175,15 +211,9 @@ export async function PUT(
       }, { status: 400 })
     }
 
-    const db = await open({
-      filename: './data/cubarapid.db',
-      driver: Database
-    })
-
     // Verificar que la orden existe
-    const existingOrder = await db.get('SELECT id FROM package_orders WHERE id = ?', [id])
-    if (!existingOrder) {
-      await db.close()
+    const existingResult = await db.query('SELECT id FROM package_orders WHERE id = $1', [id])
+    if (existingResult.rows.length === 0) {
       return NextResponse.json({
         success: false,
         error: 'Orden no encontrada'
@@ -193,42 +223,66 @@ export async function PUT(
     // Preparar campos para actualización
     const updateFields = []
     const updateValues = []
+    let valueIndex = 1
 
-    // Campos permitidos para actualizar
-    const allowedFields = [
-      'customerId', 'customerName', 'customerAddress', 'services', 'notes',
-      'scheduledDate', 'timeSlot', 'status', 'subtotal', 'taxAmount',
-      'totalAmount', 'boxCount', 'boxPrice', 'additionalServices',
-      'paymentMethod', 'latitude', 'longitude', 'routeId', 'stopNumber',
-      'firstName', 'lastName', 'phone', 'email', 'address', 'customerNotes',
-      'servicePackages', 'serviceQuantities', 'needsBoxConstruction'
-    ]
+    // Mapeo de campos de API a campos de base de datos
+    const fieldMapping = {
+      customerId: 'customerid',
+      customerName: 'customername',
+      customerAddress: 'customeraddress',
+      services: 'services',
+      notes: 'notes',
+      scheduledDate: 'scheduleddate',
+      timeSlot: 'timeslot',
+      status: 'status',
+      subtotal: 'subtotal',
+      taxAmount: 'taxamount',
+      totalAmount: 'totalamount',
+      boxCount: 'boxcount',
+      boxPrice: 'boxprice',
+      additionalServices: 'additionalservices',
+      paymentMethod: 'paymentmethod',
+      latitude: 'latitude',
+      longitude: 'longitude',
+      routeId: 'routeid',
+      stopNumber: 'stopnumber',
+      firstName: 'firstname',
+      lastName: 'lastname',
+      phone: 'phone',
+      email: 'email',
+      address: 'address',
+      customerNotes: 'customernotes',
+      servicePackages: 'servicepackages',
+      serviceQuantities: 'servicequantities',
+      needsBoxConstruction: 'needsboxconstruction'
+    }
 
-    for (const field of allowedFields) {
-      if (body[field] !== undefined) {
-        updateFields.push(`${field} = ?`)
+    for (const [apiField, dbField] of Object.entries(fieldMapping)) {
+      if (body[apiField] !== undefined) {
+        let value = body[apiField]
 
-        // Convertir arrays a JSON strings
-        if (field === 'customerAddress' && typeof body[field] === 'object') {
-          updateValues.push(JSON.stringify(body[field]))
-        } else if (field === 'additionalServices' && Array.isArray(body[field])) {
-          updateValues.push(JSON.stringify(body[field]))
-        } else if (field === 'servicePackages' && typeof body[field] === 'object') {
-          updateValues.push(JSON.stringify(body[field]))
-        } else if (field === 'serviceQuantities' && typeof body[field] === 'object') {
-          updateValues.push(JSON.stringify(body[field]))
-        } else if (field === 'needsBoxConstruction' && typeof body[field] === 'object') {
-          updateValues.push(JSON.stringify(body[field]))
-        } else if (field === 'services' && Array.isArray(body[field])) {
-          updateValues.push(JSON.stringify(body[field]))
-        } else {
-          updateValues.push(body[field])
+        // Convertir objects/arrays a JSON strings
+        if (apiField === 'customerAddress' && typeof value === 'object') {
+          value = JSON.stringify(value)
+        } else if (apiField === 'additionalServices' && Array.isArray(value)) {
+          value = JSON.stringify(value)
+        } else if (apiField === 'servicePackages' && typeof value === 'object') {
+          value = JSON.stringify(value)
+        } else if (apiField === 'serviceQuantities' && typeof value === 'object') {
+          value = JSON.stringify(value)
+        } else if (apiField === 'needsBoxConstruction' && typeof value === 'object') {
+          value = JSON.stringify(value)
+        } else if (apiField === 'services' && Array.isArray(value)) {
+          value = JSON.stringify(value)
         }
+
+        updateFields.push(`${dbField} = $${valueIndex}`)
+        updateValues.push(value)
+        valueIndex++
       }
     }
 
     if (updateFields.length === 0) {
-      await db.close()
       return NextResponse.json({
         success: false,
         error: 'No hay campos válidos para actualizar'
@@ -236,83 +290,130 @@ export async function PUT(
     }
 
     // Agregar timestamp de actualización
-    updateFields.push('updatedAt = datetime("now")')
+    updateFields.push('updatedat = NOW()')
     updateValues.push(id)
 
-    const updateQuery = `UPDATE package_orders SET ${updateFields.join(', ')} WHERE id = ?`
+    const updateQuery = `
+      UPDATE package_orders
+      SET ${updateFields.join(', ')}
+      WHERE id = $${valueIndex}
+      RETURNING *
+    `
 
     console.log('💾 EJECUTANDO ACTUALIZACIÓN:')
     console.log('📋 Query:', updateQuery)
     console.log('🔢 Valores:', updateValues)
     console.log(`📨 Campos a actualizar: ${updateFields.join(', ')}`)
 
-    const result = await db.run(updateQuery, updateValues)
+    const result = await db.query(updateQuery, updateValues)
 
-    // Obtener la orden actualizada
-    const updatedOrder = await db.get('SELECT * FROM package_orders WHERE id = ?', [id])
-    await db.close()
+    if (result.rows.length === 0) {
+      return NextResponse.json({
+        success: false,
+        error: 'No se pudo actualizar la orden'
+      }, { status: 500 })
+    }
+
+    // Formatear la orden actualizada para la respuesta
+    const updatedOrder = result.rows[0]
+    const formattedOrder = {
+      id: updatedOrder.id,
+      customerId: updatedOrder.customerid,
+      customerName: updatedOrder.customername,
+      customerAddress: updatedOrder.customeraddress,
+      orderNumber: updatedOrder.ordernumber,
+      services: updatedOrder.services,
+      notes: updatedOrder.notes,
+      scheduledDate: updatedOrder.scheduleddate,
+      timeSlot: updatedOrder.timeslot,
+      status: updatedOrder.status,
+      createdBy: updatedOrder.createdby,
+      latitude: updatedOrder.latitude,
+      longitude: updatedOrder.longitude,
+      subtotal: updatedOrder.subtotal,
+      taxAmount: updatedOrder.taxamount,
+      totalAmount: updatedOrder.totalamount,
+      boxCount: updatedOrder.boxcount,
+      boxPrice: updatedOrder.boxprice,
+      additionalServices: updatedOrder.additionalservices,
+      boxes: updatedOrder.boxes,
+      firstName: updatedOrder.firstname,
+      lastName: updatedOrder.lastname,
+      phone: updatedOrder.phone,
+      email: updatedOrder.email,
+      address: updatedOrder.address,
+      customerNotes: updatedOrder.customernotes,
+      servicePackages: updatedOrder.servicepackages,
+      serviceQuantities: updatedOrder.servicequantities,
+      needsBoxConstruction: updatedOrder.needsboxconstruction,
+      routeId: updatedOrder.routeid,
+      stopNumber: updatedOrder.stopnumber,
+      paymentMethod: updatedOrder.paymentmethod,
+      createdAt: updatedOrder.createdat,
+      updatedAt: updatedOrder.updatedat
+    }
 
     // Parsear JSON fields para la respuesta
-    if (updatedOrder.customerAddress && typeof updatedOrder.customerAddress === 'string') {
+    if (formattedOrder.customerAddress && typeof formattedOrder.customerAddress === 'string') {
       try {
-        updatedOrder.customerAddress = JSON.parse(updatedOrder.customerAddress)
+        formattedOrder.customerAddress = JSON.parse(formattedOrder.customerAddress)
       } catch (e) {
         // Si no es JSON válido, dejar como string
       }
     }
 
-    if (updatedOrder.additionalServices && typeof updatedOrder.additionalServices === 'string') {
+    if (formattedOrder.additionalServices && typeof formattedOrder.additionalServices === 'string') {
       try {
-        updatedOrder.additionalServices = JSON.parse(updatedOrder.additionalServices)
+        formattedOrder.additionalServices = JSON.parse(formattedOrder.additionalServices)
       } catch (e) {
         // Si no es JSON válido, dejar como string
       }
     }
 
     // Parsear servicios
-    if (updatedOrder.services && typeof updatedOrder.services === 'string') {
+    if (formattedOrder.services && typeof formattedOrder.services === 'string') {
       try {
-        updatedOrder.services = JSON.parse(updatedOrder.services)
+        formattedOrder.services = JSON.parse(formattedOrder.services)
       } catch (e) {
         // Si no es JSON válido, dejar como array vacío
-        updatedOrder.services = []
+        formattedOrder.services = []
       }
     }
 
     // Parsear cantidades de servicios
-    if (updatedOrder.serviceQuantities && typeof updatedOrder.serviceQuantities === 'string') {
+    if (formattedOrder.serviceQuantities && typeof formattedOrder.serviceQuantities === 'string') {
       try {
-        updatedOrder.serviceQuantities = JSON.parse(updatedOrder.serviceQuantities)
+        formattedOrder.serviceQuantities = JSON.parse(formattedOrder.serviceQuantities)
       } catch (e) {
         // Si no es JSON válido, dejar como objeto vacío
-        updatedOrder.serviceQuantities = {}
+        formattedOrder.serviceQuantities = {}
       }
     }
 
     // Parsear necesidades de construcción de cajas
-    if (updatedOrder.needsBoxConstruction && typeof updatedOrder.needsBoxConstruction === 'string') {
+    if (formattedOrder.needsBoxConstruction && typeof formattedOrder.needsBoxConstruction === 'string') {
       try {
-        updatedOrder.needsBoxConstruction = JSON.parse(updatedOrder.needsBoxConstruction)
+        formattedOrder.needsBoxConstruction = JSON.parse(formattedOrder.needsBoxConstruction)
       } catch (e) {
         // Si no es JSON válido, dejar como objeto vacío
-        updatedOrder.needsBoxConstruction = {}
+        formattedOrder.needsBoxConstruction = {}
       }
     }
 
     // Parsear empaques por servicio
-    if (updatedOrder.servicePackages && typeof updatedOrder.servicePackages === 'string') {
+    if (formattedOrder.servicePackages && typeof formattedOrder.servicePackages === 'string') {
       try {
-        updatedOrder.servicePackages = JSON.parse(updatedOrder.servicePackages)
+        formattedOrder.servicePackages = JSON.parse(formattedOrder.servicePackages)
       } catch (e) {
         // Si no es JSON válido, dejar como objeto vacío
-        updatedOrder.servicePackages = {}
+        formattedOrder.servicePackages = {}
       }
     }
 
     return NextResponse.json({
       success: true,
       message: 'Orden de paquetería actualizada exitosamente',
-      data: updatedOrder
+      data: formattedOrder
     })
 
   } catch (error) {
@@ -340,25 +441,18 @@ export async function DELETE(
       }, { status: 400 })
     }
 
-    const db = await open({
-      filename: './data/cubarapid.db',
-      driver: Database
-    })
-
     // Verificar que la orden existe
-    const existingOrder = await db.get('SELECT id FROM package_orders WHERE id = ?', [id])
-    if (!existingOrder) {
-      await db.close()
+    const existingResult = await db.query('SELECT id FROM package_orders WHERE id = $1', [id])
+    if (existingResult.rows.length === 0) {
       return NextResponse.json({
         success: false,
         error: 'Orden no encontrada'
       }, { status: 404 })
     }
 
-    const result = await db.run('DELETE FROM package_orders WHERE id = ?', [id])
-    await db.close()
+    const result = await db.query('DELETE FROM package_orders WHERE id = $1 RETURNING id', [id])
 
-    if (result.changes === 0) {
+    if (result.rows.length === 0) {
       return NextResponse.json({
         success: false,
         error: 'No se pudo eliminar la orden'

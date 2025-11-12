@@ -251,6 +251,13 @@ export default function EditPackageOrderPage() {
                 codigos: codes
               })
             })
+          } else if (quantity > 0) {
+            // Si no hay paquetes pero hay cantidad, crear configuración por defecto
+            initialConfigurations[serviceName].cajas.push({
+              tamano: 'mediano',
+              cantidad: quantity,
+              codigos: []
+            })
           }
         })
 
@@ -300,7 +307,9 @@ export default function EditPackageOrderPage() {
   // Calculate financial summary
   const calculateFinancialSummary = () => {
     // Use saved order data if available, otherwise calculate from selected services
-    let subtotal, tax, total
+    let subtotal = 0
+    let tax = 0
+    let total = 0
 
     if (order && order.totalAmount && order.totalAmount > 0) {
       // Use saved order amounts
@@ -322,10 +331,11 @@ export default function EditPackageOrderPage() {
       total = subtotal + tax
     }
 
+    // Ensure all values are valid numbers
     return {
-      subtotal,
-      tax,
-      total,
+      subtotal: Number(subtotal) || 0,
+      tax: Number(tax) || 0,
+      total: Number(total) || 0,
       serviceCount: selectedServices.length
     }
   }
@@ -1033,13 +1043,21 @@ export default function EditPackageOrderPage() {
                   <Button
                     type="submit"
                     disabled={saving}
-                    className="flex-1 bg-blue-600 hover:bg-blue-700 text-white"
+                    className={cn(
+                      "flex-1 transition-all duration-200",
+                      saving
+                        ? "bg-blue-500 cursor-not-allowed opacity-90"
+                        : "bg-blue-600 hover:bg-blue-700 text-white"
+                    )}
                   >
                     {saving ? (
-                      <>
-                        <div className="w-4 h-4 animate-spin rounded-full border-2 border-white border-t-transparent mr-2"></div>
-                        Guardando...
-                      </>
+                      <div className="flex items-center justify-center gap-2">
+                        <div className="relative">
+                          <div className="w-4 h-4 border-2 border-white/30 rounded-full"></div>
+                          <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin absolute top-0 left-0"></div>
+                        </div>
+                        <span className="font-medium">Guardando cambios...</span>
+                      </div>
                     ) : (
                       <>
                         <Save className="w-4 h-4 mr-2" />
@@ -1051,6 +1069,10 @@ export default function EditPackageOrderPage() {
                     type="button"
                     variant="outline"
                     onClick={() => router.back()}
+                    disabled={saving}
+                    className={cn(
+                      saving && "opacity-50 cursor-not-allowed"
+                    )}
                   >
                     Cancelar
                   </Button>

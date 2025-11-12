@@ -158,9 +158,12 @@ export default function PackageOrdersPage() {
     ).length,
     scheduledToday: orders.filter(order => {
       if (!order.scheduledDate) return false
-      const orderDate = new Date(order.scheduledDate).toDateString()
+      // Parsear fecha de forma segura
+      const dateStr = order.scheduledDate.includes('T') ? order.scheduledDate : order.scheduledDate + 'T00:00:00'
+      const orderDate = new Date(dateStr)
+      if (isNaN(orderDate.getTime())) return false
       const today = new Date().toDateString()
-      return orderDate === today
+      return orderDate.toDateString() === today
     }).length
   }
 
@@ -561,9 +564,12 @@ export default function PackageOrdersPage() {
                     )}>
                       {orders.filter(order => {
                         if (!order.scheduledDate) return false
-                        const orderDate = new Date(order.scheduledDate).toDateString()
+                        // Parsear fecha de forma segura
+                        const dateStr = order.scheduledDate.includes('T') ? order.scheduledDate : order.scheduledDate + 'T00:00:00'
+                        const orderDate = new Date(dateStr)
+                        if (isNaN(orderDate.getTime())) return false
                         const today = new Date().toDateString()
-                        return orderDate === today && order.status === 'scheduled'
+                        return orderDate.toDateString() === today && order.status === 'scheduled'
                       }).length}
                     </span>
                   </div>
@@ -573,9 +579,12 @@ export default function PackageOrdersPage() {
                       style={{
                         width: `${stats.scheduledToday > 0 ? (orders.filter(order => {
                           if (!order.scheduledDate) return false
-                          const orderDate = new Date(order.scheduledDate).toDateString()
+                          // Parsear fecha de forma segura
+                          const dateStr = order.scheduledDate.includes('T') ? order.scheduledDate : order.scheduledDate + 'T00:00:00'
+                          const orderDate = new Date(dateStr)
+                          if (isNaN(orderDate.getTime())) return false
                           const today = new Date().toDateString()
-                          return orderDate === today && order.status === 'scheduled'
+                          return orderDate.toDateString() === today && order.status === 'scheduled'
                         }).length / stats.scheduledToday * 100) : 0}%`
                       }}
                     ></div>
@@ -756,7 +765,15 @@ export default function PackageOrdersPage() {
                           <div className="text-xs text-gray-500 dark:text-gray-400">
                             {(() => {
                               const now = new Date()
-                              const orderDate = new Date(order.createdAt as string)
+                              // Validar que createdAt existe y es válido
+                              if (!order.createdAt) {
+                                return <span>Sin fecha</span>
+                              }
+                              const orderDate = new Date(order.createdAt)
+                              // Verificar que la fecha es válida
+                              if (isNaN(orderDate.getTime())) {
+                                return <span>Fecha inválida</span>
+                              }
                               const daysDiff = Math.floor((now.getTime() - orderDate.getTime()) / (1000 * 60 * 60 * 24))
 
                               if (daysDiff === 0) {
@@ -779,9 +796,21 @@ export default function PackageOrdersPage() {
                                   </div>
                                 )
                               }
-                              if (daysDiff < 7) return <span>Hace {daysDiff} días</span>
-                              if (daysDiff < 30) return <span>Hace {Math.floor(daysDiff / 7)} semanas</span>
-                              return <span>Hace {Math.floor(daysDiff / 30)} meses</span>
+                              // Para fechas más antiguas, mostrar fecha completa
+                              return (
+                                <div>
+                                  <div className="font-medium">
+                                    {orderDate.toLocaleDateString('es-ES', {
+                                      day: '2-digit',
+                                      month: 'short',
+                                      year: 'numeric'
+                                    })}
+                                  </div>
+                                  <div className="text-gray-400 dark:text-gray-500 mt-1">
+                                    {orderDate.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}
+                                  </div>
+                                </div>
+                              )
                             })()}
                           </div>
                         </td>
@@ -793,7 +822,15 @@ export default function PackageOrdersPage() {
                                   {(() => {
                                     if (!order.scheduledDate) return <span className="text-gray-400">No programada</span>
 
-                                    const scheduledDate = new Date(order.scheduledDate + 'T00:00:00')
+                                    // Asegurar que scheduledDate tenga el formato correcto antes de procesarlo
+                                    const dateStr = order.scheduledDate.includes('T') ? order.scheduledDate : order.scheduledDate + 'T00:00:00'
+                                    const scheduledDate = new Date(dateStr)
+
+                                    // Verificar que la fecha es válida
+                                    if (isNaN(scheduledDate.getTime())) {
+                                      return <span className="text-gray-400">Fecha inválida</span>
+                                    }
+
                                     const today = new Date()
                                     today.setHours(0, 0, 0, 0)
                                     const tomorrow = new Date(today)
@@ -816,11 +853,18 @@ export default function PackageOrdersPage() {
                                   })()}
                                 </div>
                                 <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                                  {new Date(order.scheduledDate + 'T00:00:00').toLocaleDateString('es-ES', {
-                                    day: '2-digit',
-                                    month: '2-digit',
-                                    year: 'numeric'
-                                  })}
+                                  {(() => {
+                                    const dateStr = order.scheduledDate.includes('T') ? order.scheduledDate : order.scheduledDate + 'T00:00:00'
+                                    const date = new Date(dateStr)
+                                    if (isNaN(date.getTime())) {
+                                      return 'Fecha inválida'
+                                    }
+                                    return date.toLocaleDateString('es-ES', {
+                                      day: '2-digit',
+                                      month: '2-digit',
+                                      year: 'numeric'
+                                    })
+                                  })()}
                                 </div>
                                 {order.timeSlot && (
                                   <div className="text-xs font-medium text-blue-600 dark:text-blue-400 mt-1">

@@ -200,26 +200,39 @@ export default function FleetVehiclesPage() {
           theme === 'dark' ? "bg-gray-800 border-gray-700" : "bg-white border-gray-200"
         )}>
           <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className={cn(
-                  "text-sm font-medium",
-                  theme === 'dark' ? "text-gray-400" : "text-gray-600"
-                )}>
-                  Total Vehículos
-                </p>
-                <p className={cn(
-                  "text-2xl font-bold mt-1",
-                  theme === 'dark' ? "text-white" : "text-gray-900"
-                )}>
-                  {totalVehicles}
-                </p>
+            {loading ? (
+              <div className="animate-pulse">
+                <div className={cn(
+                  "h-4 rounded w-24 mb-2",
+                  theme === 'dark' ? "bg-gray-700" : "bg-gray-200"
+                )}></div>
+                <div className={cn(
+                  "h-8 rounded w-16",
+                  theme === 'dark' ? "bg-gray-700" : "bg-gray-200"
+                )}></div>
               </div>
-              <Car className={cn(
-                "w-8 h-8",
-                theme === 'dark' ? "text-gray-600" : "text-gray-400"
-              )} />
-            </div>
+            ) : (
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className={cn(
+                    "text-sm font-medium",
+                    theme === 'dark' ? "text-gray-400" : "text-gray-600"
+                  )}>
+                    Total Vehículos
+                  </p>
+                  <p className={cn(
+                    "text-2xl font-bold mt-1",
+                    theme === 'dark' ? "text-white" : "text-gray-900"
+                  )}>
+                    {totalVehicles}
+                  </p>
+                </div>
+                <Car className={cn(
+                  "w-8 h-8",
+                  theme === 'dark' ? "text-gray-600" : "text-gray-400"
+                )} />
+              </div>
+            )}
           </CardContent>
         </Card>
 
@@ -227,23 +240,36 @@ export default function FleetVehiclesPage() {
           theme === 'dark' ? "bg-gray-800 border-gray-700" : "bg-white border-gray-200"
         )}>
           <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className={cn(
-                  "text-sm font-medium",
-                  theme === 'dark' ? "text-gray-400" : "text-gray-600"
-                )}>
-                  Activos
-                </p>
-                <p className={cn(
-                  "text-2xl font-bold mt-1 text-green-600",
-                  theme === 'dark' ? "text-green-400" : "text-green-600"
-                )}>
-                  {vehicles.filter(v => v.status === 'ACTIVE').length}
-                </p>
+            {loading ? (
+              <div className="animate-pulse">
+                <div className={cn(
+                  "h-4 rounded w-24 mb-2",
+                  theme === 'dark' ? "bg-gray-700" : "bg-gray-200"
+                )}></div>
+                <div className={cn(
+                  "h-8 rounded w-16",
+                  theme === 'dark' ? "bg-gray-700" : "bg-gray-200"
+                )}></div>
               </div>
-              <CheckCircle className="w-8 h-8 text-green-600" />
-            </div>
+            ) : (
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className={cn(
+                    "text-sm font-medium",
+                    theme === 'dark' ? "text-gray-400" : "text-gray-600"
+                  )}>
+                    Activos
+                  </p>
+                  <p className={cn(
+                    "text-2xl font-bold mt-1 text-green-600",
+                    theme === 'dark' ? "text-green-400" : "text-green-600"
+                  )}>
+                    {vehicles.filter(v => v.status === 'ACTIVE').length}
+                  </p>
+                </div>
+                <CheckCircle className="w-8 h-8 text-green-600" />
+              </div>
+            )}
           </CardContent>
         </Card>
 
@@ -251,23 +277,36 @@ export default function FleetVehiclesPage() {
           theme === 'dark' ? "bg-gray-800 border-gray-700" : "bg-white border-gray-200"
         )}>
           <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className={cn(
-                  "text-sm font-medium",
-                  theme === 'dark' ? "text-gray-400" : "text-gray-600"
-                )}>
-                  Disponibles
-                </p>
-                <p className={cn(
-                  "text-2xl font-bold mt-1 text-blue-600",
-                  theme === 'dark' ? "text-blue-400" : "text-blue-600"
-                )}>
-                  {vehicles.filter(v => v.availability === 'AVAILABLE').length}
-                </p>
+            {loading ? (
+              <div className="animate-pulse">
+                <div className={cn(
+                  "h-4 rounded w-24 mb-2",
+                  theme === 'dark' ? "bg-gray-700" : "bg-gray-200"
+                )}></div>
+                <div className={cn(
+                  "h-8 rounded w-16",
+                  theme === 'dark' ? "bg-gray-700" : "bg-gray-200"
+                )}></div>
               </div>
-              <Package className="w-8 h-8 text-blue-600" />
-            </div>
+            ) : (
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className={cn(
+                    "text-sm font-medium",
+                    theme === 'dark' ? "text-gray-400" : "text-gray-600"
+                  )}>
+                    Disponibles
+                  </p>
+                  <p className={cn(
+                    "text-2xl font-bold mt-1 text-blue-600",
+                    theme === 'dark' ? "text-blue-400" : "text-blue-600"
+                  )}>
+                    {vehicles.filter(v => v.availability === 'AVAILABLE').length}
+                  </p>
+                </div>
+                <Package className="w-8 h-8 text-blue-600" />
+              </div>
+            )}
           </CardContent>
         </Card>
 
@@ -275,26 +314,39 @@ export default function FleetVehiclesPage() {
           theme === 'dark' ? "bg-gray-800 border-gray-700" : "bg-white border-gray-200"
         )}>
           <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className={cn(
-                  "text-sm font-medium",
-                  theme === 'dark' ? "text-gray-400" : "text-gray-600"
-                )}>
-                  Capacidad Total
-                </p>
-                <p className={cn(
-                  "text-2xl font-bold mt-1",
-                  theme === 'dark' ? "text-white" : "text-gray-900"
-                )}>
-                  {vehicles.reduce((sum, v) => sum + v.capacity.empty_boxes + v.capacity.full_boxes, 0)} cajas
-                </p>
+            {loading ? (
+              <div className="animate-pulse">
+                <div className={cn(
+                  "h-4 rounded w-24 mb-2",
+                  theme === 'dark' ? "bg-gray-700" : "bg-gray-200"
+                )}></div>
+                <div className={cn(
+                  "h-8 rounded w-20",
+                  theme === 'dark' ? "bg-gray-700" : "bg-gray-200"
+                )}></div>
               </div>
-              <Package className={cn(
-                "w-8 h-8",
-                theme === 'dark' ? "text-gray-600" : "text-gray-400"
-              )} />
-            </div>
+            ) : (
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className={cn(
+                    "text-sm font-medium",
+                    theme === 'dark' ? "text-gray-400" : "text-gray-600"
+                  )}>
+                    Capacidad Total
+                  </p>
+                  <p className={cn(
+                    "text-2xl font-bold mt-1",
+                    theme === 'dark' ? "text-white" : "text-gray-900"
+                  )}>
+                    {vehicles.reduce((sum, v) => sum + v.capacity.empty_boxes + v.capacity.full_boxes, 0)} cajas
+                  </p>
+                </div>
+                <Package className={cn(
+                  "w-8 h-8",
+                  theme === 'dark' ? "text-gray-600" : "text-gray-400"
+                )} />
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>
@@ -376,8 +428,23 @@ export default function FleetVehiclesPage() {
         </CardHeader>
         <CardContent>
           {loading ? (
-            <div className="flex items-center justify-center py-12">
-              <div className="w-8 h-8 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
+            <div className="flex flex-col items-center justify-center py-16">
+              <div className="relative mb-4">
+                <div className="w-16 h-16 border-4 border-blue-600/20 rounded-full"></div>
+                <div className="w-16 h-16 border-4 border-blue-600 border-t-transparent rounded-full animate-spin absolute top-0 left-0"></div>
+              </div>
+              <p className={cn(
+                "text-lg font-medium mb-2",
+                theme === 'dark' ? "text-white" : "text-gray-900"
+              )}>
+                Cargando vehículos...
+              </p>
+              <p className={cn(
+                "text-sm",
+                theme === 'dark' ? "text-gray-400" : "text-gray-600"
+              )}>
+                Obteniendo datos de la flota
+              </p>
             </div>
           ) : vehicles.length === 0 ? (
             <div className="text-center py-12">

@@ -115,7 +115,7 @@ export async function PUT(
 
     // Remove fields that shouldn't be updated directly
     delete updateData.id;
-    delete updateData.created_at;
+    delete updateData.createdat;
     delete updateData.vin; // VIN shouldn't be updatable
 
     const updatedVehicle = updateVehicleInDatabase(id, updateData);

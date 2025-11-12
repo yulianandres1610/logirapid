@@ -1,11 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import {
-  savePackageOrder,
-  getAllPackageOrders,
-  updatePackageOrder,
-  getPackageOrderById,
-  getCustomerPackageOrders
-} from '@/lib/database'
+import { db } from '@/lib/database'
 
 // GET: Obtener todas las órdenes de paquetería con paginación y filtros
 export async function GET(request: NextRequest) {
@@ -18,61 +12,90 @@ export async function GET(request: NextRequest) {
     const searchTerm = searchParams.get('search')
     const statusFilter = searchParams.get('status')
 
-    let orders
+    // Build WHERE conditions
+    const conditions = []
+    const params = []
 
     if (orderId) {
-      // Buscar por ID específico
-      const order = getPackageOrderById(parseInt(orderId))
-      orders = order ? [order] : []
-    } else if (customerId) {
-      // Buscar por ID de cliente
-      orders = getCustomerPackageOrders(parseInt(customerId))
-    } else {
-      // Obtener todas las órdenes
-      orders = getAllPackageOrders()
+      params.push(orderId)
+      conditions.push('id = $' + params.length)
     }
 
-    // Aplicar filtros
-    let filteredOrders = orders
+    if (customerId) {
+      params.push(customerId)
+      conditions.push('customerid = $' + params.length)
+    }
+
     if (searchTerm) {
-      const searchLower = searchTerm.toLowerCase()
-      filteredOrders = orders.filter(order =>
-        order.orderNumber.toLowerCase().includes(searchLower) ||
-        (order.customerName && order.customerName.toLowerCase().includes(searchLower)) ||
-        ((order.firstName || order.lastName) &&
-          `${order.firstName || ''} ${order.lastName || ''}`.trim().toLowerCase().includes(searchLower)) ||
-        (order.customerAddress && (() => {
-          try {
-            const addr = JSON.parse(order.customerAddress || '{}')
-            return addr.street?.toLowerCase().includes(searchLower) || false
-          } catch {
-            return order.customerAddress && typeof order.customerAddress === 'string'
-              ? order.customerAddress.toLowerCase().includes(searchLower)
-              : false
-          }
-        })())
-      )
+      const searchPattern = `%${searchTerm}%`
+      params.push(searchPattern, searchPattern, searchPattern, searchPattern)
+      const searchCondition = `(
+        ordernumber ILIKE $${params.length - 3} OR
+        customername ILIKE $${params.length - 2} OR
+        CONCAT(firstname, ' ', lastname) ILIKE $${params.length - 1} OR
+        customeraddress::text ILIKE $${params.length}
+      )`
+      conditions.push(searchCondition)
     }
 
     if (statusFilter && statusFilter !== 'all') {
-      filteredOrders = filteredOrders.filter(order => order.status === statusFilter)
+      params.push(statusFilter)
+      conditions.push('status = $' + params.length)
     }
 
-    // Aplicar paginación
-    const total = filteredOrders.length
-    const startIndex = (page - 1) * limit
-    const endIndex = startIndex + limit
-    const paginatedOrders = filteredOrders.slice(startIndex, endIndex)
+    const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : ''
+
+    // Count total records
+    const countQuery = `SELECT COUNT(*) as total FROM package_orders ${whereClause}`
+    const countResult = await db.query(countQuery, params)
+    const total = parseInt(countResult.rows[0].total)
+
+    // Get paginated results
+    const offset = (page - 1) * limit
+    params.push(limit, offset)
+    const dataQuery = `
+      SELECT
+        id,
+        customerid as "customerId",
+        customername as "customerName",
+        customeraddress as "customerAddress",
+        ordernumber as "orderNumber",
+        services,
+        notes,
+        scheduleddate as "scheduledDate",
+        timeslot as "timeSlot",
+        status,
+        createdby as "createdBy",
+        latitude,
+        longitude,
+        subtotal,
+        taxamount as "taxAmount",
+        totalamount as "totalAmount",
+        boxcount as "boxCount",
+        boxprice as "boxPrice",
+        additionalservices as "additionalServices",
+        boxes,
+        firstname as "firstName",
+        lastname as "lastName",
+        createdat as "createdAt",
+        updatedat as "updatedAt"
+      FROM package_orders
+      ${whereClause}
+      ORDER BY createdat DESC
+      LIMIT $${params.length - 1} OFFSET $${params.length}
+    `
+
+    const result = await db.query(dataQuery, params)
 
     return NextResponse.json({
       success: true,
-      data: paginatedOrders,
+      data: result.rows,
       pagination: {
         page,
         limit,
         total,
         totalPages: Math.ceil(total / limit),
-        hasNext: endIndex < total,
+        hasNext: offset + limit < total,
         hasPrev: page > 1
       }
     })
@@ -107,33 +130,88 @@ export async function POST(request: NextRequest) {
       }, { status: 400 })
     }
 
-    const newOrder = savePackageOrder({
-      customerId: body.customerId,
-      customerName: body.customerName,
-      customerAddress: body.customerAddress,
-      orderNumber: body.orderNumber,
-      services: body.services,
-      notes: body.notes,
-      scheduledDate: body.scheduledDate,
-      timeSlot: body.timeSlot,
-      status: body.status || 'pending',
-      createdBy: body.createdBy || 'system',
-      // Coordinates for mapping
-      latitude: body.latitude || null,
-      longitude: body.longitude || null,
-      // Financial fields
-      subtotal: body.subtotal || 0,
-      taxAmount: body.taxAmount || 0,
-      totalAmount: body.totalAmount || 0,
-      boxCount: body.boxCount || 0,
-      boxPrice: body.boxPrice || 0,
-      additionalServices: body.additionalServices || '[]',
-      boxes: typeof body.boxes === 'string' ? body.boxes : JSON.stringify(body.boxes || [])
-    })
+    // Prepare services as JSON string
+    const servicesJson = typeof body.services === 'string' ? body.services : JSON.stringify(body.services)
+    const additionalServicesJson = typeof body.additionalServices === 'string'
+      ? body.additionalServices
+      : JSON.stringify(body.additionalServices || [])
+    const boxesJson = typeof body.boxes === 'string' ? body.boxes : JSON.stringify(body.boxes || [])
+
+    const insertQuery = `
+      INSERT INTO package_orders (
+        customerid, customername, customeraddress, ordernumber, services,
+        notes, scheduleddate, timeslot, status, createdby,
+        latitude, longitude, subtotal, taxamount, totalamount,
+        boxcount, boxprice, additionalservices, boxes,
+        firstname, lastname, createdat, updatedat
+      ) VALUES (
+        $1, $2, $3, $4, $5,
+        $6, $7, $8, $9, $10,
+        $11, $12, $13, $14, $15,
+        $16, $17, $18, $19,
+        $20, $21, NOW(), NOW()
+      )
+      RETURNING *
+    `
+
+    const values = [
+      body.customerId,
+      body.customerName || null,
+      body.customerAddress || null,
+      body.orderNumber,
+      servicesJson,
+      body.notes || null,
+      body.scheduledDate || null,
+      body.timeSlot || null,
+      body.status || 'pending',
+      body.createdBy || 'system',
+      body.latitude || null,
+      body.longitude || null,
+      body.subtotal || 0,
+      body.taxAmount || 0,
+      body.totalAmount || 0,
+      body.boxCount || 0,
+      body.boxPrice || 0,
+      additionalServicesJson,
+      boxesJson,
+      body.firstName || null,
+      body.lastName || null
+    ]
+
+    const result = await db.query(insertQuery, values)
+
+    // Format the response to match expected format
+    const newOrder = result.rows[0]
+    const formattedOrder = {
+      id: newOrder.id,
+      customerId: newOrder.customerid,
+      customerName: newOrder.customername,
+      customerAddress: newOrder.customeraddress,
+      orderNumber: newOrder.ordernumber,
+      services: newOrder.services,
+      notes: newOrder.notes,
+      scheduledDate: newOrder.scheduleddate,
+      timeSlot: newOrder.timeslot,
+      status: newOrder.status,
+      createdBy: newOrder.createdby,
+      latitude: newOrder.latitude,
+      longitude: newOrder.longitude,
+      subtotal: newOrder.subtotal,
+      taxAmount: newOrder.taxamount,
+      totalAmount: newOrder.totalamount,
+      boxCount: newOrder.boxcount,
+      boxPrice: newOrder.boxprice,
+      additionalServices: newOrder.additionalservices,
+      boxes: newOrder.boxes,
+      firstName: newOrder.firstname,
+      lastName: newOrder.lastname,
+      createdAt: newOrder.createdat,
+      updatedAt: newOrder.updatedat
+    }
 
     return NextResponse.json({
       success: true,
-      data: newOrder,
+      data: formattedOrder,
       message: 'Orden de paquetería creada exitosamente'
     })
 
@@ -159,17 +237,76 @@ export async function PUT(request: NextRequest) {
       }, { status: 400 })
     }
 
-    // Handle additionalServices if it's an array
-    if (updateData.additionalServices && Array.isArray(updateData.additionalServices)) {
-      updateData.additionalServices = JSON.stringify(updateData.additionalServices)
+    // Build UPDATE query dynamically
+    const updateFields = []
+    const values = []
+    let valueIndex = 1
+
+    const fieldMapping = {
+      customerId: 'customerid',
+      customerName: 'customername',
+      customerAddress: 'customeraddress',
+      orderNumber: 'ordernumber',
+      services: 'services',
+      notes: 'notes',
+      scheduledDate: 'scheduleddate',
+      timeSlot: 'timeslot',
+      status: 'status',
+      createdBy: 'createdby',
+      latitude: 'latitude',
+      longitude: 'longitude',
+      subtotal: 'subtotal',
+      taxAmount: 'taxamount',
+      totalAmount: 'totalamount',
+      boxCount: 'boxcount',
+      boxPrice: 'boxprice',
+      additionalServices: 'additionalservices',
+      boxes: 'boxes',
+      firstName: 'firstname',
+      lastName: 'lastname'
     }
 
-    const updatedOrder = updatePackageOrder(id, updateData)
+    for (const [key, value] of Object.entries(updateData)) {
+      if (fieldMapping[key]) {
+        let processedValue = value
 
-    if (!updatedOrder || updatedOrder.changes === 0) {
+        // Convert arrays to JSON strings for JSON fields
+        if (['services', 'additionalServices', 'boxes'].includes(key) && Array.isArray(value)) {
+          processedValue = JSON.stringify(value)
+        }
+
+        updateFields.push(`${fieldMapping[key]} = $${valueIndex}`)
+        values.push(processedValue)
+        valueIndex++
+      }
+    }
+
+    if (updateFields.length === 0) {
       return NextResponse.json({
         success: false,
-        error: 'No se encontró la orden o no hay cambios'
+        error: 'No hay campos para actualizar'
+      }, { status: 400 })
+    }
+
+    // Add updatedat
+    updateFields.push(`updatedat = NOW()`)
+
+    // Add id to values
+    values.push(id)
+
+    const updateQuery = `
+      UPDATE package_orders
+      SET ${updateFields.join(', ')}
+      WHERE id = $${valueIndex}
+      RETURNING *
+    `
+
+    const result = await db.query(updateQuery, values)
+
+    if (result.rows.length === 0) {
+      return NextResponse.json({
+        success: false,
+        error: 'No se encontró la orden'
       }, { status: 404 })
     }
 

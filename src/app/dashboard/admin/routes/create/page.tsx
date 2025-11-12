@@ -82,6 +82,7 @@ export default function CreateRoutePage() {
   const [vehicles, setVehicles] = useState<any[]>([])
   const [drivers, setDrivers] = useState<any[]>([])
   const [packageOrders, setPackageOrders] = useState<any[]>([])
+  const [zones, setZones] = useState<any[]>([])
 
   // Form data
   const [selectedOrders, setSelectedOrders] = useState<number[]>([])
@@ -135,30 +136,34 @@ export default function CreateRoutePage() {
     try {
       setLoading(true)
 
-      const [warehousesRes, vehiclesRes, driversRes, ordersRes1, ordersRes2] = await Promise.all([
+      const [warehousesRes, vehiclesRes, driversRes, ordersRes1, ordersRes2, zonesRes] = await Promise.all([
         fetch('/api/warehouses?limit=1000'),
         fetch('/api/vehicles?limit=1000'),
         fetch('/api/users?role=driver&limit=1000'),
         fetch('/api/package-orders?status=pending&limit=1000'),
-        fetch('/api/package-orders?status=reprogrammed&limit=1000')
+        fetch('/api/package-orders?status=reprogrammed&limit=1000'),
+        fetch('/api/zones')
       ])
 
-      const [warehousesData, vehiclesData, driversData, orders1, orders2] = await Promise.all([
+      const [warehousesData, vehiclesData, driversData, orders1, orders2, zonesData] = await Promise.all([
         warehousesRes.json(),
         vehiclesRes.json(),
         driversRes.json(),
         ordersRes1.json(),
-        ordersRes2.json()
+        ordersRes2.json(),
+        zonesRes.json()
       ])
 
       // Manejar formato de respuesta {data: array} o array directo
       const warehousesList = warehousesData.data || warehousesData || []
       const vehiclesList = vehiclesData.data || vehiclesData || []
       const driversList = driversData.data || driversData || []
+      const zonesList = zonesData.data || zonesData || []
 
       setWarehouses(Array.isArray(warehousesList) ? warehousesList : [])
       setVehicles(Array.isArray(vehiclesList) ? vehiclesList : [])
       setDrivers(Array.isArray(driversList) ? driversList : [])
+      setZones(Array.isArray(zonesList) ? zonesList : [])
 
       // Combinar pending + reprogrammed - Manejar formato {data: array}
       const pendingOrders = orders1.data || orders1 || []
@@ -217,11 +222,6 @@ export default function CreateRoutePage() {
     const window = TIME_WINDOWS.find(w => w.value === timeWindowValue)
     if (!window) return []
 
-    console.log(`🔍 Filtrando órdenes para horario ${timeWindowValue}:`, {
-      totalOrdenes: packageOrders.length,
-      timeWindowValue
-    })
-
     // Mapeo de diferentes formatos de timeSlot
     const timeSlotMatches = (orderTimeSlot: string, targetWindow: string) => {
       if (!orderTimeSlot) return true // Sin timeSlot = incluir en todos
@@ -242,15 +242,7 @@ export default function CreateRoutePage() {
     }
 
     // Ya filtramos por status en loadInitialData, solo filtramos por timeSlot aquí
-    const filtered = packageOrders.filter(order => {
-      const matches = timeSlotMatches(order.timeSlot, timeWindowValue)
-      console.log(`  - Orden ${order.id} timeSlot="${order.timeSlot}" → match con ${timeWindowValue}:`, matches)
-      return matches
-    })
-
-    console.log(`✅ Resultado filtro ${timeWindowValue}:`, filtered.length, 'órdenes')
-
-    return filtered
+    return packageOrders.filter(order => timeSlotMatches(order.timeSlot, timeWindowValue))
   }
 
   /**
@@ -289,6 +281,132 @@ export default function CreateRoutePage() {
   }
 
   // ============================================================================
+  // ZONE FUNCTIONS
+  // ============================================================================
+
+  /**
+   * Extrae el código postal de una orden
+   * Primero intenta usar el campo zipcode, luego extrae de la dirección
+   */
+  const extractZipcode = (order: any): string | null => {
+    // Primero intentar usar el campo zipcode directo
+    if (order.zipcode) {
+      return order.zipcode
+    }
+
+    // Si no existe, intentar extraer de la dirección
+    const address = order.customerAddress || order.address
+    let addressText = ''
+    if (typeof address === 'string') {
+      addressText = address
+    } else if (address?.street) {
+      addressText = address.street
+    } else {
+      return null
+    }
+
+    // Buscar patrón STATE zipcode (ej: "FL 33186")
+    const zipcodeMatch = addressText.match(/\b[A-Z]{2}\s+(\d{5})(?:-\d{4})?\b/)
+    return zipcodeMatch ? zipcodeMatch[1] : null
+  }
+
+  /**
+   * Encuentra la zona que contiene el zipcode dado
+   */
+  const getZoneForZipcode = (zipcode: string): any | null => {
+    if (!zipcode) return null
+
+    return zones.find(zone => {
+      const zipCodes = Array.isArray(zone.zipCodes) ? zone.zipCodes : []
+      return zipCodes.includes(zipcode)
+    }) || null
+  }
+
+  /**
+   * Obtiene órdenes filtradas por zona Y horario
+   * Por ejemplo: Zona "Sur" + Horario "8-12" = todas las órdenes de 8-12 con zipcodes de la zona Sur
+   */
+  const getOrdersByZoneAndTimeWindow = (zoneId: number, timeWindowValue: string) => {
+    // Paso 1: Filtrar por horario (ej: "8-12" matchea con órdenes timeslot="morning")
+    const ordersInTimeWindow = getOrdersByTimeWindow(timeWindowValue)
+
+    // Paso 2: Encontrar la zona y sus zipcodes
+    const zone = zones.find(z => z.id === zoneId)
+    if (!zone) return []
+
+    const zipCodes = Array.isArray(zone.zipCodes) ? zone.zipCodes : []
+
+    // Paso 3: Filtrar las órdenes del horario que tengan zipcodes de esta zona
+    return ordersInTimeWindow.filter(order => {
+      const orderZipcode = extractZipcode(order)
+      return orderZipcode && zipCodes.includes(orderZipcode)
+    })
+  }
+
+  /**
+   * Obtiene todas las zonas que tienen órdenes disponibles (en cualquier horario)
+   * Deduplica por zone.id para evitar mostrar la misma zona múltiples veces
+   */
+  const getZonesWithOrders = () => {
+    const zonesMap = new Map<number, { zone: any; totalOrders: number }>()
+
+    zones.forEach(zone => {
+      // Si ya procesamos esta zona, saltarla
+      if (zonesMap.has(zone.id)) return
+
+      let totalOrders = 0
+      const zipCodes = Array.isArray(zone.zipCodes) ? zone.zipCodes : []
+
+      // Contar cuántas órdenes hay en esta zona (en todos los horarios)
+      packageOrders.forEach(order => {
+        const orderZipcode = extractZipcode(order)
+        if (orderZipcode && zipCodes.includes(orderZipcode)) {
+          totalOrders++
+        }
+      })
+
+      if (totalOrders > 0) {
+        zonesMap.set(zone.id, { zone, totalOrders })
+      }
+    })
+
+    return Array.from(zonesMap.values())
+  }
+
+  /**
+   * Calcula cuántas PARADAS habrá en una zona y horario específico
+   */
+  const getStopsByZoneAndTimeWindow = (zoneId: number, timeWindowValue: string) => {
+    const orders = getOrdersByZoneAndTimeWindow(zoneId, timeWindowValue)
+
+    // Agrupar por dirección normalizada
+    const addressMap = new Map<string, number>()
+
+    orders.forEach(order => {
+      let addressText = ''
+      if (typeof order.customerAddress === 'string') {
+        addressText = order.customerAddress
+      } else if (order.customerAddress?.street) {
+        addressText = order.customerAddress.street
+      }
+
+      const normalizedAddress = addressText
+        .toLowerCase()
+        .trim()
+        .replace(/[.,\/#!$%\^&\*;:{}=\-_`~()]/g, '')
+        .replace(/\s+/g, ' ')
+
+      if (!normalizedAddress) return
+
+      if (!addressMap.has(normalizedAddress)) {
+        addressMap.set(normalizedAddress, 1)
+      }
+    })
+
+    return addressMap.size
+  }
+
+  // ============================================================================
   // HANDLERS
   // ============================================================================
 
@@ -307,7 +425,7 @@ export default function CreateRoutePage() {
         ? prev.filter(id => id !== orderId)
         : [...prev, orderId]
 
-      // Actualizar automáticamente los períodos seleccionados
+      // Actualizar automáticamente los períodos seleccionados basándose en las órdenes seleccionadas
       const newTimeWindows: string[] = []
       TIME_WINDOWS.forEach(window => {
         const ordersInWindow = getOrdersByTimeWindow(window.value)
@@ -375,15 +493,16 @@ export default function CreateRoutePage() {
         return
       }
 
-      // Validar que los horarios seleccionados tengan órdenes
+      // Validar que los horarios seleccionados tengan órdenes SELECCIONADAS
       const invalidTimeWindows = selectedTimeWindows.filter(tw => {
         const ordersInWindow = getOrdersByTimeWindow(tw)
-        return ordersInWindow.length === 0
+        const hasSelectedOrders = ordersInWindow.some(o => selectedOrders.includes(o.id))
+        return !hasSelectedOrders
       })
 
       if (invalidTimeWindows.length > 0) {
-        showNotification('error', 'Error', 'Hay horarios seleccionados sin órdenes disponibles')
-        // Remover horarios sin órdenes
+        showNotification('error', 'Error', 'Hay horarios seleccionados sin órdenes seleccionadas')
+        // Remover horarios sin órdenes seleccionadas
         setSelectedTimeWindows(prev => prev.filter(tw => !invalidTimeWindows.includes(tw)))
         return
       }
@@ -473,7 +592,23 @@ export default function CreateRoutePage() {
         duration: data.data.duration
       })
 
-      setOptimizationResult(data.data)
+      // Asegurar que distance y duration son números (PostgreSQL puede devolver strings)
+      const resultWithNumbers = {
+        ...data.data,
+        distance: Number(data.data.distance) || 0,
+        duration: Number(data.data.duration) || 0
+      }
+
+      console.log('🔍 [Frontend] Valores ANTES de setOptimizationResult:', {
+        distanceOriginal: data.data.distance,
+        durationOriginal: data.data.duration,
+        distanceConverted: resultWithNumbers.distance,
+        durationConverted: resultWithNumbers.duration,
+        typeofDistance: typeof resultWithNumbers.distance,
+        typeofDuration: typeof resultWithNumbers.duration
+      })
+
+      setOptimizationResult(resultWithNumbers)
       showNotification('success', 'Optimización Completa',
         `Ruta con ${data.data.totalStops} paradas optimizada correctamente`)
     } else {
@@ -587,9 +722,9 @@ export default function CreateRoutePage() {
         }
       }
 
-      // Sumar métricas
-      totalDistance += parseFloat(period.distance) || 0
-      totalDuration += parseInt(period.duration) || 0
+      // Sumar métricas (PostgreSQL puede devolver strings, convertir a números)
+      totalDistance += Number(period.distance) || 0
+      totalDuration += Number(period.duration) || 0
       totalOrders += period.totalOrders || 0
     })
 
@@ -610,8 +745,8 @@ export default function CreateRoutePage() {
       stops: unifiedStops,
       totalStops: unifiedStops.length,
       totalOrders,
-      distance: totalDistance.toFixed(1),
-      duration: totalDuration.toString(),
+      distance: totalDistance,
+      duration: totalDuration,
       warehouseCoordinates: warehouseCoords,
       geometry: unifiedGeometry,
       coordinates: unifiedCoordinates,
@@ -629,7 +764,7 @@ export default function CreateRoutePage() {
       setLoading(true)
 
       // Obtener nombre del conductor y placa del vehículo
-      const selectedVehicle = vehicles.find(v => v.id === parseInt(vehicleId))
+      const selectedVehicle = vehicles.find(v => v.id === vehicleId)
       const selectedDriver = drivers.find(d => d.id === parseInt(driverId))
 
       // Calcular hora de inicio estimada (8:00 AM de la fecha seleccionada)
@@ -644,7 +779,7 @@ export default function CreateRoutePage() {
           selectedOrders,
           warehouseId,
           vehicleId,
-          vehiclePlate: selectedVehicle?.plate || selectedVehicle?.licensePlate || null,
+          vehiclePlate: selectedVehicle?.vin || selectedVehicle?.nickname || 'Sin identificar',
           driverId: driverId || undefined,
           driverName: selectedDriver ? `${selectedDriver.firstName} ${selectedDriver.lastName}`.trim() : null,
           date: routeDate,
@@ -662,7 +797,6 @@ export default function CreateRoutePage() {
         setCreatedRoute({
           routeId: data.routeId,
           routeNumber: data.routeNumber,
-          qrCode: data.qrCode,
           mapboxJobId: data.mapboxJobId,
           totalStops: data.totalStops,
           totalOrders: data.totalOrders,
@@ -894,206 +1028,231 @@ export default function CreateRoutePage() {
     </div>
   )
 
-  const renderStep1 = () => (
-    <div className="space-y-6">
+  const renderStep1 = () => {
+    const zonesWithOrders = getZonesWithOrders()
 
-      {/* Time Windows with Orders Inside */}
-      <div className="space-y-4">
-        {TIME_WINDOWS.map(window => {
-          const ordersInWindow = getOrdersByTimeWindow(window.value)
-          const stopsCount = getStopsByTimeWindow(window.value)
-          const selectedInWindow = ordersInWindow.filter(o => selectedOrders.includes(o.id)).length
-          const allSelectedInWindow = ordersInWindow.length > 0 && ordersInWindow.every(o => selectedOrders.includes(o.id))
-          const hasOrders = ordersInWindow.length > 0
+    return (
+      <div className="space-y-6">
+        {/* Zonas con órdenes agrupadas */}
+        {zonesWithOrders.length === 0 ? (
+          <div className="bg-yellow-50 dark:bg-yellow-900/20 rounded-lg p-6 border border-yellow-200 dark:border-yellow-800">
+            <p className="text-sm text-yellow-700 dark:text-yellow-300 text-center flex items-center justify-center gap-2">
+              <AlertCircle className="w-5 h-5" />
+              No hay órdenes pendientes o reprogramadas en ninguna zona
+            </p>
+          </div>
+        ) : (
+          <div className="space-y-6">
+            {zonesWithOrders.map(({ zone, totalOrders }) => {
+              const zipCodes = Array.isArray(zone.zipCodes) ? zone.zipCodes : []
 
-          return (
-            <div
-              key={window.id}
-              className={cn(
-                'bg-white dark:bg-gray-800 rounded-lg border-2 transition-all overflow-hidden',
-                !hasOrders && 'opacity-50',
-                selectedInWindow > 0 && hasOrders
-                  ? 'border-blue-500 shadow-md'
-                  : 'border-gray-200 dark:border-gray-700'
-              )}
-            >
-              {/* Time Window Header */}
-              <div className="p-4">
-                <div className="flex items-center justify-between mb-3">
-                  <div className="flex items-center gap-3">
-                    <div>
-                      <h4 className="font-semibold text-gray-900 dark:text-white">
-                        {window.label}
-                      </h4>
-                      <p className="text-sm text-gray-500 dark:text-gray-400">
-                        {window.startTime} - {window.endTime}
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-2">
-                    {/* Paradas */}
-                    <div className={cn(
-                      'relative overflow-hidden rounded-lg border shadow px-3 py-2',
-                      theme === 'dark'
-                        ? 'bg-gradient-to-br from-gray-800 to-gray-900 border-gray-700'
-                        : 'bg-gradient-to-br from-slate-50 to-white border-slate-200'
-                    )}>
-                      <div className="absolute top-0 left-0 w-full h-0.5 bg-gradient-to-r from-blue-400 to-blue-600"></div>
-                      <div className="flex items-center gap-2">
-                        <div className={cn(
-                          'p-1.5 rounded-lg',
-                          theme === 'dark'
-                            ? 'bg-blue-900/30 border border-blue-800/50'
-                            : 'bg-gradient-to-br from-blue-50 to-blue-100 border border-blue-200'
-                        )}>
-                          <MapPin className="w-3.5 h-3.5 text-blue-600" />
-                        </div>
-                        <div>
-                          <p className={cn(
-                            'text-[10px] font-medium uppercase tracking-wide',
-                            theme === 'dark' ? 'text-gray-400' : 'text-gray-600'
-                          )}>Paradas</p>
-                          <p className={cn(
-                            'text-lg font-bold leading-tight',
-                            theme === 'dark' ? 'text-white' : 'text-slate-900'
-                          )}>{stopsCount}</p>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Órdenes */}
-                    <div className={cn(
-                      'relative overflow-hidden rounded-lg border shadow px-3 py-2',
-                      theme === 'dark'
-                        ? 'bg-gradient-to-br from-gray-800 to-gray-900 border-gray-700'
-                        : 'bg-gradient-to-br from-slate-50 to-white border-slate-200'
-                    )}>
-                      <div className="absolute top-0 left-0 w-full h-0.5 bg-gradient-to-r from-green-400 to-emerald-600"></div>
-                      <div className="flex items-center gap-2">
-                        <div className={cn(
-                          'p-1.5 rounded-lg',
-                          theme === 'dark'
-                            ? 'bg-green-900/30 border border-green-800/50'
-                            : 'bg-gradient-to-br from-green-50 to-emerald-100 border border-green-200'
-                        )}>
-                          <Package className="w-3.5 h-3.5 text-green-600" />
-                        </div>
-                        <div>
-                          <p className={cn(
-                            'text-[10px] font-medium uppercase tracking-wide',
-                            theme === 'dark' ? 'text-gray-400' : 'text-gray-600'
-                          )}>Órdenes</p>
-                          <p className={cn(
-                            'text-lg font-bold leading-tight',
-                            theme === 'dark' ? 'text-white' : 'text-slate-900'
-                          )}>
-                            {selectedInWindow}/{ordersInWindow.length}
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Select All in Period Button */}
-                {hasOrders && (
-                  <Button
-                    onClick={() => toggleAllOrdersInTimeWindow(window.value)}
-                    size="sm"
-                    className="w-full bg-blue-500 hover:bg-blue-600 text-white border-0 focus:ring-0 focus:outline-none"
+              return (
+                <div
+                  key={zone.id}
+                  className="bg-white dark:bg-gray-800 rounded-xl border-2 border-gray-200 dark:border-gray-700 overflow-hidden shadow-lg"
+                >
+                  {/* Zone Header */}
+                  <div
+                    className="p-5"
+                    style={{
+                      background: `linear-gradient(135deg, ${zone.color || '#8B5CF6'}15 0%, ${zone.color || '#8B5CF6'}05 100%)`
+                    }}
                   >
-                    {allSelectedInWindow ? 'Deseleccionar' : 'Seleccionar'} todas en este periodo
-                  </Button>
-                )}
-              </div>
-
-              {/* Orders in this Time Window */}
-              {ordersInWindow.length > 0 && (
-                <div className="border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50 p-6">
-                  <div className="space-y-3 max-h-80 overflow-y-auto pr-3">
-                    {ordersInWindow.map(order => (
-                      <label
-                        key={order.id}
-                        className={cn(
-                          'flex items-center gap-4 p-5 rounded-lg border-2 cursor-pointer transition-all duration-200',
-                          selectedOrders.includes(order.id)
-                            ? 'bg-blue-50 dark:bg-blue-900/20 border-[#2a5caa] shadow-lg'
-                            : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 hover:border-[#2a5caa] hover:shadow-md'
-                        )}
-                      >
-                        {/* Checkbox */}
-                        <div className="flex-shrink-0">
-                          <input
-                            type="checkbox"
-                            checked={selectedOrders.includes(order.id)}
-                            onChange={() => toggleOrder(order.id)}
-                            className="w-5 h-5 rounded border-gray-300 text-[#2a5caa] focus:ring-[#2a5caa] cursor-pointer"
-                          />
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <div
+                          className="w-12 h-12 rounded-lg flex items-center justify-center text-white font-bold text-xl shadow-lg"
+                          style={{ backgroundColor: zone.color || '#8B5CF6' }}
+                        >
+                          {zone.name.charAt(0)}
                         </div>
-
-                        {/* Content */}
-                        <div className="flex-1 min-w-0">
-                          <p className="font-semibold text-gray-900 dark:text-white mb-1">
-                            {order.orderNumber || `ORD-${order.id}`} - {order.customerName}
-                          </p>
-                          <p className="text-sm text-gray-600 dark:text-gray-400 flex items-center gap-2">
-                            <MapPin className="w-4 h-4 flex-shrink-0 text-[#cc0a46]" />
-                            <span className="truncate">
-                              {typeof order.customerAddress === 'string'
-                                ? order.customerAddress
-                                : order.customerAddress?.street || 'Dirección no disponible'}
-                            </span>
+                        <div>
+                          <h3 className="text-xl font-bold text-gray-900 dark:text-white">
+                            {zone.name}
+                          </h3>
+                          <p className="text-sm text-gray-600 dark:text-gray-400">
+                            {zone.description || `Códigos postales: ${zipCodes.join(', ')}`}
                           </p>
                         </div>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-sm text-gray-500 dark:text-gray-400">Total en zona</p>
+                        <p className="text-2xl font-bold text-gray-900 dark:text-white">
+                          {totalOrders}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
 
-                        {/* Coordinates */}
-                        <div className="hidden lg:flex items-center gap-2 px-3 py-2 rounded-md bg-gray-100 dark:bg-gray-700 text-xs font-mono text-gray-600 dark:text-gray-400 flex-shrink-0">
-                          {order.latitude?.toFixed(4)}, {order.longitude?.toFixed(4)}
+                  {/* Time Windows dentro de esta zona */}
+                  <div className="p-5 space-y-4">
+                    {TIME_WINDOWS.map(window => {
+                      const ordersInZoneAndWindow = getOrdersByZoneAndTimeWindow(zone.id, window.value)
+                      const stopsCount = getStopsByZoneAndTimeWindow(zone.id, window.value)
+                      const selectedInWindow = ordersInZoneAndWindow.filter(o => selectedOrders.includes(o.id)).length
+                      const allSelectedInWindow = ordersInZoneAndWindow.length > 0 && ordersInZoneAndWindow.every(o => selectedOrders.includes(o.id))
+                      const hasOrders = ordersInZoneAndWindow.length > 0
+
+                      if (!hasOrders) return null
+
+                      return (
+                        <div
+                          key={`${zone.id}-${window.id}`}
+                          className={cn(
+                            'rounded-lg border-2 transition-all overflow-hidden',
+                            selectedInWindow > 0
+                              ? 'border-blue-500 shadow-md bg-blue-50/50 dark:bg-blue-900/10'
+                              : 'border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/30'
+                          )}
+                        >
+                          {/* Horario Header */}
+                          <div className="p-4 bg-white dark:bg-gray-800">
+                            <div className="flex items-center justify-between mb-3">
+                              <div className="flex items-center gap-3">
+                                <Clock className="w-5 h-5 text-gray-600 dark:text-gray-400" />
+                                <div>
+                                  <h4 className="font-semibold text-gray-900 dark:text-white">
+                                    {window.label}
+                                  </h4>
+                                  <p className="text-sm text-gray-500 dark:text-gray-400">
+                                    {window.startTime} - {window.endTime}
+                                  </p>
+                                </div>
+                              </div>
+
+                              <div className="flex items-center gap-3">
+                                {/* Stats */}
+                                <div className="flex items-center gap-2 text-sm">
+                                  <span className="px-2 py-1 rounded bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 font-medium">
+                                    {stopsCount} paradas
+                                  </span>
+                                  <span className="px-2 py-1 rounded bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 font-medium">
+                                    {selectedInWindow}/{ordersInZoneAndWindow.length} órdenes
+                                  </span>
+                                </div>
+
+                                {/* Select All Button */}
+                                <Button
+                                  onClick={() => {
+                                    const orderIds = ordersInZoneAndWindow.map(o => o.id)
+                                    if (allSelectedInWindow) {
+                                      // Deseleccionar todas
+                                      setSelectedOrders(prev => {
+                                        const newSelected = prev.filter(id => !orderIds.includes(id))
+                                        // Actualizar time windows basado en las órdenes restantes
+                                        const newTimeWindows: string[] = []
+                                        TIME_WINDOWS.forEach(w => {
+                                          const ordersInW = getOrdersByTimeWindow(w.value)
+                                          if (ordersInW.some(o => newSelected.includes(o.id))) {
+                                            newTimeWindows.push(w.value)
+                                          }
+                                        })
+                                        setSelectedTimeWindows(newTimeWindows.sort())
+                                        return newSelected
+                                      })
+                                    } else {
+                                      // Seleccionar todas
+                                      setSelectedOrders(prev => {
+                                        const newSelected = [...new Set([...prev, ...orderIds])]
+                                        // Actualizar time windows basado en las órdenes seleccionadas
+                                        const newTimeWindows: string[] = []
+                                        TIME_WINDOWS.forEach(w => {
+                                          const ordersInW = getOrdersByTimeWindow(w.value)
+                                          if (ordersInW.some(o => newSelected.includes(o.id))) {
+                                            newTimeWindows.push(w.value)
+                                          }
+                                        })
+                                        setSelectedTimeWindows(newTimeWindows.sort())
+                                        return newSelected
+                                      })
+                                    }
+                                  }}
+                                  size="sm"
+                                  className="bg-blue-500 hover:bg-blue-600 text-white"
+                                >
+                                  <Check className="w-4 h-4 mr-1" />
+                                  {allSelectedInWindow ? 'Deseleccionar' : 'Seleccionar'} todas
+                                </Button>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Orders List */}
+                          <div className="border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50 p-4">
+                            <div className="space-y-2 max-h-64 overflow-y-auto">
+                              {ordersInZoneAndWindow.map(order => (
+                                <label
+                                  key={order.id}
+                                  className={cn(
+                                    'flex items-center gap-3 p-3 rounded-lg border-2 cursor-pointer transition-all',
+                                    selectedOrders.includes(order.id)
+                                      ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-500 shadow'
+                                      : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 hover:border-blue-300'
+                                  )}
+                                >
+                                  <input
+                                    type="checkbox"
+                                    checked={selectedOrders.includes(order.id)}
+                                    onChange={() => toggleOrder(order.id)}
+                                    className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                                  />
+                                  <div className="flex-1 min-w-0">
+                                    <p className="font-medium text-gray-900 dark:text-white text-sm">
+                                      {order.orderNumber || `ORD-${order.id}`} - {order.customerName}
+                                    </p>
+                                    <p className="text-xs text-gray-500 dark:text-gray-400 truncate flex items-center gap-1">
+                                      <MapPin className="w-3 h-3" />
+                                      {typeof order.customerAddress === 'string'
+                                        ? order.customerAddress
+                                        : order.customerAddress?.street || 'Dirección no disponible'}
+                                    </p>
+                                    {order.timeSlot && (() => {
+                                      const timeWindow = TIME_WINDOWS.find(w => w.value === order.timeSlot)
+                                      if (timeWindow) {
+                                        return (
+                                          <p className="text-xs text-blue-600 dark:text-blue-400 mt-1 flex items-center gap-1">
+                                            <Clock className="w-3 h-3" />
+                                            {timeWindow.startTime} - {timeWindow.endTime}
+                                          </p>
+                                        )
+                                      }
+                                      // Si no encuentra coincidencia, muestra el timeSlot directamente
+                                      return (
+                                        <p className="text-xs text-blue-600 dark:text-blue-400 mt-1 flex items-center gap-1">
+                                          <Clock className="w-3 h-3" />
+                                          {order.timeSlot}
+                                        </p>
+                                      )
+                                    })()}
+                                  </div>
+                                </label>
+                              ))}
+                            </div>
+                          </div>
                         </div>
-                      </label>
-                    ))}
+                      )
+                    })}
                   </div>
                 </div>
-              )}
+              )
+            })}
+          </div>
+        )}
 
-              {/* No Orders Message */}
-              {!hasOrders && (
-                <div className="border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/20 p-4">
-                  <p className="text-sm text-gray-500 dark:text-gray-400 text-center flex items-center justify-center gap-2">
-                    <AlertCircle className="w-4 h-4" />
-                    No hay órdenes pendientes o reprogramadas para este horario
-                  </p>
-                </div>
-              )}
-            </div>
-          )
-        })}
-      </div>
-
-      {/* Multi-period Info */}
-      {selectedTimeWindows.length > 1 && (
-        <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-4 border border-blue-200 dark:border-blue-800">
-          <p className="text-sm text-blue-700 dark:text-blue-300">
-            <strong>Multi-periodo:</strong> Se crearán {selectedTimeWindows.length} rutas optimizadas individualmente
-            y se unirán en secuencia para formar una ruta continua.
-          </p>
-        </div>
-      )}
-
-      {/* Summary Footer */}
-      <div className="bg-gradient-to-r from-green-50 to-blue-50 dark:from-green-900/20 dark:to-blue-900/20 rounded-lg p-4 border border-green-200 dark:border-green-800">
-        <div className="flex items-center justify-between">
-          <p className="text-sm font-medium text-gray-700 dark:text-gray-300">
-            Total seleccionado:
-          </p>
-          <p className="text-lg font-bold text-gray-900 dark:text-white">
-            {selectedOrders.length} órdenes en {selectedTimeWindows.length} periodo(s)
-          </p>
+        {/* Summary Footer */}
+        <div className="bg-gradient-to-r from-green-50 to-blue-50 dark:from-green-900/20 dark:to-blue-900/20 rounded-lg p-4 border border-green-200 dark:border-green-800">
+          <div className="flex items-center justify-between">
+            <p className="text-sm font-medium text-gray-700 dark:text-gray-300">
+              Total seleccionado:
+            </p>
+            <p className="text-lg font-bold text-gray-900 dark:text-white">
+              {selectedOrders.length} órdenes
+            </p>
+          </div>
         </div>
       </div>
-    </div>
-  )
+    )
+  }
 
   const renderStep2 = () => (
     <div className="space-y-5">
@@ -1375,7 +1534,7 @@ export default function CreateRoutePage() {
               />
               <StatCard
                 label="Duración en Ruta"
-                value={parseInt(optimizationResult.duration) + (optimizationResult.totalOrders * 20)}
+                value={Number(optimizationResult.duration) + (optimizationResult.totalOrders * 20)}
                 formatter={formatDuration}
                 color="red"
                 useCountUp={useCountUp}

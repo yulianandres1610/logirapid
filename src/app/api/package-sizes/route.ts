@@ -13,13 +13,13 @@ export async function GET() {
       companyId = '1'
     }
 
-    const packageSizes = db.prepare(`
+    const result = await db.query(`
       SELECT * FROM package_sizes
-      WHERE companyId = ? AND status = 'active'
-      ORDER BY isDefault DESC, name
-    `).all(companyId)
+      WHERE companyid = $1 AND status = 'active'
+      ORDER BY isdefault DESC, name
+    `, [companyId])
 
-    return NextResponse.json({ success: true, data: packageSizes })
+    return NextResponse.json({ success: true, data: result.rows })
   } catch (error) {
     console.error('Error fetching package sizes:', error)
     return NextResponse.json(
@@ -52,33 +52,32 @@ export async function POST(request: Request) {
 
     // If this is being set as default, unset all other defaults
     if (isDefault) {
-      db.prepare(`
+      await db.query(`
         UPDATE package_sizes
-        SET isDefault = 0
-        WHERE companyId = ? AND status = 'active'
-      `).run(companyId)
+        SET isdefault = false
+        WHERE companyid = $1 AND status = 'active'
+      `, [companyId])
     }
 
-    const stmt = db.prepare(`
+    const result = await db.query(`
       INSERT INTO package_sizes (
-        companyId, name, dimensions, weight, price, description, isDefault, status, createdAt, updatedAt
+        companyid, name, dimensions, weight, price, description, isdefault, status, createdat, updatedat
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?, 'active', datetime('now'), datetime('now'))
-    `)
-
-    const result = stmt.run(
+      VALUES ($1, $2, $3, $4, $5, $6, $7, 'active', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+      RETURNING *
+    `, [
       companyId,
       name,
       dimensions,
       weight || 0,
       price,
       description || '',
-      isDefault ? 1 : 0
-    )
+      isDefault ? true : false
+    ])
 
     return NextResponse.json({
       success: true,
-      data: { id: result.lastInsertRowid }
+      data: result.rows[0]
     })
   } catch (error) {
     console.error('Error creating package size:', error)

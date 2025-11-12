@@ -43,8 +43,8 @@ export async function GET(request: NextRequest) {
       vehicles = vehicles.filter(vehicle => vehicle.availability === availability);
     }
 
-    // Sort by created_at descending
-    vehicles.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+    // Sort by createdat descending
+    vehicles.sort((a, b) => new Date(b.createdat).getTime() - new Date(a.createdat).getTime());
 
     // Apply pagination
     const total = vehicles.length;
@@ -155,7 +155,7 @@ export async function POST(request: NextRequest) {
       vin_data,
       // New maintenance fields
       mileage,
-      insurance_expiry,
+      insuranceexpiry,
       oil_change_frequency,
       next_oil_change,
       can_collect_durable
@@ -228,7 +228,7 @@ export async function POST(request: NextRequest) {
       vin_data: vin_data || {},
       // Add maintenance fields with defaults
       mileage: mileage || 0,
-      insurance_expiry: insurance_expiry || null,
+      insurance_expiry: insuranceexpiry || null,
       oil_change_frequency: oil_change_frequency || 5000,
       next_oil_change: next_oil_change || null,
       can_collect_durable: can_collect_durable || false,

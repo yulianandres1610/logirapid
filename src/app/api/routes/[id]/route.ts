@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { Database } from 'sqlite3'
-import { open } from 'sqlite'
+import { db } from '@/lib/database'
 
 // GET: Obtener una ruta específica por ID
 export async function GET(
@@ -17,26 +16,22 @@ export async function GET(
       }, { status: 400 })
     }
 
-    const db = await open({
-      filename: './data/cubarapid.db',
-      driver: Database
-    })
+    const result = await db.query('SELECT * FROM routes WHERE id = $1', [id])
 
-    const route = await db.get('SELECT * FROM routes WHERE id = ?', [id])
-    await db.close()
-
-    if (!route) {
+    if (result.rows.length === 0) {
       return NextResponse.json({
         success: false,
         error: 'Ruta no encontrada'
       }, { status: 404 })
     }
 
+    const route = result.rows[0]
+
     // Parsear JSON fields
     try {
       route.waypoints = route.stops ? JSON.parse(route.stops) : []
-      route.optimizedRoute = route.optimizedRoute ? JSON.parse(route.optimizedRoute) : null
-      route.timeWindows = route.timeWindows ? JSON.parse(route.timeWindows) : []
+      route.optimizedRoute = route.optimizedroute ? JSON.parse(route.optimizedroute) : null
+      route.timeWindows = route.timewindows ? JSON.parse(route.timewindows) : []
     } catch (parseError) {
       console.error('Error parsing route JSON fields:', parseError)
       route.waypoints = []

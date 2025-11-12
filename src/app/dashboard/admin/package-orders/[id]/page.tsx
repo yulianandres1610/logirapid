@@ -292,13 +292,23 @@ export default function PackageOrderDetailPage() {
   }
 
   // Helper function para formatear fechas consistentemente
-  const formatDate = (dateString: string) => {
+  const formatDate = (dateString: string | undefined) => {
+    // Validar que dateString existe y no está vacío
+    if (!dateString || dateString.trim() === '') {
+      return 'Sin fecha programada';
+    }
+
     console.log('🗓️ Formateando fecha:', dateString);
 
     // Crear fecha en UTC para evitar problemas de zona horaria
     const date = new Date(dateString + 'T00:00:00.000Z');
     console.log('🕐 Fecha creada:', date.toString());
     console.log('🌍 Zona horaria:', Intl.DateTimeFormat().resolvedOptions().timeZone);
+
+    // Verificar si la fecha es válida
+    if (isNaN(date.getTime())) {
+      return 'Fecha inválida';
+    }
 
     const formattedDate = date.toLocaleDateString('es-ES', {
       day: 'numeric',
@@ -916,7 +926,7 @@ export default function PackageOrderDetailPage() {
                     <span className="text-sm font-medium text-gray-600 dark:text-gray-400">Total de la Orden</span>
                   </div>
                   <span className="text-xl font-bold text-green-600 dark:text-green-400">
-                    ${(order.totalAmount || order.total || 0).toFixed(2)}
+                    ${Number(order.totalAmount || order.total || 0).toFixed(2)}
                   </span>
                 </div>
               </motion.div>

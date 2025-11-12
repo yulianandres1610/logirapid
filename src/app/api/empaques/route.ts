@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { Database } from 'sqlite3'
-import { open } from 'sqlite'
+import { db } from '@/lib/database'
 
 export async function GET(request: NextRequest) {
   try {
@@ -10,42 +9,37 @@ export async function GET(request: NextRequest) {
     const codigo = searchParams.get('codigo')
     const disponibilidad = searchParams.get('disponibilidad') || 'disponible'
 
-    const db = await open({
-      filename: './data/cubarapid.db',
-      driver: Database
-    })
-
     let query = 'SELECT * FROM empaques WHERE 1=1'
     const params: any[] = []
+    let paramIndex = 1
 
     if (tamano) {
-      query += ' AND tamano = ?'
+      query += ` AND tamano = $${paramIndex++}`
       params.push(tamano)
     }
 
     if (tipo) {
-      query += ' AND tipo = ?'
+      query += ` AND tipo = $${paramIndex++}`
       params.push(tipo)
     }
 
     if (codigo) {
-      query += ' AND codigo = ?'
+      query += ` AND codigo = $${paramIndex++}`
       params.push(codigo)
     }
 
     if (disponibilidad) {
-      query += ' AND estado = ?'
+      query += ` AND estado = $${paramIndex++}`
       params.push(disponibilidad)
     }
 
     query += ' ORDER BY codigo ASC'
 
-    const empaques = await db.all(query, params)
-    await db.close()
+    const result = await db.query(query, params)
 
     return NextResponse.json({
       success: true,
-      data: empaques
+      data: result.rows
     })
 
   } catch (error) {

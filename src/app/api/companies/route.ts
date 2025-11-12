@@ -1,14 +1,32 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getAllCompanies } from '@/lib/database'
+import { db } from '@/lib/database'
 
 // GET: Obtener todas las empresas
 export async function GET(request: NextRequest) {
   try {
-    const companies = getAllCompanies()
+    const query = `
+      SELECT
+        id,
+        legalname as "legalName",
+        einnumber as "einNumber",
+        phone,
+        email,
+        address,
+        city,
+        state,
+        country,
+        zipcode as "zipCode",
+        status,
+        createdat as "createdAt"
+      FROM companies
+      ORDER BY legalname ASC
+    `
+
+    const result = await db.query(query)
 
     return NextResponse.json({
       success: true,
-      data: companies
+      data: result.rows
     })
 
   } catch (error) {

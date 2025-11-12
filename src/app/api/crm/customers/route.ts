@@ -1,13 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import {
-  getAllCustomers,
-  getCustomerByPhone,
-  searchCustomers,
-  saveCustomer,
-  updateCustomer,
-  updateCustomerWithHistory,
-  deleteCustomer
-} from '@/lib/database'
+import { db } from '@/lib/database'
 
 // Función para validar formato de teléfono según país
 function validatePhoneNumber(phone: string, country?: string): { valid: boolean; error?: string } {
@@ -53,23 +45,98 @@ export async function GET(request: NextRequest) {
     const phone = searchParams.get('phone')
     const search = searchParams.get('search')
 
-    let customers
+    let query: string
+    let params: any[] = []
 
     if (phone) {
       // Buscar por teléfono específico
-      const customer = getCustomerByPhone(phone)
-      customers = customer ? [customer] : []
+      query = `
+        SELECT
+          id,
+          firstname as "firstName",
+          lastname as "lastName",
+          idnumber as "idNumber",
+          idtype as "idType",
+          phone,
+          email,
+          address,
+          city,
+          state,
+          country,
+          notes,
+          createdby as "createdBy",
+          createdat as "createdAt",
+          zipcode as "zipCode",
+          apartment
+        FROM customers
+        WHERE phone = $1
+      `
+      params = [phone]
     } else if (search) {
       // Buscar por texto
-      customers = searchCustomers(search)
+      const searchPattern = `%${search}%`
+      query = `
+        SELECT
+          id,
+          firstname as "firstName",
+          lastname as "lastName",
+          idnumber as "idNumber",
+          idtype as "idType",
+          phone,
+          email,
+          address,
+          city,
+          state,
+          country,
+          notes,
+          createdby as "createdBy",
+          createdat as "createdAt",
+          zipcode as "zipCode",
+          apartment
+        FROM customers
+        WHERE
+          firstname ILIKE $1 OR
+          lastname ILIKE $1 OR
+          phone ILIKE $1 OR
+          email ILIKE $1 OR
+          idnumber ILIKE $1 OR
+          CONCAT(firstname, ' ', lastname) ILIKE $1
+        ORDER BY firstname, lastname
+        LIMIT 50
+      `
+      params = [searchPattern]
     } else {
       // Obtener todos los clientes
-      customers = getAllCustomers()
+      query = `
+        SELECT
+          id,
+          firstname as "firstName",
+          lastname as "lastName",
+          idnumber as "idNumber",
+          idtype as "idType",
+          phone,
+          email,
+          address,
+          city,
+          state,
+          country,
+          notes,
+          createdby as "createdBy",
+          createdat as "createdAt",
+          zipcode as "zipCode",
+          apartment
+        FROM customers
+        ORDER BY createdat DESC
+        LIMIT 100
+      `
+      params = []
     }
+
+    const result = await db.query(query, params)
 
     return NextResponse.json({
       success: true,
-      data: customers
+      data: result.rows
     })
 
   } catch (error) {
@@ -162,21 +229,64 @@ export async function POST(request: NextRequest) {
     console.log('🔝 NAME SPLITTING:', { fullName, firstName, lastName })
     console.log('📍 ADDRESS FIELDS:', { address, city, state, zipCode, country })
 
-    const newCustomer = saveCustomer({
-      firstName: firstName, // Use split firstName
-      lastName: lastName,  // Use split lastName
-      idNumber: body.idNumber,
-      idType: body.idType,
-      phone: body.phone,
-      email: body.email,
-      address: address,
-      city: city,
-      state: state,
-      zipCode: zipCode,
-      country: country,
-      notes: body.notes,
-      createdBy: body.createdBy || 'system'
-    })
+    // Verificar si el teléfono ya existe
+    const existingQuery = 'SELECT id FROM customers WHERE phone = $1'
+    const existingResult = await db.query(existingQuery, [body.phone])
+
+    if (existingResult.rows.length > 0) {
+      return NextResponse.json({
+        success: false,
+        error: 'Ya existe un cliente con este número de teléfono'
+      }, { status: 400 })
+    }
+
+    // Insertar nuevo cliente
+    const insertQuery = `
+      INSERT INTO customers (
+        firstname, lastname, idnumber, idtype, phone, email,
+        address, city, state, country, notes, createdby,
+        createdat, zipcode, apartment
+      ) VALUES (
+        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, NOW(), $13, $14
+      )
+      RETURNING
+        id,
+        firstname as "firstName",
+        lastname as "lastName",
+        idnumber as "idNumber",
+        idtype as "idType",
+        phone,
+        email,
+        address,
+        city,
+        state,
+        country,
+        notes,
+        createdby as "createdBy",
+        createdat as "createdAt",
+        zipcode as "zipCode",
+        apartment
+    `
+
+    const values = [
+      firstName,
+      lastName,
+      body.idNumber || null,
+      body.idType || null,
+      body.phone,
+      body.email || null,
+      address,
+      city || null,
+      state || null,
+      country || null,
+      body.notes || null,
+      body.createdBy || 'system',
+      zipCode || null,
+      body.apartment || null
+    ]
+
+    const result = await db.query(insertQuery, values)
+    const newCustomer = result.rows[0]
 
     console.log('✅ CUSTOMER CREATED:', newCustomer)
 
@@ -215,14 +325,112 @@ export async function PUT(request: NextRequest) {
       }, { status: 400 })
     }
 
-    const updatedCustomer = updateCustomerWithHistory(id, updateData, changedBy)
+    // Primero obtener el cliente actual para el historial
+    const currentQuery = `
+      SELECT * FROM customers WHERE id = $1
+    `
+    const currentResult = await db.query(currentQuery, [id])
 
-    if (updatedCustomer.changes === 0) {
+    if (currentResult.rows.length === 0) {
       return NextResponse.json({
         success: false,
-        error: 'No se encontró el cliente o no hay cambios'
+        error: 'No se encontró el cliente'
       }, { status: 404 })
     }
+
+    const currentCustomer = currentResult.rows[0]
+
+    // Guardar en el historial de cambios
+    const historyQuery = `
+      INSERT INTO customer_change_history (
+        customerid, changedate, changedby,
+        oldfirstname, newfirstname,
+        oldlastname, newlastname,
+        oldidnumber, newidnumber,
+        oldidtype, newidtype,
+        oldphone, newphone,
+        oldemail, newemail,
+        oldaddress, newaddress,
+        oldcity, newcity,
+        oldstate, newstate,
+        oldcountry, newcountry,
+        oldnotes, newnotes,
+        oldzipcode, newzipcode,
+        oldapartment, newapartment
+      ) VALUES (
+        $1, NOW(), $2,
+        $3, $4, $5, $6, $7, $8, $9, $10,
+        $11, $12, $13, $14, $15, $16,
+        $17, $18, $19, $20, $21, $22,
+        $23, $24, $25, $26, $27, $28
+      )
+    `
+
+    const historyValues = [
+      id,
+      changedBy,
+      currentCustomer.firstname, updateData.firstName || currentCustomer.firstname,
+      currentCustomer.lastname, updateData.lastName || currentCustomer.lastname,
+      currentCustomer.idnumber, updateData.idNumber || currentCustomer.idnumber,
+      currentCustomer.idtype, updateData.idType || currentCustomer.idtype,
+      currentCustomer.phone, updateData.phone || currentCustomer.phone,
+      currentCustomer.email, updateData.email || currentCustomer.email,
+      currentCustomer.address, updateData.address || currentCustomer.address,
+      currentCustomer.city, updateData.city || currentCustomer.city,
+      currentCustomer.state, updateData.state || currentCustomer.state,
+      currentCustomer.country, updateData.country || currentCustomer.country,
+      currentCustomer.notes, updateData.notes || currentCustomer.notes,
+      currentCustomer.zipcode, updateData.zipCode || currentCustomer.zipcode,
+      currentCustomer.apartment, updateData.apartment || currentCustomer.apartment
+    ]
+
+    await db.query(historyQuery, historyValues)
+
+    // Construir query de actualización dinámica
+    const updateFields = []
+    const values = []
+    let valueIndex = 1
+
+    const fieldMapping: { [key: string]: string } = {
+      firstName: 'firstname',
+      lastName: 'lastname',
+      idNumber: 'idnumber',
+      idType: 'idtype',
+      phone: 'phone',
+      email: 'email',
+      address: 'address',
+      city: 'city',
+      state: 'state',
+      country: 'country',
+      notes: 'notes',
+      zipCode: 'zipcode',
+      apartment: 'apartment'
+    }
+
+    for (const [key, value] of Object.entries(updateData)) {
+      if (fieldMapping[key]) {
+        updateFields.push(`${fieldMapping[key]} = $${valueIndex}`)
+        values.push(value)
+        valueIndex++
+      }
+    }
+
+    if (updateFields.length === 0) {
+      return NextResponse.json({
+        success: false,
+        error: 'No hay campos para actualizar'
+      }, { status: 400 })
+    }
+
+    values.push(id)
+
+    const updateQuery = `
+      UPDATE customers
+      SET ${updateFields.join(', ')}
+      WHERE id = $${valueIndex}
+    `
+
+    await db.query(updateQuery, values)
 
     return NextResponse.json({
       success: true,
@@ -269,13 +477,37 @@ export async function DELETE(request: NextRequest) {
       }, { status: 403 })
     }
 
-    // Eliminar cliente
-    const result = deleteCustomer(customerId)
+    // Verificar si el cliente tiene órdenes asociadas
+    const ordersQuery = 'SELECT COUNT(*) as count FROM package_orders WHERE customerid = $1'
+    const ordersResult = await db.query(ordersQuery, [customerId])
+
+    if (parseInt(ordersResult.rows[0].count) > 0) {
+      return NextResponse.json({
+        success: false,
+        error: 'No se puede eliminar el cliente porque tiene órdenes asociadas'
+      }, { status: 400 })
+    }
+
+    // Eliminar direcciones asociadas primero
+    await db.query('DELETE FROM customer_addresses WHERE customer_id = $1', [customerId])
+
+    // Eliminar historial de cambios
+    await db.query('DELETE FROM customer_change_history WHERE customerid = $1', [customerId])
+
+    // Eliminar el cliente
+    const deleteQuery = 'DELETE FROM customers WHERE id = $1 RETURNING id'
+    const result = await db.query(deleteQuery, [customerId])
+
+    if (result.rows.length === 0) {
+      return NextResponse.json({
+        success: false,
+        error: 'Cliente no encontrado'
+      }, { status: 404 })
+    }
 
     return NextResponse.json({
       success: true,
-      message: 'Cliente eliminado exitosamente',
-      changes: result.changes
+      message: 'Cliente eliminado exitosamente'
     })
 
   } catch (error) {

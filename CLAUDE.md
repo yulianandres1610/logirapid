@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-**LogiRapid/CubaRapid** is a multi-tenant logistics and package delivery management platform built with Next.js 15, TypeScript, and SQLite. It provides comprehensive package tracking, route optimization via Mapbox, fleet management, CRM, and multi-service capabilities (remittances, recharges, marketplace).
+**LogiRapid/CubaRapid** is a multi-tenant logistics and package delivery management platform built with Next.js 15, TypeScript, and PostgreSQL (Supabase). It provides comprehensive package tracking, route optimization via Mapbox, fleet management, CRM, and multi-service capabilities (remittances, recharges, marketplace).
 
 ## Development Commands
 
@@ -29,7 +29,7 @@ npm run lint
 
 ### Tech Stack
 - **Framework:** Next.js 15.0.0 (App Router)
-- **Database:** SQLite via better-sqlite3 (`data/cubarapid.db`)
+- **Database:** PostgreSQL via Supabase (connection via pg library)
 - **Maps:** Mapbox GL JS 3.16 for route optimization and geocoding
 - **Auth:** Custom cookie-based authentication (NOT NextAuth despite dependency)
 - **State:** React Context API (ThemeContext, NotificationContext, CompanyContext)
@@ -38,7 +38,7 @@ npm run lint
 
 ### Database Architecture
 
-**Primary SQLite Database:** `data/cubarapid.db`
+**Primary PostgreSQL Database:** Supabase-hosted PostgreSQL
 
 Core tables and their relationships:
 - **users** → **user_companies** ← **companies**: Multi-tenant user management
@@ -178,11 +178,10 @@ src/
 ├── contexts/              # React Context providers
 ├── hooks/                 # Custom React hooks
 ├── lib/
-│   └── database.ts        # SQLite access layer
+│   └── database.ts        # PostgreSQL database access layer
 └── middleware.ts          # Auth and routing middleware
 
 data/
-├── cubarapid.db          # Primary SQLite database
 ├── fleet.json            # Fleet management
 └── packages.json         # Box inventory
 ```
