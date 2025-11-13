@@ -410,32 +410,38 @@ async function handleWarehouseRoute(body: any, shouldSaveRoute: boolean) {
       }
     }
 
-    // If saving, create route in database
+    // If saving, create route in database (warehouse_routes table)
     if (shouldSaveRoute) {
-      console.log('💾 [Warehouse Route] Guardando ruta en base de datos...')
+      console.log('💾 [Warehouse Route] Guardando ruta en tabla warehouse_routes...')
 
       try {
         // Get the last route ID for numbering
-        const lastRouteResult = await db.query('SELECT id FROM routes ORDER BY id DESC LIMIT 1')
+        const lastRouteResult = await db.query('SELECT id FROM warehouse_routes ORDER BY id DESC LIMIT 1')
         const lastRouteId = lastRouteResult.rows[0]?.id || 0
         const routeNumber = `RUT-WH-${new Date().getFullYear()}-${String(lastRouteId + 1).padStart(4, '0')}`
 
-        const insertQuery = `
-          INSERT INTO routes (
+        // Get warehouse name
+        const warehouseInfo = await fetch(`${process.env.NEXTAUTH_URL || 'http://localhost:3000'}/api/warehouses/${body.warehouseId}`)
+        let warehouseName = 'Unknown'
+        if (warehouseInfo.ok) {
+          const whData = await warehouseInfo.json()
+          warehouseName = whData.name || 'Unknown'
+        }
+
+        // Insert into warehouse_routes table
+        const insertRouteQuery = `
+          INSERT INTO warehouse_routes (
             routenumber, name, driverid, drivername, vehicleid, vehicleplate,
-            status, totalpackages, deliveredpackages, estimatedduration,
-            actualduration, distance, starttime, endtime, date, notes,
-            mechanism, timewindows, warehouseid, mapboxjobid, optimizedroute, stops,
+            status, warehouseid, warehousename, totalstops, totaldistance,
+            estimatedduration, totalpackages, date, notes, geometry, coordinates,
             createdat, updatedat
           ) VALUES (
-            $1, $2, $3, $4, $5, $6, $7, $8, $9, $10,
-            $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22,
-            NOW(), NOW()
+            $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, NOW(), NOW()
           )
           RETURNING id
         `
 
-        const values = [
+        const routeValues = [
           routeNumber,
           `Ruta de Almacenes - ${new Date().toLocaleDateString('es-ES')}`,
           body.driverId ? parseInt(body.driverId) : null,
@@ -443,52 +449,62 @@ async function handleWarehouseRoute(body: any, shouldSaveRoute: boolean) {
           body.vehicleId || null,
           body.vehiclePlate || null,
           'planning',
+          parseInt(body.warehouseId),
+          warehouseName,
           stops.length,
-          0,
-          `${durationMinutes}m`,
-          null,
           Number(distanceMiles),
-          body.startTime || null,
-          null,
+          durationMinutes,
+          0, // Se actualizará cuando se vinculen paquetes
           body.date || new Date().toISOString().split('T')[0],
           `Ruta de ${stops.length} almacenes`,
-          'manual', // Warehouse routes are always manual
-          JSON.stringify([]),
-          body.warehouseId,
-          null, // No Mapbox job ID for warehouse routes
-          JSON.stringify({
-            distance: Number(distanceMiles),
-            duration: durationMinutes,
-            geometry,
-            coordinates,
-            routeType: 'warehouses'
-          }),
-          JSON.stringify(stops.map((stop, index) => ({
-            // Solo información del almacén, no hay órdenes ni clientes
-            id: stop.id,
-            name: stop.name,
-            code: stop.code,
-            address: stop.address,
-            coordinates: stop.coordinates,
-            latitude: stop.latitude,
-            longitude: stop.longitude,
-            sequence: index + 1,
-            type: 'warehouse',
-            status: 'pending',
-            // Metadata adicional del almacén
-            managerPhone: stop.managerPhone,
-            managerName: stop.managerName,
-            capacity: stop.capacity,
-            availableCapacity: stop.availableCapacity,
-            warehouseType: stop.warehouseType,
-            zipCode: stop.zipCode
-          })))
+          geometry ? JSON.stringify(geometry) : null,
+          coordinates ? JSON.stringify(coordinates) : null
         ]
 
-        const insertResult = await db.query(insertQuery, values)
-        const routeId = insertResult.rows[0].id
+        const routeResult = await db.query(insertRouteQuery, routeValues)
+        const routeId = routeResult.rows[0].id
 
         console.log(`✅ [Warehouse Route] Ruta creada: ${routeNumber} (ID: ${routeId})`)
+
+        // Insert stops into warehouse_route_stops table
+        for (let i = 0; i < stops.length; i++) {
+          const stop = stops[i]
+          const insertStopQuery = `
+            INSERT INTO warehouse_route_stops (
+              routeid, warehouseid, warehousename, warehousecode,
+              address, latitude, longitude, zipcode,
+              sequence, status, expectedpackages,
+              managername, managerphone,
+              warehousecapacity, availablecapacity, warehousetype,
+              createdat, updatedat
+            ) VALUES (
+              $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, NOW(), NOW()
+            )
+          `
+
+          const stopValues = [
+            routeId,
+            stop.id,
+            stop.name,
+            stop.code || null,
+            stop.address,
+            stop.latitude,
+            stop.longitude,
+            stop.zipCode || null,
+            i + 1, // sequence
+            'pending',
+            0, // Se actualizará cuando se vinculen paquetes
+            stop.managerName || null,
+            stop.managerPhone || null,
+            stop.capacity || null,
+            stop.availableCapacity || null,
+            stop.warehouseType || null
+          ]
+
+          await db.query(insertStopQuery, stopValues)
+        }
+
+        console.log(`✅ [Warehouse Route] ${stops.length} paradas creadas`)
 
         return NextResponse.json({
           success: true,
