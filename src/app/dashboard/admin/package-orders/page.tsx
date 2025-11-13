@@ -63,6 +63,14 @@ interface PackageOrder {
   longitude?: number | null
 }
 
+// Force dynamic rendering to avoid static generation issues with useSearchParams
+export const dynamic = 'force-dynamic'
+export const dynamicParams = true
+export const runtime = 'nodejs'
+export const fetchCache = 'force-no-store'
+
+
+
 export default function PackageOrdersPage() {
   const { user } = useAuth()
   const { theme } = useTheme()

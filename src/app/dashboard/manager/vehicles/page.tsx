@@ -57,6 +57,14 @@ interface Vehicle {
   updated_at: string
 }
 
+// Force dynamic rendering to avoid static generation issues with useSearchParams
+export const dynamic = 'force-dynamic'
+export const dynamicParams = true
+export const runtime = 'nodejs'
+export const fetchCache = 'force-no-store'
+
+
+
 export default function ManagerVehiclesPage() {
   const { user } = useAuth()
   const { theme } = useTheme()

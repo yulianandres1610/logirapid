@@ -2506,7 +2506,7 @@ export default function CreateRoutePage() {
 
   if (loading && currentStep === 1) {
     return (
-      <DashboardLayout user={user}>
+      <DashboardLayout>
         <div className="flex items-center justify-center h-96">
           <div className="text-center">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
@@ -2518,7 +2518,7 @@ export default function CreateRoutePage() {
   }
 
   return (
-    <DashboardLayout user={user}>
+    <DashboardLayout>
       <div className="max-w-6xl mx-auto">
         {/* Close Button */}
         <div className="flex justify-end mb-4">

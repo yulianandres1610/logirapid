@@ -423,8 +423,6 @@ export default function CreateWarehousePage() {
       <div className="min-h-screen p-4 lg:p-6">
         <div className="max-w-5xl xl:max-w-6xl 2xl:max-w-5xl mx-auto px-2 lg:px-4">
           <div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
             className={cn(
               'rounded-xl border shadow-xl',
               theme === 'dark'

@@ -60,6 +60,14 @@ const tabs = [
   { id: 'package', label: 'Paquetería', icon: Truck },
 ]
 
+// Force dynamic rendering to avoid static generation issues with useSearchParams
+export const dynamic = 'force-dynamic'
+export const dynamicParams = true
+export const runtime = 'nodejs'
+export const fetchCache = 'force-no-store'
+
+
+
 export default function SettingsPage() {
   const router = useRouter()
   const searchParams = useSearchParams()

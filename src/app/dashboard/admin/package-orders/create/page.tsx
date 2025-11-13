@@ -605,6 +605,7 @@ export default function CreatePackageOrderPage() {
         // Build complete address object from separate fields
         const addressObject = {
           street: createdCustomer.data.address,
+          apartment: createdCustomer.data.apartment || '',
           city: createdCustomer.data.city,
           state: createdCustomer.data.state,
           zipCode: createdCustomer.data.zipCode,

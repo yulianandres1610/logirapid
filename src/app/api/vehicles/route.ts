@@ -43,8 +43,8 @@ export async function GET(request: NextRequest) {
       vehicles = vehicles.filter(vehicle => vehicle.availability === availability);
     }
 
-    // Sort by createdat descending
-    vehicles.sort((a, b) => new Date(b.createdat).getTime() - new Date(a.createdat).getTime());
+    // Sort by created_at descending
+    vehicles.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
 
     // Apply pagination
     const total = vehicles.length;

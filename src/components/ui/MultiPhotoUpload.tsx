@@ -47,7 +47,7 @@ export function MultiPhotoUpload({
       const existingPhotos = value.map((url, index) => ({
         file: new File([], `existing-${index}`),
         preview: url,
-        type: url.includes('insurance') || url.includes('seguro') ? 'insurance' : 'vehicle' as const
+        type: (url.includes('insurance') || url.includes('seguro') ? 'insurance' : 'vehicle') as 'vehicle' | 'insurance'
       }));
       setPhotos(existingPhotos);
     }
@@ -72,7 +72,7 @@ export function MultiPhotoUpload({
     const newPhotos = validFiles.map(file => ({
       file,
       preview: URL.createObjectURL(file),
-      type: file.type === 'application/pdf' ? 'insurance' : 'vehicle' as const
+      type: (file.type === 'application/pdf' ? 'insurance' : 'vehicle') as 'vehicle' | 'insurance'
     }));
 
     setPhotos(prev => [...prev, ...newPhotos]);

@@ -123,7 +123,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Check if license plate already exists
-    const existingPlate = existingVehicles.find(v => v.licenseplate.toUpperCase() === license_plate.toUpperCase());
+    const existingPlate = existingVehicles.find(v => v.license_plate.toUpperCase() === licenseplate.toUpperCase());
 
     if (existingPlate) {
       return NextResponse.json(
@@ -141,7 +141,7 @@ export async function POST(request: NextRequest) {
 
     const vehicleData = {
       vin: vin.toUpperCase(),
-      license_plate: license_plate.toUpperCase(),
+      license_plate: licenseplate.toUpperCase(),
       make: make.trim(),
       model: model.trim(),
       year: parseInt(year),

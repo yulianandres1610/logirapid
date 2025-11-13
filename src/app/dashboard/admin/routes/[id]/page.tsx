@@ -550,7 +550,7 @@ export default function RouteDetailPage() {
                     {/* Mostrar SOLAMENTE waypoints guardados en la BD */}
                     {route.waypoints && route.waypoints.length > 0 ? (
                       route.waypoints.map((waypoint, index) => (
-                        <div key={waypoint.orderId || `waypoint-${index}`} className="p-4 border-b border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
+                        <div key={waypoint.id || `waypoint-${index}`} className="p-4 border-b border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
                           <div className="flex items-start gap-3">
                             <div className={cn(
                               'flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold',

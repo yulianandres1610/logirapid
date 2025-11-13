@@ -216,3 +216,169 @@ export async function checkConnection() {
 
 // Verificar conexión al iniciar
 checkConnection();
+
+// ==================== Agency Rates Functions ====================
+
+/**
+ * Get agency configuration from database
+ */
+export function getAgencyConfig(companyId?: string) {
+  try {
+    const query = companyId
+      ? 'SELECT * FROM agency_rates_config WHERE company_id = $1 LIMIT 1'
+      : 'SELECT * FROM agency_rates_config WHERE company_id IS NULL LIMIT 1';
+
+    const params = companyId ? [companyId] : [];
+    const stmt = db.prepare(query);
+    return stmt.get(...params);
+  } catch (error) {
+    console.error('Error getting agency config:', error);
+    return null;
+  }
+}
+
+/**
+ * Save new agency configuration
+ */
+export function saveAgencyConfig(config: {
+  id: string;
+  adjustmentPercentage: number;
+  isActive: boolean;
+  createdBy: string;
+  companyId?: string;
+}) {
+  try {
+    const query = `
+      INSERT INTO agency_rates_config
+      (id, adjustment_percentage, is_active, created_by, company_id, created_at, updated_at)
+      VALUES ($1, $2, $3, $4, $5, NOW(), NOW())
+      ON CONFLICT (id) DO NOTHING
+    `;
+
+    const stmt = db.prepare(query);
+    return stmt.run(
+      config.id,
+      config.adjustmentPercentage,
+      config.isActive,
+      config.createdBy,
+      config.companyId || null
+    );
+  } catch (error) {
+    console.error('Error saving agency config:', error);
+    return null;
+  }
+}
+
+/**
+ * Update existing agency configuration
+ */
+export function updateAgencyConfig(
+  id: string,
+  updates: {
+    adjustmentPercentage?: number;
+    isActive?: boolean;
+  }
+) {
+  try {
+    const query = `
+      UPDATE agency_rates_config
+      SET adjustment_percentage = COALESCE($2, adjustment_percentage),
+          is_active = COALESCE($3, is_active),
+          updated_at = NOW()
+      WHERE id = $1
+    `;
+
+    const stmt = db.prepare(query);
+    return stmt.run(
+      id,
+      updates.adjustmentPercentage ?? null,
+      updates.isActive ?? null
+    );
+  } catch (error) {
+    console.error('Error updating agency config:', error);
+    return null;
+  }
+}
+
+/**
+ * Save agency rates history records
+ */
+export function saveAgencyRatesHistory(records: Array<{
+  id: string;
+  configId: string;
+  currency: string;
+  baseRate: number;
+  agencyRate: number;
+  adjustmentPercentage: number;
+}>) {
+  try {
+    const query = `
+      INSERT INTO agency_rates_history
+      (id, config_id, currency, base_rate, agency_rate, adjustment_percentage, timestamp)
+      VALUES ($1, $2, $3, $4, $5, $6, NOW())
+    `;
+
+    const stmt = db.prepare(query);
+    records.forEach(record => {
+      stmt.run(
+        record.id,
+        record.configId,
+        record.currency,
+        record.baseRate,
+        record.agencyRate,
+        record.adjustmentPercentage
+      );
+    });
+
+    return true;
+  } catch (error) {
+    console.error('Error saving agency rates history:', error);
+    return false;
+  }
+}
+
+/**
+ * Get agency rates history
+ */
+export function getAgencyRatesHistory(configId: string, days: number = 30) {
+  try {
+    const query = `
+      SELECT * FROM agency_rates_history
+      WHERE config_id = $1
+      AND timestamp >= NOW() - INTERVAL '${days} days'
+      ORDER BY timestamp DESC
+    `;
+
+    const stmt = db.prepare(query);
+    return stmt.all(configId);
+  } catch (error) {
+    console.error('Error getting agency rates history:', error);
+    return [];
+  }
+}
+
+/**
+ * Save company-specific agency configuration
+ */
+export function saveCompanyAgencyConfig(config: {
+  companyId: string;
+  adjustmentPercentage: number;
+  isActive: boolean;
+  createdBy: string;
+}) {
+  const id = `company_${config.companyId}_${Date.now()}`;
+  return saveAgencyConfig({
+    id,
+    adjustmentPercentage: config.adjustmentPercentage,
+    isActive: config.isActive,
+    createdBy: config.createdBy,
+    companyId: config.companyId
+  });
+}
+
+/**
+ * Get company-specific agency configuration
+ */
+export function getCompanyAgencyConfig(companyId: string) {
+  return getAgencyConfig(companyId);
+}

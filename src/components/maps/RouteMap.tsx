@@ -220,52 +220,55 @@ export default function RouteMap({
       return
     }
 
+    // Cast to any to handle dynamic properties from API responses
+    const result: any = optimizationResult;
+
     console.log('🔍 [RouteMap] Datos recibidos:', {
-      hasGeometry: !!optimizationResult.geometry,
-      hasCoordinates: !!optimizationResult.coordinates,
-      coordinatesLength: optimizationResult.coordinates?.length,
-      hasStops: !!optimizationResult.stops,
-      stopsLength: optimizationResult.stops?.length,
-      hasRoute: !!optimizationResult.route,
-      routeStopsLength: optimizationResult.route?.stops?.length
+      hasGeometry: !!result.geometry,
+      hasCoordinates: !!result.coordinates,
+      coordinatesLength: result.coordinates?.length,
+      hasStops: !!result.stops,
+      stopsLength: result.stops?.length,
+      hasRoute: !!result.route,
+      routeStopsLength: result.route?.stops?.length
     })
 
     // Si ya hay datos de ruta optimizada con geometría, usarlos directamente
-    if (optimizationResult.geometry || (optimizationResult.optimizedRoute && optimizationResult.optimizedRoute.data)) {
+    if (result.geometry || (result.optimizedRoute && result.optimizedRoute.data)) {
       console.log('📊 Usando rutas optimizadas existentes')
 
       // Obtener geometría y coordenadas de diferentes posibles fuentes
-      const geometry = optimizationResult.geometry ||
-                     optimizationResult.optimizedRoute?.data?.route?.geometry ||
-                     optimizationResult.optimizedRoute?.geometry
+      const geometry = result.geometry ||
+                     result.optimizedRoute?.data?.route?.geometry ||
+                     result.optimizedRoute?.geometry
 
       // DEBUG: Ver todos los valores posibles
       console.log('🔍 [RouteMap] DEBUG valores distance:', {
-        direct: optimizationResult.distance,
-        optimizedData: optimizationResult.optimizedRoute?.data?.route?.distance,
-        optimized: optimizationResult.optimizedRoute?.distance,
-        typeofDirect: typeof optimizationResult.distance
+        direct: result.distance,
+        optimizedData: result.optimizedRoute?.data?.route?.distance,
+        optimized: result.optimizedRoute?.distance,
+        typeofDirect: typeof result.distance
       })
       console.log('🔍 [RouteMap] DEBUG valores duration:', {
-        direct: optimizationResult.duration,
-        optimizedData: optimizationResult.optimizedRoute?.data?.route?.duration,
-        optimized: optimizationResult.optimizedRoute?.duration,
-        typeofDirect: typeof optimizationResult.duration
+        direct: result.duration,
+        optimizedData: result.optimizedRoute?.data?.route?.duration,
+        optimized: result.optimizedRoute?.duration,
+        typeofDirect: typeof result.duration
       })
 
-      const distance = Number(optimizationResult.distance ||
-                      optimizationResult.optimizedRoute?.data?.route?.distance ||
-                      optimizationResult.optimizedRoute?.distance ||
+      const distance = Number(result.distance ||
+                      result.optimizedRoute?.data?.route?.distance ||
+                      result.optimizedRoute?.distance ||
                       0)
 
-      const duration = Number(optimizationResult.duration ||
-                      optimizationResult.optimizedRoute?.data?.route?.duration ||
-                      optimizationResult.optimizedRoute?.duration ||
+      const duration = Number(result.duration ||
+                      result.optimizedRoute?.data?.route?.duration ||
+                      result.optimizedRoute?.duration ||
                       0)
 
-      const coordinates = optimizationResult.coordinates ||
-                         optimizationResult.optimizedRoute?.data?.route?.coordinates ||
-                         optimizationResult.optimizedRoute?.coordinates ||
+      const coordinates = result.coordinates ||
+                         result.optimizedRoute?.data?.route?.coordinates ||
+                         result.optimizedRoute?.coordinates ||
                          []
 
       console.log(`🛣️ Datos de ruta: ${distance} mi, ${duration} min`)
@@ -287,8 +290,8 @@ export default function RouteMap({
         const markerCoordinates: [number, number][] = [warehouseCoordinates]
 
         // Buscar paradas en múltiples ubicaciones posibles
-        const stops = optimizationResult.stops ||
-                     optimizationResult.route?.stops ||
+        const stops = result.stops ||
+                     result.route?.stops ||
                      []
 
         console.log('📍 [RouteMap] Paradas encontradas (sin almacén):', stops.length)
@@ -342,14 +345,14 @@ export default function RouteMap({
     }
 
     // Si no hay rutas pre-procesadas, obtenerlas de la API
-    if (!optimizationResult.route || !optimizationResult.route.stops) {
+    if (!result.route || !result.route.stops) {
       console.log('⚠️ No hay paradas en los resultados de optimización')
       return
     }
 
     const fetchRoutes = async () => {
       try {
-        const stops = optimizationResult.route.stops
+        const stops = result.route.stops
         console.log(`📦 Procesando ${stops.length} paradas`)
 
         // Preparar coordenadas: almacén -> paradas -> almacén
@@ -461,7 +464,7 @@ export default function RouteMap({
     }
 
     // Obtener las paradas desde múltiples ubicaciones posibles
-    let stops = optimizationResult?.stops || optimizationResult?.route?.stops || []
+    let stops = (optimizationResult as any)?.stops || (optimizationResult as any)?.route?.stops || []
 
     // Enriquecer stops con colores de zona si es ruta de almacenes
     if (routeType === 'warehouses' && zones.length > 0) {

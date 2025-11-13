@@ -92,7 +92,6 @@ export function PackageSizeSelector({
           <Select
             value={selectedSize}
             onValueChange={onSizeChange}
-            placeholder="Seleccionar tamaño"
           >
             <SelectTrigger className="w-full">
               <SelectValue placeholder="Seleccionar tamaño" />

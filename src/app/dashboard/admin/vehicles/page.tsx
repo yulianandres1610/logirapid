@@ -33,6 +33,12 @@ import BrandLogo from '@/components/ui/BrandLogo'
 import { Vehicle, VehicleFormData, VehicleStatus, VehicleAvailability } from '@/types/vehicle'
 import { createVehicle, getVehicles } from '@/services/vehicleService'
 
+// Force dynamic rendering to avoid static generation issues with useSearchParams
+export const dynamic = 'force-dynamic'
+export const dynamicParams = true
+export const runtime = 'nodejs'
+export const fetchCache = 'force-no-store'
+
 export default function AdminVehiclesPage() {
   const { user } = useAuth()
   const { theme } = useTheme()
@@ -71,7 +77,7 @@ export default function AdminVehiclesPage() {
 
         // Handle pagination safely - API returns data directly as array with pagination property
         const vehiclesArray = Array.isArray(response.data) ? response.data : response.data.data || [];
-        const paginationInfo = response.data.pagination || {};
+        const paginationInfo: { total?: number } = response.data.pagination || {};
         const paginationTotal = paginationInfo.total || vehiclesArray.length || 0;
         console.log('Total vehicles from pagination:', paginationTotal);
 
@@ -120,8 +126,8 @@ export default function AdminVehiclesPage() {
     active: vehicles.filter(vehicle => vehicle.status === 'ACTIVE').length,
     available: vehicles.filter(vehicle => vehicle.availability === 'AVAILABLE').length,
     inTransit: vehicles.filter(vehicle => vehicle.status === 'IN_TRANSIT').length,
-    totalCapacity: vehicles.reduce((sum, v) => sum + (v.capacity?.empty_boxes || 0) + (v.capacity?.full_boxes || 0), 0),
-    usedCapacity: Math.round(vehicles.reduce((sum, v) => sum + (v.capacity?.empty_boxes || 0) + (v.capacity?.full_boxes || 0), 0) * 0.65) // Simulación
+    totalCapacity: vehicles.reduce((sum, v) => sum + (v.capacity?.weight_kg || 0), 0),
+    usedCapacity: Math.round(vehicles.reduce((sum, v) => sum + (v.capacity?.weight_kg || 0), 0) * 0.65) // Simulación
   }
 
   const STATUSES = {
@@ -567,7 +573,7 @@ export default function AdminVehiclesPage() {
                                   )}>
                                     {AVAILABILITY[vehicle.availability]?.label || vehicle.availability}
                                   </span>
-                                  {vehicle.can_collect_durable && (
+                                  {(vehicle as any).can_collect_durable && (
                                     <div className="flex items-center gap-1">
                                       <div className="w-3 h-3 rounded bg-blue-600 border border-blue-600 flex items-center justify-center">
                                         <svg className="w-1.5 h-1.5 text-white" fill="currentColor" viewBox="0 0 20 20">
@@ -644,7 +650,7 @@ export default function AdminVehiclesPage() {
                                   "font-medium",
                                   theme === 'dark' ? "text-gray-300" : "text-gray-700"
                                 )}>
-                                  {vehicle.mileage ? vehicle.mileage.toLocaleString() : 'N/A'} mi
+                                  {(vehicle as any).mileage ? (vehicle as any).mileage.toLocaleString() : 'N/A'} mi
                                 </p>
                               </div>
                               <div>
@@ -658,7 +664,7 @@ export default function AdminVehiclesPage() {
                                   "font-medium",
                                   theme === 'dark' ? "text-gray-300" : "text-gray-700"
                                 )}>
-                                  {vehicle.insurance_expiry ? new Date(vehicle.insurance_expiry).toLocaleDateString('es-ES', { month: 'short', day: 'numeric', year: 'numeric' }) : 'N/A'}
+                                  {(vehicle as any).insurance_expiry ? new Date((vehicle as any).insurance_expiry).toLocaleDateString('es-ES', { month: 'short', day: 'numeric', year: 'numeric' }) : 'N/A'}
                                 </p>
                               </div>
                               <div>
@@ -672,7 +678,7 @@ export default function AdminVehiclesPage() {
                                   "font-medium",
                                   theme === 'dark' ? "text-gray-300" : "text-gray-700"
                                 )}>
-                                  {vehicle.next_oil_change ? new Date(vehicle.next_oil_change).toLocaleDateString('es-ES', { month: 'short', day: 'numeric', year: 'numeric' }) : 'N/A'}
+                                  {(vehicle as any).next_oil_change ? new Date((vehicle as any).next_oil_change).toLocaleDateString('es-ES', { month: 'short', day: 'numeric', year: 'numeric' }) : 'N/A'}
                                 </p>
                               </div>
                             </div>
@@ -702,13 +708,13 @@ export default function AdminVehiclesPage() {
                                       theme === 'dark' ? "text-red-400" : "text-red-600"
                                     )}
                                   >
-                                    {Math.max(0, (vehicle.capacity?.empty_boxes || 0) - 5)}
+                                    {Math.max(0, ((vehicle.capacity as any)?.empty_boxes || 0) - 5)}
                                   </span>
                                   <span className={cn(
                                     "text-sm font-medium",
                                     theme === 'dark' ? "text-gray-400" : "text-gray-500"
                                   )}>
-                                    /{vehicle.capacity?.empty_boxes || 0}
+                                    /{(vehicle.capacity as any)?.empty_boxes || 0}
                                   </span>
                                 </div>
                               </div>
@@ -718,7 +724,7 @@ export default function AdminVehiclesPage() {
                                 <div
                                   className="h-full bg-gradient-to-r from-red-500 via-red-600 to-red-700 rounded-full transition-all duration-1000 ease-out shadow-lg relative"
                                   style={{
-                                    width: `${Math.min(((Math.max(0, (vehicle.capacity?.empty_boxes || 0) - 5)) / Math.max(1, vehicle.capacity?.empty_boxes || 1)) * 100, 100)}%`
+                                    width: `${Math.min(((Math.max(0, ((vehicle.capacity as any)?.empty_boxes || 0) - 5)) / Math.max(1, (vehicle.capacity as any)?.empty_boxes || 1)) * 100, 100)}%`
                                   }}
                                 >
                                   {/* Efecto de brillo */}
@@ -729,7 +735,7 @@ export default function AdminVehiclesPage() {
                                   "text-xs font-bold tracking-wide",
                                   "text-white drop-shadow-sm"
                                 )}>
-                                  {Math.round(((Math.max(0, (vehicle.capacity?.empty_boxes || 0) - 5)) / Math.max(1, vehicle.capacity?.empty_boxes || 1)) * 100)}%
+                                  {Math.round(((Math.max(0, ((vehicle.capacity as any)?.empty_boxes || 0) - 5)) / Math.max(1, (vehicle.capacity as any)?.empty_boxes || 1)) * 100)}%
                                 </div>
                                 {/* Efecto de partículas */}
                                 <div className="absolute inset-0 overflow-hidden rounded-full">
@@ -762,13 +768,13 @@ export default function AdminVehiclesPage() {
                                       theme === 'dark' ? "text-blue-400" : "text-blue-600"
                                     )}
                                   >
-                                    {vehicle.capacity?.full_boxes || 0}
+                                    {(vehicle.capacity as any)?.full_boxes || 0}
                                   </span>
                                   <span className={cn(
                                     "text-sm font-medium",
                                     theme === 'dark' ? "text-gray-400" : "text-gray-500"
                                   )}>
-                                    /{vehicle.capacity?.full_boxes || 20}
+                                    /{(vehicle.capacity as any)?.full_boxes || 20}
                                   </span>
                                 </div>
                               </div>
@@ -778,7 +784,7 @@ export default function AdminVehiclesPage() {
                                 <div
                                   className="h-full bg-gradient-to-r from-blue-500 via-blue-600 to-blue-700 rounded-full transition-all duration-1000 ease-out shadow-lg relative"
                                   style={{
-                                    width: `${Math.min(((vehicle.capacity?.full_boxes || 0) / Math.max(1, vehicle.capacity?.full_boxes || 20)) * 100, 100)}%`
+                                    width: `${Math.min((((vehicle.capacity as any)?.full_boxes || 0) / Math.max(1, (vehicle.capacity as any)?.full_boxes || 20)) * 100, 100)}%`
                                   }}
                                 >
                                   {/* Efecto de brillo */}
@@ -789,7 +795,7 @@ export default function AdminVehiclesPage() {
                                   "text-xs font-bold tracking-wide",
                                   "text-white drop-shadow-sm"
                                 )}>
-                                  {Math.round(((vehicle.capacity?.full_boxes || 0) / Math.max(1, vehicle.capacity?.full_boxes || 20)) * 100)}%
+                                  {Math.round((((vehicle.capacity as any)?.full_boxes || 0) / Math.max(1, (vehicle.capacity as any)?.full_boxes || 20)) * 100)}%
                                 </div>
                                 {/* Efecto de partículas */}
                                 <div className="absolute inset-0 overflow-hidden rounded-full">
@@ -819,7 +825,7 @@ export default function AdminVehiclesPage() {
                                   "text-sm font-bold",
                                   theme === 'dark' ? "text-white" : "text-gray-900"
                                 )}>
-                                  {(vehicle.capacity?.empty_boxes || 0) + (vehicle.capacity?.full_boxes || 0)} cajas totales
+                                  {((vehicle.capacity as any)?.empty_boxes || 0) + ((vehicle.capacity as any)?.full_boxes || 0)} cajas totales
                                 </span>
                               </div>
                             </div>

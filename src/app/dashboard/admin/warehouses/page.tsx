@@ -58,6 +58,14 @@ interface Warehouse {
   longitude?: number | null
 }
 
+// Force dynamic rendering to avoid static generation issues with useSearchParams
+export const dynamic = 'force-dynamic'
+export const dynamicParams = true
+export const runtime = 'nodejs'
+export const fetchCache = 'force-no-store'
+
+
+
 export default function WarehousesPage() {
   const { user } = useAuth()
   const { theme } = useTheme()
@@ -234,9 +242,6 @@ export default function WarehousesPage() {
     <DashboardLayout>
       <div className="min-h-screen p-6">
         <div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ duration: 0.4 }}
           className="space-y-6"
         >
           {/* Conditional Rendering based on active view */}
@@ -245,9 +250,6 @@ export default function WarehousesPage() {
               {/* Panel de Almacenes - Stats Cards */}
               <div
                 className="grid grid-cols-1 md:grid-cols-4 gap-5"
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.3 }}
               >
                 {/* Total de Almacenes */}
                 <div
@@ -741,8 +743,6 @@ export default function WarehousesPage() {
                 {/* Pagination */}
                 {totalWarehouses > WAREHOUSES_PER_PAGE && (
                   <div
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
                     className={cn(
                       'mt-6 p-4 rounded-xl border',
                       theme === 'dark' ? 'border-gray-700 bg-gray-800' : 'border-gray-200 bg-white'
@@ -823,9 +823,6 @@ export default function WarehousesPage() {
           {/* Vista de Mapa */}
           {activeView === 'map' && (
             <div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ duration: 0.3 }}
             >
               {/* Filters para Mapa */}
               <div className="flex flex-col lg:flex-row gap-6 items-center justify-between py-6 px-4 mt-8 mb-6 bg-white dark:bg-gray-800/50 rounded-xl border border-gray-200 dark:border-gray-700">
@@ -940,9 +937,6 @@ export default function WarehousesPage() {
           {/* Statistics View */}
           {activeView === 'statistics' && (
             <div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ duration: 0.3 }}
               className="space-y-8"
             >
               <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 p-12">

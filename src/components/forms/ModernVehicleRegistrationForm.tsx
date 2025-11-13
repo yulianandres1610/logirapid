@@ -83,6 +83,7 @@ const finalRegistrationSchema = z.object({
   full_boxes: z.number()
     .min(0, 'La cantidad mínima es 0')
     .max(1000, 'La cantidad máxima es 1,000 cajas'),
+  can_collect_durable: z.boolean().optional(),
 });
 
 // Schema para información de mantenimiento
@@ -271,10 +272,11 @@ export function ModernVehicleRegistrationForm({
 
         // Calcular capacidades sugeridas
         const suggestedCapacity = calculateCargoCapacity(response.data.gvwr, response.data.vehicle_type);
-        finalForm.setValue('capacity_weight_lbs', suggestedCapacity.weight_lbs);
-        finalForm.setValue('capacity_weight_kg', suggestedCapacity.weight_kg);
-        finalForm.setValue('capacity_volume_cubic_ft', suggestedCapacity.volume_cubic_ft);
-        finalForm.setValue('capacity_volume_cubic_m', suggestedCapacity.volume_cubic_m);
+        // Note: capacity fields are not part of finalRegistrationSchema, using empty_boxes/full_boxes instead
+        // finalForm.setValue('capacity_weight_lbs', suggestedCapacity.weight_lbs);
+        // finalForm.setValue('capacity_weight_kg', suggestedCapacity.weight_kg);
+        // finalForm.setValue('capacity_volume_cubic_ft', suggestedCapacity.volume_cubic_ft);
+        // finalForm.setValue('capacity_volume_cubic_m', suggestedCapacity.volume_cubic_m);
 
         // Auto-set photo from API if available
         if (response.data.photo_urls && response.data.photo_urls.length > 0) {
@@ -338,10 +340,11 @@ export function ModernVehicleRegistrationForm({
       volume_cubic_ft: 200,
       volume_cubic_m: 5.7,
     };
-    finalForm.setValue('capacity_weight_lbs', defaultCapacity.weight_lbs);
-    finalForm.setValue('capacity_weight_kg', defaultCapacity.weight_kg);
-    finalForm.setValue('capacity_volume_cubic_ft', defaultCapacity.volume_cubic_ft);
-    finalForm.setValue('capacity_volume_cubic_m', defaultCapacity.volume_cubic_m);
+    // Note: capacity fields are not part of finalRegistrationSchema, using empty_boxes/full_boxes instead
+    // finalForm.setValue('capacity_weight_lbs', defaultCapacity.weight_lbs);
+    // finalForm.setValue('capacity_weight_kg', defaultCapacity.weight_kg);
+    // finalForm.setValue('capacity_volume_cubic_ft', defaultCapacity.volume_cubic_ft);
+    // finalForm.setValue('capacity_volume_cubic_m', defaultCapacity.volume_cubic_m);
 
     setCurrentStep('final-registration');
   };
@@ -397,7 +400,7 @@ export function ModernVehicleRegistrationForm({
 
   // Enviar formulario de mantenimiento
   const onMaintenanceInfoSubmit = async (data: MaintenanceInfoData) => {
-    const formData: VehicleFormData = {
+    const formData: any = {
       vin: collectedData.finalInfo?.vin || collectedData.vin,
       make: collectedData.make || vinData?.make || collectedData.manualInfo?.make,
       model: collectedData.model || vinData?.model || collectedData.manualInfo?.model,
@@ -423,7 +426,14 @@ export function ModernVehicleRegistrationForm({
         model_year: collectedData.year || collectedData.manualInfo?.year || new Date().getFullYear(),
         body_type: collectedData.body_type || collectedData.manualInfo?.body_type || 'Unknown',
         color: collectedData.color || collectedData.manualInfo?.color || 'Unknown',
-      },
+        drivetrain: '',
+        engine: '',
+        transmission: '',
+        fuel_type: '',
+        doors: 0,
+        cylinders: 0,
+        displacement: 0,
+      } as VinDecodeResponse,
       insurance_documents: uploadedFiles.map(file => ({
         name: file.name,
         type: file.type,
@@ -436,7 +446,7 @@ export function ModernVehicleRegistrationForm({
       insurance_expiry: data.insurance_expiry,
       oil_change_frequency: data.oil_change_frequency,
       next_oil_change: new Date(Date.now() + (data.oil_change_frequency * 1609)).toISOString().split('T')[0], // Aproximación
-      can_collect_durable: collectedData.finalInfo?.can_collect_durable || false,
+      can_collect_durable: (collectedData.finalInfo as any)?.can_collect_durable || false,
     };
 
     await onSubmit(formData);
@@ -481,7 +491,6 @@ export function ModernVehicleRegistrationForm({
                   ? theme === 'dark' ? "bg-blue-600 text-white" : "bg-blue-600 text-white"
                   : (currentStep === 'final-registration' ||
                      (currentStep === 'manual-info' && step === 'vin-input') ||
-                     (currentStep === 'final-registration' && step !== 'final-registration' && step !== 'maintenance-info') ||
                      (currentStep === 'maintenance-info'))
                   ? theme === 'dark' ? "bg-green-600 text-white" : "bg-green-600 text-white"
                   : theme === 'dark' ? "bg-gray-700 text-gray-400" : "bg-gray-200 text-gray-500"

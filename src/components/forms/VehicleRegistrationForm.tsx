@@ -192,7 +192,7 @@ export function VehicleRegistrationForm({ onSubmit, isLoading = false }: Vehicle
 
     if (!result.success) {
       result.error.issues.forEach((issue) => {
-        setError(issue.path[0] as string, {
+        setError(issue.path[0] as any, {
           message: issue.message,
         });
       });
@@ -209,7 +209,7 @@ export function VehicleRegistrationForm({ onSubmit, isLoading = false }: Vehicle
 
     if (!result.success) {
       result.error.issues.forEach((issue) => {
-        setError(issue.path[0] as string, {
+        setError(issue.path[0] as any, {
           message: issue.message,
         });
       });
