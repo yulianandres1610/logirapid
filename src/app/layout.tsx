@@ -5,6 +5,8 @@ import { Inter } from 'next/font/google'
 import { AuthProvider } from '@/components/providers/auth-provider'
 import { ThemeProvider } from '@/contexts/theme-context'
 import { NotificationProvider } from '@/contexts/NotificationContext'
+import { SpeedInsights } from '@vercel/speed-insights/next'
+import { Analytics } from '@vercel/analytics/react'
 
 const inter = Inter({ subsets: ['latin'] })
 
@@ -33,6 +35,8 @@ export default function RootLayout({
             </NotificationProvider>
           </AuthProvider>
         </ThemeProvider>
+        <SpeedInsights />
+        <Analytics />
       </body>
     </html>
   )
