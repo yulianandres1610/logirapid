@@ -1,6 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { AgencyRatesService } from '../../../../lib/agency-rates.service'
 
+// Force dynamic rendering - don't execute during build
+export const dynamic = 'force-dynamic'
+export const dynamicParams = true
+export const runtime = 'nodejs'
+
+
 // POST: Inicializar tasas de agencia para una nueva empresa
 export async function POST(request: NextRequest) {
   try {

@@ -2,6 +2,12 @@ import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/database'
 import crypto from 'crypto'
 
+// Force dynamic rendering - don't execute during build
+export const dynamic = 'force-dynamic'
+export const dynamicParams = true
+export const runtime = 'nodejs'
+
+
 // Mapbox Optimization API v2 + Directions API Integration - Updated 2025-11-07
 // Types
 export interface Route {

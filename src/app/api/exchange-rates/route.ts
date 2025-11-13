@@ -1,6 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
 import ElToqueAPI, { ExchangeRate } from '@/lib/eltoque-api'
 
+// Force dynamic rendering - don't execute during build
+export const dynamic = 'force-dynamic'
+export const dynamicParams = true
+export const runtime = 'nodejs'
+
+
 // Función para obtener tasas de emergencia formateadas
 function getEmergencyFormattedRates() {
   const now = new Date().toLocaleString('es-ES', {

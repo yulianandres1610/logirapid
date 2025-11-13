@@ -1,6 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
 import ElToqueAPI from '@/lib/eltoque-api'
 
+// Force dynamic rendering - don't execute during build
+export const dynamic = 'force-dynamic'
+export const dynamicParams = true
+export const runtime = 'nodejs'
+
+
 export async function GET(request: NextRequest) {
   const startTime = Date.now()
   const healthStatus = {

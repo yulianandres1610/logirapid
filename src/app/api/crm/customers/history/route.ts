@@ -1,6 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/database'
 
+// Force dynamic rendering - don't execute during build
+export const dynamic = 'force-dynamic'
+export const dynamicParams = true
+export const runtime = 'nodejs'
+
+
 // GET: Obtener historial de cambios de un cliente
 export async function GET(request: NextRequest) {
   try {

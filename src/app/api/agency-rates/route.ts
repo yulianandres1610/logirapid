@@ -2,6 +2,12 @@ import { NextRequest, NextResponse } from 'next/server'
 import { AgencyRatesService } from '../../../lib/agency-rates.service'
 import { AgencyRatesResponse, AgencyRateUpdateRequest, CalculationBreakdown } from '../../../types/agency-rates'
 
+// Force dynamic rendering - don't execute during build
+export const dynamic = 'force-dynamic'
+export const dynamicParams = true
+export const runtime = 'nodejs'
+
+
 // GET: Obtener todas las tasas de agencia
 export async function GET(request: NextRequest) {
   try {

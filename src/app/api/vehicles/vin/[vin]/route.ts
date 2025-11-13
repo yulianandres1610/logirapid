@@ -1,5 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 
+// Force dynamic rendering - don't execute during build
+export const dynamic = 'force-dynamic'
+export const dynamicParams = true
+export const runtime = 'nodejs'
+
+
 const AUTO_DEV_API_KEY = process.env.NEXT_PUBLIC_AUTO_DEV_API_KEY;
 
 export async function GET(

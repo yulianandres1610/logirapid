@@ -5,6 +5,12 @@ import {
   getVehicleStatisticsFromDatabase
 } from '@/lib/vehicle-database';
 
+// Force dynamic rendering - don't execute during build
+export const dynamic = 'force-dynamic'
+export const dynamicParams = true
+export const runtime = 'nodejs'
+
+
 export async function GET(request: NextRequest) {
   try {
     // Temporarily remove authentication requirement

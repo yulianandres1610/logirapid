@@ -2,6 +2,12 @@ import { NextRequest, NextResponse } from 'next/server';
 import fs from 'fs';
 import path from 'path';
 
+// Force dynamic rendering - don't execute during build
+export const dynamic = 'force-dynamic'
+export const dynamicParams = true
+export const runtime = 'nodejs'
+
+
 const PACKAGE_DB_PATH = path.join(process.cwd(), 'data', 'packages.json');
 
 // Types

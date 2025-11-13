@@ -2,6 +2,12 @@ import { NextResponse } from 'next/server'
 import { db } from '@/lib/database'
 import { cookies } from 'next/headers'
 
+// Force dynamic rendering - don't execute during build
+export const dynamic = 'force-dynamic'
+export const dynamicParams = true
+export const runtime = 'nodejs'
+
+
 // Helper function to check for duplicate zipcodes in other zones
 async function checkDuplicateZipCodes(
   zipCodes: string[],

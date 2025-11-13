@@ -2,6 +2,12 @@ import { NextResponse } from 'next/server'
 import { db } from '@/lib/database'
 import { cookies } from 'next/headers'
 
+// Force dynamic rendering - don't execute during build
+export const dynamic = 'force-dynamic'
+export const dynamicParams = true
+export const runtime = 'nodejs'
+
+
 export async function GET() {
   try {
     const cookieStore = await cookies()
