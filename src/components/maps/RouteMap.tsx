@@ -1039,44 +1039,6 @@ export default function RouteMap({
         </div>
       )}
 
-      {/* Leyenda de Zonas para rutas de almacenes */}
-      {routeType === 'warehouses' && zones.length > 0 && !loading && (
-        <div className="absolute top-4 left-4 bg-white dark:bg-gray-800 rounded-lg shadow-xl p-4 border border-gray-200 dark:border-gray-700 max-w-xs z-10">
-          <div className="flex items-center gap-2 mb-3">
-            <MapPin className="w-4 h-4 text-purple-600" />
-            <h3 className="font-semibold text-gray-900 dark:text-white">Zonas de Entrega</h3>
-          </div>
-
-          <div className="space-y-2">
-            {zones.map((zone) => (
-              <div
-                key={zone.id}
-                className="flex items-center gap-2 p-2 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
-              >
-                <div
-                  className="w-4 h-4 rounded-full border-2 border-white shadow-sm flex-shrink-0"
-                  style={{ backgroundColor: zone.color }}
-                />
-                <div className="flex-1 min-w-0">
-                  <div className="text-sm font-medium text-gray-900 dark:text-white truncate">
-                    {zone.name}
-                  </div>
-                  <div className="text-xs text-gray-500 dark:text-gray-400">
-                    {zone.zipCodes?.length || 0} códigos postales
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-
-          <div className="mt-3 pt-3 border-t border-gray-200 dark:border-gray-600">
-            <div className="text-xs text-gray-500 dark:text-gray-400 flex items-center gap-1">
-              <Info className="w-3 h-3" />
-              <span>Haz clic en los marcadores para más info</span>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Estado de carga */}
       {loading && (
