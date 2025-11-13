@@ -368,7 +368,17 @@ async function handleWarehouseRoute(body: any, shouldSaveRoute: boolean) {
     const directionsResponse = await fetch(directionsUrl)
 
     if (!directionsResponse.ok) {
-      throw new Error('Error calling Mapbox Directions API')
+      const errorText = await directionsResponse.text()
+      console.error('❌ [Warehouse Route] Mapbox Directions error:', errorText)
+      throw new Error(`Mapbox Directions API error: ${directionsResponse.status}`)
+    }
+
+    // Verificar que la respuesta sea JSON
+    const contentType = directionsResponse.headers.get('content-type')
+    if (!contentType || !contentType.includes('application/json')) {
+      const responseText = await directionsResponse.text()
+      console.error('❌ [Warehouse Route] Expected JSON but got:', responseText.substring(0, 200))
+      throw new Error(`Mapbox returned non-JSON response: ${contentType}`)
     }
 
     const directionsData = await directionsResponse.json()
@@ -653,6 +663,14 @@ export async function POST(request: NextRequest) {
             throw new Error(`Mapbox Optimization error for ${timeSlot}: ${createJobResponse.status}`)
           }
 
+          // Verificar que la respuesta sea JSON
+          const contentType = createJobResponse.headers.get('content-type')
+          if (!contentType || !contentType.includes('application/json')) {
+            const responseText = await createJobResponse.text()
+            console.error(`❌ [${timeSlot}] Expected JSON but got:`, responseText.substring(0, 200))
+            throw new Error(`Mapbox returned non-JSON response: ${contentType}`)
+          }
+
           const createJobResult = await createJobResponse.json()
           const timeSlotJobId = createJobResult.id
 
@@ -675,6 +693,14 @@ export async function POST(request: NextRequest) {
             console.log(`[${timeSlot} - Polling ${attempts}/${maxAttempts}] Status: ${resultResponse.status}`)
 
             if (resultResponse.status === 200) {
+              // Verificar que la respuesta sea JSON
+              const contentType = resultResponse.headers.get('content-type')
+              if (!contentType || !contentType.includes('application/json')) {
+                const responseText = await resultResponse.text()
+                console.error(`❌ [${timeSlot}] Expected JSON but got:`, responseText.substring(0, 200))
+                throw new Error(`Mapbox returned non-JSON response: ${contentType}`)
+              }
+
               optimizationResult = await resultResponse.json()
               console.log(`✅ [${timeSlot}] Resultado obtenido después de ${attempts} intentos`)
               break
@@ -779,6 +805,14 @@ export async function POST(request: NextRequest) {
             const directionsResponse = await fetch(directionsUrl)
 
             if (directionsResponse.ok) {
+              // Verificar que la respuesta sea JSON
+              const contentType = directionsResponse.headers.get('content-type')
+              if (!contentType || !contentType.includes('application/json')) {
+                const responseText = await directionsResponse.text()
+                console.error(`❌ [${timeSlot}] Expected JSON but got:`, responseText.substring(0, 200))
+                throw new Error(`Mapbox returned non-JSON response: ${contentType}`)
+              }
+
               const directionsData = await directionsResponse.json()
               const segmentGeometry = directionsData.routes[0]?.geometry
               const segmentCoordinates = segmentGeometry?.coordinates || []
@@ -873,6 +907,14 @@ export async function POST(request: NextRequest) {
           const directionsResponse = await fetch(directionsUrl)
 
           if (directionsResponse.ok) {
+            // Verificar que la respuesta sea JSON
+            const contentType = directionsResponse.headers.get('content-type')
+            if (!contentType || !contentType.includes('application/json')) {
+              const responseText = await directionsResponse.text()
+              console.error('❌ [Fallback] Expected JSON but got:', responseText.substring(0, 200))
+              throw new Error(`Mapbox returned non-JSON response: ${contentType}`)
+            }
+
             const directionsData = await directionsResponse.json()
             const route = directionsData.routes[0]
 
@@ -918,6 +960,14 @@ export async function POST(request: NextRequest) {
         const directionsResponse = await fetch(directionsUrl)
 
         if (directionsResponse.ok) {
+          // Verificar que la respuesta sea JSON
+          const contentType = directionsResponse.headers.get('content-type')
+          if (!contentType || !contentType.includes('application/json')) {
+            const responseText = await directionsResponse.text()
+            console.error('❌ [Preview] Expected JSON but got:', responseText.substring(0, 200))
+            throw new Error(`Mapbox returned non-JSON response: ${contentType}`)
+          }
+
           const directionsResult = await directionsResponse.json()
           geometry = directionsResult.routes[0].geometry
           coordinates = geometry.coordinates
