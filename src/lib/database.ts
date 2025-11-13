@@ -30,19 +30,19 @@ function getPool(): Pool {
     });
 
     // Event handler para errores del pool
-    pool.on('error', (err, client) => {
+    pool.on('error', (err: any, client) => {
       console.error('❌ [Pool Error] Unexpected error on idle client:', {
         message: err.message,
-        code: err.code,
+        code: err.code || 'N/A',
         stack: err.stack
       });
 
       // Only recreate pool on critical errors
       if (
-        err.message.includes('termination') ||
-        err.message.includes('timeout') ||
-        err.message.includes('ECONNREFUSED') ||
-        err.message.includes('ENOTFOUND') ||
+        err.message?.includes('termination') ||
+        err.message?.includes('timeout') ||
+        err.message?.includes('ECONNREFUSED') ||
+        err.message?.includes('ENOTFOUND') ||
         err.code === 'XX000' // Internal error
       ) {
         console.log('🔄 [Pool] Recreating pool due to critical connection error...');
@@ -78,7 +78,7 @@ class DatabaseWrapper {
     } catch (error: any) {
       console.error('❌ [DB Query Error]:', {
         message: error.message,
-        code: error.code,
+        code: error.code || 'N/A',
         query: text.substring(0, 100),
         retries
       });
@@ -125,7 +125,7 @@ class DatabaseWrapper {
       }
       console.error('❌ [DB Transaction Error]:', {
         message: error.message,
-        code: error.code
+        code: error.code || 'N/A'
       });
       throw error;
     } finally {
@@ -165,7 +165,7 @@ export async function checkConnection() {
   } catch (error: any) {
     console.error('❌ [DB Connection] Failed:', {
       message: error.message,
-      code: error.code,
+      code: error.code || 'N/A',
       stack: error.stack
     });
     return false;

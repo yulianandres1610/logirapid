@@ -464,9 +464,24 @@ async function handleWarehouseRoute(body: any, shouldSaveRoute: boolean) {
             routeType: 'warehouses'
           }),
           JSON.stringify(stops.map((stop, index) => ({
-            ...stop,
+            // Solo información del almacén, no hay órdenes ni clientes
+            id: stop.id,
+            name: stop.name,
+            code: stop.code,
+            address: stop.address,
+            coordinates: stop.coordinates,
+            latitude: stop.latitude,
+            longitude: stop.longitude,
             sequence: index + 1,
-            status: 'pending'
+            type: 'warehouse',
+            status: 'pending',
+            // Metadata adicional del almacén
+            managerPhone: stop.managerPhone,
+            managerName: stop.managerName,
+            capacity: stop.capacity,
+            availableCapacity: stop.availableCapacity,
+            warehouseType: stop.warehouseType,
+            zipCode: stop.zipCode
           })))
         ]
 
