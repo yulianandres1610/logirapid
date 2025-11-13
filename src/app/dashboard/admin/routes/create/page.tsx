@@ -1026,23 +1026,34 @@ export default function CreateRoutePage() {
       const startDateTime = new Date(routeDate + 'T08:00:00')
       const startTime = startDateTime.toISOString()
 
+      // Construct request body based on route type
+      const requestBody: any = {
+        mechanism: 'automatic',
+        warehouseId,
+        vehicleId,
+        vehiclePlate: selectedVehicle?.vin || selectedVehicle?.nickname || 'Sin identificar',
+        driverId: driverId || undefined,
+        driverName: selectedDriver ? `${selectedDriver.firstName} ${selectedDriver.lastName}`.trim() : null,
+        date: routeDate,
+        startTime: startTime,
+        saveRoute: true
+      }
+
+      // Add route-type specific data
+      if (routeType === 'warehouses') {
+        requestBody.routeType = 'warehouses'
+        requestBody.selectedWarehouses = selectedWarehouses
+        requestBody.notes = notes || `Ruta de almacenes - ${selectedWarehouses.length} destinos`
+      } else {
+        requestBody.selectedOrders = selectedOrders
+        requestBody.timeWindows = selectedTimeWindows
+        requestBody.notes = notes || `Ruta optimizada - ${selectedOrders.length} órdenes`
+      }
+
       const response = await fetch('/api/routes', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          mechanism: 'automatic',
-          selectedOrders,
-          warehouseId,
-          vehicleId,
-          vehiclePlate: selectedVehicle?.vin || selectedVehicle?.nickname || 'Sin identificar',
-          driverId: driverId || undefined,
-          driverName: selectedDriver ? `${selectedDriver.firstName} ${selectedDriver.lastName}`.trim() : null,
-          date: routeDate,
-          timeWindows: selectedTimeWindows,
-          notes: notes || `Ruta optimizada - ${selectedOrders.length} órdenes`,
-          startTime: startTime, // Enviar hora de inicio
-          saveRoute: true // GUARDAR!
-        })
+        body: JSON.stringify(requestBody)
       })
 
       const data = await response.json()
