@@ -412,9 +412,85 @@ async function handleWarehouseRoute(body: any, shouldSaveRoute: boolean) {
 
     // If saving, create route in database
     if (shouldSaveRoute) {
-      // TODO: Implement database save for warehouse routes
-      // For now, just return preview
-      console.log('⚠️ [Warehouse Route] Database save not yet implemented')
+      console.log('💾 [Warehouse Route] Guardando ruta en base de datos...')
+
+      try {
+        // Get the last route ID for numbering
+        const lastRouteResult = await db.query('SELECT id FROM routes ORDER BY id DESC LIMIT 1')
+        const lastRouteId = lastRouteResult.rows[0]?.id || 0
+        const routeNumber = `RUT-WH-${new Date().getFullYear()}-${String(lastRouteId + 1).padStart(4, '0')}`
+
+        const insertQuery = `
+          INSERT INTO routes (
+            routenumber, name, driverid, drivername, vehicleid, vehicleplate,
+            status, totalpackages, deliveredpackages, estimatedduration,
+            actualduration, distance, starttime, endtime, date, notes,
+            mechanism, timewindows, warehouseid, mapboxjobid, optimizedroute, stops,
+            createdat, updatedat
+          ) VALUES (
+            $1, $2, $3, $4, $5, $6, $7, $8, $9, $10,
+            $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22,
+            NOW(), NOW()
+          )
+          RETURNING id
+        `
+
+        const values = [
+          routeNumber,
+          `Ruta de Almacenes - ${new Date().toLocaleDateString('es-ES')}`,
+          body.driverId ? parseInt(body.driverId) : null,
+          body.driverName || null,
+          body.vehicleId || null,
+          body.vehiclePlate || null,
+          'planning',
+          stops.length,
+          0,
+          `${durationMinutes}m`,
+          null,
+          Number(distanceMiles),
+          body.startTime || null,
+          null,
+          body.date || new Date().toISOString().split('T')[0],
+          `Ruta de ${stops.length} almacenes`,
+          'manual', // Warehouse routes are always manual
+          JSON.stringify([]),
+          body.warehouseId,
+          null, // No Mapbox job ID for warehouse routes
+          JSON.stringify({
+            distance: Number(distanceMiles),
+            duration: durationMinutes,
+            geometry,
+            coordinates,
+            routeType: 'warehouses'
+          }),
+          JSON.stringify(stops.map((stop, index) => ({
+            ...stop,
+            sequence: index + 1,
+            status: 'pending'
+          })))
+        ]
+
+        const insertResult = await db.query(insertQuery, values)
+        const routeId = insertResult.rows[0].id
+
+        console.log(`✅ [Warehouse Route] Ruta creada: ${routeNumber} (ID: ${routeId})`)
+
+        return NextResponse.json({
+          success: true,
+          routeId,
+          routeNumber,
+          totalStops: stops.length,
+          distance: Number(distanceMiles),
+          duration: `${durationMinutes}m`,
+          message: `Ruta ${routeNumber} creada con ${stops.length} almacenes`
+        }, { status: 201 })
+      } catch (dbError) {
+        console.error('❌ [Warehouse Route] Error guardando en BD:', dbError)
+        return NextResponse.json(
+          { error: 'Error guardando ruta de almacenes', details: dbError instanceof Error ? dbError.message : 'Unknown error' },
+          { status: 500 }
+        )
+      }
     }
 
     return NextResponse.json(result)

@@ -17,23 +17,52 @@ function getPool(): Pool {
       ssl: {
         rejectUnauthorized: false
       },
-      max: 10,
-      min: 0,
-      idleTimeoutMillis: 10000,
+      max: 20, // Increased from 10 to handle more concurrent requests
+      min: 2, // Keep at least 2 connections alive
+      idleTimeoutMillis: 30000, // Increased from 10s to 30s
       connectionTimeoutMillis: 10000,
       query_timeout: 30000,
       statement_timeout: 30000,
       keepAlive: true,
       keepAliveInitialDelayMillis: 10000,
+      // Allow graceful reconnection
+      allowExitOnIdle: false,
     });
 
     // Event handler para errores del pool
     pool.on('error', (err, client) => {
-      console.error('Unexpected error on idle client', err);
-      if (err.message.includes('termination') || err.message.includes('timeout')) {
-        console.log('🔄 Recreating pool due to connection error...');
+      console.error('❌ [Pool Error] Unexpected error on idle client:', {
+        message: err.message,
+        code: err.code,
+        stack: err.stack
+      });
+
+      // Only recreate pool on critical errors
+      if (
+        err.message.includes('termination') ||
+        err.message.includes('timeout') ||
+        err.message.includes('ECONNREFUSED') ||
+        err.message.includes('ENOTFOUND') ||
+        err.code === 'XX000' // Internal error
+      ) {
+        console.log('🔄 [Pool] Recreating pool due to critical connection error...');
         pool = null; // Force pool recreation on next query
+      } else {
+        console.log('⚠️ [Pool] Non-critical error, keeping pool alive');
       }
+    });
+
+    // Connection event handlers for debugging
+    pool.on('connect', (client) => {
+      console.log('✅ [Pool] New client connected to database');
+    });
+
+    pool.on('acquire', (client) => {
+      console.log('🔓 [Pool] Client acquired from pool');
+    });
+
+    pool.on('remove', (client) => {
+      console.log('🗑️ [Pool] Client removed from pool');
     });
   }
 
@@ -42,17 +71,37 @@ function getPool(): Pool {
 
 // Wrapper para PostgreSQL con métodos convenientes
 class DatabaseWrapper {
-  async query(text: string, params?: any[], retries = 1) {
+  async query(text: string, params?: any[], retries = 2) {
     try {
       const result = await getPool().query(text, params);
       return result;
     } catch (error: any) {
-      console.error('Database query error:', error);
+      console.error('❌ [DB Query Error]:', {
+        message: error.message,
+        code: error.code,
+        query: text.substring(0, 100),
+        retries
+      });
 
-      if (retries > 0 && (error.message?.includes('termination') || error.message?.includes('timeout'))) {
-        console.log('🔄 Connection error detected, retrying...');
-        pool = null; // Reset pool
-        await new Promise(resolve => setTimeout(resolve, 1000));
+      // Check if error is recoverable
+      const isRecoverableError =
+        error.message?.includes('termination') ||
+        error.message?.includes('timeout') ||
+        error.message?.includes('ECONNREFUSED') ||
+        error.message?.includes('ENOTFOUND') ||
+        error.message?.includes('Connection terminated') ||
+        error.code === 'XX000' || // Internal error
+        error.code === '57P01' || // Admin shutdown
+        error.code === '57P03' || // Cannot connect now
+        error.code === '08006' || // Connection failure
+        error.code === '08003' || // Connection does not exist
+        error.code === '08000'; // Connection exception
+
+      if (retries > 0 && isRecoverableError) {
+        console.log(`🔄 [DB] Recoverable error detected, retrying (${retries} attempts left)...`);
+        pool = null; // Reset pool to force reconnection
+        const delay = (3 - retries) * 1000; // Progressive delay: 1s, 2s
+        await new Promise(resolve => setTimeout(resolve, delay));
         return this.query(text, params, retries - 1);
       }
 
@@ -68,11 +117,23 @@ class DatabaseWrapper {
       const result = await callback(client);
       await client.query('COMMIT');
       return result;
-    } catch (error) {
-      await client.query('ROLLBACK');
+    } catch (error: any) {
+      try {
+        await client.query('ROLLBACK');
+      } catch (rollbackError: any) {
+        console.error('❌ [DB] Error during ROLLBACK:', rollbackError.message);
+      }
+      console.error('❌ [DB Transaction Error]:', {
+        message: error.message,
+        code: error.code
+      });
       throw error;
     } finally {
-      client.release();
+      try {
+        client.release();
+      } catch (releaseError: any) {
+        console.error('❌ [DB] Error releasing client:', releaseError.message);
+      }
     }
   }
 }
@@ -91,11 +152,22 @@ export async function closePool() {
 // Función para verificar la conexión
 export async function checkConnection() {
   try {
-    const result = await getPool().query('SELECT NOW()');
-    console.log('Database connection successful:', result.rows[0].now);
+    const startTime = Date.now();
+    const result = await getPool().query('SELECT NOW() as now, version() as version');
+    const duration = Date.now() - startTime;
+
+    console.log('✅ [DB Connection] Successful:', {
+      timestamp: result.rows[0].now,
+      version: result.rows[0].version.split(' ')[0] + ' ' + result.rows[0].version.split(' ')[1],
+      latency: `${duration}ms`
+    });
     return true;
-  } catch (error) {
-    console.error('Database connection failed:', error);
+  } catch (error: any) {
+    console.error('❌ [DB Connection] Failed:', {
+      message: error.message,
+      code: error.code,
+      stack: error.stack
+    });
     return false;
   }
 }
