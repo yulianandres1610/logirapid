@@ -3,17 +3,5 @@
   "devCommand": "npm run dev",
   "installCommand": "npm install",
   "framework": "nextjs",
-  "regions": ["iad1"],
-  "env": {
-    "NEXT_PUBLIC_MAPBOX_TOKEN": "@mapbox-token",
-    "NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN": "@mapbox-token",
-    "DATABASE_URL": "@database-url",
-    "NEXTAUTH_SECRET": "@nextauth-secret"
-  },
-  "build": {
-    "env": {
-      "NEXT_PUBLIC_MAPBOX_TOKEN": "@mapbox-token",
-      "NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN": "@mapbox-token"
-    }
-  }
+  "regions": ["iad1"]
 }
