@@ -77,7 +77,7 @@ jspm_packages/
 
 # Gatsby files
 .cache/
-public
+# public - COMENTADO: En Next.js el directorio public/ debe estar en el repo
 
 # Vuepress build output
 .vuepress/dist
