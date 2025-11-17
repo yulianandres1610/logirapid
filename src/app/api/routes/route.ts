@@ -381,20 +381,31 @@ async function handleWarehouseRoute(body: any, shouldSaveRoute: boolean) {
     ].map(coord => `${coord[0]},${coord[1]}`).join(';')
 
     const directionsUrl = `https://api.mapbox.com/directions/v5/mapbox/driving/${coordinatesString}?geometries=geojson&overview=full&steps=true&access_token=${mapboxToken}`
+
+    console.log(`🔑 [Warehouse Route] Using Mapbox token: ${mapboxToken.substring(0, 20)}...`)
     const directionsResponse = await fetch(directionsUrl)
 
-    if (!directionsResponse.ok) {
-      const errorText = await directionsResponse.text()
-      console.error('❌ [Warehouse Route] Mapbox Directions error:', errorText)
-      throw new Error(`Mapbox Directions API error: ${directionsResponse.status}`)
-    }
-
-    // Verificar que la respuesta sea JSON
+    // Verificar que la respuesta sea JSON ANTES de leer el body
     const contentType = directionsResponse.headers.get('content-type')
     if (!contentType || !contentType.includes('application/json')) {
       const responseText = await directionsResponse.text()
-      console.error('❌ [Warehouse Route] Expected JSON but got:', responseText.substring(0, 200))
-      throw new Error(`Mapbox returned non-JSON response: ${contentType}`)
+      console.error('❌ [Warehouse Route] Mapbox returned non-JSON response')
+      console.error('❌ [Warehouse Route] Content-Type:', contentType)
+      console.error('❌ [Warehouse Route] Response preview:', responseText.substring(0, 500))
+      console.error('❌ [Warehouse Route] Status:', directionsResponse.status)
+
+      // Mensaje de error más descriptivo para debugging
+      if (responseText.includes('deploy') || responseText.includes('<!DOCTYPE') || responseText.includes('<html')) {
+        throw new Error(`Mapbox token inválido o no configurado. Verifica NEXT_PUBLIC_MAPBOX_TOKEN en las variables de entorno de Vercel.`)
+      }
+
+      throw new Error(`Mapbox returned non-JSON response (${contentType}): ${responseText.substring(0, 100)}`)
+    }
+
+    if (!directionsResponse.ok) {
+      const errorData = await directionsResponse.json()
+      console.error('❌ [Warehouse Route] Mapbox Directions error:', errorData)
+      throw new Error(`Mapbox Directions API error: ${directionsResponse.status} - ${errorData.message || 'Unknown error'}`)
     }
 
     const directionsData = await directionsResponse.json()
@@ -1063,17 +1074,26 @@ export async function POST(request: NextRequest) {
           ].map(coord => `${coord[0]},${coord[1]}`).join(';')
 
           const directionsUrl = `https://api.mapbox.com/directions/v5/mapbox/driving/${coordinatesString}?overview=full&access_token=${mapboxToken}`
+          console.log(`🔑 [Fallback] Using Mapbox token: ${mapboxToken.substring(0, 20)}...`)
           const directionsResponse = await fetch(directionsUrl)
 
-          if (directionsResponse.ok) {
-            // Verificar que la respuesta sea JSON
-            const contentType = directionsResponse.headers.get('content-type')
-            if (!contentType || !contentType.includes('application/json')) {
-              const responseText = await directionsResponse.text()
-              console.error('❌ [Fallback] Expected JSON but got:', responseText.substring(0, 200))
-              throw new Error(`Mapbox returned non-JSON response: ${contentType}`)
+          // Verificar que la respuesta sea JSON ANTES de leer el body
+          const contentType = directionsResponse.headers.get('content-type')
+          if (!contentType || !contentType.includes('application/json')) {
+            const responseText = await directionsResponse.text()
+            console.error('❌ [Fallback] Mapbox returned non-JSON response')
+            console.error('❌ [Fallback] Content-Type:', contentType)
+            console.error('❌ [Fallback] Response preview:', responseText.substring(0, 500))
+
+            // Mensaje de error más descriptivo
+            if (responseText.includes('deploy') || responseText.includes('<!DOCTYPE') || responseText.includes('<html')) {
+              throw new Error(`Mapbox token inválido o no configurado. Verifica NEXT_PUBLIC_MAPBOX_TOKEN en las variables de entorno de Vercel.`)
             }
 
+            throw new Error(`Mapbox returned non-JSON response (${contentType}): ${responseText.substring(0, 100)}`)
+          }
+
+          if (directionsResponse.ok) {
             const directionsData = await directionsResponse.json()
             const route = directionsData.routes[0]
 
@@ -1083,6 +1103,10 @@ export async function POST(request: NextRequest) {
             totalDuration = Math.floor(route.duration / 60)
 
             console.log(`📊 [Fallback] Distancia: ${totalDistance.toFixed(1)} mi, Duración: ${totalDuration} min`)
+          } else {
+            const errorData = await directionsResponse.json()
+            console.error('❌ [Fallback] Mapbox error:', errorData)
+            throw new Error(`Mapbox API error: ${directionsResponse.status} - ${errorData.message || 'Unknown error'}`)
           }
         } catch (distError) {
           console.warn('⚠️ [Fallback] No se pudo calcular distancia/duración:', distError)
@@ -1116,21 +1140,35 @@ export async function POST(request: NextRequest) {
         const directionsUrl = `https://api.mapbox.com/directions/v5/mapbox/driving-traffic/${coordinatesString}?geometries=geojson&overview=full&steps=false&access_token=${mapboxToken}`
 
         console.log('📍 [Preview] Obteniendo geometría con Directions API...')
+        console.log(`🔑 [Preview] Using Mapbox token: ${mapboxToken.substring(0, 20)}...`)
         const directionsResponse = await fetch(directionsUrl)
 
-        if (directionsResponse.ok) {
-          // Verificar que la respuesta sea JSON
-          const contentType = directionsResponse.headers.get('content-type')
-          if (!contentType || !contentType.includes('application/json')) {
-            const responseText = await directionsResponse.text()
-            console.error('❌ [Preview] Expected JSON but got:', responseText.substring(0, 200))
-            throw new Error(`Mapbox returned non-JSON response: ${contentType}`)
+        // Verificar que la respuesta sea JSON ANTES de leer el body
+        const contentType = directionsResponse.headers.get('content-type')
+        if (!contentType || !contentType.includes('application/json')) {
+          const responseText = await directionsResponse.text()
+          console.error('❌ [Preview] Mapbox returned non-JSON response')
+          console.error('❌ [Preview] Content-Type:', contentType)
+          console.error('❌ [Preview] Response preview:', responseText.substring(0, 500))
+          console.error('❌ [Preview] Status:', directionsResponse.status)
+
+          // Mensaje de error más descriptivo
+          if (responseText.includes('deploy') || responseText.includes('<!DOCTYPE') || responseText.includes('<html')) {
+            throw new Error(`Mapbox token inválido o no configurado. Verifica NEXT_PUBLIC_MAPBOX_TOKEN en las variables de entorno de Vercel.`)
           }
 
+          throw new Error(`Mapbox returned non-JSON response (${contentType}): ${responseText.substring(0, 100)}`)
+        }
+
+        if (directionsResponse.ok) {
           const directionsResult = await directionsResponse.json()
           geometry = directionsResult.routes[0].geometry
           coordinates = geometry.coordinates
           console.log(`✅ [Preview] Geometría obtenida: ${coordinates.length} puntos`)
+        } else {
+          const errorData = await directionsResponse.json()
+          console.error('❌ [Preview] Mapbox error:', errorData)
+          throw new Error(`Mapbox Directions API error: ${directionsResponse.status} - ${errorData.message || 'Unknown error'}`)
         }
       } catch (error) {
         console.warn('⚠️ [Preview] No se pudo obtener geometría:', error)
