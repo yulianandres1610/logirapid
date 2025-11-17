@@ -88,7 +88,7 @@ export default function RoutesPage() {
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1)
   const [totalRoutes, setTotalRoutes] = useState(0)
-  const ROUTES_PER_PAGE = 10
+  const ROUTES_PER_PAGE = 25
   const [statusFilter, setStatusFilter] = useState<string>('all')
   const [dayFilter, setDayFilter] = useState<string>('all')
   const [driverFilter, setDriverFilter] = useState<string>('all')

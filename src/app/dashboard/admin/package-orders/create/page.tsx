@@ -910,9 +910,20 @@ export default function CreatePackageOrderPage() {
         return
       }
 
-      // Generate order number
-      const random = Math.floor(Math.random() * 900000) + 100000  // Número aleatorio de 6 dígitos (100000-999999)
-      const orderNumber = `PACK${random}`
+      // Generate PICKUP order number
+      const numberResponse = await fetch('/api/package-orders/generate-number', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ orderType: 'recogida' })
+      })
+
+      const numberData = await numberResponse.json()
+      if (!numberData.success) {
+        showNotification('error', 'Error', 'No se pudo generar el número de orden: ' + numberData.error)
+        return
+      }
+
+      const orderNumber = numberData.orderNumber
 
       // Use the address from the wizard (orderData already has the correct address)
       const finalAddress = orderData.customerAddress
@@ -929,6 +940,7 @@ export default function CreatePackageOrderPage() {
       const orderPayload = {
         ...orderData,
         orderNumber,
+        orderType: 'recogida',  // PICKUP orders
         createdBy: user?.name || 'system',
         customerAddress: finalAddress,  // Use customerAddress instead of address
         paymentMethod: orderData.paymentMethod || 'cash_on_delivery', // Include payment method

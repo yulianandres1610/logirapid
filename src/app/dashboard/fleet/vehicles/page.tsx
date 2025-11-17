@@ -71,7 +71,7 @@ export default function FleetVehiclesPage() {
   const [totalVehicles, setTotalVehicles] = useState(0);
   const [selectedVehicle, setSelectedVehicle] = useState<Vehicle | null>(null);
 
-  const VEHICLES_PER_PAGE = 10;
+  const VEHICLES_PER_PAGE = 25;
 
   const fetchVehicles = async () => {
     try {

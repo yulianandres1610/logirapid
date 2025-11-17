@@ -26,8 +26,7 @@ import {
   Trash2,
   ChevronLeft,
   ChevronRight,
-  Clock,
-  BarChart3
+  Clock
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useTheme } from '@/contexts/theme-context'
@@ -48,7 +47,7 @@ interface PackageOrder {
   notes?: string
   scheduledDate?: string
   timeSlot?: string
-  status: 'pending' | 'scheduled' | 'picked_up' | 'delivered' | 'cancelled' | 'in_transit' | 'in_route'
+  status: 'pending' | 'reprogrammed' | 'picked_up' | 'in_transit' | 'in_route' | 'delivered'
   createdAt: string
   updatedAt: string
   firstName?: string
@@ -58,6 +57,7 @@ interface PackageOrder {
   email?: string
   address?: string
   customerNotes?: string
+  orderType?: 'recogida' | 'oficina' | 'entrega'
   // Coordinates for mapping
   latitude?: number | null
   longitude?: number | null
@@ -65,13 +65,8 @@ interface PackageOrder {
 
 // Force dynamic rendering to avoid static generation issues with useSearchParams
 export const dynamic = 'force-dynamic'
-export const dynamicParams = true
-export const runtime = 'nodejs'
-export const fetchCache = 'force-no-store'
 
-
-
-export default function PackageOrdersPage() {
+export default function PickupOrdersPage() {
   const { user } = useAuth()
   const { theme } = useTheme()
   const { showNotification } = useNotifications()
@@ -85,25 +80,28 @@ export default function PackageOrdersPage() {
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1)
   const [totalOrders, setTotalOrders] = useState(0)
-  const ORDERS_PER_PAGE = 10
+  const ORDERS_PER_PAGE = 25
   const [statusFilter, setStatusFilter] = useState<string>('all')
   const [dayFilter, setDayFilter] = useState<string>('all')
 
   // View state - inicializar desde URL o por defecto 'table'
   const [activeView, setActiveView] = useState<'table' | 'map' | 'statistics'>(() => {
     const viewFromUrl = searchParams.get('view')
-    return viewFromUrl === 'map' ? 'map' : viewFromUrl === 'statistics' ? 'statistics' : 'table'
+    if (viewFromUrl === 'map') return 'map'
+    if (viewFromUrl === 'statistics') return 'statistics'
+    return 'table'
   })
   const [allOrders, setAllOrders] = useState<PackageOrder[]>([])
   const [zones, setZones] = useState<any[]>([])
 
-  // Fetch orders
+  // Fetch orders - Show both recogida and entrega (both need routes)
   const fetchData = async () => {
     try {
       setLoading(true)
       const params = new URLSearchParams({
         page: currentPage.toString(),
         limit: ORDERS_PER_PAGE.toString(),
+        // No orderType filter - will show recogida and entrega by default
         ...(searchTerm && { search: searchTerm }),
         ...(statusFilter && statusFilter !== 'all' && { status: statusFilter }),
         ...(dayFilter && dayFilter !== 'all' && { dayFilter: dayFilter })
@@ -146,11 +144,9 @@ export default function PackageOrdersPage() {
       params.delete('view')
     }
 
-    const newUrl = `/dashboard/admin/package-orders${params.toString() ? '?' + params.toString() : ''}`
+    const newUrl = `/dashboard/admin/pickup-orders${params.toString() ? '?' + params.toString() : ''}`
     router.push(newUrl, { scroll: false })
   }, [activeView, searchParams, router])
-
-  // Orders are now filtered on the server side
 
   // Calculate statistics
   const stats = {
@@ -176,17 +172,21 @@ export default function PackageOrdersPage() {
     }).length
   }
 
-  // Fetch all orders for map view
+  // Fetch all orders for map view (recogida y entrega - ambas necesitan ruta)
   const fetchAllOrders = async () => {
     try {
       const [ordersResponse, zonesResponse] = await Promise.all([
-        fetch('/api/package-orders?limit=1000'),
+        fetch('/api/package-orders?limit=1000'), // Sin orderType - mostrará recogida y entrega
         fetch('/api/zones')
       ])
 
       if (ordersResponse.ok) {
         const data = await ordersResponse.json()
-        setAllOrders(data.data || [])
+        // Filtrar solo órdenes pendientes y reprogramadas (las importantes para rutas)
+        const filteredOrders = (data.data || []).filter((order: PackageOrder) =>
+          order.status === 'pending' || order.status === 'reprogrammed'
+        )
+        setAllOrders(filteredOrders)
       }
 
       if (zonesResponse.ok) {
@@ -206,23 +206,21 @@ export default function PackageOrdersPage() {
 
   const STATUSES = {
     pending: { label: 'Pendiente', color: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400', icon: AlertCircle },
-    scheduled: { label: 'Programada', color: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400', icon: Clock },
-    in_transit: { label: 'En Ruta', color: 'bg-gradient-to-r from-blue-500 to-indigo-600 text-white shadow-lg border border-blue-200 dark:from-blue-600 dark:to-indigo-700 dark:border-blue-400', icon: Package },
+    reprogrammed: { label: 'Reprogramado', color: 'bg-gradient-to-r from-yellow-500 to-orange-600 text-white shadow-lg border border-yellow-200 dark:from-yellow-600 dark:to-orange-700 dark:border-yellow-400', icon: AlertCircle },
     picked_up: { label: 'Recogido', color: 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-400', icon: Package },
-    in_route: { label: 'En Camino', color: 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900/30 dark:text-indigo-400', icon: Truck },
+    in_transit: { label: 'Enviado', color: 'bg-gradient-to-r from-blue-500 to-indigo-600 text-white shadow-lg border border-blue-200 dark:from-blue-600 dark:to-indigo-700 dark:border-blue-400', icon: Package },
+    in_route: { label: 'En Reparto', color: 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900/30 dark:text-indigo-400', icon: Truck },
     delivered: { label: 'Entregado', color: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400', icon: CheckCircle },
-    cancelled: { label: 'Cancelado', color: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400', icon: XCircle },
-    reprogrammed: { label: 'Reprogramada', color: 'bg-gradient-to-r from-yellow-500 to-orange-600 text-white shadow-lg border border-yellow-200 dark:from-yellow-600 dark:to-orange-700 dark:border-yellow-400', icon: AlertCircle },
   }
 
   // Handle view order details
   const handleViewOrder = (orderId: number) => {
-    window.location.href = `/dashboard/admin/package-orders/${orderId}`
+    window.location.href = `/dashboard/admin/pickup-orders/${orderId}`
   }
 
   // Handle edit order
   const handleEditOrder = (orderId: number) => {
-    window.location.href = `/dashboard/admin/package-orders/${orderId}/edit`
+    window.location.href = `/dashboard/admin/pickup-orders/${orderId}/edit`
   }
 
   // Handle delete order
@@ -235,7 +233,6 @@ export default function PackageOrdersPage() {
 
     if (!order) {
       console.error('Order not found with ID:', orderId)
-      // Don't show notification to user - let the API handle the error
       return
     }
 
@@ -264,7 +261,17 @@ export default function PackageOrdersPage() {
 
       console.log('DELETE response status:', response.status)
 
-      const data = await response.json()
+      // Try to parse JSON response, but handle empty responses
+      let data: any = {}
+      try {
+        const text = await response.text()
+        if (text) {
+          data = JSON.parse(text)
+        }
+      } catch (e) {
+        console.log('No JSON response from DELETE')
+      }
+
       console.log('DELETE response data:', data)
 
       if (response.ok) {
@@ -288,31 +295,91 @@ export default function PackageOrdersPage() {
     }
   }
 
-  // Handle cancel order
-  const handleCancelOrder = async (orderId: number) => {
-    if (!confirm('¿Estás seguro de que deseas cancelar esta orden de paquetería?')) {
-      return
+  // Helper para parsear direcciones
+  const parseAddress = (addressField: any) => {
+    if (!addressField) return null
+    if (typeof addressField === 'object' && addressField !== null) {
+      return addressField
     }
+    if (typeof addressField === 'string') {
+      // First try to parse as JSON
+      try {
+        const parsed = JSON.parse(addressField)
+        if (parsed && typeof parsed === 'object') {
+          return parsed
+        }
+      } catch {
+        // If not JSON, parse comma-separated string format
+        // Format: "street, [Apt X,] city, state, zipcode, country"
+        const parts = addressField.split(',').map(p => p.trim()).filter(Boolean)
 
-    try {
-      const response = await fetch(`/api/package-orders/${orderId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          status: 'cancelled'
-        })
-      })
+        if (parts.length >= 2) {
+          // Try to identify components
+          const result: any = {}
 
-      if (response.ok) {
-        showNotification('success', 'Orden Cancelada', 'La orden ha sido cancelada exitosamente')
-        fetchData() // Refresh the orders list
-      } else {
-        throw new Error('Error cancelling order')
+          // Last part is usually country (if exists and not a number)
+          if (parts.length > 4 && isNaN(Number(parts[parts.length - 1]))) {
+            result.country = parts[parts.length - 1]
+            parts.pop()
+          }
+
+          // Second to last should be zipcode (5 digits)
+          if (parts.length > 0 && /^\d{5}(-\d{4})?$/.test(parts[parts.length - 1])) {
+            result.zipCode = parts[parts.length - 1]
+            parts.pop()
+          }
+
+          // Third to last should be state (2 letters)
+          if (parts.length > 0 && /^[A-Z]{2}$/i.test(parts[parts.length - 1])) {
+            result.state = parts[parts.length - 1]
+            parts.pop()
+          }
+
+          // Fourth to last should be city
+          if (parts.length > 0) {
+            result.city = parts[parts.length - 1]
+            parts.pop()
+          }
+
+          // Check if second part might be apartment (starts with "Apt")
+          if (parts.length > 1 && parts[1].toLowerCase().startsWith('apt')) {
+            result.apartment = parts[1]
+            result.street = parts[0]
+          } else {
+            // Everything else is the street
+            result.street = parts.join(', ')
+          }
+
+          return result
+        }
+
+        // Fallback: just return as street
+        return { street: addressField }
       }
-    } catch (error) {
-      console.error('Error cancelling order:', error)
-      showNotification('error', 'Error', 'No se pudo cancelar la orden')
     }
+    return null
+  }
+
+  const formatAddress = (address: any) => {
+    if (!address) return 'Sin dirección'
+    const parts: string[] = []
+    if (address.street) parts.push(address.street)
+    if (address.apartment) parts.push(`Apt: ${address.apartment}`)
+    if (address.city) parts.push(address.city)
+    if (address.state) parts.push(address.state)
+    if (address.zipCode) parts.push(address.zipCode)
+    if (address.country && address.country !== 'Estados Unidos') parts.push(address.country)
+
+    return parts.length > 0 ? (
+      <div>
+        <div className="font-medium text-black dark:text-gray-100">{parts[0]}</div>
+        {parts.length > 1 && (
+          <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+            {parts.slice(1).join(', ')}
+          </div>
+        )}
+      </div>
+    ) : 'Sin dirección'
   }
 
   return (
@@ -323,9 +390,9 @@ export default function PackageOrdersPage() {
           animate={{ opacity: 1, y: 0 }}
           className="space-y-6"
         >
-          
-  
-  
+
+
+
           {/* Conditional Rendering based on active view */}
           {activeView === 'table' && (
             <div>
@@ -374,7 +441,7 @@ export default function PackageOrdersPage() {
                     <span className={cn(
                       'text-xs font-medium',
                       theme === 'dark' ? 'text-gray-500' : 'text-black'
-                    )}>En sistema</span>
+                    )}>De recogida</span>
                   </div>
                 </div>
               </div>
@@ -587,7 +654,7 @@ export default function PackageOrdersPage() {
                         const orderDate = new Date(dateStr)
                         if (isNaN(orderDate.getTime())) return false
                         const today = new Date().toDateString()
-                        return orderDate.toDateString() === today && order.status === 'scheduled'
+                        return orderDate.toDateString() === today && order.status === 'pending'
                       }).length}
                     </span>
                   </div>
@@ -602,7 +669,7 @@ export default function PackageOrdersPage() {
                           const orderDate = new Date(dateStr)
                           if (isNaN(orderDate.getTime())) return false
                           const today = new Date().toDateString()
-                          return orderDate.toDateString() === today && order.status === 'scheduled'
+                          return orderDate.toDateString() === today && order.status === 'pending'
                         }).length / stats.scheduledToday * 100) : 0}%`
                       }}
                     ></div>
@@ -674,7 +741,7 @@ export default function PackageOrdersPage() {
                 counts={{
                   table: orders.length,
                   map: allOrders.length,
-                  statistics: allOrders.length
+                  statistics: 0
                 }}
                 theme={theme}
                 compact={true}
@@ -697,22 +764,19 @@ export default function PackageOrdersPage() {
                 </Button>
 
                 <button
-                  onClick={() => window.location.href = '/dashboard/admin/package-orders/create'}
+                  onClick={() => window.location.href = '/dashboard/admin/pickup-orders/create'}
                   className={cn(
                     'flex-1 sm:flex-none justify-center whitespace-nowrap',
                     'rounded-lg text-sm font-medium transition-all duration-200',
-                    'h-12 bg-blue-600 hover:bg-blue-700 text-black dark:text-white',
+                    'h-12 bg-blue-600 hover:bg-blue-700 text-white',
                     'shadow-sm hover:shadow-md',
                     'focus:outline-none focus:ring-2 focus:ring-blue-500/20',
                     'dark:bg-blue-700 dark:hover:bg-blue-800 dark:text-white',
                     'flex items-center gap-2 px-6'
                   )}
                 >
-                  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-plus w-4 h-4">
-                    <path d="M5 12h14"></path>
-                    <path d="M12 5v14"></path>
-                  </svg>
-                  Nueva Orden
+                  <Plus className="w-4 h-4" />
+                  Nueva Orden de Recogida
                 </button>
               </div>
             </div>
@@ -726,13 +790,13 @@ export default function PackageOrdersPage() {
             {loading ? (
               <div className="p-8 text-center">
                 <RefreshCw className="w-8 h-8 animate-spin mx-auto text-gray-400" />
-                <p className="mt-2 text-black dark:text-gray-400">Cargando órdenes...</p>
+                <p className="mt-2 text-black dark:text-gray-400">Cargando órdenes de recogida...</p>
               </div>
             ) : orders.length === 0 ? (
               <div className="p-8 text-center">
                 <Package className="w-12 h-12 mx-auto text-gray-400" />
                 <p className="mt-2 text-black dark:text-gray-400">
-                  {searchTerm || statusFilter !== 'all' || dayFilter !== 'all' ? 'No se encontraron órdenes con los filtros aplicados' : 'No hay órdenes registradas'}
+                  {searchTerm || statusFilter !== 'all' || dayFilter !== 'all' ? 'No se encontraron órdenes con los filtros aplicados' : 'No hay órdenes de recogida registradas'}
                 </p>
               </div>
             ) : (
@@ -743,7 +807,7 @@ export default function PackageOrdersPage() {
                     theme === 'dark' ? 'bg-gray-900/50' : 'bg-gray-50'
                   )}>
                     <tr>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider w-24">
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider w-32">
                         Orden
                       </th>
                       <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider w-44">
@@ -753,7 +817,7 @@ export default function PackageOrdersPage() {
                         Cliente
                       </th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider flex-1">
-                        Dirección
+                        Dirección Recogida
                       </th>
                       <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider w-52">
                         Servicios
@@ -767,28 +831,28 @@ export default function PackageOrdersPage() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
-                    {orders.map((order) => (
-                      <motion.tr
-                        key={order.id}
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        className={cn(
-                          'hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors'
-                        )}
-                      >
+                    {orders.map((order) => {
+                      return (
+                        <motion.tr
+                          key={order.id}
+                          initial={{ opacity: 0 }}
+                          animate={{ opacity: 1 }}
+                          className={cn('hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors')}
+                        >
+                        {/* Columna 1: Número de Orden */}
                         <td className="px-4 py-4 whitespace-nowrap">
-                          <div className="text-base font-bold text-black dark:text-gray-100 mb-1">
-                            {order.orderNumber}
+                          <div className="flex items-center gap-2 mb-1">
+                            <div className="text-base font-bold text-black dark:text-gray-100">
+                              {order.orderNumber}
+                            </div>
                           </div>
                           <div className="text-xs text-gray-500 dark:text-gray-400">
                             {(() => {
                               const now = new Date()
-                              // Validar que createdAt existe y es válido
                               if (!order.createdAt) {
                                 return <span>Sin fecha</span>
                               }
                               const orderDate = new Date(order.createdAt)
-                              // Verificar que la fecha es válida
                               if (isNaN(orderDate.getTime())) {
                                 return <span>Fecha inválida</span>
                               }
@@ -814,7 +878,6 @@ export default function PackageOrdersPage() {
                                   </div>
                                 )
                               }
-                              // Para fechas más antiguas, mostrar fecha completa
                               return (
                                 <div>
                                   <div className="font-medium">
@@ -832,319 +895,177 @@ export default function PackageOrdersPage() {
                             })()}
                           </div>
                         </td>
-                        <td className="px-4 py-4 whitespace-nowrap">
-                          <div className="text-sm">
-                            {order.scheduledDate ? (
-                              <div>
-                                <div className="font-medium text-black dark:text-gray-100">
-                                  {(() => {
-                                    if (!order.scheduledDate) return <span className="text-gray-400">No programada</span>
 
-                                    // Asegurar que scheduledDate tenga el formato correcto antes de procesarlo
-                                    const dateStr = order.scheduledDate.includes('T') ? order.scheduledDate : order.scheduledDate + 'T00:00:00'
-                                    const scheduledDate = new Date(dateStr)
-
-                                    // Verificar que la fecha es válida
-                                    if (isNaN(scheduledDate.getTime())) {
-                                      return <span className="text-gray-400">Fecha inválida</span>
-                                    }
-
-                                    const today = new Date()
-                                    today.setHours(0, 0, 0, 0)
-                                    const tomorrow = new Date(today)
-                                    tomorrow.setDate(tomorrow.getDate() + 1)
-
-                                    const isToday = scheduledDate.toDateString() === today.toDateString()
-                                    const isTomorrow = scheduledDate.toDateString() === tomorrow.toDateString()
-
-                                    if (isToday) {
-                                      return <span className="text-blue-600 dark:text-blue-400">Hoy</span>
-                                    } else if (isTomorrow) {
-                                      return <span className="text-green-600 dark:text-green-400">Mañana</span>
-                                    } else {
-                                      return scheduledDate.toLocaleDateString('es-ES', {
-                                        weekday: 'short',
-                                        day: '2-digit',
-                                        month: 'short'
-                                      })
-                                    }
-                                  })()}
-                                </div>
-                                <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                                  {(() => {
-                                    const dateStr = order.scheduledDate.includes('T') ? order.scheduledDate : order.scheduledDate + 'T00:00:00'
-                                    const date = new Date(dateStr)
-                                    if (isNaN(date.getTime())) {
-                                      return 'Fecha inválida'
-                                    }
-                                    return date.toLocaleDateString('es-ES', {
-                                      day: '2-digit',
-                                      month: '2-digit',
-                                      year: 'numeric'
-                                    })
-                                  })()}
-                                </div>
-                                {order.timeSlot && (
-                                  <div className="text-xs font-medium text-blue-600 dark:text-blue-400 mt-1">
-                                    🕐 {(() => {
-                                      const timeSlots: { [key: string]: string } = {
-                                        'morning': '8:00 - 12:00',
-                                        'afternoon': '12:00 - 16:00',
-                                        'evening': '16:00 - 20:00'
-                                      }
-                                      return timeSlots[order.timeSlot] || order.timeSlot
+                          {/* Fecha Recogida */}
+                          <td className="px-4 py-4 whitespace-nowrap">
+                            <div className="text-sm">
+                              {order.scheduledDate ? (
+                                <div>
+                                  <div className="font-medium text-black dark:text-gray-100">
+                                    {(() => {
+                                      const dateStr = order.scheduledDate.includes('T') ? order.scheduledDate : order.scheduledDate + 'T00:00:00'
+                                      const scheduledDate = new Date(dateStr)
+                                      if (isNaN(scheduledDate.getTime())) return <span className="text-gray-400">Fecha inválida</span>
+                                      const today = new Date()
+                                      today.setHours(0, 0, 0, 0)
+                                      const tomorrow = new Date(today)
+                                      tomorrow.setDate(tomorrow.getDate() + 1)
+                                      const isToday = scheduledDate.toDateString() === today.toDateString()
+                                      const isTomorrow = scheduledDate.toDateString() === tomorrow.toDateString()
+                                      if (isToday) return <span className="text-blue-600 dark:text-blue-400">Hoy</span>
+                                      if (isTomorrow) return <span className="text-green-600 dark:text-green-400">Mañana</span>
+                                      return scheduledDate.toLocaleDateString('es-ES', { weekday: 'short', day: '2-digit', month: 'short' })
                                     })()}
                                   </div>
-                                )}
-                              </div>
-                            ) : (
-                              <span className="text-gray-400 dark:text-gray-500 italic">No programada</span>
-                            )}
-                          </div>
-                        </td>
-                        <td className="px-6 py-2">
-                          <div className="text-base font-medium text-black dark:text-gray-100">
-                            {order.customerName || `${order.firstName || ''} ${order.lastName || ''}`.trim()}
-                          </div>
-                        </td>
-                        <td className="px-6 py-3">
-                          <div className="text-sm text-black dark:text-gray-400 min-w-0 max-w-md">
-                            {(() => {
-                              // Enhanced address parsing function
-                              const parseAddress = (addressField: any) => {
-                                if (!addressField) return null
-
-                                // Handle case where address is already an object (from new system)
-                                if (typeof addressField === 'object' && addressField !== null) {
-                                  return addressField
-                                }
-
-                                // Handle string addresses
-                                if (typeof addressField === 'string') {
-                                  // Try to parse as JSON first (for old formatted addresses)
-                                  try {
-                                    const parsed = JSON.parse(addressField)
-                                    if (parsed && typeof parsed === 'object') {
-                                      return parsed
-                                    }
-                                  } catch {
-                                    // Parse complete address string into components
-                                    return parseCompleteAddressString(addressField)
-                                  }
-                                }
-
-                                return null
-                              }
-
-                              // Parse complete address string into components
-                              const parseCompleteAddressString = (addressString: string) => {
-                                // Common patterns for US addresses
-                                const patterns = {
-                                  // Pattern: Street, City, State CP (Miami, Florida, CP 33161)
-                                  fullAddress: /^(.+?),\s*([^,]+?,\s*[^,]+?),\s*CP\s*(\d{5}(?:-\d{4})?)$/i,
-                                  // Pattern: Street, City, State Zip (Miami, FL 33161)
-                                  fullAddressZip: /^(.+?),\s*([^,]+?),\s*([A-Z]{2})\s*(\d{5}(?:-\d{4})?)$/i,
-                                  // Pattern: Street, City State (Miami, FL)
-                                  streetCityState: /^(.+?),\s*([^,]+?)\s+([A-Z]{2})$/i
-                                }
-
-                                for (const [key, pattern] of Object.entries(patterns)) {
-                                  const match = addressString.match(pattern)
-                                  if (match) {
-                                    if (key === 'fullAddress') {
-                                      return {
-                                        street: match[1]?.trim(),
-                                        city: match[2]?.trim(),
-                                        state: match[3]?.trim(),
-                                        zipCode: match[4]?.trim()
-                                      }
-                                    } else if (key === 'fullAddressZip') {
-                                      return {
-                                        street: match[1]?.trim(),
-                                        city: match[2]?.trim(),
-                                        state: match[3]?.trim(),
-                                        zipCode: match[4]?.trim()
-                                      }
-                                    } else if (key === 'streetCityState') {
-                                      return {
-                                        street: match[1]?.trim(),
-                                        city: match[2]?.trim(),
-                                        state: match[3]?.trim()
-                                      }
-                                    }
-                                  }
-                                }
-
-                                // If no pattern matches, try to split by commas
-                                const parts = addressString.split(',').map(part => part.trim())
-                                if (parts.length >= 2) {
-                                  return {
-                                    street: parts[0],
-                                    city: parts[1],
-                                    state: parts[2] || '',
-                                    ...(parts[3] && { zipCode: parts[3] })
-                                  }
-                                }
-
-                                // Fallback: treat as street only
-                                return { street: addressString }
-                              }
-
-                              // Get address from customerAddress first, then fallback to address
-                              const address = parseAddress(order.customerAddress) || parseAddress(order.address)
-
-                              if (address) {
-                                const parts: string[] = []
-
-                                // Helper function to ensure we only add strings to parts
-                                const safeAdd = (value: any, prefix?: string) => {
-                                  if (value === null || value === undefined) return
-                                  if (typeof value === 'object') {
-                                    // If it's an object, convert to JSON string to avoid React errors
-                                    const str = JSON.stringify(value)
-                                    if (str && str !== '{}') {
-                                      parts.push(prefix ? `${prefix} ${str}` : str)
-                                    }
-                                  } else if (typeof value === 'string' && value.trim()) {
-                                    parts.push(prefix ? `${prefix} ${value.trim()}` : value.trim())
-                                  } else if (value && value.toString() !== '[object Object]') {
-                                    const str = String(value).trim()
-                                    if (str) {
-                                      parts.push(prefix ? `${prefix} ${str}` : str)
-                                    }
-                                  }
-                                }
-
-                                safeAdd(address.street)
-                                safeAdd(address.apartment, 'Apt:')
-                                safeAdd(address.city)
-                                safeAdd(address.state)
-                                safeAdd(address.zipCode)
-                                if (address.country && address.country !== 'Estados Unidos') {
-                                  safeAdd(address.country)
-                                }
-
-                                return parts.length > 0 ? (
-                                  <div>
-                                    <div className="font-medium text-black dark:text-gray-100">
-                                      {parts[0]}
-                                    </div>
-                                    {parts.length > 1 && (
-                                      <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                                        {parts.slice(1).join(', ')}
-                                      </div>
-                                    )}
+                                  <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                                    {(() => {
+                                      const dateStr = order.scheduledDate.includes('T') ? order.scheduledDate : order.scheduledDate + 'T00:00:00'
+                                      const date = new Date(dateStr)
+                                      if (isNaN(date.getTime())) return 'Fecha inválida'
+                                      return date.toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' })
+                                    })()}
                                   </div>
-                                ) : (
-                                  <span className="text-gray-400 dark:text-gray-500">Sin dirección</span>
-                                )
-                              }
-
-                              return <span className="text-gray-400 dark:text-gray-500">Sin dirección</span>
-                            })()}
-                          </div>
-                        </td>
-                        <td className="px-4 py-4">
-                          <div className="flex flex-wrap gap-1">
-                            {order.services.map((service, index) => (
-                              <span
-                                key={index}
-                                className={cn(
-                                  'inline-flex items-center px-2 py-1 rounded-full text-xs font-medium',
-                                  service.toLowerCase().includes('recogida') || service.toLowerCase().includes('pickup')
-                                    ? 'bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-400'
-                                    : 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400'
-                                )}
-                              >
-                                {service}
-                              </span>
-                            ))}
-                          </div>
-                        </td>
-                        <td className="px-4 py-4 whitespace-nowrap">
-                          <span className={cn(
-                            'inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium',
-                            STATUSES[order.status]?.color || 'bg-gray-100 text-gray-800 dark:bg-gray-900/30 dark:text-gray-400'
-                          )}>
-                            {(() => {
-                              const StatusIcon = STATUSES[order.status]?.icon || AlertCircle
-                              return <StatusIcon className="w-3 h-3 mr-1" />
-                            })()}
-                            {STATUSES[order.status]?.label || order.status || 'Desconocido'}
-                          </span>
-                        </td>
-                        <td className="px-2 py-4 whitespace-nowrap">
-                          <div className="flex gap-1 justify-end">
-                            {/* View Details Button */}
-                            <motion.button
-                              whileHover={{ scale: 1.1 }}
-                              whileTap={{ scale: 0.9 }}
-                              onClick={() => handleViewOrder(order.id)}
-                              className={cn(
-                                'relative p-2 rounded-lg transition-all duration-200',
-                                theme === 'dark'
-                                  ? 'text-blue-400 hover:bg-blue-900/30'
-                                  : 'text-blue-600 hover:bg-blue-50'
+                                  {order.timeSlot && (
+                                    <div className="text-xs font-medium text-blue-600 dark:text-blue-400 mt-1">
+                                      <Clock className="w-3 h-3 inline mr-1" />
+                                      {(() => {
+                                        const timeSlots: { [key: string]: string } = {
+                                          'morning': '8:00 - 12:00',
+                                          'afternoon': '12:00 - 16:00',
+                                          'evening': '16:00 - 20:00'
+                                        }
+                                        return timeSlots[order.timeSlot] || order.timeSlot
+                                      })()}
+                                    </div>
+                                  )}
+                                </div>
+                              ) : (
+                                <span className="text-gray-400 dark:text-gray-500 italic">No programada</span>
                               )}
-                              title="Ver detalles"
-                            >
-                              <Eye className="w-4 h-4" />
-                            </motion.button>
+                            </div>
+                          </td>
 
-                            {/* Edit Button */}
-                            <motion.button
-                              whileHover={{ scale: 1.1 }}
-                              whileTap={{ scale: 0.9 }}
-                              onClick={() => handleEditOrder(order.id)}
-                              className={cn(
-                                'relative p-2 rounded-lg transition-all duration-200',
-                                theme === 'dark'
-                                  ? 'text-gray-400 hover:bg-gray-700/50'
-                                  : 'text-gray-600 hover:bg-gray-100'
-                              )}
-                              title="Editar orden"
-                            >
-                              <Edit className="w-4 h-4" />
-                            </motion.button>
+                          {/* Cliente */}
+                          <td className="px-6 py-2">
+                            <div className="text-base font-medium text-black dark:text-gray-100">
+                              {order.customerName || `${order.firstName || ''} ${order.lastName || ''}`.trim()}
+                            </div>
+                          </td>
 
-                            {/* Delete Button (only for pending orders) */}
-                            {order.status === 'pending' ? (
+                          {/* Dirección Recogida */}
+                          <td className="px-6 py-3">
+                            <div className="text-sm text-black dark:text-gray-400 min-w-0 max-w-md">
+                              {formatAddress(parseAddress(order.customerAddress) || parseAddress(order.address))}
+                            </div>
+                          </td>
+
+                          {/* Servicios */}
+                          <td className="px-4 py-4">
+                            <div className="flex flex-wrap gap-1">
+                              {order.services.map((service, index) => (
+                                <span
+                                  key={index}
+                                  className={cn(
+                                    'inline-flex items-center px-2 py-1 rounded-full text-xs font-medium',
+                                    service.toLowerCase().includes('recogida') || service.toLowerCase().includes('pickup')
+                                      ? 'bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-400'
+                                      : 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400'
+                                  )}
+                                >
+                                  {service}
+                                </span>
+                              ))}
+                            </div>
+                          </td>
+
+                          {/* Estado */}
+                          <td className="px-4 py-4 whitespace-nowrap">
+                            <span className={cn(
+                              'inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium',
+                              STATUSES[order.status]?.color || 'bg-gray-100 text-gray-800 dark:bg-gray-900/30 dark:text-gray-400'
+                            )}>
+                              {(() => {
+                                const StatusIcon = STATUSES[order.status]?.icon || AlertCircle
+                                return <StatusIcon className="w-3 h-3 mr-1" />
+                              })()}
+                              {STATUSES[order.status]?.label || order.status || 'Desconocido'}
+                            </span>
+                          </td>
+
+                          {/* Acciones */}
+                          <td className="px-2 py-4 whitespace-nowrap">
+                            <div className="flex gap-1 justify-end">
+                              {/* View Details Button */}
                               <motion.button
-                                type="button"
                                 whileHover={{ scale: 1.1 }}
                                 whileTap={{ scale: 0.9 }}
-                                onClick={(e) => {
-                                  e.preventDefault()
-                                  e.stopPropagation()
-                                  handleDeleteOrder(order.id)
-                                }}
+                                onClick={() => handleViewOrder(order.id)}
                                 className={cn(
                                   'relative p-2 rounded-lg transition-all duration-200',
                                   theme === 'dark'
-                                    ? 'text-red-400 hover:bg-red-900/30'
-                                    : 'text-red-600 hover:bg-red-50'
+                                    ? 'text-blue-400 hover:bg-blue-900/30'
+                                    : 'text-blue-600 hover:bg-blue-50'
                                 )}
-                                title="Eliminar orden"
+                                title="Ver detalles"
                               >
-                                <Trash2 className="w-4 h-4" />
+                                <Eye className="w-4 h-4" />
                               </motion.button>
-                            ) : (
-                              <div
+
+                              {/* Edit Button */}
+                              <motion.button
+                                whileHover={{ scale: 1.1 }}
+                                whileTap={{ scale: 0.9 }}
+                                onClick={() => handleEditOrder(order.id)}
                                 className={cn(
-                                  'p-2 rounded-lg opacity-50 cursor-not-allowed',
+                                  'relative p-2 rounded-lg transition-all duration-200',
                                   theme === 'dark'
-                                    ? 'text-gray-600'
-                                    : 'text-gray-400'
+                                    ? 'text-gray-400 hover:bg-gray-700/50'
+                                    : 'text-gray-600 hover:bg-gray-100'
                                 )}
-                                title="No se puede eliminar"
+                                title="Editar orden"
                               >
-                                <Trash2 className="w-4 h-4" />
-                              </div>
-                            )}
-                          </div>
-                        </td>
-                      </motion.tr>
-                    ))}
+                                <Edit className="w-4 h-4" />
+                              </motion.button>
+
+                              {/* Delete Button (only for pending orders) */}
+                              {order.status === 'pending' ? (
+                                <motion.button
+                                  type="button"
+                                  whileHover={{ scale: 1.1 }}
+                                  whileTap={{ scale: 0.9 }}
+                                  onClick={(e) => {
+                                    e.preventDefault()
+                                    e.stopPropagation()
+                                    handleDeleteOrder(order.id)
+                                  }}
+                                  className={cn(
+                                    'relative p-2 rounded-lg transition-all duration-200',
+                                    theme === 'dark'
+                                      ? 'text-red-400 hover:bg-red-900/30'
+                                      : 'text-red-600 hover:bg-red-50'
+                                  )}
+                                  title="Eliminar orden"
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </motion.button>
+                              ) : (
+                                <div
+                                  className={cn(
+                                    'p-2 rounded-lg opacity-50 cursor-not-allowed',
+                                    theme === 'dark'
+                                      ? 'text-gray-600'
+                                      : 'text-gray-400'
+                                  )}
+                                  title="No se puede eliminar"
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </div>
+                              )}
+                            </div>
+                          </td>
+                        </motion.tr>
+                      )
+                    })}
                   </tbody>
                 </table>
               </div>
@@ -1301,7 +1222,7 @@ export default function PackageOrdersPage() {
                     counts={{
                       table: orders.length,
                       map: allOrders.length,
-                      statistics: allOrders.length
+                      statistics: 0
                     }}
                     theme={theme}
                     compact={true}
@@ -1323,19 +1244,20 @@ export default function PackageOrdersPage() {
                   </Button>
 
                   <button
-                    onClick={() => window.location.href = '/dashboard/admin/package-orders/create'}
+                    onClick={() => window.location.href = '/dashboard/admin/pickup-orders/create'}
                     className={cn(
                       'flex-1 sm:flex-none justify-center whitespace-nowrap',
                       'items-center gap-2 h-12 px-4',
-                      'bg-green-600 hover:bg-green-700 text-white font-medium',
+                      'bg-blue-600 hover:bg-blue-700 text-white font-medium',
                       'rounded-lg transition-all duration-200',
                       'shadow-sm hover:shadow-md',
-                      'focus:outline-none focus:ring-2 focus:ring-green-500/20',
-                      'dark:bg-green-700 dark:hover:bg-green-800 dark:text-white'
+                      'focus:outline-none focus:ring-2 focus:ring-blue-500/20',
+                      'dark:bg-blue-700 dark:hover:bg-blue-800 dark:text-white',
+                      'flex'
                     )}
                   >
                     <Plus className="w-4 h-4" />
-                    Nueva Orden
+                    Nueva Orden de Recogida
                   </button>
                 </div>
               </div>
@@ -1349,81 +1271,6 @@ export default function PackageOrdersPage() {
               </div>
             </motion.div>
           )}
-
-          {/* Statistics View */}
-          {activeView === 'statistics' && (
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.5 }}
-              className="space-y-8"
-            >
-              <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 p-12">
-                <div className="text-center space-y-6">
-                  {/* Icon */}
-                  <div className="mx-auto w-24 h-24 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center">
-                    <BarChart3 className="w-12 h-12 text-black dark:text-white" />
-                  </div>
-
-                  {/* Title */}
-                  <h2 className="text-3xl font-bold text-black dark:text-white">
-                    Estadísticas de Órdenes
-                  </h2>
-
-                  {/* Message */}
-                  <div className="space-y-4">
-                    <p className="text-xl text-gray-600 dark:text-gray-300">
-                      Estamos trabajando en Desarrollar una Solución Práctica
-                    </p>
-                    <p className="text-lg text-gray-500 dark:text-gray-400">
-                      Próximamente podrás ver aquí análisis detallados, gráficos interactivos y métricas importantes sobre tus órdenes.
-                    </p>
-                  </div>
-
-                  {/* Stats Preview */}
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-12">
-                    <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-6">
-                      <div className="text-3xl font-bold text-blue-600 dark:text-blue-400">
-                        {allOrders.length}
-                      </div>
-                      <div className="text-sm text-black dark:text-gray-300 mt-1">
-                        Total de Órdenes
-                      </div>
-                    </div>
-                    <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-6">
-                      <div className="text-3xl font-bold text-green-600 dark:text-green-400">
-                        {allOrders.filter(order => order.status === 'delivered').length}
-                      </div>
-                      <div className="text-sm text-black dark:text-gray-300 mt-1">
-                        Órdenes Entregadas
-                      </div>
-                    </div>
-                    <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-6">
-                      <div className="text-3xl font-bold text-amber-600 dark:text-amber-400">
-                        {allOrders.filter(order => order.status === 'pending').length}
-                      </div>
-                      <div className="text-sm text-black dark:text-gray-300 mt-1">
-                        Órdenes Pendientes
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Progress indicator */}
-                  <div className="mt-8">
-                    <div className="flex items-center justify-center space-x-2">
-                      <div className="w-2 h-2 bg-blue-600 rounded-full animate-pulse"></div>
-                      <div className="w-2 h-2 bg-blue-600 rounded-full animate-pulse delay-75"></div>
-                      <div className="w-2 h-2 bg-blue-600 rounded-full animate-pulse delay-150"></div>
-                    </div>
-                    <p className="text-sm text-gray-500 dark:text-gray-400 mt-3">
-                      En desarrollo...
-                    </p>
-                  </div>
-                </div>
-              </div>
-            </motion.div>
-          )}
-
 
         </motion.div>
       </div>

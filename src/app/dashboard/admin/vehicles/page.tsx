@@ -53,7 +53,7 @@ export default function AdminVehiclesPage() {
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1)
   const [totalVehicles, setTotalVehicles] = useState(0)
-  const VEHICLES_PER_PAGE = 10
+  const VEHICLES_PER_PAGE = 25
   const [statusFilter, setStatusFilter] = useState<string>('all')
   const [availabilityFilter, setAvailabilityFilter] = useState<string>('all')
 

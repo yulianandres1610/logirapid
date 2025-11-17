@@ -263,3 +263,23 @@ When modifying core features, verify:
 - [ ] Routes include warehouse as start/end point
 - [ ] Currency calculations handle decimal precision
 - [ ] Forms validate with Zod schemas before submission
+- # Error Type
+Console SyntaxError
+
+## Error Message
+Failed to execute 'json' on 'Response': Unexpected end of JSON input
+
+
+    at handleDeleteOrder (src/app/dashboard/admin/pickup-orders/page.tsx:264:35)
+
+## Code Frame
+  262 |       console.log('DELETE response status:', response.status)
+  263 |
+> 264 |       const data = await response.json()
+      |                                   ^
+  265 |       console.log('DELETE response data:', data)
+  266 |
+  267 |       if (response.ok) {
+
+Next.js version: 15.5.6 (Webpack)
+ hay error al eliminar una orden en estado pendiente y otro detalle es que las ordenes que se estan creando con el nuevo formulario no se esta guardando la direccion completa en la tabla no se esta mpstrando la direccion comppleta con el zipcode la ciudad el estado y el pais revisa y corrigelo

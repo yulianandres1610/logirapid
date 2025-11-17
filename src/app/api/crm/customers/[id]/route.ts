@@ -40,7 +40,10 @@ export async function GET(
         createdby as "createdBy",
         createdat as "createdAt",
         zipcode as "zipCode",
-        apartment
+        apartment,
+        has_alternate_contact as "hasAlternateContact",
+        alternate_contact_name as "alternateContactName",
+        alternate_contact_phone as "alternateContactPhone"
       FROM customers
       WHERE id = $1
     `
@@ -128,7 +131,10 @@ export async function PUT(
       country: 'country',
       notes: 'notes',
       zipCode: 'zipcode',
-      apartment: 'apartment'
+      apartment: 'apartment',
+      hasAlternateContact: 'has_alternate_contact',
+      alternateContactName: 'alternate_contact_name',
+      alternateContactPhone: 'alternate_contact_phone'
     }
 
     // Build update fields dynamically
@@ -169,7 +175,10 @@ export async function PUT(
         createdby as "createdBy",
         createdat as "createdAt",
         zipcode as "zipCode",
-        apartment
+        apartment,
+        has_alternate_contact as "hasAlternateContact",
+        alternate_contact_name as "alternateContactName",
+        alternate_contact_phone as "alternateContactPhone"
     `
 
     const result = await db.query(updateQuery, values)

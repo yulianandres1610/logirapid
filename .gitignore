@@ -126,3 +126,18 @@ Thumbs.db
 tmp/
 temp/
 .vercel
+
+# Sensitive credentials and temporary development files
+envvercel
+foo_test_branch
+
+# Temporary migration and check scripts (development only)
+fix-*.js
+run-migration-*.js
+check-*.js
+
+# Temporary logo files (use assets in proper directories)
+blanco.png
+blanco_logo.png
+rojo.png
+rojo_logo.png

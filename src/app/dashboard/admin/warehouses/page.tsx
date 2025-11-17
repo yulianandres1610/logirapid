@@ -49,6 +49,10 @@ interface Warehouse {
   openingDate?: string
   operatingHours?: string
   capacity?: number
+  cajas_vacias_capacity?: number
+  bultos_capacity?: number
+  cajas_vacias_count?: number
+  bultos_count?: number
   currentStock?: number
   notes?: string
   createdAt: string
@@ -80,7 +84,7 @@ export default function WarehousesPage() {
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1)
   const [totalWarehouses, setTotalWarehouses] = useState(0)
-  const WAREHOUSES_PER_PAGE = 10
+  const WAREHOUSES_PER_PAGE = 25
   const [statusFilter, setStatusFilter] = useState<string>('all')
   const [typeFilter, setTypeFilter] = useState<string>('all')
 
@@ -225,11 +229,12 @@ export default function WarehousesPage() {
         },
       })
 
-      if (response.ok) {
+      const data = await response.json()
+
+      if (data.success) {
         showNotification('success', 'Almacen Eliminado', 'El almacen ha sido eliminado exitosamente')
         fetchData()
       } else {
-        const data = await response.json()
         showNotification('error', 'Error al eliminar', data.error || 'No se pudo eliminar el almacen')
       }
     } catch (error) {
@@ -603,8 +608,9 @@ export default function WarehousesPage() {
                         {warehouses.map((warehouse) => (
                           <tr
                             key={warehouse.id}
+                            onClick={() => router.push(`/dashboard/admin/warehouses/${warehouse.id}`)}
                             className={cn(
-                              'hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors'
+                              'hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors cursor-pointer'
                             )}
                           >
                             <td className="px-4 py-4 whitespace-nowrap">
@@ -658,18 +664,73 @@ export default function WarehousesPage() {
                                 {STATUSES[warehouse.status].label}
                               </span>
                             </td>
-                            <td className="px-4 py-4 whitespace-nowrap">
-                              <div className="text-sm">
-                                <div className="font-medium text-black dark:text-gray-100">
-                                  {warehouse.currentStock || 0} / {warehouse.capacity || 0}
+                            <td className="px-4 py-4">
+                              <div className="space-y-2">
+                                {/* Cajas Vacías */}
+                                <div className="text-xs">
+                                  <div className="flex items-center justify-between mb-1">
+                                    <span className="text-gray-600 dark:text-gray-400">Cajas:</span>
+                                    <span className="font-medium text-black dark:text-gray-100">
+                                      {warehouse.cajas_vacias_count || 0} / {warehouse.cajas_vacias_capacity || 0}
+                                    </span>
+                                  </div>
+                                  <div className="w-full bg-blue-100 dark:bg-blue-900/30 rounded-full h-1.5">
+                                    <div
+                                      className="h-1.5 rounded-full transition-all duration-300"
+                                      style={{
+                                        width: `${(warehouse.cajas_vacias_capacity || 0) > 0 ? ((warehouse.cajas_vacias_count || 0) / (warehouse.cajas_vacias_capacity || 1) * 100) : 0}%`,
+                                        backgroundColor: (() => {
+                                          const count = warehouse.cajas_vacias_count || 0
+                                          const capacity = warehouse.cajas_vacias_capacity || 0
+                                          const remaining = capacity - count
+
+                                          // At 100% capacity
+                                          if (count === capacity && capacity > 0) {
+                                            return '#3b82f6' // Blue
+                                          }
+                                          // 10 or fewer spaces remaining (almost full - warning)
+                                          if (remaining <= 10 && remaining >= 0) {
+                                            return '#cc0a46' // Exa red
+                                          }
+                                          // Default blue
+                                          return '#3b82f6'
+                                        })()
+                                      }}
+                                    ></div>
+                                  </div>
                                 </div>
-                                <div className="w-full bg-gray-200 dark:bg-gray-600 rounded-full h-1.5 mt-1">
-                                  <div
-                                    className="bg-blue-600 h-1.5 rounded-full transition-all duration-300"
-                                    style={{
-                                      width: `${(warehouse.capacity || 0) > 0 ? ((warehouse.currentStock || 0) / (warehouse.capacity || 1) * 100) : 0}%`
-                                    }}
-                                  ></div>
+                                {/* Bultos */}
+                                <div className="text-xs">
+                                  <div className="flex items-center justify-between mb-1">
+                                    <span className="text-gray-600 dark:text-gray-400">Bultos:</span>
+                                    <span className="font-medium text-black dark:text-gray-100">
+                                      {warehouse.bultos_count || 0} / {warehouse.bultos_capacity || 0}
+                                    </span>
+                                  </div>
+                                  <div className="w-full bg-blue-100 dark:bg-blue-900/30 rounded-full h-1.5">
+                                    <div
+                                      className="h-1.5 rounded-full transition-all duration-300"
+                                      style={{
+                                        width: `${(warehouse.bultos_capacity || 0) > 0 ? ((warehouse.bultos_count || 0) / (warehouse.bultos_capacity || 1) * 100) : 0}%`,
+                                        backgroundColor: (() => {
+                                          const count = warehouse.bultos_count || 0
+                                          const capacity = warehouse.bultos_capacity || 0
+                                          const remaining = capacity - count
+
+                                          // At 100% capacity
+                                          if (count === capacity && capacity > 0) {
+                                            return '#3b82f6' // Blue
+                                          }
+                                          // 10 or fewer spaces remaining (almost full - warning)
+                                          if (remaining <= 10 && remaining >= 0) {
+                                            return '#cc0a46' // Exa red
+                                          }
+                                          // Default blue
+                                          return '#3b82f6'
+                                        })()
+                                      }}
+                                    ></div>
+                                  </div>
                                 </div>
                               </div>
                             </td>

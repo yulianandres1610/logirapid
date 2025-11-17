@@ -61,6 +61,41 @@ const STEPS = [
   { id: 5, title: 'Éxito', icon: PartyPopper }
 ]
 
+// ============================================================================
+// HELPER FUNCTIONS
+// ============================================================================
+
+/**
+ * Formatea el timeSlot a un formato legible, manejando formatos legacy
+ */
+const formatTimeSlot = (timeSlot: string | null | undefined): string => {
+  if (!timeSlot) return 'Sin horario'
+
+  const slot = timeSlot.toLowerCase().trim()
+
+  // Mapeo de formatos a etiquetas legibles
+  const mappings: Record<string, string> = {
+    // Formato nuevo (estándar)
+    'morning': '🌅 Mañana (8:00 AM - 12:00 PM)',
+    'afternoon': '☀️ Tarde (12:00 PM - 4:00 PM)',
+    'evening': '🌙 Noche (4:00 PM - 8:00 PM)',
+    // Formatos legacy - rangos simples
+    '8-12': '🌅 Mañana (8:00 AM - 12:00 PM)',
+    '12-16': '☀️ Tarde (12:00 PM - 4:00 PM)',
+    '16-20': '🌙 Noche (4:00 PM - 8:00 PM)',
+    // Formatos legacy - rangos completos
+    '8:00 am - 12:00 pm': '🌅 Mañana (8:00 AM - 12:00 PM)',
+    '12:00 pm - 4:00 pm': '☀️ Tarde (12:00 PM - 4:00 PM)',
+    '4:00 pm - 8:00 pm': '🌙 Noche (4:00 PM - 8:00 PM)',
+    // Alias en español
+    'mañana': '🌅 Mañana (8:00 AM - 12:00 PM)',
+    'tarde': '☀️ Tarde (12:00 PM - 4:00 PM)',
+    'noche': '🌙 Noche (4:00 PM - 8:00 PM)'
+  }
+
+  return mappings[slot] || timeSlot
+}
+
 type RouteType = 'orders' | 'warehouses'
 
 // ============================================================================
@@ -164,7 +199,7 @@ export default function CreateRoutePage() {
       // Manejar formato de respuesta {data: array} o array directo
       const warehousesList = warehousesData.data || warehousesData || []
       const vehiclesList = vehiclesData.data || vehiclesData || []
-      const driversList = driversData.data || driversData || []
+      const driversList = driversData.data?.users || driversData.data || driversData || []
       const zonesList = zonesData.data || zonesData || []
 
       setWarehouses(Array.isArray(warehousesList) ? warehousesList : [])
@@ -219,6 +254,12 @@ export default function CreateRoutePage() {
         reprogrammed: validOrders.filter(o => o.status === 'reprogrammed').length,
         otros: validOrders.filter(o => o.status !== 'pending' && o.status !== 'reprogrammed').length
       })
+      console.log('🚚 [Debug] Órdenes válidas por tipo:', {
+        pickup: validOrders.filter(o => o.orderType === 'recogida').length,
+        delivery: validOrders.filter(o => o.orderType === 'entrega').length,
+        office: validOrders.filter(o => o.orderType === 'oficina').length,
+        otros: validOrders.filter(o => !['recogida', 'entrega', 'oficina'].includes(o.orderType)).length
+      })
       console.log('📋 [Debug] Ejemplo de orden válida:', validOrders[0] ? {
         id: validOrders[0].id,
         orderNumber: validOrders[0].orderNumber,
@@ -254,19 +295,28 @@ export default function CreateRoutePage() {
     const timeSlotMatches = (orderTimeSlot: string, targetWindow: string) => {
       if (!orderTimeSlot) return true // Sin timeSlot = incluir en todos
 
-      const slot = orderTimeSlot.toLowerCase()
+      const slot = orderTimeSlot.toLowerCase().trim()
 
       // Mapeo directo
       if (slot === targetWindow) return true
 
-      // Mapeo de nombres a rangos
+      // Mapeo MEJORADO: usa matching exacto para rangos completos
       const mappings: Record<string, string[]> = {
         '8-12': ['morning', 'mañana', '8:00 am - 12:00 pm'],
         '12-16': ['afternoon', 'tarde', '12:00 pm - 4:00 pm'],
         '16-20': ['evening', 'noche', '4:00 pm - 8:00 pm']
       }
 
-      return mappings[targetWindow]?.some(variant => slot.includes(variant)) || false
+      const targetMappings = mappings[targetWindow] || []
+
+      return targetMappings.some(variant => {
+        // Si contiene guión (es un rango), debe ser exacto para evitar falsos positivos
+        if (variant.includes('-')) {
+          return slot === variant
+        }
+        // Para palabras sueltas (morning, afternoon, evening) sí usar includes
+        return slot.includes(variant)
+      })
     }
 
     // Ya filtramos por status en loadInitialData, solo filtramos por timeSlot aquí
@@ -333,8 +383,9 @@ export default function CreateRoutePage() {
       return null
     }
 
-    // Buscar patrón STATE zipcode (ej: "FL 33186")
-    const zipcodeMatch = addressText.match(/\b[A-Z]{2}\s+(\d{5})(?:-\d{4})?\b/)
+    // Buscar patrón STATE zipcode (ej: "FL 33186" o "FL, 33012")
+    // Acepta tanto espacio como coma+espacio entre estado y código postal
+    const zipcodeMatch = addressText.match(/\b[A-Z]{2}[,\s]+(\d{5})(?:-\d{4})?\b/)
     return zipcodeMatch ? zipcodeMatch[1] : null
   }
 
@@ -1048,6 +1099,19 @@ export default function CreateRoutePage() {
         requestBody.selectedOrders = selectedOrders
         requestBody.timeWindows = selectedTimeWindows
         requestBody.notes = notes || `Ruta optimizada - ${selectedOrders.length} órdenes`
+
+        console.log('🚀 [Frontend handleSaveRoute] Enviando request con:', {
+          selectedOrdersCount: selectedOrders.length,
+          selectedOrdersIds: selectedOrders,
+          timeWindows: selectedTimeWindows
+        })
+
+        // Log de las órdenes completas para debug
+        const fullOrders = packageOrders.filter(o => selectedOrders.includes(o.id))
+        console.log('📦 [Frontend handleSaveRoute] Órdenes completas:')
+        fullOrders.forEach(order => {
+          console.log(`  - ${order.orderNumber}: ${order.customerAddress}`)
+        })
       }
 
       const response = await fetch('/api/routes', {
@@ -1073,8 +1137,8 @@ export default function CreateRoutePage() {
         showNotification('success', 'Ruta Creada',
           `Ruta ${data.routeNumber} creada exitosamente`)
 
-        // Ir al paso 4 (éxito)
-        setCurrentStep(4)
+        // Ir al paso 5 (éxito con QR e impresión)
+        setCurrentStep(5)
       } else {
         throw new Error(data.error || 'Error al crear ruta')
       }
@@ -1721,10 +1785,10 @@ export default function CreateRoutePage() {
                           <div className="border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50 p-4">
                             <div className="space-y-2 max-h-64 overflow-y-auto">
                               {ordersInZoneAndWindow.map(order => (
-                                <label
+                                <div
                                   key={order.id}
                                   className={cn(
-                                    'flex items-center gap-3 p-3 rounded-lg border-2 cursor-pointer transition-all',
+                                    'flex items-center gap-3 p-3 rounded-lg border-2 transition-all',
                                     selectedOrders.includes(order.id)
                                       ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-500 shadow'
                                       : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 hover:border-blue-300'
@@ -1734,7 +1798,7 @@ export default function CreateRoutePage() {
                                     type="checkbox"
                                     checked={selectedOrders.includes(order.id)}
                                     onChange={() => toggleOrder(order.id)}
-                                    className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                                    className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
                                   />
                                   <div className="flex-1 min-w-0">
                                     <div className="flex items-center gap-2 mb-1">
@@ -1775,7 +1839,7 @@ export default function CreateRoutePage() {
                                       )
                                     })()}
                                   </div>
-                                </label>
+                                </div>
                               ))}
                             </div>
                           </div>
@@ -1921,7 +1985,7 @@ export default function CreateRoutePage() {
           <option value="">Sin asignar (usar QR después)</option>
           {drivers.map(d => (
             <option key={d.id} value={d.id}>
-              {d.name} {d.lastName}
+              {d.firstName} {d.lastName}
             </option>
           ))}
         </select>
@@ -2362,17 +2426,21 @@ export default function CreateRoutePage() {
 
             {/* Pages 2+: One order per page - Modern Minimal Design */}
             {routeOrders.map((order, index) => (
-              <div key={order.id} className="page-break" style={{
+              <div key={order.id} className={index > 0 ? "page-break" : ""} style={{
                 padding: '12mm 15mm',
                 fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
                 position: 'relative',
-                minHeight: '277mm'
+                minHeight: '277mm',
+                pageBreakBefore: index === 0 ? 'always' : 'auto'
               }}>
                 {/* Header con QR */}
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8mm', borderBottom: '1px solid #e5e7eb', paddingBottom: '5mm' }}>
                   <div style={{ flex: 1 }}>
                     <p style={{ fontSize: '9pt', color: '#9ca3af', margin: '0 0 1mm 0', letterSpacing: '0.5px' }}>
                       PARADA {index + 1} DE {routeOrders.length}
+                      {order.orderType === 'recogida' && ' • 📦 RECOGIDA'}
+                      {order.orderType === 'entrega' && ' • 🚚 ENTREGA'}
+                      {order.orderType === 'oficina' && ' • 🏢 OFICINA'}
                     </p>
                     <h1 style={{ fontSize: '24pt', fontWeight: '700', margin: '0', color: '#111827', letterSpacing: '-0.5px' }}>
                       {order.orderNumber || `PACK-${String(order.id).padStart(6, '0')}`}
@@ -2392,25 +2460,37 @@ export default function CreateRoutePage() {
                 <div style={{ marginBottom: '6mm', padding: '4mm', backgroundColor: '#f9fafb', borderRadius: '2mm', border: '1px solid #e5e7eb' }}>
                   <p style={{ fontSize: '8pt', color: '#6b7280', margin: '0 0 2mm 0', textTransform: 'uppercase', letterSpacing: '1px', fontWeight: '600' }}>Cliente</p>
                   <p style={{ fontSize: '14pt', fontWeight: '600', color: '#111827', margin: '0 0 2mm 0' }}>
-                    {order.firstName} {order.lastName}
+                    {order.firstName && order.lastName
+                      ? `${order.firstName} ${order.lastName}`
+                      : order.officeOrderData?.senderName || order.customerName || 'Cliente no especificado'}
                   </p>
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '3mm', marginTop: '3mm' }}>
                     <div>
                       <p style={{ fontSize: '8pt', color: '#6b7280', margin: '0' }}>📞 Teléfono</p>
-                      <p style={{ fontSize: '11pt', color: '#111827', margin: '1mm 0 0 0', fontWeight: '500' }}>{order.phone || 'N/A'}</p>
+                      <p style={{ fontSize: '11pt', color: '#111827', margin: '1mm 0 0 0', fontWeight: '500' }}>
+                        {order.phone || order.officeOrderData?.senderPhone || 'N/A'}
+                      </p>
                     </div>
                     <div>
                       <p style={{ fontSize: '8pt', color: '#6b7280', margin: '0' }}>✉️ Email</p>
-                      <p style={{ fontSize: '11pt', color: '#111827', margin: '1mm 0 0 0', fontWeight: '500' }}>{order.email || 'N/A'}</p>
+                      <p style={{ fontSize: '11pt', color: '#111827', margin: '1mm 0 0 0', fontWeight: '500' }}>
+                        {order.email || order.officeOrderData?.senderEmail || 'N/A'}
+                      </p>
                     </div>
                   </div>
                 </div>
 
                 {/* Dirección */}
                 <div style={{ marginBottom: '6mm', padding: '4mm', backgroundColor: '#ecfdf5', borderRadius: '2mm', border: '1px solid #a7f3d0' }}>
-                  <p style={{ fontSize: '8pt', color: '#065f46', margin: '0 0 2mm 0', textTransform: 'uppercase', letterSpacing: '1px', fontWeight: '600' }}>📍 Dirección de Entrega</p>
+                  <p style={{ fontSize: '8pt', color: '#065f46', margin: '0 0 2mm 0', textTransform: 'uppercase', letterSpacing: '1px', fontWeight: '600' }}>
+                    📍 Dirección de {order.orderType === 'recogida' ? 'Recogida' : 'Entrega'}
+                  </p>
                   <p style={{ fontSize: '13pt', fontWeight: '700', color: '#064e3b', margin: '0', lineHeight: 1.4 }}>
-                    {order.address || order.customerAddress?.street || 'N/A'}
+                    {order.address
+                      || (typeof order.customerAddress === 'string' ? order.customerAddress : order.customerAddress?.street)
+                      || order.officeOrderData?.senderAddress
+                      || order.officeOrderData?.destination?.fullAddress
+                      || 'N/A'}
                   </p>
                   {order.customerAddress && typeof order.customerAddress === 'object' && order.customerAddress.city && (
                     <p style={{ fontSize: '10pt', color: '#047857', margin: '2mm 0 0 0' }}>
@@ -2473,8 +2553,9 @@ export default function CreateRoutePage() {
                     <p style={{ fontSize: '12pt', fontWeight: '700', color: '#1e40af', margin: '1mm 0 0 0' }}>{order.status}</p>
                   </div>
                   <div style={{ padding: '3mm', backgroundColor: '#f5f3ff', borderRadius: '2mm', border: '1px solid #ddd6fe' }}>
-                    <p style={{ fontSize: '8pt', color: '#5b21b6', margin: '0' }}>📅 Fecha</p>
-                    <p style={{ fontSize: '12pt', fontWeight: '700', color: '#6b21a8', margin: '1mm 0 0 0' }}>{order.scheduledDate || order.date}</p>
+                    <p style={{ fontSize: '8pt', color: '#5b21b6', margin: '0' }}>📅 Fecha y Horario</p>
+                    <p style={{ fontSize: '10pt', fontWeight: '700', color: '#6b21a8', margin: '1mm 0 0 0' }}>{order.scheduledDate || order.date}</p>
+                    <p style={{ fontSize: '9pt', fontWeight: '500', color: '#7c3aed', margin: '1mm 0 0 0' }}>{formatTimeSlot(order.timeSlot)}</p>
                   </div>
                   <div style={{ padding: '3mm', backgroundColor: '#f0fdf4', borderRadius: '2mm', border: '1px solid #bbf7d0' }}>
                     <p style={{ fontSize: '8pt', color: '#14532d', margin: '0' }}>💳 Pago</p>

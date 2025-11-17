@@ -67,12 +67,13 @@ export default function PackageDeliveryMap({
     }
 
     // Intentar múltiples patrones para extraer zipcode:
-    // 1. Patrón "STATE zipcode" (ej: "FL 33186")
-    let zipcodeMatch = addressText.match(/\b[A-Z]{2}\s+(\d{5})(?:-\d{4})?\b/)
+    // 1. Patrón "STATE zipcode" (ej: "FL 33186" o "FL, 33142")
+    // Acepta tanto espacio como coma+espacio entre estado y código postal
+    let zipcodeMatch = addressText.match(/\b[A-Z]{2}[,\s]+(\d{5})(?:-\d{4})?\b/)
     if (zipcodeMatch) return zipcodeMatch[1]
 
     // 2. Patrón "state_name zipcode" (ej: "florida 33186", "miami florida 33186")
-    zipcodeMatch = addressText.match(/(?:florida|miami|kentucky|texas|california|new york)\s+(\d{5})(?:-\d{4})?\b/i)
+    zipcodeMatch = addressText.match(/(?:florida|miami|kentucky|texas|california|new york)[,\s]+(\d{5})(?:-\d{4})?\b/i)
     if (zipcodeMatch) return zipcodeMatch[1]
 
     // 3. Cualquier secuencia de 5 dígitos al final o en medio de la dirección

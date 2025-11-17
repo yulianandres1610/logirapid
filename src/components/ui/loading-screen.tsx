@@ -73,7 +73,7 @@ export function LoadingScreen({ onComplete }: LoadingScreenProps) {
           {/* Logo Image */}
           <motion.img
             src="/images/logoheader.png"
-            alt="CUBARAPID"
+            alt="LogiRapid"
             className="w-48 h-auto object-contain relative z-10"
             animate={{
               rotateY: [0, 360],
@@ -88,7 +88,7 @@ export function LoadingScreen({ onComplete }: LoadingScreenProps) {
               target.style.display = 'none'
               const parent = target.parentElement
               if (parent) {
-                parent.innerHTML = '<div class="text-white font-bold text-4xl tracking-wider">CUBARAPID</div>'
+                parent.innerHTML = '<div class="text-white font-bold text-4xl tracking-wider">LogiRapid</div>'
               }
             }}
           />
@@ -123,7 +123,7 @@ export function LoadingScreen({ onComplete }: LoadingScreenProps) {
               ease: "easeInOut"
             }}
           >
-            CUBARAPID
+            LogiRapid
           </motion.h1>
 
           <motion.p

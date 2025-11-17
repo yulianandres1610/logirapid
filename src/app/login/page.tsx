@@ -62,8 +62,8 @@ export default function LoginPage() {
             className="flex justify-center pt-8 pb-4"
           >
             <img
-              src="/images/logoheader.png"
-              alt="CUBARAPID"
+              src="/logo-blanco.png"
+              alt="LogiRapid"
               className="object-contain w-full max-w-xs h-auto"
               onError={(e) => {
                 console.error('Error loading logo:', e);
@@ -73,7 +73,7 @@ export default function LoginPage() {
                 if (parent) {
                   parent.innerHTML = `
                     <div class="text-white font-bold text-3xl tracking-wider px-4 py-2">
-                      CUBARAPID
+                      LogiRapid
                     </div>
                   `;
                 }
@@ -108,7 +108,7 @@ export default function LoginPage() {
           className="text-center mt-8"
         >
           <p className="text-gray-500 text-xs">
-            © 2024 CUBARAPID. Todos los derechos reservados.
+            © 2024 LogiRapid. Todos los derechos reservados.
           </p>
         </motion.div>
       </div>

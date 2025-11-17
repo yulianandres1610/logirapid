@@ -65,6 +65,7 @@ function generateQRCode(routeId: number, routeNumber: string): string {
  * Esto es crítico para evitar paradas duplicadas
  */
 function groupOrdersByAddress(orders: any[]) {
+  console.log(`\n🗺️ [groupOrdersByAddress] Procesando ${orders.length} órdenes`)
   const addressMap = new Map<string, any>()
 
   orders.forEach(order => {
@@ -77,15 +78,23 @@ function groupOrdersByAddress(orders: any[]) {
     }
 
     // Normalizar dirección de texto para agrupar
+    // Solo normalizar mayúsculas/minúsculas y espacios múltiples
+    // MANTENER números y caracteres importantes para diferenciar direcciones
     const normalizedAddress = addressText
       .toLowerCase()
       .trim()
-      .replace(/[.,\/#!$%\^&\*;:{}=\-_`~()]/g, '')
-      .replace(/\s+/g, ' ')
+      .replace(/\s+/g, ' ')  // Solo normalizar espacios múltiples
+
+    console.log(`  📍 [${order.orderNumber}]:`, {
+      addressOriginal: addressText,
+      addressNormalized: normalizedAddress,
+      alreadyExists: addressMap.has(normalizedAddress)
+    })
 
     if (addressMap.has(normalizedAddress)) {
       // Dirección ya existe, agregar orden al grupo
       const existing = addressMap.get(normalizedAddress)
+      console.log(`    ⚠️ Dirección duplicada! Agregando al grupo existente con ${existing.orderNumbers.join(', ')}`)
       existing.orderIds.push(order.id)
       existing.orderNumbers.push(order.orderNumber || `PACK-${String(order.id).padStart(6, '0')}`)
       existing.orders.push({
@@ -98,6 +107,7 @@ function groupOrdersByAddress(orders: any[]) {
       existing.totalOrders++
     } else {
       // Nueva dirección
+      console.log(`    ✅ Nueva dirección única`)
       addressMap.set(normalizedAddress, {
         address: addressText,
         latitude: order.latitude,
@@ -120,14 +130,20 @@ function groupOrdersByAddress(orders: any[]) {
     }
   })
 
-  return Array.from(addressMap.values())
+  const result = Array.from(addressMap.values())
+  console.log(`✅ [groupOrdersByAddress] Resultado: ${result.length} paradas únicas de ${orders.length} órdenes`)
+  result.forEach((stop, idx) => {
+    console.log(`  Parada ${idx + 1}: ${stop.orderNumbers.join(', ')} - ${stop.address}`)
+  })
+
+  return result
 }
 
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url)
     const page = parseInt(searchParams.get('page') || '1')
-    const limit = parseInt(searchParams.get('limit') || '10')
+    const limit = parseInt(searchParams.get('limit') || '25')
     const search = searchParams.get('search') || ''
     const status = searchParams.get('status') || ''
     const dayFilter = searchParams.get('dayFilter') || ''
@@ -580,6 +596,9 @@ export async function POST(request: NextRequest) {
 
     console.log(`📋 [Órdenes] Total en BD: ${ordersData.data?.length || 0}`)
 
+    console.log(`📋 [Body] selectedOrders recibidos del frontend:`, body.selectedOrders)
+    console.log(`📋 [Body] Total IDs en selectedOrders:`, body.selectedOrders?.length || 0)
+
     // Filtrar órdenes seleccionadas con coordenadas válidas
     const selectedOrders = ordersData.data?.filter((order: any) => {
       const isSelected = body.selectedOrders && body.selectedOrders.includes(order.id)
@@ -587,10 +606,25 @@ export async function POST(request: NextRequest) {
                        order.latitude !== 0 && order.longitude !== 0
       const isValidStatus = order.status === 'pending' || order.status === 'reprogrammed'
 
-      return isSelected && hasCoords && (shouldSaveRoute ? isValidStatus : true)
+      const passes = isSelected && hasCoords && (shouldSaveRoute ? isValidStatus : true)
+
+      if (isSelected) {
+        console.log(`  📦 [Order ${order.id}] ${order.orderNumber}:`, {
+          isSelected,
+          hasCoords,
+          isValidStatus,
+          passes,
+          address: order.customerAddress
+        })
+      }
+
+      return passes
     }) || []
 
     console.log(`✅ [Filtrado] ${selectedOrders.length} órdenes válidas seleccionadas`)
+    selectedOrders.forEach(order => {
+      console.log(`  ✅ ${order.orderNumber}: ${order.customerAddress}`)
+    })
 
     if (selectedOrders.length === 0) {
       return NextResponse.json(
@@ -607,10 +641,28 @@ export async function POST(request: NextRequest) {
     // Definir orden cronológico de horarios
     const timeSlotOrder = ['morning', 'afternoon', 'evening', '8-12', '12-16', '16-20']
 
+    // Función para normalizar valores legacy de timeSlot
+    const normalizeTimeSlot = (timeSlot: string | null | undefined): string => {
+      if (!timeSlot) return 'morning'
+
+      const normalized = timeSlot.toLowerCase().trim()
+
+      // Mapear valores legacy a formato estándar
+      if (normalized === '8-12' || normalized === '8:00 am - 12:00 pm') return 'morning'
+      if (normalized === '12-4' || normalized === '12-16' || normalized === '12:00 pm - 4:00 pm') return 'afternoon'
+      if (normalized === '4-8' || normalized === '16-20' || normalized === '4:00 pm - 8:00 pm') return 'evening'
+
+      // Si ya está en formato estándar, retornar tal cual
+      if (['morning', 'afternoon', 'evening'].includes(normalized)) return normalized
+
+      // Fallback a morning si no se reconoce
+      return 'morning'
+    }
+
     // Agrupar órdenes por timeSlot
     const ordersByTimeSlot = new Map<string, any[]>()
     selectedOrders.forEach(order => {
-      const timeSlot = order.timeSlot || 'morning'
+      const timeSlot = normalizeTimeSlot(order.timeSlot)
       if (!ordersByTimeSlot.has(timeSlot)) {
         ordersByTimeSlot.set(timeSlot, [])
       }

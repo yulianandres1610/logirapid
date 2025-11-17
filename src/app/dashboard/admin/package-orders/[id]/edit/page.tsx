@@ -52,7 +52,7 @@ interface PackageOrder {
   notes?: string
   scheduledDate?: string
   timeSlot?: string
-  status: 'pending' | 'in_transit' | 'reprogrammed' | 'picked_up' | 'delivered' | 'cancelled'
+  status: 'pending' | 'reprogrammed' | 'picked_up' | 'in_transit' | 'in_route' | 'delivered'
   createdAt: string
   updatedAt: string
   firstName?: string
@@ -157,7 +157,7 @@ export default function EditPackageOrderPage() {
   const [selectedServices, setSelectedServices] = useState<string[]>([])
   const [serviceConfigurations, setServiceConfigurations] = useState<{ [serviceName: string]: any }>({})
   const [formData, setFormData] = useState({
-    status: 'pending' as 'pending' | 'reprogrammed' | 'in_transit' | 'delivered' | 'cancelled',
+    status: 'pending' as 'pending' | 'reprogrammed' | 'picked_up' | 'in_transit' | 'in_route' | 'delivered',
     scheduledDate: '',
     timeSlot: '',
     notes: ''

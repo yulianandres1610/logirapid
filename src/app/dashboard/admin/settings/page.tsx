@@ -6,6 +6,8 @@ import { DashboardLayout } from '@/components/layout/dashboard-layout'
 import { cn } from '@/lib/utils'
 import { useTheme } from '@/contexts/theme-context'
 import { useNotifications } from '@/contexts/NotificationContext'
+import ServicesManagement from '@/components/settings/ServicesManagement'
+import ContentTypesManagement from '@/components/settings/ContentTypesManagement'
 import {
   Palette,
   Package,
@@ -21,7 +23,9 @@ import {
   MapPin,
   FileText,
   Image,
-  Maximize2
+  Maximize2,
+  Tag,
+  Ruler
 } from 'lucide-react'
 
 interface Zone {
@@ -80,6 +84,7 @@ export default function SettingsPage() {
     const validTabs = ['brand', 'remittance', 'recharge', 'marketplace', 'package']
     return tabFromUrl && validTabs.includes(tabFromUrl) ? tabFromUrl : 'brand'
   })
+  const [packageSubTab, setPackageSubTab] = useState<'zones' | 'sizes' | 'services' | 'content-types'>('zones')
   const [zones, setZones] = useState<Zone[]>([])
   const [packageSizes, setPackageSizes] = useState<PackageSize[]>([])
   const [isAddingZone, setIsAddingZone] = useState(false)
@@ -89,9 +94,6 @@ export default function SettingsPage() {
   const [isSavingZone, setIsSavingZone] = useState(false)
   const [isSavingSize, setIsSavingSize] = useState(false)
   const [isLoadingZones, setIsLoadingZones] = useState(true)
-  const [isSavingLabelSettings, setIsSavingLabelSettings] = useState(false)
-  const [isUploadingLogo, setIsUploadingLogo] = useState(false)
-  const [isEditingLabels, setIsEditingLabels] = useState(false)
 
   // Estado para marca blanca
   const [brandSettings, setBrandSettings] = useState({
@@ -99,22 +101,6 @@ export default function SettingsPage() {
     primaryColor: '#8B5CF6',
     secondaryColor: '#10B981',
     accentColor: '#F59E0B',
-  })
-
-  // Estado para configuración de etiquetas
-  const [labelSettings, setLabelSettings] = useState({
-    labelType: 'shipping', // shipping, package
-    size: '4x6', // Tamaño de etiqueta
-    customWidth: 4,
-    customHeight: 6,
-    logo: '',
-    showLogo: true,
-    showBarcode: true,
-    showQR: false,
-    fontSize: 'medium',
-    template: 'classic', // classic, modern, minimal
-    logoPosition: 'top', // top, bottom, left, right
-    logoSize: 'medium', // small, medium, large
   })
 
   // Estados para el formulario de zona
@@ -150,22 +136,7 @@ export default function SettingsPage() {
   useEffect(() => {
     loadZones()
     loadPackageSizes()
-    loadLabelSettings()
   }, [])
-
-  const loadLabelSettings = async () => {
-    try {
-      const response = await fetch('/api/label-settings')
-      if (response.ok) {
-        const data = await response.json()
-        if (data.success && data.data) {
-          setLabelSettings(data.data)
-        }
-      }
-    } catch (error) {
-      console.error('Error loading label settings:', error)
-    }
-  }
 
   const loadZones = async () => {
     setIsLoadingZones(true)
@@ -412,61 +383,6 @@ export default function SettingsPage() {
     }
   }
 
-  const handleLogoUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0]
-    if (!file) return
-
-    setIsUploadingLogo(true)
-    try {
-      const formData = new FormData()
-      formData.append('logo', file)
-
-      const response = await fetch('/api/upload-logo', {
-        method: 'POST',
-        body: formData
-      })
-
-      const data = await response.json()
-
-      if (data.success) {
-        setLabelSettings({...labelSettings, logo: data.url})
-        showNotification('success', 'Logo subido', 'El logo se ha subido exitosamente')
-      } else {
-        showNotification('error', 'Error', data.error || 'Error al subir el logo')
-      }
-    } catch (error) {
-      console.error('Error uploading logo:', error)
-      showNotification('error', 'Error', 'Error al subir el logo')
-    } finally {
-      setIsUploadingLogo(false)
-    }
-  }
-
-  const handleSaveLabelSettings = async () => {
-    setIsSavingLabelSettings(true)
-    try {
-      const response = await fetch('/api/label-settings', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(labelSettings)
-      })
-
-      const data = await response.json()
-
-      if (data.success) {
-        showNotification('success', 'Configuración guardada', 'La configuración de etiquetas se guardó exitosamente')
-        setIsEditingLabels(false) // Cerrar el formulario después de guardar
-      } else {
-        showNotification('error', 'Error', data.error || 'Error al guardar la configuración')
-      }
-    } catch (error) {
-      console.error('Error saving label settings:', error)
-      showNotification('error', 'Error', 'Error al guardar la configuración')
-    } finally {
-      setIsSavingLabelSettings(false)
-    }
-  }
-
   const renderTabContent = () => {
     switch (activeTab) {
       case 'brand':
@@ -620,11 +536,64 @@ export default function SettingsPage() {
         )
 
       case 'package':
+        const packageSubTabs = [
+          { id: 'zones', label: 'Zonas', icon: MapPin },
+          { id: 'sizes', label: 'Tamaños', icon: Ruler },
+          { id: 'services', label: 'Servicios', icon: Package },
+          { id: 'content-types', label: 'Tipos de Contenido', icon: Tag }
+        ]
+
         return (
           <div className="space-y-6">
             <h2 className="text-2xl font-bold mb-4">Configuración de Paquetería</h2>
 
+            {/* Package Sub-Tabs */}
+            <div className="mb-6">
+              <div className={cn(
+                "flex space-x-1 p-1 rounded-xl",
+                theme === 'dark' ? 'bg-gray-800' : 'bg-gray-100'
+              )}>
+                {packageSubTabs.map((tab) => {
+                  const Icon = tab.icon
+                  return (
+                    <button
+                      key={tab.id}
+                      onClick={() => setPackageSubTab(tab.id as any)}
+                      className={cn(
+                        "flex items-center gap-2 px-4 py-2.5 rounded-lg font-medium transition-all",
+                        packageSubTab === tab.id
+                          ? theme === 'dark'
+                            ? 'bg-gray-700 text-white shadow-sm'
+                            : 'bg-white text-gray-900 shadow-sm'
+                          : theme === 'dark'
+                            ? 'text-gray-400 hover:text-gray-200'
+                            : 'text-gray-600 hover:text-gray-900'
+                      )}
+                    >
+                      <Icon className="w-4 h-4" />
+                      {tab.label}
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+
+            {/* Services Tab */}
+            {packageSubTab === 'services' && (
+              <div className="bg-white dark:bg-gray-800 rounded-xl p-6 shadow-sm">
+                <ServicesManagement />
+              </div>
+            )}
+
+            {/* Content Types Tab */}
+            {packageSubTab === 'content-types' && (
+              <div className="bg-white dark:bg-gray-800 rounded-xl p-6 shadow-sm">
+                <ContentTypesManagement />
+              </div>
+            )}
+
             {/* Zones Section */}
+            {packageSubTab === 'zones' && (
             <div className="bg-white dark:bg-gray-800 rounded-xl p-6 shadow-sm">
               <div className="flex justify-between items-center mb-4">
                 <h3 className="text-lg font-semibold">Zonas de Entrega</h3>
@@ -632,6 +601,10 @@ export default function SettingsPage() {
                   onClick={() => {
                     setIsAddingZone(true)
                     setZipCodeInput('')
+                    // Scroll suave hacia el formulario de creación
+                    setTimeout(() => {
+                      window.scrollTo({ top: 0, behavior: 'smooth' })
+                    }, 100)
                   }}
                   className={cn(
                     "px-4 py-2 rounded-lg font-medium flex items-center gap-2",
@@ -961,6 +934,10 @@ export default function SettingsPage() {
                             })
                             setIsAddingZone(false)
                             setZipCodeInput('')
+                            // Scroll suave hacia el formulario de edición
+                            setTimeout(() => {
+                              window.scrollTo({ top: 0, behavior: 'smooth' })
+                            }, 100)
                           }}
                           className="p-2 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors"
                         >
@@ -1045,13 +1022,21 @@ export default function SettingsPage() {
 }
               </div>
             </div>
+            )}
 
             {/* Package Sizes Section */}
+            {packageSubTab === 'sizes' && (
             <div className="bg-white dark:bg-gray-800 rounded-xl p-6 shadow-sm">
               <div className="flex justify-between items-center mb-4">
                 <h3 className="text-lg font-semibold">Tamaños de Empaques</h3>
                 <button
-                  onClick={() => setIsAddingSize(true)}
+                  onClick={() => {
+                    setIsAddingSize(true)
+                    // Scroll suave hacia el formulario de creación
+                    setTimeout(() => {
+                      window.scrollTo({ top: 0, behavior: 'smooth' })
+                    }, 100)
+                  }}
                   className={cn(
                     "px-4 py-2 rounded-lg font-medium flex items-center gap-2",
                     "bg-exa-primary text-white hover:opacity-90 transition-opacity"
@@ -1222,6 +1207,10 @@ export default function SettingsPage() {
                           setEditingSize(size)
                           setNewSize(size)
                           setIsAddingSize(false)
+                          // Scroll suave hacia el formulario de edición
+                          setTimeout(() => {
+                            window.scrollTo({ top: 0, behavior: 'smooth' })
+                          }, 100)
                         }}
                         className="p-2 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg"
                       >
@@ -1238,646 +1227,8 @@ export default function SettingsPage() {
                 ))}
               </div>
             </div>
+            )}
 
-            {/* Label Configuration Section */}
-            <div className="bg-white dark:bg-gray-800 rounded-xl p-6 shadow-sm">
-              <div className="flex justify-between items-center mb-6">
-                <div>
-                  <h3 className="text-lg font-semibold flex items-center gap-2">
-                    <FileText className="w-5 h-5" />
-                    Configuración de Etiquetas de Envío
-                  </h3>
-                  <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-                    Personaliza el diseño y formato de las etiquetas de paquetería
-                  </p>
-                </div>
-                {!isEditingLabels && (
-                  <button
-                    onClick={() => setIsEditingLabels(true)}
-                    className={cn(
-                      "px-4 py-2 rounded-lg font-medium flex items-center gap-2",
-                      "bg-exa-primary text-white hover:opacity-90 transition-opacity"
-                    )}
-                  >
-                    <Edit className="w-4 h-4" />
-                    Configurar Etiquetas
-                  </button>
-                )}
-              </div>
-
-              {/* Label Configuration Form */}
-              {isEditingLabels && (
-              <div className="space-y-6">
-              <div className="mb-6">
-                <label className="block text-sm font-medium mb-3">Tipo de Etiqueta</label>
-                <div className="grid grid-cols-2 gap-4">
-                  <button
-                    type="button"
-                    onClick={() => setLabelSettings({...labelSettings, labelType: 'shipping'})}
-                    className={cn(
-                      "p-4 rounded-lg border-2 text-left transition-all",
-                      labelSettings.labelType === 'shipping'
-                        ? theme === 'dark'
-                          ? 'border-blue-500 bg-blue-900/30 text-white'
-                          : 'border-blue-500 bg-blue-50 text-blue-900'
-                        : theme === 'dark'
-                          ? 'border-gray-600 bg-gray-700/50 text-gray-300 hover:border-gray-500'
-                          : 'border-gray-300 bg-white text-gray-700 hover:border-gray-400'
-                    )}
-                  >
-                    <div className="flex items-center gap-3 mb-2">
-                      <Truck className="w-5 h-5" />
-                      <span className="font-semibold">Etiqueta de Envío</span>
-                    </div>
-                    <p className="text-xs opacity-70">
-                      Para pegar en el exterior del paquete con información de envío completa
-                    </p>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => setLabelSettings({...labelSettings, labelType: 'package'})}
-                    className={cn(
-                      "p-4 rounded-lg border-2 text-left transition-all",
-                      labelSettings.labelType === 'package'
-                        ? theme === 'dark'
-                          ? 'border-blue-500 bg-blue-900/30 text-white'
-                          : 'border-blue-500 bg-blue-50 text-blue-900'
-                        : theme === 'dark'
-                          ? 'border-gray-600 bg-gray-700/50 text-gray-300 hover:border-gray-500'
-                          : 'border-gray-300 bg-white text-gray-700 hover:border-gray-400'
-                    )}
-                  >
-                    <div className="flex items-center gap-3 mb-2">
-                      <Package className="w-5 h-5" />
-                      <span className="font-semibold">Etiqueta de Empaque</span>
-                    </div>
-                    <p className="text-xs opacity-70">
-                      Para incluir dentro del paquete con detalles del contenido
-                    </p>
-                  </button>
-                </div>
-              </div>
-
-              {/* Label Size Selection */}
-              <div className="mb-6">
-                <label className="block text-sm font-medium mb-3">Tamaño de Etiqueta</label>
-                <div className="grid grid-cols-4 gap-3">
-                  {[
-                    { value: '4x6', label: '4" x 6"', desc: 'Estándar' },
-                    { value: '4x4', label: '4" x 4"', desc: 'Cuadrada' },
-                    { value: '2x3', label: '2" x 3"', desc: 'Pequeña' },
-                    { value: 'custom', label: 'Personalizado', desc: 'Custom' }
-                  ].map((size) => (
-                    <button
-                      key={size.value}
-                      type="button"
-                      onClick={() => setLabelSettings({...labelSettings, size: size.value})}
-                      className={cn(
-                        "p-4 rounded-lg border-2 text-left transition-all",
-                        labelSettings.size === size.value
-                          ? theme === 'dark'
-                            ? 'border-blue-500 bg-blue-900/30 text-white'
-                            : 'border-blue-500 bg-blue-50 text-blue-900'
-                          : theme === 'dark'
-                            ? 'border-gray-600 bg-gray-700/50 text-gray-300 hover:border-gray-500'
-                            : 'border-gray-300 bg-white text-gray-700 hover:border-gray-400'
-                      )}
-                    >
-                      <div className="flex items-center gap-2 mb-1">
-                        <Maximize2 className="w-4 h-4" />
-                        <span className="font-semibold">{size.label}</span>
-                      </div>
-                      <span className="text-xs opacity-70">{size.desc}</span>
-                    </button>
-                  ))}
-                </div>
-
-                {/* Custom size inputs */}
-                {labelSettings.size === 'custom' && (
-                  <div className="grid grid-cols-2 gap-4 mt-4 p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
-                    <div>
-                      <label className="block text-sm font-medium mb-2">Ancho (pulgadas)</label>
-                      <input
-                        type="number"
-                        value={labelSettings.customWidth}
-                        onChange={(e) => setLabelSettings({...labelSettings, customWidth: parseFloat(e.target.value)})}
-                        className={cn(
-                          "w-full px-3 py-2 rounded-lg border",
-                          theme === 'dark'
-                            ? 'bg-gray-700 border-gray-600 text-white'
-                            : 'bg-white border-gray-300'
-                        )}
-                        min="1"
-                        max="12"
-                        step="0.25"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium mb-2">Alto (pulgadas)</label>
-                      <input
-                        type="number"
-                        value={labelSettings.customHeight}
-                        onChange={(e) => setLabelSettings({...labelSettings, customHeight: parseFloat(e.target.value)})}
-                        className={cn(
-                          "w-full px-3 py-2 rounded-lg border",
-                          theme === 'dark'
-                            ? 'bg-gray-700 border-gray-600 text-white'
-                            : 'bg-white border-gray-300'
-                        )}
-                        min="1"
-                        max="12"
-                        step="0.25"
-                      />
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* Logo Configuration */}
-              <div className="mb-6 p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
-                <h4 className="text-sm font-semibold mb-4 flex items-center gap-2">
-                  <Image className="w-4 h-4" />
-                  Logo en Etiqueta
-                </h4>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="flex items-center mb-3">
-                      <input
-                        type="checkbox"
-                        checked={labelSettings.showLogo}
-                        onChange={(e) => setLabelSettings({...labelSettings, showLogo: e.target.checked})}
-                        className="mr-2 w-4 h-4"
-                      />
-                      <span className="text-sm font-medium">Mostrar logo en etiqueta</span>
-                    </label>
-
-                    {labelSettings.showLogo && (
-                      <>
-                        <div className="mb-3">
-                          <label className="block text-sm font-medium mb-2">Logo</label>
-                          <input
-                            type="file"
-                            id="logo-upload"
-                            accept="image/png,image/jpeg,image/jpg,image/svg+xml,image/webp"
-                            onChange={handleLogoUpload}
-                            className="hidden"
-                          />
-                          <label
-                            htmlFor="logo-upload"
-                            className={cn(
-                              "w-full h-32 rounded-lg border-2 border-dashed flex items-center justify-center cursor-pointer hover:border-blue-500 transition-colors relative",
-                              theme === 'dark' ? 'border-gray-600 bg-gray-700' : 'border-gray-300 bg-white'
-                            )}
-                          >
-                            {isUploadingLogo ? (
-                              <div className="text-center">
-                                <div className="w-8 h-8 mx-auto mb-2 border-2 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
-                                <p className="text-xs text-gray-500">Subiendo...</p>
-                              </div>
-                            ) : labelSettings.logo ? (
-                              <>
-                                <img src={labelSettings.logo} alt="Logo" className="max-w-full max-h-full object-contain p-2" />
-                                <div className="absolute inset-0 bg-black bg-opacity-0 hover:bg-opacity-50 transition-all flex items-center justify-center opacity-0 hover:opacity-100">
-                                  <p className="text-white text-sm">Click para cambiar</p>
-                                </div>
-                              </>
-                            ) : (
-                              <div className="text-center">
-                                <Upload className="w-8 h-8 mx-auto text-gray-400 mb-2" />
-                                <p className="text-xs text-gray-500">Click para subir logo</p>
-                                <p className="text-xs text-gray-400 mt-1">PNG, JPG, SVG (Max. 2MB)</p>
-                              </div>
-                            )}
-                          </label>
-                        </div>
-                      </>
-                    )}
-                  </div>
-
-                  {labelSettings.showLogo && (
-                    <div>
-                      <div className="mb-3">
-                        <label className="block text-sm font-medium mb-2">Posición del Logo</label>
-                        <select
-                          value={labelSettings.logoPosition}
-                          onChange={(e) => setLabelSettings({...labelSettings, logoPosition: e.target.value})}
-                          className={cn(
-                            "w-full px-3 py-2 rounded-lg border",
-                            theme === 'dark'
-                              ? 'bg-gray-700 border-gray-600 text-white'
-                              : 'bg-white border-gray-300'
-                          )}
-                        >
-                          <option value="top">Superior</option>
-                          <option value="bottom">Inferior</option>
-                          <option value="left">Izquierda</option>
-                          <option value="right">Derecha</option>
-                        </select>
-                      </div>
-
-                      <div>
-                        <label className="block text-sm font-medium mb-2">Tamaño del Logo</label>
-                        <select
-                          value={labelSettings.logoSize}
-                          onChange={(e) => setLabelSettings({...labelSettings, logoSize: e.target.value})}
-                          className={cn(
-                            "w-full px-3 py-2 rounded-lg border",
-                            theme === 'dark'
-                              ? 'bg-gray-700 border-gray-600 text-white'
-                              : 'bg-white border-gray-300'
-                          )}
-                        >
-                          <option value="small">Pequeño</option>
-                          <option value="medium">Mediano</option>
-                          <option value="large">Grande</option>
-                        </select>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* Elements to Display */}
-              <div className="mb-6">
-                <label className="block text-sm font-medium mb-3">Elementos a Mostrar</label>
-                <div className="grid grid-cols-2 gap-3">
-                  <label className={cn(
-                    "flex items-center p-3 rounded-lg border cursor-pointer transition-colors",
-                    labelSettings.showBarcode
-                      ? theme === 'dark'
-                        ? 'border-blue-500 bg-blue-900/20'
-                        : 'border-blue-500 bg-blue-50'
-                      : theme === 'dark'
-                        ? 'border-gray-600 bg-gray-700/50'
-                        : 'border-gray-300 bg-white'
-                  )}>
-                    <input
-                      type="checkbox"
-                      checked={labelSettings.showBarcode}
-                      onChange={(e) => setLabelSettings({...labelSettings, showBarcode: e.target.checked})}
-                      className="mr-3 w-4 h-4"
-                    />
-                    <div>
-                      <div className="font-medium text-sm">Código de Barras</div>
-                      <div className="text-xs opacity-70">Barcode 1D</div>
-                    </div>
-                  </label>
-
-                  <label className={cn(
-                    "flex items-center p-3 rounded-lg border cursor-pointer transition-colors",
-                    labelSettings.showQR
-                      ? theme === 'dark'
-                        ? 'border-blue-500 bg-blue-900/20'
-                        : 'border-blue-500 bg-blue-50'
-                      : theme === 'dark'
-                        ? 'border-gray-600 bg-gray-700/50'
-                        : 'border-gray-300 bg-white'
-                  )}>
-                    <input
-                      type="checkbox"
-                      checked={labelSettings.showQR}
-                      onChange={(e) => setLabelSettings({...labelSettings, showQR: e.target.checked})}
-                      className="mr-3 w-4 h-4"
-                    />
-                    <div>
-                      <div className="font-medium text-sm">Código QR</div>
-                      <div className="text-xs opacity-70">Quick Response</div>
-                    </div>
-                  </label>
-                </div>
-              </div>
-
-              {/* Font Size */}
-              <div className="mb-6">
-                <label className="block text-sm font-medium mb-3">Tamaño de Fuente</label>
-                <div className="grid grid-cols-3 gap-3">
-                  {[
-                    { value: 'small', label: 'Pequeña', size: '12px' },
-                    { value: 'medium', label: 'Mediana', size: '14px' },
-                    { value: 'large', label: 'Grande', size: '16px' }
-                  ].map((font) => (
-                    <button
-                      key={font.value}
-                      type="button"
-                      onClick={() => setLabelSettings({...labelSettings, fontSize: font.value})}
-                      className={cn(
-                        "p-3 rounded-lg border-2 transition-all",
-                        labelSettings.fontSize === font.value
-                          ? theme === 'dark'
-                            ? 'border-blue-500 bg-blue-900/30 text-white'
-                            : 'border-blue-500 bg-blue-50 text-blue-900'
-                          : theme === 'dark'
-                            ? 'border-gray-600 bg-gray-700/50 text-gray-300 hover:border-gray-500'
-                            : 'border-gray-300 bg-white text-gray-700 hover:border-gray-400'
-                      )}
-                    >
-                      <div className="font-semibold text-sm">{font.label}</div>
-                      <div className="text-xs opacity-70">{font.size}</div>
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Label Preview */}
-              <div className="mb-6 p-6 bg-gradient-to-br from-gray-100 to-gray-200 dark:from-gray-700 dark:to-gray-800 rounded-xl">
-                <h4 className="text-sm font-semibold mb-4 text-gray-700 dark:text-gray-300">
-                  Vista Previa - {labelSettings.labelType === 'shipping' ? 'Etiqueta de Envío' : 'Etiqueta de Empaque'}
-                </h4>
-
-                {/* SHIPPING LABEL - FedEx Style */}
-                {labelSettings.labelType === 'shipping' && (
-                  <div className={cn(
-                    "mx-auto bg-white border-2 border-black",
-                    labelSettings.size === '4x6' ? 'w-[340px] h-[500px]' :
-                    labelSettings.size === '4x4' ? 'w-[280px] h-[280px]' :
-                    labelSettings.size === '2x3' ? 'w-[180px] h-[260px]' :
-                    'w-[340px] h-[500px]'
-                  )}>
-                    {/* Top Header - Logo and Service Type */}
-                    <div className="border-b-2 border-black px-2 py-1.5 flex items-center justify-between bg-white">
-                      <div className="flex items-center gap-2">
-                        {labelSettings.showLogo && (
-                          <div className={cn(
-                            "bg-purple-700 flex items-center justify-center",
-                            labelSettings.logoSize === 'small' ? 'w-8 h-8' :
-                            labelSettings.logoSize === 'medium' ? 'w-12 h-12' :
-                            'w-16 h-16'
-                          )}>
-                            <span className={cn(
-                              "text-white font-bold",
-                              labelSettings.logoSize === 'small' ? 'text-xs' :
-                              labelSettings.logoSize === 'medium' ? 'text-sm' :
-                              'text-base'
-                            )}>CR</span>
-                          </div>
-                        )}
-                        <div>
-                          <div className={cn(
-                            "font-bold",
-                            labelSettings.fontSize === 'small' ? 'text-xs' :
-                            labelSettings.fontSize === 'medium' ? 'text-sm' :
-                            'text-base'
-                          )}>CubaRapid</div>
-                          <div className="text-xs text-gray-600">PRIORITY OVERNIGHT</div>
-                        </div>
-                      </div>
-                      <div className="text-right">
-                        <div className="text-xs font-bold">TRACKING #</div>
-                        <div className={cn(
-                          "font-mono font-bold",
-                          labelSettings.fontSize === 'small' ? 'text-xs' :
-                          labelSettings.fontSize === 'medium' ? 'text-sm' :
-                          'text-base'
-                        )}>7849-3021-4567</div>
-                      </div>
-                    </div>
-
-                    {/* Shipping Address Section */}
-                    <div className="px-2 py-2 border-b border-black">
-                      <div className="mb-2">
-                        <div className="text-xs font-semibold mb-0.5 bg-black text-white px-1">SHIP TO:</div>
-                        <div className={cn(
-                          "font-bold",
-                          labelSettings.fontSize === 'small' ? 'text-sm' :
-                          labelSettings.fontSize === 'medium' ? 'text-base' :
-                          'text-lg'
-                        )}>Juan Carlos Pérez</div>
-                        <div className={cn(
-                          labelSettings.fontSize === 'small' ? 'text-xs' :
-                          labelSettings.fontSize === 'medium' ? 'text-sm' :
-                          'text-base'
-                        )}>
-                          Calle 23 #456<br />
-                          Vedado, La Habana<br />
-                          CUBA - 10400
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Origin Section */}
-                    <div className="px-2 py-1.5 border-b border-gray-400 bg-gray-50">
-                      <div className="text-xs font-semibold mb-0.5">SHIP FROM:</div>
-                      <div className={cn(
-                        labelSettings.fontSize === 'small' ? 'text-xs' :
-                        labelSettings.fontSize === 'medium' ? 'text-sm' :
-                        'text-base'
-                      )}>
-                        <div className="font-semibold">CubaRapid Miami</div>
-                        <div>Miami, FL 33101, USA</div>
-                      </div>
-                    </div>
-
-                    {/* Barcode Section */}
-                    {labelSettings.showBarcode && (
-                      <div className="px-2 py-2 border-b border-black">
-                        <div className="w-full h-16 bg-white border border-gray-300 flex flex-col items-center justify-center">
-                          <div className="flex gap-0.5 items-end h-10">
-                            {[...Array(30)].map((_, i) => (
-                              <div key={i} className="w-1 bg-black" style={{height: `${20 + Math.random() * 20}px`}}></div>
-                            ))}
-                          </div>
-                          <div className="text-xs font-mono mt-1">*7849302145678*</div>
-                        </div>
-                      </div>
-                    )}
-
-                    {/* QR Code and Details */}
-                    <div className="px-2 py-2 flex gap-2 border-b border-black">
-                      {labelSettings.showQR && (
-                        <div className="w-20 h-20 bg-white border-2 border-black flex items-center justify-center flex-shrink-0">
-                          <div className="w-16 h-16 bg-black" style={{
-                            backgroundImage: `repeating-linear-gradient(0deg, transparent, transparent 2px, white 2px, white 4px),
-                                             repeating-linear-gradient(90deg, transparent, transparent 2px, white 2px, white 4px)`
-                          }}></div>
-                        </div>
-                      )}
-                      <div className="flex-1 text-xs">
-                        <div className="font-semibold">REF: PKG-2024-001</div>
-                        <div>Weight: 2.5 lbs</div>
-                        <div>Dims: 12x10x8"</div>
-                        <div className="text-xs mt-1 text-gray-600">Declared Value: $250.00</div>
-                      </div>
-                    </div>
-
-                    {/* Bottom Notice */}
-                    <div className="px-2 py-1 text-xs text-center bg-gray-100 border-t border-black">
-                      <div className="font-semibold">SIGNATURE REQUIRED</div>
-                      <div className="text-xs text-gray-600">Handle with care</div>
-                    </div>
-                  </div>
-                )}
-
-                {/* PACKAGE LABEL - Packing Slip Style */}
-                {labelSettings.labelType === 'package' && (
-                  <div className={cn(
-                    "mx-auto bg-white border-2 border-gray-400 p-4",
-                    labelSettings.size === '4x6' ? 'w-[340px]' :
-                    labelSettings.size === '4x4' ? 'w-[280px]' :
-                    labelSettings.size === '2x3' ? 'w-[180px]' :
-                    'w-[340px]'
-                  )}>
-                    {/* Header */}
-                    <div className="text-center border-b-2 border-gray-800 pb-3 mb-3">
-                      {labelSettings.showLogo && (
-                        <div className={cn(
-                          "mx-auto bg-purple-700 flex items-center justify-center mb-2",
-                          labelSettings.logoSize === 'small' ? 'w-12 h-12' :
-                          labelSettings.logoSize === 'medium' ? 'w-16 h-16' :
-                          'w-20 h-20'
-                        )}>
-                          <span className={cn(
-                            "text-white font-bold",
-                            labelSettings.logoSize === 'small' ? 'text-base' :
-                            labelSettings.logoSize === 'medium' ? 'text-xl' :
-                            'text-2xl'
-                          )}>CR</span>
-                        </div>
-                      )}
-                      <div className={cn(
-                        "font-bold",
-                        labelSettings.fontSize === 'small' ? 'text-lg' :
-                        labelSettings.fontSize === 'medium' ? 'text-xl' :
-                        'text-2xl'
-                      )}>PACKING SLIP</div>
-                      <div className="text-sm text-gray-600">CubaRapid Logistics</div>
-                    </div>
-
-                    {/* Order Info */}
-                    <div className="mb-3">
-                      <div className="grid grid-cols-2 gap-2 text-sm mb-2">
-                        <div>
-                          <div className="font-semibold text-xs text-gray-600">Order #:</div>
-                          <div className="font-mono font-bold">CR-2024-001</div>
-                        </div>
-                        <div>
-                          <div className="font-semibold text-xs text-gray-600">Date:</div>
-                          <div>Jan 15, 2025</div>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Customer Info */}
-                    <div className="mb-3 p-2 bg-gray-50 border border-gray-300">
-                      <div className="font-semibold text-xs text-gray-600 mb-1">SHIP TO:</div>
-                      <div className={cn(
-                        "font-bold",
-                        labelSettings.fontSize === 'small' ? 'text-sm' :
-                        labelSettings.fontSize === 'medium' ? 'text-base' :
-                        'text-lg'
-                      )}>Juan Carlos Pérez</div>
-                      <div className="text-sm">
-                        Calle 23 #456<br />
-                        Vedado, La Habana<br />
-                        CUBA - 10400
-                      </div>
-                    </div>
-
-                    {/* Package Contents */}
-                    <div className="mb-3">
-                      <div className="font-semibold text-sm mb-2 bg-gray-800 text-white px-2 py-1">PACKAGE CONTENTS</div>
-                      <div className="text-xs space-y-1">
-                        <div className="flex justify-between py-1 border-b">
-                          <span>Caja Mediana (12x10x8")</span>
-                          <span className="font-semibold">x1</span>
-                        </div>
-                        <div className="flex justify-between py-1 border-b">
-                          <span>Articles diversos</span>
-                          <span className="font-semibold">5 items</span>
-                        </div>
-                        <div className="flex justify-between py-1 border-b font-semibold">
-                          <span>Total Weight:</span>
-                          <span>2.5 lbs</span>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Barcodes */}
-                    <div className="space-y-2">
-                      {labelSettings.showBarcode && (
-                        <div>
-                          <div className="text-xs font-semibold mb-1">TRACKING:</div>
-                          <div className="w-full h-12 bg-white border border-gray-400 flex flex-col items-center justify-center">
-                            <div className="flex gap-0.5 items-end h-8">
-                              {[...Array(25)].map((_, i) => (
-                                <div key={i} className="w-1 bg-black" style={{height: `${15 + Math.random() * 15}px`}}></div>
-                              ))}
-                            </div>
-                            <div className="text-xs font-mono">*7849302145678*</div>
-                          </div>
-                        </div>
-                      )}
-
-                      {labelSettings.showQR && (
-                        <div className="flex items-center gap-2">
-                          <div className="w-16 h-16 bg-white border border-gray-400 flex items-center justify-center flex-shrink-0">
-                            <div className="w-14 h-14 bg-black" style={{
-                              backgroundImage: `repeating-linear-gradient(0deg, transparent, transparent 2px, white 2px, white 3px),
-                                               repeating-linear-gradient(90deg, transparent, transparent 2px, white 2px, white 3px)`
-                            }}></div>
-                          </div>
-                          <div className="text-xs text-gray-600">
-                            Scan for order details
-                          </div>
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Footer */}
-                    <div className="mt-3 pt-2 border-t border-gray-400 text-xs text-center text-gray-600">
-                      Thank you for choosing CubaRapid!
-                    </div>
-                  </div>
-                )}
-
-                <p className="text-center text-xs text-gray-500 dark:text-gray-400 mt-3">
-                  Tamaño: {labelSettings.size === 'custom'
-                    ? `${labelSettings.customWidth}" x ${labelSettings.customHeight}"`
-                    : labelSettings.size} • Tipo: {labelSettings.labelType === 'shipping' ? 'Envío' : 'Empaque'}
-                </p>
-              </div>
-
-              {/* Action Buttons */}
-              <div className="flex justify-end gap-3">
-                <button
-                  onClick={() => setIsEditingLabels(false)}
-                  disabled={isSavingLabelSettings}
-                  className={cn(
-                    "px-6 py-3 rounded-lg font-medium flex items-center gap-2 transition-all",
-                    "border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300",
-                    "hover:bg-gray-100 dark:hover:bg-gray-700",
-                    isSavingLabelSettings && "opacity-50 cursor-not-allowed"
-                  )}
-                >
-                  <X className="w-4 h-4" />
-                  Cancelar
-                </button>
-                <button
-                  onClick={handleSaveLabelSettings}
-                  disabled={isSavingLabelSettings}
-                  className={cn(
-                    "px-6 py-3 rounded-lg font-medium flex items-center gap-2 transition-all",
-                    isSavingLabelSettings
-                      ? "bg-blue-400 cursor-not-allowed"
-                      : "bg-exa-primary text-white hover:opacity-90"
-                  )}
-                >
-                  {isSavingLabelSettings ? (
-                    <>
-                      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                      Guardando...
-                    </>
-                  ) : (
-                    <>
-                      <Save className="w-4 h-4" />
-                      Guardar Configuración de Etiquetas
-                    </>
-                  )}
-                </button>
-              </div>
-              </div>
-              )}
-            </div>
           </div>
         )
 

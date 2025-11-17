@@ -14,6 +14,7 @@ export async function GET(request: NextRequest) {
     await db.query(`
       CREATE TABLE IF NOT EXISTS label_settings (
         id SERIAL PRIMARY KEY,
+        name TEXT NOT NULL DEFAULT 'Configuración de Etiqueta',
         label_type TEXT NOT NULL DEFAULT 'shipping',
         size TEXT NOT NULL DEFAULT '4x6',
         custom_width DECIMAL(5,2) DEFAULT 4,
@@ -30,46 +31,36 @@ export async function GET(request: NextRequest) {
       )
     `)
 
-    // Obtener la configuración actual
-    const result = await db.query('SELECT * FROM label_settings ORDER BY id DESC LIMIT 1')
-
-    if (result.rows.length === 0) {
-      // Si no hay configuración, devolver valores por defecto
-      return NextResponse.json({
-        success: true,
-        data: {
-          labelType: 'shipping',
-          size: '4x6',
-          customWidth: 4,
-          customHeight: 6,
-          logo: '',
-          showLogo: true,
-          showBarcode: true,
-          showQR: false,
-          fontSize: 'medium',
-          logoPosition: 'top',
-          logoSize: 'medium'
-        }
-      })
+    // Agregar columna name si no existe (migración)
+    try {
+      await db.query(`
+        ALTER TABLE label_settings ADD COLUMN IF NOT EXISTS name TEXT NOT NULL DEFAULT 'Configuración de Etiqueta'
+      `)
+    } catch (error) {
+      // Columna ya existe
     }
 
-    const settings = result.rows[0]
+    // Obtener todas las configuraciones
+    const result = await db.query('SELECT * FROM label_settings ORDER BY id DESC')
+
+    const labelSettings = result.rows.map(setting => ({
+      id: setting.id,
+      name: setting.name || `${setting.size} - ${setting.label_type}`,
+      label_type: setting.label_type,
+      size: setting.size,
+      custom_width: parseFloat(setting.custom_width),
+      custom_height: parseFloat(setting.custom_height),
+      show_logo: setting.show_logo,
+      show_barcode: setting.show_barcode,
+      show_qr: setting.show_qr,
+      font_size: setting.font_size,
+      logo_position: setting.logo_position,
+      logo_size: setting.logo_size
+    }))
 
     return NextResponse.json({
       success: true,
-      data: {
-        labelType: settings.label_type,
-        size: settings.size,
-        customWidth: parseFloat(settings.custom_width),
-        customHeight: parseFloat(settings.custom_height),
-        logo: settings.logo || '',
-        showLogo: settings.show_logo,
-        showBarcode: settings.show_barcode,
-        showQR: settings.show_qr,
-        fontSize: settings.font_size,
-        logoPosition: settings.logo_position,
-        logoSize: settings.logo_size
-      }
+      labelSettings: labelSettings
     })
   } catch (error) {
     console.error('Error fetching label settings:', error)
@@ -85,6 +76,7 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
     const {
+      name,
       labelType,
       size,
       customWidth,
@@ -102,6 +94,7 @@ export async function POST(request: NextRequest) {
     await db.query(`
       CREATE TABLE IF NOT EXISTS label_settings (
         id SERIAL PRIMARY KEY,
+        name TEXT NOT NULL DEFAULT 'Configuración de Etiqueta',
         label_type TEXT NOT NULL DEFAULT 'shipping',
         size TEXT NOT NULL DEFAULT '4x6',
         custom_width DECIMAL(5,2) DEFAULT 4,
@@ -118,15 +111,25 @@ export async function POST(request: NextRequest) {
       )
     `)
 
+    // Agregar columna name si no existe (migración)
+    try {
+      await db.query(`
+        ALTER TABLE label_settings ADD COLUMN IF NOT EXISTS name TEXT NOT NULL DEFAULT 'Configuración de Etiqueta'
+      `)
+    } catch (error) {
+      // Columna ya existe
+    }
+
     // Insertar nueva configuración
     const result = await db.query(`
       INSERT INTO label_settings (
-        label_type, size, custom_width, custom_height, logo,
+        name, label_type, size, custom_width, custom_height, logo,
         show_logo, show_barcode, show_qr, font_size,
         logo_position, logo_size, updated_at
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, CURRENT_TIMESTAMP)
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, CURRENT_TIMESTAMP)
       RETURNING *
     `, [
+      name || `${size} - ${labelType}`,
       labelType,
       size,
       customWidth,

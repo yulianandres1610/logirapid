@@ -102,7 +102,10 @@ export async function GET(request: NextRequest) {
           createdby as "createdBy",
           createdat as "createdAt",
           zipcode as "zipCode",
-          apartment
+          apartment,
+          has_alternate_contact as "hasAlternateContact",
+          alternate_contact_name as "alternateContactName",
+          alternate_contact_phone as "alternateContactPhone"
         FROM customers
         WHERE id = $1
       `
@@ -133,7 +136,10 @@ export async function GET(request: NextRequest) {
           createdby as "createdBy",
           createdat as "createdAt",
           zipcode as "zipCode",
-          apartment
+          apartment,
+          has_alternate_contact as "hasAlternateContact",
+          alternate_contact_name as "alternateContactName",
+          alternate_contact_phone as "alternateContactPhone"
         FROM customers
         WHERE phone = $1
       `
@@ -165,7 +171,10 @@ export async function GET(request: NextRequest) {
           createdby as "createdBy",
           createdat as "createdAt",
           zipcode as "zipCode",
-          apartment
+          apartment,
+          has_alternate_contact as "hasAlternateContact",
+          alternate_contact_name as "alternateContactName",
+          alternate_contact_phone as "alternateContactPhone"
         FROM customers
         WHERE
           firstname ILIKE $1 OR
@@ -204,7 +213,10 @@ export async function GET(request: NextRequest) {
         createdby as "createdBy",
         createdat as "createdAt",
         zipcode as "zipCode",
-        apartment
+        apartment,
+        has_alternate_contact as "hasAlternateContact",
+        alternate_contact_name as "alternateContactName",
+        alternate_contact_phone as "alternateContactPhone"
       FROM customers
       ORDER BY createdat DESC
       LIMIT $1 OFFSET $2
@@ -264,9 +276,10 @@ export async function POST(request: NextRequest) {
       INSERT INTO customers (
         firstname, lastname, idnumber, idtype, phone, email,
         address, city, state, country, notes, createdby,
-        createdat, zipcode, apartment
+        createdat, zipcode, apartment,
+        has_alternate_contact, alternate_contact_name, alternate_contact_phone
       ) VALUES (
-        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, NOW(), $13, $14
+        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, NOW(), $13, $14, $15, $16, $17
       )
       RETURNING
         id,
@@ -284,7 +297,10 @@ export async function POST(request: NextRequest) {
         createdby as "createdBy",
         createdat as "createdAt",
         zipcode as "zipCode",
-        apartment
+        apartment,
+        has_alternate_contact as "hasAlternateContact",
+        alternate_contact_name as "alternateContactName",
+        alternate_contact_phone as "alternateContactPhone"
     `
 
     const values = [
@@ -301,7 +317,10 @@ export async function POST(request: NextRequest) {
       body.notes || null,
       body.createdBy || 'system',
       body.zipCode || null,
-      body.apartment || null
+      body.apartment || null,
+      body.hasAlternateContact || false,
+      body.alternateContactName || null,
+      body.alternateContactPhone || null
     ]
 
     const result = await db.query(insertQuery, values)
@@ -352,7 +371,10 @@ export async function PUT(request: NextRequest) {
       country: 'country',
       notes: 'notes',
       zipCode: 'zipcode',
-      apartment: 'apartment'
+      apartment: 'apartment',
+      hasAlternateContact: 'has_alternate_contact',
+      alternateContactName: 'alternate_contact_name',
+      alternateContactPhone: 'alternate_contact_phone'
     }
 
     for (const [key, value] of Object.entries(updateData)) {
@@ -392,7 +414,10 @@ export async function PUT(request: NextRequest) {
         createdby as "createdBy",
         createdat as "createdAt",
         zipcode as "zipCode",
-        apartment
+        apartment,
+        has_alternate_contact as "hasAlternateContact",
+        alternate_contact_name as "alternateContactName",
+        alternate_contact_phone as "alternateContactPhone"
     `
 
     const result = await db.query(updateQuery, values)

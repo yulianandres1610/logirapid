@@ -32,7 +32,9 @@ import {
   UserCheck,
   Warehouse,
   Route,
-  Box
+  Box,
+  Store,
+  Truck
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
@@ -247,9 +249,11 @@ export function Sidebar({ isCollapsed, onToggle }: SidebarProps) {
   useEffect(() => {
     if (pathname.includes('/purchase-orders') ||
         pathname.includes('/orders') ||
+        pathname.includes('/office-orders') ||
         pathname.includes('/warehouses') ||
         pathname.includes('/vehicles') ||
-        pathname.includes('/routes')) {
+        pathname.includes('/routes') ||
+        pathname.includes('/paqueteria/configuracion')) {
       setOpenSubmenus(prev => ({
         ...prev,
         'Paquetería': true
@@ -272,10 +276,11 @@ export function Sidebar({ isCollapsed, onToggle }: SidebarProps) {
     {
       icon: ShoppingBag,
       label: "Paquetería",
-      href: "/dashboard/admin/package-orders",
+      href: "/dashboard/admin/pickup-orders",
       hasSubmenu: true,
       submenuItems: [
-        { icon: Package, label: "Órdenes", href: "/dashboard/admin/package-orders" },
+        { icon: Truck, label: "Órdenes de Recogida", href: "/dashboard/admin/pickup-orders" },
+        { icon: Store, label: "Órdenes de Oficina", href: "/dashboard/admin/office-orders" },
         { icon: Warehouse, label: "Almacenes", href: "/dashboard/admin/warehouses" },
         { icon: Car, label: "Vehículos", href: "/dashboard/admin/vehicles" },
         { icon: Route, label: "Rutas", href: "/dashboard/admin/routes" },
@@ -302,11 +307,13 @@ export function Sidebar({ isCollapsed, onToggle }: SidebarProps) {
       href: "/dashboard/agency-admin/orders",
       hasSubmenu: true,
       submenuItems: [
-        { icon: Package, label: "Órdenes", href: "/dashboard/agency-admin/orders" },
+        { icon: Truck, label: "Órdenes Recogida", href: "/dashboard/agency-admin/orders" },
+        { icon: Store, label: "Órdenes Oficina", href: "/dashboard/agency-admin/office-orders" },
         { icon: Warehouse, label: "Almacenes", href: "/dashboard/agency-admin/warehouses" },
         { icon: Car, label: "Vehículos", href: "/dashboard/agency-admin/vehicles" },
         { icon: Route, label: "Rutas", href: "/dashboard/admin/routes" },
-        { icon: Box, label: "Empaque", href: "/dashboard/agency-admin/package-route" }
+        { icon: Box, label: "Empaque", href: "/dashboard/agency-admin/package-route" },
+        { icon: Settings, label: "Configuración", href: "/dashboard/agency-admin/paqueteria/configuracion" }
       ]
     },
     { icon: Settings, label: "Configuración", href: "/dashboard/agency-admin/white-label" },
@@ -326,11 +333,13 @@ export function Sidebar({ isCollapsed, onToggle }: SidebarProps) {
       href: "/dashboard/manager/orders",
       hasSubmenu: true,
       submenuItems: [
-        { icon: Package, label: "Órdenes", href: "/dashboard/manager/orders" },
+        { icon: Truck, label: "Órdenes Recogida", href: "/dashboard/manager/orders" },
+        { icon: Store, label: "Órdenes Oficina", href: "/dashboard/manager/office-orders" },
         { icon: Warehouse, label: "Almacenes", href: "/dashboard/manager/warehouses" },
         { icon: Car, label: "Vehículos", href: "/dashboard/manager/vehicles" },
         { icon: Route, label: "Rutas", href: "/dashboard/admin/routes" },
-        { icon: Box, label: "Empaque", href: "/dashboard/manager/package-route" }
+        { icon: Box, label: "Empaque", href: "/dashboard/manager/package-route" },
+        { icon: Settings, label: "Configuración", href: "/dashboard/manager/paqueteria/configuracion" }
       ]
     },
     { icon: Settings, label: "Configuración", href: "/dashboard/manager/white-label" },
@@ -351,7 +360,8 @@ export function Sidebar({ isCollapsed, onToggle }: SidebarProps) {
       href: "/dashboard/user/orders",
       hasSubmenu: true,
       submenuItems: [
-        { icon: Package, label: "Mis Órdenes", href: "/dashboard/user/orders" },
+        { icon: Truck, label: "Órdenes Recogida", href: "/dashboard/user/orders" },
+        { icon: Store, label: "Órdenes Oficina", href: "/dashboard/user/office-orders" },
         { icon: BarChart3, label: "Mis Ventas", href: "/dashboard/user/sales" },
         { icon: DollarSign, label: "Comisiones", href: "/dashboard/user/commissions" }
       ]
@@ -483,8 +493,8 @@ export function Sidebar({ isCollapsed, onToggle }: SidebarProps) {
                   className="flex items-center justify-start w-full"
                 >
                   <img
-                    src={theme === 'light' ? "/images/logocolor.png" : "/images/logoheader.png"}
-                    alt="CUBARAPID"
+                    src={theme === 'light' ? "/logo-rojo.png" : "/logo-blanco.png"}
+                    alt="LogiRapid"
                     className={cn(
                       "h-14 object-contain transition-all duration-300",
                       "w-full max-w-[200px] drop-shadow-lg"

@@ -319,7 +319,7 @@ export default function CRMPage() {
 
   // Pagination states
   const [currentPage, setCurrentPage] = useState(1)
-  const [itemsPerPage, setItemsPerPage] = useState(10)
+  const [itemsPerPage, setItemsPerPage] = useState(25)
 
   // Form states for customer creation
   const [formStep, setFormStep] = useState(1)

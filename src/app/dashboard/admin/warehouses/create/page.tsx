@@ -116,7 +116,8 @@ interface NewWarehouseData {
   operatingHours: string
   customOperatingHours?: string
   totalArea: number
-  capacity: number
+  cajas_vacias_capacity: number
+  bultos_capacity: number
   openingDate: string
   notes: string
   // Coordinates for mapping
@@ -150,7 +151,8 @@ export default function CreateWarehousePage() {
     operatingHours: 'standard',
     customOperatingHours: '',
     totalArea: 0,
-    capacity: 0,
+    cajas_vacias_capacity: 0,
+    bultos_capacity: 0,
     openingDate: '',
     notes: '',
     latitude: null,
@@ -336,7 +338,9 @@ export default function CreateWarehousePage() {
         operatingHours: warehouseData.operatingHours || 'standard',
         customOperatingHours: warehouseData.customOperatingHours || null,
         totalArea: Number(warehouseData.totalArea) || 0,
-        capacity: Number(warehouseData.capacity) || 0,
+        capacity: 0,
+        cajas_vacias_capacity: Number(warehouseData.cajas_vacias_capacity) || 0,
+        bultos_capacity: Number(warehouseData.bultos_capacity) || 0,
         openingDate: warehouseData.openingDate || '',
         notes: warehouseData.notes?.trim() || null,
         latitude: warehouseData.latitude || null,
@@ -849,12 +853,12 @@ export default function CreateWarehousePage() {
                       </div>
                       <div>
                         <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                          Capacidad de Almacenaje *
+                          Cantidad de Cajas Vacías *
                         </label>
                         <input
                           type="number"
-                          value={warehouseData.capacity}
-                          onChange={(e) => updateWarehouseData('capacity', parseFloat(e.target.value) || 0)}
+                          value={warehouseData.cajas_vacias_capacity}
+                          onChange={(e) => updateWarehouseData('cajas_vacias_capacity', parseFloat(e.target.value) || 0)}
                           className={cn(
                             'w-full px-4 py-3 rounded-lg border transition-colors',
                             'focus:outline-none focus:ring-2 focus:ring-blue-500',
@@ -862,7 +866,26 @@ export default function CreateWarehousePage() {
                               ? 'bg-gray-800 border-gray-600 text-white'
                               : 'bg-white border-gray-300 text-black'
                           )}
-                          placeholder="10000"
+                          placeholder="5000"
+                          min="0"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                          Cantidad de Bultos *
+                        </label>
+                        <input
+                          type="number"
+                          value={warehouseData.bultos_capacity}
+                          onChange={(e) => updateWarehouseData('bultos_capacity', parseFloat(e.target.value) || 0)}
+                          className={cn(
+                            'w-full px-4 py-3 rounded-lg border transition-colors',
+                            'focus:outline-none focus:ring-2 focus:ring-blue-500',
+                            theme === 'dark'
+                              ? 'bg-gray-800 border-gray-600 text-white'
+                              : 'bg-white border-gray-300 text-black'
+                          )}
+                          placeholder="5000"
                           min="0"
                         />
                       </div>

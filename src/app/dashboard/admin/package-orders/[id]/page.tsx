@@ -20,7 +20,8 @@ import {
   Edit,
   Trash2,
   RefreshCw,
-  DollarSign
+  DollarSign,
+  FileText
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useTheme } from '@/contexts/theme-context'
@@ -30,6 +31,8 @@ import { DashboardLayout } from '@/components/layout/dashboard-layout'
 import { Button } from '@/components/ui/button'
 import PackageDeliveryMap from '@/components/maps/PackageDeliveryMap'
 import RouteMap from '@/components/maps/RouteMap'
+import EntregaCajasTab from './tabs/EntregaCajasTab'
+import RecogidaCajasTab from './tabs/RecogidaCajasTab'
 
 interface PackageOrder {
   id: number
@@ -97,6 +100,7 @@ export default function PackageOrderDetailPage() {
   const [loading, setLoading] = useState(true)
   const [routeData, setRouteData] = useState<RouteData | null>(null)
   const [loadingRoute, setLoadingRoute] = useState(false)
+  const [activeTab, setActiveTab] = useState<'info' | 'entrega' | 'recogida'>('info')
 
   // Fetch order details
   const fetchOrder = async () => {
@@ -425,19 +429,30 @@ export default function PackageOrderDetailPage() {
     }
   }, [order?.status, order?.routeAssignment?.routeId])
 
+  // Helper functions to get services by type
+  const getServicesByType = (type: 'entrega' | 'recogida') => {
+    if (!order || !order.services) return []
+
+    return order.services.filter(service => {
+      const serviceLower = service.toLowerCase()
+      if (type === 'entrega') {
+        return serviceLower.includes('entrega') || serviceLower.includes('delivery')
+      } else {
+        return serviceLower.includes('recogida') || serviceLower.includes('pickup')
+      }
+    })
+  }
+
+  const entregaServices = getServicesByType('entrega')
+  const recogidaServices = getServicesByType('recogida')
+
   const STATUSES = {
     pending: { label: 'Pendiente', color: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400', icon: AlertCircle },
-    scheduled: { label: 'Programado', color: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400', icon: Calendar },
+    reprogrammed: { label: 'Reprogramado', color: 'bg-gradient-to-r from-yellow-500 to-orange-600 text-white shadow-lg border border-yellow-200 dark:from-yellow-600 dark:to-orange-700 dark:border-yellow-400', icon: AlertCircle },
     picked_up: { label: 'Recogido', color: 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-400', icon: Package },
-    delivered: { label: 'Entregado', color: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400', icon: CheckCircle },
-    cancelled: { label: 'Cancelado', color: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400', icon: XCircle },
-    // Additional common statuses that might exist in the database
-    in_route: { label: 'En Ruta', color: 'bg-gradient-to-r from-blue-500 to-indigo-600 text-white shadow-lg border border-blue-200 dark:from-blue-600 dark:to-indigo-700 dark:border-blue-400', icon: Package },
-    in_transit: { label: 'En Tránsito', color: 'bg-gradient-to-r from-blue-500 to-indigo-600 text-white shadow-lg border border-blue-200 dark:from-blue-600 dark:to-indigo-700 dark:border-blue-400', icon: Package },
-    reprogrammed: { label: 'Reprogramada', color: 'bg-gradient-to-r from-yellow-500 to-orange-600 text-white shadow-lg border border-yellow-200 dark:from-yellow-600 dark:to-orange-700 dark:border-yellow-400', icon: AlertCircle },
-    processing: { label: 'Procesando', color: 'bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-400', icon: AlertCircle },
-    ready: { label: 'Listo', color: 'bg-teal-100 text-teal-800 dark:bg-teal-900/30 dark:text-teal-400', icon: CheckCircle },
-    failed: { label: 'Fallido', color: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400', icon: XCircle }
+    in_transit: { label: 'Enviado', color: 'bg-gradient-to-r from-blue-500 to-indigo-600 text-white shadow-lg border border-blue-200 dark:from-blue-600 dark:to-indigo-700 dark:border-blue-400', icon: Package },
+    in_route: { label: 'En Reparto', color: 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900/30 dark:text-indigo-400', icon: Truck },
+    delivered: { label: 'Entregado', color: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400', icon: CheckCircle }
   }
 
   // Parse address from JSON if needed
@@ -698,11 +713,193 @@ export default function PackageOrderDetailPage() {
                 </div>
               </motion.div>
 
+              {/* Tabs Section for Package Association */}
+              {(entregaServices.length > 0 || recogidaServices.length > 0) && (
+                <motion.div
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.25 }}
+                  className={cn(
+                    'rounded-xl border overflow-hidden',
+                    theme === 'dark'
+                      ? 'bg-gray-800 border-gray-700'
+                      : 'bg-white border-gray-200'
+                  )}
+                >
+                  {/* Tab Headers */}
+                  <div className={cn(
+                    'flex border-b',
+                    theme === 'dark' ? 'border-gray-700' : 'border-gray-200'
+                  )}>
+                    <button
+                      onClick={() => setActiveTab('info')}
+                      className={cn(
+                        'flex-1 px-6 py-4 font-medium transition-all relative',
+                        activeTab === 'info'
+                          ? theme === 'dark'
+                            ? 'text-gray-300 bg-gray-700/50'
+                            : 'text-gray-700 bg-gray-50'
+                          : theme === 'dark'
+                            ? 'text-gray-500 hover:text-gray-400'
+                            : 'text-gray-500 hover:text-gray-700'
+                      )}
+                    >
+                      <div className="flex items-center justify-center gap-2">
+                        <FileText className="h-4 w-4" />
+                        Información
+                      </div>
+                      {activeTab === 'info' && (
+                        <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-gray-600" />
+                      )}
+                    </button>
+
+                    {entregaServices.length > 0 && (
+                      <button
+                        onClick={() => setActiveTab('entrega')}
+                        className={cn(
+                          'flex-1 px-6 py-4 font-medium transition-all relative',
+                          activeTab === 'entrega'
+                            ? theme === 'dark'
+                              ? 'text-blue-400 bg-blue-900/20'
+                              : 'text-blue-600 bg-blue-50'
+                            : theme === 'dark'
+                              ? 'text-gray-400 hover:text-gray-300'
+                              : 'text-gray-600 hover:text-gray-900'
+                        )}
+                      >
+                        <div className="flex items-center justify-center gap-2">
+                          Entrega de Cajas
+                          {entregaServices.length > 0 && (
+                            <span className={cn(
+                              'px-2 py-0.5 rounded-full text-xs',
+                              activeTab === 'entrega'
+                                ? 'bg-blue-600 text-white'
+                                : 'bg-gray-200 text-gray-700 dark:bg-gray-700 dark:text-gray-300'
+                            )}>
+                              {entregaServices.length}
+                            </span>
+                          )}
+                        </div>
+                        {activeTab === 'entrega' && (
+                          <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-600" />
+                        )}
+                      </button>
+                    )}
+
+                    {recogidaServices.length > 0 && (
+                      <button
+                        onClick={() => setActiveTab('recogida')}
+                        className={cn(
+                          'flex-1 px-6 py-4 font-medium transition-all relative',
+                          activeTab === 'recogida'
+                            ? theme === 'dark'
+                              ? 'text-orange-400 bg-orange-900/20'
+                              : 'text-orange-600 bg-orange-50'
+                            : theme === 'dark'
+                              ? 'text-gray-400 hover:text-gray-300'
+                              : 'text-gray-600 hover:text-gray-900'
+                        )}
+                      >
+                        <div className="flex items-center justify-center gap-2">
+                          Recogida de Cajas
+                          {recogidaServices.length > 0 && (
+                            <span className={cn(
+                              'px-2 py-0.5 rounded-full text-xs',
+                              activeTab === 'recogida'
+                                ? 'bg-orange-600 text-white'
+                                : 'bg-gray-200 text-gray-700 dark:bg-gray-700 dark:text-gray-300'
+                            )}>
+                              {recogidaServices.length}
+                            </span>
+                          )}
+                        </div>
+                        {activeTab === 'recogida' && (
+                          <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-orange-600" />
+                        )}
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Tab Content */}
+                  <div className="p-6">
+                    {activeTab === 'info' && (
+                      <motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        transition={{ duration: 0.2 }}
+                      >
+                        <div className="text-center py-8">
+                          <FileText className={cn(
+                            'h-16 w-16 mx-auto mb-4',
+                            theme === 'dark' ? 'text-gray-600' : 'text-gray-400'
+                          )} />
+                          <h3 className={cn(
+                            'text-lg font-semibold mb-2',
+                            theme === 'dark' ? 'text-white' : 'text-gray-900'
+                          )}>
+                            Información de Servicios
+                          </h3>
+                          <p className={cn(
+                            'text-sm mb-4',
+                            theme === 'dark' ? 'text-gray-400' : 'text-gray-600'
+                          )}>
+                            Seleccione una pestaña para gestionar las entregas o recogidas de cajas
+                          </p>
+                          <div className="flex flex-wrap gap-2 justify-center">
+                            {order.services.map((service, index) => (
+                              <span
+                                key={index}
+                                className={cn(
+                                  'inline-flex items-center px-3 py-2 rounded-lg text-sm font-medium',
+                                  service.toLowerCase().includes('recogida') || service.toLowerCase().includes('pickup')
+                                    ? 'bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-400'
+                                    : 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400'
+                                )}
+                              >
+                                {service}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      </motion.div>
+                    )}
+
+                    {activeTab === 'entrega' && entregaServices.length > 0 && (
+                      <motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        transition={{ duration: 0.2 }}
+                      >
+                        <EntregaCajasTab
+                          order={order}
+                          services={entregaServices}
+                          onUpdate={fetchOrder}
+                        />
+                      </motion.div>
+                    )}
+
+                    {activeTab === 'recogida' && recogidaServices.length > 0 && (
+                      <motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        transition={{ duration: 0.2 }}
+                      >
+                        <RecogidaCajasTab
+                          order={order}
+                          services={recogidaServices}
+                          onUpdate={fetchOrder}
+                        />
+                      </motion.div>
+                    )}
+                  </div>
+                </motion.div>
+              )}
+
               {/* Map */}
               <motion.div
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.25 }}
+                transition={{ delay: 0.3 }}
                 className={cn(
                   'p-6 rounded-xl border border-gray-200 dark:border-gray-700',
                   theme === 'dark' ? 'bg-gray-800' : 'bg-white'

@@ -50,6 +50,7 @@
     "zustand": "^4.4.0"
   },
   "devDependencies": {
+    "@types/jsbarcode": "^3.11.4",
     "@types/node": "^20.0.0",
     "@types/react": "^18.0.0",
     "@types/react-dom": "^18.0.0",
