@@ -199,6 +199,27 @@ export default function CompaniesPage() {
     documents: [],
   })
 
+  // Load companies from API on mount
+  useEffect(() => {
+    const fetchCompanies = async () => {
+      try {
+        setLoading(true)
+        const response = await fetch('/api/companies')
+        const data = await response.json()
+
+        if (data.success) {
+          setCompanies(data.data)
+        }
+      } catch (error) {
+        console.error('Error loading companies:', error)
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    fetchCompanies()
+  }, [])
+
   const generateWalletNumber = () => {
     const timestamp = Date.now().toString().slice(-14)
     const walletNumber = `2026${timestamp}`
@@ -239,51 +260,67 @@ export default function CompaniesPage() {
   }
 
   const handleCreateCompany = async () => {
-    // If it's a market type company, also create in marketplaces API
-    if (formData.companyType === 'market') {
-      try {
-        const marketplaceResponse = await fetch('/api/admin/marketplaces', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            name: formData.legalName,
-            address: formData.address,
-            province: formData.city.toLowerCase().includes('la habana') ? 'la-habana' : 'matanzas', // Simplified for demo
-            municipality: 'vedado', // Default for demo
-            phone: formData.phone,
-            description: `Empresa tipo mercado: ${formData.legalName}`,
-            categories: ['Mercado'],
-            schedule: 'Lun-Dom: 8:00 AM - 8:00 PM',
-            deliveryTime: '30-45 min',
-            deliveryCost: 2.50
-          })
-        })
+    try {
+      setLoading(true)
 
-        if (!marketplaceResponse.ok) {
-          console.error('Error creating marketplace:', await marketplaceResponse.text())
-          // Continue with company creation even if marketplace creation fails
-        }
-      } catch (error) {
-        console.error('Error creating marketplace:', error)
-        // Continue with company creation even if marketplace creation fails
+      // Create company via API
+      const response = await fetch('/api/companies', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(formData)
+      })
+
+      const data = await response.json()
+
+      if (!data.success) {
+        alert(`Error: ${data.error}`)
+        return
       }
-    }
 
-    const newCompany = {
-      ...formData,
-      id: companies.length + 1,
-      status: 'active',
-      createdAt: new Date().toISOString().split('T')[0],
-      walletBalance: 0,
-      transactionsCount: 0,
-      usersCount: 0
+      // If it's a market type company, also create in marketplaces API
+      if (formData.companyType === 'market') {
+        try {
+          await fetch('/api/admin/marketplaces', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              name: formData.legalName,
+              address: formData.address,
+              province: formData.city.toLowerCase().includes('la habana') ? 'la-habana' : 'matanzas',
+              municipality: 'vedado',
+              phone: formData.phone,
+              description: `Empresa tipo mercado: ${formData.legalName}`,
+              categories: ['Mercado'],
+              schedule: 'Lun-Dom: 8:00 AM - 8:00 PM',
+              deliveryTime: '30-45 min',
+              deliveryCost: 2.50
+            })
+          })
+        } catch (error) {
+          console.error('Error creating marketplace:', error)
+        }
+      }
+
+      // Reload companies from API
+      const companiesResponse = await fetch('/api/companies')
+      const companiesData = await companiesResponse.json()
+
+      if (companiesData.success) {
+        setCompanies(companiesData.data)
+      }
+
+      setShowCreateForm(false)
+      resetForm()
+      alert('Empresa creada exitosamente!')
+
+    } catch (error) {
+      console.error('Error creating company:', error)
+      alert('Error al crear empresa. Por favor intenta de nuevo')
+    } finally {
+      setLoading(false)
     }
-    setCompanies([newCompany, ...companies])
-    setShowCreateForm(false)
-    resetForm()
-    alert('Empresa creada exitosamente!')
   }
 
   return (
