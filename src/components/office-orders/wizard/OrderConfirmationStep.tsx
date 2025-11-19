@@ -77,6 +77,12 @@ export default function OrderConfirmationStep({ wizardData, updateWizardData, se
         customerId: wizardData.sender.id,
         customerName: `${wizardData.sender.firstName} ${wizardData.sender.lastName}`,
         customerAddress: recipientFullAddress || wizardData.recipient.address || null,
+        // Campos de dirección estructurados
+        street: wizardData.recipient.street || null,
+        apartment: wizardData.recipient.apartment || null,
+        city: wizardData.recipient.city || null,
+        state: wizardData.recipient.state || null,
+        country: wizardData.recipient.country || 'US',
         zipcode: wizardData.recipient.zipCode || null,
         orderNumber: generatedOrderNumber,
         services: wizardData.selectedServices.map((s: any) => s.name),

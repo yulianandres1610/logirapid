@@ -114,6 +114,13 @@ export default function PickupOrderConfirmationStep({ wizardData, updateWizardDa
           customerId: wizardData.sender.id,
           customerName: `${wizardData.sender.firstName} ${wizardData.sender.lastName}`, // Remitente
           customerAddress: senderFullAddress || wizardData.sender.address || null, // Dirección del remitente
+          // Campos de dirección estructurados del remitente
+          street: wizardData.sender.street || null,
+          apartment: wizardData.sender.apartment || null,
+          city: wizardData.sender.city || null,
+          state: wizardData.sender.state || null,
+          country: wizardData.sender.country || 'US',
+          zipcode: wizardData.sender.zipCode || null,
           orderNumber: generatedOrderNumber,
           services: ['Entrega de Cajas Vacías'],
           notes: `Orden de entrega de ${totalEmpaques} empaques vacíos`,
@@ -171,6 +178,13 @@ export default function PickupOrderConfirmationStep({ wizardData, updateWizardDa
           customerId: wizardData.sender.id,
           customerName: `${wizardData.sender.firstName} ${wizardData.sender.lastName}`,
           customerAddress: senderFullAddress || wizardData.sender.address || null,
+          // Campos de dirección estructurados del remitente
+          street: wizardData.sender.street || null,
+          apartment: wizardData.sender.apartment || null,
+          city: wizardData.sender.city || null,
+          state: wizardData.sender.state || null,
+          country: wizardData.sender.country || 'US',
+          zipcode: wizardData.sender.zipCode || null,
           orderNumber: generatedOrderNumber,
           services: wizardData.selectedServices.map((s: any) => s.name),
           notes: 'Orden de recogida creada desde wizard',

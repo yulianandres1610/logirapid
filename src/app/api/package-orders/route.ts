@@ -106,6 +106,12 @@ export async function GET(request: NextRequest) {
         office_order_data as "officeOrderData",
         warehouse_id as "warehouseId",
         warehouse_name as "warehouseName",
+        zipcode,
+        street,
+        apartment,
+        city,
+        state,
+        country,
         createdat as "createdAt",
         COUNT(*) OVER() as total_count
       FROM package_orders
@@ -241,13 +247,17 @@ export async function POST(request: NextRequest) {
         notes, scheduleddate, timeslot, status, createdby,
         latitude, longitude, subtotal, taxamount, totalamount,
         boxcount, boxprice, additionalservices, boxes,
-        firstname, lastname, order_type, office_order_data, zipcode, createdat, updatedat
+        firstname, lastname, order_type, office_order_data,
+        zipcode, street, apartment, city, state, country,
+        createdat, updatedat
       ) VALUES (
         $1, $2, $3, $4, $5,
         $6, $7, $8, $9, $10,
         $11, $12, $13, $14, $15,
         $16, $17, $18, $19,
-        $20, $21, $22, $23, $24, NOW(), NOW()
+        $20, $21, $22, $23,
+        $24, $25, $26, $27, $28, $29,
+        NOW(), NOW()
       )
       RETURNING *
     `
@@ -279,7 +289,12 @@ export async function POST(request: NextRequest) {
       body.lastName || null,
       orderType,
       body.officeOrderData || null,
-      zipcode
+      zipcode,
+      body.street || null,
+      body.apartment || null,
+      body.city || null,
+      body.state || null,
+      body.country || null
     ]
 
     const result = await db.query(insertQuery, values)

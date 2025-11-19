@@ -1,16 +1,16 @@
 'use client'
 
-import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { motion } from 'framer-motion'
 import { LoginForm } from '@/components/forms/LoginForm'
+import Image from 'next/image'
+import { Lock, Mail, ArrowRight } from 'lucide-react'
 
 export default function LoginPage() {
   const router = useRouter()
 
   const handleLoginSuccess = () => {
-    console.log('✅ LoginPage - handleLoginSuccess llamado')
-    // La redirección se manejará automáticamente por el AuthProvider
+    router.push('/dashboard/admin')
   }
 
   return (
@@ -38,13 +38,13 @@ export default function LoginPage() {
         <div className="absolute bottom-2/5 right-1/5 w-48 h-48 bg-exa-secondary/14 rounded-full filter blur-2xl animate-pulse delay-1700" />
         <div className="absolute left-2/5 top-1/4 w-72 h-72 bg-exa-secondary/16 rounded-full filter blur-3xl animate-pulse delay-500" />
         <div className="absolute right-2/5 bottom-1/6 w-40 h-40 bg-exa-secondary/20 rounded-full filter blur-2xl animate-pulse delay-1300" />
-        <div className="absolute top-4/5 left-1/3 w-52 h-52 bg-exa-secondary/12 rounded-full filter blur-3xl animate-pulse delay-900" />
-        <div className="absolute bottom-1/6 right-2/3 w-44 h-44 bg-exa-secondary/16 rounded-full filter blur-3xl animate-pulse delay-1600" />
+        <div className="absolute top-4/5 left-1/3 w-52 h-52 bg-exa-secondary/12 rounded-full filter blur-2xl animate-pulse delay-900" />
+        <div className="absolute bottom-1/6 right-2/3 w-44 h-44 bg-exa-secondary/16 rounded-full filter blur-2xl animate-pulse delay-1600" />
         <div className="absolute left-1/4 top-2/3 w-60 h-60 bg-exa-secondary/14 rounded-full filter blur-3xl animate-pulse delay-400" />
-        <div className="absolute right-1/3 top-1/6 w-36 h-36 bg-exa-secondary/18 rounded-full filter blur-3xl animate-pulse delay-1100" />
+        <div className="absolute right-1/3 top-1/6 w-36 h-36 bg-exa-secondary/18 rounded-full filter blur-2xl animate-pulse delay-1100" />
       </div>
 
-
+    
       {/* Main Container - Centrado */}
       <div className="relative z-10 w-full max-w-md mx-auto">
         {/* Login Card */}
@@ -62,8 +62,8 @@ export default function LoginPage() {
             className="flex justify-center pt-8 pb-4"
           >
             <img
-              src="/logo-blanco.png"
-              alt="LogiRapid"
+              src="/images/logoheader.png"
+              alt="CUBARAPID"
               className="object-contain w-full max-w-xs h-auto"
               onError={(e) => {
                 console.error('Error loading logo:', e);
@@ -73,7 +73,7 @@ export default function LoginPage() {
                 if (parent) {
                   parent.innerHTML = `
                     <div class="text-white font-bold text-3xl tracking-wider px-4 py-2">
-                      LogiRapid
+                      CUBARAPID
                     </div>
                   `;
                 }
@@ -108,7 +108,7 @@ export default function LoginPage() {
           className="text-center mt-8"
         >
           <p className="text-gray-500 text-xs">
-            © 2024 LogiRapid. Todos los derechos reservados.
+            © 2024 CUBARAPID. Todos los derechos reservados.
           </p>
         </motion.div>
       </div>
