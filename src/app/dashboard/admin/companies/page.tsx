@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   Building2,
@@ -28,16 +28,19 @@ import {
   Activity,
   Zap,
   Shield,
-  Star
+  Star,
+  Loader2
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useTheme } from '@/contexts/theme-context'
 import { DashboardLayout } from '@/components/layout/dashboard-layout'
 import { WalletCard } from '@/components/wallet-card'
 import { Button } from '@/components/ui/button'
+import LogoUpload from '@/components/ui/LogoUpload'
 
-// Mock data for registered companies
-const MOCK_COMPANIES = [
+// Placeholder while data loads
+const LOADING_COMPANIES:any[] = []
+const MOCK_COMPANIES_BACKUP = [
   {
     id: 1,
     legalName: 'CubaExpress S.A.',
@@ -162,20 +165,24 @@ const getPrimaryCurrencyForCountry = (country: string) => {
 
 export default function CompaniesPage() {
   const { theme } = useTheme()
-  const [companies, setCompanies] = useState(MOCK_COMPANIES)
+  const [companies, setCompanies] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
   const [showCreateForm, setShowCreateForm] = useState(false)
   const [searchTerm, setSearchTerm] = useState('')
   const [selectedFilter, setSelectedFilter] = useState('all')
-  const [selectedCompany, setSelectedCompany] = useState<typeof MOCK_COMPANIES[0] | null>(null)
+  const [selectedCompany, setSelectedCompany] = useState<any>(null)
 
   // Create company form state
   const [currentStep, setCurrentStep] = useState(1)
   const [formData, setFormData] = useState<any>({
     legalName: '',
     phone: '',
+    email: '',
     address: '',
     city: '',
+    state: '',
     country: '',
+    zipCode: '',
     walletNumber: '',
     currency: '',
     isMultiCurrency: false,

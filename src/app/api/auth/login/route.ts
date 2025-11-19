@@ -105,13 +105,48 @@ export async function POST(request: NextRequest) {
     // Remove password from response
     const { password: _, ...userWithoutPassword } = user
 
-    // Return authenticated user
-    return NextResponse.json({
+    // Prepare user data for response
+    const userData = {
+      id: user.id,
+      name: `${user.firstName || ''} ${user.lastName || ''}`.trim(),
+      email: user.email,
+      role: user.role,
+      companyId: user.companyId,
+      companyName: user.companyName,
+      createdAt: user.createdAt,
+      updatedAt: user.createdAt, // Use createdAt as fallback
+    }
+
+    // Create response with cookies
+    const response = NextResponse.json({
       success: true,
-      data: {
-        user: userWithoutPassword
-      }
+      user: userData
     })
+
+    // Set authentication cookies
+    const cookieOptions = {
+      httpOnly: false, // Allow JavaScript access for client-side routing
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax' as const,
+      path: '/',
+      maxAge: 60 * 60 * 24 * 7, // 7 days
+    }
+
+    response.cookies.set('auth-token', 'authenticated', cookieOptions)
+    response.cookies.set('user-id', user.id.toString(), cookieOptions)
+    response.cookies.set('user-name', encodeURIComponent(userData.name), cookieOptions)
+    response.cookies.set('user-email', encodeURIComponent(user.email), cookieOptions)
+    response.cookies.set('user-role', user.role, cookieOptions)
+
+    if (user.companyId) {
+      response.cookies.set('user-company-id', user.companyId.toString(), cookieOptions)
+    }
+
+    if (user.companyName) {
+      response.cookies.set('user-company-name', encodeURIComponent(user.companyName), cookieOptions)
+    }
+
+    return response
 
   } catch (error) {
     console.error('Login error:', error)
