@@ -13,46 +13,6 @@ interface UseAuthReturn {
   clearError: () => void
 }
 
-const mockUsers: User[] = [
-  {
-    id: '1',
-    email: 'admin@cubarapid.com',
-    name: 'Administrador General',
-    role: 'SUPER_ADMIN',
-    createdAt: new Date(),
-    updatedAt: new Date(),
-  },
-  {
-    id: '2',
-    email: 'empresa@cubaexpress.com',
-    name: 'Carlos Pérez',
-    role: 'ADMIN',
-    companyId: 'company-1',
-    createdAt: new Date(),
-    updatedAt: new Date(),
-  },
-  {
-    id: '3',
-    email: 'manager@cubaexpress.com',
-    name: 'María González',
-    role: 'MANAGER',
-    companyId: 'company-1',
-        createdAt: new Date(),
-    updatedAt: new Date(),
-  },
-  {
-    id: '4',
-    email: 'usuario@cubaexpress.com',
-    name: 'Luis Rodríguez',
-    role: 'USER',
-    companyId: 'company-1',
-        createdAt: new Date(),
-    updatedAt: new Date(),
-  }
-]
-
-const mockUser: User = mockUsers[0] // Por defecto, el admin general
-
 export function useAuth(): UseAuthReturn {
   const [state, setState] = useState<AuthState>({
     user: null,
@@ -66,17 +26,31 @@ export function useAuth(): UseAuthReturn {
     if (typeof window === 'undefined') return
 
     try {
-      // First check localStorage
-      let userStr = localStorage.getItem('user')
-      let user: User | null = null
-
+      // Check localStorage first
+      const userStr = localStorage.getItem('user')
       if (userStr) {
-        user = JSON.parse(userStr)
+        const user = JSON.parse(userStr)
+        setState(prev => ({ ...prev, user, isLoading: false }))
       } else {
-        // If no localStorage, check cookies and reconstruct user
+        // Check cookies and reconstruct user from them
         const authToken = document.cookie
           .split('; ')
           .find(row => row.startsWith('auth-token='))
+          ?.split('=')[1]
+
+        const userId = document.cookie
+          .split('; ')
+          .find(row => row.startsWith('user-id='))
+          ?.split('=')[1]
+
+        const userName = document.cookie
+          .split('; ')
+          .find(row => row.startsWith('user-name='))
+          ?.split('=')[1]
+
+        const userEmail = document.cookie
+          .split('; ')
+          .find(row => row.startsWith('user-email='))
           ?.split('=')[1]
 
         const userRole = document.cookie
@@ -94,23 +68,24 @@ export function useAuth(): UseAuthReturn {
           .find(row => row.startsWith('user-company-name='))
           ?.split('=')[1]
 
-        if (authToken === 'authenticated' && userRole) {
-          // Reconstruct user from mock data based on role
-          user = mockUsers.find(u => u.role === userRole) || null
-          if (user) {
-            user = { ...user, companyId: companyId || user.companyId }
-            // Save to localStorage for future use
-            localStorage.setItem('user', JSON.stringify(user))
+        if (authToken === 'authenticated' && userId && userName && userEmail && userRole) {
+          const user: User = {
+            id: userId,
+            name: decodeURIComponent(userName),
+            email: decodeURIComponent(userEmail),
+            role: userRole as any,
+            companyId: companyId || undefined,
+            createdAt: new Date(),
+            updatedAt: new Date(),
           }
+          localStorage.setItem('user', JSON.stringify(user))
+          setState(prev => ({ ...prev, user, isLoading: false }))
+        } else {
+          setState(prev => ({ ...prev, isLoading: false }))
         }
       }
-
-      if (user) {
-        setState(prev => ({ ...prev, user, isLoading: false }))
-      } else {
-        setState(prev => ({ ...prev, isLoading: false }))
-      }
     } catch (error) {
+      console.error('Error loading user from storage:', error)
       localStorage.removeItem('user')
       setState(prev => ({ ...prev, isLoading: false }))
     }
@@ -120,84 +95,103 @@ export function useAuth(): UseAuthReturn {
     setState(prev => ({ ...prev, isLoading: true, error: null }))
 
     try {
-      // Simular delay de red
-      await new Promise(resolve => setTimeout(resolve, 1500))
+      // Call the real API endpoint
+      const response = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(credentials),
+      })
 
-      // Buscar usuario en mockUsers
-      const user = mockUsers.find(
-        u => u.email === credentials.email
-      )
+      const data = await response.json()
 
-      // Validar credenciales
-      let authenticatedUser: User | null = null
-
-      if (credentials.email === 'admin@cubarapid.com' && credentials.password === 'admin123') {
-        authenticatedUser = mockUsers[0] // SUPER_ADMIN
-      } else if (credentials.email === 'empresa@cubaexpress.com' && credentials.password === 'empresa123') {
-        authenticatedUser = mockUsers[1] // ADMIN de empresa
-      } else if (credentials.email === 'manager@cubaexpress.com' && credentials.password === 'manager123') {
-        authenticatedUser = mockUsers[2] // MANAGER de empresa
-      } else if (credentials.email === 'usuario@cubaexpress.com' && credentials.password === 'usuario123') {
-        authenticatedUser = mockUsers[3] // USER de empresa
+      if (!response.ok) {
+        throw new Error(data.error || 'Error al iniciar sesión')
       }
 
-      if (authenticatedUser) {
-        // Guardar en localStorage y cookie
-        if (typeof window !== 'undefined') {
-          localStorage.setItem('user', JSON.stringify(authenticatedUser))
-          document.cookie = 'auth-token=authenticated; path=/; max-age=86400'
-
-          // También guardar cookies específicas para el middleware
-          document.cookie = `user-company-id=${authenticatedUser.companyId || ''}; path=/; max-age=86400`
-          document.cookie = `user-role=${authenticatedUser.role}; path=/; max-age=86400`
-          document.cookie = `user-company-name=CubaExpress S.A.; path=/; max-age=86400`
+      if (data.success && data.user) {
+        const user: User = {
+          id: data.user.id.toString(),
+          name: data.user.name,
+          email: data.user.email,
+          role: data.user.role,
+          companyId: data.user.companyId?.toString(),
+          createdAt: new Date(data.user.createdAt),
+          updatedAt: new Date(data.user.updatedAt),
         }
 
-        // Actualizar estado inmediatamente
+        // Save to localStorage
+        if (typeof window !== 'undefined') {
+          localStorage.setItem('user', JSON.stringify(user))
+        }
+
+        // Update state
         setState({
-          user: authenticatedUser,
+          user,
           isLoading: false,
           isTransitioning: false,
           error: null,
         })
 
-        // Redirección según el rol
+        // Redirect to appropriate dashboard based on role
         if (typeof window !== 'undefined') {
-          if (authenticatedUser.role === 'SUPER_ADMIN') {
-            window.location.href = '/dashboard/admin'
-          } else if (authenticatedUser.role === 'ADMIN') {
-            window.location.href = '/dashboard/agency-admin'
-          } else if (authenticatedUser.role === 'MANAGER') {
-            window.location.href = '/dashboard/manager'
-          } else if (authenticatedUser.role === 'USER') {
-            window.location.href = '/dashboard/user'
+          let redirectPath = '/dashboard/admin'
+
+          switch (user.role) {
+            case 'SUPER_ADMIN':
+              redirectPath = '/dashboard/admin'
+              break
+            case 'ADMIN':
+              redirectPath = '/dashboard/agency-admin'
+              break
+            case 'MANAGER':
+              redirectPath = '/dashboard/agency-admin'
+              break
+            case 'USER':
+              redirectPath = '/dashboard/agency-admin'
+              break
+            default:
+              redirectPath = '/dashboard/admin'
           }
+
+          window.location.href = redirectPath
         }
       } else {
-        throw new Error('Credenciales incorrectas')
+        throw new Error('Respuesta inválida del servidor')
       }
     } catch (error) {
+      console.error('Login error:', error)
       setState(prev => ({
         ...prev,
         user: null,
         isLoading: false,
         isTransitioning: false,
-        error: error instanceof Error ? error.message : 'Error desconocido',
+        error: error instanceof Error ? error.message : 'Error al iniciar sesión',
       }))
     }
   }, [])
 
   const logout = useCallback(() => {
-    // Limpiar localStorage y cookies
+    // Clear localStorage and cookies
     if (typeof window !== 'undefined') {
       localStorage.removeItem('user')
-      document.cookie = 'auth-token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT'
-      document.cookie = 'user-company-id=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT'
-      document.cookie = 'user-role=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT'
-      document.cookie = 'user-company-name=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT'
+      // Clear all auth cookies
+      const cookiesToClear = [
+        'auth-token',
+        'user-id',
+        'user-name',
+        'user-email',
+        'user-role',
+        'user-company-id',
+        'user-company-name',
+      ]
+      cookiesToClear.forEach(cookie => {
+        document.cookie = `${cookie}=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT`
+      })
     }
 
-    // Resetear estado
+    // Reset state
     setState({
       user: null,
       isLoading: false,
@@ -205,7 +199,7 @@ export function useAuth(): UseAuthReturn {
       error: null,
     })
 
-    // Redirigir al login
+    // Redirect to login
     if (typeof window !== 'undefined') {
       window.location.href = '/login'
     }

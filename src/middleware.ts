@@ -14,10 +14,9 @@ export async function middleware(request: NextRequest) {
     '/auth/error'
   ]
 
-  // Recursos estáticos y API públicas
+  // Recursos estáticos (pero NO API)
   const staticRoutes = [
     '/_next',
-    '/api',
     '/images',
     '/favicon.ico',
     '/robots.txt'
@@ -26,6 +25,39 @@ export async function middleware(request: NextRequest) {
   // Verificar si la ruta es pública
   if (publicRoutes.includes(pathname) || staticRoutes.some(route => pathname.startsWith(route))) {
     return NextResponse.next()
+  }
+
+  // Para rutas API, inyectar headers de autenticación y multi-tenancy
+  if (pathname.startsWith('/api')) {
+    const authToken = request.cookies.get('auth-token')?.value
+    const userRole = request.cookies.get('user-role')?.value
+    const companyId = request.cookies.get('user-company-id')?.value
+    const companyName = request.cookies.get('user-company-name')?.value
+    const userId = request.cookies.get('user-id')?.value
+
+    // Crear respuesta con headers inyectados
+    const response = NextResponse.next()
+
+    // Inyectar headers para que las APIs puedan acceder a la información del usuario
+    if (authToken) {
+      response.headers.set('x-auth-token', authToken)
+    }
+    if (userRole) {
+      response.headers.set('x-user-role', userRole)
+      // Inyectar flag de super admin para query-helpers.ts
+      response.headers.set('x-is-super-admin', userRole === 'SUPER_ADMIN' ? 'true' : 'false')
+    }
+    if (companyId) {
+      response.headers.set('x-company-id', companyId)
+    }
+    if (companyName) {
+      response.headers.set('x-company-name', companyName)
+    }
+    if (userId) {
+      response.headers.set('x-user-id', userId)
+    }
+
+    return response
   }
 
   // Solo aplicar middleware a rutas del dashboard
