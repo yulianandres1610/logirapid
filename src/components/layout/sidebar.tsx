@@ -232,11 +232,21 @@ interface SidebarProps {
   onToggle: () => void
 }
 
+interface BrandingData {
+  companyId: number
+  companyName: string
+  subdomain: string
+  logoUrl: string | null
+  primaryColor: string
+  secondaryColor: string
+}
+
 export function Sidebar({ isCollapsed, onToggle }: SidebarProps) {
   const pathname = usePathname()
   const { theme } = useTheme()
   const { user } = useAuth()
   const [openSubmenus, setOpenSubmenus] = useState<{ [key: string]: boolean }>({})
+  const [branding, setBranding] = useState<BrandingData | null>(null)
 
   const toggleSubmenu = (key: string) => {
     setOpenSubmenus(prev => ({
@@ -260,6 +270,25 @@ export function Sidebar({ isCollapsed, onToggle }: SidebarProps) {
       }))
     }
   }, [pathname])
+
+  // Fetch branding data for company logo
+  useEffect(() => {
+    const fetchBranding = async () => {
+      try {
+        const response = await fetch('/api/branding/current')
+        if (response.ok) {
+          const data = await response.json()
+          if (data.success) {
+            setBranding(data.data)
+          }
+        }
+      } catch (error) {
+        console.error('Error fetching branding in sidebar:', error)
+      }
+    }
+
+    fetchBranding()
+  }, [user?.companyId])
 
   // Menu items para SUPER_ADMIN (acceso completo a todo el sistema)
   const superAdminMenuItems = [
@@ -307,16 +336,15 @@ export function Sidebar({ isCollapsed, onToggle }: SidebarProps) {
       href: "/dashboard/agency-admin/orders",
       hasSubmenu: true,
       submenuItems: [
-        { icon: Truck, label: "Órdenes Recogida", href: "/dashboard/agency-admin/orders" },
+        { icon: Truck, label: "Órdenes Recogida", href: "/dashboard/agency-admin/pickup-orders" },
         { icon: Store, label: "Órdenes Oficina", href: "/dashboard/agency-admin/office-orders" },
         { icon: Warehouse, label: "Almacenes", href: "/dashboard/agency-admin/warehouses" },
         { icon: Car, label: "Vehículos", href: "/dashboard/agency-admin/vehicles" },
-        { icon: Route, label: "Rutas", href: "/dashboard/admin/routes" },
-        { icon: Box, label: "Empaque", href: "/dashboard/agency-admin/package-route" },
-        { icon: Settings, label: "Configuración", href: "/dashboard/agency-admin/paqueteria/configuracion" }
+        { icon: Route, label: "Rutas", href: "/dashboard/agency-admin/routes" },
+        { icon: Box, label: "Empaque", href: "/dashboard/agency-admin/package-route" }
       ]
     },
-    { icon: Settings, label: "Configuración", href: "/dashboard/agency-admin/white-label" },
+    { icon: Settings, label: "Configuración", href: "/dashboard/agency-admin/settings" },
   ]
 
   // Menu items para MANAGER (puede crear usuarios y recargar wallet, pero no empresas ni transferencias)
@@ -337,12 +365,11 @@ export function Sidebar({ isCollapsed, onToggle }: SidebarProps) {
         { icon: Store, label: "Órdenes Oficina", href: "/dashboard/manager/office-orders" },
         { icon: Warehouse, label: "Almacenes", href: "/dashboard/manager/warehouses" },
         { icon: Car, label: "Vehículos", href: "/dashboard/manager/vehicles" },
-        { icon: Route, label: "Rutas", href: "/dashboard/admin/routes" },
-        { icon: Box, label: "Empaque", href: "/dashboard/manager/package-route" },
-        { icon: Settings, label: "Configuración", href: "/dashboard/manager/paqueteria/configuracion" }
+        { icon: Route, label: "Rutas", href: "/dashboard/manager/routes" },
+        { icon: Box, label: "Empaque", href: "/dashboard/manager/package-route" }
       ]
     },
-    { icon: Settings, label: "Configuración", href: "/dashboard/manager/white-label" },
+    { icon: Settings, label: "Configuración", href: "/dashboard/manager/settings" },
   ]
 
   // Menu items para USER (solo puede vender servicios)
@@ -493,8 +520,8 @@ export function Sidebar({ isCollapsed, onToggle }: SidebarProps) {
                   className="flex items-center justify-start w-full"
                 >
                   <img
-                    src={theme === 'light' ? "/logo-rojo.png" : "/logo-blanco.png"}
-                    alt="LogiRapid"
+                    src={branding?.logoUrl || (theme === 'light' ? "/logo-rojo.png" : "/logo-blanco.png")}
+                    alt={branding?.companyName || "LogiRapid"}
                     className={cn(
                       "h-14 object-contain transition-all duration-300",
                       "w-full max-w-[200px] drop-shadow-lg"

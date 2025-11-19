@@ -3,12 +3,9 @@
  * Diseño: 4x6 pulgadas
  * Contenido:
  * - Logo de la empresa (arriba)
- * - Código del empaque
- * - Almacén de creación
- * - Almacén de impresión
- * - Fecha/hora de creación
- * - Fecha/hora de impresión
- * - Código de barras del almacén (abajo)
+ * - Código del empaque con código de barras
+ * - Sección promocional grande: "Puede llamarnos para recogida y entregas"
+ * - Footer: Fechas de creación/impresión y marca de agua
  */
 
 interface Empaque {
@@ -33,6 +30,8 @@ interface Company {
   legalName: string
   logo?: string
   primary_color?: string
+  phone?: string
+  customerServicePhone?: string
 }
 
 interface EmpaqueLabel {
@@ -105,7 +104,7 @@ export function generateEmpaqueLabel({
         }
 
         .company-name {
-          font-size: 32px;
+          font-size: 38px;
           font-weight: bold;
           color: #000000;
           margin-top: 5px;
@@ -143,139 +142,77 @@ export function generateEmpaqueLabel({
           margin-top: 2px;
         }
 
-        /* Datos de almacenes */
-        .warehouse-section {
+        /* Sección promocional de atención al cliente */
+        .customer-service-section {
           flex: 1;
-          margin: 0.05in 0;
-        }
-
-        .warehouse-block {
-          background: white;
-          border: 1px solid #000000;
-          border-radius: 4px;
-          padding: 0.08in;
-          margin-bottom: 0.05in;
-        }
-
-        .warehouse-title {
-          font-size: 9px;
-          color: #000000;
-          text-transform: uppercase;
-          margin-bottom: 3px;
-          font-weight: 700;
-          letter-spacing: 0.3px;
-        }
-
-        .warehouse-name {
-          font-size: 12px;
-          font-weight: bold;
-          color: #000000;
-          margin-bottom: 2px;
-        }
-
-        .warehouse-details {
-          font-size: 9px;
-          color: #000000;
-          line-height: 1.3;
-        }
-
-        /* Fechas */
-        .dates-section {
-          display: grid;
-          grid-template-columns: 1fr 1fr;
-          gap: 0.05in;
-          margin-bottom: 0.08in;
-        }
-
-        .date-block {
-          background: white;
-          padding: 6px;
-          border-radius: 3px;
-          border: 1px solid #000000;
-        }
-
-        .date-label {
-          font-size: 8px;
-          color: #000000;
-          text-transform: uppercase;
-          margin-bottom: 2px;
-          font-weight: 600;
-        }
-
-        .date-value {
-          font-size: 9px;
-          font-weight: 700;
-          color: #000000;
-        }
-
-        .time-value {
-          font-size: 8px;
-          color: #000000;
-          margin-top: 1px;
-        }
-
-        /* Códigos QR de información */
-        .qr-codes-section {
-          display: grid;
-          grid-template-columns: 1fr 1fr 1fr;
-          gap: 0.04in;
-          margin: 0.05in 0;
-          padding: 0.06in;
-          border: 1px solid #000000;
-          border-radius: 3px;
-        }
-
-        .qr-item {
-          text-align: center;
           display: flex;
           flex-direction: column;
+          justify-content: center;
           align-items: center;
-        }
-
-        .qr-container {
-          width: 0.5in;
-          height: 0.5in;
-          margin: 0 auto 2px;
-        }
-
-        .qr-container canvas {
-          width: 100% !important;
-          height: 100% !important;
-        }
-
-        .qr-label {
-          font-size: 7px;
-          color: #000000;
-          font-weight: 600;
-          text-transform: uppercase;
-        }
-
-        /* Código de barras */
-        .barcode-section {
           text-align: center;
-          padding-top: 0.08in;
+          padding: 0.2in 0.12in;
+          background: white;
+          border: 2px solid #000000;
+          border-radius: 8px;
+          margin: 0.1in 0;
+        }
+
+        .service-header {
+          font-size: 16px;
+          font-weight: 800;
+          color: #000000;
+          margin-bottom: 10px;
+          letter-spacing: 0.8px;
+          line-height: 1.3;
+          max-width: 3.2in;
+        }
+
+        .service-phone {
+          font-size: 28px;
+          font-weight: 900;
+          color: #000000;
+          margin: 8px 0;
+          font-family: 'Courier New', monospace;
+          letter-spacing: 2px;
+        }
+
+        /* Footer con fechas y marca de agua */
+        .label-footer {
           border-top: 1px solid #000000;
+          padding: 0.08in 0;
           margin-top: auto;
         }
 
-        .barcode-label {
+        .footer-dates {
+          display: flex;
+          justify-content: space-between;
+          margin-bottom: 4px;
           font-size: 8px;
           color: #000000;
-          margin-bottom: 3px;
+        }
+
+        .footer-date-item {
+          display: flex;
+          flex-direction: column;
+        }
+
+        .footer-date-label {
+          font-weight: 700;
           text-transform: uppercase;
-          font-weight: 600;
+          margin-bottom: 1px;
         }
 
-        #warehouseBarcode {
-          max-width: 100%;
+        .footer-date-value {
+          font-weight: 400;
         }
 
-        .barcode-code {
-          font-size: 9px;
-          color: #000000;
-          margin-top: 2px;
-          font-family: 'Courier New', monospace;
+        .footer-watermark {
+          text-align: center;
+          font-size: 7px;
+          color: #666666;
           font-weight: 600;
+          margin-top: 4px;
+          letter-spacing: 0.3px;
         }
 
         @media print {
@@ -346,63 +283,25 @@ export function generateEmpaqueLabel({
           <div class="codigo-text">${empaque.codigo}</div>
         </div>
 
-        <!-- Datos de almacenes -->
-        <div class="warehouse-section">
-          <!-- Almacén de creación -->
-          <div class="warehouse-block">
-            <div class="warehouse-title">ALMACEN DE CREACION</div>
-            <div class="warehouse-name">${warehouseCreacion.name}</div>
-            <div class="warehouse-details">
-              Código: ${warehouseCreacion.code} | ${warehouseCreacion.city}
+        <!-- Sección promocional de atención al cliente -->
+        <div class="customer-service-section">
+          <div class="service-header">Puede Llamarnos Para Solicitar<br>Entregas de Cajas Vacias o<br>Recogidas de sus cajas Llenas</div>
+          <div class="service-phone">${company.customerServicePhone || company.phone || '6452432403'}</div>
+        </div>
+
+        <!-- Footer con fechas y marca de agua -->
+        <div class="label-footer">
+          <div class="footer-dates">
+            <div class="footer-date-item">
+              <div class="footer-date-label">Creación:</div>
+              <div class="footer-date-value">${formatDate(new Date(empaque.created_at))} ${formatTime(new Date(empaque.created_at))}</div>
+            </div>
+            <div class="footer-date-item">
+              <div class="footer-date-label">Impresión:</div>
+              <div class="footer-date-value">${formatDate(fechaImpresion)} ${formatTime(fechaImpresion)}</div>
             </div>
           </div>
-
-          <!-- Almacén de impresión -->
-          <div class="warehouse-block">
-            <div class="warehouse-title">ALMACEN DE IMPRESION</div>
-            <div class="warehouse-name">${warehouseImpresion.name}</div>
-            <div class="warehouse-details">
-              Código: ${warehouseImpresion.code} | ${warehouseImpresion.city}
-            </div>
-          </div>
-        </div>
-
-        <!-- Códigos QR de información -->
-        <div class="qr-codes-section">
-          <div class="qr-item">
-            <div class="qr-container" id="qr-web"></div>
-            <div class="qr-label">Web</div>
-          </div>
-          <div class="qr-item">
-            <div class="qr-container" id="qr-phone"></div>
-            <div class="qr-label">Teléfono</div>
-          </div>
-          <div class="qr-item">
-            <div class="qr-container" id="qr-address"></div>
-            <div class="qr-label">Dirección</div>
-          </div>
-        </div>
-
-        <!-- Fechas -->
-        <div class="dates-section">
-          <div class="date-block">
-            <div class="date-label">Creación</div>
-            <div class="date-value">${formatDate(new Date(empaque.created_at))}</div>
-            <div class="time-value">${formatTime(new Date(empaque.created_at))}</div>
-          </div>
-
-          <div class="date-block">
-            <div class="date-label">Impresión</div>
-            <div class="date-value">${formatDate(fechaImpresion)}</div>
-            <div class="time-value">${formatTime(fechaImpresion)}</div>
-          </div>
-        </div>
-
-        <!-- Código de barras del almacén de impresión -->
-        <div class="barcode-section">
-          <div class="barcode-label">Código de Almacén</div>
-          <svg id="warehouseBarcode"></svg>
-          <div class="barcode-code">${warehouseImpresion.code}</div>
+          <div class="footer-watermark">${company.legalName} - Todos los derechos reservados</div>
         </div>
       </div>
 
@@ -423,43 +322,6 @@ export function generateEmpaqueLabel({
               height: 60,
               displayValue: false,
               margin: 5
-            });
-
-            // Generar código de barras para el código del almacén
-            JsBarcode("#warehouseBarcode", "${warehouseImpresion.code}", {
-              format: "CODE128",
-              width: 2,
-              height: 50,
-              displayValue: false,
-              margin: 5
-            });
-
-            // Generar códigos QR
-            new QRCode(document.getElementById("qr-web"), {
-              text: "https://logirapid.com/ventas",
-              width: 48,
-              height: 48,
-              colorDark: "#000000",
-              colorLight: "#ffffff",
-              correctLevel: QRCode.CorrectLevel.M
-            });
-
-            new QRCode(document.getElementById("qr-phone"), {
-              text: "tel:6452432403",
-              width: 48,
-              height: 48,
-              colorDark: "#000000",
-              colorLight: "#ffffff",
-              correctLevel: QRCode.CorrectLevel.M
-            });
-
-            new QRCode(document.getElementById("qr-address"), {
-              text: "Miami, FL",
-              width: 48,
-              height: 48,
-              colorDark: "#000000",
-              colorLight: "#ffffff",
-              correctLevel: QRCode.CorrectLevel.M
             });
 
             // Auto-abrir el diálogo de impresión después de generar todos los códigos

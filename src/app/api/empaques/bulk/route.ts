@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/database'
+import { getCompanyFilter } from '@/lib/query-helpers'
 
 export const dynamic = 'force-dynamic'
 export const dynamicParams = true
@@ -34,6 +35,34 @@ export async function POST(request: NextRequest) {
       usuarioNombre,
       labelSettingId
     } = body
+
+    // Get company filter
+    const { isSuperAdmin, companyId: userCompanyId } = getCompanyFilter(request)
+
+    // For SUPER_ADMIN, get company_id from the warehouse
+    // For normal users, use their company_id
+    let companyId = userCompanyId
+
+    // If SUPER_ADMIN and no company_id from cookies, get it from warehouse
+    if (isSuperAdmin && !companyId && warehouseId) {
+      const warehouseResult = await db.query(
+        'SELECT company_id FROM warehouses WHERE id = $1',
+        [warehouseId]
+      )
+
+      if (warehouseResult.rows.length > 0) {
+        companyId = warehouseResult.rows[0].company_id
+        console.log(`📦 [empaques/bulk] SUPER_ADMIN: Using warehouse's company_id: ${companyId}`)
+      }
+    }
+
+    // If still no company_id, reject
+    if (!companyId) {
+      return NextResponse.json(
+        { success: false, error: 'No se pudo determinar la empresa. Seleccione un almacén válido.' },
+        { status: 400 }
+      )
+    }
 
     if (!quantity || quantity < 1) {
       return NextResponse.json(
@@ -100,10 +129,10 @@ export async function POST(request: NextRequest) {
         const result = await db.query(
           `INSERT INTO empaques (
             codigo, package_size_id, tipo, estado, warehouse_id, warehouse_name,
-            supplier_id, supplier_name, label_setting_id, created_at, updated_at
-          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW(), NOW())
+            supplier_id, supplier_name, label_setting_id, company_id, created_at, updated_at
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW(), NOW())
           RETURNING *`,
-          [newCodigo, packageSizeId, 'caja', 'disponible', warehouseId, warehouseName, supplierId, supplierName, labelSettingId || null]
+          [newCodigo, packageSizeId, 'caja', 'disponible', warehouseId, warehouseName, supplierId, supplierName, labelSettingId || null, companyId]
         )
 
         createdEmpaques.push(result.rows[0])
@@ -129,10 +158,10 @@ export async function POST(request: NextRequest) {
         const result = await db.query(
           `INSERT INTO empaques (
             codigo, package_size_id, tipo, estado, warehouse_id, warehouse_name,
-            supplier_id, supplier_name, label_setting_id, created_at, updated_at
-          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW(), NOW())
+            supplier_id, supplier_name, label_setting_id, company_id, created_at, updated_at
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW(), NOW())
           RETURNING *`,
-          [codigo, packageSizeId, 'caja', 'disponible', warehouseId, warehouseName, supplierId, supplierName, labelSettingId || null]
+          [codigo, packageSizeId, 'caja', 'disponible', warehouseId, warehouseName, supplierId, supplierName, labelSettingId || null, companyId]
         )
 
         createdEmpaques.push(result.rows[0])
