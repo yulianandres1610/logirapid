@@ -157,23 +157,18 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
       >
         <Button
           type="submit"
-          className="w-full h-14 text-base font-semibold bg-exa-secondary hover:bg-exa-secondary/90 text-white rounded-2xl transition-all duration-300 hover:shadow-xl hover:shadow-exa-secondary/25 flex items-center justify-center space-x-2"
+          className="w-full h-14 text-base font-semibold bg-exa-secondary hover:bg-exa-secondary/90 text-white rounded-2xl transition-all duration-300 hover:shadow-xl hover:shadow-exa-secondary/25"
           loading={isLoading}
           disabled={!isValid || !watchedEmail || !watchedPassword || isLoading}
         >
-          {isLoading ? (
-            <>
-              <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-              <span>Iniciando sesión...</span>
-            </>
-          ) : (
-            <>
-              <span>Ingresar</span>
+          <div className="flex items-center justify-center space-x-2">
+            <span>Ingresar</span>
+            {!isLoading && (
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
               </svg>
-            </>
-          )}
+            )}
+          </div>
         </Button>
       </motion.div>
 

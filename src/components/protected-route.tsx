@@ -10,25 +10,28 @@ interface ProtectedRouteProps {
 export function ProtectedRoute({ children, requiredRole }: ProtectedRouteProps) {
   const { user, isLoading } = useAuth()
 
-  // Si está cargando, mostrar un loading simple
-  if (isLoading) {
+  // Si está cargando o no hay usuario, mostrar loading
+  // (el middleware redirigirá al login si realmente no está autenticado)
+  if (isLoading || !user) {
     return (
       <div className="min-h-screen bg-gray-900 flex items-center justify-center">
-        <div className="w-8 h-8 border-2 border-exa-primary border-t-transparent rounded-full animate-spin" />
+        <div className="flex flex-col items-center space-y-4">
+          <div className="w-12 h-12 border-4 border-exa-secondary border-t-transparent rounded-full animate-spin" />
+          <p className="text-gray-400 text-sm">Cargando...</p>
+        </div>
       </div>
     )
   }
 
-  // Si no hay usuario o no tiene el rol requerido, mostrar mensaje simple
-  if (!user || (requiredRole && user.role !== requiredRole)) {
+  // Verificar si el usuario tiene el rol requerido
+  if (requiredRole && user.role !== requiredRole) {
+    // Redirigir automáticamente sin mostrar mensaje
+    if (typeof window !== 'undefined') {
+      window.location.href = '/login'
+    }
     return (
       <div className="min-h-screen bg-gray-900 flex items-center justify-center">
-        <div className="text-center">
-          <p className="text-white text-lg mb-4">Acceso no autorizado</p>
-          <a href="/login" className="text-exa-primary hover:underline">
-            Ir al login
-          </a>
-        </div>
+        <div className="w-12 h-12 border-4 border-exa-secondary border-t-transparent rounded-full animate-spin" />
       </div>
     )
   }
