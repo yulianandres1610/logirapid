@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react'
 import { X, CheckCircle, AlertCircle, AlertTriangle, Info } from 'lucide-react'
 import { useNotifications } from '@/contexts/NotificationContext'
+import { motion, AnimatePresence } from 'framer-motion'
 
 interface PopupNotification {
   id: string
@@ -28,6 +29,18 @@ export default function NotificationPopup() {
       }))
 
     setPopups(recentNotifications)
+
+    // Auto-remove after duration
+    if (recentNotifications.length > 0) {
+      const lastNotification = recentNotifications[0]
+      const autoHideTime = lastNotification.type === 'error' ? 7000 : 5000
+
+      const timer = setTimeout(() => {
+        removePopup(lastNotification.id)
+      }, autoHideTime)
+
+      return () => clearTimeout(timer)
+    }
   }, [notifications])
 
   const removePopup = (id: string) => {
@@ -80,89 +93,98 @@ export default function NotificationPopup() {
   }
 
   return (
-    <div className="fixed top-20 right-4 z-50 space-y-2 pointer-events-none">
-      {popups.map((popup, index) => (
-        <div
-          key={popup.id}
-          className={`
-            pointer-events-auto
-            transform transition-all duration-300 ease-out
-            ${index === 0 ? 'translate-x-0' : '-translate-x-full'}
-            hover:translate-x-0
-            min-w-80 max-w-md
-            ${getBgColor(popup.type)}
-            border-l-4 ${getBorderColor(popup.type)}
-            rounded-lg shadow-lg
-            backdrop-blur-sm
-          `}
-          style={{
-            animation: 'slideIn 0.3s ease-out',
-            animationDelay: `${index * 100}ms`,
-            animationFillMode: 'both'
-          }}
-        >
-          <div className="p-4">
-            <div className="flex items-start">
-              <div className="flex-shrink-0">
-                {getIcon(popup.type)}
-              </div>
-              <div className="ml-3 flex-1">
-                <h4 className={`text-sm font-bold ${
-                  popup.type === 'error'
-                    ? 'text-white dark:text-white'
-                    : popup.type === 'success'
-                    ? 'text-green-800 dark:text-green-200'
-                    : popup.type === 'warning'
-                    ? 'text-yellow-800 dark:text-yellow-200'
-                    : 'text-blue-800 dark:text-blue-200'
-                }`}>
-                  {popup.title}
-                </h4>
-                <p className={`mt-1 text-sm font-semibold ${
-                  popup.type === 'error'
-                    ? 'text-white dark:text-white/90'
-                    : popup.type === 'success'
-                    ? 'text-green-700 dark:text-green-300'
-                    : popup.type === 'warning'
-                    ? 'text-yellow-700 dark:text-yellow-300'
-                    : 'text-blue-700 dark:text-blue-300'
-                }`}>
-                  {popup.message}
-                </p>
-              </div>
-              <div className="ml-4 flex-shrink-0">
-                <button
-                  onClick={() => removePopup(popup.id)}
-                  className={`inline-flex rounded-md p-1.5 hover:bg-opacity-30 transition-all ${
-                    popup.type === 'error'
-                      ? 'hover:bg-red-700 dark:hover:bg-red-800 text-white hover:scale-110'
-                      : popup.type === 'success'
-                      ? 'hover:bg-green-100 dark:hover:bg-green-800 text-green-600 dark:text-green-400'
-                      : popup.type === 'warning'
-                      ? 'hover:bg-yellow-100 dark:hover:bg-yellow-800 text-yellow-600 dark:text-yellow-400'
-                      : 'hover:bg-blue-100 dark:hover:bg-blue-800 text-blue-600 dark:text-blue-400'
-                  }`}
-                >
-                  <X className="w-4 h-4 font-bold" />
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      ))}
+    <div className="fixed top-20 right-4 z-50 space-y-3 pointer-events-none">
+      <AnimatePresence>
+        {popups.map((popup, index) => {
+          const autoHideTime = popup.type === 'error' ? 7000 : 5000
 
-      <style jsx>{`
-        @keyframes slideIn {
-          from {
-            transform: translateX(100%);
-            opacity: 0;
-          }
-          to {
-            transform: translateX(0);
-            opacity: 1;
-          }
-        }
-      `}</style>
+          return (
+            <motion.div
+              key={popup.id}
+              initial={{ opacity: 0, x: 100, scale: 0.9 }}
+              animate={{ opacity: 1, x: 0, scale: 1 }}
+              exit={{ opacity: 0, x: 100, scale: 0.9 }}
+              transition={{ duration: 0.3, ease: 'easeOut' }}
+              className="pointer-events-auto"
+            >
+              <div
+                className={`
+                  relative overflow-hidden
+                  min-w-80 max-w-md
+                  ${getBgColor(popup.type)}
+                  border-l-4 ${getBorderColor(popup.type)}
+                  rounded-xl shadow-2xl
+                  backdrop-blur-md
+                `}
+              >
+                {/* Progress bar */}
+                <div className="absolute bottom-0 left-0 right-0 h-1 bg-black/10 dark:bg-white/10">
+                  <motion.div
+                    initial={{ width: '100%' }}
+                    animate={{ width: '0%' }}
+                    transition={{ duration: autoHideTime / 1000, ease: 'linear' }}
+                    className={`h-full ${
+                      popup.type === 'error'
+                        ? 'bg-red-400'
+                        : popup.type === 'success'
+                        ? 'bg-green-500'
+                        : popup.type === 'warning'
+                        ? 'bg-yellow-500'
+                        : 'bg-blue-500'
+                    }`}
+                  />
+                </div>
+
+                <div className="p-4">
+                  <div className="flex items-start gap-3">
+                    <div className="flex-shrink-0 mt-0.5">
+                      {getIcon(popup.type)}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <h4 className={`text-sm font-bold mb-1 ${
+                        popup.type === 'error'
+                          ? 'text-white'
+                          : popup.type === 'success'
+                          ? 'text-green-900 dark:text-green-100'
+                          : popup.type === 'warning'
+                          ? 'text-yellow-900 dark:text-yellow-100'
+                          : 'text-blue-900 dark:text-blue-100'
+                      }`}>
+                        {popup.title}
+                      </h4>
+                      <p className={`text-sm ${
+                        popup.type === 'error'
+                          ? 'text-white/95'
+                          : popup.type === 'success'
+                          ? 'text-green-800 dark:text-green-200'
+                          : popup.type === 'warning'
+                          ? 'text-yellow-800 dark:text-yellow-200'
+                          : 'text-blue-800 dark:text-blue-200'
+                      }`}>
+                        {popup.message}
+                      </p>
+                    </div>
+                    <button
+                      onClick={() => removePopup(popup.id)}
+                      className={`flex-shrink-0 rounded-lg p-1.5 transition-all hover:scale-110 ${
+                        popup.type === 'error'
+                          ? 'hover:bg-red-700 text-white'
+                          : popup.type === 'success'
+                          ? 'hover:bg-green-200 dark:hover:bg-green-800 text-green-700 dark:text-green-300'
+                          : popup.type === 'warning'
+                          ? 'hover:bg-yellow-200 dark:hover:bg-yellow-800 text-yellow-700 dark:text-yellow-300'
+                          : 'hover:bg-blue-200 dark:hover:bg-blue-800 text-blue-700 dark:text-blue-300'
+                      }`}
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </motion.div>
+          )
+        })}
+      </AnimatePresence>
     </div>
   )
 }

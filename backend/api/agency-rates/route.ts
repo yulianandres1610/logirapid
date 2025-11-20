@@ -60,7 +60,7 @@ export async function GET(request: NextRequest) {
       success: true,
       data: {
         rates: agencyRates,
-        config: config!,
+        config,
         timestamp: new Date().toISOString()
       }
     }
@@ -118,7 +118,7 @@ export async function POST(request: NextRequest) {
       success: true,
       data: {
         rates: agencyRates,
-        config: config!,
+        config,
         timestamp: new Date().toISOString()
       },
       message: 'Configuración de tasas actualizada exitosamente'
@@ -158,7 +158,7 @@ export async function PUT(request: NextRequest) {
       success: true,
       data: {
         rates: agencyRates,
-        config: config!,
+        config,
         baseRates: service.getBaseRates(),
         timestamp: new Date().toISOString()
       },
@@ -197,7 +197,7 @@ export async function DELETE(request: NextRequest) {
       success: true,
       data: {
         rates: agencyRates,
-        config: config!,
+        config,
         timestamp: new Date().toISOString()
       },
       message: 'Configuración restablecida a valores por defecto'

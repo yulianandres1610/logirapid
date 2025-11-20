@@ -1,16 +1,22 @@
 'use client'
 
+import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { motion } from 'framer-motion'
+import { motion, AnimatePresence } from 'framer-motion'
 import { LoginForm } from '@/components/forms/LoginForm'
 import Image from 'next/image'
-import { Lock, Mail, ArrowRight } from 'lucide-react'
+import { Lock, Mail, ArrowRight, Package } from 'lucide-react'
 
 export default function LoginPage() {
   const router = useRouter()
+  const [isRedirecting, setIsRedirecting] = useState(false)
 
   const handleLoginSuccess = () => {
-    router.push('/dashboard/admin')
+    setIsRedirecting(true)
+    // Simular carga de datos antes de redirigir
+    setTimeout(() => {
+      router.push('/dashboard/admin')
+    }, 5000)
   }
 
   return (
@@ -62,8 +68,8 @@ export default function LoginPage() {
             className="flex justify-center pt-8 pb-4"
           >
             <img
-              src="/images/logoheader.png"
-              alt="CUBARAPID"
+              src="/logo-blanco.png"
+              alt="LogiRapid"
               className="object-contain w-full max-w-xs h-auto"
               onError={(e) => {
                 console.error('Error loading logo:', e);
@@ -73,7 +79,7 @@ export default function LoginPage() {
                 if (parent) {
                   parent.innerHTML = `
                     <div class="text-white font-bold text-3xl tracking-wider px-4 py-2">
-                      CUBARAPID
+                      LogiRapid
                     </div>
                   `;
                 }
@@ -108,7 +114,7 @@ export default function LoginPage() {
           className="text-center mt-8"
         >
           <p className="text-gray-500 text-xs">
-            © 2024 CUBARAPID. Todos los derechos reservados.
+            © 2024 LogiRapid. Todos los derechos reservados.
           </p>
         </motion.div>
       </div>
@@ -243,6 +249,77 @@ export default function LoginPage() {
           delay: 0.7
         }}
       />
+
+      {/* Loading Overlay */}
+      <AnimatePresence>
+        {isRedirecting && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-gray-900/95 backdrop-blur-sm flex items-center justify-center z-50"
+          >
+            <motion.div
+              initial={{ scale: 0.8, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              transition={{ delay: 0.2, duration: 0.5 }}
+              className="flex flex-col items-center justify-center space-y-6"
+            >
+              {/* Loading Animation */}
+              <div className="relative">
+                <div className="animate-spin rounded-full h-24 w-24 border-b-4 border-t-4 border-exa-primary"></div>
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <Package className="h-12 w-12 text-exa-primary animate-pulse" />
+                </div>
+              </div>
+
+              {/* Loading Text */}
+              <div className="text-center space-y-3">
+                <motion.p
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.4 }}
+                  className="text-2xl font-semibold text-white"
+                >
+                  Cargando tu espacio de trabajo
+                </motion.p>
+                <motion.p
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.6 }}
+                  className="text-sm text-gray-400"
+                >
+                  Preparando LogiRapid para ti...
+                </motion.p>
+              </div>
+
+              {/* Loading Dots Animation */}
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ delay: 0.8 }}
+                className="flex space-x-2"
+              >
+                <motion.div
+                  animate={{ scale: [1, 1.2, 1] }}
+                  transition={{ duration: 1, repeat: Infinity, delay: 0 }}
+                  className="w-3 h-3 bg-exa-primary rounded-full"
+                />
+                <motion.div
+                  animate={{ scale: [1, 1.2, 1] }}
+                  transition={{ duration: 1, repeat: Infinity, delay: 0.2 }}
+                  className="w-3 h-3 bg-exa-secondary rounded-full"
+                />
+                <motion.div
+                  animate={{ scale: [1, 1.2, 1] }}
+                  transition={{ duration: 1, repeat: Infinity, delay: 0.4 }}
+                  className="w-3 h-3 bg-exa-primary rounded-full"
+                />
+              </motion.div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   )
 }

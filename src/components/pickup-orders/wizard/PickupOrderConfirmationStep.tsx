@@ -115,7 +115,7 @@ export default function PickupOrderConfirmationStep({ wizardData, updateWizardDa
           customerName: `${wizardData.sender.firstName} ${wizardData.sender.lastName}`, // Remitente
           customerAddress: senderFullAddress || wizardData.sender.address || null, // Dirección del remitente
           // Campos de dirección estructurados del remitente
-          street: wizardData.sender.street || null,
+          street: wizardData.sender.street || wizardData.sender.address || null,
           apartment: wizardData.sender.apartment || null,
           city: wizardData.sender.city || null,
           state: wizardData.sender.state || null,
@@ -179,7 +179,7 @@ export default function PickupOrderConfirmationStep({ wizardData, updateWizardDa
           customerName: `${wizardData.sender.firstName} ${wizardData.sender.lastName}`,
           customerAddress: senderFullAddress || wizardData.sender.address || null,
           // Campos de dirección estructurados del remitente
-          street: wizardData.sender.street || null,
+          street: wizardData.sender.street || wizardData.sender.address || null,
           apartment: wizardData.sender.apartment || null,
           city: wizardData.sender.city || null,
           state: wizardData.sender.state || null,

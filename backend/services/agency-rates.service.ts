@@ -17,6 +17,27 @@ export class AgencyRatesService {
     return AgencyRatesService.instance
   }
 
+  private createDefaultConfig(): AgencyRatesConfig {
+    const now = new Date().toISOString()
+
+    return {
+      id: 'global_config_1',
+      adjustmentPercentage: 5.0,
+      isActive: true,
+      createdAt: now,
+      updatedAt: now,
+      createdBy: 'system'
+    }
+  }
+
+  private ensureConfig(): AgencyRatesConfig {
+    if (!this.config) {
+      this.config = this.createDefaultConfig()
+    }
+
+    return this.config
+  }
+
   private initializeBaseRates(): void {
     // Tasas base simuladas desde eltoque
     this.baseRates = {
@@ -38,17 +59,12 @@ export class AgencyRatesService {
       const savedConfig = localStorage.getItem('globalAgencyConfig')
       if (savedConfig) {
         this.config = JSON.parse(savedConfig)
-      } else {
-        this.config = {
-          id: 'global_config_1',
-          adjustmentPercentage: 5.0,
-          isActive: true,
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-          createdBy: 'system'
-        }
+        return
       }
     }
+
+    // En entornos de servidor o si no hay configuración guardada, usamos valores por defecto
+    this.config = this.createDefaultConfig()
   }
 
   public updateBaseRates(rates: Record<string, number>): void {
@@ -56,31 +72,33 @@ export class AgencyRatesService {
   }
 
   public updateConfig(config: Partial<AgencyRatesConfig>): void {
-    if (this.config) {
-      this.config = { ...this.config, ...config, updatedAt: new Date().toISOString() }
+    const currentConfig = this.ensureConfig()
 
-      // Guardar en localStorage
-      if (typeof window !== 'undefined') {
-        localStorage.setItem('globalAgencyConfig', JSON.stringify(this.config))
-      }
+    this.config = { ...currentConfig, ...config, updatedAt: new Date().toISOString() }
+
+    // Guardar en localStorage
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('globalAgencyConfig', JSON.stringify(this.config))
     }
   }
 
   public calculateAgencyRates(): Record<string, AgencyRate> {
-    if (!this.config || !this.config.isActive) {
+    const config = this.ensureConfig()
+
+    if (!config.isActive) {
       return {}
     }
 
     const agencyRates: Record<string, AgencyRate> = {}
 
     Object.entries(this.baseRates).forEach(([currency, baseRate]) => {
-      const calculatedRate = baseRate * (1 + this.config!.adjustmentPercentage / 100)
+      const calculatedRate = baseRate * (1 + config.adjustmentPercentage / 100)
 
       agencyRates[currency] = {
         currency,
         baseRate,
         agencyRate: Math.round(calculatedRate * 100) / 100,
-        adjustmentPercentage: this.config!.adjustmentPercentage,
+        adjustmentPercentage: config.adjustmentPercentage,
         lastUpdate: new Date().toISOString(),
         formattedBaseRate: baseRate.toFixed(2),
         formattedAgencyRate: calculatedRate.toFixed(2)
@@ -91,20 +109,22 @@ export class AgencyRatesService {
   }
 
   public getCalculationBreakdown(currency: string): CalculationBreakdown | null {
-    if (!this.config || !this.baseRates[currency]) {
+    const config = this.ensureConfig()
+
+    if (!this.baseRates[currency]) {
       return null
     }
 
     const baseRate = this.baseRates[currency]
-    const calculatedRate = baseRate * (1 + this.config.adjustmentPercentage / 100)
+    const calculatedRate = baseRate * (1 + config.adjustmentPercentage / 100)
     const adjustment = calculatedRate - baseRate
 
     return {
       currency,
       baseRate,
-      adjustmentPercentage: this.config.adjustmentPercentage,
+      adjustmentPercentage: config.adjustmentPercentage,
       calculatedRate: Math.round(calculatedRate * 100) / 100,
-      formula: `baseRate * (1 + ${this.config.adjustmentPercentage}% / 100)`,
+      formula: `baseRate * (1 + ${config.adjustmentPercentage}% / 100)`,
       breakdown: {
         baseAmount: baseRate,
         adjustment: Math.round(adjustment * 100) / 100,
@@ -113,8 +133,8 @@ export class AgencyRatesService {
     }
   }
 
-  public getConfig(): AgencyRatesConfig | null {
-    return this.config
+  public getConfig(): AgencyRatesConfig {
+    return this.ensureConfig()
   }
 
   public getBaseRates(): Record<string, number> {
@@ -143,6 +163,12 @@ export class AgencyRatesService {
     agencyRate: number
     adjustment: number
   }> {
+    const config = this.ensureConfig()
+
+    if (!this.baseRates[currency]) {
+      return []
+    }
+
     // Simular historial de tasas
     const history = []
     const today = new Date()
@@ -153,13 +179,13 @@ export class AgencyRatesService {
 
       const variation = (Math.random() - 0.5) * 10 // Variación aleatoria de ±5%
       const historicalBaseRate = this.baseRates[currency] * (1 + variation / 100)
-      const historicalAgencyRate = historicalBaseRate * (1 + this.config!.adjustmentPercentage / 100)
+      const historicalAgencyRate = historicalBaseRate * (1 + config.adjustmentPercentage / 100)
 
       history.push({
         date: date.toISOString(),
         baseRate: Math.round(historicalBaseRate * 100) / 100,
         agencyRate: Math.round(historicalAgencyRate * 100) / 100,
-        adjustment: this.config!.adjustmentPercentage
+        adjustment: config.adjustmentPercentage
       })
     }
 

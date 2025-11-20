@@ -172,26 +172,23 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
         </Button>
       </motion.div>
 
-      {/* Demo Credentials - More Elegant */}
+      {/* Forgot Password Link */}
       <motion.div
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         transition={{ delay: 0.4 }}
         className="text-center"
       >
-        <details className="group">
-          <summary className="cursor-pointer text-xs text-gray-400 hover:text-gray-300 transition-colors list-none">
-            ¿Credenciales de demostración?
-          </summary>
-          <div className="mt-3 p-3 bg-white/5 rounded-2xl border border-white/10">
-            <p className="text-xs text-gray-300 mb-1">
-              <span className="font-mono">Email:</span> admin@cubarapid.com
-            </p>
-            <p className="text-xs text-gray-300">
-              <span className="font-mono">Contraseña:</span> admin123
-            </p>
-          </div>
-        </details>
+        <button
+          type="button"
+          onClick={() => {
+            // TODO: Implementar funcionalidad de restablecer contraseña
+            console.log('Restablecer contraseña - Por implementar')
+          }}
+          className="text-sm text-gray-400 hover:text-exa-secondary transition-colors underline decoration-dotted"
+        >
+          ¿Olvidaste tu contraseña?
+        </button>
       </motion.div>
     </form>
   )

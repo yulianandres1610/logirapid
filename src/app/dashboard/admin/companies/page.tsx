@@ -29,14 +29,17 @@ import {
   Zap,
   Shield,
   Star,
-  Loader2
+  Loader2,
+  Palette
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useTheme } from '@/contexts/theme-context'
+import { useNotifications } from '@/contexts/NotificationContext'
 import { DashboardLayout } from '@/components/layout/dashboard-layout'
 import { WalletCard } from '@/components/wallet-card'
 import { Button } from '@/components/ui/button'
 import LogoUpload from '@/components/ui/LogoUpload'
+import MapboxAddressAutofill from '@/components/ui/MapboxAddressAutofill'
 
 // Placeholder while data loads
 const LOADING_COMPANIES:any[] = []
@@ -117,15 +120,17 @@ const STEPS = [
   { id: 1, title: 'Información Básica', icon: Building2 },
   { id: 2, title: 'Wallet', icon: CreditCard },
   { id: 3, title: 'Servicios', icon: Settings },
-  { id: 4, title: 'Precios', icon: Users },
-  { id: 5, title: 'Documentación', icon: FileText },
-  { id: 6, title: 'Revisión', icon: Check }
+  { id: 4, title: 'Fee de Plataforma', icon: DollarSign },
+  { id: 5, title: 'Branding', icon: Palette },
+  { id: 6, title: 'Documentos', icon: FileText },
+  { id: 7, title: 'Revisión', icon: Check }
 ]
 
 const SERVICES = [
   { id: 'wallet', name: 'Wallet', description: 'Gestión de billeteras digitales' },
   { id: 'recharge', name: 'Recarga', description: 'Recargas móviles y servicios' },
   { id: 'remittance', name: 'Remesa', description: 'Envío de remesas internacionales' },
+  { id: 'paqueteria', name: 'Paquetería', description: 'Servicio de envío y entrega de paquetes' },
   { id: 'tracker', name: 'Rastreador', description: 'Seguimiento de envíos' },
   { id: 'exchange', name: 'Tasa de Cambio', description: 'Gestión de tasas de cambio' },
   { id: 'marketplace', name: 'Mercado', description: 'Plataforma de compra y venta' },
@@ -165,6 +170,7 @@ const getPrimaryCurrencyForCountry = (country: string) => {
 
 export default function CompaniesPage() {
   const { theme } = useTheme()
+  const { showNotification } = useNotifications()
   const [companies, setCompanies] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [showCreateForm, setShowCreateForm] = useState(false)
@@ -177,6 +183,7 @@ export default function CompaniesPage() {
   const [formData, setFormData] = useState<any>({
     legalName: '',
     phone: '',
+    customerServicePhone: '',
     email: '',
     address: '',
     city: '',
@@ -194,9 +201,16 @@ export default function CompaniesPage() {
     transferLimits: { daily: '', monthly: '' },
     enabledServices: [],
     companyType: '',
-    prices: { wallet: 0, recharge: 0, tracker: 0, marketplace: 0 },
+    serviceFees: {},
+    prices: { wallet: 0, recharge: 0, tracker: 0, marketplace: 0, paqueteria: 0 },
     einNumber: '',
     documents: [],
+    logoUrl: '',
+    subdomain: '',
+    primaryColor: '#CC0A46',
+    secondaryColor: '#0A46CC',
+    latitude: null,
+    longitude: null,
   })
 
   // Load companies from API on mount
@@ -238,9 +252,13 @@ export default function CompaniesPage() {
     setFormData({
       legalName: '',
       phone: '',
+      customerServicePhone: '',
+      email: '',
       address: '',
       city: '',
+      state: '',
       country: '',
+      zipCode: '',
       walletNumber: '',
       currency: '',
       isMultiCurrency: false,
@@ -252,9 +270,14 @@ export default function CompaniesPage() {
       transferLimits: { daily: '', monthly: '' },
       enabledServices: [],
       companyType: '',
-      prices: { wallet: 0, recharge: 0, tracker: 0, marketplace: 0 },
+      serviceFees: {},
+      prices: { wallet: 0, recharge: 0, tracker: 0, marketplace: 0, paqueteria: 0 },
       einNumber: '',
       documents: [],
+      logoUrl: '',
+      subdomain: '',
+      primaryColor: '#CC0A46',
+      secondaryColor: '#0A46CC',
     })
     setCurrentStep(1)
   }
@@ -275,8 +298,40 @@ export default function CompaniesPage() {
       const data = await response.json()
 
       if (!data.success) {
-        alert(`Error: ${data.error}`)
+        showNotification('error', 'Error', data.error || 'Error al crear empresa')
         return
+      }
+
+      const companyId = data.data.id
+
+      // Upload documents if any
+      if (formData.documents && formData.documents.length > 0) {
+        try {
+          const documentsFormData = new FormData()
+
+          // Add company ID
+          documentsFormData.append('companyId', companyId.toString())
+
+          // Add all documents
+          formData.documents.forEach((doc: File) => {
+            documentsFormData.append('documents', doc)
+          })
+
+          const docsResponse = await fetch('/api/upload/documents', {
+            method: 'POST',
+            body: documentsFormData
+          })
+
+          const docsData = await docsResponse.json()
+
+          if (!docsData.success) {
+            console.error('Error uploading documents:', docsData.error)
+            showNotification('warning', 'Advertencia', 'Empresa creada pero hubo un error al subir los documentos. Puedes subirlos más tarde.')
+          }
+        } catch (error) {
+          console.error('Error uploading documents:', error)
+          showNotification('warning', 'Advertencia', 'Empresa creada pero hubo un error al subir los documentos. Puedes subirlos más tarde.')
+        }
       }
 
       // If it's a market type company, also create in marketplaces API
@@ -313,11 +368,148 @@ export default function CompaniesPage() {
 
       setShowCreateForm(false)
       resetForm()
-      alert('Empresa creada exitosamente!')
+      showNotification('success', '¡Éxito!', 'Empresa creada exitosamente')
 
     } catch (error) {
       console.error('Error creating company:', error)
-      alert('Error al crear empresa. Por favor intenta de nuevo')
+      showNotification('error', 'Error', 'Error al crear empresa. Por favor intenta de nuevo')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleDeleteCompany = async (companyId: number, companyName: string) => {
+    if (!confirm(`¿Estás seguro de eliminar la empresa "${companyName}"?\n\nEsta acción marcará la empresa como inactiva.`)) {
+      return
+    }
+
+    try {
+      setLoading(true)
+
+      const response = await fetch(`/api/companies/${companyId}`, {
+        method: 'DELETE'
+      })
+
+      const data = await response.json()
+
+      if (!data.success) {
+        showNotification('error', 'Error', data.error || 'Error al eliminar empresa')
+        return
+      }
+
+      // Reload companies from API
+      const companiesResponse = await fetch('/api/companies')
+      const companiesData = await companiesResponse.json()
+
+      if (companiesData.success) {
+        setCompanies(companiesData.data)
+      }
+
+      showNotification('success', '¡Éxito!', 'Empresa eliminada exitosamente')
+
+    } catch (error) {
+      console.error('Error deleting company:', error)
+      showNotification('error', 'Error', 'Error al eliminar empresa. Por favor intenta de nuevo')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleEditCompany = async (companyId: number) => {
+    try {
+      setLoading(true)
+
+      // Obtener datos de la empresa
+      const response = await fetch(`/api/companies/${companyId}`)
+      const data = await response.json()
+
+      if (!data.success) {
+        showNotification('error', 'Error', data.error || 'Error al cargar empresa')
+        return
+      }
+
+      const company = data.data
+
+      // Cargar datos en el formulario
+      setFormData({
+        legalName: company.legalName || '',
+        phone: company.phone || '',
+        customerServicePhone: company.customerServicePhone || '',
+        email: company.email || '',
+        address: company.address || '',
+        city: company.city || '',
+        state: company.state || '',
+        country: company.country || '',
+        zipCode: company.zipCode || '',
+        walletNumber: company.walletNumber || '',
+        currency: company.currency || 'USD',
+        isMultiCurrency: company.isMultiCurrency || false,
+        secondaryCurrencies: company.secondaryCurrencies || [],
+        hasLimits: company.hasLimits || false,
+        dailyLimit: company.dailyLimit || '',
+        monthlyLimit: company.monthlyLimit || '',
+        rechargeLimits: { daily: '', monthly: '' },
+        transferLimits: { daily: '', monthly: '' },
+        enabledServices: company.enabledServices || [],
+        companyType: company.companyType || '',
+        serviceFees: company.serviceFees || {},
+        prices: {},
+        einNumber: company.einNumber || '',
+        documents: [],
+        logoUrl: company.logoUrl || '',
+        subdomain: company.subdomain || '',
+        primaryColor: company.primaryColor || '#CC0A46',
+        secondaryColor: company.secondaryColor || '#0A46CC',
+        editMode: true,
+        editId: companyId
+      })
+
+      // Abrir el formulario
+      setShowCreateForm(true)
+      setCurrentStep(1)
+
+    } catch (error) {
+      console.error('Error loading company:', error)
+      showNotification('error', 'Error', 'Error al cargar empresa. Por favor intenta de nuevo')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleUpdateCompany = async () => {
+    try {
+      setLoading(true)
+
+      const response = await fetch(`/api/companies/${formData.editId}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(formData)
+      })
+
+      const data = await response.json()
+
+      if (!data.success) {
+        showNotification('error', 'Error', data.error || 'Error al actualizar empresa')
+        return
+      }
+
+      // Reload companies from API
+      const companiesResponse = await fetch('/api/companies')
+      const companiesData = await companiesResponse.json()
+
+      if (companiesData.success) {
+        setCompanies(companiesData.data)
+      }
+
+      setShowCreateForm(false)
+      resetForm()
+      showNotification('success', '¡Éxito!', 'Empresa actualizada exitosamente')
+
+    } catch (error) {
+      console.error('Error updating company:', error)
+      showNotification('error', 'Error', 'Error al actualizar empresa. Por favor intenta de nuevo')
     } finally {
       setLoading(false)
     }
@@ -340,13 +532,16 @@ export default function CompaniesPage() {
                   "text-3xl font-bold mb-2",
                   theme === 'dark' ? "text-white" : "text-black"
                 )}>
-                  Crear Nueva Empresa
+                  {formData.editMode ? 'Editar Empresa' : 'Crear Nueva Empresa'}
                 </h1>
                 <p className={cn(
                   "text-sm",
                   theme === 'dark' ? "text-gray-400" : "text-gray-600"
                 )}>
-                  Completa el formulario para registrar una nueva empresa en el sistema
+                  {formData.editMode
+                    ? 'Actualiza la información de la empresa'
+                    : 'Completa el formulario para registrar una nueva empresa en el sistema'
+                  }
                 </p>
               </div>
 
@@ -483,6 +678,54 @@ export default function CompaniesPage() {
                         "block text-sm font-medium mb-2",
                         theme === 'dark' ? "text-gray-300" : "text-gray-700"
                       )}>
+                        Teléfono de Soporte
+                      </label>
+                      <input
+                        type="tel"
+                        value={formData.customerServicePhone}
+                        onChange={(e) => setFormData({...formData, customerServicePhone: e.target.value})}
+                        className={cn(
+                          "w-full px-4 py-3 rounded-xl border focus:outline-none focus:ring-2 transition-all duration-300",
+                          theme === 'dark'
+                            ? "bg-gray-800/50 border-gray-700 text-white focus:border-blue-500 focus:ring-blue-500/20"
+                            : "bg-white border-gray-300 text-black focus:border-blue-500 focus:ring-blue-500/20"
+                        )}
+                        placeholder="+53 7 800 0000"
+                      />
+                      <p className={cn(
+                        "mt-1 text-xs",
+                        theme === 'dark' ? "text-gray-400" : "text-gray-500"
+                      )}>
+                        Número de contacto para soporte al cliente (opcional)
+                      </p>
+                    </div>
+
+                    <div>
+                      <label className={cn(
+                        "block text-sm font-medium mb-2",
+                        theme === 'dark' ? "text-gray-300" : "text-gray-700"
+                      )}>
+                        Email *
+                      </label>
+                      <input
+                        type="email"
+                        value={formData.email}
+                        onChange={(e) => setFormData({...formData, email: e.target.value})}
+                        className={cn(
+                          "w-full px-4 py-3 rounded-xl border focus:outline-none focus:ring-2 transition-all duration-300",
+                          theme === 'dark'
+                            ? "bg-gray-800/50 border-gray-700 text-white focus:border-blue-500 focus:ring-blue-500/20"
+                            : "bg-white border-gray-300 text-black focus:border-blue-500 focus:ring-blue-500/20"
+                        )}
+                        placeholder="contacto@empresa.com"
+                      />
+                    </div>
+
+                    <div>
+                      <label className={cn(
+                        "block text-sm font-medium mb-2",
+                        theme === 'dark' ? "text-gray-300" : "text-gray-700"
+                      )}>
                         EIN / Número de Identificación *
                       </label>
                       <input
@@ -523,66 +766,37 @@ export default function CompaniesPage() {
                       </select>
                     </div>
 
+                    {/* Dirección con Mapbox Autofill */}
                     <div className="md:col-span-2">
-                      <label className={cn(
-                        "block text-sm font-medium mb-2",
-                        theme === 'dark' ? "text-gray-300" : "text-gray-700"
-                      )}>
-                        Dirección *
-                      </label>
-                      <input
-                        type="text"
-                        value={formData.address}
-                        onChange={(e) => setFormData({...formData, address: e.target.value})}
-                        className={cn(
-                          "w-full px-4 py-3 rounded-xl border focus:outline-none focus:ring-2 transition-all duration-300",
-                          theme === 'dark'
-                            ? "bg-gray-800/50 border-gray-700 text-white focus:border-blue-500 focus:ring-blue-500/20"
-                            : "bg-white border-gray-300 text-black focus:border-blue-500 focus:ring-blue-500/20"
-                        )}
-                        placeholder="Calle 23 #456, Vedado"
-                      />
-                    </div>
-
-                    <div>
-                      <label className={cn(
-                        "block text-sm font-medium mb-2",
-                        theme === 'dark' ? "text-gray-300" : "text-gray-700"
-                      )}>
-                        Ciudad *
-                      </label>
-                      <input
-                        type="text"
-                        value={formData.city}
-                        onChange={(e) => setFormData({...formData, city: e.target.value})}
-                        className={cn(
-                          "w-full px-4 py-3 rounded-xl border focus:outline-none focus:ring-2 transition-all duration-300",
-                          theme === 'dark'
-                            ? "bg-gray-800/50 border-gray-700 text-white focus:border-blue-500 focus:ring-blue-500/20"
-                            : "bg-white border-gray-300 text-black focus:border-blue-500 focus:ring-blue-500/20"
-                        )}
-                        placeholder="La Habana"
-                      />
-                    </div>
-
-                    <div>
-                      <label className={cn(
-                        "block text-sm font-medium mb-2",
-                        theme === 'dark' ? "text-gray-300" : "text-gray-700"
-                      )}>
-                        País *
-                      </label>
-                      <input
-                        type="text"
-                        value={formData.country}
-                        onChange={(e) => setFormData({...formData, country: e.target.value})}
-                        className={cn(
-                          "w-full px-4 py-3 rounded-xl border focus:outline-none focus:ring-2 transition-all duration-300",
-                          theme === 'dark'
-                            ? "bg-gray-800/50 border-gray-700 text-white focus:border-blue-500 focus:ring-blue-500/20"
-                            : "bg-white border-gray-300 text-black focus:border-blue-500 focus:ring-blue-500/20"
-                        )}
-                        placeholder="Cuba"
+                      <MapboxAddressAutofill
+                        value={{
+                          street: formData.address || '',
+                          apartment: '',
+                          city: formData.city || '',
+                          state: formData.state || '',
+                          zipCode: formData.zipCode || '',
+                          country: formData.country || ''
+                        }}
+                        onChange={(addressData) => {
+                          setFormData({
+                            ...formData,
+                            address: addressData.street,
+                            city: addressData.city,
+                            state: addressData.state,
+                            zipCode: addressData.zipCode,
+                            country: addressData.country
+                          })
+                        }}
+                        onCoordinatesChange={(coordinates) => {
+                          if (coordinates) {
+                            setFormData({
+                              ...formData,
+                              latitude: coordinates.latitude,
+                              longitude: coordinates.longitude
+                            })
+                          }
+                        }}
+                        required={true}
                       />
                     </div>
                   </div>
@@ -878,7 +1092,7 @@ export default function CompaniesPage() {
                 </div>
               )}
 
-              {/* Step 4: Prices */}
+              {/* Step 4: Platform Fees */}
               {currentStep === 4 && (
                 <div className={cn(
                   "backdrop-blur-sm border rounded-2xl p-8",
@@ -888,49 +1102,285 @@ export default function CompaniesPage() {
                     "text-xl font-bold mb-6",
                     theme === 'dark' ? "text-white" : "text-black"
                   )}>
-                    Configuración de Precios
+                    Fee de Plataforma
                   </h2>
+                  <p className={cn(
+                    "text-sm mb-6",
+                    theme === 'dark' ? "text-gray-400" : "text-gray-600"
+                  )}>
+                    Configura las comisiones que se cobrarán por cada transacción de servicio
+                  </p>
 
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="space-y-6">
                     {formData.enabledServices.map((serviceId: string) => {
                       const service = SERVICES.find(s => s.id === serviceId)
-                      return service ? (
-                        <div key={serviceId}>
-                          <label className={cn(
-                            "block text-sm font-medium mb-2",
-                            theme === 'dark' ? "text-gray-300" : "text-gray-700"
-                          )}>
-                            Precio para {service.name}
-                          </label>
-                          <div className="relative">
-                            <DollarSign className={cn(
-                              "absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5",
-                              theme === 'dark' ? "text-gray-400" : "text-gray-500"
-                            )} />
-                            <input
-                              type="number"
-                              value={formData.prices[serviceId]}
-                              onChange={(e) => setFormData({
-                                ...formData,
-                                prices: {...formData.prices, [serviceId]: parseFloat(e.target.value) || 0}
-                              })}
-                              className={cn(
-                                "w-full pl-12 pr-4 py-3 rounded-xl border focus:outline-none focus:ring-2 transition-all duration-300",
-                                theme === 'dark'
-                                  ? "bg-gray-800/50 border-gray-700 text-white focus:border-blue-500 focus:ring-blue-500/20"
-                                  : "bg-white border-gray-300 text-black focus:border-blue-500 focus:ring-blue-500/20"
-                              )}
-                              placeholder="0.00"
-                            />
+                      if (!service) return null
+
+                      // Inicializar fee si no existe
+                      if (!formData.serviceFees[serviceId]) {
+                        formData.serviceFees[serviceId] = {
+                          type: 'none',
+                          percentage: 0,
+                          fixed: 0
+                        }
+                      }
+
+                      const fee = formData.serviceFees[serviceId]
+                      const exampleAmount = 100 // Monto de ejemplo para el preview
+
+                      // Calcular fee total para preview
+                      const calculateFee = () => {
+                        let total = 0
+                        if (fee.type === 'percentage' || fee.type === 'both') {
+                          total += (exampleAmount * (fee.percentage || 0)) / 100
+                        }
+                        if (fee.type === 'fixed' || fee.type === 'both') {
+                          total += fee.fixed || 0
+                        }
+                        return total.toFixed(2)
+                      }
+
+                      return (
+                        <div
+                          key={serviceId}
+                          className={cn(
+                            "p-6 rounded-xl border",
+                            theme === 'dark' ? "bg-gray-800/50 border-gray-700" : "bg-gray-50 border-gray-200"
+                          )}
+                        >
+                          {/* Service Header */}
+                          <div className="flex items-center justify-between mb-4">
+                            <div className="flex items-center gap-3">
+                              <div className={cn(
+                                "w-10 h-10 rounded-lg flex items-center justify-center",
+                                theme === 'dark' ? "bg-exa-secondary/20" : "bg-exa-primary/20"
+                              )}>
+                                <Settings className={cn(
+                                  "w-5 h-5",
+                                  theme === 'dark' ? "text-exa-secondary" : "text-exa-primary"
+                                )} />
+                              </div>
+                              <div>
+                                <h3 className={cn(
+                                  "font-semibold",
+                                  theme === 'dark' ? "text-white" : "text-black"
+                                )}>
+                                  {service.name}
+                                </h3>
+                                <p className={cn(
+                                  "text-xs",
+                                  theme === 'dark' ? "text-gray-400" : "text-gray-500"
+                                )}>
+                                  {service.description}
+                                </p>
+                              </div>
+                            </div>
                           </div>
+
+                          {/* Fee Type Selector */}
+                          <div className="mb-4">
+                            <label className={cn(
+                              "block text-sm font-medium mb-3",
+                              theme === 'dark' ? "text-gray-300" : "text-gray-700"
+                            )}>
+                              Tipo de Fee
+                            </label>
+                            <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                              {[
+                                { value: 'none', label: 'Sin Fee', icon: 'X' },
+                                { value: 'percentage', label: 'Porcentaje (%)', icon: '%' },
+                                { value: 'fixed', label: 'Monto Fijo ($)', icon: '$' },
+                                { value: 'both', label: 'Ambos', icon: '$%' },
+                              ].map((option) => (
+                                <button
+                                  key={option.value}
+                                  type="button"
+                                  onClick={() => {
+                                    setFormData({
+                                      ...formData,
+                                      serviceFees: {
+                                        ...formData.serviceFees,
+                                        [serviceId]: { ...fee, type: option.value }
+                                      }
+                                    })
+                                  }}
+                                  className={cn(
+                                    "px-3 py-2 rounded-lg border text-sm font-medium transition-all duration-300",
+                                    fee.type === option.value
+                                      ? theme === 'dark'
+                                        ? "border-exa-secondary bg-exa-secondary/20 text-exa-secondary"
+                                        : "border-exa-primary bg-exa-primary/20 text-exa-primary"
+                                      : theme === 'dark'
+                                        ? "border-gray-700 bg-gray-800/50 text-gray-300 hover:border-gray-600"
+                                        : "border-gray-300 bg-white text-gray-700 hover:border-gray-400"
+                                  )}
+                                >
+                                  {option.label}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+
+                          {/* Fee Inputs */}
+                          {fee.type !== 'none' && (
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                              {/* Percentage Input */}
+                              {(fee.type === 'percentage' || fee.type === 'both') && (
+                                <div>
+                                  <label className={cn(
+                                    "block text-sm font-medium mb-2",
+                                    theme === 'dark' ? "text-gray-300" : "text-gray-700"
+                                  )}>
+                                    Porcentaje (%)
+                                  </label>
+                                  <div className="relative">
+                                    <input
+                                      type="number"
+                                      min="0"
+                                      max="100"
+                                      step="0.1"
+                                      value={fee.percentage || 0}
+                                      onChange={(e) => {
+                                        setFormData({
+                                          ...formData,
+                                          serviceFees: {
+                                            ...formData.serviceFees,
+                                            [serviceId]: {
+                                              ...fee,
+                                              percentage: parseFloat(e.target.value) || 0
+                                            }
+                                          }
+                                        })
+                                      }}
+                                      className={cn(
+                                        "w-full px-4 py-3 pr-10 rounded-xl border focus:outline-none focus:ring-2 transition-all duration-300",
+                                        theme === 'dark'
+                                          ? "bg-gray-800/50 border-gray-700 text-white focus:border-blue-500 focus:ring-blue-500/20"
+                                          : "bg-white border-gray-300 text-black focus:border-blue-500 focus:ring-blue-500/20"
+                                      )}
+                                      placeholder="2.5"
+                                    />
+                                    <span className={cn(
+                                      "absolute right-4 top-1/2 transform -translate-y-1/2 text-sm font-medium",
+                                      theme === 'dark' ? "text-gray-400" : "text-gray-500"
+                                    )}>
+                                      %
+                                    </span>
+                                  </div>
+                                </div>
+                              )}
+
+                              {/* Fixed Amount Input */}
+                              {(fee.type === 'fixed' || fee.type === 'both') && (
+                                <div>
+                                  <label className={cn(
+                                    "block text-sm font-medium mb-2",
+                                    theme === 'dark' ? "text-gray-300" : "text-gray-700"
+                                  )}>
+                                    Monto Fijo ($)
+                                  </label>
+                                  <div className="relative">
+                                    <DollarSign className={cn(
+                                      "absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5",
+                                      theme === 'dark' ? "text-gray-400" : "text-gray-500"
+                                    )} />
+                                    <input
+                                      type="number"
+                                      min="0"
+                                      step="0.01"
+                                      value={fee.fixed || 0}
+                                      onChange={(e) => {
+                                        setFormData({
+                                          ...formData,
+                                          serviceFees: {
+                                            ...formData.serviceFees,
+                                            [serviceId]: {
+                                              ...fee,
+                                              fixed: parseFloat(e.target.value) || 0
+                                            }
+                                          }
+                                        })
+                                      }}
+                                      className={cn(
+                                        "w-full pl-12 pr-4 py-3 rounded-xl border focus:outline-none focus:ring-2 transition-all duration-300",
+                                        theme === 'dark'
+                                          ? "bg-gray-800/50 border-gray-700 text-white focus:border-blue-500 focus:ring-blue-500/20"
+                                          : "bg-white border-gray-300 text-black focus:border-blue-500 focus:ring-blue-500/20"
+                                      )}
+                                      placeholder="1.50"
+                                    />
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          )}
+
+                          {/* Fee Preview */}
+                          {fee.type !== 'none' && (
+                            <div className={cn(
+                              "p-4 rounded-lg border",
+                              theme === 'dark' ? "bg-gray-900/50 border-gray-600" : "bg-blue-50 border-blue-200"
+                            )}>
+                              <div className="flex items-center justify-between">
+                                <div>
+                                  <p className={cn(
+                                    "text-xs font-medium mb-1",
+                                    theme === 'dark' ? "text-gray-400" : "text-gray-600"
+                                  )}>
+                                    Ejemplo: Transacción de ${exampleAmount.toFixed(2)}
+                                  </p>
+                                  <p className={cn(
+                                    "text-sm",
+                                    theme === 'dark' ? "text-gray-300" : "text-gray-700"
+                                  )}>
+                                    {fee.type === 'percentage' && `${fee.percentage}% = $${calculateFee()}`}
+                                    {fee.type === 'fixed' && `Fijo = $${calculateFee()}`}
+                                    {fee.type === 'both' && `${fee.percentage}% + $${fee.fixed} = $${calculateFee()}`}
+                                  </p>
+                                </div>
+                                <div className={cn(
+                                  "px-4 py-2 rounded-lg",
+                                  theme === 'dark' ? "bg-exa-secondary/20" : "bg-exa-primary/20"
+                                )}>
+                                  <p className={cn(
+                                    "text-xs font-medium",
+                                    theme === 'dark' ? "text-exa-secondary" : "text-exa-primary"
+                                  )}>
+                                    Fee Total
+                                  </p>
+                                  <p className={cn(
+                                    "text-lg font-bold",
+                                    theme === 'dark' ? "text-exa-secondary" : "text-exa-primary"
+                                  )}>
+                                    ${calculateFee()}
+                                  </p>
+                                </div>
+                              </div>
+                            </div>
+                          )}
                         </div>
-                      ) : null
+                      )
                     })}
+
+                    {formData.enabledServices.length === 0 && (
+                      <div className="text-center py-12">
+                        <Settings className={cn(
+                          "w-16 h-16 mx-auto mb-4",
+                          theme === 'dark' ? "text-gray-600" : "text-gray-400"
+                        )} />
+                        <p className={cn(
+                          "text-sm",
+                          theme === 'dark' ? "text-gray-400" : "text-gray-600"
+                        )}>
+                          No hay servicios activados. Vuelve al paso anterior para seleccionar servicios.
+                        </p>
+                      </div>
+                    )}
                   </div>
                 </div>
               )}
 
-              {/* Step 5: Documentation */}
+              {/* Step 5: Branding */}
               {currentStep === 5 && (
                 <div className={cn(
                   "backdrop-blur-sm border rounded-2xl p-8",
@@ -940,32 +1390,494 @@ export default function CompaniesPage() {
                     "text-xl font-bold mb-6",
                     theme === 'dark' ? "text-white" : "text-black"
                   )}>
-                    Documentación Requerida
+                    Branding de la Empresa
                   </h2>
+                  <p className={cn(
+                    "text-sm mb-6",
+                    theme === 'dark' ? "text-gray-400" : "text-gray-600"
+                  )}>
+                    Configure la identidad visual de la empresa para personalizar su dashboard
+                  </p>
 
-                  <div className="text-center py-12">
-                    <FileText className={cn(
-                      "w-16 h-16 mx-auto mb-4",
-                      theme === 'dark' ? "text-gray-600" : "text-gray-400"
-                    )} />
-                    <p className={cn(
-                      "text-lg font-medium mb-2",
-                      theme === 'dark' ? "text-white" : "text-black"
+                  <div className="space-y-8">
+                    {/* Logo Upload */}
+                    <div>
+                      <label className={cn(
+                        "block text-sm font-medium mb-3",
+                        theme === 'dark' ? "text-gray-300" : "text-gray-700"
+                      )}>
+                        Logo de la Empresa
+                      </label>
+                      <LogoUpload
+                        value={formData.logoUrl}
+                        onChange={(url) => setFormData({...formData, logoUrl: url})}
+                      />
+                      <p className={cn(
+                        "mt-2 text-xs",
+                        theme === 'dark' ? "text-gray-400" : "text-gray-500"
+                      )}>
+                        El logo se mostrará en el dashboard y documentos de la empresa. Formatos aceptados: PNG, JPG, SVG, WEBP (máx. 5GB)
+                      </p>
+                    </div>
+
+                    {/* Color Pickers */}
+                    <div>
+                      <h3 className={cn(
+                        "text-sm font-medium mb-4",
+                        theme === 'dark' ? "text-gray-300" : "text-gray-700"
+                      )}>
+                        Colores de Marca
+                      </h3>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        {/* Primary Color */}
+                        <div>
+                          <label className={cn(
+                            "block text-sm font-medium mb-3",
+                            theme === 'dark' ? "text-gray-300" : "text-gray-700"
+                          )}>
+                            Color Primario
+                          </label>
+                          <div className="flex items-center gap-4">
+                            <input
+                              type="color"
+                              value={formData.primaryColor}
+                              onChange={(e) => setFormData({...formData, primaryColor: e.target.value})}
+                              className="w-16 h-16 rounded-lg cursor-pointer border-2 border-gray-300 dark:border-gray-600"
+                            />
+                            <div className="flex-1">
+                              <input
+                                type="text"
+                                value={formData.primaryColor}
+                                onChange={(e) => {
+                                  const hex = e.target.value
+                                  if (/^#[0-9A-F]{6}$/i.test(hex) || hex === '') {
+                                    setFormData({...formData, primaryColor: hex})
+                                  }
+                                }}
+                                className={cn(
+                                  "w-full px-4 py-3 rounded-xl border focus:outline-none focus:ring-2 transition-all duration-300 font-mono",
+                                  theme === 'dark'
+                                    ? "bg-gray-800/50 border-gray-700 text-white focus:border-blue-500 focus:ring-blue-500/20"
+                                    : "bg-white border-gray-300 text-black focus:border-blue-500 focus:ring-blue-500/20"
+                                )}
+                                placeholder="#CC0A46"
+                              />
+                              <p className={cn(
+                                "mt-1 text-xs",
+                                theme === 'dark' ? "text-gray-400" : "text-gray-500"
+                              )}>
+                                Usado en botones principales y acentos
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Secondary Color */}
+                        <div>
+                          <label className={cn(
+                            "block text-sm font-medium mb-3",
+                            theme === 'dark' ? "text-gray-300" : "text-gray-700"
+                          )}>
+                            Color Secundario
+                          </label>
+                          <div className="flex items-center gap-4">
+                            <input
+                              type="color"
+                              value={formData.secondaryColor}
+                              onChange={(e) => setFormData({...formData, secondaryColor: e.target.value})}
+                              className="w-16 h-16 rounded-lg cursor-pointer border-2 border-gray-300 dark:border-gray-600"
+                            />
+                            <div className="flex-1">
+                              <input
+                                type="text"
+                                value={formData.secondaryColor}
+                                onChange={(e) => {
+                                  const hex = e.target.value
+                                  if (/^#[0-9A-F]{6}$/i.test(hex) || hex === '') {
+                                    setFormData({...formData, secondaryColor: hex})
+                                  }
+                                }}
+                                className={cn(
+                                  "w-full px-4 py-3 rounded-xl border focus:outline-none focus:ring-2 transition-all duration-300 font-mono",
+                                  theme === 'dark'
+                                    ? "bg-gray-800/50 border-gray-700 text-white focus:border-blue-500 focus:ring-blue-500/20"
+                                    : "bg-white border-gray-300 text-black focus:border-blue-500 focus:ring-blue-500/20"
+                                )}
+                                placeholder="#0A46CC"
+                              />
+                              <p className={cn(
+                                "mt-1 text-xs",
+                                theme === 'dark' ? "text-gray-400" : "text-gray-500"
+                              )}>
+                                Usado en elementos secundarios y highlights
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Preview */}
+                    <div className={cn(
+                      "p-6 rounded-xl border",
+                      theme === 'dark' ? "bg-gray-800/50 border-gray-700" : "bg-gray-50 border-gray-200"
                     )}>
-                      Subida de Documentos
-                    </p>
-                    <p className={cn(
-                      "text-sm mb-6",
-                      theme === 'dark' ? "text-gray-400" : "text-gray-600"
+                      <h3 className={cn(
+                        "text-sm font-medium mb-4",
+                        theme === 'dark' ? "text-gray-300" : "text-gray-700"
+                      )}>
+                        Vista Previa de Colores
+                      </h3>
+                      <div className="grid grid-cols-2 gap-4">
+                        {/* Primary Preview */}
+                        <div className="space-y-2">
+                          <button
+                            type="button"
+                            style={{ backgroundColor: formData.primaryColor }}
+                            className="w-full px-4 py-3 rounded-lg text-white font-medium transition-transform hover:scale-105"
+                          >
+                            Botón Primario
+                          </button>
+                          <div
+                            style={{ backgroundColor: formData.primaryColor + '20', borderColor: formData.primaryColor }}
+                            className="p-3 rounded-lg border-2 text-center"
+                          >
+                            <span style={{ color: formData.primaryColor }} className="text-sm font-medium">
+                              Badge Primario
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Secondary Preview */}
+                        <div className="space-y-2">
+                          <button
+                            type="button"
+                            style={{ backgroundColor: formData.secondaryColor }}
+                            className="w-full px-4 py-3 rounded-lg text-white font-medium transition-transform hover:scale-105"
+                          >
+                            Botón Secundario
+                          </button>
+                          <div
+                            style={{ backgroundColor: formData.secondaryColor + '20', borderColor: formData.secondaryColor }}
+                            className="p-3 rounded-lg border-2 text-center"
+                          >
+                            <span style={{ color: formData.secondaryColor }} className="text-sm font-medium">
+                              Badge Secundario
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Subdomain Configuration */}
+                    <div>
+                      <h3 className={cn(
+                        "text-sm font-medium mb-4",
+                        theme === 'dark' ? "text-gray-300" : "text-gray-700"
+                      )}>
+                        Subdominio Personalizado
+                      </h3>
+                      <div className="space-y-3">
+                        <div>
+                          <label className={cn(
+                            "block text-sm font-medium mb-2",
+                            theme === 'dark' ? "text-gray-300" : "text-gray-700"
+                          )}>
+                            Subdominio
+                          </label>
+                          <div className="flex items-center gap-2">
+                            <input
+                              type="text"
+                              value={formData.subdomain}
+                              onChange={(e) => {
+                                // Solo permitir alfanuméricos y guiones, convertir a minúsculas
+                                const value = e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, '')
+                                setFormData({...formData, subdomain: value})
+                              }}
+                              className={cn(
+                                "flex-1 px-4 py-3 rounded-xl border focus:outline-none focus:ring-2 transition-all duration-300 font-mono",
+                                theme === 'dark'
+                                  ? "bg-gray-800/50 border-gray-700 text-white focus:border-blue-500 focus:ring-blue-500/20"
+                                  : "bg-white border-gray-300 text-black focus:border-blue-500 focus:ring-blue-500/20"
+                              )}
+                              placeholder="mi-empresa"
+                            />
+                            <span className={cn(
+                              "text-sm font-medium whitespace-nowrap",
+                              theme === 'dark' ? "text-gray-400" : "text-gray-600"
+                            )}>
+                              .logirapid.com
+                            </span>
+                          </div>
+                          <p className={cn(
+                            "mt-2 text-xs",
+                            theme === 'dark' ? "text-gray-400" : "text-gray-500"
+                          )}>
+                            Solo letras minúsculas, números y guiones. Ejemplo: acme-logistics
+                          </p>
+                        </div>
+
+                        {/* Subdomain Preview */}
+                        {formData.subdomain && (
+                          <div className={cn(
+                            "p-4 rounded-lg border",
+                            theme === 'dark' ? "bg-gray-800/50 border-gray-700" : "bg-gray-50 border-gray-200"
+                          )}>
+                            <div className="flex items-center gap-3">
+                              <Globe className={cn(
+                                "w-5 h-5",
+                                theme === 'dark' ? "text-blue-400" : "text-blue-500"
+                              )} />
+                              <div className="flex-1">
+                                <p className={cn(
+                                  "text-xs font-medium mb-1",
+                                  theme === 'dark' ? "text-gray-400" : "text-gray-600"
+                                )}>
+                                  URL de Dashboard Personalizado
+                                </p>
+                                <p className={cn(
+                                  "text-sm font-mono font-medium",
+                                  theme === 'dark' ? "text-blue-400" : "text-blue-600"
+                                )}>
+                                  https://{formData.subdomain}.logirapid.com
+                                </p>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Info Box */}
+                    <div className={cn(
+                      "p-4 rounded-lg border-l-4",
+                      theme === 'dark'
+                        ? "bg-blue-900/20 border-blue-500"
+                        : "bg-blue-50 border-blue-500"
                     )}>
-                      Funcionalidad de subida de documentos próximamente
-                    </p>
+                      <div className="flex items-start gap-3">
+                        <svg className="w-5 h-5 text-blue-500 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
+                          <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+                        </svg>
+                        <div className="flex-1">
+                          <p className={cn(
+                            "text-sm font-medium mb-1",
+                            theme === 'dark' ? "text-blue-300" : "text-blue-900"
+                          )}>
+                            Personalización Completa
+                          </p>
+                          <p className={cn(
+                            "text-xs",
+                            theme === 'dark' ? "text-blue-200/70" : "text-blue-800/70"
+                          )}>
+                            El logo, colores y subdominio se aplicarán automáticamente cuando los usuarios de esta empresa inicien sesión, creando una experiencia completamente personalizada con su marca.
+                          </p>
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 </div>
               )}
 
-              {/* Step 6: Review */}
+              {/* Step 6: Documents */}
               {currentStep === 6 && (
+                <div className={cn(
+                  "backdrop-blur-sm border rounded-2xl p-8",
+                  theme === 'dark' ? "bg-white/5 border-white/10" : "bg-white/90 border-gray-200"
+                )}>
+                  <h2 className={cn(
+                    "text-xl font-bold mb-6",
+                    theme === 'dark' ? "text-white" : "text-black"
+                  )}>
+                    Documentos de la Empresa
+                  </h2>
+                  <p className={cn(
+                    "text-sm mb-6",
+                    theme === 'dark' ? "text-gray-400" : "text-gray-600"
+                  )}>
+                    Sube documentos legales y oficiales de la empresa. Estos archivos se almacenarán de forma segura y privada.
+                  </p>
+
+                  <div className="space-y-6">
+                    {/* Document Upload Area */}
+                    <div>
+                      <label className={cn(
+                        "block text-sm font-medium mb-3",
+                        theme === 'dark' ? "text-gray-300" : "text-gray-700"
+                      )}>
+                        Subir Documentos
+                      </label>
+
+                      <div className={cn(
+                        "border-2 border-dashed rounded-lg p-8 transition-colors text-center",
+                        theme === 'dark'
+                          ? "border-gray-600 hover:border-gray-500"
+                          : "border-gray-300 hover:border-gray-400"
+                      )}>
+                        <input
+                          type="file"
+                          multiple
+                          accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
+                          onChange={(e) => {
+                            if (e.target.files) {
+                              const newFiles = Array.from(e.target.files)
+                              setFormData({
+                                ...formData,
+                                documents: [...(formData.documents || []), ...newFiles]
+                              })
+                            }
+                          }}
+                          className="hidden"
+                          id="document-upload"
+                        />
+
+                        <div className="flex flex-col items-center">
+                          <div className="w-16 h-16 bg-gray-100 dark:bg-gray-700 rounded-full flex items-center justify-center mb-4">
+                            <FileText className="w-8 h-8 text-gray-400" />
+                          </div>
+                          <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                            <label
+                              htmlFor="document-upload"
+                              className="text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 underline cursor-pointer"
+                            >
+                              Haz clic para subir
+                            </label>
+                            {' '}o arrastra los documentos aquí
+                          </p>
+                          <p className="text-xs text-gray-500 dark:text-gray-400">
+                            PDF, DOC, DOCX, JPG, PNG (máx. 5GB por archivo)
+                          </p>
+                        </div>
+                      </div>
+
+                      <p className={cn(
+                        "mt-2 text-xs",
+                        theme === 'dark' ? "text-gray-400" : "text-gray-500"
+                      )}>
+                        Documentos sugeridos: EIN, Licencia de negocio, Certificado de incorporación, Contratos, etc.
+                      </p>
+                    </div>
+
+                    {/* Uploaded Documents List */}
+                    {formData.documents && formData.documents.length > 0 && (
+                      <div>
+                        <h3 className={cn(
+                          "text-sm font-medium mb-3",
+                          theme === 'dark' ? "text-gray-300" : "text-gray-700"
+                        )}>
+                          Documentos Seleccionados ({formData.documents.length})
+                        </h3>
+                        <div className="space-y-2">
+                          {formData.documents.map((doc: File, index: number) => (
+                            <div
+                              key={index}
+                              className={cn(
+                                "flex items-center justify-between p-3 rounded-lg border",
+                                theme === 'dark'
+                                  ? "bg-gray-800/50 border-gray-700"
+                                  : "bg-gray-50 border-gray-200"
+                              )}
+                            >
+                              <div className="flex items-center gap-3 flex-1">
+                                <div className={cn(
+                                  "w-10 h-10 rounded-lg flex items-center justify-center",
+                                  theme === 'dark' ? "bg-blue-900/20" : "bg-blue-100"
+                                )}>
+                                  <FileText className="w-5 h-5 text-blue-500" />
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                  <p className={cn(
+                                    "text-sm font-medium truncate",
+                                    theme === 'dark' ? "text-white" : "text-black"
+                                  )}>
+                                    {doc.name}
+                                  </p>
+                                  <p className={cn(
+                                    "text-xs",
+                                    theme === 'dark' ? "text-gray-400" : "text-gray-500"
+                                  )}>
+                                    {(doc.size / 1024 / 1024).toFixed(2)} MB
+                                  </p>
+                                </div>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const newDocs = formData.documents.filter((_: any, i: number) => i !== index)
+                                  setFormData({...formData, documents: newDocs})
+                                }}
+                                className="p-2 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Info Boxes */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {/* Security Info */}
+                      <div className={cn(
+                        "p-4 rounded-lg border-l-4",
+                        theme === 'dark'
+                          ? "bg-green-900/20 border-green-500"
+                          : "bg-green-50 border-green-500"
+                      )}>
+                        <div className="flex items-start gap-3">
+                          <Shield className="w-5 h-5 text-green-500 mt-0.5" />
+                          <div className="flex-1">
+                            <p className={cn(
+                              "text-sm font-medium mb-1",
+                              theme === 'dark' ? "text-green-300" : "text-green-900"
+                            )}>
+                              Almacenamiento Seguro
+                            </p>
+                            <p className={cn(
+                              "text-xs",
+                              theme === 'dark' ? "text-green-200/70" : "text-green-800/70"
+                            )}>
+                              Los documentos se guardan en un bucket privado con acceso restringido. Solo usuarios autorizados pueden ver estos archivos.
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Optional Info */}
+                      <div className={cn(
+                        "p-4 rounded-lg border-l-4",
+                        theme === 'dark'
+                          ? "bg-blue-900/20 border-blue-500"
+                          : "bg-blue-50 border-blue-500"
+                      )}>
+                        <div className="flex items-start gap-3">
+                          <svg className="w-5 h-5 text-blue-500 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
+                            <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+                          </svg>
+                          <div className="flex-1">
+                            <p className={cn(
+                              "text-sm font-medium mb-1",
+                              theme === 'dark' ? "text-blue-300" : "text-blue-900"
+                            )}>
+                              Opcional
+                            </p>
+                            <p className={cn(
+                              "text-xs",
+                              theme === 'dark' ? "text-blue-200/70" : "text-blue-800/70"
+                            )}>
+                              Puedes omitir este paso y agregar documentos más tarde desde la configuración de la empresa.
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Step 7: Review */}
+              {currentStep === 7 && (
                 <div className={cn(
                   "backdrop-blur-sm border rounded-2xl p-8",
                   theme === 'dark' ? "bg-white/5 border-white/10" : "bg-white/90 border-gray-200"
@@ -1166,18 +2078,19 @@ export default function CompaniesPage() {
 
             {currentStep === STEPS.length ? (
               <motion.button
-                onClick={handleCreateCompany}
+                onClick={formData.editMode ? handleUpdateCompany : handleCreateCompany}
                 whileHover={{ scale: 1.02 }}
                 whileTap={{ scale: 0.98 }}
+                disabled={loading}
                 className={cn(
-                  "flex items-center gap-2 px-6 py-3 rounded-xl font-medium transition-all duration-300",
+                  "flex items-center gap-2 px-6 py-3 rounded-xl font-medium transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed",
                   theme === 'dark'
                     ? "bg-green-500 text-white hover:bg-green-600"
                     : "bg-green-500 text-white hover:bg-green-600"
                 )}
               >
                 <Check className="w-4 h-4" />
-                Crear Empresa
+                {formData.editMode ? 'Actualizar Empresa' : 'Crear Empresa'}
               </motion.button>
             ) : (
               <motion.button
@@ -1427,58 +2340,66 @@ export default function CompaniesPage() {
               </div>
 
               <div className="flex gap-2">
-                <Button
-                  variant="outline"
+                <button
                   onClick={() => setSelectedFilter('all')}
                   className={cn(
+                    "px-4 py-2 rounded-lg font-medium transition-all duration-300 border",
                     selectedFilter === 'all'
-                      ? theme === 'dark' ? "bg-blue-600 text-white hover:bg-blue-700" : "bg-exa-primary text-white hover:bg-exa-primary/90"
+                      ? theme === 'dark'
+                        ? "bg-exa-secondary text-white border-exa-secondary hover:bg-exa-secondary/90"
+                        : "bg-exa-primary text-white border-exa-primary hover:bg-exa-primary/90"
                       : theme === 'dark'
-                        ? "border-gray-700 text-gray-300 hover:bg-gray-800 hover:text-white"
-                        : "border-gray-300 text-gray-700 hover:bg-exa-primary hover:text-white"
+                        ? "bg-gray-800/50 border-gray-700 text-gray-300 hover:bg-gray-700 hover:text-white"
+                        : "bg-gray-100 border-gray-300 text-gray-700 hover:bg-exa-primary hover:text-white"
                   )}
                 >
                   Todas
-                </Button>
-                <Button
-                  variant="outline"
+                </button>
+                <button
                   onClick={() => setSelectedFilter('agency')}
                   className={cn(
+                    "px-4 py-2 rounded-lg font-medium transition-all duration-300 border",
                     selectedFilter === 'agency'
-                      ? theme === 'dark' ? "bg-blue-600 text-white hover:bg-blue-700" : "bg-exa-primary text-white hover:bg-exa-primary/90"
+                      ? theme === 'dark'
+                        ? "bg-exa-secondary text-white border-exa-secondary hover:bg-exa-secondary/90"
+                        : "bg-exa-primary text-white border-exa-primary hover:bg-exa-primary/90"
                       : theme === 'dark'
-                        ? "border-gray-700 text-gray-300 hover:bg-gray-800 hover:text-white"
-                        : "border-gray-300 text-gray-700 hover:bg-exa-primary hover:text-white"
+                        ? "bg-gray-800/50 border-gray-700 text-gray-300 hover:bg-gray-700 hover:text-white"
+                        : "bg-gray-100 border-gray-300 text-gray-700 hover:bg-exa-primary hover:text-white"
                   )}
                 >
                   Agencias
-                </Button>
-                <Button
-                  variant="outline"
+                </button>
+                <button
                   onClick={() => setSelectedFilter('market')}
                   className={cn(
+                    "px-4 py-2 rounded-lg font-medium transition-all duration-300 border",
                     selectedFilter === 'market'
-                      ? theme === 'dark' ? "bg-blue-600 text-white hover:bg-blue-700" : "bg-exa-primary text-white hover:bg-exa-primary/90"
+                      ? theme === 'dark'
+                        ? "bg-exa-secondary text-white border-exa-secondary hover:bg-exa-secondary/90"
+                        : "bg-exa-primary text-white border-exa-primary hover:bg-exa-primary/90"
                       : theme === 'dark'
-                        ? "border-gray-700 text-gray-300 hover:bg-gray-800 hover:text-white"
-                        : "border-gray-300 text-gray-700 hover:bg-exa-primary hover:text-white"
+                        ? "bg-gray-800/50 border-gray-700 text-gray-300 hover:bg-gray-700 hover:text-white"
+                        : "bg-gray-100 border-gray-300 text-gray-700 hover:bg-exa-primary hover:text-white"
                   )}
                 >
                   Mercados
-                </Button>
-                <Button
-                  variant="outline"
+                </button>
+                <button
                   onClick={() => setSelectedFilter('broker')}
                   className={cn(
+                    "px-4 py-2 rounded-lg font-medium transition-all duration-300 border",
                     selectedFilter === 'broker'
-                      ? theme === 'dark' ? "bg-blue-600 text-white hover:bg-blue-700" : "bg-exa-primary text-white hover:bg-exa-primary/90"
+                      ? theme === 'dark'
+                        ? "bg-exa-secondary text-white border-exa-secondary hover:bg-exa-secondary/90"
+                        : "bg-exa-primary text-white border-exa-primary/90"
                       : theme === 'dark'
-                        ? "border-gray-700 text-gray-300 hover:bg-gray-800 hover:text-white"
-                        : "border-gray-300 text-gray-700 hover:bg-exa-primary hover:text-white"
+                        ? "bg-gray-800/50 border-gray-700 text-gray-300 hover:bg-gray-700 hover:text-white"
+                        : "bg-gray-100 border-gray-300 text-gray-700 hover:bg-exa-primary hover:text-white"
                   )}
                 >
                   Brokers
-                </Button>
+                </button>
               </div>
             </div>
           </motion.div>
@@ -1493,11 +2414,16 @@ export default function CompaniesPage() {
                 transition={{ delay: index * 0.1 }}
                 whileHover={{ y: -4, scale: 1.02 }}
                 className={cn(
-                  "backdrop-blur-sm border rounded-2xl p-6 hover:shadow-xl transition-all duration-300 cursor-pointer",
-                  theme === 'dark' ? "bg-white/5 border-white/10" : "bg-white/90 border-gray-200"
+                  "relative overflow-hidden border rounded-2xl p-6 shadow-xl hover:shadow-2xl transition-all duration-300 cursor-pointer",
+                  theme === 'dark'
+                    ? "bg-gradient-to-br from-gray-800 to-gray-900 border-gray-700"
+                    : "bg-gradient-to-br from-slate-50 to-white border-slate-200"
                 )}
                 onClick={() => setSelectedCompany(company)}
               >
+                {/* Barra superior de color */}
+                <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-400 to-blue-600"></div>
+
                 {/* Header */}
                 <div className="flex items-start justify-between mb-4">
                   <div className="flex items-center gap-3">
@@ -1657,7 +2583,7 @@ export default function CompaniesPage() {
                 </div>
 
                 {/* Features */}
-                <div className="flex items-center gap-4 mt-4 pt-4 border-t border-gray-200">
+                <div className="flex items-center gap-4 mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
                   {company.isMultiCurrency && (
                     <div className="flex items-center gap-1">
                       <DollarSign className={cn(
@@ -1700,6 +2626,42 @@ export default function CompaniesPage() {
                       {COMPANY_TYPES.find(t => t.id === company.companyType)?.name}
                     </span>
                   </div>
+                </div>
+
+                {/* Actions */}
+                <div className="flex items-center gap-2 mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      handleEditCompany(company.id)
+                    }}
+                    disabled={loading}
+                    className={cn(
+                      "flex-1 flex items-center justify-center gap-2 px-4 py-2 rounded-lg font-medium transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed",
+                      theme === 'dark'
+                        ? "bg-blue-500/20 text-blue-400 hover:bg-blue-500/30 border border-blue-500/30"
+                        : "bg-blue-50 text-blue-600 hover:bg-blue-100 border border-blue-200"
+                    )}
+                  >
+                    <Edit className="w-4 h-4" />
+                    <span className="text-sm">Editar</span>
+                  </button>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      handleDeleteCompany(company.id, company.legalName)
+                    }}
+                    disabled={loading}
+                    className={cn(
+                      "flex-1 flex items-center justify-center gap-2 px-4 py-2 rounded-lg font-medium transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed",
+                      theme === 'dark'
+                        ? "bg-red-500/20 text-red-400 hover:bg-red-500/30 border border-red-500/30"
+                        : "bg-red-50 text-red-600 hover:bg-red-100 border border-red-200"
+                    )}
+                  >
+                    <Trash2 className="w-4 h-4" />
+                    <span className="text-sm">Eliminar</span>
+                  </button>
                 </div>
               </motion.div>
             ))}

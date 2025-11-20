@@ -955,7 +955,14 @@ export default function PickupOrdersPage() {
                           {/* Dirección Recogida */}
                           <td className="px-6 py-3">
                             <div className="text-sm text-black dark:text-gray-400 min-w-0 max-w-md">
-                              {formatAddress(parseAddress(order.customerAddress) || parseAddress(order.address))}
+                              {formatAddress({
+                                street: order.street,
+                                apartment: order.apartment,
+                                city: order.city,
+                                state: order.state,
+                                zipCode: order.zipcode,
+                                country: order.country
+                              })}
                             </div>
                           </td>
 
