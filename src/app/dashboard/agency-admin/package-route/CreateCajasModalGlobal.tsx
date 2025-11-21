@@ -3,7 +3,7 @@
 import { useEffect, useState, useRef } from 'react'
 import { useNotifications } from '@/contexts/NotificationContext'
 import { Plus, Printer, User, Warehouse, Package } from 'lucide-react'
-import { generateEmpaqueLabel } from '@/components/EmpaqueLabel'
+import { generateMultipleEmpaqueLabels } from '@/components/EmpaqueLabel'
 import { useAuth } from '@/hooks/useAuth'
 
 interface PackageSize {
@@ -311,10 +311,12 @@ export default function CreateCajasModalGlobal({ onClose, onSuccess }: CreateCaj
       const companyData = await companyResponse.json()
       const company = {
         legalName: companyData.data.legalName,
-        logo: companyData.data.logo || companyData.data.logoUrl,
+        logo: companyData.data.logoUrl || companyData.data.logo || '',
+        logoUrl: companyData.data.logoUrl || companyData.data.logo || '',
         primaryColor: companyData.data.primaryColor,
         phone: companyData.data.phone || '',
-        customerServicePhone: companyData.data.customerServicePhone || ''
+        customerServicePhone: companyData.data.customerServicePhone || '',
+        website: companyData.data.website || ''
       }
 
       // Fetch warehouse data (mismo almacén para creación e impresión)
@@ -334,24 +336,24 @@ export default function CreateCajasModalGlobal({ onClose, onSuccess }: CreateCaj
       // Fecha de impresión
       const fechaImpresion = new Date()
 
-      // Generar etiquetas usando el template profesional
-      const labelsHTML = cajas.map(caja => {
-        return generateEmpaqueLabel({
-          empaque: {
-            id: caja.id,
-            codigo: caja.codigo,
-            warehouse_id: parseInt(formData.warehouseId),
-            warehouse_name: selectedWarehouse?.name || warehouse.name,
-            created_at: caja.created_at || new Date().toISOString(),
-            package_size_name: packageSizes.find(ps => ps.id === parseInt(formData.packageSizeId))?.name,
-            estado: 'disponible'
-          },
-          warehouseCreacion: warehouse,
-          warehouseImpresion: warehouse,
-          company: company,
-          fechaImpresion: fechaImpresion
-        })
-      }).join('\n')
+      // Generar etiquetas usando el template profesional para múltiples etiquetas
+      const labels = cajas.map(caja => ({
+        empaque: {
+          id: caja.id,
+          codigo: caja.codigo,
+          warehouse_id: parseInt(formData.warehouseId),
+          warehouse_name: selectedWarehouse?.name || warehouse.name,
+          created_at: caja.created_at || new Date().toISOString(),
+          package_size_name: packageSizes.find(ps => ps.id === parseInt(formData.packageSizeId))?.name,
+          estado: 'disponible'
+        },
+        warehouseCreacion: warehouse,
+        warehouseImpresion: warehouse,
+        company: company,
+        fechaImpresion: fechaImpresion
+      }))
+
+      const labelsHTML = generateMultipleEmpaqueLabels(labels)
 
       // Abrir ventana de impresión con todas las etiquetas
       const printWindow = window.open('', '_blank', 'width=800,height=600')

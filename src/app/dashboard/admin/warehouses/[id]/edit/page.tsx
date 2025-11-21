@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useLayoutEffect } from 'react'
-import { useParams, useRouter } from 'next/navigation'
+import { useParams, useRouter, usePathname } from 'next/navigation'
 import {
   X,
   Building,
@@ -129,6 +129,10 @@ interface WarehouseData {
 export default function EditWarehousePage() {
   const params = useParams()
   const router = useRouter()
+  const pathname = usePathname()
+  const basePath = pathname?.startsWith('/dashboard/agency-admin')
+    ? '/dashboard/agency-admin/warehouses'
+    : '/dashboard/admin/warehouses'
   const warehouseId = params.id as string
   const { theme } = useTheme()
   const { showNotification } = useNotifications()
@@ -221,7 +225,7 @@ export default function EditWarehousePage() {
       } catch (error) {
         console.error('Error fetching warehouse:', error)
         showNotification('error', 'Error', 'No se pudo cargar la información del almacén')
-        router.push('/dashboard/admin/warehouses')
+          router.push(basePath)
       } finally {
         setLoadingData(false)
       }
@@ -426,7 +430,7 @@ export default function EditWarehousePage() {
       if (response.ok) {
         const data = await response.json()
         showNotification('success', 'Almacén Actualizado', data.message || 'El almacén ha sido actualizado exitosamente')
-        router.push(`/dashboard/admin/warehouses/${warehouseId}`)
+        router.push(`${basePath}/${warehouseId}`)
       } else {
         const errorText = await response.text()
         console.error('❌ Error del servidor:', response.status, errorText)
@@ -510,7 +514,7 @@ export default function EditWarehousePage() {
               <div className="flex items-center justify-between">
                 <div>
                   <button
-                    onClick={() => router.push(`/dashboard/admin/warehouses/${warehouseId}`)}
+                    onClick={() => router.push(`${basePath}/${warehouseId}`)}
                     className="mb-2 flex items-center text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 transition-colors"
                   >
                     <ArrowLeft className="h-4 w-4 mr-1" />
@@ -524,7 +528,7 @@ export default function EditWarehousePage() {
                   </p>
                 </div>
                 <button
-                  onClick={() => router.push(`/dashboard/admin/warehouses/${warehouseId}`)}
+                  onClick={() => router.push(`${basePath}/${warehouseId}`)}
                   className={cn(
                     'p-2 rounded-lg transition-colors',
                     theme === 'dark'
@@ -955,7 +959,7 @@ export default function EditWarehousePage() {
                 : 'border-gray-200'
             )}>
               <button
-                onClick={() => router.push(`/dashboard/admin/warehouses/${warehouseId}`)}
+                onClick={() => router.push(`${basePath}/${warehouseId}`)}
                 className={cn(
                   'flex items-center gap-2 px-6 py-2 mr-4 rounded-lg font-medium transition-colors',
                   'hover:bg-gray-100 dark:hover:bg-gray-700'

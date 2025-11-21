@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/database'
+import { getCompanyFilter } from '@/lib/query-helpers'
 
 /**
  * DELETE /api/package-orders/[id]
@@ -12,6 +13,7 @@ export async function DELETE(
   try {
     const { id } = await params
     const orderId = parseInt(id)
+    const { isSuperAdmin, companyId } = getCompanyFilter(request)
 
     if (isNaN(orderId)) {
       return NextResponse.json(
@@ -24,8 +26,21 @@ export async function DELETE(
     }
 
     // Verificar si la orden existe y su estado
-    const checkQuery = 'SELECT id, status, ordernumber FROM package_orders WHERE id = $1'
-    const checkResult = await db.query(checkQuery, [orderId])
+    const checkParams = [orderId]
+    let checkQuery = 'SELECT id, status, ordernumber, company_id FROM package_orders WHERE id = $1'
+
+    if (!isSuperAdmin) {
+      if (!companyId) {
+        return NextResponse.json(
+          { success: false, error: 'No se pudo determinar la empresa del usuario' },
+          { status: 400 }
+        )
+      }
+      checkParams.push(companyId)
+      checkQuery += ' AND company_id = $2'
+    }
+
+    const checkResult = await db.query(checkQuery, checkParams)
 
     if (checkResult.rows.length === 0) {
       return NextResponse.json(
@@ -51,8 +66,13 @@ export async function DELETE(
     }
 
     // Eliminar la orden
-    const deleteQuery = 'DELETE FROM package_orders WHERE id = $1'
-    await db.query(deleteQuery, [orderId])
+    const deleteParams = [orderId]
+    let deleteQuery = 'DELETE FROM package_orders WHERE id = $1'
+    if (!isSuperAdmin) {
+      deleteParams.push(companyId)
+      deleteQuery += ' AND company_id = $2'
+    }
+    await db.query(deleteQuery, deleteParams)
 
     return NextResponse.json({
       success: true,
@@ -81,6 +101,7 @@ export async function PATCH(
   try {
     const { id } = await params
     const orderId = parseInt(id)
+    const { isSuperAdmin, companyId } = getCompanyFilter(request)
 
     if (isNaN(orderId)) {
       return NextResponse.json(
@@ -128,12 +149,26 @@ export async function PATCH(
 
     // Agregar el ID de la orden al final
     values.push(orderId)
+    let whereClause = `id = $${paramCount}`
+    paramCount++
+
+    if (!isSuperAdmin) {
+      if (!companyId) {
+        return NextResponse.json(
+          { success: false, error: 'No se pudo determinar la empresa del usuario' },
+          { status: 400 }
+        )
+      }
+      values.push(companyId)
+      whereClause += ` AND company_id = $${paramCount}`
+      paramCount++
+    }
 
     // Ejecutar el UPDATE
     const query = `
       UPDATE package_orders
       SET ${updates.join(', ')}
-      WHERE id = $${paramCount}
+      WHERE ${whereClause}
       RETURNING *
     `
 

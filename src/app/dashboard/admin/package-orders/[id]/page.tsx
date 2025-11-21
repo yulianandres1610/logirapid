@@ -33,6 +33,7 @@ import PackageDeliveryMap from '@/components/maps/PackageDeliveryMap'
 import RouteMap from '@/components/maps/RouteMap'
 import EntregaCajasTab from './tabs/EntregaCajasTab'
 import RecogidaCajasTab from './tabs/RecogidaCajasTab'
+import Spinner from '@/components/ui/Spinner'
 
 interface PackageOrder {
   id: number
@@ -478,10 +479,7 @@ export default function PackageOrderDetailPage() {
     return (
       <DashboardLayout>
         <div className="min-h-screen p-6 flex items-center justify-center">
-          <div className="text-center">
-            <RefreshCw className="w-8 h-8 animate-spin mx-auto text-gray-400" />
-            <p className="mt-2 text-gray-600 dark:text-gray-400">Cargando detalles de la orden...</p>
-          </div>
+          <Spinner size="lg" text="Cargando detalles de la orden..." />
         </div>
       </DashboardLayout>
     )

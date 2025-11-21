@@ -37,6 +37,8 @@ import { cn } from '@/lib/utils'
 import { useTheme } from '@/contexts/theme-context'
 import { DashboardLayout } from '@/components/layout/dashboard-layout'
 import { Button } from '@/components/ui/button'
+import MapboxAddressAutofill from '@/components/ui/MapboxAddressAutofill'
+import Spinner from '@/components/ui/Spinner'
 // Las funciones de base de datos ahora se manejan a través de API routes
 
 // Mock data for registered users
@@ -126,6 +128,7 @@ const USER_STEPS = [
 
 const USER_ROLES = [
   { id: 'user', name: 'Usuario', description: 'Acceso básico al sistema' },
+  { id: 'driver', name: 'Driver', description: 'Conduce y gestiona entregas' },
   { id: 'admin', name: 'Administrador', description: 'Acceso completo de gestión' },
   { id: 'super_admin', name: 'Super Admin', description: 'Acceso total al sistema' }
 ]
@@ -139,17 +142,34 @@ export default function UsersPage() {
   const [selectedFilter, setSelectedFilter] = useState('all')
   const [selectedUser, setSelectedUser] = useState<any | null>(null)
   const [loading, setLoading] = useState(true)
+  const [showPasswordModal, setShowPasswordModal] = useState(false)
+  const [passwordForm, setPasswordForm] = useState({ newPassword: '', confirmPassword: '', submitting: false })
 
   // Create user form state
   const [currentStep, setCurrentStep] = useState(1)
   const [formData, setFormData] = useState<any>({
+    id: null,
+    editMode: false,
     firstName: '',
     lastName: '',
     email: '',
     phone: '',
     address: '',
+    apartment: '',
     city: '',
+    state: '',
+    zipCode: '',
     country: '',
+    addressData: {
+      street: '',
+      apartment: '',
+      city: '',
+      state: '',
+      zipCode: '',
+      country: ''
+    },
+    latitude: null,
+    longitude: null,
     role: 'user',
     assignedCompanies: [],
     password: '',
@@ -169,7 +189,12 @@ export default function UsersPage() {
       const data = await response.json()
 
       if (data.success) {
-        setUsers(data.data.users)
+        const normalizedUsers = (data.data.users || []).map((u: any) => ({
+          ...u,
+          companies: u.companies || [],
+          transactionsCount: u.transactionsCount || 0
+        }))
+        setUsers(normalizedUsers)
         setCompanies(data.data.companies || [])
       } else {
         console.error('Error loading data:', data.error)
@@ -183,24 +208,40 @@ export default function UsersPage() {
 
 
   const filteredUsers = users.filter(user => {
-    const matchesSearch = user.firstName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         user.lastName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         user.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         user.phone.includes(searchTerm) ||
-                         user.city.toLowerCase().includes(searchTerm.toLowerCase())
-    const matchesFilter = selectedFilter === 'all' || user.role === selectedFilter
+    const role = (user.role || '').toLowerCase()
+    const matchesSearch = (user.firstName || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+                         (user.lastName || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+                         (user.email || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+                         (user.phone || '').includes(searchTerm) ||
+                         (user.city || '').toLowerCase().includes(searchTerm.toLowerCase())
+    const matchesFilter = selectedFilter === 'all' || role === selectedFilter
     return matchesSearch && matchesFilter
   })
 
   const resetForm = () => {
     setFormData({
+      id: null,
+      editMode: false,
       firstName: '',
       lastName: '',
       email: '',
       phone: '',
       address: '',
+      apartment: '',
       city: '',
+      state: '',
+      zipCode: '',
       country: '',
+      addressData: {
+        street: '',
+        apartment: '',
+        city: '',
+        state: '',
+        zipCode: '',
+        country: ''
+      },
+      latitude: null,
+      longitude: null,
       role: 'user',
       assignedCompanies: [],
       password: '',
@@ -211,47 +252,178 @@ export default function UsersPage() {
     setCurrentStep(1)
   }
 
-  const handleCreateUser = async () => {
+  const handleAddressChange = (addressData: any) => {
+    setFormData((prev: any) => ({
+      ...prev,
+      addressData,
+      address: addressData.street || '',
+      apartment: addressData.apartment || '',
+      city: addressData.city || '',
+      state: addressData.state || '',
+      zipCode: addressData.zipCode || '',
+      country: addressData.country || ''
+    }))
+  }
+
+  const handleCoordinatesChange = (coordinates: { latitude: number; longitude: number } | null) => {
+    setFormData((prev: any) => ({
+      ...prev,
+      latitude: coordinates?.latitude || null,
+      longitude: coordinates?.longitude || null
+    }))
+  }
+
+  const handleEditUser = (user: any) => {
+    setFormData({
+      id: user.id,
+      editMode: true,
+      firstName: user.firstName || '',
+      lastName: user.lastName || '',
+      email: user.email || '',
+      phone: user.phone || '',
+      address: user.address || '',
+      apartment: user.apartment || '',
+      city: user.city || '',
+      state: user.state || '',
+      zipCode: user.zipCode || '',
+      country: user.country || '',
+      addressData: {
+        street: user.address || '',
+        apartment: user.apartment || '',
+        city: user.city || '',
+        state: user.state || '',
+        zipCode: user.zipCode || '',
+        country: user.country || ''
+      },
+      latitude: user.latitude || null,
+      longitude: user.longitude || null,
+      role: (user.role || 'user').toLowerCase(),
+      assignedCompanies: user.companyIds || [],
+      password: '',
+      confirmPassword: '',
+      isActive: user.status === 'active' || user.isActive,
+      sendEmail: false
+    })
+    setShowCreateForm(true)
+    setCurrentStep(1)
+  }
+
+  const handleDeleteUser = async (user: any) => {
+    const confirmed = confirm(`¿Eliminar a ${user.firstName} ${user.lastName}? Esta acción es permanente.`)
+    if (!confirmed) return
+
+    try {
+      setLoading(true)
+      const response = await fetch(`/api/users?id=${user.id}`, { method: 'DELETE' })
+      const data = await response.json()
+
+      if (!data.success) {
+        alert(data.error || 'No se pudo eliminar el usuario')
+      } else {
+        await loadData()
+        setSelectedUser(null)
+      }
+    } catch (error) {
+      console.error('Error deleting user:', error)
+      alert('Error al eliminar usuario.')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleSaveUser = async () => {
+    if (!formData.firstName || !formData.lastName || !formData.email) {
+      alert('Nombre, apellido y correo son obligatorios.')
+      return
+    }
+
+    if (!formData.editMode) {
+      if (!formData.password || formData.password !== formData.confirmPassword) {
+        alert('Las contraseñas no coinciden o están vacías.')
+        return
+      }
+    }
+
+    const addressLine = formData.addressData?.street || formData.address || ''
+    const cityValue = formData.city || formData.addressData?.city || ''
+    const countryValue = formData.country || formData.addressData?.country || ''
+
+    const payloadUser = {
+      firstName: formData.firstName,
+      lastName: formData.lastName,
+      email: formData.email,
+      phone: formData.phone,
+      address: addressLine,
+      city: cityValue,
+      country: countryValue,
+      role: (formData.role || 'user').toUpperCase(),
+      password: formData.editMode ? undefined : formData.password,
+      isActive: formData.isActive,
+      sendEmail: formData.sendEmail
+    }
+
     try {
       const response = await fetch('/api/users', {
-        method: 'POST',
+        method: formData.editMode ? 'PUT' : 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          user: {
-            firstName: formData.firstName,
-            lastName: formData.lastName,
-            email: formData.email,
-            phone: formData.phone,
-            address: formData.address,
-            city: formData.city,
-            country: formData.country,
-            role: formData.role,
-            password: formData.password,
-            isActive: formData.isActive,
-            sendEmail: formData.sendEmail
-          },
-          assignedCompanies: formData.assignedCompanies
-        }),
+        body: JSON.stringify(
+          formData.editMode
+            ? { id: formData.id, ...payloadUser, assignedCompanies: formData.assignedCompanies }
+            : { user: payloadUser, assignedCompanies: formData.assignedCompanies }
+        ),
       })
 
       const data = await response.json()
 
       if (data.success) {
-        // Reload data
         await loadData()
-
         setShowCreateForm(false)
         resetForm()
-
-        alert(`Usuario creado exitosamente!${data.data.message ? '\n' + data.data.message : ''}`)
+        alert(`Usuario ${formData.editMode ? 'actualizado' : 'creado'} exitosamente!${data.data?.message ? '\n' + data.data.message : ''}`)
       } else {
-        alert('Error al crear usuario: ' + data.error)
+        alert('Error al guardar usuario: ' + data.error)
       }
     } catch (error) {
-      console.error('Error creating user:', error)
-      alert('Error al crear usuario. Intente nuevamente.')
+      console.error('Error saving user:', error)
+      alert('Error al guardar usuario. Intente nuevamente.')
+    }
+  }
+
+  const openPasswordModal = (user: any) => {
+    setSelectedUser(user)
+    setPasswordForm({ newPassword: '', confirmPassword: '', submitting: false })
+    setShowPasswordModal(true)
+  }
+
+  const handleChangePassword = async () => {
+    if (!selectedUser) return
+    if (!passwordForm.newPassword || passwordForm.newPassword !== passwordForm.confirmPassword) {
+      alert('Las contraseñas no coinciden.')
+      return
+    }
+
+    try {
+      setPasswordForm(prev => ({ ...prev, submitting: true }))
+      const response = await fetch('/api/users', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: selectedUser.id, password: passwordForm.newPassword })
+      })
+      const data = await response.json()
+      if (!data.success) {
+        alert(data.error || 'No se pudo actualizar la contraseña')
+      } else {
+        alert('Contraseña actualizada correctamente')
+        setShowPasswordModal(false)
+        setPasswordForm({ newPassword: '', confirmPassword: '', submitting: false })
+      }
+    } catch (error) {
+      console.error('Error cambiando contraseña:', error)
+      alert('Error al cambiar la contraseña.')
+    } finally {
+      setPasswordForm(prev => ({ ...prev, submitting: false }))
     }
   }
 
@@ -272,13 +444,15 @@ export default function UsersPage() {
                   "text-3xl font-bold mb-2",
                   theme === 'dark' ? "text-white" : "text-black"
                 )}>
-                  Crear Nuevo Usuario
+                  {formData.editMode ? 'Editar Usuario' : 'Crear Nuevo Usuario'}
                 </h1>
                 <p className={cn(
                   "text-sm",
                   theme === 'dark' ? "text-gray-400" : "text-gray-600"
                 )}>
-                  Completa el formulario para registrar un nuevo usuario en el sistema
+                  {formData.editMode
+                    ? 'Actualiza la información del usuario seleccionado'
+                    : 'Completa el formulario para registrar un nuevo usuario en el sistema'}
                 </p>
               </div>
 
@@ -466,9 +640,9 @@ export default function UsersPage() {
                   <h2 className={cn(
                     "text-xl font-bold mb-6",
                     theme === 'dark' ? "text-white" : "text-black"
-                  )}>
-                    Contacto y Ubicación
-                  </h2>
+                )}>
+                  Contacto y Ubicación
+                </h2>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div>
@@ -489,6 +663,25 @@ export default function UsersPage() {
                             : "bg-white border-gray-300 text-black focus:border-blue-500 focus:ring-blue-500/20"
                         )}
                         placeholder="+53 5 12345678"
+                      />
+                    </div>
+
+                    <div className="md:col-span-2">
+                      <label className={cn(
+                        "block text-sm font-medium mb-2",
+                        theme === 'dark' ? "text-gray-300" : "text-gray-700"
+                      )}>
+                        Dirección con Mapbox *
+                      </label>
+                      <MapboxAddressAutofill
+                        value={formData.addressData}
+                        onChange={handleAddressChange}
+                        onCoordinatesChange={handleCoordinatesChange}
+                        required
+                        className={cn(
+                          "rounded-xl border",
+                          theme === 'dark' ? "border-white/10" : "border-gray-200"
+                        )}
                       />
                     </div>
 
@@ -513,28 +706,49 @@ export default function UsersPage() {
                       />
                     </div>
 
-                    <div className="md:col-span-2">
+                    <div>
                       <label className={cn(
                         "block text-sm font-medium mb-2",
                         theme === 'dark' ? "text-gray-300" : "text-gray-700"
                       )}>
-                        Dirección *
+                        Estado/Provincia
                       </label>
                       <input
                         type="text"
-                        value={formData.address}
-                        onChange={(e) => setFormData({...formData, address: e.target.value})}
+                        value={formData.state}
+                        onChange={(e) => setFormData({...formData, state: e.target.value})}
                         className={cn(
                           "w-full px-4 py-3 rounded-xl border focus:outline-none focus:ring-2 transition-all duration-300",
                           theme === 'dark'
                             ? "bg-gray-800/50 border-gray-700 text-white focus:border-blue-500 focus:ring-blue-500/20"
                             : "bg-white border-gray-300 text-black focus:border-blue-500 focus:ring-blue-500/20"
                         )}
-                        placeholder="Calle 23 #456, Vedado"
+                        placeholder="Provincia"
                       />
                     </div>
 
-                    <div className="md:col-span-2">
+                    <div>
+                      <label className={cn(
+                        "block text-sm font-medium mb-2",
+                        theme === 'dark' ? "text-gray-300" : "text-gray-700"
+                      )}>
+                        Código Postal
+                      </label>
+                      <input
+                        type="text"
+                        value={formData.zipCode}
+                        onChange={(e) => setFormData({...formData, zipCode: e.target.value})}
+                        className={cn(
+                          "w-full px-4 py-3 rounded-xl border focus:outline-none focus:ring-2 transition-all duration-300",
+                          theme === 'dark'
+                            ? "bg-gray-800/50 border-gray-700 text-white focus:border-blue-500 focus:ring-blue-500/20"
+                            : "bg-white border-gray-300 text-black focus:border-blue-500 focus:ring-blue-500/20"
+                        )}
+                        placeholder="00000"
+                      />
+                    </div>
+
+                    <div>
                       <label className={cn(
                         "block text-sm font-medium mb-2",
                         theme === 'dark' ? "text-gray-300" : "text-gray-700"
@@ -676,6 +890,14 @@ export default function UsersPage() {
                   </h2>
 
                   <div className="space-y-6">
+                    {formData.editMode && (
+                      <div className={cn(
+                        "p-4 rounded-xl border",
+                        theme === 'dark' ? "border-yellow-600/40 bg-yellow-500/5 text-yellow-200" : "border-yellow-200 bg-yellow-50 text-yellow-700"
+                      )}>
+                        Este usuario ya existe. Para cambiar contraseña usa la opción "Cambiar contraseña" en el detalle.
+                      </div>
+                    )}
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                       <div>
                         <label className={cn(
@@ -693,6 +915,7 @@ export default function UsersPage() {
                             type="password"
                             value={formData.password}
                             onChange={(e) => setFormData({...formData, password: e.target.value})}
+                            disabled={formData.editMode}
                             className={cn(
                               "w-full pl-12 pr-4 py-3 rounded-xl border focus:outline-none focus:ring-2 transition-all duration-300",
                               theme === 'dark'
@@ -720,6 +943,7 @@ export default function UsersPage() {
                             type="password"
                             value={formData.confirmPassword}
                             onChange={(e) => setFormData({...formData, confirmPassword: e.target.value})}
+                            disabled={formData.editMode}
                             className={cn(
                               "w-full pl-12 pr-4 py-3 rounded-xl border focus:outline-none focus:ring-2 transition-all duration-300",
                               theme === 'dark'
@@ -935,7 +1159,7 @@ export default function UsersPage() {
 
             {currentStep === USER_STEPS.length ? (
               <motion.button
-                onClick={handleCreateUser}
+                onClick={handleSaveUser}
                 whileHover={{ scale: 1.02 }}
                 whileTap={{ scale: 0.98 }}
                 className={cn(
@@ -946,7 +1170,7 @@ export default function UsersPage() {
                 )}
               >
                 <Check className="w-4 h-4" />
-                Crear Usuario
+                {formData.editMode ? 'Guardar Cambios' : 'Crear Usuario'}
               </motion.button>
             ) : (
               <motion.button
@@ -971,18 +1195,7 @@ export default function UsersPage() {
         <div className="max-w-7xl mx-auto p-6">
           {loading ? (
             <div className="flex items-center justify-center h-64">
-              <div className="text-center">
-                <div className={cn(
-                  "w-12 h-12 border-4 border-t-transparent rounded-full animate-spin mx-auto mb-4",
-                  theme === 'dark' ? "border-blue-400" : "border-blue-600"
-                )}></div>
-                <p className={cn(
-                  "text-sm",
-                  theme === 'dark' ? "text-gray-400" : "text-gray-600"
-                )}>
-                  Cargando usuarios...
-                </p>
-              </div>
+              <Spinner size="lg" text="Cargando usuarios..." />
             </div>
           ) : (
           <>
@@ -1009,7 +1222,10 @@ export default function UsersPage() {
               </div>
 
               <Button
-                onClick={() => setShowCreateForm(true)}
+                onClick={() => {
+                  resetForm()
+                  setShowCreateForm(true)
+                }}
                 className={cn(
                   "flex items-center gap-2 px-6 py-3 rounded-xl font-medium transition-all duration-300",
                   theme === 'dark' ? "bg-exa-secondary text-white hover:bg-exa-secondary/90" : "bg-exa-primary text-white hover:bg-exa-primary/90"
@@ -1100,7 +1316,7 @@ export default function UsersPage() {
                 transition={{ delay: 0.3 }}
                 className={cn(
                   "p-4 rounded-xl border",
-                  theme === 'dark' ? "bg-blue-500/20" : "bg-blue-500/20"
+                  theme === 'dark' ? "bg-white/5 border-white/10" : "bg-white/90 border-gray-200"
                 )}
               >
                 <div className="flex items-center gap-3">
@@ -1136,7 +1352,7 @@ export default function UsersPage() {
                 transition={{ delay: 0.4 }}
                 className={cn(
                   "p-4 rounded-xl border",
-                  theme === 'dark' ? "bg-purple-500/20" : "bg-purple-500/20"
+                  theme === 'dark' ? "bg-white/5 border-white/10" : "bg-white/90 border-gray-200"
                 )}
               >
                 <div className="flex items-center gap-3">
@@ -1232,25 +1448,52 @@ export default function UsersPage() {
                 >
                   Admins
                 </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => setSelectedFilter('driver')}
+                  className={cn(
+                    selectedFilter === 'driver'
+                      ? theme === 'dark' ? "bg-blue-600 text-white" : "bg-blue-500 text-white"
+                      : theme === 'dark' ? "border-gray-700 text-gray-300" : "border-gray-300 text-gray-700"
+                  )}
+                >
+                  Drivers
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => setSelectedFilter('super_admin')}
+                  className={cn(
+                    selectedFilter === 'super_admin'
+                      ? theme === 'dark' ? "bg-blue-600 text-white" : "bg-blue-500 text-white"
+                      : theme === 'dark' ? "border-gray-700 text-gray-300" : "border-gray-300 text-gray-700"
+                  )}
+                >
+                  Super Admin
+                </Button>
               </div>
             </div>
           </motion.div>
 
           {/* Users Grid */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {filteredUsers.map((user, index) => (
-              <motion.div
-                key={user.id}
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: index * 0.1 }}
-                whileHover={{ y: -4, scale: 1.02 }}
-                className={cn(
-                  "backdrop-blur-sm border rounded-2xl p-6 hover:shadow-xl transition-all duration-300 cursor-pointer",
-                  theme === 'dark' ? "bg-white/5 border-white/10" : "bg-white/90 border-gray-200"
-                )}
-                onClick={() => setSelectedUser(user)}
-              >
+            {filteredUsers.map((user, index) => {
+              const role = (user.role || '').toLowerCase()
+              return (
+                <motion.div
+                  key={user.id}
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: index * 0.1 }}
+                  whileHover={{ y: -4, scale: 1.02 }}
+                  className={cn(
+                    "relative overflow-hidden border rounded-2xl p-6 shadow-xl hover:shadow-2xl transition-all duration-300 cursor-pointer",
+                    theme === 'dark'
+                      ? "bg-gradient-to-br from-gray-800 to-gray-900 border-gray-700"
+                      : "bg-gradient-to-br from-slate-50 to-white border-slate-200"
+                  )}
+                  onClick={() => setSelectedUser(user)}
+                >
+                <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-400 to-blue-600"></div>
                 {/* Header */}
                 <div className="flex items-start justify-between mb-4">
                   <div className="flex items-center gap-3">
@@ -1288,15 +1531,16 @@ export default function UsersPage() {
                   <div className="flex items-center gap-1">
                     <Shield className={cn(
                       "w-4 h-4",
-                      user.role === 'super_admin' ? "text-purple-500" : user.role === 'admin' ? "text-blue-500" : "text-gray-500"
+                      role === 'super_admin' ? "text-purple-500" : role === 'admin' ? "text-blue-500" : role === 'driver' ? "text-amber-500" : "text-gray-500"
                     )} />
                     <span className={cn(
                       "text-xs px-2 py-1 rounded-lg",
-                      user.role === 'super_admin' ? theme === 'dark' ? "bg-purple-500/20 text-purple-400" : "bg-purple-100 text-purple-800" :
-                      user.role === 'admin' ? theme === 'dark' ? "bg-blue-500/20 text-blue-400" : "bg-blue-100 text-blue-800" :
+                      role === 'super_admin' ? theme === 'dark' ? "bg-purple-500/20 text-purple-400" : "bg-purple-100 text-purple-800" :
+                      role === 'admin' ? theme === 'dark' ? "bg-blue-500/20 text-blue-400" : "bg-blue-100 text-blue-800" :
+                      role === 'driver' ? theme === 'dark' ? "bg-amber-500/20 text-amber-300" : "bg-amber-100 text-amber-700" :
                       theme === 'dark' ? "bg-gray-700/20 text-gray-400" : "bg-gray-100 text-gray-800"
                     )}>
-                      {user.role === 'super_admin' ? 'Super Admin' : user.role === 'admin' ? 'Admin' : 'Usuario'}
+                      {role === 'super_admin' ? 'Super Admin' : role === 'admin' ? 'Admin' : role === 'driver' ? 'Driver' : 'Usuario'}
                     </span>
                   </div>
                 </div>
@@ -1403,8 +1647,41 @@ export default function UsersPage() {
                     </span>
                   )}
                 </div>
+                <div className="flex items-center gap-2 mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      handleEditUser(user)
+                    }}
+                    className={cn(
+                      "flex-1 flex items-center justify-center gap-2 px-4 py-2 rounded-lg font-medium transition-all duration-300",
+                      theme === 'dark'
+                        ? "bg-blue-500/20 text-blue-400 hover:bg-blue-500/30 border border-blue-500/30"
+                        : "bg-blue-50 text-blue-600 hover:bg-blue-100 border border-blue-200"
+                    )}
+                  >
+                    <Edit className="w-4 h-4" />
+                    <span className="text-sm">Editar</span>
+                  </button>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      handleDeleteUser(user)
+                    }}
+                    className={cn(
+                      "flex-1 flex items-center justify-center gap-2 px-4 py-2 rounded-lg font-medium transition-all duration-300",
+                      theme === 'dark'
+                        ? "bg-red-500/20 text-red-400 hover:bg-red-500/30 border border-red-500/30"
+                        : "bg-red-50 text-red-600 hover:bg-red-100 border border-red-200"
+                    )}
+                  >
+                    <Trash2 className="w-4 h-4" />
+                    <span className="text-sm">Eliminar</span>
+                  </button>
+                </div>
               </motion.div>
-            ))}
+            )
+          })}
           </div>
 
           {/* User Detail Modal */}
@@ -1461,11 +1738,18 @@ export default function UsersPage() {
                             </span>
                             <span className={cn(
                               "text-sm px-2 py-1 rounded-lg",
-                              selectedUser.role === 'super_admin' ? theme === 'dark' ? "bg-purple-500/20" : "bg-purple-100" :
-                              selectedUser.role === 'admin' ? theme === 'dark' ? "bg-blue-500/20" : "bg-blue-100" :
+                              (selectedUser.role || '').toLowerCase() === 'super_admin' ? theme === 'dark' ? "bg-purple-500/20" : "bg-purple-100" :
+                              (selectedUser.role || '').toLowerCase() === 'admin' ? theme === 'dark' ? "bg-blue-500/20" : "bg-blue-100" :
+                              (selectedUser.role || '').toLowerCase() === 'driver' ? theme === 'dark' ? "bg-amber-500/20" : "bg-amber-100" :
                               theme === 'dark' ? "bg-gray-700" : "bg-gray-100"
                             )}>
-                              {selectedUser.role === 'super_admin' ? 'Super Admin' : selectedUser.role === 'admin' ? 'Administrador' : 'Usuario'}
+                              {(selectedUser.role || '').toLowerCase() === 'super_admin'
+                                ? 'Super Admin'
+                                : (selectedUser.role || '').toLowerCase() === 'admin'
+                                  ? 'Administrador'
+                                  : (selectedUser.role || '').toLowerCase() === 'driver'
+                                    ? 'Driver'
+                                    : 'Usuario'}
                             </span>
                           </div>
                         </div>
@@ -1482,6 +1766,39 @@ export default function UsersPage() {
                           theme === 'dark' ? "text-gray-400" : "text-gray-600"
                         )} />
                       </button>
+                    </div>
+
+                    <div className="flex flex-wrap gap-2">
+                      <Button
+                        variant="outline"
+                        onClick={() => {
+                          handleEditUser(selectedUser)
+                          setSelectedUser(null)
+                        }}
+                        className="flex items-center gap-2"
+                      >
+                        <Edit className="w-4 h-4" />
+                        Editar
+                      </Button>
+                      <Button
+                        variant="outline"
+                        onClick={() => openPasswordModal(selectedUser)}
+                        className="flex items-center gap-2"
+                      >
+                        <Lock className="w-4 h-4" />
+                        Cambiar contraseña
+                      </Button>
+                      <Button
+                        variant="outline"
+                        onClick={() => handleDeleteUser(selectedUser)}
+                        className={cn(
+                          "flex items-center gap-2",
+                          theme === 'dark' ? "border-red-400 text-red-300" : "border-red-500 text-red-600"
+                        )}
+                      >
+                        <Trash2 className="w-4 h-4" />
+                        Eliminar
+                      </Button>
                     </div>
 
                     {/* Contact Information */}
@@ -1530,7 +1847,7 @@ export default function UsersPage() {
                               "text-sm",
                               theme === 'dark' ? "text-gray-300" : "text-gray-700"
                             )}>
-                              {selectedUser.address}, {selectedUser.city}, {selectedUser.country}
+                              {selectedUser.address}{selectedUser.apartment ? `, ${selectedUser.apartment}` : ''}{selectedUser.city ? `, ${selectedUser.city}` : ''}{selectedUser.state ? `, ${selectedUser.state}` : ''}{selectedUser.zipCode ? ` ${selectedUser.zipCode}` : ''}{selectedUser.country ? `, ${selectedUser.country}` : ''}
                             </span>
                           </div>
 
@@ -1656,6 +1973,92 @@ export default function UsersPage() {
                           </div>
                         ))}
                       </div>
+                    </div>
+                  </div>
+                </motion.div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          {/* Change Password Modal */}
+          <AnimatePresence>
+            {showPasswordModal && selectedUser && (
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4"
+                onClick={() => setShowPasswordModal(false)}
+              >
+                <motion.div
+                  initial={{ scale: 0.95, opacity: 0 }}
+                  animate={{ scale: 1, opacity: 1 }}
+                  exit={{ scale: 0.95, opacity: 0 }}
+                  onClick={(e) => e.stopPropagation()}
+                  className={cn(
+                    "w-full max-w-md rounded-2xl p-6",
+                    theme === 'dark' ? "bg-gray-900" : "bg-white"
+                  )}
+                >
+                  <div className="flex items-center justify-between mb-4">
+                    <div>
+                      <h2 className={cn("text-xl font-bold", theme === 'dark' ? "text-white" : "text-black")}>Cambiar contraseña</h2>
+                      <p className={cn("text-sm", theme === 'dark' ? "text-gray-400" : "text-gray-600")}>
+                        Usuario: {selectedUser.firstName} {selectedUser.lastName}
+                      </p>
+                    </div>
+                    <button
+                      onClick={() => setShowPasswordModal(false)}
+                      className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800"
+                    >
+                      <X className={cn("w-5 h-5", theme === 'dark' ? "text-gray-400" : "text-gray-600")} />
+                    </button>
+                  </div>
+
+                  <div className="space-y-4">
+                    <div>
+                      <label className={cn("block text-sm font-medium mb-2", theme === 'dark' ? "text-gray-300" : "text-gray-700")}>
+                        Nueva contraseña
+                      </label>
+                      <input
+                        type="password"
+                        value={passwordForm.newPassword}
+                        onChange={(e) => setPasswordForm(prev => ({ ...prev, newPassword: e.target.value }))}
+                        className={cn(
+                          "w-full px-4 py-3 rounded-xl border focus:outline-none focus:ring-2 transition-all duration-300",
+                          theme === 'dark'
+                            ? "bg-gray-800/50 border-gray-700 text-white focus:border-blue-500 focus:ring-blue-500/20"
+                            : "bg-white border-gray-300 text-black focus:border-blue-500 focus:ring-blue-500/20"
+                        )}
+                        placeholder="********"
+                      />
+                    </div>
+
+                    <div>
+                      <label className={cn("block text-sm font-medium mb-2", theme === 'dark' ? "text-gray-300" : "text-gray-700")}>
+                        Confirmar contraseña
+                      </label>
+                      <input
+                        type="password"
+                        value={passwordForm.confirmPassword}
+                        onChange={(e) => setPasswordForm(prev => ({ ...prev, confirmPassword: e.target.value }))}
+                        className={cn(
+                          "w-full px-4 py-3 rounded-xl border focus:outline-none focus:ring-2 transition-all duration-300",
+                          theme === 'dark'
+                            ? "bg-gray-800/50 border-gray-700 text-white focus:border-blue-500 focus:ring-blue-500/20"
+                            : "bg-white border-gray-300 text-black focus:border-blue-500 focus:ring-blue-500/20"
+                        )}
+                        placeholder="********"
+                      />
+                    </div>
+
+                    <div className="flex items-center justify-end gap-3 pt-2">
+                      <Button variant="outline" onClick={() => setShowPasswordModal(false)}>
+                        Cancelar
+                      </Button>
+                      <Button onClick={handleChangePassword} loading={passwordForm.submitting}>
+                        Guardar
+                      </Button>
                     </div>
                   </div>
                 </motion.div>

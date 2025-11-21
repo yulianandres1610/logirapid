@@ -19,7 +19,8 @@ import {
   MapPin,
   Clock,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  Building2
 } from 'lucide-react'
 import CreateCajasModal from './CreateCajasModal'
 import { cn } from '@/lib/utils'
@@ -46,6 +47,8 @@ interface Empaque {
   fechaAsignacion: string | null
   descripcion: string | null
   created_at: string
+  company_id?: number
+  company_name?: string
 }
 
 interface TrazabilidadRecord {
@@ -163,20 +166,37 @@ export default function EmpaquesTab({ warehouse }: EmpaquesTabProps) {
       if (companyId.startsWith('company-')) {
         companyId = companyId.replace('company-', '')
       }
+
+      console.log('🏢 [EmpaqueLabel] Fetching company data for ID:', companyId)
       const companyResponse = await fetch(`/api/companies/${companyId}`)
       let company = {
         legalName: 'LogiRapid',
         logo: '',
-        primary_color: '#8B5CF6'
+        logoUrl: '',
+        primary_color: '#8B5CF6',
+        phone: '',
+        customerServicePhone: '6452432403',
+        website: ''
       }
 
       if (companyResponse.ok) {
         const companyData = await companyResponse.json()
+        console.log('🏢 [EmpaqueLabel] Company data received:', companyData.data)
+        console.log('🖼️ [EmpaqueLabel] Logo URL:', companyData.data?.logoUrl)
+
         company = {
           legalName: companyData.data?.legalName || 'LogiRapid',
-          logo: companyData.data?.logo || '',
-          primary_color: companyData.data?.primaryColor || '#8B5CF6'
+          logo: companyData.data?.logoUrl || companyData.data?.logo_url || '',
+          logoUrl: companyData.data?.logoUrl || companyData.data?.logo_url || '',
+          primary_color: companyData.data?.primaryColor || companyData.data?.primary_color || '#8B5CF6',
+          phone: companyData.data?.phone || company.phone,
+          customerServicePhone: companyData.data?.customerServicePhone || companyData.data?.customer_service_phone || company.customerServicePhone,
+          website: companyData.data?.website || ''
         }
+
+        console.log('🏢 [EmpaqueLabel] Company object for label:', company)
+      } else {
+        console.error('❌ [EmpaqueLabel] Failed to fetch company:', companyResponse.status)
       }
 
       // Obtener trazabilidad para encontrar el almacén de creación
@@ -402,6 +422,9 @@ export default function EmpaquesTab({ warehouse }: EmpaquesTabProps) {
                     Tipo
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                    Empresa
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                     Tamaño
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
@@ -428,6 +451,14 @@ export default function EmpaquesTab({ warehouse }: EmpaquesTabProps) {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600 dark:text-gray-400">
                       {empaque.tipo}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="flex items-center">
+                        <Building2 className="h-4 w-4 text-blue-600 dark:text-blue-400 mr-2" />
+                        <span className="text-sm font-medium text-gray-900 dark:text-white">
+                          {empaque.company_name || 'Sin empresa'}
+                        </span>
+                      </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="flex flex-col">

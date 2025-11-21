@@ -97,6 +97,7 @@ export default function PackageRoutePage() {
   const [showHistoryModal, setShowHistoryModal] = useState(false)
   const [selectedEmpaque, setSelectedEmpaque] = useState<Empaque | null>(null)
   const [trazabilidad, setTrazabilidad] = useState<any[]>([])
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set())
 
   // Cargar datos iniciales
   useEffect(() => {
@@ -183,15 +184,23 @@ export default function PackageRoutePage() {
       let company = {
         legalName: 'LogiRapid',
         logo: '',
-        primary_color: '#8B5CF6'
+        logoUrl: '',
+        primary_color: '#8B5CF6',
+        phone: '',
+        customerServicePhone: '6452432403',
+        website: ''
       }
 
       if (companyResponse.ok) {
         const companyData = await companyResponse.json()
         company = {
           legalName: companyData.data?.legalName || 'LogiRapid',
-          logo: companyData.data?.logo || '',
-          primary_color: companyData.data?.primaryColor || '#8B5CF6'
+          logo: companyData.data?.logoUrl || companyData.data?.logo || '',
+          logoUrl: companyData.data?.logoUrl || companyData.data?.logo || '',
+          primary_color: companyData.data?.primaryColor || '#8B5CF6',
+          phone: companyData.data?.phone || company.phone,
+          customerServicePhone: companyData.data?.customerServicePhone || company.customerServicePhone,
+          website: companyData.data?.website || ''
         }
       }
 
@@ -604,12 +613,34 @@ export default function PackageRoutePage() {
             </div>
           ) : (
             <div className="overflow-x-auto">
+              <div className="flex justify-between items-center px-4 py-3">
+                <div>
+                  <p className={cn('text-sm', theme === 'dark' ? 'text-gray-300' : 'text-gray-700')}>
+                    Mostrando {empaques.length} de {totalEmpaques} cajas
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button variant="outline" size="sm" onClick={handleSelectAll}>
+                    {selectedIds.size === empaques.length ? 'Deseleccionar' : 'Seleccionar todos'}
+                  </Button>
+                  <Button size="sm" onClick={handlePrintSelected} disabled={selectedIds.size === 0}>
+                    Imprimir seleccionados ({selectedIds.size})
+                  </Button>
+                </div>
+              </div>
               <table className="w-full">
                 <thead className={cn(
                   'border-b',
                   theme === 'dark' ? 'border-gray-700 bg-gray-900/50' : 'border-gray-200 bg-gray-50'
                 )}>
                   <tr>
+                    <th className="px-4 py-4">
+                      <input
+                        type="checkbox"
+                        checked={selectedIds.size === empaques.length && empaques.length > 0}
+                        onChange={handleSelectAll}
+                      />
+                    </th>
                     <th className="px-6 py-4 text-left text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400">
                       Código
                     </th>
@@ -647,6 +678,13 @@ export default function PackageRoutePage() {
                           : 'hover:bg-gray-50'
                       )}
                     >
+                      <td className="px-4 py-4">
+                        <input
+                          type="checkbox"
+                          checked={selectedIds.has(empaque.id)}
+                          onChange={() => toggleSelectEmpaque(empaque.id)}
+                        />
+                      </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="flex items-center gap-2">
                           <QrCode className="h-4 w-4 text-gray-400" />
@@ -916,4 +954,268 @@ export default function PackageRoutePage() {
       )}
     </DashboardLayout>
   )
+
+  function toggleSelectEmpaque(id: number) {
+    setSelectedIds(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) {
+        next.delete(id)
+      } else {
+        next.add(id)
+      }
+      return next
+    })
+  }
+
+  function handleSelectAll() {
+    if (selectedIds.size === empaques.length) {
+      setSelectedIds(new Set())
+    } else {
+      setSelectedIds(new Set(empaques.map(e => e.id)))
+    }
+  }
+
+  async function handlePrintSelected() {
+    if (selectedIds.size === 0) {
+      showNotification('warning', 'Selecciona empaques', 'Elige al menos un empaque para imprimir')
+      return
+    }
+
+    // Obtener datos de la compañía una sola vez para todas las etiquetas
+    let companyId = user?.companyId || '1'
+    if (typeof companyId === 'string' && companyId.startsWith('company-')) {
+      companyId = companyId.replace('company-', '')
+    }
+    let company = {
+      legalName: 'LogiRapid',
+      logo: '',
+      primary_color: '#8B5CF6',
+      phone: '6452432403',
+      customerServicePhone: '6452432403'
+    }
+
+    try {
+      const companyResponse = await fetch(`/api/companies/${companyId}`)
+      if (companyResponse.ok) {
+        const companyData = await companyResponse.json()
+        company = {
+          legalName: companyData.data?.legalName || 'LogiRapid',
+          logo: companyData.data?.logo || '',
+          primary_color: companyData.data?.primaryColor || '#8B5CF6',
+          phone: companyData.data?.phone || company.phone,
+          customerServicePhone: companyData.data?.customerServicePhone || company.customerServicePhone
+        }
+      }
+    } catch (error) {
+      console.error('Error obteniendo la compañía para impresión masiva:', error)
+    }
+
+    // Preparar HTML con todas las etiquetas en una sola página de impresión
+    const now = new Date().toISOString()
+    const selectedEmpaques = empaques.filter(e => selectedIds.has(e.id))
+
+    const labelsHtml = selectedEmpaques.map((empaque, idx) => `
+      <div class="label-container">
+        <div class="logo-section">
+          ${company.logo
+            ? `<img src="${company.logo}" alt="${company.legalName}">`
+            : `<div class="company-name">${company.legalName}</div>`
+          }
+        </div>
+
+        <div class="codigo-section">
+          <div class="codigo-label">Código de Empaque</div>
+          <svg id="codigoBarcode-${idx}"></svg>
+          <div class="codigo-text">${empaque.codigo}</div>
+        </div>
+
+        <div class="customer-service-section">
+          <div class="service-header">Puede Llamarnos Para Solicitar<br>Entregas de Cajas Vacias o<br>Recogidas de sus cajas Llenas</div>
+          <div class="service-phone">${company.customerServicePhone || company.phone || '6452432403'}</div>
+        </div>
+
+        <div class="label-footer">
+          <div class="footer-dates">
+            <div class="footer-date-item">
+              <div class="footer-date-label">Creación:</div>
+              <div class="footer-date-value" data-created="${empaque.created_at || ''}" id="created-${idx}"></div>
+            </div>
+            <div class="footer-date-item">
+              <div class="footer-date-label">Impresión:</div>
+              <div class="footer-date-value" data-printed="${now}" id="printed-${idx}"></div>
+            </div>
+          </div>
+          <div class="footer-watermark">${company.legalName} - Todos los derechos reservados</div>
+        </div>
+      </div>
+      <div class="page-break"></div>
+    `).join('')
+
+    const bulkHtml = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="UTF-8">
+        <title>Etiquetas de Empaques</title>
+        <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.12.1/dist/JsBarcode.all.min.js"></script>
+        <style>
+          * { margin: 0; padding: 0; box-sizing: border-box; }
+          @page { size: 4in 6in; margin: 0; }
+          body {
+            font-family: 'Arial', sans-serif;
+            width: 4in;
+            padding: 0.2in;
+            background: white;
+            color: #000000;
+          }
+          .label-container {
+            display: flex;
+            flex-direction: column;
+            height: 6in;
+            page-break-inside: avoid;
+          }
+          .logo-section {
+            width: 100%;
+            text-align: center;
+            margin-bottom: 0.08in;
+            border-bottom: 2px solid #000000;
+            padding-bottom: 0.08in;
+          }
+          .logo-section img {
+            max-width: 100%;
+            max-height: 0.7in;
+            object-fit: contain;
+          }
+          .company-name { font-size: 38px; font-weight: bold; color: #000000; margin-top: 5px; }
+          .codigo-section {
+            text-align: center;
+            margin: 0.05in 0;
+            padding: 0.08in 0.08in 0.05in 0.08in;
+            background: white;
+            border: 1px solid #000000;
+            border-radius: 4px;
+          }
+          .codigo-label { font-size: 10px; color: #000000; margin-bottom: 2px; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600; }
+          .codigo-text { font-size: 9px; color: #000000; font-family: 'Courier New', monospace; font-weight: 600; margin-top: 2px; }
+          .customer-service-section {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+            padding: 0.2in 0.12in;
+            background: white;
+            border: 2px solid #000000;
+            border-radius: 8px;
+            margin: 0.1in 0;
+          }
+          .service-header { font-size: 16px; font-weight: 800; color: #000000; margin-bottom: 10px; letter-spacing: 0.8px; line-height: 1.3; max-width: 3.2in; }
+          .service-phone { font-size: 28px; font-weight: 900; color: #000000; margin: 8px 0; font-family: 'Courier New', monospace; letter-spacing: 2px; }
+          .label-footer { border-top: 1px solid #000000; padding: 0.08in 0; margin-top: auto; }
+          .footer-dates { display: flex; justify-content: space-between; margin-bottom: 4px; font-size: 8px; color: #000000; }
+          .footer-date-item { display: flex; flex-direction: column; }
+          .footer-date-label { font-weight: 700; text-transform: uppercase; margin-bottom: 1px; }
+          .footer-date-value { font-weight: 400; }
+          .footer-watermark { text-align: center; font-size: 7px; color: #666666; font-weight: 600; margin-top: 4px; letter-spacing: 0.3px; }
+          @media print {
+            body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+            .button-container { display: none !important; }
+            .page-break { page-break-after: always; }
+          }
+          .button-container {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            display: flex;
+            gap: 10px;
+            z-index: 9999;
+          }
+          button {
+            padding: 12px 24px;
+            border-radius: 12px;
+            border: none;
+            cursor: pointer;
+            font-size: 15px;
+            font-weight: 700;
+            transition: all 0.2s ease;
+            letter-spacing: 0.5px;
+          }
+          .btn-print { background: ${company.primary_color || '#000000'}; color: white; }
+          .btn-close { background: #666666; color: white; }
+          .page-break { height: 12px; }
+        </style>
+      </head>
+      <body>
+        ${labelsHtml}
+        <div class="button-container">
+          <button class="btn-print" onclick="window.print()">Imprimir</button>
+          <button class="btn-close" onclick="window.close()">Cerrar</button>
+        </div>
+        <script>
+          const labelsData = ${JSON.stringify(selectedEmpaques.map(e => ({
+            codigo: e.codigo,
+            created_at: e.created_at
+          })))};
+
+          function formatDate(date) {
+            const d = new Date(date);
+            const day = String(d.getDate()).padStart(2, '0');
+            const month = String(d.getMonth() + 1).padStart(2, '0');
+            const year = d.getFullYear();
+            return day + '/' + month + '/' + year;
+          }
+
+          function formatTime(date) {
+            const d = new Date(date);
+            const hours = String(d.getHours()).padStart(2, '0');
+            const minutes = String(d.getMinutes()).padStart(2, '0');
+            const seconds = String(d.getSeconds()).padStart(2, '0');
+            return hours + ':' + minutes + ':' + seconds;
+          }
+
+          window.onload = function() {
+            try {
+              labelsData.forEach((label, idx) => {
+                const createdEl = document.getElementById('created-' + idx);
+                const printedEl = document.getElementById('printed-' + idx);
+                if (createdEl) {
+                  createdEl.textContent = label.created_at
+                    ? formatDate(label.created_at) + ' ' + formatTime(label.created_at)
+                    : 'N/A';
+                }
+                if (printedEl) {
+                  const printed = printedEl.dataset.printed || new Date().toISOString();
+                  printedEl.textContent = formatDate(printed) + ' ' + formatTime(printed);
+                }
+                JsBarcode('#codigoBarcode-' + idx, label.codigo, {
+                  format: 'CODE128',
+                  width: 2,
+                  height: 60,
+                  displayValue: false,
+                  margin: 5
+                });
+              });
+
+              setTimeout(function() { window.print(); }, 800);
+            } catch (error) {
+              console.error('Error generando códigos:', error);
+            }
+          };
+        </script>
+      </body>
+      </html>
+    `
+
+    const printWindow = window.open('', '_blank', 'width=720,height=900')
+    if (!printWindow) {
+      showNotification('error', 'Error', 'No se pudo abrir la ventana de impresión')
+      return
+    }
+
+    printWindow.document.write(bulkHtml)
+    printWindow.document.close()
+
+    showNotification('success', 'Impresión enviada', `Se enviaron ${selectedIds.size} etiquetas a impresión`)
+  }
 }

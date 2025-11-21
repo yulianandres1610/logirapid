@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { useParams, useRouter, useSearchParams } from 'next/navigation'
+import { useParams, useRouter, useSearchParams, usePathname } from 'next/navigation'
 import { DashboardLayout } from '@/components/layout/dashboard-layout'
 import { useNotifications } from '@/contexts/NotificationContext'
 import {
@@ -68,6 +68,10 @@ export default function WarehouseDetailPage() {
   const params = useParams()
   const router = useRouter()
   const searchParams = useSearchParams()
+  const pathname = usePathname()
+  const basePath = pathname?.startsWith('/dashboard/agency-admin')
+    ? '/dashboard/agency-admin/warehouses'
+    : '/dashboard/admin/warehouses'
   const { showNotification } = useNotifications()
   const warehouseId = params.id as string
 
@@ -98,7 +102,7 @@ export default function WarehouseDetailPage() {
     } catch (error) {
       console.error('Error fetching warehouse:', error)
       showNotification('error', 'Error', 'No se pudo cargar la información del almacén')
-      router.push('/dashboard/admin/warehouses')
+      router.push(basePath)
     } finally {
       setLoading(false)
     }
@@ -135,7 +139,7 @@ export default function WarehouseDetailPage() {
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
             {/* Back button */}
             <button
-              onClick={() => router.push('/dashboard/admin/warehouses')}
+              onClick={() => router.push(basePath)}
               className="mb-4 flex items-center text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 transition-colors"
             >
               <ArrowLeft className="h-4 w-4 mr-1" />
@@ -184,12 +188,12 @@ export default function WarehouseDetailPage() {
                       </div>
                     )}
                   </div>
-                </div>
               </div>
-              <button
-                onClick={() => router.push(`/dashboard/admin/warehouses/${warehouseId}/edit`)}
-                className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors shadow-md hover:shadow-lg"
-              >
+            </div>
+            <button
+              onClick={() => router.push(`${basePath}/${warehouseId}/edit`)}
+              className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors shadow-md hover:shadow-lg"
+            >
                 <Edit className="h-4 w-4" />
                 Editar Almacén
               </button>
@@ -205,7 +209,7 @@ export default function WarehouseDetailPage() {
                   return (
                     <button
                       key={tab.id}
-                      onClick={() => router.push(`/dashboard/admin/warehouses/${warehouseId}?tab=${tab.id}`)}
+                      onClick={() => router.push(`${basePath}/${warehouseId}?tab=${tab.id}`)}
                       className={`
                         group inline-flex items-center py-4 px-1 border-b-2 font-medium text-sm transition-colors
                         ${isActive

@@ -8,13 +8,12 @@ const removeLeadingZeros = (address: string): string => {
   return address.replace(/^0+/, '')
 }
 
-import { useRouter, useSearchParams } from 'next/navigation'
+import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { motion } from 'framer-motion'
 import {
   Package,
   Plus,
   Search,
-  RefreshCw,
   Archive,
   Truck,
   Calendar,
@@ -26,8 +25,11 @@ import {
   Trash2,
   ChevronLeft,
   ChevronRight,
-  Clock
+  Clock,
+  RefreshCw,
+  Building2
 } from 'lucide-react'
+import LoadingBox from '@/components/ui/LoadingBox'
 import { cn } from '@/lib/utils'
 import { useTheme } from '@/contexts/theme-context'
 import { useAuth } from '@/hooks/useAuth'
@@ -58,6 +60,14 @@ interface PackageOrder {
   address?: string
   customerNotes?: string
   orderType?: 'recogida' | 'oficina' | 'entrega'
+  street?: string
+  apartment?: string
+  city?: string
+  state?: string
+  zipcode?: string
+  country?: string
+  companyName?: string // Nombre de la empresa
+  companyId?: number // ID de la empresa
   // Coordinates for mapping
   latitude?: number | null
   longitude?: number | null
@@ -71,7 +81,11 @@ export default function PickupOrdersPage() {
   const { theme } = useTheme()
   const { showNotification } = useNotifications()
   const router = useRouter()
+  const pathname = usePathname()
   const searchParams = useSearchParams()
+  const basePath = pathname?.startsWith('/dashboard/agency-admin')
+    ? '/dashboard/agency-admin/pickup-orders'
+    : '/dashboard/admin/pickup-orders'
 
   const [orders, setOrders] = useState<PackageOrder[]>([])
   const [loading, setLoading] = useState(true)
@@ -144,9 +158,9 @@ export default function PickupOrdersPage() {
       params.delete('view')
     }
 
-    const newUrl = `/dashboard/admin/pickup-orders${params.toString() ? '?' + params.toString() : ''}`
+    const newUrl = `${basePath}${params.toString() ? '?' + params.toString() : ''}`
     router.push(newUrl, { scroll: false })
-  }, [activeView, searchParams, router])
+  }, [activeView, searchParams, router, basePath])
 
   // Calculate statistics
   const stats = {
@@ -215,12 +229,12 @@ export default function PickupOrdersPage() {
 
   // Handle view order details
   const handleViewOrder = (orderId: number) => {
-    window.location.href = `/dashboard/admin/pickup-orders/${orderId}`
+    router.push(`${basePath}/${orderId}`)
   }
 
   // Handle edit order
   const handleEditOrder = (orderId: number) => {
-    window.location.href = `/dashboard/admin/pickup-orders/${orderId}/edit`
+    router.push(`${basePath}/${orderId}/edit`)
   }
 
   // Handle delete order
@@ -367,8 +381,9 @@ export default function PickupOrdersPage() {
     if (address.apartment) parts.push(`Apt: ${address.apartment}`)
     if (address.city) parts.push(address.city)
     if (address.state) parts.push(address.state)
-    if (address.zipCode) parts.push(address.zipCode)
-    if (address.country && address.country !== 'Estados Unidos') parts.push(address.country)
+    // Handle both zipCode (camelCase) and zipcode (lowercase)
+    if (address.zipCode || address.zipcode) parts.push(address.zipCode || address.zipcode)
+    if (address.country && address.country !== 'Estados Unidos' && address.country !== 'US') parts.push(address.country)
 
     return parts.length > 0 ? (
       <div>
@@ -764,7 +779,7 @@ export default function PickupOrdersPage() {
                 </Button>
 
                 <button
-                  onClick={() => window.location.href = '/dashboard/admin/pickup-orders/create'}
+                  onClick={() => router.push(`${basePath}/create`)}
                   className={cn(
                     'flex-1 sm:flex-none justify-center whitespace-nowrap',
                     'rounded-lg text-sm font-medium transition-all duration-200',
@@ -788,9 +803,8 @@ export default function PickupOrdersPage() {
             theme === 'dark' ? 'bg-gray-800' : 'bg-white'
           )}>
             {loading ? (
-              <div className="p-8 text-center">
-                <RefreshCw className="w-8 h-8 animate-spin mx-auto text-gray-400" />
-                <p className="mt-2 text-black dark:text-gray-400">Cargando órdenes de recogida...</p>
+              <div className="p-8">
+                <LoadingBox size="lg" text="Cargando órdenes de recogida..." />
               </div>
             ) : orders.length === 0 ? (
               <div className="p-8 text-center">
@@ -816,6 +830,11 @@ export default function PickupOrdersPage() {
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider w-48">
                         Cliente
                       </th>
+                      {user?.role === 'SUPER_ADMIN' && (
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider w-40">
+                          Empresa
+                        </th>
+                      )}
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider flex-1">
                         Dirección Recogida
                       </th>
@@ -951,6 +970,18 @@ export default function PickupOrdersPage() {
                               {order.customerName || `${order.firstName || ''} ${order.lastName || ''}`.trim()}
                             </div>
                           </td>
+
+                          {/* Empresa (Solo para Super Admin) */}
+                          {user?.role === 'SUPER_ADMIN' && (
+                            <td className="px-6 py-3">
+                              <div className="flex items-center gap-2">
+                                <Building2 className="w-4 h-4 text-blue-600 dark:text-blue-400 flex-shrink-0" />
+                                <span className="text-sm font-medium text-black dark:text-gray-100">
+                                  {order.companyName || 'Sin empresa'}
+                                </span>
+                              </div>
+                            </td>
+                          )}
 
                           {/* Dirección Recogida */}
                           <td className="px-6 py-3">
@@ -1251,7 +1282,7 @@ export default function PickupOrdersPage() {
                   </Button>
 
                   <button
-                    onClick={() => window.location.href = '/dashboard/admin/pickup-orders/create'}
+                    onClick={() => router.push(`${basePath}/create`)}
                     className={cn(
                       'flex-1 sm:flex-none justify-center whitespace-nowrap',
                       'items-center gap-2 h-12 px-4',

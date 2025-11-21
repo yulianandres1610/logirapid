@@ -27,6 +27,7 @@ export interface Company {
   taxId: string
   phone: string
   email: string
+  website?: string
   logo?: string
   colors: {
     primary?: string

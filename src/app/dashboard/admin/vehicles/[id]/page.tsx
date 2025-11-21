@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { useTheme } from '@/contexts/theme-context';
 import { useNotifications } from '@/contexts/NotificationContext';
 import { useRouter } from 'next/navigation';
+import Spinner from '@/components/ui/Spinner';
 import {
   ArrowLeft,
   User,
@@ -258,15 +259,7 @@ export default function VehicleDetailsPage({
     return (
       <DashboardLayout>
         <div className="flex items-center justify-center min-h-screen">
-          <div className="text-center">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
-            <p className={cn(
-              "text-lg",
-              theme === 'dark' ? "text-gray-300" : "text-gray-600"
-            )}>
-              Cargando detalles del vehículo...
-            </p>
-          </div>
+          <Spinner size="lg" text="Cargando detalles del vehículo..." />
         </div>
       </DashboardLayout>
     )

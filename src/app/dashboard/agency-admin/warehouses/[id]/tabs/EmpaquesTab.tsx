@@ -21,7 +21,7 @@ import {
   ChevronLeft,
   ChevronRight
 } from 'lucide-react'
-import CreateCajasModal from './CreateCajasModal'
+import CreateCajasModal from '@/app/dashboard/admin/warehouses/[id]/tabs/CreateCajasModal'
 import { cn } from '@/lib/utils'
 import { useTheme } from '@/contexts/theme-context'
 import { Button } from '@/components/ui/button'
@@ -168,26 +168,39 @@ export default function EmpaquesTab({ warehouse }: EmpaquesTabProps) {
       if (companyId.startsWith('company-')) {
         companyId = companyId.replace('company-', '')
       }
+
+      console.log('🏢 [EmpaqueLabel] Fetching company data for ID:', companyId)
       const companyResponse = await fetch(`/api/companies/${companyId}`, {
         credentials: 'include'
       })
       let company = {
         legalName: 'LogiRapid',
         logo: '',
+        logoUrl: '',
         primary_color: '#8B5CF6',
         phone: '',
-        customerServicePhone: ''
+        customerServicePhone: '6452432403',
+        website: ''
       }
 
       if (companyResponse.ok) {
         const companyData = await companyResponse.json()
+        console.log('🏢 [EmpaqueLabel] Company data received:', companyData.data)
+        console.log('🖼️ [EmpaqueLabel] Logo URL:', companyData.data?.logoUrl)
+
         company = {
           legalName: companyData.data?.legalName || 'LogiRapid',
-          logo: companyData.data?.logo || companyData.data?.logoUrl || '',
-          primary_color: companyData.data?.primaryColor || '#8B5CF6',
-          phone: companyData.data?.phone || '',
-          customerServicePhone: companyData.data?.customerServicePhone || ''
+          logo: companyData.data?.logoUrl || companyData.data?.logo_url || '',
+          logoUrl: companyData.data?.logoUrl || companyData.data?.logo_url || '',
+          primary_color: companyData.data?.primaryColor || companyData.data?.primary_color || '#8B5CF6',
+          phone: companyData.data?.phone || company.phone,
+          customerServicePhone: companyData.data?.customerServicePhone || companyData.data?.customer_service_phone || company.customerServicePhone,
+          website: companyData.data?.website || ''
         }
+
+        console.log('🏢 [EmpaqueLabel] Company object for label:', company)
+      } else {
+        console.error('❌ [EmpaqueLabel] Failed to fetch company:', companyResponse.status)
       }
 
       // Obtener trazabilidad para encontrar el almacén de creación

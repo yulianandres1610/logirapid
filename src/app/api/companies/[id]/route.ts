@@ -1,16 +1,24 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/database'
 
-// Force dynamic rendering
-export const dynamic = 'force-dynamic'
-
-// GET: Obtener una empresa por ID
+/**
+ * GET /api/companies/[id]
+ * Obtiene los datos de una empresa específica
+ */
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const { id } = await params
+    const companyId = parseInt(id)
+
+    if (isNaN(companyId)) {
+      return NextResponse.json(
+        { success: false, error: 'ID de empresa inválido' },
+        { status: 400 }
+      )
+    }
 
     const query = `
       SELECT
@@ -20,6 +28,7 @@ export async function GET(
         phone,
         customer_service_phone as "customerServicePhone",
         email,
+        website,
         address,
         city,
         state,
@@ -48,13 +57,13 @@ export async function GET(
       WHERE id = $1
     `
 
-    const result = await db.query(query, [id])
+    const result = await db.query(query, [companyId])
 
     if (result.rows.length === 0) {
-      return NextResponse.json({
-        success: false,
-        error: 'Empresa no encontrada'
-      }, { status: 404 })
+      return NextResponse.json(
+        { success: false, error: 'Empresa no encontrada' },
+        { status: 404 }
+      )
     }
 
     return NextResponse.json({
@@ -63,197 +72,151 @@ export async function GET(
     })
 
   } catch (error) {
-    console.error('Error getting company:', error)
-    return NextResponse.json({
-      success: false,
-      error: 'Error al obtener empresa'
-    }, { status: 500 })
+    console.error('Error in GET /api/companies/[id]:', error)
+    return NextResponse.json(
+      { success: false, error: 'Error interno del servidor' },
+      { status: 500 }
+    )
   }
 }
 
-// PUT: Actualizar una empresa
+/**
+ * PUT /api/companies/[id]
+ * Actualiza una empresa (principalmente el status: active/inactive)
+ */
 export async function PUT(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const { id } = await params
+    const companyId = parseInt(id)
     const body = await request.json()
 
-    const {
-      legalName,
-      einNumber,
-      phone,
-      customerServicePhone,
-      email,
-      address,
-      city,
-      state,
-      country,
-      zipCode,
-      currency,
-      isMultiCurrency,
-      secondaryCurrencies,
-      hasLimits,
-      dailyLimit,
-      monthlyLimit,
-      companyType,
-      enabledServices,
-      serviceFees,
-      logoUrl,
-      subdomain,
-      primaryColor,
-      secondaryColor,
-      status
-    } = body
+    if (isNaN(companyId)) {
+      return NextResponse.json(
+        { success: false, error: 'ID de empresa inválido' },
+        { status: 400 }
+      )
+    }
 
-    // Convertir serviceFees al formato JSONB esperado
-    const serviceFeesFormatted: any = {}
-    if (serviceFees && typeof serviceFees === 'object') {
-      Object.keys(serviceFees).forEach(serviceId => {
-        const fee = serviceFees[serviceId]
-        serviceFeesFormatted[serviceId] = {
-          percentage: fee.percentage || 0,
-          fixed: fee.fixed || 0
-        }
+    const checkResult = await db.query(
+      'SELECT id, legalname, status FROM companies WHERE id = $1',
+      [companyId]
+    )
+
+    if (checkResult.rows.length === 0) {
+      return NextResponse.json(
+        { success: false, error: 'Empresa no encontrada' },
+        { status: 404 }
+      )
+    }
+
+    if (body.status) {
+      const newStatus = body.status
+
+      if (!['active', 'inactive'].includes(newStatus)) {
+        return NextResponse.json(
+          { success: false, error: 'Status inválido' },
+          { status: 400 }
+        )
+      }
+
+      await db.query(
+        'UPDATE companies SET status = $1 WHERE id = $2',
+        [newStatus, companyId]
+      )
+
+      return NextResponse.json({
+        success: true,
+        message: `Empresa ${newStatus === 'active' ? 'activada' : 'desactivada'} exitosamente`
       })
     }
 
-    const query = `
-      UPDATE companies SET
-        legalname = $1,
-        einnumber = $2,
-        phone = $3,
-        customer_service_phone = $4,
-        email = $5,
-        address = $6,
-        city = $7,
-        state = $8,
-        country = $9,
-        zipcode = $10,
-        currency = $11,
-        ismulticurrency = $12,
-        secondarycurrencies = $13,
-        haslimits = $14,
-        dailylimit = $15,
-        monthlylimit = $16,
-        companytype = $17,
-        enabledservices = $18,
-        service_fees = $19,
-        logo_url = $20,
-        subdomain = $21,
-        primary_color = $22,
-        secondary_color = $23,
-        status = $24
-      WHERE id = $25
-      RETURNING
-        id,
-        legalname as "legalName",
-        einnumber as "einNumber",
-        logo_url as "logoUrl"
-    `
-
-    const values = [
-      legalName,
-      einNumber,
-      phone,
-      customerServicePhone || null,
-      email || '',
-      address,
-      city,
-      state || '',
-      country,
-      zipCode || '',
-      currency || 'USD',
-      isMultiCurrency || false,
-      JSON.stringify(secondaryCurrencies || []),
-      hasLimits || false,
-      dailyLimit || 0,
-      monthlyLimit || 0,
-      companyType || 'agency',
-      JSON.stringify(enabledServices || []),
-      JSON.stringify(serviceFeesFormatted),
-      logoUrl || null,
-      subdomain || null,
-      primaryColor || '#CC0A46',
-      secondaryColor || '#0A46CC',
-      status || 'active',
-      id
-    ]
-
-    const result = await db.query(query, values)
-
-    if (result.rows.length === 0) {
-      return NextResponse.json({
-        success: false,
-        error: 'Empresa no encontrada'
-      }, { status: 404 })
-    }
-
-    return NextResponse.json({
-      success: true,
-      data: result.rows[0]
-    })
-
-  } catch (error: any) {
-    console.error('Error updating company:', error)
-    return NextResponse.json({
-      success: false,
-      error: error.message || 'Error al actualizar empresa'
-    }, { status: 500 })
+    return NextResponse.json(
+      { success: false, error: 'No se proporcionaron campos' },
+      { status: 400 }
+    )
+  } catch (error) {
+    console.error('Error in PUT /api/companies/[id]:', error)
+    return NextResponse.json(
+      { success: false, error: 'Error interno del servidor' },
+      { status: 500 }
+    )
   }
 }
 
-// DELETE: Eliminar (soft delete) una empresa
 export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const { id } = await params
+    const companyId = parseInt(id)
 
-    // Verificar si la empresa tiene usuarios activos
-    const usersCheck = await db.query(
-      'SELECT COUNT(*) as count FROM user_companies WHERE companyId = $1',
-      [id]
+    if (isNaN(companyId)) {
+      return NextResponse.json(
+        { success: false, error: 'ID inválido' },
+        { status: 400 }
+      )
+    }
+
+    const checkResult = await db.query(
+      'SELECT id, legalname, status FROM companies WHERE id = $1',
+      [companyId]
     )
 
-    const userCount = parseInt(usersCheck.rows[0]?.count || '0')
-
-    if (userCount > 0) {
-      return NextResponse.json({
-        success: false,
-        error: `No se puede eliminar la empresa. Tiene ${userCount} usuario(s) asociado(s).`
-      }, { status: 400 })
+    if (checkResult.rows.length === 0) {
+      return NextResponse.json(
+        { success: false, error: 'Empresa no encontrada' },
+        { status: 404 }
+      )
     }
 
-    // Soft delete - cambiar status a inactive
-    const query = `
-      UPDATE companies
-      SET status = 'inactive'
-      WHERE id = $1
-      RETURNING id
-    `
+    const company = checkResult.rows[0]
 
-    const result = await db.query(query, [id])
-
-    if (result.rows.length === 0) {
-      return NextResponse.json({
-        success: false,
-        error: 'Empresa no encontrada'
-      }, { status: 404 })
+    if (company.status === 'active') {
+      return NextResponse.json(
+        { success: false, error: 'Solo se pueden eliminar empresas inactivas' },
+        { status: 400 }
+      )
     }
+
+    const usersCheck = await db.query(
+      'SELECT COUNT(*) as count FROM user_companies WHERE companyid = $1',
+      [companyId]
+    )
+
+    const ordersCheck = await db.query(
+      'SELECT COUNT(*) as count FROM package_orders WHERE companyid = $1',
+      [companyId]
+    )
+
+    if (parseInt(usersCheck.rows[0].count) > 0) {
+      return NextResponse.json(
+        { success: false, error: `No se puede eliminar. Tiene ${usersCheck.rows[0].count} usuarios` },
+        { status: 400 }
+      )
+    }
+
+    if (parseInt(ordersCheck.rows[0].count) > 0) {
+      return NextResponse.json(
+        { success: false, error: `No se puede eliminar. Tiene ${ordersCheck.rows[0].count} órdenes` },
+        { status: 400 }
+      )
+    }
+
+    await db.query('DELETE FROM companies WHERE id = $1', [companyId])
 
     return NextResponse.json({
       success: true,
       message: 'Empresa eliminada exitosamente'
     })
-
-  } catch (error: any) {
-    console.error('Error deleting company:', error)
-    return NextResponse.json({
-      success: false,
-      error: error.message || 'Error al eliminar empresa'
-    }, { status: 500 })
+  } catch (error) {
+    console.error('Error in DELETE /api/companies/[id]:', error)
+    return NextResponse.json(
+      { success: false, error: 'Error interno del servidor' },
+      { status: 500 }
+    )
   }
 }

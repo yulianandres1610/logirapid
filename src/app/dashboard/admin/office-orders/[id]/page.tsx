@@ -7,6 +7,7 @@ import { Package, Users, MapPin, Loader2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useTheme } from '@/contexts/theme-context'
 import { DashboardLayout } from '@/components/layout/dashboard-layout'
+import Spinner from '@/components/ui/Spinner'
 import {
   generateShippingLabelHTML,
   type ShippingLabelData
@@ -260,15 +261,7 @@ export default function OfficeOrderDetailPage() {
     return (
       <DashboardLayout>
         <div className="min-h-screen flex items-center justify-center">
-          <div className="text-center">
-            <Loader2 className="w-12 h-12 animate-spin mx-auto mb-4 text-blue-500" />
-            <p className={cn(
-              'text-lg font-medium',
-              theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
-            )}>
-              Cargando detalles de la orden...
-            </p>
-          </div>
+          <Spinner size="lg" text="Cargando detalles de la orden..." />
         </div>
       </DashboardLayout>
     )

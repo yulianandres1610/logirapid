@@ -95,11 +95,15 @@ export default function AgencyAdminVehiclesPage() {
   const fetchData = async () => {
     try {
       setLoading(true)
-      const response = await getVehicles(currentPage, VEHICLES_PER_PAGE)
+      const response = await getVehicles(currentPage, VEHICLES_PER_PAGE, searchTerm, statusFilter, availabilityFilter)
 
       if (response.success && response.data) {
-        setVehicles(response.data.data)
-        setTotalVehicles(response.data.pagination.total)
+        const dataAny = response.data as any
+        const list = Array.isArray(dataAny?.data) ? dataAny.data : Array.isArray(dataAny) ? dataAny : []
+        const pagination = dataAny?.pagination || (response as any)?.pagination
+
+        setVehicles(list || [])
+        setTotalVehicles(pagination?.total || list?.length || 0)
       }
     } catch (error) {
       console.error('Error fetching vehicles:', error)

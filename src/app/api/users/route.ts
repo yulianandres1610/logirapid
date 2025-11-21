@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/database'
 import { hashPassword, generateRandomPassword } from '@/lib/auth'
+import { getCompanyFilter } from '@/lib/query-helpers'
 
 // Force dynamic rendering - don't execute during build
 export const dynamic = 'force-dynamic'
@@ -12,33 +13,61 @@ export const runtime = 'nodejs'
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url)
+    const { isSuperAdmin, companyId: headerCompanyId } = getCompanyFilter(request)
     const includeCompanies = searchParams.get('includeCompanies') === 'true'
     const page = parseInt(searchParams.get('page') || '1')
     const limit = parseInt(searchParams.get('limit') || '100')
+    const requestedCompanyId = searchParams.get('companyId')
+    const companyIdFilter = requestedCompanyId ? parseInt(requestedCompanyId) : headerCompanyId
 
     // Get users from PostgreSQL with correct column names
     const offset = (page - 1) * limit
+    const params: any[] = []
+    const conditions: string[] = []
+
+    if (!isSuperAdmin) {
+      if (!headerCompanyId) {
+        return NextResponse.json(
+          { success: false, error: 'No se pudo determinar la empresa del usuario' },
+          { status: 400 }
+        )
+      }
+      params.push(headerCompanyId)
+      conditions.push(`uc.companyid = $${params.length}`)
+    } else if (requestedCompanyId) {
+      params.push(parseInt(requestedCompanyId))
+      conditions.push(`uc.companyid = $${params.length}`)
+    }
+
+    const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : ''
+
     const usersQuery = `
       SELECT
-        id,
-        firstname as "firstName",
-        lastname as "lastName",
-        email,
-        phone,
-        address,
-        city,
-        country,
-        role,
-        status,
-        isactive as "isActive",
-        transactionscount as "transactionsCount",
-        createdat as "createdAt",
-        lastlogin as "lastLogin"
-      FROM users
-      ORDER BY createdat DESC
-      LIMIT $1 OFFSET $2
+        u.id,
+        u.firstname as "firstName",
+        u.lastname as "lastName",
+        u.email,
+        u.phone,
+        u.address,
+        u.city,
+        u.country,
+        u.role,
+        u.status,
+        u.isactive as "isActive",
+        u.transactionscount as "transactionsCount",
+        u.createdat as "createdAt",
+        u.lastlogin as "lastLogin",
+        ARRAY_REMOVE(ARRAY_AGG(DISTINCT uc.companyid), NULL) as "companyIds"
+      FROM users u
+      LEFT JOIN user_companies uc ON uc.userid = u.id
+      ${whereClause}
+      GROUP BY u.id
+      ORDER BY u.createdat DESC
+      LIMIT $${params.length + 1} OFFSET $${params.length + 2}
     `
-    const usersResult = await db.query(usersQuery, [limit, offset])
+    params.push(limit, offset)
+
+    const usersResult = await db.query(usersQuery, params)
 
     let companies: any[] = []
     if (includeCompanies) {
@@ -66,12 +95,17 @@ export async function GET(request: NextRequest) {
             FROM user_companies uc
             JOIN companies c ON uc.companyid = c.id
             WHERE uc.userid = $1
+            ${companyIdFilter ? 'AND uc.companyid = $2' : ''}
           `
-          const userCompaniesResult = await db.query(userCompaniesQuery, [user.id])
+          const userCompaniesResult = await db.query(
+            userCompaniesQuery,
+            companyIdFilter ? [user.id, companyIdFilter] : [user.id]
+          )
 
           return {
             ...user,
             companies: userCompaniesResult.rows.map((c: any) => c.legalName),
+            companyIds: Array.isArray(user.companyIds) ? user.companyIds : [],
             status: user.isActive ? 'active' : 'inactive'
           }
         })
@@ -99,8 +133,22 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
+  const { isSuperAdmin, companyId: headerCompanyId } = getCompanyFilter(request)
 
-    const { user, assignedCompanies } = body
+  const { user, assignedCompanies } = body
+  const resolvedAssignedCompanies =
+    assignedCompanies && assignedCompanies.length > 0
+      ? assignedCompanies
+      : headerCompanyId
+        ? [headerCompanyId]
+        : []
+
+    if (!isSuperAdmin && resolvedAssignedCompanies.length === 0) {
+      return NextResponse.json({
+        success: false,
+        error: 'No se pudo determinar la empresa para crear el usuario'
+      }, { status: 400 })
+    }
 
     if (!user || !user.firstName || !user.lastName || !user.email) {
       return NextResponse.json({
@@ -156,7 +204,7 @@ export async function POST(request: NextRequest) {
       user.address || null,
       user.city || null,
       user.country || null,
-      user.role || 'USER',
+      (user.role || 'USER').toUpperCase(),
       hashedPassword,
       user.isActive ? 'active' : 'inactive',
       user.isActive !== false,
@@ -167,8 +215,8 @@ export async function POST(request: NextRequest) {
     const newUser = newUserResult.rows[0]
 
     // Assign companies to user
-    if (assignedCompanies && assignedCompanies.length > 0) {
-      for (const companyId of assignedCompanies) {
+    if (resolvedAssignedCompanies && resolvedAssignedCompanies.length > 0) {
+      for (const companyId of resolvedAssignedCompanies) {
         const assignCompanyQuery = `
           INSERT INTO user_companies (userid, companyid)
           VALUES ($1, $2)
@@ -226,12 +274,25 @@ export async function PUT(request: NextRequest) {
       status: 'status'
     }
 
+    const hasPasswordUpdate = typeof userData.password === 'string' && userData.password.trim() !== ''
+
     for (const [key, value] of Object.entries(userData)) {
       if (fieldMapping[key]) {
         updateFields.push(`${fieldMapping[key]} = $${valueIndex}`)
-        values.push(value)
+        if (key === 'role' && typeof value === 'string') {
+          values.push(value.toUpperCase())
+        } else {
+          values.push(value)
+        }
         valueIndex++
       }
+    }
+
+    if (hasPasswordUpdate) {
+      const hashed = await hashPassword(userData.password)
+      updateFields.push(`password = $${valueIndex}`)
+      values.push(hashed)
+      valueIndex++
     }
 
     if (updateFields.length === 0) {
@@ -245,7 +306,7 @@ export async function PUT(request: NextRequest) {
 
     const updateQuery = `
       UPDATE users
-      SET ${updateFields.join(', ')}, updatedat = NOW()
+      SET ${updateFields.join(', ')}
       WHERE id = $${valueIndex}
       RETURNING
         id,
@@ -255,6 +316,9 @@ export async function PUT(request: NextRequest) {
         phone,
         address,
         city,
+        state,
+        zipcode as "zipCode",
+        apartment,
         country,
         role,
         status,

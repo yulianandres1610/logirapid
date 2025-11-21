@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/database'
+import { getCompanyFilter } from '@/lib/query-helpers'
 
 // Force dynamic rendering - don't execute during build
 export const dynamic = 'force-dynamic'
@@ -10,11 +11,14 @@ export const runtime = 'nodejs'
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url)
+    const { isSuperAdmin, companyId: headerCompanyId } = getCompanyFilter(request)
     const page = parseInt(searchParams.get('page') || '1')
     const limit = parseInt(searchParams.get('limit') || '25')
     const search = searchParams.get('search') || ''
     const status = searchParams.get('status') || ''
     const type = searchParams.get('type') || ''
+    const companyIdParam = searchParams.get('companyId')
+    const companyIdFilter = companyIdParam ? parseInt(companyIdParam) : headerCompanyId
 
     // Build WHERE conditions
     const conditions = []
@@ -34,6 +38,20 @@ export async function GET(request: NextRequest) {
     if (type && type !== 'all') {
       params.push(type)
       conditions.push('w.type = $' + params.length)
+    }
+
+    if (!isSuperAdmin) {
+      if (!headerCompanyId) {
+        return NextResponse.json(
+          { success: false, error: 'No se pudo determinar la empresa del usuario' },
+          { status: 400 }
+        )
+      }
+      params.push(headerCompanyId)
+      conditions.push('w.company_id = $' + params.length)
+    } else if (companyIdParam) {
+      params.push(parseInt(companyIdParam))
+      conditions.push('w.company_id = $' + params.length)
     }
 
     const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : ''
@@ -114,6 +132,15 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const warehouseData = await request.json()
+    const { isSuperAdmin, companyId: headerCompanyId } = getCompanyFilter(request)
+    const companyId = isSuperAdmin ? (warehouseData.companyId || headerCompanyId) : headerCompanyId
+
+    if (!companyId) {
+      return NextResponse.json(
+        { success: false, error: 'No se pudo determinar la empresa para el almacén' },
+        { status: 400 }
+      )
+    }
 
     // Validate required fields
     const requiredFields = ['name', 'code', 'type', 'address', 'city', 'state', 'zipCode']
@@ -146,8 +173,8 @@ export async function POST(request: NextRequest) {
         type, status, manager_name, manager_email, manager_phone,
         operating_hours, custom_operating_hours, total_area, capacity,
         cajas_vacias_capacity, bultos_capacity,
-        opening_date, notes, latitude, longitude
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22)
+        opening_date, notes, latitude, longitude, company_id
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23)
       RETURNING *
     `
 
@@ -175,7 +202,8 @@ export async function POST(request: NextRequest) {
       warehouseData.openingDate || null,
       warehouseData.notes || null,
       warehouseData.latitude || null,
-      warehouseData.longitude || null
+      warehouseData.longitude || null,
+      companyId
     ]
 
     console.log('📋 Valores a insertar:', values)

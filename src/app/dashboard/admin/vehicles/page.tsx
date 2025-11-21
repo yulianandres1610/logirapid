@@ -69,15 +69,19 @@ export default function AdminVehiclesPage() {
       setLoading(true)
 
       // Call getVehicles function from API
-      const response = await getVehicles(currentPage, VEHICLES_PER_PAGE)
+      const response = await getVehicles(currentPage, VEHICLES_PER_PAGE, searchTerm, statusFilter, availabilityFilter)
       console.log('API response from getVehicles:', response);
 
       if (response.success && response.data) {
         console.log('Setting vehicles in state:', response.data);
 
         // Handle pagination safely - API returns data directly as array with pagination property
-        const vehiclesArray = Array.isArray(response.data) ? response.data : response.data.data || [];
-        const paginationInfo: { total?: number } = response.data.pagination || {};
+        const vehiclesArray = Array.isArray(response.data)
+          ? response.data
+          : Array.isArray((response.data as any).data)
+            ? (response.data as any).data
+            : [];
+        const paginationInfo: { total?: number } = (response.data as any).pagination || {};
         const paginationTotal = paginationInfo.total || vehiclesArray.length || 0;
         console.log('Total vehicles from pagination:', paginationTotal);
 

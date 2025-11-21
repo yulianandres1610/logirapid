@@ -18,7 +18,8 @@ import {
   Store,
   MapPin,
   User,
-  Phone
+  Phone,
+  Building2
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useTheme } from '@/contexts/theme-context'
@@ -26,6 +27,7 @@ import { useAuth } from '@/hooks/useAuth'
 import { useNotifications } from '@/contexts/NotificationContext'
 import { DashboardLayout } from '@/components/layout/dashboard-layout'
 import { Button } from '@/components/ui/button'
+import LoadingBox from '@/components/ui/LoadingBox'
 
 interface PackageOrder {
   id: number
@@ -37,6 +39,8 @@ interface PackageOrder {
   updatedAt: string
   total?: number
   orderType?: 'recogida' | 'oficina'
+  companyName?: string // Nombre de la empresa
+  companyId?: number // ID de la empresa
   officeOrderData?: string | {
     senderName?: string
     senderPhone?: string
@@ -171,7 +175,16 @@ export default function OfficeOrdersPage() {
         },
       })
 
-      const data = await response.json()
+      // Try to parse JSON response, but handle empty responses
+      let data: any = {}
+      try {
+        const text = await response.text()
+        if (text) {
+          data = JSON.parse(text)
+        }
+      } catch (e) {
+        console.log('No JSON response from DELETE')
+      }
 
       if (response.ok) {
         showNotification('success', 'Orden Eliminada', data.message || 'La orden ha sido eliminada exitosamente')
@@ -528,9 +541,8 @@ export default function OfficeOrdersPage() {
             theme === 'dark' ? 'bg-gray-800' : 'bg-white'
           )}>
             {loading ? (
-              <div className="p-8 text-center">
-                <RefreshCw className="w-8 h-8 animate-spin mx-auto text-gray-400" />
-                <p className="mt-2 text-black dark:text-gray-400">Cargando órdenes...</p>
+              <div className="p-8">
+                <LoadingBox size="lg" text="Cargando órdenes de oficina..." />
               </div>
             ) : orders.length === 0 ? (
               <div className="p-8 text-center">
@@ -559,6 +571,11 @@ export default function OfficeOrdersPage() {
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider w-48">
                         Destinatario
                       </th>
+                      {user?.role === 'SUPER_ADMIN' && (
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider w-40">
+                          Empresa
+                        </th>
+                      )}
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider w-32">
                         Municipio
                       </th>
@@ -666,6 +683,18 @@ export default function OfficeOrdersPage() {
                               </div>
                             </div>
                           </td>
+
+                          {/* Empresa (Solo para Super Admin) */}
+                          {user?.role === 'SUPER_ADMIN' && (
+                            <td className="px-6 py-3">
+                              <div className="flex items-center gap-2">
+                                <Building2 className="w-4 h-4 text-blue-600 dark:text-blue-400 flex-shrink-0" />
+                                <span className="text-sm font-medium text-black dark:text-gray-100">
+                                  {order.companyName || 'Sin empresa'}
+                                </span>
+                              </div>
+                            </td>
+                          )}
 
                           {/* Municipio */}
                           <td className="px-6 py-3">

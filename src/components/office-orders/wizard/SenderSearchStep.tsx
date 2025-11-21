@@ -130,6 +130,48 @@ export default function SenderSearchStep({ wizardData, updateWizardData, setCanP
               customerWithCoords.longitude = coords.longitude
             }
           }
+
+          // Ensure structured address fields are present
+          // If customer has structured fields (street, city, etc.), use them
+          // Otherwise, parse the legacy address field
+          if (!customerWithCoords.street && customerWithCoords.address) {
+            // Parse the address string to extract components
+            const addressParts = customerWithCoords.address.split(',').map((p: string) => p.trim())
+
+            if (addressParts.length >= 4) {
+              // Format: "street, city, state zipcode, country"
+              customerWithCoords.street = addressParts[0]
+              customerWithCoords.city = addressParts[1]
+
+              // Parse "state zipcode" part
+              const stateZip = addressParts[2].split(' ').filter(Boolean)
+              if (stateZip.length >= 2) {
+                customerWithCoords.state = stateZip[0]
+                customerWithCoords.zipCode = stateZip[1]
+              }
+
+              // Country is the last part
+              if (addressParts[3]) {
+                customerWithCoords.country = addressParts[3]
+              }
+            } else {
+              // Fallback: just use the address as street
+              customerWithCoords.street = customerWithCoords.address
+            }
+          }
+          if (!customerWithCoords.city) {
+            customerWithCoords.city = ''
+          }
+          if (!customerWithCoords.state) {
+            customerWithCoords.state = ''
+          }
+          if (!customerWithCoords.zipCode && !customerWithCoords.zipcode) {
+            customerWithCoords.zipCode = customerWithCoords.zipcode || ''
+          }
+          if (!customerWithCoords.country) {
+            customerWithCoords.country = 'US'
+          }
+
           updateWizardData('sender', customerWithCoords)
           setCanProceed(true)
         }
@@ -145,6 +187,46 @@ export default function SenderSearchStep({ wizardData, updateWizardData, setCanP
           customerWithCoords.longitude = coords.longitude
         }
       }
+
+      // Ensure structured address fields are present
+      if (!customerWithCoords.street && customerWithCoords.address) {
+        // Parse the address string to extract components
+        const addressParts = customerWithCoords.address.split(',').map((p: string) => p.trim())
+
+        if (addressParts.length >= 4) {
+          // Format: "street, city, state zipcode, country"
+          customerWithCoords.street = addressParts[0]
+          customerWithCoords.city = addressParts[1]
+
+          // Parse "state zipcode" part
+          const stateZip = addressParts[2].split(' ').filter(Boolean)
+          if (stateZip.length >= 2) {
+            customerWithCoords.state = stateZip[0]
+            customerWithCoords.zipCode = stateZip[1]
+          }
+
+          // Country is the last part
+          if (addressParts[3]) {
+            customerWithCoords.country = addressParts[3]
+          }
+        } else {
+          // Fallback: just use the address as street
+          customerWithCoords.street = customerWithCoords.address
+        }
+      }
+      if (!customerWithCoords.city) {
+        customerWithCoords.city = ''
+      }
+      if (!customerWithCoords.state) {
+        customerWithCoords.state = ''
+      }
+      if (!customerWithCoords.zipCode && !customerWithCoords.zipcode) {
+        customerWithCoords.zipCode = customerWithCoords.zipcode || ''
+      }
+      if (!customerWithCoords.country) {
+        customerWithCoords.country = 'US'
+      }
+
       updateWizardData('sender', customerWithCoords)
       setCanProceed(true)
     } finally {

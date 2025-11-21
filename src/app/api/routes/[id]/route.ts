@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/database'
+import { getCompanyFilter } from '@/lib/query-helpers'
 
 // Force dynamic rendering - don't execute during build
 export const dynamic = 'force-dynamic'
@@ -15,6 +16,8 @@ export async function GET(
   try {
     const resolvedParams = await params
     const id = parseInt(resolvedParams.id)
+    const { isSuperAdmin, companyId: headerCompanyId } = getCompanyFilter(request)
+
     if (isNaN(id)) {
       return NextResponse.json({
         success: false,
@@ -22,7 +25,16 @@ export async function GET(
       }, { status: 400 })
     }
 
-    const result = await db.query('SELECT * FROM routes WHERE id = $1', [id])
+    // Construir query con validación de empresa
+    let query = 'SELECT * FROM routes WHERE id = $1'
+    const queryParams: any[] = [id]
+
+    if (!isSuperAdmin && headerCompanyId) {
+      query += ' AND company_id = $2'
+      queryParams.push(headerCompanyId)
+    }
+
+    const result = await db.query(query, queryParams)
 
     if (result.rows.length === 0) {
       return NextResponse.json({

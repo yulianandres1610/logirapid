@@ -20,9 +20,11 @@ type LoginFormData = z.infer<typeof loginSchema>
 
 interface LoginFormProps {
   onSuccess?: () => void
+  disabled?: boolean
+  onLoadingChange?: (loading: boolean) => void
 }
 
-export function LoginForm({ onSuccess }: LoginFormProps) {
+export function LoginForm({ onSuccess, disabled, onLoadingChange }: LoginFormProps) {
   const { login, isLoading, error, clearError } = useAuth()
   const [showPassword, setShowPassword] = useState(false)
 
@@ -41,12 +43,17 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
 
   const onSubmit = async (data: LoginFormData) => {
     clearError()
+    onLoadingChange?.(true)
     try {
-      await login(data as LoginCredentials)
-      onSuccess?.()
+      const success = await login(data as LoginCredentials)
+      if (success) {
+        onSuccess?.()
+        return
+      }
     } catch (err) {
       // Error is handled by the useAuth hook
     }
+    onLoadingChange?.(false)
   }
 
   return (
@@ -71,7 +78,7 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
               focus:ring-exa-secondary focus:border-exa-secondary transition-all duration-300
               ${watchedEmail ? 'bg-white/10 border-exa-secondary/50' : ''}
             `}
-            disabled={isLoading}
+            disabled={isLoading || disabled}
           />
         </div>
         {errors.email && (
@@ -112,7 +119,7 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
             type="button"
             onClick={() => setShowPassword(!showPassword)}
             className="absolute inset-y-0 right-0 pr-4 flex items-center text-gray-400 hover:text-white transition-colors"
-            disabled={isLoading}
+            disabled={isLoading || disabled}
           >
             {showPassword ? (
               <EyeOff className="h-5 w-5" />
@@ -159,10 +166,10 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
           type="submit"
           className="w-full h-14 text-base font-semibold bg-exa-secondary hover:bg-exa-secondary/90 text-white rounded-2xl transition-all duration-300 hover:shadow-xl hover:shadow-exa-secondary/25"
           loading={isLoading}
-          disabled={!isValid || !watchedEmail || !watchedPassword || isLoading}
+          disabled={!isValid || !watchedEmail || !watchedPassword || isLoading || disabled}
         >
           <div className="flex items-center justify-center space-x-2">
-            <span>Ingresar</span>
+            <span>{isLoading ? 'Ingresando...' : 'Ingresar'}</span>
             {!isLoading && (
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />

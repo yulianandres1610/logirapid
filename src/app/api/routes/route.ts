@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/database'
+import { getCompanyFilter } from '@/lib/query-helpers'
 import crypto from 'crypto'
 
 // Force dynamic rendering - don't execute during build
@@ -142,12 +143,23 @@ function groupOrdersByAddress(orders: any[]) {
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url)
+    const { isSuperAdmin, companyId: headerCompanyId } = getCompanyFilter(request)
     const page = parseInt(searchParams.get('page') || '1')
     const limit = parseInt(searchParams.get('limit') || '25')
     const search = searchParams.get('search') || ''
     const status = searchParams.get('status') || ''
     const dayFilter = searchParams.get('dayFilter') || ''
     const driver = searchParams.get('driver') || ''
+    const companyIdParam = searchParams.get('companyId')
+    const companyIdFilter = companyIdParam ? parseInt(companyIdParam) : headerCompanyId
+
+    // Validar que usuarios no SUPER_ADMIN tengan company_id
+    if (!isSuperAdmin && !companyIdFilter) {
+      return NextResponse.json({
+        success: false,
+        error: 'No se pudo determinar la empresa del usuario'
+      }, { status: 400 })
+    }
 
     // Build WHERE conditions for PostgreSQL
     const conditions = []
@@ -200,6 +212,15 @@ export async function GET(request: NextRequest) {
           conditions.push(`date >= $${params.length - 1} AND date < $${params.length}`)
           break
       }
+    }
+
+    // Filtro por empresa (multi-tenant)
+    if (!isSuperAdmin) {
+      params.push(headerCompanyId)
+      conditions.push(`company_id = $${params.length}`)
+    } else if (companyIdParam) {
+      params.push(parseInt(companyIdParam))
+      conditions.push(`company_id = $${params.length}`)
     }
 
     const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : ''
@@ -567,12 +588,24 @@ async function handleWarehouseRoute(body: any, shouldSaveRoute: boolean) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
+    const { isSuperAdmin, companyId: headerCompanyId } = getCompanyFilter(request)
 
     // ==============================
     // PASO 1: Validaciones iniciales
     // ==============================
     console.log('🚀 [Routes API] Iniciando creación de ruta v3 (Mapbox Optimization API v2 + job_id)')
     console.log('📦 [Payload]', JSON.stringify(body, null, 2))
+
+    // Determinar el company_id a usar
+    const companyIdToUse = body.companyId || headerCompanyId
+
+    // Validar que usuarios no SUPER_ADMIN tengan company_id
+    if (!isSuperAdmin && !companyIdToUse) {
+      return NextResponse.json({
+        success: false,
+        error: 'No se pudo determinar la empresa del usuario'
+      }, { status: 400 })
+    }
 
     if (!body.vehicleId) {
       return NextResponse.json(
@@ -602,8 +635,35 @@ export async function POST(request: NextRequest) {
     // ==============================
     // PASO 2: Obtener y agrupar órdenes por dirección
     // ==============================
-    const ordersResponse = await fetch(`${process.env.NEXTAUTH_URL || 'http://localhost:3000'}/api/package-orders?limit=1000`)
-    const ordersData = await ordersResponse.json()
+    // Query directa a BD en lugar de fetch interno para mantener contexto de autenticación
+    let ordersQuery = `
+      SELECT * FROM package_orders
+      WHERE 1=1
+    `
+    const queryParams: any[] = []
+
+    // Aplicar filtro de company_id solo si NO es SUPER_ADMIN
+    if (!isSuperAdmin) {
+      if (!headerCompanyId) {
+        return NextResponse.json({
+          success: false,
+          error: 'No se pudo determinar la empresa del usuario'
+        }, { status: 400 })
+      }
+      queryParams.push(headerCompanyId)
+      ordersQuery += ` AND company_id = $${queryParams.length}`
+    }
+
+    ordersQuery += ' LIMIT 1000'
+
+    console.log(`📋 [Query] Ejecutando query de órdenes:`, {
+      isSuperAdmin,
+      hasCompanyFilter: !isSuperAdmin,
+      companyId: headerCompanyId
+    })
+
+    const ordersResult = await db.query(ordersQuery, queryParams.length > 0 ? queryParams : undefined)
+    const ordersData = { data: ordersResult.rows }
 
     console.log(`📋 [Órdenes] Total en BD: ${ordersData.data?.length || 0}`)
 
@@ -1239,11 +1299,11 @@ export async function POST(request: NextRequest) {
         status, totalpackages, deliveredpackages, estimatedduration,
         actualduration, distance, starttime, endtime, date, notes,
         mechanism, timewindows, warehouseid, mapboxjobid, optimizedroute, stops,
-        createdat, updatedat
+        company_id, createdat, updatedat
       ) VALUES (
         $1, $2, $3, $4, $5, $6, $7, $8, $9, $10,
         $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22,
-        NOW(), NOW()
+        $23, NOW(), NOW()
       )
       RETURNING id
     `
@@ -1275,7 +1335,8 @@ export async function POST(request: NextRequest) {
         ...stop,
         sequence: index + 1,
         status: 'pending'
-      })))
+      }))),
+      companyIdToUse
     ]
 
     const result = await db.query(insertQuery, values)

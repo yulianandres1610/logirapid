@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useLayoutEffect } from 'react'
+import { useRouter, usePathname } from 'next/navigation'
 import {
   X,
   Building,
@@ -126,6 +127,11 @@ interface NewWarehouseData {
 }
 
 export default function CreateWarehousePage() {
+  const router = useRouter()
+  const pathname = usePathname()
+  const basePath = pathname?.startsWith('/dashboard/agency-admin')
+    ? '/dashboard/agency-admin/warehouses'
+    : '/dashboard/admin/warehouses'
   const { theme } = useTheme()
   const { showNotification } = useNotifications()
 
@@ -360,7 +366,7 @@ export default function CreateWarehousePage() {
       if (response.ok) {
         const data = await response.json()
         showNotification('success', 'Almacén Creado', data.message || 'El almacén ha sido creado exitosamente')
-        window.location.href = '/dashboard/admin/warehouses'
+        router.push(basePath)
       } else {
         const errorText = await response.text()
         console.error('❌ Error del servidor:', response.status, errorText)

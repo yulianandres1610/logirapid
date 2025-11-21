@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/database'
+import { getCompanyFilter } from '@/lib/query-helpers'
 
 // Force dynamic rendering - don't execute during build
 export const dynamic = 'force-dynamic'
@@ -10,6 +11,7 @@ export const runtime = 'nodejs'
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url)
+    const { isSuperAdmin, companyId: headerCompanyId } = getCompanyFilter(request)
     const tipo = searchParams.get('tipo')
     const codigo = searchParams.get('codigo')
     const warehouseId = searchParams.get('warehouseId')
@@ -17,6 +19,8 @@ export async function GET(request: NextRequest) {
     const packageSizeId = searchParams.get('packageSizeId')
     const orderNumber = searchParams.get('orderNumber')
     const hasOrder = searchParams.get('hasOrder') // Filter: only empaques with orden_id
+    const companyIdParam = searchParams.get('companyId')
+    const companyIdFilter = companyIdParam ? parseInt(companyIdParam) : headerCompanyId
 
     // Pagination parameters
     const page = parseInt(searchParams.get('page') || '1')
@@ -77,6 +81,21 @@ export async function GET(request: NextRequest) {
       paramIndex += 4
     }
 
+    // Filtro por empresa
+    if (!isSuperAdmin) {
+      if (!headerCompanyId) {
+        return NextResponse.json({
+          success: false,
+          error: 'No se pudo determinar la empresa del usuario'
+        }, { status: 400 })
+      }
+      conditions.push(`e.company_id = $${paramIndex++}`)
+      params.push(headerCompanyId)
+    } else if (companyIdParam) {
+      conditions.push(`e.company_id = $${paramIndex++}`)
+      params.push(parseInt(companyIdParam))
+    }
+
     const whereClause = conditions.join(' AND ')
 
     // Count total records
@@ -97,9 +116,11 @@ export async function GET(request: NextRequest) {
         ps.name as package_size_name,
         ps.dimensions as package_size_dimensions,
         ps.weight as package_size_weight,
-        ps.price as package_size_price
+        ps.price as package_size_price,
+        c.legalname as company_name
       FROM empaques e
       LEFT JOIN package_sizes ps ON e.package_size_id = ps.id
+      LEFT JOIN companies c ON e.company_id = c.id
       WHERE ${whereClause}
       ORDER BY e.created_at DESC, e.codigo ASC
       LIMIT $${paramIndex} OFFSET $${paramIndex + 1}
@@ -177,14 +198,24 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    const { isSuperAdmin, companyId: headerCompanyId } = getCompanyFilter(request)
+    const companyId = isSuperAdmin ? (body.companyId || headerCompanyId) : headerCompanyId
+
+    if (!companyId) {
+      return NextResponse.json(
+        { success: false, error: 'No se pudo determinar la empresa para este empaque' },
+        { status: 400 }
+      )
+    }
+
     // Insert new empaque
     const result = await db.query(
       `INSERT INTO empaques (
         codigo, package_size_id, tipo, estado, warehouse_id, warehouse_name,
-        cliente_id, orden_id, descripcion, created_at, updated_at
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW(), NOW())
+        cliente_id, orden_id, descripcion, company_id, created_at, updated_at
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW(), NOW())
       RETURNING *`,
-      [codigo, packageSizeId, tipo, estado, warehouseId, warehouseName, clienteId, ordenId, descripcion]
+      [codigo, packageSizeId, tipo, estado, warehouseId, warehouseName, clienteId, ordenId, descripcion, companyId]
     )
 
     const empaque = result.rows[0]

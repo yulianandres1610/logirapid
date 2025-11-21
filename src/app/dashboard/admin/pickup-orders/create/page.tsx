@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { useRouter } from 'next/navigation'
+import { useRouter, usePathname } from 'next/navigation'
 import {
   ArrowLeft,
   ArrowRight,
@@ -52,8 +52,15 @@ interface WizardStep {
 export default function CreatePickupOrderPage() {
   const { theme } = useTheme()
   const router = useRouter()
+  const pathname = usePathname()
   const [currentStep, setCurrentStep] = useState(1)
   const [canProceed, setCanProceed] = useState(false)
+  const [showCancelModal, setShowCancelModal] = useState(false)
+
+  // Determinar la ruta base según el pathname
+  const basePath = pathname?.startsWith('/dashboard/agency-admin')
+    ? '/dashboard/agency-admin/pickup-orders'
+    : '/dashboard/admin/pickup-orders'
 
   // Estado compartido del wizard
   const [wizardData, setWizardData] = useState({
@@ -206,9 +213,15 @@ export default function CreatePickupOrderPage() {
   }
 
   const handleCancel = () => {
-    if (confirm('¿Estás seguro de cancelar? Se perderá toda la información ingresada.')) {
-      router.push('/dashboard/admin/pickup-orders')
-    }
+    setShowCancelModal(true)
+  }
+
+  const confirmCancel = () => {
+    router.push(basePath)
+  }
+
+  const closeCancelModal = () => {
+    setShowCancelModal(false)
   }
 
   const updateWizardData = (key: string, value: any) => {
@@ -227,51 +240,23 @@ export default function CreatePickupOrderPage() {
         theme === 'dark' ? 'bg-gray-900' : 'bg-gray-50'
       )}>
         {/* Main Container */}
-        <div className="max-w-4xl xl:max-w-5xl mx-auto space-y-6 sm:space-y-8">
+        <div className="max-w-4xl xl:max-w-5xl mx-auto space-y-6 sm:space-y-8 relative">
 
-        {/* Header Title with Close Button */}
-        <motion.div
-          initial={{ opacity: 0, y: -20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="text-center mb-8 relative"
+        {/* Close Button - Minimalista */}
+        <motion.button
+          onClick={handleCancel}
+          whileHover={{ scale: 1.05 }}
+          whileTap={{ scale: 0.95 }}
+          className={cn(
+            "absolute -top-14 -right-2 sm:-top-12 sm:right-0 z-10 w-8 h-8 rounded-full flex items-center justify-center",
+            "transition-colors duration-200",
+            theme === 'dark'
+              ? 'text-gray-400 hover:text-gray-200 hover:bg-gray-800'
+              : 'text-gray-500 hover:text-gray-700 hover:bg-gray-200'
+          )}
         >
-          {/* Close Button - Minimalista */}
-          <motion.button
-            onClick={handleCancel}
-            whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.95 }}
-            className={cn(
-              "absolute -top-2 right-0 w-8 h-8 rounded-lg flex items-center justify-center",
-              "transition-colors duration-200",
-              theme === 'dark'
-                ? 'text-gray-500 hover:text-gray-300 hover:bg-gray-800/50'
-                : 'text-gray-400 hover:text-gray-600 hover:bg-gray-100'
-            )}
-          >
-            <X className="w-5 h-5" />
-          </motion.button>
-
-          <h1 className={cn(
-            "text-3xl sm:text-4xl font-bold mb-2",
-            theme === 'dark' ? 'text-white' : 'text-gray-900'
-          )}>
-            {!wizardData.orderType
-              ? 'Nueva Orden'
-              : wizardData.orderType === 'recogida'
-              ? 'Nueva Orden de Recogida'
-              : 'Nueva Orden de Entrega'}
-          </h1>
-          <p className={cn(
-            "text-sm sm:text-base",
-            theme === 'dark' ? 'text-gray-400' : 'text-gray-600'
-          )}>
-            {!wizardData.orderType
-              ? 'Selecciona el tipo de servicio que deseas realizar'
-              : wizardData.orderType === 'recogida'
-              ? 'Los códigos de empaque se asignarán durante la recogida'
-              : 'Entrega gratuita de empaques vacíos al cliente'}
-          </p>
-        </motion.div>
+          <X className="w-4 h-4" />
+        </motion.button>
 
         {/* Progress Indicator */}
         <div className="mb-8 sm:mb-12">
@@ -295,8 +280,8 @@ export default function CreatePickupOrderPage() {
                         }}
                         style={{
                           background: theme === 'dark'
-                            ? 'rgba(251, 146, 60, 0.5)' // amber-500
-                            : 'rgba(245, 158, 11, 0.5)' // amber-600
+                            ? 'rgba(59, 130, 246, 0.5)' // blue-500
+                            : 'rgba(37, 99, 235, 0.5)' // blue-600
                         }}
                       />
                     )}
@@ -307,7 +292,7 @@ export default function CreatePickupOrderPage() {
                       scale: currentStep === step.id ? 1.1 : 1,
                       rotate: currentStep === step.id ? 360 : 0,
                       backgroundColor: currentStep === step.id
-                        ? theme === 'dark' ? '#F59E0B' : '#D97706' // amber colors
+                        ? theme === 'dark' ? '#3B82F6' : '#2563EB' // blue colors
                         : currentStep > step.id
                         ? theme === 'dark' ? '#10B981' : '#059669'
                         : theme === 'dark' ? '#374151' : '#E5E7EB'
@@ -323,8 +308,8 @@ export default function CreatePickupOrderPage() {
                       "transition-shadow duration-300",
                       currentStep === step.id && (
                         theme === 'dark'
-                          ? 'shadow-lg shadow-amber-500/50'
-                          : 'shadow-lg shadow-amber-400/50'
+                          ? 'shadow-lg shadow-blue-500/50'
+                          : 'shadow-lg shadow-blue-400/50'
                       ),
                       currentStep > step.id && (
                         theme === 'dark'
@@ -354,7 +339,7 @@ export default function CreatePickupOrderPage() {
                     <p className={cn(
                       "text-xs sm:text-sm font-semibold",
                       currentStep === step.id
-                        ? theme === 'dark' ? 'text-amber-400' : 'text-amber-600'
+                        ? theme === 'dark' ? 'text-blue-400' : 'text-blue-600'
                         : currentStep > step.id
                         ? theme === 'dark' ? 'text-green-400' : 'text-green-600'
                         : theme === 'dark' ? 'text-gray-500' : 'text-gray-400'
@@ -452,8 +437,8 @@ export default function CreatePickupOrderPage() {
                   "flex items-center gap-2 px-6 py-3 rounded-xl font-medium transition-all",
                   "disabled:opacity-50 disabled:cursor-not-allowed",
                   theme === 'dark'
-                    ? 'bg-amber-600 hover:bg-amber-700 shadow-lg shadow-amber-500/30'
-                    : 'bg-amber-500 hover:bg-amber-600 shadow-lg shadow-amber-400/30',
+                    ? 'bg-blue-600 hover:bg-blue-700 shadow-lg shadow-blue-500/30'
+                    : 'bg-blue-500 hover:bg-blue-600 shadow-lg shadow-blue-400/30',
                   'text-white'
                 )}
               >
@@ -464,7 +449,7 @@ export default function CreatePickupOrderPage() {
           ) : (
             <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
               <Button
-                onClick={() => router.push('/dashboard/admin/pickup-orders')}
+                onClick={() => router.push(basePath)}
                 className={cn(
                   "flex items-center gap-2 px-6 py-3 rounded-xl font-medium transition-all",
                   theme === 'dark'
@@ -480,6 +465,105 @@ export default function CreatePickupOrderPage() {
           )}
         </div>
         </div>
+
+        {/* Modal de confirmación para cancelar */}
+        <AnimatePresence>
+          {showCancelModal && (
+            <>
+              {/* Backdrop */}
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                onClick={closeCancelModal}
+                className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50"
+              />
+
+              {/* Modal */}
+              <motion.div
+                initial={{ opacity: 0, scale: 0.95, y: 20 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.95, y: 20 }}
+                transition={{ type: "spring", duration: 0.3 }}
+                className="fixed inset-0 z-50 flex items-center justify-center p-4"
+              >
+                <div
+                  className={cn(
+                    "w-full max-w-md rounded-2xl shadow-2xl border",
+                    theme === 'dark'
+                      ? 'bg-gray-800 border-gray-700'
+                      : 'bg-white border-gray-200'
+                  )}
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  {/* Header */}
+                  <div className="p-6 pb-4">
+                    <div className="flex items-start gap-4">
+                      <div className={cn(
+                        "w-12 h-12 rounded-full flex items-center justify-center flex-shrink-0",
+                        theme === 'dark'
+                          ? 'bg-red-900/30'
+                          : 'bg-red-100'
+                      )}>
+                        <X className={cn(
+                          "w-6 h-6",
+                          theme === 'dark' ? 'text-red-400' : 'text-red-600'
+                        )} />
+                      </div>
+                      <div className="flex-1">
+                        <h3 className={cn(
+                          "text-xl font-bold mb-2",
+                          theme === 'dark' ? 'text-white' : 'text-gray-900'
+                        )}>
+                          ¿Cancelar orden?
+                        </h3>
+                        <p className={cn(
+                          "text-sm",
+                          theme === 'dark' ? 'text-gray-400' : 'text-gray-600'
+                        )}>
+                          Se perderá toda la información ingresada y no podrás recuperarla.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Actions */}
+                  <div className={cn(
+                    "flex gap-3 p-6 pt-4 border-t",
+                    theme === 'dark' ? 'border-gray-700' : 'border-gray-200'
+                  )}>
+                    <motion.button
+                      whileHover={{ scale: 1.02 }}
+                      whileTap={{ scale: 0.98 }}
+                      onClick={closeCancelModal}
+                      className={cn(
+                        "flex-1 px-4 py-3 rounded-xl font-medium transition-all",
+                        theme === 'dark'
+                          ? 'bg-gray-700 hover:bg-gray-600 text-white'
+                          : 'bg-gray-100 hover:bg-gray-200 text-gray-900'
+                      )}
+                    >
+                      Continuar editando
+                    </motion.button>
+                    <motion.button
+                      whileHover={{ scale: 1.02 }}
+                      whileTap={{ scale: 0.98 }}
+                      onClick={confirmCancel}
+                      className={cn(
+                        "flex-1 px-4 py-3 rounded-xl font-medium transition-all text-white",
+                        theme === 'dark'
+                          ? 'bg-red-600 hover:bg-red-700'
+                          : 'bg-red-500 hover:bg-red-600'
+                      )}
+                    >
+                      Sí, cancelar
+                    </motion.button>
+                  </div>
+                </div>
+              </motion.div>
+            </>
+          )}
+        </AnimatePresence>
       </div>
     </DashboardLayout>
   )

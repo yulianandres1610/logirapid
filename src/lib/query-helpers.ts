@@ -55,9 +55,20 @@ export interface CompanyFilter {
  */
 export function getCompanyFilter(request: NextRequest): CompanyFilter {
   // Leer headers inyectados por middleware
-  const isSuperAdmin = request.headers.get('x-is-super-admin') === 'true'
-  const companyIdHeader = request.headers.get('x-company-id')
-  const companyId = companyIdHeader ? parseInt(companyIdHeader, 10) : null
+  const headerIsSuperAdmin = request.headers.get('x-is-super-admin') === 'true'
+  const headerCompanyId = request.headers.get('x-company-id') || request.headers.get('x-user-company-id')
+  const cookieCompanyId = request.cookies.get('user-company-id')?.value
+  const parsedCompany = headerCompanyId
+    ? parseInt(headerCompanyId, 10)
+    : cookieCompanyId
+      ? parseInt(cookieCompanyId, 10)
+      : null
+  const companyId = Number.isFinite(parsedCompany) ? parsedCompany : null
+
+  const isSuperAdmin =
+    headerIsSuperAdmin ||
+    request.headers.get('x-user-role') === 'SUPER_ADMIN' ||
+    request.cookies.get('user-role')?.value === 'SUPER_ADMIN'
 
   // Logging para debugging (solo en desarrollo)
   if (process.env.NODE_ENV === 'development') {

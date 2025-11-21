@@ -69,10 +69,18 @@ export function VehicleList({
     try {
       const response = await getVehicles(1, 100); // Cargar hasta 100 vehículos
       if (response.success && response.data) {
-        setVehicles(response.data.data);
+        const list = Array.isArray((response.data as any).data)
+          ? (response.data as any).data
+          : Array.isArray(response.data as any)
+            ? (response.data as any)
+            : [];
+        setVehicles(list);
+      } else {
+        setVehicles([]);
       }
     } catch (error) {
       console.error('Error loading vehicles:', error);
+      setVehicles([]);
     } finally {
       setIsLoading(false);
     }

@@ -30,7 +30,9 @@ import {
   Shield,
   Star,
   Loader2,
-  Palette
+  Palette,
+  CheckCircle,
+  XCircle
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useTheme } from '@/contexts/theme-context'
@@ -40,6 +42,8 @@ import { WalletCard } from '@/components/wallet-card'
 import { Button } from '@/components/ui/button'
 import LogoUpload from '@/components/ui/LogoUpload'
 import MapboxAddressAutofill from '@/components/ui/MapboxAddressAutofill'
+import LoadingBox from '@/components/ui/LoadingBox'
+import ConfirmDialog from '@/components/ui/ConfirmDialog'
 
 // Placeholder while data loads
 const LOADING_COMPANIES:any[] = []
@@ -177,6 +181,19 @@ export default function CompaniesPage() {
   const [searchTerm, setSearchTerm] = useState('')
   const [selectedFilter, setSelectedFilter] = useState('all')
   const [selectedCompany, setSelectedCompany] = useState<any>(null)
+  const [confirmDialog, setConfirmDialog] = useState<{
+    isOpen: boolean
+    title: string
+    message: string
+    onConfirm: () => void
+    type: 'danger' | 'warning' | 'info'
+  }>({
+    isOpen: false,
+    title: '',
+    message: '',
+    onConfirm: () => {},
+    type: 'warning'
+  })
 
   // Create company form state
   const [currentStep, setCurrentStep] = useState(1)
@@ -185,6 +202,7 @@ export default function CompaniesPage() {
     phone: '',
     customerServicePhone: '',
     email: '',
+    website: '',
     address: '',
     city: '',
     state: '',
@@ -254,6 +272,7 @@ export default function CompaniesPage() {
       phone: '',
       customerServicePhone: '',
       email: '',
+      website: '',
       address: '',
       city: '',
       state: '',
@@ -378,21 +397,111 @@ export default function CompaniesPage() {
     }
   }
 
-  const handleDeleteCompany = async (companyId: number, companyName: string) => {
-    if (!confirm(`¿Estás seguro de eliminar la empresa "${companyName}"?\n\nEsta acción marcará la empresa como inactiva.`)) {
-      return
-    }
+  // Función para formatear moneda de forma segura
+  const formatCurrency = (value: number | string | undefined | null): string => {
+    if (value === null || value === undefined || value === '') return '$0.00'
+
+    const numValue = typeof value === 'string' ? parseFloat(value) : value
+
+    if (isNaN(numValue)) return '$0.00'
+
+    return `$${numValue.toLocaleString('en-US', {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2
+    })}`
+  }
+
+  // Función para cambiar el estado de la empresa (activar/desactivar)
+  const handleToggleStatus = async (companyId: number, companyName: string, currentStatus: string) => {
+    const newStatus = currentStatus === 'active' ? 'inactive' : 'active'
+    const action = newStatus === 'inactive' ? 'desactivar' : 'activar'
+
+    setConfirmDialog({
+      isOpen: true,
+      title: `${action === 'desactivar' ? 'Desactivar' : 'Activar'} Empresa`,
+      message: `¿Estás seguro de ${action} la empresa "${companyName}"?`,
+      type: newStatus === 'inactive' ? 'warning' : 'info',
+      onConfirm: async () => {
+        await executeToggleStatus(companyId, companyName, newStatus, action)
+      }
+    })
+  }
+
+  const executeToggleStatus = async (companyId: number, companyName: string, newStatus: string, action: string) => {
 
     try {
       setLoading(true)
 
       const response = await fetch(`/api/companies/${companyId}`, {
-        method: 'DELETE'
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ status: newStatus })
       })
 
       const data = await response.json()
 
       if (!data.success) {
+        showNotification('error', 'Error', data.error || `Error al ${action} empresa`)
+        return
+      }
+
+      // Reload companies from API
+      const companiesResponse = await fetch('/api/companies')
+      const companiesData = await companiesResponse.json()
+
+      if (companiesData.success) {
+        setCompanies(companiesData.data)
+      }
+
+      showNotification('success', '¡Éxito!', `Empresa ${action === 'desactivar' ? 'desactivada' : 'activada'} exitosamente`)
+
+    } catch (error) {
+      console.error(`Error ${action} company:`, error)
+      showNotification('error', 'Error', `Error al ${action} empresa. Por favor intenta de nuevo`)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  // Función para eliminar permanentemente la empresa (solo si está inactiva)
+  const handleDeleteCompany = async (companyId: number, companyName: string) => {
+    setConfirmDialog({
+      isOpen: true,
+      title: '⚠️ Eliminar Empresa',
+      message: `¿Estás seguro de eliminar PERMANENTEMENTE la empresa "${companyName}"?\n\nEsta acción NO se puede deshacer y eliminará todos los datos relacionados.`,
+      type: 'danger',
+      onConfirm: async () => {
+        await executeDeleteCompany(companyId, companyName)
+      }
+    })
+  }
+
+  const executeDeleteCompany = async (companyId: number, companyName: string) => {
+
+    try {
+      setLoading(true)
+
+      const response = await fetch(`/api/companies/${companyId}`, {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+        }
+      })
+
+      // Try to parse JSON response, but handle empty responses
+      let data: any = {}
+      try {
+        const text = await response.text()
+        if (text) {
+          data = JSON.parse(text)
+        }
+      } catch (e) {
+        console.log('No JSON response from DELETE')
+      }
+
+      if (!response.ok || !data.success) {
         showNotification('error', 'Error', data.error || 'Error al eliminar empresa')
         return
       }
@@ -405,7 +514,7 @@ export default function CompaniesPage() {
         setCompanies(companiesData.data)
       }
 
-      showNotification('success', '¡Éxito!', 'Empresa eliminada exitosamente')
+      showNotification('success', '¡Éxito!', data.message || 'Empresa eliminada exitosamente')
 
     } catch (error) {
       console.error('Error deleting company:', error)
@@ -436,6 +545,7 @@ export default function CompaniesPage() {
         phone: company.phone || '',
         customerServicePhone: company.customerServicePhone || '',
         email: company.email || '',
+        website: company.website || '',
         address: company.address || '',
         city: company.city || '',
         state: company.state || '',
@@ -705,27 +815,54 @@ export default function CompaniesPage() {
                         "block text-sm font-medium mb-2",
                         theme === 'dark' ? "text-gray-300" : "text-gray-700"
                       )}>
-                        Email *
-                      </label>
-                      <input
-                        type="email"
-                        value={formData.email}
+                    Email *
+                  </label>
+                  <input
+                    type="email"
+                    value={formData.email}
                         onChange={(e) => setFormData({...formData, email: e.target.value})}
                         className={cn(
                           "w-full px-4 py-3 rounded-xl border focus:outline-none focus:ring-2 transition-all duration-300",
                           theme === 'dark'
                             ? "bg-gray-800/50 border-gray-700 text-white focus:border-blue-500 focus:ring-blue-500/20"
                             : "bg-white border-gray-300 text-black focus:border-blue-500 focus:ring-blue-500/20"
-                        )}
-                        placeholder="contacto@empresa.com"
-                      />
-                    </div>
+                    )}
+                    placeholder="contacto@empresa.com"
+                  />
+                </div>
 
-                    <div>
-                      <label className={cn(
-                        "block text-sm font-medium mb-2",
-                        theme === 'dark' ? "text-gray-300" : "text-gray-700"
-                      )}>
+                <div>
+                  <label className={cn(
+                    "block text-sm font-medium mb-2",
+                    theme === 'dark' ? "text-gray-300" : "text-gray-700"
+                  )}>
+                    Website
+                  </label>
+                  <input
+                    type="url"
+                    value={formData.website}
+                    onChange={(e) => setFormData({...formData, website: e.target.value})}
+                    className={cn(
+                      "w-full px-4 py-3 rounded-xl border focus:outline-none focus:ring-2 transition-all duration-300",
+                      theme === 'dark'
+                        ? "bg-gray-800/50 border-gray-700 text-white focus:border-blue-500 focus:ring-blue-500/20"
+                        : "bg-white border-gray-300 text-black focus:border-blue-500 focus:ring-blue-500/20"
+                    )}
+                    placeholder="https://empresa.com"
+                  />
+                  <p className={cn(
+                    "mt-1 text-xs",
+                    theme === 'dark' ? "text-gray-400" : "text-gray-500"
+                  )}>
+                    Se mostrará en las etiquetas y comunicación al cliente.
+                  </p>
+                </div>
+
+                <div>
+                  <label className={cn(
+                    "block text-sm font-medium mb-2",
+                    theme === 'dark' ? "text-gray-300" : "text-gray-700"
+                  )}>
                         EIN / Número de Identificación *
                       </label>
                       <input
@@ -2405,231 +2542,135 @@ export default function CompaniesPage() {
           </motion.div>
 
           {/* Companies Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {filteredCompanies.map((company, index) => (
+          {loading && companies.length === 0 ? (
+            <div className="flex items-center justify-center py-20">
+              <LoadingBox text="Cargando empresas..." size="md" />
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {filteredCompanies.map((company, index) => (
               <motion.div
                 key={company.id}
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: index * 0.1 }}
-                whileHover={{ y: -4, scale: 1.02 }}
+                whileHover={{ y: -2 }}
                 className={cn(
-                  "relative overflow-hidden border rounded-2xl p-6 shadow-xl hover:shadow-2xl transition-all duration-300 cursor-pointer",
+                  "relative overflow-hidden border rounded-xl p-6 shadow-sm hover:shadow-md transition-all duration-200 cursor-pointer",
                   theme === 'dark'
-                    ? "bg-gradient-to-br from-gray-800 to-gray-900 border-gray-700"
-                    : "bg-gradient-to-br from-slate-50 to-white border-slate-200"
+                    ? "bg-gray-800 border-gray-700"
+                    : "bg-white border-gray-200"
                 )}
                 onClick={() => setSelectedCompany(company)}
               >
-                {/* Barra superior de color */}
-                <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-400 to-blue-600"></div>
 
                 {/* Header */}
-                <div className="flex items-start justify-between mb-4">
-                  <div className="flex items-center gap-3">
-                    <div className={cn(
-                      "w-12 h-12 rounded-xl flex items-center justify-center",
-                      theme === 'dark' ? "bg-exa-secondary/20" : "bg-exa-primary/20"
+                <div className="flex items-start justify-between mb-6">
+                  <div>
+                    <h3 className={cn(
+                      "font-semibold text-lg mb-1",
+                      theme === 'dark' ? "text-white" : "text-gray-900"
                     )}>
-                      <Building2 className={cn(
-                        "w-6 h-6",
-                        theme === 'dark' ? "text-exa-secondary" : "text-exa-primary"
-                      )} />
-                    </div>
-                    <div>
-                      <h3 className={cn(
-                        "font-bold text-lg",
-                        theme === 'dark' ? "text-white" : "text-black"
+                      {company.legalName}
+                    </h3>
+                    <div className="flex items-center gap-2">
+                      <div className={cn(
+                        "px-2 py-0.5 rounded-full text-xs font-medium",
+                        company.status === 'active'
+                          ? theme === 'dark'
+                            ? "bg-green-500/20 text-green-400"
+                            : "bg-green-100 text-green-700"
+                          : theme === 'dark'
+                            ? "bg-red-500/20 text-red-400"
+                            : "bg-red-100 text-red-700"
                       )}>
-                        {company.legalName}
-                      </h3>
-                      <div className="flex items-center gap-1">
-                        <div className={cn(
-                          "w-2 h-2 rounded-full",
-                          company.status === 'active' ? "bg-green-500" : "bg-red-500"
-                        )} />
-                        <span className={cn(
-                          "text-xs",
-                          theme === 'dark' ? "text-gray-400" : "text-gray-600"
-                        )}>
-                          {company.status === 'active' ? 'Activa' : 'Inactiva'}
-                        </span>
+                        {company.status === 'active' ? 'Activa' : 'Inactiva'}
                       </div>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-1">
-                    <Globe className={cn(
-                      "w-4 h-4",
-                      theme === 'dark' ? "text-gray-400" : "text-gray-600"
-                    )} />
-                    <span className="text-xs">{company.currency}</span>
-                  </div>
-                </div>
-
-                {/* Info */}
-                <div className="space-y-3 mb-4">
-                  <div className="flex items-center gap-2">
-                    <MapPin className={cn(
-                      "w-4 h-4",
-                      theme === 'dark' ? "text-gray-400" : "text-gray-600"
-                    )} />
-                    <span className={cn(
-                      "text-sm",
-                      theme === 'dark' ? "text-gray-300" : "text-gray-700"
-                    )}>
-                      {company.city}, {company.country}
-                    </span>
-                  </div>
-
-                  <div className="flex items-center gap-2">
-                    <Phone className={cn(
-                      "w-4 h-4",
-                      theme === 'dark' ? "text-gray-400" : "text-gray-600"
-                    )} />
-                    <span className={cn(
-                      "text-sm",
-                      theme === 'dark' ? "text-gray-300" : "text-gray-700"
-                    )}>
-                      {company.phone}
-                    </span>
-                  </div>
-
-                  <div className="flex items-center gap-2">
-                    <CreditCard className={cn(
-                      "w-4 h-4",
-                      theme === 'dark' ? "text-gray-400" : "text-gray-600"
-                    )} />
-                    <span className={cn(
-                      "text-sm font-mono",
-                      theme === 'dark' ? "text-gray-300" : "text-gray-700"
-                    )}>
-                      {company.walletNumber.slice(0, 4)}...{company.walletNumber.slice(-4)}
-                    </span>
-                  </div>
-                </div>
-
-                {/* Stats */}
-                <div className="grid grid-cols-3 gap-2 mb-4">
-                  <div className={cn(
-                    "p-2 rounded-lg text-center",
-                    theme === 'dark' ? "bg-gray-800/50" : "bg-gray-100"
-                  )}>
-                    <p className={cn(
-                      "text-xs font-bold",
-                      theme === 'dark' ? "text-exa-secondary" : "text-exa-primary"
-                    )}>
-                      ${company.walletBalance.toLocaleString()}
-                    </p>
-                    <p className={cn(
-                      "text-xs",
-                      theme === 'dark' ? "text-gray-400" : "text-gray-600"
-                    )}>
-                      Balance
-                    </p>
-                  </div>
-                  <div className={cn(
-                    "p-2 rounded-lg text-center",
-                    theme === 'dark' ? "bg-gray-800/50" : "bg-gray-100"
-                  )}>
-                    <p className={cn(
-                      "text-xs font-bold",
-                      theme === 'dark' ? "text-exa-secondary" : "text-exa-primary"
-                    )}>
-                      {company.transactionsCount}
-                    </p>
-                    <p className={cn(
-                      "text-xs",
-                      theme === 'dark' ? "text-gray-400" : "text-gray-600"
-                    )}>
-                      Transacciones
-                    </p>
-                  </div>
-                  <div className={cn(
-                    "p-2 rounded-lg text-center",
-                    theme === 'dark' ? "bg-gray-800/50" : "bg-gray-100"
-                  )}>
-                    <p className={cn(
-                      "text-xs font-bold",
-                      theme === 'dark' ? "text-exa-secondary" : "text-exa-primary"
-                    )}>
-                      {company.usersCount}
-                    </p>
-                    <p className={cn(
-                      "text-xs",
-                      theme === 'dark' ? "text-gray-400" : "text-gray-600"
-                    )}>
-                      Usuarios
-                    </p>
-                  </div>
-                </div>
-
-                {/* Services */}
-                <div className="flex flex-wrap gap-1">
-                  {company.enabledServices.map((serviceId: string) => {
-                    const service = SERVICES.find(s => s.id === serviceId)
-                    return service ? (
-                      <span
-                        key={serviceId}
-                        className={cn(
-                          "px-2 py-1 rounded-full text-xs",
-                          theme === 'dark' ? "bg-exa-secondary/20 text-exa-secondary" : "bg-exa-primary/20 text-exa-primary"
-                        )}
-                      >
-                        {service.name}
-                      </span>
-                    ) : null
-                  })}
-                </div>
-
-                {/* Features */}
-                <div className="flex items-center gap-4 mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
-                  {company.isMultiCurrency && (
-                    <div className="flex items-center gap-1">
-                      <DollarSign className={cn(
-                        "w-3 h-3",
-                        theme === 'dark' ? "text-green-400" : "text-green-600"
-                      )} />
                       <span className={cn(
                         "text-xs",
-                        theme === 'dark' ? "text-green-400" : "text-green-600"
+                        theme === 'dark' ? "text-gray-500" : "text-gray-500"
                       )}>
-                        Multi-moneda
+                        {company.currency}
                       </span>
                     </div>
-                  )}
-
-                  {company.hasLimits && (
-                    <div className="flex items-center gap-1">
-                      <Shield className={cn(
-                        "w-3 h-3",
-                        theme === 'dark' ? "text-exa-secondary" : "text-exa-primary"
-                      )} />
-                      <span className={cn(
-                        "text-xs",
-                        theme === 'dark' ? "text-exa-secondary" : "text-exa-primary"
-                      )}>
-                        Con límites
-                      </span>
-                    </div>
-                  )}
-
-                  <div className="flex items-center gap-1">
-                    <Zap className={cn(
-                      "w-3 h-3",
-                      theme === 'dark' ? "text-yellow-400" : "text-yellow-600"
-                    )} />
-                    <span className={cn(
-                      "text-xs",
-                      theme === 'dark' ? "text-yellow-400" : "text-yellow-600"
-                    )}>
-                      {COMPANY_TYPES.find(t => t.id === company.companyType)?.name}
-                    </span>
                   </div>
                 </div>
 
-                {/* Actions */}
-                <div className="flex items-center gap-2 mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
+                {/* Stats - Minimalista */}
+                <div className={cn(
+                  "py-4 mb-4 border-y",
+                  theme === 'dark' ? "border-gray-700" : "border-gray-200"
+                )}>
+                  <div className="grid grid-cols-3 divide-x dark:divide-gray-700 divide-gray-200">
+                    <div className="pr-4">
+                      <p className={cn(
+                        "text-xs mb-1",
+                        theme === 'dark' ? "text-gray-500" : "text-gray-500"
+                      )}>
+                        Balance
+                      </p>
+                      <p className={cn(
+                        "text-lg font-semibold",
+                        theme === 'dark' ? "text-white" : "text-gray-900"
+                      )}>
+                        {formatCurrency(company.walletBalance)}
+                      </p>
+                    </div>
+                    <div className="px-4">
+                      <p className={cn(
+                        "text-xs mb-1",
+                        theme === 'dark' ? "text-gray-500" : "text-gray-500"
+                      )}>
+                        Trans.
+                      </p>
+                      <p className={cn(
+                        "text-lg font-semibold",
+                        theme === 'dark' ? "text-white" : "text-gray-900"
+                      )}>
+                        {company.transactionsCount || 0}
+                      </p>
+                    </div>
+                    <div className="pl-4">
+                      <p className={cn(
+                        "text-xs mb-1",
+                        theme === 'dark' ? "text-gray-500" : "text-gray-500"
+                      )}>
+                        Usuarios
+                      </p>
+                      <p className={cn(
+                        "text-lg font-semibold",
+                        theme === 'dark' ? "text-white" : "text-gray-900"
+                      )}>
+                        {company.usersCount || 0}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Location & Contact - Simplificado */}
+                <div className="flex items-center gap-3 mb-4">
+                  <span className={cn(
+                    "text-sm",
+                    theme === 'dark' ? "text-gray-400" : "text-gray-600"
+                  )}>
+                    {company.city}
+                  </span>
+                  <span className={cn(
+                    "text-sm",
+                    theme === 'dark' ? "text-gray-500" : "text-gray-400"
+                  )}>
+                    •
+                  </span>
+                  <span className={cn(
+                    "text-sm",
+                    theme === 'dark' ? "text-gray-400" : "text-gray-600"
+                  )}>
+                    {company.phone}
+                  </span>
+                </div>
+
+                {/* Actions - Minimalista */}
+                <div className="flex items-center gap-2">
                   <button
                     onClick={(e) => {
                       e.stopPropagation()
@@ -2637,35 +2678,70 @@ export default function CompaniesPage() {
                     }}
                     disabled={loading}
                     className={cn(
-                      "flex-1 flex items-center justify-center gap-2 px-4 py-2 rounded-lg font-medium transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed",
+                      "flex-1 px-3 py-2 rounded-lg text-sm font-medium transition-colors",
                       theme === 'dark'
-                        ? "bg-blue-500/20 text-blue-400 hover:bg-blue-500/30 border border-blue-500/30"
-                        : "bg-blue-50 text-blue-600 hover:bg-blue-100 border border-blue-200"
+                        ? "bg-[#0374e5]/20 text-[#0374e5] hover:bg-[#0374e5]/30"
+                        : "bg-[#0374e5] text-white hover:bg-[#0374e5]/90"
                     )}
                   >
-                    <Edit className="w-4 h-4" />
-                    <span className="text-sm">Editar</span>
+                    Editar
                   </button>
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      handleDeleteCompany(company.id, company.legalName)
-                    }}
-                    disabled={loading}
-                    className={cn(
-                      "flex-1 flex items-center justify-center gap-2 px-4 py-2 rounded-lg font-medium transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed",
-                      theme === 'dark'
-                        ? "bg-red-500/20 text-red-400 hover:bg-red-500/30 border border-red-500/30"
-                        : "bg-red-50 text-red-600 hover:bg-red-100 border border-red-200"
-                    )}
-                  >
-                    <Trash2 className="w-4 h-4" />
-                    <span className="text-sm">Eliminar</span>
-                  </button>
+
+                  {company.status === 'active' ? (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        handleToggleStatus(company.id, company.legalName, company.status)
+                      }}
+                      disabled={loading}
+                      className={cn(
+                        "flex-1 px-3 py-2 rounded-lg text-sm font-medium transition-colors border",
+                        theme === 'dark'
+                          ? "border-gray-600 text-gray-400 hover:bg-gray-700"
+                          : "border-gray-300 text-gray-700 hover:bg-gray-50"
+                      )}
+                    >
+                      Desactivar
+                    </button>
+                  ) : (
+                    <>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          handleToggleStatus(company.id, company.legalName, company.status)
+                        }}
+                        disabled={loading}
+                        className={cn(
+                          "flex-1 px-3 py-2 rounded-lg text-sm font-medium transition-colors border",
+                          theme === 'dark'
+                            ? "border-gray-600 text-gray-400 hover:bg-gray-700"
+                            : "border-gray-300 text-gray-700 hover:bg-gray-50"
+                        )}
+                      >
+                        Activar
+                      </button>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          handleDeleteCompany(company.id, company.legalName)
+                        }}
+                        disabled={loading}
+                        className={cn(
+                          "flex-1 px-3 py-2 rounded-lg text-sm font-medium transition-colors border",
+                          theme === 'dark'
+                            ? "border-red-500/30 text-red-400 hover:bg-red-500/10"
+                            : "border-red-300 text-red-600 hover:bg-red-50"
+                        )}
+                      >
+                        Eliminar
+                      </button>
+                    </>
+                  )}
                 </div>
               </motion.div>
             ))}
           </div>
+          )}
 
           {/* Company Detail Modal */}
           <AnimatePresence>
@@ -2973,6 +3049,19 @@ export default function CompaniesPage() {
               </motion.div>
             )}
           </AnimatePresence>
+
+          {/* Confirm Dialog */}
+          <ConfirmDialog
+            isOpen={confirmDialog.isOpen}
+            onClose={() => setConfirmDialog({ ...confirmDialog, isOpen: false })}
+            onConfirm={confirmDialog.onConfirm}
+            title={confirmDialog.title}
+            message={confirmDialog.message}
+            type={confirmDialog.type}
+            theme={theme}
+            confirmText="Confirmar"
+            cancelText="Cancelar"
+          />
         </div>
       )}
     </DashboardLayout>

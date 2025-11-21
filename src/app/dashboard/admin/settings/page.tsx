@@ -1,13 +1,14 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useRouter, useSearchParams } from 'next/navigation'
+import { useRouter, useSearchParams, usePathname } from 'next/navigation'
 import { DashboardLayout } from '@/components/layout/dashboard-layout'
 import { cn } from '@/lib/utils'
 import { useTheme } from '@/contexts/theme-context'
 import { useNotifications } from '@/contexts/NotificationContext'
 import ServicesManagement from '@/components/settings/ServicesManagement'
 import ContentTypesManagement from '@/components/settings/ContentTypesManagement'
+import CompanySelector from '@/components/settings/CompanySelector'
 import {
   Palette,
   Package,
@@ -75,8 +76,12 @@ export const fetchCache = 'force-no-store'
 export default function SettingsPage() {
   const router = useRouter()
   const searchParams = useSearchParams()
+  const pathname = usePathname()
   const { theme } = useTheme()
   const { showNotification } = useNotifications()
+  const basePath = pathname?.startsWith('/dashboard/agency-admin')
+    ? '/dashboard/agency-admin/settings'
+    : '/dashboard/admin/settings'
 
   // Initialize activeTab from URL query parameter if present
   const [activeTab, setActiveTab] = useState(() => {
@@ -94,6 +99,7 @@ export default function SettingsPage() {
   const [isSavingZone, setIsSavingZone] = useState(false)
   const [isSavingSize, setIsSavingSize] = useState(false)
   const [isLoadingZones, setIsLoadingZones] = useState(true)
+  const [selectedCompanyId, setSelectedCompanyId] = useState<number | null>(null)
 
   // Estado para marca blanca
   const [brandSettings, setBrandSettings] = useState({
@@ -130,18 +136,21 @@ export default function SettingsPage() {
   // Function to handle tab changes and update URL
   const handleTabChange = (tabId: string) => {
     setActiveTab(tabId)
-    router.push(`/dashboard/admin/settings?tab=${tabId}`, { scroll: false })
+    router.push(`${basePath}?tab=${tabId}`, { scroll: false })
   }
 
   useEffect(() => {
     loadZones()
     loadPackageSizes()
-  }, [])
+  }, [selectedCompanyId])
 
   const loadZones = async () => {
     setIsLoadingZones(true)
     try {
-      const response = await fetch('/api/zones')
+      const url = selectedCompanyId
+        ? `/api/zones?companyId=${selectedCompanyId}`
+        : '/api/zones'
+      const response = await fetch(url)
       if (response.ok) {
         const data = await response.json()
         setZones(data.data || [])
@@ -155,7 +164,10 @@ export default function SettingsPage() {
 
   const loadPackageSizes = async () => {
     try {
-      const response = await fetch('/api/package-sizes')
+      const url = selectedCompanyId
+        ? `/api/package-sizes?companyId=${selectedCompanyId}`
+        : '/api/package-sizes'
+      const response = await fetch(url)
       if (response.ok) {
         const data = await response.json()
         setPackageSizes(data.data || [])
@@ -1241,6 +1253,12 @@ export default function SettingsPage() {
     <DashboardLayout>
       <div className="p-6">
         <h1 className="text-3xl font-bold mb-6">Configuraciones</h1>
+
+        {/* Company Selector for SUPER_ADMIN */}
+        <CompanySelector
+          selectedCompanyId={selectedCompanyId}
+          onCompanyChange={setSelectedCompanyId}
+        />
 
         {/* Tabs */}
         <div className="mb-6">

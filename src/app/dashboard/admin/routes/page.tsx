@@ -34,6 +34,7 @@ import { useNotifications } from '@/contexts/NotificationContext'
 import { DashboardLayout } from '@/components/layout/dashboard-layout'
 import { Button } from '@/components/ui/button'
 import ViewToggle from '@/components/ui/ViewToggle'
+import Spinner from '@/components/ui/Spinner'
 
 interface Route {
   id: number
@@ -681,15 +682,8 @@ export default function RoutesPage() {
                 )}>
                   {loading ? (
                     <tr>
-                      <td colSpan={8} className="px-6 py-12 text-center">
-                        <div className="flex items-center justify-center">
-                          <RefreshCw className="w-6 h-6 animate-spin mr-2" />
-                          <span className={cn(
-                            theme === 'dark' ? "text-gray-400" : "text-gray-600"
-                          )}>
-                            Cargando rutas...
-                          </span>
-                        </div>
+                      <td colSpan={8} className="px-6 py-12">
+                        <Spinner size="lg" text="Cargando rutas..." />
                       </td>
                     </tr>
                   ) : routes.length === 0 ? (

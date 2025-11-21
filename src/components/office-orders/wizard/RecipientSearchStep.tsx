@@ -122,14 +122,91 @@ export default function RecipientSearchStep({ wizardData, updateWizardData, setC
           setCanProceed(false) // Usuario debe seleccionar una dirección manualmente
         } else {
           // No tiene direcciones guardadas, usar la dirección legacy del customer
-          updateWizardData('recipient', customer)
+          // Ensure structured address fields are present
+          const recipientWithFields = { ...customer }
+          if (!recipientWithFields.street && recipientWithFields.address) {
+            // Parse the address string to extract components
+            const addressParts = recipientWithFields.address.split(',').map((p: string) => p.trim())
+
+            if (addressParts.length >= 4) {
+              // Format: "street, city, state zipcode, country"
+              recipientWithFields.street = addressParts[0]
+              recipientWithFields.city = addressParts[1]
+
+              // Parse "state zipcode" part
+              const stateZip = addressParts[2].split(' ').filter(Boolean)
+              if (stateZip.length >= 2) {
+                recipientWithFields.state = stateZip[0]
+                recipientWithFields.zipCode = stateZip[1]
+              }
+
+              // Country is the last part
+              if (addressParts[3]) {
+                recipientWithFields.country = addressParts[3]
+              }
+            } else {
+              // Fallback: just use the address as street
+              recipientWithFields.street = recipientWithFields.address
+            }
+          }
+          if (!recipientWithFields.city) {
+            recipientWithFields.city = ''
+          }
+          if (!recipientWithFields.state) {
+            recipientWithFields.state = ''
+          }
+          if (!recipientWithFields.zipCode && !recipientWithFields.zipcode) {
+            recipientWithFields.zipCode = recipientWithFields.zipcode || ''
+          }
+          if (!recipientWithFields.country) {
+            recipientWithFields.country = 'US'
+          }
+          updateWizardData('recipient', recipientWithFields)
           setCanProceed(true)
         }
       }
     } catch (error) {
       console.error('Error loading addresses:', error)
       // Si falla, usar dirección legacy
-      updateWizardData('recipient', customer)
+      const recipientWithFields = { ...customer }
+      if (!recipientWithFields.street && recipientWithFields.address) {
+        // Parse the address string to extract components
+        const addressParts = recipientWithFields.address.split(',').map((p: string) => p.trim())
+
+        if (addressParts.length >= 4) {
+          // Format: "street, city, state zipcode, country"
+          recipientWithFields.street = addressParts[0]
+          recipientWithFields.city = addressParts[1]
+
+          // Parse "state zipcode" part
+          const stateZip = addressParts[2].split(' ').filter(Boolean)
+          if (stateZip.length >= 2) {
+            recipientWithFields.state = stateZip[0]
+            recipientWithFields.zipCode = stateZip[1]
+          }
+
+          // Country is the last part
+          if (addressParts[3]) {
+            recipientWithFields.country = addressParts[3]
+          }
+        } else {
+          // Fallback: just use the address as street
+          recipientWithFields.street = recipientWithFields.address
+        }
+      }
+      if (!recipientWithFields.city) {
+        recipientWithFields.city = ''
+      }
+      if (!recipientWithFields.state) {
+        recipientWithFields.state = ''
+      }
+      if (!recipientWithFields.zipCode && !recipientWithFields.zipcode) {
+        recipientWithFields.zipCode = recipientWithFields.zipcode || ''
+      }
+      if (!recipientWithFields.country) {
+        recipientWithFields.country = 'US'
+      }
+      updateWizardData('recipient', recipientWithFields)
       setCanProceed(true)
     } finally {
       setLoadingAddresses(false)

@@ -8,7 +8,7 @@ interface UseAuthReturn {
   isLoading: boolean
   isTransitioning: boolean
   error: string | null
-  login: (credentials: LoginCredentials) => Promise<void>
+  login: (credentials: LoginCredentials) => Promise<boolean>
   logout: () => void
   clearError: () => void
 }
@@ -107,7 +107,15 @@ export function useAuth(): UseAuthReturn {
       const data = await response.json()
 
       if (!response.ok) {
-        throw new Error(data.error || 'Error al iniciar sesión')
+        // Set error state without throwing to avoid console errors
+        setState(prev => ({
+          ...prev,
+          user: null,
+          isLoading: false,
+          isTransitioning: false,
+          error: data.error || 'Error al iniciar sesión',
+        }))
+        return false
       }
 
       if (data.success && data.user) {
@@ -121,7 +129,7 @@ export function useAuth(): UseAuthReturn {
           updatedAt: new Date(data.user.updatedAt),
         }
 
-        // Save to localStorage
+        // Persist in localStorage
         if (typeof window !== 'undefined') {
           localStorage.setItem('user', JSON.stringify(user))
         }
@@ -157,11 +165,22 @@ export function useAuth(): UseAuthReturn {
 
           window.location.href = redirectPath
         }
+        return true
       } else {
-        throw new Error('Respuesta inválida del servidor')
+        setState(prev => ({
+          ...prev,
+          user: null,
+          isLoading: false,
+          isTransitioning: false,
+          error: 'Respuesta inválida del servidor',
+        }))
+        return false
       }
     } catch (error) {
-      console.error('Login error:', error)
+      // Only log network errors, not authentication errors
+      if (error instanceof TypeError) {
+        console.error('Network error:', error)
+      }
       setState(prev => ({
         ...prev,
         user: null,
@@ -169,6 +188,7 @@ export function useAuth(): UseAuthReturn {
         isTransitioning: false,
         error: error instanceof Error ? error.message : 'Error al iniciar sesión',
       }))
+      return false
     }
   }, [])
 

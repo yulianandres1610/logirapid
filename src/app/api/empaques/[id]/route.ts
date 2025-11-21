@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/database'
+import { getCompanyFilter } from '@/lib/query-helpers'
 
 export const dynamic = 'force-dynamic'
 export const dynamicParams = true
@@ -11,11 +12,25 @@ export async function DELETE(
 ) {
   try {
     const { id } = await params
+    const { isSuperAdmin, companyId } = getCompanyFilter(request)
 
     // Check if empaque exists
+    const checkParams: (string | number)[] = [id]
+    let checkQuery = 'SELECT id, company_id FROM empaques WHERE id = $1'
+    if (!isSuperAdmin) {
+      if (!companyId) {
+        return NextResponse.json(
+          { success: false, error: 'No se pudo determinar la empresa del usuario' },
+          { status: 400 }
+        )
+      }
+      checkQuery += ' AND company_id = $2'
+      checkParams.push(companyId)
+    }
+
     const checkResult = await db.query(
-      'SELECT id FROM empaques WHERE id = $1',
-      [id]
+      checkQuery,
+      checkParams
     )
 
     if (checkResult.rows.length === 0) {
@@ -26,7 +41,13 @@ export async function DELETE(
     }
 
     // Delete empaque
-    await db.query('DELETE FROM empaques WHERE id = $1', [id])
+    const deleteParams: (string | number)[] = [id]
+    let deleteQuery = 'DELETE FROM empaques WHERE id = $1'
+    if (!isSuperAdmin) {
+      deleteQuery += ' AND company_id = $2'
+      deleteParams.push(companyId)
+    }
+    await db.query(deleteQuery, deleteParams)
 
     return NextResponse.json(
       { success: true, message: 'Empaque eliminado exitosamente' },
@@ -49,6 +70,7 @@ export async function PATCH(
   try {
     const { id } = await params
     const body = await request.json()
+    const { isSuperAdmin, companyId } = getCompanyFilter(request)
 
     const {
       estado,
@@ -119,11 +141,25 @@ export async function PATCH(
 
     updates.push(`updated_at = NOW()`)
     values.push(id)
+    let whereClause = `id = $${paramIndex}`
+    paramIndex++
+
+    if (!isSuperAdmin) {
+      if (!companyId) {
+        return NextResponse.json(
+          { success: false, error: 'No se pudo determinar la empresa del usuario' },
+          { status: 400 }
+        )
+      }
+      values.push(companyId)
+      whereClause += ` AND company_id = $${paramIndex}`
+      paramIndex++
+    }
 
     const query = `
       UPDATE empaques
       SET ${updates.join(', ')}
-      WHERE id = $${paramIndex}
+      WHERE ${whereClause}
       RETURNING *
     `
 

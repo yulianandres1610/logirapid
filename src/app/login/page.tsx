@@ -10,13 +10,15 @@ import { Lock, Mail, ArrowRight, Package } from 'lucide-react'
 export default function LoginPage() {
   const router = useRouter()
   const [isRedirecting, setIsRedirecting] = useState(false)
+  const [showLoadingOverlay, setShowLoadingOverlay] = useState(false)
 
   const handleLoginSuccess = () => {
+    setShowLoadingOverlay(true)
     setIsRedirecting(true)
-    // Simular carga de datos antes de redirigir
+    // Simular carga de datos antes de redirigir (12s)
     setTimeout(() => {
       router.push('/dashboard/admin')
-    }, 5000)
+    }, 12000)
   }
 
   return (
@@ -92,7 +94,11 @@ export default function LoginPage() {
 
           {/* Form Content */}
           <div className="p-8 pt-4">
-            <LoginForm onSuccess={handleLoginSuccess} />
+            <LoginForm
+              onSuccess={handleLoginSuccess}
+              disabled={isRedirecting || showLoadingOverlay}
+              onLoadingChange={setShowLoadingOverlay}
+            />
 
             {/* Alternative Login */}
             <div className="mt-8 text-center">
@@ -252,7 +258,7 @@ export default function LoginPage() {
 
       {/* Loading Overlay */}
       <AnimatePresence>
-        {isRedirecting && (
+        {(isRedirecting || showLoadingOverlay) && (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -267,9 +273,9 @@ export default function LoginPage() {
             >
               {/* Loading Animation */}
               <div className="relative">
-                <div className="animate-spin rounded-full h-24 w-24 border-b-4 border-t-4 border-exa-primary"></div>
+                <div className="animate-spin rounded-full h-24 w-24 border-b-4 border-t-4 border-exa-secondary"></div>
                 <div className="absolute inset-0 flex items-center justify-center">
-                  <Package className="h-12 w-12 text-exa-primary animate-pulse" />
+                  <Package className="h-12 w-12 text-exa-secondary animate-pulse" />
                 </div>
               </div>
 
@@ -320,6 +326,7 @@ export default function LoginPage() {
           </motion.div>
         )}
       </AnimatePresence>
+      {/* Layout wrapper close */}
     </div>
   )
 }

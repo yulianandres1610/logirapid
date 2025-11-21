@@ -1,12 +1,11 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useRouter, useSearchParams } from 'next/navigation'
+import { useRouter, useSearchParams, usePathname } from 'next/navigation'
 import {
   Building,
   Plus,
   Search,
-  RefreshCw,
   MapPin,
   Calendar,
   CheckCircle,
@@ -19,8 +18,10 @@ import {
   ChevronRight,
   BarChart3,
   Store,
-  Package
+  Package,
+  RefreshCw
 } from 'lucide-react'
+import LoadingBox from '@/components/ui/LoadingBox'
 import { cn } from '@/lib/utils'
 import { useTheme } from '@/contexts/theme-context'
 import { useAuth } from '@/hooks/useAuth'
@@ -76,6 +77,10 @@ export default function WarehousesPage() {
   const { showNotification } = useNotifications()
   const router = useRouter()
   const searchParams = useSearchParams()
+  const pathname = usePathname()
+  const basePath = pathname?.startsWith('/dashboard/agency-admin')
+    ? '/dashboard/agency-admin/warehouses'
+    : '/dashboard/admin/warehouses'
 
   const [warehouses, setWarehouses] = useState<Warehouse[]>([])
   const [loading, setLoading] = useState(true)
@@ -149,9 +154,9 @@ export default function WarehousesPage() {
       params.delete('view')
     }
 
-    const newUrl = `/dashboard/admin/warehouses${params.toString() ? '?' + params.toString() : ''}`
+    const newUrl = `${basePath}${params.toString() ? '?' + params.toString() : ''}`
     router.push(newUrl, { scroll: false })
-  }, [activeView, searchParams, router])
+  }, [activeView, searchParams, router, basePath])
 
   // Calculate statistics
   const stats = {
@@ -204,12 +209,12 @@ export default function WarehousesPage() {
 
   // Handle view warehouse details
   const handleViewWarehouse = (warehouseId: number) => {
-    window.location.href = `/dashboard/admin/warehouses/${warehouseId}`
+    router.push(`${basePath}/${warehouseId}`)
   }
 
   // Handle edit warehouse
   const handleEditWarehouse = (warehouseId: number) => {
-    window.location.href = `/dashboard/admin/warehouses/${warehouseId}/edit`
+    router.push(`${basePath}/${warehouseId}/edit`)
   }
 
   // Handle delete warehouse
@@ -537,7 +542,7 @@ export default function WarehousesPage() {
                     </Button>
 
                     <button
-                      onClick={() => window.location.href = '/dashboard/admin/warehouses/create'}
+                      onClick={() => router.push(`${basePath}/create`)}
                       className={cn(
                         'flex-1 sm:flex-none justify-center whitespace-nowrap',
                         'rounded-lg text-sm font-medium transition-all duration-200',
@@ -560,9 +565,8 @@ export default function WarehousesPage() {
                 theme === 'dark' ? 'bg-gray-800' : 'bg-white'
               )}>
                 {loading ? (
-                  <div className="p-8 text-center">
-                    <RefreshCw className="w-8 h-8 animate-spin mx-auto text-gray-400" />
-                    <p className="mt-2 text-black dark:text-gray-400">Cargando almacenes...</p>
+                  <div className="p-8">
+                    <LoadingBox size="lg" text="Cargando almacenes..." />
                   </div>
                 ) : warehouses.length === 0 ? (
                   <div className="p-8 text-center">
@@ -608,7 +612,7 @@ export default function WarehousesPage() {
                         {warehouses.map((warehouse) => (
                           <tr
                             key={warehouse.id}
-                            onClick={() => router.push(`/dashboard/admin/warehouses/${warehouse.id}`)}
+                            onClick={() => router.push(`${basePath}/${warehouse.id}`)}
                             className={cn(
                               'hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors cursor-pointer'
                             )}
@@ -968,7 +972,7 @@ export default function WarehousesPage() {
                   </Button>
 
                   <button
-                    onClick={() => window.location.href = '/dashboard/admin/warehouses/create'}
+                    onClick={() => router.push(`${basePath}/create`)}
                     className={cn(
                       'flex-1 sm:flex-none justify-center whitespace-nowrap',
                       'items-center gap-2 h-12 px-4',

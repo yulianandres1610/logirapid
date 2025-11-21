@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/database'
+import { getCompanyFilter } from '@/lib/query-helpers'
 
 // Force dynamic rendering - don't execute during build
 export const dynamic = 'force-dynamic'
@@ -11,6 +12,7 @@ export const runtime = 'nodejs'
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url)
+    const { isSuperAdmin, companyId: headerCompanyId } = getCompanyFilter(request)
     const customerId = searchParams.get('customerId')
     const orderId = searchParams.get('id')
     const page = parseInt(searchParams.get('page') || '1')
@@ -20,6 +22,8 @@ export async function GET(request: NextRequest) {
     const orderType = searchParams.get('orderType') // 'recogida' o 'oficina'
     const hasCoordinates = searchParams.get('hasCoordinates') === 'true' // Filtro para vista de mapa
     const warehouseId = searchParams.get('warehouseId') // Filtro por almacén
+    const companyIdParam = searchParams.get('companyId')
+    const companyIdFilter = companyIdParam ? parseInt(companyIdParam) : headerCompanyId
 
     // Build WHERE conditions
     const conditions = []
@@ -27,36 +31,36 @@ export async function GET(request: NextRequest) {
 
     if (orderId) {
       params.push(orderId)
-      conditions.push('id = $' + params.length)
+      conditions.push('po.id = $' + params.length)
     }
 
     if (customerId) {
       params.push(customerId)
-      conditions.push('customerid = $' + params.length)
+      conditions.push('po.customerid = $' + params.length)
     }
 
     // Filtrar por tipo de orden (recogida u oficina)
     if (orderType) {
       params.push(orderType)
-      conditions.push('order_type = $' + params.length)
+      conditions.push('po.order_type = $' + params.length)
     } else {
       // Si no se especifica orderType, excluir solo las de oficina
       // Mostrar recogida y entrega (ambas necesitan ruta)
-      conditions.push("order_type IN ('recogida', 'entrega')")
+      conditions.push("po.order_type IN ('recogida', 'entrega')")
     }
 
     if (searchTerm) {
       const searchPattern = `%${searchTerm}%`
       params.push(searchPattern, searchPattern, searchPattern, searchPattern, searchPattern, searchPattern)
       const searchCondition = `(
-        ordernumber ILIKE $${params.length - 5} OR
-        customername ILIKE $${params.length - 4} OR
-        CONCAT(firstname, ' ', lastname) ILIKE $${params.length - 3} OR
-        customeraddress::text ILIKE $${params.length - 2} OR
-        phone ILIKE $${params.length - 1} OR
+        po.ordernumber ILIKE $${params.length - 5} OR
+        po.customername ILIKE $${params.length - 4} OR
+        CONCAT(po.firstname, ' ', po.lastname) ILIKE $${params.length - 3} OR
+        po.customeraddress::text ILIKE $${params.length - 2} OR
+        po.phone ILIKE $${params.length - 1} OR
         EXISTS (
           SELECT 1 FROM empaques e
-          WHERE e.orden_id = package_orders.id
+          WHERE e.orden_id = po.id
           AND e.codigo ILIKE $${params.length}
         )
       )`
@@ -65,18 +69,33 @@ export async function GET(request: NextRequest) {
 
     if (statusFilter && statusFilter !== 'all') {
       params.push(statusFilter)
-      conditions.push('status = $' + params.length)
+      conditions.push('po.status = $' + params.length)
     }
 
     // Filtro para vista de mapa: solo órdenes con coordenadas válidas
     if (hasCoordinates) {
-      conditions.push('latitude IS NOT NULL AND longitude IS NOT NULL')
+      conditions.push('po.latitude IS NOT NULL AND po.longitude IS NOT NULL')
     }
 
     // Filtro por almacén
     if (warehouseId) {
       params.push(parseInt(warehouseId))
-      conditions.push('warehouse_id = $' + params.length)
+      conditions.push('po.warehouse_id = $' + params.length)
+    }
+
+    // Filtro por empresa (multi-tenant)
+    if (!isSuperAdmin) {
+      if (!headerCompanyId) {
+        return NextResponse.json({
+          success: false,
+          error: 'No se pudo determinar la empresa del usuario'
+        }, { status: 400 })
+      }
+      params.push(headerCompanyId)
+      conditions.push(`po.company_id = $${params.length}`)
+    } else if (companyIdParam) {
+      params.push(parseInt(companyIdParam))
+      conditions.push(`po.company_id = $${params.length}`)
     }
 
     const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : ''
@@ -88,35 +107,38 @@ export async function GET(request: NextRequest) {
 
     const dataQuery = `
       SELECT
-        id,
-        customerid as "customerId",
-        customername as "customerName",
-        customeraddress as "customerAddress",
-        ordernumber as "orderNumber",
-        services,
-        scheduleddate as "scheduledDate",
-        timeslot as "timeSlot",
-        status,
-        latitude,
-        longitude,
-        totalamount as "totalAmount",
-        firstname as "firstName",
-        lastname as "lastName",
-        order_type as "orderType",
-        office_order_data as "officeOrderData",
-        warehouse_id as "warehouseId",
-        warehouse_name as "warehouseName",
-        zipcode,
-        street,
-        apartment,
-        city,
-        state,
-        country,
-        createdat as "createdAt",
+        po.id,
+        po.customerid as "customerId",
+        po.customername as "customerName",
+        po.customeraddress as "customerAddress",
+        po.ordernumber as "orderNumber",
+        po.services,
+        po.scheduleddate as "scheduledDate",
+        po.timeslot as "timeSlot",
+        po.status,
+        po.latitude,
+        po.longitude,
+        po.totalamount as "totalAmount",
+        po.firstname as "firstName",
+        po.lastname as "lastName",
+        po.order_type as "orderType",
+        po.office_order_data as "officeOrderData",
+        po.warehouse_id as "warehouseId",
+        po.warehouse_name as "warehouseName",
+        po.zipcode,
+        po.street,
+        po.apartment,
+        po.city,
+        po.state,
+        po.country,
+        po.company_id as "companyId",
+        c.legalname as "companyName",
+        po.createdat as "createdAt",
         COUNT(*) OVER() as total_count
-      FROM package_orders
+      FROM package_orders po
+      LEFT JOIN companies c ON po.company_id = c.id
       ${whereClause}
-      ORDER BY createdat DESC
+      ORDER BY po.createdat DESC
       LIMIT $${params.length - 1} OFFSET $${params.length}
     `
 
@@ -157,6 +179,18 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
+    const { isSuperAdmin, companyId: headerCompanyId } = getCompanyFilter(request)
+    const bodyCompanyId = body.companyId ? parseInt(body.companyId) : null
+    const companyId = !isSuperAdmin
+      ? headerCompanyId || bodyCompanyId
+      : (bodyCompanyId || headerCompanyId)
+
+    if (!companyId) {
+      return NextResponse.json({
+        success: false,
+        error: 'No se pudo determinar la empresa para la orden'
+      }, { status: 400 })
+    }
     console.log('POST /api/package-orders received body:', body)
 
     // Validar campos requeridos
@@ -241,6 +275,9 @@ export async function POST(request: NextRequest) {
       : JSON.stringify(body.additionalServices || [])
     const boxesJson = typeof body.boxes === 'string' ? body.boxes : JSON.stringify(body.boxes || [])
 
+    // Determine initial status based on order type
+    const initialStatus = body.status || (orderType === 'oficina' ? 'picked_up' : 'pending')
+
     const insertQuery = `
       INSERT INTO package_orders (
         customerid, customername, customeraddress, ordernumber, services,
@@ -249,6 +286,7 @@ export async function POST(request: NextRequest) {
         boxcount, boxprice, additionalservices, boxes,
         firstname, lastname, order_type, office_order_data,
         zipcode, street, apartment, city, state, country,
+        company_id,
         createdat, updatedat
       ) VALUES (
         $1, $2, $3, $4, $5,
@@ -257,13 +295,11 @@ export async function POST(request: NextRequest) {
         $16, $17, $18, $19,
         $20, $21, $22, $23,
         $24, $25, $26, $27, $28, $29,
+        $30,
         NOW(), NOW()
       )
       RETURNING *
     `
-
-    // Determine initial status based on order type
-    const initialStatus = body.status || (orderType === 'oficina' ? 'picked_up' : 'pending')
 
     const values = [
       body.customerId,
@@ -294,7 +330,8 @@ export async function POST(request: NextRequest) {
       body.apartment || null,
       body.city || null,
       body.state || null,
-      body.country || null
+      body.country || null,
+      companyId
     ]
 
     const result = await db.query(insertQuery, values)

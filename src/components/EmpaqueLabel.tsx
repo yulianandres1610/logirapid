@@ -15,6 +15,7 @@ interface Empaque {
   warehouse_name: string
   created_at: string
   package_size_name?: string
+  package_size_dimensions?: string
   estado: string
 }
 
@@ -29,9 +30,11 @@ interface Warehouse {
 interface Company {
   legalName: string
   logo?: string
+  logoUrl?: string
   primary_color?: string
   phone?: string
   customerServicePhone?: string
+  website?: string
 }
 
 interface EmpaqueLabel {
@@ -40,6 +43,7 @@ interface EmpaqueLabel {
   warehouseImpresion: Warehouse
   company: Company
   fechaImpresion: Date
+  index?: number
 }
 
 /**
@@ -51,8 +55,13 @@ export function generateEmpaqueLabel({
   warehouseCreacion,
   warehouseImpresion,
   company,
-  fechaImpresion
+  fechaImpresion,
+  index = 0
 }: EmpaqueLabel): string {
+  const logoSrc = company.logo || company.logoUrl || ''
+  const website = company.website?.trim()
+  const tamano = empaque.package_size_name || empaque.package_size_dimensions
+
   return `
     <!DOCTYPE html>
     <html>
@@ -129,7 +138,7 @@ export function generateEmpaqueLabel({
           font-weight: 600;
         }
 
-        #codigoBarcode {
+        [id^="barcode-"] {
           max-width: 100%;
           margin: 2px 0;
         }
@@ -174,6 +183,19 @@ export function generateEmpaqueLabel({
           margin: 8px 0;
           font-family: 'Courier New', monospace;
           letter-spacing: 2px;
+        }
+        .service-website {
+          font-size: 12px;
+          color: #000000;
+          margin-top: 4px;
+          word-break: break-all;
+        }
+        .service-size {
+          font-size: 24px;
+          font-weight: 800;
+          color: #000000;
+          margin-top: 6px;
+          text-transform: uppercase;
         }
 
         /* Footer con fechas y marca de agua */
@@ -270,8 +292,8 @@ export function generateEmpaqueLabel({
       <div class="label-container">
         <!-- Logo de la empresa -->
         <div class="logo-section">
-          ${company.logo
-            ? `<img src="${company.logo}" alt="${company.legalName}">`
+          ${logoSrc
+            ? `<img src="${logoSrc}" alt="${company.legalName}">`
             : `<div class="company-name">${company.legalName}</div>`
           }
         </div>
@@ -279,7 +301,7 @@ export function generateEmpaqueLabel({
         <!-- Código del empaque con código de barras -->
         <div class="codigo-section">
           <div class="codigo-label">Código de Empaque</div>
-          <svg id="codigoBarcode"></svg>
+          <svg id="barcode-${index}"></svg>
           <div class="codigo-text">${empaque.codigo}</div>
         </div>
 
@@ -287,6 +309,8 @@ export function generateEmpaqueLabel({
         <div class="customer-service-section">
           <div class="service-header">Puede Llamarnos Para Solicitar<br>Entregas de Cajas Vacias o<br>Recogidas de sus cajas Llenas</div>
           <div class="service-phone">${company.customerServicePhone || company.phone || '6452432403'}</div>
+          ${website ? `<div class="service-website">${website}</div>` : ''}
+          ${tamano ? `<div class="service-size">${tamano}</div>` : ''}
         </div>
 
         <!-- Footer con fechas y marca de agua -->
@@ -316,7 +340,7 @@ export function generateEmpaqueLabel({
         window.onload = function() {
           try {
             // Generar código de barras para el código del empaque
-            JsBarcode("#codigoBarcode", "${empaque.codigo}", {
+            JsBarcode("#barcode-${index}", "${empaque.codigo}", {
               format: "CODE128",
               width: 2,
               height: 60,
@@ -356,4 +380,325 @@ function formatTime(date: Date): string {
   const minutes = String(date.getMinutes()).padStart(2, '0')
   const seconds = String(date.getSeconds()).padStart(2, '0')
   return `${hours}:${minutes}:${seconds}`
+}
+
+/**
+ * Genera múltiples etiquetas en un solo documento HTML
+ * Optimizado para impresión masiva sin conflictos de IDs
+ */
+export function generateMultipleEmpaqueLabels(labels: EmpaqueLabel[]): string {
+  const firstLabel = labels[0]
+  const logoSrc = firstLabel.company.logo || firstLabel.company.logoUrl || ''
+
+  // Generar el contenido de todas las etiquetas
+  const labelsContent = labels.map((label, index) => {
+    const tamano = label.empaque.package_size_name || label.empaque.package_size_dimensions
+    const website = label.company.website?.trim()
+
+    return `
+      <div class="label-container" style="page-break-after: always;">
+        <!-- Logo de la empresa -->
+        <div class="logo-section">
+          ${logoSrc
+            ? `<img src="${logoSrc}" alt="${label.company.legalName}">`
+            : `<div class="company-name">${label.company.legalName}</div>`
+          }
+        </div>
+
+        <!-- Código del empaque con código de barras -->
+        <div class="codigo-section">
+          <div class="codigo-label">Código de Empaque</div>
+          <svg id="barcode-${index}"></svg>
+          <div class="codigo-text">${label.empaque.codigo}</div>
+        </div>
+
+        <!-- Sección promocional de atención al cliente -->
+        <div class="customer-service-section">
+          <div class="service-header">Puede Llamarnos Para Solicitar<br>Entregas de Cajas Vacias o<br>Recogidas de sus cajas Llenas</div>
+          <div class="service-phone">${label.company.customerServicePhone || label.company.phone || '6452432403'}</div>
+          ${website ? `<div class="service-website">${website}</div>` : ''}
+          ${tamano ? `<div class="service-size">${tamano}</div>` : ''}
+        </div>
+
+        <!-- Footer con fechas y marca de agua -->
+        <div class="label-footer">
+          <div class="footer-dates">
+            <div class="footer-date-item">
+              <div class="footer-date-label">Creación:</div>
+              <div class="footer-date-value">${formatDate(new Date(label.empaque.created_at))} ${formatTime(new Date(label.empaque.created_at))}</div>
+            </div>
+            <div class="footer-date-item">
+              <div class="footer-date-label">Impresión:</div>
+              <div class="footer-date-value">${formatDate(label.fechaImpresion)} ${formatTime(label.fechaImpresion)}</div>
+            </div>
+          </div>
+          <div class="footer-watermark">${label.company.legalName} - Todos los derechos reservados</div>
+        </div>
+      </div>
+    `
+  }).join('\n')
+
+  // Generar el script que crea todos los códigos de barras
+  const barcodesScript = labels.map((label, index) => {
+    return `JsBarcode("#barcode-${index}", "${label.empaque.codigo}", {
+      format: "CODE128",
+      width: 2,
+      height: 60,
+      displayValue: false,
+      margin: 5
+    });`
+  }).join('\n            ')
+
+  return `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="UTF-8">
+      <title>Etiquetas de Empaques</title>
+      <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.12.1/dist/JsBarcode.all.min.js"></script>
+      <style>
+        * {
+          margin: 0;
+          padding: 0;
+          box-sizing: border-box;
+        }
+
+        @page {
+          size: 4in 6in;
+          margin: 0;
+        }
+
+        body {
+          font-family: 'Arial', sans-serif;
+          background: white;
+          color: #000000;
+        }
+
+        .label-container {
+          width: 4in;
+          height: 6in;
+          padding: 0.2in;
+          display: flex;
+          flex-direction: column;
+        }
+
+        /* Logo */
+        .logo-section {
+          width: 100%;
+          text-align: center;
+          margin-bottom: 0.08in;
+          border-bottom: 2px solid #000000;
+          padding-bottom: 0.08in;
+        }
+
+        .logo-section img {
+          max-width: 100%;
+          max-height: 0.7in;
+          object-fit: contain;
+        }
+
+        .company-name {
+          font-size: 38px;
+          font-weight: bold;
+          color: #000000;
+          margin-top: 5px;
+        }
+
+        /* Código del empaque */
+        .codigo-section {
+          text-align: center;
+          margin: 0.05in 0;
+          padding: 0.08in 0.08in 0.05in 0.08in;
+          background: white;
+          border: 1px solid #000000;
+          border-radius: 4px;
+        }
+
+        .codigo-label {
+          font-size: 10px;
+          color: #000000;
+          margin-bottom: 2px;
+          text-transform: uppercase;
+          letter-spacing: 0.5px;
+          font-weight: 600;
+        }
+
+        [id^="barcode-"] {
+          max-width: 100%;
+          margin: 2px 0;
+        }
+
+        .codigo-text {
+          font-size: 9px;
+          color: #000000;
+          font-family: 'Courier New', monospace;
+          font-weight: 600;
+          margin-top: 2px;
+        }
+
+        /* Sección promocional de atención al cliente */
+        .customer-service-section {
+          flex: 1;
+          display: flex;
+          flex-direction: column;
+          justify-content: center;
+          align-items: center;
+          text-align: center;
+          padding: 0.2in 0.12in;
+          background: white;
+          border: 2px solid #000000;
+          border-radius: 8px;
+          margin: 0.1in 0;
+        }
+
+        .service-header {
+          font-size: 16px;
+          font-weight: 800;
+          color: #000000;
+          margin-bottom: 10px;
+          letter-spacing: 0.8px;
+          line-height: 1.3;
+          max-width: 3.2in;
+        }
+
+        .service-phone {
+          font-size: 28px;
+          font-weight: 900;
+          color: #000000;
+          margin: 8px 0;
+          font-family: 'Courier New', monospace;
+          letter-spacing: 2px;
+        }
+        .service-website {
+          font-size: 12px;
+          color: #000000;
+          margin-top: 4px;
+          word-break: break-all;
+        }
+        .service-size {
+          font-size: 24px;
+          font-weight: 800;
+          color: #000000;
+          margin-top: 6px;
+          text-transform: uppercase;
+        }
+
+        /* Footer con fechas y marca de agua */
+        .label-footer {
+          border-top: 1px solid #000000;
+          padding: 0.08in 0;
+          margin-top: auto;
+        }
+
+        .footer-dates {
+          display: flex;
+          justify-content: space-between;
+          margin-bottom: 4px;
+          font-size: 8px;
+          color: #000000;
+        }
+
+        .footer-date-item {
+          display: flex;
+          flex-direction: column;
+        }
+
+        .footer-date-label {
+          font-weight: 700;
+          text-transform: uppercase;
+          margin-bottom: 1px;
+        }
+
+        .footer-date-value {
+          font-weight: 400;
+        }
+
+        .footer-watermark {
+          text-align: center;
+          font-size: 7px;
+          color: #666666;
+          font-weight: 600;
+          margin-top: 4px;
+          letter-spacing: 0.3px;
+        }
+
+        @media print {
+          body {
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+          }
+
+          .button-container {
+            display: none !important;
+          }
+        }
+
+        /* Botones de control */
+        .button-container {
+          position: fixed;
+          bottom: 20px;
+          right: 20px;
+          display: flex;
+          gap: 10px;
+          z-index: 9999;
+        }
+
+        button {
+          padding: 12px 24px;
+          font-size: 14px;
+          cursor: pointer;
+          border: none;
+          border-radius: 6px;
+          font-weight: 600;
+          transition: all 0.2s;
+        }
+
+        .btn-print {
+          background: #000000;
+          color: white;
+        }
+
+        .btn-print:hover {
+          opacity: 0.8;
+          transform: translateY(-2px);
+        }
+
+        .btn-close {
+          background: #666666;
+          color: white;
+        }
+
+        .btn-close:hover {
+          background: #444444;
+        }
+      </style>
+    </head>
+    <body>
+      ${labelsContent}
+
+      <!-- Botones de control -->
+      <div class="button-container">
+        <button class="btn-print" onclick="window.print()">Imprimir</button>
+        <button class="btn-close" onclick="window.close()">Cerrar</button>
+      </div>
+
+      <script>
+        // Esperar a que carguen las librerías
+        window.onload = function() {
+          try {
+            // Generar todos los códigos de barras
+            ${barcodesScript}
+
+            // Auto-abrir el diálogo de impresión después de generar todos los códigos
+            setTimeout(function() {
+              window.print();
+            }, 800);
+          } catch (error) {
+            console.error('Error generando códigos de barras:', error);
+          }
+        };
+      </script>
+    </body>
+    </html>
+  `
 }

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/database'
+import { getCompanyFilter } from '@/lib/query-helpers'
 
 // Force dynamic rendering
 export const dynamic = 'force-dynamic'
@@ -15,8 +16,8 @@ interface StatsCache {
   timestamp: number
 }
 
-// Caché global (válido por 5 minutos)
-let statsCache: StatsCache | null = null
+// Caché por empresa (válido por 5 minutos)
+const statsCache = new Map<string, StatsCache>()
 
 // TTL del caché: 5 minutos (configurable)
 const CACHE_TTL = 5 * 60 * 1000 // 5 minutos en milisegundos
@@ -33,18 +34,43 @@ const CACHE_TTL = 5 * 60 * 1000 // 5 minutos en milisegundos
  */
 export async function GET(request: NextRequest) {
   try {
+    const { searchParams } = new URL(request.url)
+    const { isSuperAdmin, companyId: headerCompanyId } = getCompanyFilter(request)
+    const companyIdParam = searchParams.get('companyId')
+    const companyId = companyIdParam ? parseInt(companyIdParam) : headerCompanyId
+    const cacheKey = isSuperAdmin && !companyId ? 'all' : `company-${companyId || 'unknown'}`
     const now = Date.now()
 
     // Verificar si el caché es válido
-    if (statsCache && (now - statsCache.timestamp) < CACHE_TTL) {
+    const cached = statsCache.get(cacheKey)
+    if (cached && (now - cached.timestamp) < CACHE_TTL) {
       console.log('📊 Stats servidos desde caché')
       return NextResponse.json({
         success: true,
-        data: statsCache.data,
+        data: cached.data,
         cached: true,
-        cacheAge: Math.floor((now - statsCache.timestamp) / 1000) // segundos
+        cacheAge: Math.floor((now - cached.timestamp) / 1000) // segundos
       })
     }
+
+    const conditions: string[] = []
+    const params: any[] = []
+
+    if (!isSuperAdmin) {
+      if (!companyId) {
+        return NextResponse.json({
+          success: false,
+          error: 'No se pudo determinar la empresa del usuario'
+        }, { status: 400 })
+      }
+      params.push(companyId)
+      conditions.push(`company_id = $${params.length}`)
+    } else if (companyId) {
+      params.push(companyId)
+      conditions.push(`company_id = $${params.length}`)
+    }
+
+    const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : ''
 
     // Consulta optimizada con agregaciones SQL
     // Beneficio: 1 query vs 5+ iteraciones en frontend
@@ -87,9 +113,10 @@ export async function GET(request: NextRequest) {
         MAX(updatedat) as last_updated
 
       FROM package_orders
+      ${whereClause}
     `
 
-    const result = await db.query(query)
+    const result = await db.query(query, params)
     const stats = result.rows[0]
 
     // Formatear números decimales
@@ -119,10 +146,10 @@ export async function GET(request: NextRequest) {
     }
 
     // Actualizar caché
-    statsCache = {
+    statsCache.set(cacheKey, {
       data: formattedStats,
       timestamp: now
-    }
+    })
 
     console.log('📊 Stats calculados y cacheados')
 
@@ -152,15 +179,16 @@ export async function GET(request: NextRequest) {
  */
 export async function DELETE(request: NextRequest) {
   try {
-    const previousCache = statsCache
-    statsCache = null
+    const previousCaches = Array.from(statsCache.entries()).map(([key, value]) => ({
+      key,
+      age: Math.floor((Date.now() - value.timestamp) / 1000)
+    }))
+    statsCache.clear()
 
     return NextResponse.json({
       success: true,
       message: 'Caché limpiado exitosamente',
-      previousCacheAge: previousCache
-        ? Math.floor((Date.now() - previousCache.timestamp) / 1000)
-        : null
+      previousCacheAge: previousCaches
     })
 
   } catch (error) {

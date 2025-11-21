@@ -49,6 +49,7 @@ import { Button } from '@/components/ui/button'
 import DepartmentPill from '@/components/ui/department-pill'
 import NotificationPopup from '@/components/ui/NotificationPopup'
 import MapboxAddressAutofill from '@/components/ui/MapboxAddressAutofill'
+import Spinner from '@/components/ui/Spinner'
 import { Fragment } from 'react'
 
 // Función para remover ceros iniciales de direcciones
@@ -1045,13 +1046,8 @@ export default function CRMPage() {
               theme === 'dark' ? "border-gray-700" : "border-gray-200"
             )}>
               {loading ? (
-                <div className="flex items-center justify-center py-12">
-                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mr-3"></div>
-                  <p className={cn(
-                    theme === 'dark' ? "text-gray-400" : "text-gray-600"
-                  )}>
-                    Cargando clientes...
-                  </p>
+                <div className="py-12">
+                  <Spinner size="lg" text="Cargando clientes..." />
                 </div>
               ) : paginatedCustomers.length > 0 ? (
                 <div className="overflow-x-auto">

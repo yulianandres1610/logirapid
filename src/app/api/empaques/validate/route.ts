@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/database'
+import { getCompanyFilter } from '@/lib/query-helpers'
 
 /**
  * POST /api/empaques/validate
@@ -8,6 +9,8 @@ import { db } from '@/lib/database'
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
+    const { isSuperAdmin, companyId: headerCompanyId } = getCompanyFilter(request)
+    const companyId = headerCompanyId
     const { codigo } = body
 
     // Validar que se proporcione el código
@@ -20,6 +23,21 @@ export async function POST(request: NextRequest) {
     }
 
     // Buscar el empaque en la base de datos
+    const conditions = ['codigo = $1']
+    const params: any[] = [codigo.trim()]
+
+    if (!isSuperAdmin) {
+      if (!companyId) {
+        return NextResponse.json({
+          success: false,
+          valid: false,
+          error: 'No se pudo determinar la empresa del usuario'
+        }, { status: 400 })
+      }
+      conditions.push('company_id = $2')
+      params.push(companyId)
+    }
+
     const result = await db.query(
       `SELECT
         id,
@@ -38,8 +56,8 @@ export async function POST(request: NextRequest) {
         created_at,
         updated_at
       FROM empaques
-      WHERE codigo = $1`,
-      [codigo.trim()]
+      WHERE ${conditions.join(' AND ')}`,
+      params
     )
 
     // Verificar si existe el empaque

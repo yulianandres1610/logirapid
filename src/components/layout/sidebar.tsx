@@ -274,17 +274,20 @@ export function Sidebar({ isCollapsed, onToggle }: SidebarProps) {
   // Fetch branding data for company logo
   useEffect(() => {
     const fetchBranding = async () => {
+      const controller = new AbortController()
       try {
-        const response = await fetch('/api/branding/current')
-        if (response.ok) {
-          const data = await response.json()
-          if (data.success) {
-            setBranding(data.data)
-          }
+        const response = await fetch('/api/branding/current', { signal: controller.signal, cache: 'no-store' })
+        if (!response.ok) return
+        const data = await response.json()
+        if (data?.success) {
+          setBranding(data.data)
         }
       } catch (error) {
-        console.error('Error fetching branding in sidebar:', error)
+        if ((error as any).name !== 'AbortError') {
+          console.warn('Branding no disponible (sidebar):', error)
+        }
       }
+      return () => controller.abort()
     }
 
     fetchBranding()

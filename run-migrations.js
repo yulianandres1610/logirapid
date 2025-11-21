@@ -34,6 +34,8 @@ async function main() {
     await runMigration('19_add_service_fees_to_companies.sql');
     await runMigration('19_add_customer_service_phone.sql');
     await runMigration('21_add_branding_fields_to_companies.sql');
+    await runMigration('23_add_company_id_to_customers.sql');
+    await runMigration('24_add_company_id_to_routes.sql');
 
     console.log('\n✅ All migrations completed successfully!');
   } catch (error) {
