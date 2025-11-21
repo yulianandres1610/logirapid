@@ -14,11 +14,16 @@ interface LoginRequest {
 
 export async function POST(request: NextRequest) {
   try {
+    console.log('[LOGIN] Iniciando proceso de login...')
+
     const body: LoginRequest = await request.json()
     const { email, password } = body
 
+    console.log('[LOGIN] Email recibido:', email)
+
     // Validate required fields
     if (!email || !password) {
+      console.log('[LOGIN] Error: Campos requeridos faltantes')
       return NextResponse.json(
         {
           success: false,
@@ -29,6 +34,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Query user from database with company association
+    console.log('[LOGIN] Consultando base de datos...')
     const query = `
       SELECT
         u.id,
@@ -58,9 +64,11 @@ export async function POST(request: NextRequest) {
     `
 
     const result = await db.query(query, [email])
+    console.log('[LOGIN] Usuarios encontrados:', result.rows.length)
 
     // Check if user exists
     if (result.rows.length === 0) {
+      console.log('[LOGIN] Error: Usuario no encontrado')
       return NextResponse.json(
         {
           success: false,
@@ -71,9 +79,11 @@ export async function POST(request: NextRequest) {
     }
 
     const user = result.rows[0]
+    console.log('[LOGIN] Usuario encontrado:', user.email, 'Role:', user.role)
 
     // Check if user is active
     if (!user.isActive || user.status !== 'active') {
+      console.log('[LOGIN] Error: Usuario inactivo')
       return NextResponse.json(
         {
           success: false,
@@ -84,9 +94,12 @@ export async function POST(request: NextRequest) {
     }
 
     // Verify password using bcrypt
+    console.log('[LOGIN] Verificando contraseña...')
     const isPasswordValid = await verifyPassword(password, user.password)
+    console.log('[LOGIN] Contraseña válida:', isPasswordValid)
 
     if (!isPasswordValid) {
+      console.log('[LOGIN] Error: Contraseña incorrecta')
       return NextResponse.json(
         {
           success: false,
@@ -97,6 +110,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Update last login timestamp
+    console.log('[LOGIN] Actualizando última conexión...')
     await db.query(
       'UPDATE users SET lastlogin = NOW() WHERE id = $1',
       [user.id]
@@ -146,14 +160,19 @@ export async function POST(request: NextRequest) {
       response.cookies.set('user-company-name', encodeURIComponent(user.companyName), cookieOptions)
     }
 
+    console.log('[LOGIN] Login exitoso para:', user.email)
     return response
 
   } catch (error) {
-    console.error('Login error:', error)
+    console.error('[LOGIN] Error crítico:', error)
+    console.error('[LOGIN] Stack trace:', error instanceof Error ? error.stack : 'No stack trace')
+    console.error('[LOGIN] Error message:', error instanceof Error ? error.message : String(error))
+
     return NextResponse.json(
       {
         success: false,
-        error: 'Error al procesar la solicitud de inicio de sesión'
+        error: 'Error al procesar la solicitud de inicio de sesión',
+        details: error instanceof Error ? error.message : String(error)
       },
       { status: 500 }
     )
