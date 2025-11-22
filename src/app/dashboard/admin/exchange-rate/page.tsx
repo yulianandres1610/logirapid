@@ -671,13 +671,25 @@ export default function ExchangeRatePage() {
   // Funciones para configuración global de agencias
   const fetchGlobalConfig = async () => {
     try {
-      // Simular obtención de configuración global
-      const savedConfig = localStorage.getItem('globalAgencyConfig')
-      if (savedConfig) {
-        const config = JSON.parse(savedConfig)
+      console.log('🔄 Fetching global config from database...')
+
+      // Obtener configuración desde el API
+      const response = await fetch('/api/agency-rates')
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`)
+      }
+
+      const data = await response.json()
+      console.log('📊 Config fetched from API:', data)
+
+      if (data.success && data.data?.config) {
+        const config = data.data.config
         setGlobalConfig(config)
         setAdjustmentPercentage(config.adjustmentPercentage)
+        console.log('✅ Global config loaded from database:', config)
       } else {
+        console.warn('⚠️ No config found in database, using default')
         // Configuración por defecto
         const defaultConfig: GlobalRateConfig = {
           id: 'global_config_1',
@@ -689,33 +701,67 @@ export default function ExchangeRatePage() {
         }
         setGlobalConfig(defaultConfig)
         setAdjustmentPercentage(5.0)
-        localStorage.setItem('globalAgencyConfig', JSON.stringify(defaultConfig))
       }
     } catch (error) {
-      console.error('Error fetching global config:', error)
+      console.error('❌ Error fetching global config:', error)
+      // Fallback a configuración por defecto en caso de error
+      const defaultConfig: GlobalRateConfig = {
+        id: 'global_config_1',
+        adjustmentPercentage: 5.0,
+        isActive: true,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        createdBy: 'system'
+      }
+      setGlobalConfig(defaultConfig)
+      setAdjustmentPercentage(5.0)
     }
   }
 
   const saveGlobalConfig = async () => {
     try {
       setSavingConfig(true)
-      const updatedConfig: GlobalRateConfig = {
-        ...globalConfig!,
+      console.log('💾 Saving global config to database...', {
         adjustmentPercentage,
-        updatedAt: new Date().toISOString()
+        isActive: globalConfig?.isActive ?? true
+      })
+
+      // Guardar en la base de datos vía API
+      const response = await fetch('/api/agency-rates', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          adjustmentPercentage,
+          isActive: globalConfig?.isActive ?? true
+        })
+      })
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`)
       }
 
-      setGlobalConfig(updatedConfig)
-      localStorage.setItem('globalAgencyConfig', JSON.stringify(updatedConfig))
+      const data = await response.json()
+      console.log('📊 Config saved to API:', data)
 
-      // Recalcular tasas de agencias
-      if (rates) {
-        calculateAgencyRates()
+      if (data.success && data.data?.config) {
+        const updatedConfig = data.data.config
+        setGlobalConfig(updatedConfig)
+        console.log('✅ Global config saved to database:', updatedConfig)
+
+        // Recalcular tasas de agencias
+        if (rates) {
+          calculateAgencyRates()
+        }
+
+        setIsEditingConfig(false)
+      } else {
+        throw new Error(data.error || 'Error al guardar configuración')
       }
-
-      setIsEditingConfig(false)
     } catch (error) {
-      console.error('Error saving global config:', error)
+      console.error('❌ Error saving global config:', error)
+      setError(error instanceof Error ? error.message : 'Error al guardar configuración')
     } finally {
       setSavingConfig(false)
     }
