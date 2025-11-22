@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
-import jwt from 'jsonwebtoken'
+import { jwtVerify } from 'jose'
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl
@@ -33,11 +33,13 @@ export async function middleware(request: NextRequest) {
     const authToken = request.cookies.get('auth-token')?.value
     const response = NextResponse.next()
 
-    // Si hay token JWT, validarlo y extraer información
+    // Si hay token JWT, validarlo y extraer información (usando jose para Edge Runtime)
     if (authToken && !pathname.includes('/api/auth/login')) {
       try {
         const jwtSecret = process.env.JWT_SECRET || 'fallback-secret-change-in-production'
-        const decodedToken = jwt.verify(authToken, jwtSecret) as any
+        const secret = new TextEncoder().encode(jwtSecret)
+        const { payload } = await jwtVerify(authToken, secret)
+        const decodedToken = payload as any
 
         // Inyectar headers desde el JWT decodificado
         response.headers.set('x-auth-token', authToken)
@@ -104,12 +106,17 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(loginUrl)
   }
 
-  // Validar JWT token
+  // Validar JWT token con jose (compatible con Edge Runtime)
   let decodedToken: any
   try {
     const jwtSecret = process.env.JWT_SECRET || 'fallback-secret-change-in-production'
     console.log('[MIDDLEWARE] Using JWT_SECRET:', jwtSecret === 'fallback-secret-change-in-production' ? 'FALLBACK' : 'FROM ENV')
-    decodedToken = jwt.verify(authToken, jwtSecret) as any
+
+    // jose requiere el secret como Uint8Array
+    const secret = new TextEncoder().encode(jwtSecret)
+    const { payload } = await jwtVerify(authToken, secret)
+    decodedToken = payload
+
     console.log('[MIDDLEWARE] JWT token validated successfully for user:', decodedToken.email)
   } catch (error) {
     console.error('[MIDDLEWARE] Invalid JWT token:', error instanceof Error ? error.message : error)
