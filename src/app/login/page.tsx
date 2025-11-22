@@ -15,10 +15,8 @@ export default function LoginPage() {
   const handleLoginSuccess = () => {
     setShowLoadingOverlay(true)
     setIsRedirecting(true)
-    // Simular carga de datos antes de redirigir (12s)
-    setTimeout(() => {
-      router.push('/dashboard/admin')
-    }, 12000)
+    // useAuth hook will handle the redirect with proper cookie propagation delay
+    // No need to manually redirect here
   }
 
   return (

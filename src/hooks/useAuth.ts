@@ -149,7 +149,8 @@ export function useAuth(): UseAuthReturn {
           error: null,
         })
 
-        // Redirect to appropriate dashboard based on role
+        // Wait for cookies to propagate before redirecting
+        // This prevents race condition where middleware checks before cookies are available
         if (typeof window !== 'undefined') {
           let redirectPath = '/dashboard/admin'
 
@@ -170,7 +171,11 @@ export function useAuth(): UseAuthReturn {
               redirectPath = '/dashboard/admin'
           }
 
-          window.location.href = redirectPath
+          // Small delay to ensure cookies are propagated to document.cookie
+          // before the redirect triggers middleware validation
+          setTimeout(() => {
+            window.location.href = redirectPath
+          }, 300) // 300ms should be enough for cookies to propagate
         }
         return true
       } else {
