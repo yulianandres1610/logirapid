@@ -380,5 +380,24 @@ export async function getPublishedRates() {
   }
 }
 
+// Función para obtener servicios habilitados de una empresa
+export async function getCompanyServices(companyId: number): Promise<string[]> {
+  try {
+    const result = await db.query(
+      'SELECT enabledservices FROM companies WHERE id = $1',
+      [companyId]
+    )
+
+    if (result.rows[0]?.enabledservices) {
+      return result.rows[0].enabledservices
+    }
+
+    return []
+  } catch (error) {
+    console.error('[DB] Error getting company services:', error)
+    return []
+  }
+}
+
 // Inicialización de la base de datos
 console.log('PostgreSQL database initialized - tables managed via migrations');

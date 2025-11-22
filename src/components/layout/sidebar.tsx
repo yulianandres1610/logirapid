@@ -40,6 +40,7 @@ import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { useTheme } from '@/contexts/theme-context'
 import { useAuth } from '@/hooks/useAuth'
+import { useEnabledServices } from '@/hooks/useEnabledServices'
 
 interface SidebarItemProps {
   icon: any
@@ -324,19 +325,20 @@ export function Sidebar({ isCollapsed, onToggle }: SidebarProps) {
 
   // Menu items para ADMIN (puede hacer todo en su empresa)
   const adminMenuItems = [
-    { icon: Home, label: "Dashboard", href: "/dashboard/agency-admin" },
-    { icon: Users, label: "Usuarios", href: "/dashboard/agency-admin/users" },
-    { icon: Building2, label: "Sucursales", href: "/dashboard/agency-admin/companies" },
-    { icon: UserCheck, label: "CRM", href: "/dashboard/agency-admin/crm" },
-    { icon: Wallet, label: "Wallet", href: "/dashboard/agency-admin/wallet" },
-    { icon: Send, label: "Remesas", href: "/dashboard/agency-admin/remittance" },
-    { icon: Smartphone, label: "Recargas", href: "/dashboard/agency-admin/recargas" },
-    { icon: BarChart3, label: "Tasa de Cambio", href: "/dashboard/agency-admin/exchange-rate" },
-    { icon: ShoppingCart, label: "Mercado", href: "/dashboard/agency-admin/marketplace" },
+    { icon: Home, label: "Dashboard", href: "/dashboard/agency-admin", requiredService: null },
+    { icon: Users, label: "Usuarios", href: "/dashboard/agency-admin/users", requiredService: null },
+    { icon: Building2, label: "Sucursales", href: "/dashboard/agency-admin/companies", requiredService: null },
+    { icon: UserCheck, label: "CRM", href: "/dashboard/agency-admin/crm", requiredService: null },
+    { icon: Wallet, label: "Wallet", href: "/dashboard/agency-admin/wallet", requiredService: 'wallet' },
+    { icon: Send, label: "Remesas", href: "/dashboard/agency-admin/remittance", requiredService: 'remittance' },
+    { icon: Smartphone, label: "Recargas", href: "/dashboard/agency-admin/recargas", requiredService: 'recharge' },
+    { icon: BarChart3, label: "Tasa de Cambio", href: "/dashboard/agency-admin/exchange-rate", requiredService: 'exchange' },
+    { icon: ShoppingCart, label: "Mercado", href: "/dashboard/agency-admin/marketplace", requiredService: 'marketplace' },
     {
       icon: ShoppingBag,
       label: "Paquetería",
       href: "/dashboard/agency-admin/orders",
+      requiredService: 'paqueteria',
       hasSubmenu: true,
       submenuItems: [
         { icon: Truck, label: "Órdenes Recogida", href: "/dashboard/agency-admin/pickup-orders" },
@@ -347,21 +349,22 @@ export function Sidebar({ isCollapsed, onToggle }: SidebarProps) {
         { icon: Box, label: "Empaque", href: "/dashboard/agency-admin/package-route" }
       ]
     },
-    { icon: Settings, label: "Configuración", href: "/dashboard/agency-admin/settings" },
+    { icon: Settings, label: "Configuración", href: "/dashboard/agency-admin/settings", requiredService: null },
   ]
 
   // Menu items para MANAGER (puede crear usuarios y recargar wallet, pero no empresas ni transferencias)
   const managerMenuItems = [
-    { icon: Home, label: "Dashboard", href: "/dashboard/manager" },
-    { icon: Users, label: "Usuarios", href: "/dashboard/manager/users" },
-    { icon: UserCheck, label: "CRM", href: "/dashboard/manager/crm" },
-    { icon: Wallet, label: "Recargar Wallet", href: "/dashboard/manager/wallet" },
-    { icon: BarChart3, label: "Tasa de Cambio", href: "/dashboard/manager/exchange-rate" },
-    { icon: ShoppingCart, label: "Mercado", href: "/dashboard/manager/marketplace" },
+    { icon: Home, label: "Dashboard", href: "/dashboard/manager", requiredService: null },
+    { icon: Users, label: "Usuarios", href: "/dashboard/manager/users", requiredService: null },
+    { icon: UserCheck, label: "CRM", href: "/dashboard/manager/crm", requiredService: null },
+    { icon: Wallet, label: "Recargar Wallet", href: "/dashboard/manager/wallet", requiredService: 'wallet' },
+    { icon: BarChart3, label: "Tasa de Cambio", href: "/dashboard/manager/exchange-rate", requiredService: 'exchange' },
+    { icon: ShoppingCart, label: "Mercado", href: "/dashboard/manager/marketplace", requiredService: 'marketplace' },
     {
       icon: FileText,
       label: "Paquetería",
       href: "/dashboard/manager/orders",
+      requiredService: 'paqueteria',
       hasSubmenu: true,
       submenuItems: [
         { icon: Truck, label: "Órdenes Recogida", href: "/dashboard/manager/orders" },
@@ -372,22 +375,23 @@ export function Sidebar({ isCollapsed, onToggle }: SidebarProps) {
         { icon: Box, label: "Empaque", href: "/dashboard/manager/package-route" }
       ]
     },
-    { icon: Settings, label: "Configuración", href: "/dashboard/manager/settings" },
+    { icon: Settings, label: "Configuración", href: "/dashboard/manager/settings", requiredService: null },
   ]
 
   // Menu items para USER (solo puede vender servicios)
   const userMenuItems = [
-    { icon: Home, label: "Dashboard", href: "/dashboard/user" },
-    { icon: Send, label: "Vender Remesa", href: "/dashboard/user/remittance" },
-    { icon: Smartphone, label: "Recargar Móvil", href: "/dashboard/user/recharge" },
-    { icon: Package, label: "Paquetes", href: "/dashboard/user/packages" },
-    { icon: UserCheck, label: "CRM", href: "/dashboard/user/crm" },
-    { icon: BarChart3, label: "Tasa de Cambio", href: "/dashboard/user/exchange-rate" },
-    { icon: ShoppingCart, label: "Mercado", href: "/dashboard/user/marketplace" },
+    { icon: Home, label: "Dashboard", href: "/dashboard/user", requiredService: null },
+    { icon: Send, label: "Vender Remesa", href: "/dashboard/user/remittance", requiredService: 'remittance' },
+    { icon: Smartphone, label: "Recargar Móvil", href: "/dashboard/user/recharge", requiredService: 'recharge' },
+    { icon: Package, label: "Paquetes", href: "/dashboard/user/packages", requiredService: 'paqueteria' },
+    { icon: UserCheck, label: "CRM", href: "/dashboard/user/crm", requiredService: null },
+    { icon: BarChart3, label: "Tasa de Cambio", href: "/dashboard/user/exchange-rate", requiredService: 'exchange' },
+    { icon: ShoppingCart, label: "Mercado", href: "/dashboard/user/marketplace", requiredService: 'marketplace' },
     {
       icon: ShoppingBag,
       label: "Paquetería",
       href: "/dashboard/user/orders",
+      requiredService: 'paqueteria',
       hasSubmenu: true,
       submenuItems: [
         { icon: Truck, label: "Órdenes Recogida", href: "/dashboard/user/orders" },
@@ -398,12 +402,29 @@ export function Sidebar({ isCollapsed, onToggle }: SidebarProps) {
     },
   ]
 
+  // Hook para verificar servicios habilitados
+  const { hasService } = useEnabledServices()
+
+  // Función para filtrar items del menú según servicios habilitados
+  const filterMenuByServices = (items: any[]) => {
+    return items.filter(item => {
+      // Si no requiere servicio, siempre se muestra (ej: Dashboard, Usuarios, Configuración)
+      if (!item.requiredService) return true
+
+      // Si requiere servicio, verificar que esté habilitado
+      return hasService(item.requiredService)
+    })
+  }
+
   // Seleccionar el menú adecuado según el rol del usuario
-  const menuItems = user?.role === 'SUPER_ADMIN' ? superAdminMenuItems :
-                   user?.role === 'ADMIN' ? adminMenuItems :
-                   user?.role === 'MANAGER' ? managerMenuItems :
-                   user?.role === 'USER' ? userMenuItems :
-                   []
+  let baseMenuItems = user?.role === 'SUPER_ADMIN' ? superAdminMenuItems :
+                      user?.role === 'ADMIN' ? adminMenuItems :
+                      user?.role === 'MANAGER' ? managerMenuItems :
+                      user?.role === 'USER' ? userMenuItems :
+                      []
+
+  // Filtrar menú según servicios habilitados (solo para usuarios de empresa)
+  const menuItems = user?.role === 'SUPER_ADMIN' ? baseMenuItems : filterMenuByServices(baseMenuItems)
 
   return (
     <motion.div

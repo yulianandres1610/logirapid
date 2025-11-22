@@ -6,6 +6,7 @@ interface CompanyInfo {
   companyId?: string
   companyName?: string
   userRole?: string
+  enabledServices?: string[]
 }
 
 interface CompanyContextType {
@@ -29,7 +30,7 @@ export function CompanyProvider({
   useEffect(() => {
     // Intentar obtener la información de la empresa de las cookies
     // que el middleware podría haber establecido
-    const getCompanyInfoFromCookies = () => {
+    const getCompanyInfoFromCookies = async () => {
       try {
         const cookies = document.cookie.split(';')
         let info: CompanyInfo = {}
@@ -45,7 +46,32 @@ export function CompanyProvider({
           }
         })
 
-        setCompanyInfo(info)
+        // Si es SUPER_ADMIN, no necesita servicios (acceso completo)
+        if (info.userRole === 'SUPER_ADMIN') {
+          info.enabledServices = []
+          setCompanyInfo(info)
+        }
+        // Si es usuario de empresa (ADMIN, MANAGER, USER), cargar servicios
+        else if (info.companyId && ['ADMIN', 'MANAGER', 'USER'].includes(info.userRole || '')) {
+          try {
+            const response = await fetch(`/api/companies/${info.companyId}`)
+            if (response.ok) {
+              const data = await response.json()
+              info.enabledServices = data.enabledServices || []
+              console.log('[CompanyContext] Loaded services for company:', info.companyId, info.enabledServices)
+            } else {
+              console.error('[CompanyContext] Failed to load company services')
+              info.enabledServices = []
+            }
+          } catch (error) {
+            console.error('[CompanyContext] Error loading company services:', error)
+            info.enabledServices = []
+          }
+          setCompanyInfo(info)
+        } else {
+          info.enabledServices = []
+          setCompanyInfo(info)
+        }
       } catch (error) {
         console.error('Error reading company info from cookies:', error)
       } finally {
