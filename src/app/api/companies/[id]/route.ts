@@ -267,12 +267,12 @@ export async function DELETE(
     }
 
     const usersCheck = await db.query(
-      'SELECT COUNT(*) as count FROM user_companies WHERE companyid = $1',
+      'SELECT COUNT(*) as count FROM user_companies WHERE company_id = $1',
       [companyId]
     )
 
     const ordersCheck = await db.query(
-      'SELECT COUNT(*) as count FROM package_orders WHERE companyid = $1',
+      'SELECT COUNT(*) as count FROM package_orders WHERE company_id = $1',
       [companyId]
     )
 
