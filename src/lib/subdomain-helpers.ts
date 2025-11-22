@@ -225,61 +225,63 @@ export async function resolveCompany(host: string): Promise<CompanyInfo | null> 
     }
   }
 
-  // 3. Desarrollo local: usar DEV_SUBDOMAIN env var
-  if (hostname === 'localhost' || hostname === '127.0.0.1') {
-    const devSubdomain = process.env.DEV_SUBDOMAIN || 'demo'
+  // 3. Desarrollo local o dominio raíz: usar DEV_SUBDOMAIN env var o empresa por defecto
+  if (hostname === 'localhost' || hostname === '127.0.0.1' || hostname === 'logirapid.com' || hostname === 'www.logirapid.com') {
+    const devSubdomain = process.env.DEV_SUBDOMAIN
 
-    if (process.env.NODE_ENV === 'development') {
-      console.log(`[resolveCompany] Development mode, using DEV_SUBDOMAIN: ${devSubdomain}`)
+    if (devSubdomain) {
+      if (process.env.NODE_ENV === 'development') {
+        console.log(`[resolveCompany] Using DEV_SUBDOMAIN: ${devSubdomain}`)
+      }
+
+      const company = await getCompanyBySubdomain(devSubdomain)
+
+      if (company) {
+        return company
+      }
     }
 
-    const company = await getCompanyBySubdomain(devSubdomain)
+    console.log(`[resolveCompany] No subdomain or DEV_SUBDOMAIN, falling back to company ID=1`)
 
-    if (company) {
-      return company
-    } else {
-      console.warn(`[resolveCompany] DEV_SUBDOMAIN "${devSubdomain}" not found, falling back to company ID=1`)
+    // 4. Fallback: empresa por defecto (ID = 1) - Super Admin company
+    try {
+      const query = `
+        SELECT
+          id,
+          legalname,
+          subdomain,
+          logo_url,
+          primary_color,
+          secondary_color,
+          custom_domain,
+          status
+        FROM companies
+        WHERE id = 1
+        LIMIT 1
+      `
 
-      // 4. Fallback: empresa por defecto (ID = 1)
-      try {
-        const query = `
-          SELECT
-            id,
-            legalname,
-            subdomain,
-            logo_url,
-            primary_color,
-            secondary_color,
-            custom_domain,
-            status
-          FROM companies
-          WHERE id = 1
-          LIMIT 1
-        `
+      const result = await db.query(query)
 
-        const result = await db.query(query)
-
-        if (result.rows.length === 0) {
-          console.error('[resolveCompany] Default company (ID=1) not found in database')
-          return null
-        }
-
-        const row = result.rows[0]
-
-        return {
-          id: row.id,
-          legalName: row.legalname,
-          subdomain: row.subdomain,
-          logoUrl: row.logo_url,
-          primaryColor: row.primary_color || '#DC2626',
-          secondaryColor: row.secondary_color || '#1E40AF',
-          customDomain: row.custom_domain,
-          status: row.status
-        }
-      } catch (error) {
-        console.error('[resolveCompany] Error fetching default company:', error)
+      if (result.rows.length === 0) {
+        console.error('[resolveCompany] Default company (ID=1) not found in database')
         return null
       }
+
+      const row = result.rows[0]
+
+      return {
+        id: row.id,
+        legalName: row.legalname,
+        subdomain: row.subdomain,
+        logoUrl: row.logo_url,
+        primaryColor: row.primary_color || '#DC2626',
+        secondaryColor: row.secondary_color || '#1E40AF',
+        customDomain: row.custom_domain,
+        status: row.status
+      }
+    } catch (error) {
+      console.error('[resolveCompany] Error fetching default company:', error)
+      return null
     }
   }
 

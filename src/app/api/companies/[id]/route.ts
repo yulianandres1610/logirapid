@@ -82,7 +82,7 @@ export async function GET(
 
 /**
  * PUT /api/companies/[id]
- * Actualiza una empresa (principalmente el status: active/inactive)
+ * Actualiza una empresa completa o solo el status
  */
 export async function PUT(
   request: NextRequest,
@@ -112,7 +112,8 @@ export async function PUT(
       )
     }
 
-    if (body.status) {
+    // Si solo se envía status, actualizar solo eso (caso simple)
+    if (body.status && Object.keys(body).length === 1) {
       const newStatus = body.status
 
       if (!['active', 'inactive'].includes(newStatus)) {
@@ -133,10 +134,87 @@ export async function PUT(
       })
     }
 
-    return NextResponse.json(
-      { success: false, error: 'No se proporcionaron campos' },
-      { status: 400 }
-    )
+    // Actualización completa de la empresa
+    const updateFields: string[] = []
+    const values: any[] = []
+    let paramCounter = 1
+
+    // Mapeo de campos del frontend a columnas de la BD
+    const fieldMapping: Record<string, string> = {
+      legalName: 'legalname',
+      einNumber: 'einnumber',
+      phone: 'phone',
+      customerServicePhone: 'customer_service_phone',
+      email: 'email',
+      website: 'website',
+      address: 'address',
+      city: 'city',
+      state: 'state',
+      country: 'country',
+      zipCode: 'zipcode',
+      walletNumber: 'walletnumber',
+      currency: 'currency',
+      isMultiCurrency: 'ismulticurrency',
+      secondaryCurrencies: 'secondarycurrencies',
+      hasLimits: 'haslimits',
+      dailyLimit: 'dailylimit',
+      monthlyLimit: 'monthlylimit',
+      companyType: 'companytype',
+      enabledServices: 'enabledservices',
+      serviceFees: 'service_fees',
+      logoUrl: 'logo_url',
+      subdomain: 'subdomain',
+      primaryColor: 'primary_color',
+      secondaryColor: 'secondary_color',
+      status: 'status'
+    }
+
+    // Construir query dinámicamente
+    for (const [frontendKey, dbColumn] of Object.entries(fieldMapping)) {
+      if (body[frontendKey] !== undefined) {
+        updateFields.push(`${dbColumn} = $${paramCounter}`)
+
+        // Convertir valores según tipo
+        let value = body[frontendKey]
+
+        // Convertir arrays y objetos a JSON para PostgreSQL
+        if (['secondaryCurrencies', 'enabledServices', 'serviceFees', 'prices'].includes(frontendKey)) {
+          value = JSON.stringify(value)
+        }
+
+        values.push(value)
+        paramCounter++
+      }
+    }
+
+    if (updateFields.length === 0) {
+      return NextResponse.json(
+        { success: false, error: 'No se proporcionaron campos para actualizar' },
+        { status: 400 }
+      )
+    }
+
+    // Agregar companyId al final
+    values.push(companyId)
+
+    const updateQuery = `
+      UPDATE companies
+      SET ${updateFields.join(', ')}
+      WHERE id = $${paramCounter}
+      RETURNING id, legalname
+    `
+
+    console.log('[PUT /api/companies/:id] Updating company:', companyId)
+    console.log('[PUT /api/companies/:id] Fields:', updateFields)
+
+    const result = await db.query(updateQuery, values)
+
+    return NextResponse.json({
+      success: true,
+      message: 'Empresa actualizada exitosamente',
+      data: result.rows[0]
+    })
+
   } catch (error) {
     console.error('Error in PUT /api/companies/[id]:', error)
     return NextResponse.json(
