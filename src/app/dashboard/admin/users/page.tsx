@@ -1625,27 +1625,41 @@ export default function UsersPage() {
                   </div>
                 </div>
 
-                {/* Companies */}
-                <div className="flex flex-wrap gap-1">
-                  {user.companies.slice(0, 2).map((company: any, idx: number) => (
-                    <span
-                      key={idx}
-                      className={cn(
-                        "px-2 py-1 rounded-full text-xs",
-                        theme === 'dark' ? "bg-exa-secondary/20 text-exa-secondary" : "bg-exa-primary/10 text-exa-primary"
-                      )}
-                    >
-                      {company}
-                    </span>
-                  ))}
-                  {user.companies.length > 2 && (
+                {/* Companies - Solo visible para SUPER_ADMIN */}
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2">
+                    <Building2 className={cn(
+                      "w-4 h-4",
+                      theme === 'dark' ? "text-gray-400" : "text-gray-600"
+                    )} />
                     <span className={cn(
-                      "px-2 py-1 rounded-full text-xs",
-                      theme === 'dark' ? "bg-gray-700/20 text-gray-400" : "bg-gray-100 text-gray-600"
+                      "text-xs font-medium",
+                      theme === 'dark' ? "text-gray-400" : "text-gray-600"
                     )}>
-                      +{user.companies.length - 2}
+                      Empresas:
                     </span>
-                  )}
+                  </div>
+                  <div className="flex flex-wrap gap-1">
+                    {user.companies.slice(0, 2).map((company: any, idx: number) => (
+                      <span
+                        key={idx}
+                        className={cn(
+                          "px-2 py-1 rounded-full text-xs",
+                          theme === 'dark' ? "bg-exa-secondary/20 text-exa-secondary" : "bg-exa-primary/10 text-exa-primary"
+                        )}
+                      >
+                        {company}
+                      </span>
+                    ))}
+                    {user.companies.length > 2 && (
+                      <span className={cn(
+                        "px-2 py-1 rounded-full text-xs",
+                        theme === 'dark' ? "bg-gray-700/20 text-gray-400" : "bg-gray-100 text-gray-600"
+                      )}>
+                        +{user.companies.length - 2}
+                      </span>
+                    )}
+                  </div>
                 </div>
                 <div className="flex items-center gap-2 mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
                   <button

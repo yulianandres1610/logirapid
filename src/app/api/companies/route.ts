@@ -10,44 +10,64 @@ export const runtime = 'nodejs'
 // GET: Obtener todas las empresas
 export async function GET(request: NextRequest) {
   try {
-    const query = `
+    const { searchParams } = new URL(request.url)
+    const parentId = searchParams.get('parentId')
+    const includeBranches = searchParams.get('includeBranches') === 'true'
+
+    let query = `
       SELECT
-        id,
-        legalname as "legalName",
-        einnumber as "einNumber",
-        phone,
-        customer_service_phone as "customerServicePhone",
-        email,
-        website,
-        address,
-        city,
-        state,
-        country,
-        zipcode as "zipCode",
-        walletnumber as "walletNumber",
-        currency,
-        ismulticurrency as "isMultiCurrency",
-        secondarycurrencies as "secondaryCurrencies",
-        haslimits as "hasLimits",
-        dailylimit as "dailyLimit",
-        monthlylimit as "monthlyLimit",
-        companytype as "companyType",
-        enabledservices as "enabledServices",
-        service_fees as "serviceFees",
-        walletbalance as "walletBalance",
-        transactionscount as "transactionsCount",
-        userscount as "usersCount",
-        logo_url as "logoUrl",
-        subdomain,
-        primary_color as "primaryColor",
-        secondary_color as "secondaryColor",
-        status,
-        createdat as "createdAt"
-      FROM companies
-      ORDER BY legalname ASC
+        c.id,
+        c.legalname as "legalName",
+        c.einnumber as "einNumber",
+        c.phone,
+        c.customer_service_phone as "customerServicePhone",
+        c.email,
+        c.website,
+        c.address,
+        c.city,
+        c.state,
+        c.country,
+        c.zipcode as "zipCode",
+        c.walletnumber as "walletNumber",
+        c.currency,
+        c.ismulticurrency as "isMultiCurrency",
+        c.secondarycurrencies as "secondaryCurrencies",
+        c.haslimits as "hasLimits",
+        c.dailylimit as "dailyLimit",
+        c.monthlylimit as "monthlyLimit",
+        c.companytype as "companyType",
+        c.enabledservices as "enabledServices",
+        c.service_fees as "serviceFees",
+        c.walletbalance as "walletBalance",
+        c.transactionscount as "transactionsCount",
+        c.userscount as "usersCount",
+        c.logo_url as "logoUrl",
+        c.subdomain,
+        c.primary_color as "primaryColor",
+        c.secondary_color as "secondaryColor",
+        c.status,
+        c.createdat as "createdAt",
+        c.parent_company_id as "parentCompanyId",
+        c.is_branch as "isBranch",
+        parent.legalname as "parentCompanyName"
+      FROM companies c
+      LEFT JOIN companies parent ON c.parent_company_id = parent.id
     `
 
-    const result = await db.query(query)
+    // Filtrar por empresa matriz si se especifica
+    if (parentId) {
+      query += ` WHERE c.parent_company_id = $1`
+    } else if (!includeBranches) {
+      // Si no se especifica parentId y no se quieren incluir sucursales,
+      // solo mostrar empresas principales (sin parent_company_id)
+      query += ` WHERE c.parent_company_id IS NULL`
+    }
+
+    query += ` ORDER BY c.legalname ASC`
+
+    const result = parentId
+      ? await db.query(query, [parentId])
+      : await db.query(query)
 
     return NextResponse.json({
       success: true,
@@ -63,7 +83,7 @@ export async function GET(request: NextRequest) {
   }
 }
 
-// POST: Crear una nueva empresa
+// POST: Crear una nueva empresa o sucursal
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
@@ -92,7 +112,9 @@ export async function POST(request: NextRequest) {
       logoUrl,
       subdomain,
       primaryColor,
-      secondaryColor
+      secondaryColor,
+      parentCompanyId,
+      isBranch
     } = body
 
     // Validaciones básicas
@@ -131,18 +153,22 @@ export async function POST(request: NextRequest) {
         walletnumber, currency, ismulticurrency, secondarycurrencies,
         haslimits, dailylimit, monthlylimit, companytype, enabledservices,
         service_fees, logo_url, subdomain, primary_color, secondary_color,
+        parent_company_id, is_branch,
         status, createdat, walletbalance, transactionscount, userscount
       ) VALUES (
         $1, $2, $3, $4, $5, $6, $7, $8, $9, $10,
         $11, $12, $13, $14, $15,
         $16, $17, $18, $19, $20,
         $21, $22, $23, $24, $25,
+        $26, $27,
         'active', NOW(), 0, 0, 0
       ) RETURNING
         id,
         legalname as "legalName",
         einnumber as "einNumber",
         logo_url as "logoUrl",
+        parent_company_id as "parentCompanyId",
+        is_branch as "isBranch",
         createdat as "createdAt"
     `
 
@@ -171,7 +197,9 @@ export async function POST(request: NextRequest) {
       logoUrl || null,
       subdomain || null,
       primaryColor || '#CC0A46',
-      secondaryColor || '#0A46CC'
+      secondaryColor || '#0A46CC',
+      parentCompanyId || null,
+      isBranch || false
     ]
 
     const result = await db.query(query, values)

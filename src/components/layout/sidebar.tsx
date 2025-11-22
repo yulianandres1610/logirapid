@@ -327,7 +327,7 @@ export function Sidebar({ isCollapsed, onToggle }: SidebarProps) {
   const adminMenuItems = [
     { icon: Home, label: "Dashboard", href: "/dashboard/agency-admin", requiredService: null },
     { icon: Users, label: "Usuarios", href: "/dashboard/agency-admin/users", requiredService: null },
-    { icon: Building2, label: "Sucursales", href: "/dashboard/agency-admin/companies", requiredService: null },
+    { icon: Building2, label: "Sucursales", href: "/dashboard/agency-admin/sucursales", requiredService: null },
     { icon: UserCheck, label: "CRM", href: "/dashboard/agency-admin/crm", requiredService: null },
     { icon: Wallet, label: "Wallet", href: "/dashboard/agency-admin/wallet", requiredService: 'wallet' },
     { icon: Send, label: "Remesas", href: "/dashboard/agency-admin/remittance", requiredService: 'remittance' },
