@@ -131,63 +131,9 @@ export async function middleware(request: NextRequest) {
   const companyName = decodedToken.companyName || request.cookies.get('user-company-name')?.value
 
   // Validación de servicios habilitados (solo para usuarios de empresa, no SUPER_ADMIN)
-  if (userRole && ['ADMIN', 'MANAGER', 'USER'].includes(userRole) && companyId) {
-    const { getCompanyServices } = await import('@/lib/database')
-
-    // Mapeo de rutas a servicios requeridos
-    const ROUTE_SERVICE_MAP: Record<string, string> = {
-      '/dashboard/agency-admin/pickup-orders': 'paqueteria',
-      '/dashboard/agency-admin/office-orders': 'paqueteria',
-      '/dashboard/agency-admin/warehouses': 'paqueteria',
-      '/dashboard/agency-admin/vehicles': 'paqueteria',
-      '/dashboard/agency-admin/routes': 'paqueteria',
-      '/dashboard/agency-admin/package-route': 'paqueteria',
-      '/dashboard/agency-admin/orders': 'paqueteria',
-      '/dashboard/agency-admin/exchange-rate': 'exchange',
-      '/dashboard/agency-admin/remittance': 'remittance',
-      '/dashboard/agency-admin/wallet': 'wallet',
-      '/dashboard/agency-admin/recargas': 'recharge',
-      '/dashboard/agency-admin/marketplace': 'marketplace',
-      '/dashboard/manager/exchange-rate': 'exchange',
-      '/dashboard/manager/wallet': 'wallet',
-      '/dashboard/manager/marketplace': 'marketplace',
-      '/dashboard/manager/orders': 'paqueteria',
-      '/dashboard/manager/office-orders': 'paqueteria',
-      '/dashboard/manager/warehouses': 'paqueteria',
-      '/dashboard/manager/vehicles': 'paqueteria',
-      '/dashboard/manager/routes': 'paqueteria',
-      '/dashboard/manager/package-route': 'paqueteria',
-      '/dashboard/user/remittance': 'remittance',
-      '/dashboard/user/recharge': 'recharge',
-      '/dashboard/user/packages': 'paqueteria',
-      '/dashboard/user/exchange-rate': 'exchange',
-      '/dashboard/user/marketplace': 'marketplace',
-      '/dashboard/user/orders': 'paqueteria',
-      '/dashboard/user/office-orders': 'paqueteria',
-    }
-
-    // Verificar si la ruta requiere un servicio
-    const requiredService = ROUTE_SERVICE_MAP[pathname]
-
-    if (requiredService) {
-      try {
-        const companyServices = await getCompanyServices(parseInt(companyId))
-
-        if (!companyServices.includes(requiredService)) {
-          console.log(`[MIDDLEWARE] Access denied: Company ${companyId} doesn't have service '${requiredService}' for route ${pathname}`)
-
-          // Redirigir al dashboard base (no tiene acceso a esta ruta)
-          const baseDashboard = userRole === 'ADMIN' ? '/dashboard/agency-admin' :
-                                userRole === 'MANAGER' ? '/dashboard/manager' :
-                                '/dashboard/user'
-          return NextResponse.redirect(new URL(baseDashboard, request.url))
-        }
-      } catch (error) {
-        console.error('[MIDDLEWARE] Error checking company services:', error)
-        // En caso de error, permitir acceso (fail open)
-      }
-    }
-  }
+  // NOTA: La validación de servicios se hace en el cliente (Sidebar) y en las API routes
+  // No en middleware debido a limitaciones del Edge Runtime
+  // El middleware solo valida autenticación y roles
 
   // Validación de acceso según rol
   const response = NextResponse.next()
