@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   DollarSign,
@@ -400,6 +401,8 @@ function RateCard({
 
 export default function ExchangeRatePage() {
   const { theme } = useTheme()
+  const router = useRouter()
+  const searchParams = useSearchParams()
 
   // Estados principales
   const [activeTab, setActiveTab] = useState<'rates' | 'agency'>('rates')
@@ -807,6 +810,14 @@ export default function ExchangeRatePage() {
       setLoadingHealth(false)
     }
   }
+
+  // Leer tab inicial desde URL
+  useEffect(() => {
+    const tab = searchParams.get('tab')
+    if (tab === 'agency' || tab === 'rates') {
+      setActiveTab(tab)
+    }
+  }, [searchParams])
 
   // Efectos secundarios
   useEffect(() => {
@@ -1284,7 +1295,10 @@ export default function ExchangeRatePage() {
             ].map((tab) => (
               <button
                 key={tab.id}
-                onClick={() => setActiveTab(tab.id as any)}
+                onClick={() => {
+                  setActiveTab(tab.id as any)
+                  router.push(`?tab=${tab.id}`, { scroll: false })
+                }}
                 className={cn(
                   "flex items-center gap-2 px-6 py-3 font-medium transition-all duration-300 relative",
                   activeTab === tab.id
