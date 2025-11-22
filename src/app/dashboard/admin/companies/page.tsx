@@ -32,7 +32,10 @@ import {
   Loader2,
   Palette,
   CheckCircle,
-  XCircle
+  XCircle,
+  Package,
+  Archive,
+  Truck
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useTheme } from '@/contexts/theme-context'
@@ -2270,179 +2273,203 @@ export default function CompaniesPage() {
             animate={{ opacity: 1, y: 0 }}
             className="mb-8"
           >
-            <div className="flex items-center justify-between mb-4">
-              <div>
-                <h1 className={cn(
-                  "text-3xl font-bold mb-2",
-                  theme === 'dark' ? "text-white" : "text-black"
-                )}>
-                  Empresas Registradas
-                </h1>
-                <p className={cn(
-                  "text-sm",
-                  theme === 'dark' ? "text-gray-400" : "text-gray-600"
-                )}>
-                  Gestiona todas las empresas del sistema
-                </p>
+            {/* Stats Cards */}
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-5">
+            {/* Total Empresas */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.1 }}
+              className={cn(
+                'relative overflow-hidden',
+                theme === 'dark'
+                  ? 'bg-gradient-to-br from-gray-800 to-gray-900 border-gray-700'
+                  : 'bg-gradient-to-br from-slate-50 to-white border-slate-200',
+                'rounded-2xl border shadow-xl'
+              )}
+            >
+              <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-400 to-blue-600"></div>
+              <div className="p-6">
+                <div className="flex items-start justify-between mb-4">
+                  <div className="flex items-center gap-3">
+                    <div className={cn(
+                      'p-3 rounded-xl shadow-sm',
+                      theme === 'dark'
+                        ? 'bg-blue-900/30 border border-blue-800/50'
+                        : 'bg-gradient-to-br from-blue-50 to-blue-100 border border-blue-200'
+                    )}>
+                      <Building2 className="w-6 h-6 text-blue-600" />
+                    </div>
+                    <div>
+                      <p className={cn(
+                        'text-sm font-medium',
+                        theme === 'dark' ? 'text-gray-400' : 'text-black'
+                      )}>Total Empresas</p>
+                      <p className={cn(
+                        'text-3xl font-bold mt-1',
+                        theme === 'dark' ? 'text-white' : 'text-slate-900'
+                      )}>{companies.length}</p>
+                    </div>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-1">
+                    <div className="w-2 h-2 bg-blue-400 rounded-full animate-pulse"></div>
+                    <span className={cn(
+                      'text-xs font-medium',
+                      theme === 'dark' ? 'text-gray-500' : 'text-black'
+                    )}>Registradas</span>
+                  </div>
+                </div>
               </div>
+            </motion.div>
 
-              <Button
-                onClick={() => setShowCreateForm(true)}
-                className={cn(
-                  "flex items-center gap-2 px-6 py-3 rounded-xl font-medium transition-all duration-300",
-                  theme === 'dark' ? "bg-exa-secondary text-white hover:bg-exa-secondary/90" : "bg-exa-primary text-white hover:bg-exa-primary/90"
-                )}
-              >
-                <Plus className="w-5 h-5" />
-                Nueva Empresa
-              </Button>
-            </div>
-
-            {/* Stats */}
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-              <motion.div
-                initial={{ opacity: 0, scale: 0.9 }}
-                animate={{ opacity: 1, scale: 1 }}
-                transition={{ delay: 0.1 }}
-                className={cn(
-                  "p-4 rounded-xl border",
-                  theme === 'dark' ? "bg-white/5 border-white/10" : "bg-white/90 border-gray-200"
-                )}
-              >
-                <div className="flex items-center gap-3">
-                  <div className={cn(
-                    "w-12 h-12 rounded-xl flex items-center justify-center",
-                    theme === 'dark' ? "bg-exa-secondary/20" : "bg-exa-primary/20"
-                  )}>
-                    <Building2 className={cn(
-                      "w-6 h-6",
-                      theme === 'dark' ? "text-exa-secondary" : "text-exa-primary"
-                    )} />
-                  </div>
-                  <div>
-                    <p className={cn(
-                      "text-2xl font-bold",
-                      theme === 'dark' ? "text-white" : "text-black"
+            {/* Activas */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.2 }}
+              className={cn(
+                'relative overflow-hidden',
+                theme === 'dark'
+                  ? 'bg-gradient-to-br from-gray-800 to-gray-900 border-gray-700'
+                  : 'bg-gradient-to-br from-slate-50 to-white border-slate-200',
+                'rounded-2xl border shadow-xl'
+              )}
+            >
+              <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-amber-400 to-orange-600"></div>
+              <div className="p-6">
+                <div className="flex items-start justify-between mb-4">
+                  <div className="flex items-center gap-3">
+                    <div className={cn(
+                      'p-3 rounded-xl shadow-sm',
+                      theme === 'dark'
+                        ? 'bg-amber-900/30 border border-amber-800/50'
+                        : 'bg-gradient-to-br from-amber-50 to-orange-100 border border-amber-200'
                     )}>
-                      {companies.length}
-                    </p>
-                    <p className={cn(
-                      "text-xs",
-                      theme === 'dark' ? "text-gray-400" : "text-gray-600"
-                    )}>
-                      Total Empresas
-                    </p>
+                      <Activity className="w-6 h-6 text-amber-600" />
+                    </div>
+                    <div>
+                      <p className={cn(
+                        'text-sm font-medium',
+                        theme === 'dark' ? 'text-gray-400' : 'text-black'
+                      )}>Activas</p>
+                      <p className={cn(
+                        'text-3xl font-bold mt-1',
+                        theme === 'dark' ? 'text-white' : 'text-slate-900'
+                      )}>{companies.filter((c: any) => c.status === 'active').length}</p>
+                    </div>
                   </div>
                 </div>
-              </motion.div>
-
-              <motion.div
-                initial={{ opacity: 0, scale: 0.9 }}
-                animate={{ opacity: 1, scale: 1 }}
-                transition={{ delay: 0.2 }}
-                className={cn(
-                  "p-4 rounded-xl border",
-                  theme === 'dark' ? "bg-white/5 border-white/10" : "bg-white/90 border-gray-200"
-                )}
-              >
-                <div className="flex items-center gap-3">
-                  <div className={cn(
-                    "w-12 h-12 rounded-xl flex items-center justify-center",
-                    theme === 'dark' ? "bg-green-500/20" : "bg-green-500/20"
-                  )}>
-                    <Activity className={cn(
-                      "w-6 h-6",
-                      theme === 'dark' ? "text-green-400" : "text-green-600"
-                    )} />
-                  </div>
-                  <div>
-                    <p className={cn(
-                      "text-2xl font-bold",
-                      theme === 'dark' ? "text-white" : "text-black"
-                    )}>
-                      {companies.filter((c: any) => c.status === 'active').length}
-                    </p>
-                    <p className={cn(
-                      "text-xs",
-                      theme === 'dark' ? "text-gray-400" : "text-gray-600"
-                    )}>
-                      Activas
-                    </p>
+                <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-1">
+                    <div className="w-2 h-2 bg-amber-400 rounded-full animate-pulse"></div>
+                    <span className={cn(
+                      'text-xs font-medium',
+                      theme === 'dark' ? 'text-gray-500' : 'text-black'
+                    )}>En operación</span>
                   </div>
                 </div>
-              </motion.div>
+              </div>
+            </motion.div>
 
-              <motion.div
-                initial={{ opacity: 0, scale: 0.9 }}
-                animate={{ opacity: 1, scale: 1 }}
-                transition={{ delay: 0.3 }}
-                className={cn(
-                  "p-4 rounded-xl border",
-                  theme === 'dark' ? "bg-white/5 border-white/10" : "bg-white/90 border-gray-200"
-                )}
-              >
-                <div className="flex items-center gap-3">
-                  <div className={cn(
-                    "w-12 h-12 rounded-xl flex items-center justify-center",
-                    theme === 'dark' ? "bg-exa-secondary/20" : "bg-exa-primary/20"
-                  )}>
-                    <Users className={cn(
-                      "w-6 h-6",
-                      theme === 'dark' ? "text-exa-secondary" : "text-exa-primary"
-                    )} />
-                  </div>
-                  <div>
-                    <p className={cn(
-                      "text-2xl font-bold",
-                      theme === 'dark' ? "text-white" : "text-black"
+            {/* Total Usuarios */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.3 }}
+              className={cn(
+                'relative overflow-hidden',
+                theme === 'dark'
+                  ? 'bg-gradient-to-br from-gray-800 to-gray-900 border-gray-700'
+                  : 'bg-gradient-to-br from-slate-50 to-white border-slate-200',
+                'rounded-2xl border shadow-xl'
+              )}
+            >
+              <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-emerald-400 to-green-600"></div>
+              <div className="p-6">
+                <div className="flex items-start justify-between mb-4">
+                  <div className="flex items-center gap-3">
+                    <div className={cn(
+                      'p-3 rounded-xl shadow-sm',
+                      theme === 'dark'
+                        ? 'bg-emerald-900/30 border border-emerald-800/50'
+                        : 'bg-gradient-to-br from-emerald-50 to-green-100 border border-emerald-200'
                     )}>
-                      {companies.reduce((sum, c) => sum + c.usersCount, 0)}
-                    </p>
-                    <p className={cn(
-                      "text-xs",
-                      theme === 'dark' ? "text-gray-400" : "text-gray-600"
-                    )}>
-                      Total Usuarios
-                    </p>
+                      <Users className="w-6 h-6 text-emerald-600" />
+                    </div>
+                    <div>
+                      <p className={cn(
+                        'text-sm font-medium',
+                        theme === 'dark' ? 'text-gray-400' : 'text-black'
+                      )}>Total Usuarios</p>
+                      <p className={cn(
+                        'text-3xl font-bold mt-1',
+                        theme === 'dark' ? 'text-white' : 'text-slate-900'
+                      )}>{companies.reduce((sum, c) => sum + c.usersCount, 0)}</p>
+                    </div>
                   </div>
                 </div>
-              </motion.div>
-
-              <motion.div
-                initial={{ opacity: 0, scale: 0.9 }}
-                animate={{ opacity: 1, scale: 1 }}
-                transition={{ delay: 0.4 }}
-                className={cn(
-                  "p-4 rounded-xl border",
-                  theme === 'dark' ? "bg-white/5 border-white/10" : "bg-white/90 border-gray-200"
-                )}
-              >
-                <div className="flex items-center gap-3">
-                  <div className={cn(
-                    "w-12 h-12 rounded-xl flex items-center justify-center",
-                    theme === 'dark' ? "bg-purple-500/20" : "bg-purple-500/20"
-                  )}>
-                    <TrendingUp className={cn(
-                      "w-6 h-6",
-                      theme === 'dark' ? "text-purple-400" : "text-purple-600"
-                    )} />
-                  </div>
-                  <div>
-                    <p className={cn(
-                      "text-2xl font-bold",
-                      theme === 'dark' ? "text-white" : "text-black"
-                    )}>
-                      ${companies.reduce((sum, c) => sum + (parseFloat(c.walletBalance) || 0), 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                    </p>
-                    <p className={cn(
-                      "text-xs",
-                      theme === 'dark' ? "text-gray-400" : "text-gray-600"
-                    )}>
-                      Balance Total
-                    </p>
+                <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-1">
+                    <div className="w-2 h-2 bg-emerald-400 rounded-full animate-pulse"></div>
+                    <span className={cn(
+                      'text-xs font-medium',
+                      theme === 'dark' ? 'text-gray-500' : 'text-black'
+                    )}>Totales</span>
                   </div>
                 </div>
-              </motion.div>
+              </div>
+            </motion.div>
+
+            {/* Balance Total */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.4 }}
+              className={cn(
+                'relative overflow-hidden',
+                theme === 'dark'
+                  ? 'bg-gradient-to-br from-gray-800 to-gray-900 border-gray-700'
+                  : 'bg-gradient-to-br from-slate-50 to-white border-slate-200',
+                'rounded-2xl border shadow-xl'
+              )}
+            >
+              <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-violet-400 to-purple-600"></div>
+              <div className="p-6">
+                <div className="flex items-start justify-between mb-4">
+                  <div className="flex items-center gap-3">
+                    <div className={cn(
+                      'p-3 rounded-xl shadow-sm',
+                      theme === 'dark'
+                        ? 'bg-violet-900/30 border border-violet-800/50'
+                        : 'bg-gradient-to-br from-violet-50 to-purple-100 border border-violet-200'
+                    )}>
+                      <TrendingUp className="w-6 h-6 text-violet-600" />
+                    </div>
+                    <div>
+                      <p className={cn(
+                        'text-sm font-medium',
+                        theme === 'dark' ? 'text-gray-400' : 'text-black'
+                      )}>Balance Total</p>
+                      <p className={cn(
+                        'text-3xl font-bold mt-1',
+                        theme === 'dark' ? 'text-white' : 'text-slate-900'
+                      )}>${companies.reduce((sum, c) => sum + (parseFloat(c.walletBalance) || 0), 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                    </div>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-1">
+                    <div className="w-2 h-2 bg-violet-400 rounded-full animate-pulse"></div>
+                    <span className={cn(
+                      'text-xs font-medium',
+                      theme === 'dark' ? 'text-gray-500' : 'text-black'
+                    )}>Acumulado</span>
+                  </div>
+                </div>
+              </div>
+            </motion.div>
             </div>
           </motion.div>
 
@@ -2536,6 +2563,13 @@ export default function CompaniesPage() {
                   )}
                 >
                   Brokers
+                </button>
+                <button
+                  onClick={() => setShowCreateForm(true)}
+                  className="flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all duration-300 bg-blue-600 hover:bg-blue-700 text-white"
+                >
+                  <Plus className="w-4 h-4" />
+                  Crear Empresa
                 </button>
               </div>
             </div>
