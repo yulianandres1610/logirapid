@@ -1,5 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/database'
+import {
+  inheritFeesFromParent,
+  getParentEnabledServices,
+  validateBranchServices,
+  getParentSubdomain,
+  getParentContactInfo
+} from '@/lib/branch-utils'
 
 // Force dynamic rendering - don't execute during build
 export const dynamic = 'force-dynamic'
@@ -125,26 +132,78 @@ export async function POST(request: NextRequest) {
       }, { status: 400 })
     }
 
-    // Convertir serviceFees al formato JSONB esperado por PostgreSQL
-    const serviceFeesFormatted: any = {}
-    if (serviceFees && typeof serviceFees === 'object') {
-      Object.keys(serviceFees).forEach(serviceId => {
-        const fee = serviceFees[serviceId]
-        serviceFeesFormatted[serviceId] = {
-          percentage: fee.percentage || 0,
-          fixed: fee.fixed || 0
-        }
-      })
+    // Variables para almacenar configuración final
+    let finalServiceFees: any
+    let finalEnabledServices = enabledServices || []
+    let finalSubdomain = subdomain
+    let finalCustomerServicePhone = customerServicePhone
+    let finalWebsite = website
+
+    // Si es una sucursal, heredar configuración de la empresa matriz
+    if (isBranch && parentCompanyId) {
+      console.log(`[BRANCH] Creando sucursal para empresa matriz ID: ${parentCompanyId}`)
+
+      // 1. Heredar fees de la empresa matriz (las sucursales NO configuran sus propios fees)
+      const parentFees = await inheritFeesFromParent(parentCompanyId)
+      if (!parentFees) {
+        return NextResponse.json({
+          success: false,
+          error: 'No se pudieron obtener los fees de la empresa matriz'
+        }, { status: 400 })
+      }
+      finalServiceFees = parentFees
+      console.log('[BRANCH] Fees heredados de empresa matriz')
+
+      // 2. Validar que los servicios sean un subset de los de la empresa matriz
+      const parentServices = await getParentEnabledServices(parentCompanyId)
+      const validation = validateBranchServices(finalEnabledServices, parentServices)
+
+      if (!validation.valid) {
+        return NextResponse.json({
+          success: false,
+          error: `Los siguientes servicios no están habilitados en la empresa matriz: ${validation.invalidServices.join(', ')}`
+        }, { status: 400 })
+      }
+      console.log('[BRANCH] Servicios validados contra empresa matriz')
+
+      // 3. Las sucursales usan el MISMO subdominio que la empresa matriz
+      const parentSubdomain = await getParentSubdomain(parentCompanyId)
+      finalSubdomain = parentSubdomain
+      console.log(`[BRANCH] Subdominio copiado de empresa matriz: ${finalSubdomain}`)
+
+      // 4. Las sucursales usan el MISMO teléfono de soporte y website que la empresa matriz
+      const parentContact = await getParentContactInfo(parentCompanyId)
+      finalCustomerServicePhone = parentContact.customerServicePhone
+      finalWebsite = parentContact.website
+      console.log(`[BRANCH] Teléfono de soporte copiado: ${finalCustomerServicePhone}`)
+      console.log(`[BRANCH] Website copiado: ${finalWebsite}`)
+
     } else {
-      // Valores por defecto para todos los servicios
-      const defaultFees = { percentage: 0, fixed: 0 }
-      serviceFeesFormatted.wallet = defaultFees
-      serviceFeesFormatted.recharge = defaultFees
-      serviceFeesFormatted.remittance = defaultFees
-      serviceFeesFormatted.paqueteria = defaultFees
-      serviceFeesFormatted.tracker = defaultFees
-      serviceFeesFormatted.exchange = defaultFees
-      serviceFeesFormatted.marketplace = defaultFees
+      // Es una empresa matriz o independiente
+      // Convertir serviceFees al formato JSONB esperado por PostgreSQL
+      const serviceFeesFormatted: any = {}
+      if (serviceFees && typeof serviceFees === 'object') {
+        Object.keys(serviceFees).forEach(serviceId => {
+          const fee = serviceFees[serviceId]
+          serviceFeesFormatted[serviceId] = {
+            percentage: fee.percentage || 0,
+            fixed: fee.fixed || 0
+          }
+        })
+        finalServiceFees = serviceFeesFormatted
+      } else {
+        // Valores por defecto para todos los servicios
+        const defaultFees = { percentage: 0, fixed: 0 }
+        finalServiceFees = {
+          wallet: defaultFees,
+          recharge: defaultFees,
+          remittance: defaultFees,
+          paqueteria: defaultFees,
+          tracker: defaultFees,
+          exchange: defaultFees,
+          marketplace: defaultFees
+        }
+      }
     }
 
     const query = `
@@ -176,9 +235,9 @@ export async function POST(request: NextRequest) {
       legalName,
       einNumber,
       phone,
-      customerServicePhone || null,
+      finalCustomerServicePhone || null, // Usar phone de soporte heredado o configurado
       email || '',
-      website || null,
+      finalWebsite || null, // Usar website heredado o configurado
       address,
       city,
       state || '',
@@ -192,10 +251,10 @@ export async function POST(request: NextRequest) {
       dailyLimit || 0,
       monthlyLimit || 0,
       companyType || 'agency',
-      JSON.stringify(enabledServices || []),
-      JSON.stringify(serviceFeesFormatted),
+      JSON.stringify(finalEnabledServices), // Usar servicios validados
+      JSON.stringify(finalServiceFees), // Usar fees heredados o configurados
       logoUrl || null,
-      subdomain || null,
+      finalSubdomain, // Usar subdominio heredado o configurado
       primaryColor || '#CC0A46',
       secondaryColor || '#0A46CC',
       parentCompanyId || null,
