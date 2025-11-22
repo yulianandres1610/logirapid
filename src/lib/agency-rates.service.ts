@@ -66,6 +66,20 @@ export class AgencyRatesService {
     }
   }
 
+  /**
+   * Asegura que las tasas base estén cargadas antes de usarlas
+   * Método público para que los endpoints puedan esperar a que las tasas estén listas
+   */
+  public async ensureBaseRatesLoaded(): Promise<void> {
+    // Si ya hay tasas cargadas, no hacer nada
+    if (Object.keys(this.baseRates).length > 0) {
+      return
+    }
+
+    // Si no hay tasas, cargar desde BD
+    await this.loadBaseRatesFromDB()
+  }
+
   private async loadConfigFromDB(companyId?: string): Promise<void> {
     try {
       // Obtener configuración desde la base de datos

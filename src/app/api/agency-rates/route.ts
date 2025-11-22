@@ -51,15 +51,19 @@ export async function GET(request: NextRequest) {
       })
     }
 
-    // Obtener tasas base desde el API de eltoque
+    // Asegurar que el servicio ha cargado las tasas base desde BD
+    await service.ensureBaseRatesLoaded()
+
+    // Obtener tasas base
     let baseRates = service.getBaseRates()
 
-    // Si las tasas base están vacías o se fuerza refresh, obtenerlas del API de exchange-rates con timeout mejorado
+    // Si las tasas base están vacías o se fuerza refresh, obtenerlas del API de exchange-rates
     if (Object.keys(baseRates).length === 0 || forceRefresh) {
+      console.log('[agency-rates] Base rates empty or forceRefresh, fetching from exchange-rates API...')
+
       try {
-        // Usar Promise.race para manejar timeout de forma más elegante
         const timeoutPromise = new Promise((_, reject) => {
-          setTimeout(() => reject(new Error('Timeout obteniendo tasas del API externa')), 20000) // 20 segundos
+          setTimeout(() => reject(new Error('Timeout obteniendo tasas del API externa')), 20000)
         })
 
         const fetchPromise = fetch(`${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3002'}/api/exchange-rates`)
@@ -68,7 +72,6 @@ export async function GET(request: NextRequest) {
         const exchangeRatesData = await Promise.race([fetchPromise, timeoutPromise]) as any
 
         if (exchangeRatesData.success && exchangeRatesData.data) {
-          // Convertir tasas de exchange-rates al formato baseRates
           const freshBaseRates: Record<string, number> = {}
           Object.entries(exchangeRatesData.data).forEach(([currency, rateData]: [string, any]) => {
             if (typeof rateData === 'object' && rateData.rate) {
@@ -77,13 +80,28 @@ export async function GET(request: NextRequest) {
           })
 
           if (Object.keys(freshBaseRates).length > 0) {
+            console.log('[agency-rates] Loaded', Object.keys(freshBaseRates).length, 'rates from exchange-rates API')
             service.updateBaseRates(freshBaseRates)
             baseRates = freshBaseRates
+          } else {
+            console.warn('[agency-rates] No rates found in exchange-rates API response')
           }
+        } else {
+          console.warn('[agency-rates] exchange-rates API returned unsuccessful response')
         }
       } catch (apiError) {
-        console.error('Error fetching base rates from exchange-rates API:', apiError)
+        console.error('[agency-rates] Error fetching from exchange-rates API:', apiError)
       }
+    }
+
+    // Si aún no hay tasas base después de intentar cargar, retornar error
+    if (Object.keys(baseRates).length === 0) {
+      console.error('[agency-rates] No base rates available')
+      return NextResponse.json({
+        success: false,
+        error: 'No hay tasas base disponibles. Por favor, configure las tasas en el panel de administrador.',
+        timestamp: new Date().toISOString()
+      }, { status: 503 })
     }
 
     // Calcular tasas de agencia
