@@ -768,26 +768,23 @@ export default function ExchangeRatePage() {
   }
 
   const calculateAgencyRates = () => {
-    if (!rates || !globalConfig) return
+    if (!rates) return
 
     const calculatedRates: ExchangeRatesData = {} as ExchangeRatesData
 
     Object.entries(rates).forEach(([currency, rateData]) => {
-      if (globalConfig.isActive) {
-        const baseRate = rateData.rate
-        const calculatedRate = baseRate * (1 + globalConfig.adjustmentPercentage / 100)
+      const baseRate = rateData.rate
+      const calculatedRate = baseRate * (1 + adjustmentPercentage / 100)
 
-        calculatedRates[currency as keyof ExchangeRatesData] = {
-          ...rateData,
-          tasa: Math.round(calculatedRate * 100) / 100,
-          formatted: calculatedRate.toFixed(2)
-        }
-      } else {
-        calculatedRates[currency as keyof ExchangeRatesData] = rateData
+      calculatedRates[currency as keyof ExchangeRatesData] = {
+        ...rateData,
+        rate: Math.round(calculatedRate * 100) / 100,
+        formatted: calculatedRate.toFixed(2)
       }
     })
 
     setAgencyRates(calculatedRates)
+    console.log('✅ Agency rates calculated with', adjustmentPercentage, '%')
   }
 
   // Funciones para salud del API
@@ -820,7 +817,7 @@ export default function ExchangeRatePage() {
     if (rates) {
       calculateAgencyRates()
     }
-  }, [rates, globalConfig])
+  }, [rates, adjustmentPercentage])
 
   useEffect(() => {
     if (autoRefreshHealth) {

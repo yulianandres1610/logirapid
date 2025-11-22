@@ -5,13 +5,21 @@ import { saveAgencyRatesHistory, getAgencyConfig } from '@/lib/database'
 export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
 
-// API de ElToque
-const ELTOQUE_API_URL = 'https://api.eltoque.com/v1/rates'
+// API de ElToque via CubaRAPID
+const ELTOQUE_API_URL = 'https://eltoque.cubarapid.com/api/tasas'
 
 interface ElToqueRate {
-  currency: string
-  rate: number
-  rate_name?: string
+  moneda: string
+  tasa: number
+  variacion?: number
+  fechaActualizacion?: string
+}
+
+interface ElToqueResponse {
+  exito: boolean
+  datos: ElToqueRate[]
+  timestamp: string
+  ultimaActualizacion?: any
 }
 
 export async function GET(request: NextRequest) {
@@ -59,18 +67,28 @@ export async function GET(request: NextRequest) {
       }, { status: 500 })
     }
 
-    const data = await response.json()
-    console.log('[CRON] Rates fetched from ElToque:', data.length, 'currencies')
+    const data: ElToqueResponse = await response.json()
+
+    if (!data.exito || !data.datos || !Array.isArray(data.datos)) {
+      console.error('[CRON] Invalid response from ElToque:', data)
+      return NextResponse.json({
+        success: false,
+        error: 'Invalid response from ElToque API'
+      }, { status: 500 })
+    }
+
+    console.log('[CRON] Rates fetched from ElToque:', data.datos.length, 'currencies')
 
     // 3. Procesar tasas y aplicar ajuste
-    const historyRecords = data.map((rate: ElToqueRate) => {
-      const baseRate = rate.rate
+    const timestamp = Date.now()
+    const historyRecords = data.datos.map((rate: ElToqueRate, index: number) => {
+      const baseRate = rate.tasa
       const agencyRate = baseRate * (1 + adjustmentPercentage / 100)
 
       return {
-        id: `${config.id}_${rate.currency}_${Date.now()}`,
+        id: `${config.id}_${rate.moneda}_${timestamp}_${index}`,
         configId: config.id,
-        currency: rate.currency,
+        currency: rate.moneda,
         baseRate: baseRate,
         agencyRate: agencyRate,
         adjustmentPercentage: adjustmentPercentage
@@ -87,11 +105,7 @@ export async function GET(request: NextRequest) {
       message: `Updated ${saved.length} exchange rates`,
       timestamp: new Date().toISOString(),
       adjustmentPercentage: adjustmentPercentage,
-      rates: saved.map(r => ({
-        currency: r.currency,
-        baseRate: r.baseRate,
-        agencyRate: r.agencyRate
-      }))
+      currencies: saved.length
     })
 
   } catch (error) {
