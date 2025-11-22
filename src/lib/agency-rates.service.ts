@@ -45,7 +45,7 @@ export class AgencyRatesService {
   private async loadConfigFromDB(companyId?: string): Promise<void> {
     try {
       // Obtener configuración desde la base de datos
-      const dbConfig: any = getAgencyConfig(companyId)
+      const dbConfig: any = await getAgencyConfig(companyId)
 
       if (dbConfig) {
         this.config = {
@@ -69,7 +69,7 @@ export class AgencyRatesService {
         }
 
         // Guardar en base de datos
-        saveAgencyConfig({
+        await saveAgencyConfig({
           id: this.config.id,
           adjustmentPercentage: this.config.adjustmentPercentage,
           isActive: this.config.isActive,
@@ -109,7 +109,7 @@ export class AgencyRatesService {
 
       try {
         // Actualizar en base de datos
-        updateAgencyConfig(this.config.id, {
+        await updateAgencyConfig(this.config.id, {
           adjustmentPercentage: this.config.adjustmentPercentage,
           isActive: this.config.isActive
         })
@@ -126,7 +126,7 @@ export class AgencyRatesService {
             adjustmentPercentage: this.config!.adjustmentPercentage
           }))
 
-          saveAgencyRatesHistory(historyData)
+          await saveAgencyRatesHistory(historyData)
           console.log('📈 Historial de tasas guardado para cambio de porcentaje')
         }
 

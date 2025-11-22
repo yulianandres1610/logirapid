@@ -41,7 +41,13 @@ Copia y pega estos valores exactamente en Vercel:
 JWT_SECRET=kg/cuEijkhCR2gqC3G8yldvFmvtyQu7TkoRr8JXgIDs=
 COOKIE_DOMAIN=.logirapid.com
 NEXTAUTH_URL=https://www.logirapid.com
+CRON_SECRET=fLLoSIC+6kgVa9AX1FkbBxkvYJ8QXZCxUxQJiY9gupM=
 ```
+
+### CRON_SECRET
+- **Valor para producción:** `fLLoSIC+6kgVa9AX1FkbBxkvYJ8QXZCxUxQJiY9gupM=`
+- **Descripción:** Secret para autenticar el cron job de actualización de tasas de cambio
+- **Nota:** El cron se ejecuta cada 6 minutos para guardar variaciones de ElToque
 
 ## Verificación
 

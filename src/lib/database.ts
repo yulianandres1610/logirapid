@@ -178,52 +178,167 @@ export function getPoolDirect() {
 }
 
 // Funciones para agency rates
-export function getAgencyConfig(companyId?: string) {
+export async function getAgencyConfig(companyId?: string) {
   try {
-    // Implementación simplificada - retorna null durante build
-    if (!connectionString) return null;
-
     const query = companyId
-      ? 'SELECT * FROM agency_rates_config WHERE company_id = $1 LIMIT 1'
-      : 'SELECT * FROM agency_rates_config WHERE company_id IS NULL LIMIT 1';
-    const params = companyId ? [companyId] : [];
+      ? 'SELECT * FROM agency_rates_config WHERE "companyId" = $1 ORDER BY "updatedAt" DESC LIMIT 1'
+      : 'SELECT * FROM agency_rates_config WHERE "companyId" IS NULL ORDER BY "updatedAt" DESC LIMIT 1'
 
-    // Usar query síncrona solo si está disponible
-    return null; // Placeholder - implementar según necesidades
+    const params = companyId ? [companyId] : []
+    const result = await db.query(query, params)
+    return result.rows[0] || null
   } catch (error) {
-    console.error('Error getting agency config:', error);
-    return null;
+    console.error('Error getting agency config:', error)
+    return null
   }
 }
 
-export function saveAgencyConfig(config: any) {
-  // Implementación placeholder
-  return null;
+export async function saveAgencyConfig(config: any) {
+  try {
+    const query = `
+      INSERT INTO agency_rates_config (id, "adjustmentPercentage", "isActive", "companyId", "createdBy")
+      VALUES ($1, $2, $3, $4, $5)
+      RETURNING *
+    `
+    const values = [
+      config.id,
+      config.adjustmentPercentage,
+      config.isActive !== undefined ? config.isActive : true,
+      config.companyId || null,
+      config.createdBy
+    ]
+    const result = await db.query(query, values)
+    console.log('[DB] Agency config saved:', result.rows[0])
+    return result.rows[0]
+  } catch (error) {
+    console.error('Error saving agency config:', error)
+    return null
+  }
 }
 
-export function updateAgencyConfig(id: any, config: any) {
-  // Implementación placeholder
-  return null;
+export async function updateAgencyConfig(id: string, config: any) {
+  try {
+    const query = `
+      UPDATE agency_rates_config
+      SET "adjustmentPercentage" = $2, "isActive" = $3, "updatedAt" = CURRENT_TIMESTAMP
+      WHERE id = $1
+      RETURNING *
+    `
+    const values = [id, config.adjustmentPercentage, config.isActive]
+    const result = await db.query(query, values)
+    console.log('[DB] Agency config updated:', result.rows[0])
+    return result.rows[0]
+  } catch (error) {
+    console.error('Error updating agency config:', error)
+    return null
+  }
 }
 
-export function saveAgencyRatesHistory(history: any) {
-  // Implementación placeholder
-  return null;
+export async function saveAgencyRatesHistory(history: any[]) {
+  try {
+    if (!history || history.length === 0) return []
+
+    // Construir query con múltiples inserts
+    const placeholders = history.map((_, i) =>
+      `($${i * 6 + 1}, $${i * 6 + 2}, $${i * 6 + 3}, $${i * 6 + 4}, $${i * 6 + 5}, $${i * 6 + 6})`
+    ).join(', ')
+
+    const query = `
+      INSERT INTO agency_rates_history
+      (id, "configId", currency, "baseRate", "agencyRate", "adjustmentPercentage")
+      VALUES ${placeholders}
+      RETURNING *
+    `
+
+    const values = history.flatMap(h => [
+      h.id,
+      h.configId,
+      h.currency,
+      h.baseRate,
+      h.agencyRate,
+      h.adjustmentPercentage
+    ])
+
+    const result = await db.query(query, values)
+    console.log(`[DB] Saved ${result.rows.length} agency rates history records`)
+    return result.rows
+  } catch (error) {
+    console.error('Error saving agency rates history:', error)
+    return []
+  }
 }
 
-export function getAgencyRatesHistory(...args: any[]) {
-  // Implementación placeholder
-  return [];
+export async function getAgencyRatesHistory(configId: string, days: number = 30) {
+  try {
+    const query = `
+      SELECT * FROM agency_rates_history
+      WHERE "configId" = $1
+      AND timestamp >= CURRENT_TIMESTAMP - INTERVAL '${days} days'
+      ORDER BY timestamp DESC
+    `
+    const result = await db.query(query, [configId])
+    return result.rows
+  } catch (error) {
+    console.error('Error getting agency rates history:', error)
+    return []
+  }
 }
 
-export function saveCompanyAgencyConfig(config: any) {
-  // Implementación placeholder
-  return null;
+export async function saveCompanyAgencyConfig(config: any) {
+  try {
+    const query = `
+      INSERT INTO company_agency_configs (id, "companyId", "agencyConfigId", "isActive")
+      VALUES ($1, $2, $3, $4)
+      ON CONFLICT ("companyId") DO UPDATE SET
+        "agencyConfigId" = $3,
+        "isActive" = $4,
+        "updatedAt" = CURRENT_TIMESTAMP
+      RETURNING *
+    `
+    const values = [config.id, config.companyId, config.agencyConfigId, config.isActive]
+    const result = await db.query(query, values)
+    return result.rows[0]
+  } catch (error) {
+    console.error('Error saving company agency config:', error)
+    return null
+  }
 }
 
-export function getCompanyAgencyConfig(companyId: string) {
-  // Implementación placeholder
-  return null;
+export async function getCompanyAgencyConfig(companyId: string) {
+  try {
+    const query = `
+      SELECT cac.*, arc.*
+      FROM company_agency_configs cac
+      LEFT JOIN agency_rates_config arc ON cac."agencyConfigId" = arc.id
+      WHERE cac."companyId" = $1
+    `
+    const result = await db.query(query, [companyId])
+    return result.rows[0] || null
+  } catch (error) {
+    console.error('Error getting company agency config:', error)
+    return null
+  }
+}
+
+// Nueva función para obtener tasas publicadas (solo resultado final para agencias)
+export async function getPublishedRates() {
+  try {
+    const query = `
+      SELECT currency, "agencyRate" as rate, timestamp
+      FROM agency_rates_history
+      WHERE timestamp = (
+        SELECT MAX(timestamp)
+        FROM agency_rates_history AS arh2
+        WHERE arh2.currency = agency_rates_history.currency
+      )
+      ORDER BY currency
+    `
+    const result = await db.query(query)
+    return result.rows
+  } catch (error) {
+    console.error('Error getting published rates:', error)
+    return []
+  }
 }
 
 // Inicialización de la base de datos
