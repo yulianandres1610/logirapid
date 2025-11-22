@@ -56,11 +56,12 @@ export function CompanyProvider({
           try {
             const response = await fetch(`/api/companies/${info.companyId}`)
             if (response.ok) {
-              const data = await response.json()
-              info.enabledServices = data.enabledServices || []
+              const result = await response.json()
+              // El endpoint retorna { success, data: { enabledServices, ... } }
+              info.enabledServices = result.data?.enabledServices || []
               console.log('[CompanyContext] Loaded services for company:', info.companyId, info.enabledServices)
             } else {
-              console.error('[CompanyContext] Failed to load company services')
+              console.error('[CompanyContext] Failed to load company services:', response.status)
               info.enabledServices = []
             }
           } catch (error) {
