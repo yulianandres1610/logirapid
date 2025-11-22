@@ -90,8 +90,15 @@ export async function middleware(request: NextRequest) {
   // Obtener el auth-token de las cookies (JWT)
   const authToken = request.cookies.get('auth-token')?.value
 
+  console.log('[MIDDLEWARE] Dashboard access attempt:', {
+    pathname,
+    hasAuthToken: !!authToken,
+    tokenPreview: authToken ? authToken.substring(0, 20) + '...' : 'none'
+  })
+
   // Si no hay token de autenticación, redirigir al login
   if (!authToken) {
+    console.log('[MIDDLEWARE] No auth token found, redirecting to login')
     const loginUrl = new URL('/login', request.url)
     loginUrl.searchParams.set('callbackUrl', pathname)
     return NextResponse.redirect(loginUrl)
@@ -101,9 +108,11 @@ export async function middleware(request: NextRequest) {
   let decodedToken: any
   try {
     const jwtSecret = process.env.JWT_SECRET || 'fallback-secret-change-in-production'
+    console.log('[MIDDLEWARE] Using JWT_SECRET:', jwtSecret === 'fallback-secret-change-in-production' ? 'FALLBACK' : 'FROM ENV')
     decodedToken = jwt.verify(authToken, jwtSecret) as any
+    console.log('[MIDDLEWARE] JWT token validated successfully for user:', decodedToken.email)
   } catch (error) {
-    console.error('[MIDDLEWARE] Invalid JWT token:', error)
+    console.error('[MIDDLEWARE] Invalid JWT token:', error instanceof Error ? error.message : error)
     const loginUrl = new URL('/login', request.url)
     loginUrl.searchParams.set('callbackUrl', pathname)
     return NextResponse.redirect(loginUrl)

@@ -134,6 +134,8 @@ export async function POST(request: NextRequest) {
 
     // Generate JWT token
     const jwtSecret = process.env.JWT_SECRET || 'fallback-secret-change-in-production'
+    console.log('[LOGIN] Using JWT_SECRET:', jwtSecret === 'fallback-secret-change-in-production' ? 'FALLBACK' : 'FROM ENV')
+
     const token = jwt.sign(
       {
         userId: user.id,
@@ -145,6 +147,7 @@ export async function POST(request: NextRequest) {
       jwtSecret,
       { expiresIn: '7d' }
     )
+    console.log('[LOGIN] JWT token generated successfully')
 
     // Create response with cookies
     const response = NextResponse.json({
@@ -158,6 +161,14 @@ export async function POST(request: NextRequest) {
       process.env.NODE_ENV === 'production' ? '.logirapid.com' : undefined
     )
 
+    console.log('[LOGIN] Cookie configuration:', {
+      domain: cookieDomain,
+      secure: process.env.NODE_ENV === 'production',
+      httpOnly: false,
+      sameSite: 'lax',
+      nodeEnv: process.env.NODE_ENV
+    })
+
     const cookieOptions = {
       httpOnly: false, // Allow JavaScript access for client-side routing
       secure: process.env.NODE_ENV === 'production',
@@ -168,6 +179,7 @@ export async function POST(request: NextRequest) {
     }
 
     response.cookies.set('auth-token', token, cookieOptions)
+    console.log('[LOGIN] Auth token cookie set')
     response.cookies.set('user-id', user.id.toString(), cookieOptions)
     response.cookies.set('user-name', encodeURIComponent(userData.name), cookieOptions)
     response.cookies.set('user-email', encodeURIComponent(user.email), cookieOptions)

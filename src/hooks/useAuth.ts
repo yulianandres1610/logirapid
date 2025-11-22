@@ -171,11 +171,36 @@ export function useAuth(): UseAuthReturn {
               redirectPath = '/dashboard/admin'
           }
 
-          // Small delay to ensure cookies are propagated to document.cookie
-          // before the redirect triggers middleware validation
-          setTimeout(() => {
-            window.location.href = redirectPath
-          }, 300) // 300ms should be enough for cookies to propagate
+          // Cookie polling: Wait until auth-token is available in document.cookie
+          // This ensures middleware will find the cookie when validating
+          const waitForCookie = () => {
+            const maxAttempts = 60 // 60 attempts * 50ms = 3 seconds max
+            let attempts = 0
+
+            const checkCookie = () => {
+              attempts++
+              const cookies = document.cookie
+              const hasAuthToken = cookies.includes('auth-token=')
+
+              console.log(`[AUTH] Cookie check attempt ${attempts}: ${hasAuthToken ? 'Found' : 'Not found'}`)
+
+              if (hasAuthToken) {
+                console.log('[AUTH] Auth token cookie found, redirecting to:', redirectPath)
+                window.location.href = redirectPath
+              } else if (attempts >= maxAttempts) {
+                console.error('[AUTH] Cookie not found after 3 seconds, redirecting anyway')
+                window.location.href = redirectPath
+              } else {
+                // Check again after 50ms
+                setTimeout(checkCookie, 50)
+              }
+            }
+
+            // Start checking
+            checkCookie()
+          }
+
+          waitForCookie()
         }
         return true
       } else {
