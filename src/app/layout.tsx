@@ -5,6 +5,7 @@ import { Inter } from 'next/font/google'
 import { AuthProvider } from '@/components/providers/auth-provider'
 import { ThemeProvider } from '@/contexts/theme-context'
 import { NotificationProvider } from '@/contexts/NotificationContext'
+import { CompanyProvider } from '@/contexts/company-context'
 import NotificationPopup from '@/components/ui/NotificationPopup'
 import { SpeedInsights } from '@vercel/speed-insights/next'
 import { Analytics } from '@vercel/analytics/react'
@@ -31,10 +32,12 @@ export default function RootLayout({
       <body className={inter.className}>
         <ThemeProvider>
           <AuthProvider>
-            <NotificationProvider>
-              {children}
-              <NotificationPopup />
-            </NotificationProvider>
+            <CompanyProvider>
+              <NotificationProvider>
+                {children}
+                <NotificationPopup />
+              </NotificationProvider>
+            </CompanyProvider>
           </AuthProvider>
         </ThemeProvider>
         <SpeedInsights />
