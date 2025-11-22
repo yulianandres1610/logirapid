@@ -1,32 +1,57 @@
 import { NextRequest, NextResponse } from 'next/server'
 import ElToqueAPI, { ExchangeRate } from '@/lib/eltoque-api'
+import { db } from '@/lib/database'
 
 // Force dynamic rendering - don't execute during build
 export const dynamic = 'force-dynamic'
 export const dynamicParams = true
 export const runtime = 'nodejs'
 
+/**
+ * Obtiene las últimas tasas desde la base de datos
+ * Fallback cuando ElToque API no está disponible
+ */
+async function getRatesFromDatabase() {
+  try {
+    const query = `
+      SELECT currency, baserate as rate, timestamp
+      FROM agency_rates_history
+      WHERE timestamp = (
+        SELECT MAX(timestamp)
+        FROM agency_rates_history
+      )
+      ORDER BY currency
+    `
 
-// Función para obtener tasas de emergencia formateadas
-function getEmergencyFormattedRates() {
-  const now = new Date().toLocaleString('es-ES', {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit'
-  })
+    const result = await db.query(query)
 
-  return {
-    USD: { rate: 470, formatted: "470.00", lastUpdate: now, variacion: -0.5 },
-    EUR: { rate: 525, formatted: "525.00", lastUpdate: now, variacion: 0.3 },
-    MLC: { rate: 200, formatted: "200.00", lastUpdate: now, variacion: 0.0 },
-    GBP: { rate: 487.91, formatted: "487.91", lastUpdate: now, variacion: 1.2 },
-    CAD: { rate: 304.48, formatted: "304.48", lastUpdate: now, variacion: -0.8 },
-    MXN: { rate: 23.46, formatted: "23.46", lastUpdate: now, variacion: 0.1 },
-    BRL: { rate: 77.90, formatted: "77.90", lastUpdate: now, variacion: -0.3 },
-    ZELLE: { rate: 449.21, formatted: "449.21", lastUpdate: now, variacion: 0.7 },
-    CLA: { rate: 432.65, formatted: "432.65", lastUpdate: now, variacion: -0.2 }
+    if (result.rows.length === 0) {
+      return null
+    }
+
+    // Formatear tasas de BD al mismo formato que ElToque
+    const formattedRates: Record<string, any> = {}
+
+    result.rows.forEach((row: any) => {
+      const rate = parseFloat(row.rate)
+      formattedRates[row.currency] = {
+        rate: rate,
+        formatted: rate.toFixed(2),
+        lastUpdate: new Date(row.timestamp).toLocaleString('es-ES', {
+          day: '2-digit',
+          month: '2-digit',
+          year: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit'
+        }),
+        variacion: 0 // BD no tiene variación histórica
+      }
+    })
+
+    return formattedRates
+  } catch (error) {
+    console.error('[getRatesFromDatabase] Error:', error)
+    return null
   }
 }
 
@@ -136,19 +161,34 @@ export async function GET(request: NextRequest) {
     } catch (apiError) {
       console.error('❌ ElToqueAPI.getFormattedRates failed:', apiError)
 
-      // Si el API falla, devolver tasas de emergencia formateadas
-      const emergencyRates = getEmergencyFormattedRates()
+      // Intentar obtener tasas desde la base de datos
+      console.log('🔄 Attempting to load rates from database...')
+      const dbRates = await getRatesFromDatabase()
 
+      if (dbRates) {
+        const duration = Date.now() - startTime
+        console.log('✅ Loaded rates from database')
+        return NextResponse.json({
+          success: true,
+          data: dbRates,
+          source: 'database',
+          warning: 'El servicio externo no está disponible. Usando últimas tasas guardadas.',
+          message: 'Tasas de cambio (base de datos)',
+          timestamp: new Date().toISOString(),
+          duration: `${duration}ms`
+        }, { status: 200 })
+      }
+
+      // Si no hay tasas en BD, retornar error
       const duration = Date.now() - startTime
+      console.error('❌ No rates available in database')
       return NextResponse.json({
-        success: true,
-        data: emergencyRates,
-        warning: 'Usando tasas de emergencia. El servicio externo no está disponible.',
-        message: 'Tasas de cambio (emergencia)',
-        error: apiError instanceof Error ? apiError.message : 'API Error',
+        success: false,
+        error: 'No se pudieron obtener las tasas de cambio',
+        message: 'El servicio externo no está disponible y no hay tasas guardadas',
         timestamp: new Date().toISOString(),
         duration: `${duration}ms`
-      }, { status: 200 })
+      }, { status: 503 })
     }
   } catch (error) {
     const duration = Date.now() - startTime
@@ -159,43 +199,35 @@ export async function GET(request: NextRequest) {
       timestamp: new Date().toISOString()
     })
 
-    // Devolver tasas de emergencia en caso de fallo del API externo
-    const fallbackRates = {
-      USD: { rate: 350, formatted: "350.00", lastUpdate: new Date().toLocaleString('es-ES'), variacion: 0 },
-      EUR: { rate: 380, formatted: "380.00", lastUpdate: new Date().toLocaleString('es-ES'), variacion: 0 },
-      MLC: { rate: 360, formatted: "360.00", lastUpdate: new Date().toLocaleString('es-ES'), variacion: 0 },
-      GBP: { rate: 487.91, formatted: "487.91", lastUpdate: new Date().toLocaleString('es-ES'), variacion: 0 },
-      CAD: { rate: 304.36, formatted: "304.36", lastUpdate: new Date().toLocaleString('es-ES'), variacion: 0 },
-      MXN: { rate: 23.3, formatted: "23.30", lastUpdate: new Date().toLocaleString('es-ES'), variacion: 0 },
-      BRL: { rate: 77.9, formatted: "77.90", lastUpdate: new Date().toLocaleString('es-ES'), variacion: 0 },
-      ZELLE: { rate: 449.25, formatted: "449.25", lastUpdate: new Date().toLocaleString('es-ES'), variacion: 0 },
-      CLA: { rate: 429.59, formatted: "429.59", lastUpdate: new Date().toLocaleString('es-ES'), variacion: 0 }
+    // Intentar cargar desde BD como último recurso
+    try {
+      console.log('🔄 Final attempt: loading from database...')
+      const dbRates = await getRatesFromDatabase()
+
+      if (dbRates) {
+        console.log('✅ Recovered using database rates')
+        return NextResponse.json({
+          success: true,
+          data: dbRates,
+          source: 'database',
+          warning: 'Error crítico en el servicio. Usando últimas tasas guardadas.',
+          message: 'Tasas de cambio (recuperación)',
+          timestamp: new Date().toISOString(),
+          duration: `${duration}ms`
+        }, { status: 200 })
+      }
+    } catch (dbError) {
+      console.error('❌ Database fallback also failed:', dbError)
     }
 
-    console.log('🛡️ Using fallback rates due to API failure')
-
-    const errorResponse = {
-      success: true,
-      data: fallbackRates,
-      warning: 'Usando tasas de respaldo. No se pudo conectar con el servicio externo.',
-      message: 'Tasas de cambio (respaldo)',
-      error: error instanceof Error ? error.message : 'Unknown error',
+    // Sin tasas disponibles - retornar error
+    return NextResponse.json({
+      success: false,
+      error: 'No se pudieron obtener las tasas de cambio',
+      message: 'Error crítico: servicio externo no disponible y sin tasas guardadas',
+      details: error instanceof Error ? error.message : 'Unknown error',
       timestamp: new Date().toISOString(),
       duration: `${duration}ms`
-    }
-
-    console.log('📤 Sending error fallback response:', errorResponse)
-
-    try {
-      return NextResponse.json(errorResponse, { status: 200 })
-    } catch (jsonError) {
-      console.error('❌ Failed to serialize JSON response:', jsonError)
-      // Si incluso el fallback falla, devolver una respuesta JSON mínima
-      return NextResponse.json({
-        success: false,
-        error: 'Critical error in exchange rates API',
-        timestamp: new Date().toISOString()
-      }, { status: 500 })
-    }
+    }, { status: 503 })
   }
 }
