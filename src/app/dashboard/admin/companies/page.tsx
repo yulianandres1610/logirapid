@@ -2812,7 +2812,7 @@ export default function CompaniesPage() {
                             currentPage === pageNum && theme === 'dark'
                               ? 'bg-blue-600 hover:bg-blue-700'
                               : currentPage === pageNum
-                              ? 'bg-[#0374e5] hover:bg-[#0374e5]/90 text-white'
+                              ? 'bg-[#0374e5] hover:bg-[#025bb9] text-white'
                               : ''
                           )}
                         >
