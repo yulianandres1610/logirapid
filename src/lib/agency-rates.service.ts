@@ -208,19 +208,19 @@ export class AgencyRatesService {
     return { isValid: true }
   }
 
-  public getRateHistory(currency: string, days: number = 30): Array<{
+  public async getRateHistory(currency: string, days: number = 30): Promise<Array<{
     date: string
     baseRate: number
     agencyRate: number
     adjustment: number
-  }> {
+  }>> {
     if (!this.config) {
       return []
     }
 
     try {
       // Obtener historial desde la base de datos
-      const dbHistory = getAgencyRatesHistory(this.config.id, days)
+      const dbHistory = await getAgencyRatesHistory(this.config.id, days)
 
       if (dbHistory.length > 0) {
         return dbHistory
