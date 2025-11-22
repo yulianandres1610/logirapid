@@ -172,8 +172,6 @@ const getPrimaryCurrencyForCountry = (country: string) => {
   }
 }
 
-const COMPANIES_PER_PAGE = 16 // 4x4 grid
-
 export default function CompaniesPage() {
   const { theme } = useTheme()
   const { showNotification } = useNotifications()
@@ -183,7 +181,6 @@ export default function CompaniesPage() {
   const [searchTerm, setSearchTerm] = useState('')
   const [selectedFilter, setSelectedFilter] = useState('all')
   const [selectedCompany, setSelectedCompany] = useState<any>(null)
-  const [currentPage, setCurrentPage] = useState(1)
   const [confirmDialog, setConfirmDialog] = useState<{
     isOpen: boolean
     title: string
@@ -268,18 +265,6 @@ export default function CompaniesPage() {
     const matchesFilter = selectedFilter === 'all' || company.companyType === selectedFilter
     return matchesSearch && matchesFilter
   })
-
-  // Paginación
-  const totalCompanies = filteredCompanies.length
-  const totalPages = Math.ceil(totalCompanies / COMPANIES_PER_PAGE)
-  const startIndex = (currentPage - 1) * COMPANIES_PER_PAGE
-  const endIndex = startIndex + COMPANIES_PER_PAGE
-  const paginatedCompanies = filteredCompanies.slice(startIndex, endIndex)
-
-  // Reset to page 1 when filters change
-  useEffect(() => {
-    setCurrentPage(1)
-  }, [searchTerm, selectedFilter])
 
   const resetForm = () => {
     setFormData({
@@ -2278,206 +2263,183 @@ export default function CompaniesPage() {
         </div>
       ) : (
         // Companies List View
-        <div className="w-full px-8 py-6">
-          {/* Stats - Estilo Órdenes */}
+        <div className="max-w-7xl mx-auto p-6">
+          {/* Header */}
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             className="mb-8"
           >
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-5">
-              {/* Total de Empresas */}
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h1 className={cn(
+                  "text-3xl font-bold mb-2",
+                  theme === 'dark' ? "text-white" : "text-black"
+                )}>
+                  Empresas Registradas
+                </h1>
+                <p className={cn(
+                  "text-sm",
+                  theme === 'dark' ? "text-gray-400" : "text-gray-600"
+                )}>
+                  Gestiona todas las empresas del sistema
+                </p>
+              </div>
+
+              <Button
+                onClick={() => setShowCreateForm(true)}
+                className={cn(
+                  "flex items-center gap-2 px-6 py-3 rounded-xl font-medium transition-all duration-300",
+                  theme === 'dark' ? "bg-exa-secondary text-white hover:bg-exa-secondary/90" : "bg-exa-primary text-white hover:bg-exa-primary/90"
+                )}
+              >
+                <Plus className="w-5 h-5" />
+                Nueva Empresa
+              </Button>
+            </div>
+
+            {/* Stats */}
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
               <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
+                initial={{ opacity: 0, scale: 0.9 }}
+                animate={{ opacity: 1, scale: 1 }}
                 transition={{ delay: 0.1 }}
                 className={cn(
-                  'relative overflow-hidden',
-                  theme === 'dark'
-                    ? 'bg-gradient-to-br from-gray-800 to-gray-900 border-gray-700'
-                    : 'bg-gradient-to-br from-slate-50 to-white border-slate-200',
-                  'rounded-2xl border shadow-xl'
+                  "p-4 rounded-xl border",
+                  theme === 'dark' ? "bg-white/5 border-white/10" : "bg-white/90 border-gray-200"
                 )}
               >
-                <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-400 to-blue-600"></div>
-                <div className="p-6">
-                  <div className="flex items-start justify-between mb-4">
-                    <div className="flex items-center gap-3">
-                      <div className={cn(
-                        'p-3 rounded-xl shadow-sm',
-                        theme === 'dark'
-                          ? 'bg-blue-900/30 border border-blue-800/50'
-                          : 'bg-gradient-to-br from-blue-50 to-blue-100 border border-blue-200'
-                      )}>
-                        <Building2 className="w-6 h-6 text-blue-600" />
-                      </div>
-                      <div>
-                        <p className={cn(
-                          'text-sm font-medium',
-                          theme === 'dark' ? 'text-gray-400' : 'text-black'
-                        )}>Total de Empresas</p>
-                        <p className={cn(
-                          'text-3xl font-bold mt-1',
-                          theme === 'dark' ? 'text-white' : 'text-slate-900'
-                        )}>{companies.length}</p>
-                      </div>
-                    </div>
+                <div className="flex items-center gap-3">
+                  <div className={cn(
+                    "w-12 h-12 rounded-xl flex items-center justify-center",
+                    theme === 'dark' ? "bg-exa-secondary/20" : "bg-exa-primary/20"
+                  )}>
+                    <Building2 className={cn(
+                      "w-6 h-6",
+                      theme === 'dark' ? "text-exa-secondary" : "text-exa-primary"
+                    )} />
                   </div>
-                  <div className="flex items-center gap-2">
-                    <div className="flex items-center gap-1">
-                      <div className="w-2 h-2 bg-blue-400 rounded-full animate-pulse"></div>
-                      <span className={cn(
-                        'text-xs font-medium',
-                        theme === 'dark' ? 'text-gray-500' : 'text-black'
-                      )}>Matrices y Sucursales</span>
-                    </div>
+                  <div>
+                    <p className={cn(
+                      "text-2xl font-bold",
+                      theme === 'dark' ? "text-white" : "text-black"
+                    )}>
+                      {companies.length}
+                    </p>
+                    <p className={cn(
+                      "text-xs",
+                      theme === 'dark' ? "text-gray-400" : "text-gray-600"
+                    )}>
+                      Total Empresas
+                    </p>
                   </div>
                 </div>
               </motion.div>
 
-              {/* Balance Total */}
               <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
+                initial={{ opacity: 0, scale: 0.9 }}
+                animate={{ opacity: 1, scale: 1 }}
                 transition={{ delay: 0.2 }}
                 className={cn(
-                  'relative overflow-hidden',
-                  theme === 'dark'
-                    ? 'bg-gradient-to-br from-gray-800 to-gray-900 border-gray-700'
-                    : 'bg-gradient-to-br from-slate-50 to-white border-slate-200',
-                  'rounded-2xl border shadow-xl'
+                  "p-4 rounded-xl border",
+                  theme === 'dark' ? "bg-white/5 border-white/10" : "bg-white/90 border-gray-200"
                 )}
               >
-                <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-emerald-400 to-green-600"></div>
-                <div className="p-6">
-                  <div className="flex items-start justify-between mb-4">
-                    <div className="flex items-center gap-3">
-                      <div className={cn(
-                        'p-3 rounded-xl shadow-sm',
-                        theme === 'dark'
-                          ? 'bg-emerald-900/30 border border-emerald-800/50'
-                          : 'bg-gradient-to-br from-emerald-50 to-green-100 border border-emerald-200'
-                      )}>
-                        <CreditCard className="w-6 h-6 text-emerald-600" />
-                      </div>
-                      <div>
-                        <p className={cn(
-                          'text-sm font-medium',
-                          theme === 'dark' ? 'text-gray-400' : 'text-black'
-                        )}>Balance Total</p>
-                        <p className={cn(
-                          'text-3xl font-bold mt-1',
-                          theme === 'dark' ? 'text-white' : 'text-slate-900'
-                        )}>${filteredCompanies.reduce((sum, c) => sum + (parseFloat(c.walletBalance) || 0), 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
-                      </div>
-                    </div>
+                <div className="flex items-center gap-3">
+                  <div className={cn(
+                    "w-12 h-12 rounded-xl flex items-center justify-center",
+                    theme === 'dark' ? "bg-green-500/20" : "bg-green-500/20"
+                  )}>
+                    <Activity className={cn(
+                      "w-6 h-6",
+                      theme === 'dark' ? "text-green-400" : "text-green-600"
+                    )} />
                   </div>
-                  <div className="flex items-center gap-2">
-                    <div className="flex items-center gap-1">
-                      <div className="w-2 h-2 bg-emerald-400 rounded-full animate-pulse"></div>
-                      <span className={cn(
-                        'text-xs font-medium',
-                        theme === 'dark' ? 'text-gray-500' : 'text-black'
-                      )}>Wallets Activos</span>
-                    </div>
+                  <div>
+                    <p className={cn(
+                      "text-2xl font-bold",
+                      theme === 'dark' ? "text-white" : "text-black"
+                    )}>
+                      {companies.filter((c: any) => c.status === 'active').length}
+                    </p>
+                    <p className={cn(
+                      "text-xs",
+                      theme === 'dark' ? "text-gray-400" : "text-gray-600"
+                    )}>
+                      Activas
+                    </p>
                   </div>
                 </div>
               </motion.div>
 
-              {/* Total de Usuarios */}
               <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
+                initial={{ opacity: 0, scale: 0.9 }}
+                animate={{ opacity: 1, scale: 1 }}
                 transition={{ delay: 0.3 }}
                 className={cn(
-                  'relative overflow-hidden',
-                  theme === 'dark'
-                    ? 'bg-gradient-to-br from-gray-800 to-gray-900 border-gray-700'
-                    : 'bg-gradient-to-br from-slate-50 to-white border-slate-200',
-                  'rounded-2xl border shadow-xl'
+                  "p-4 rounded-xl border",
+                  theme === 'dark' ? "bg-white/5 border-white/10" : "bg-white/90 border-gray-200"
                 )}
               >
-                <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-amber-400 to-orange-600"></div>
-                <div className="p-6">
-                  <div className="flex items-start justify-between mb-4">
-                    <div className="flex items-center gap-3">
-                      <div className={cn(
-                        'p-3 rounded-xl shadow-sm',
-                        theme === 'dark'
-                          ? 'bg-amber-900/30 border border-amber-800/50'
-                          : 'bg-gradient-to-br from-amber-50 to-orange-100 border border-amber-200'
-                      )}>
-                        <Users className="w-6 h-6 text-amber-600" />
-                      </div>
-                      <div>
-                        <p className={cn(
-                          'text-sm font-medium',
-                          theme === 'dark' ? 'text-gray-400' : 'text-black'
-                        )}>Total Usuarios</p>
-                        <p className={cn(
-                          'text-3xl font-bold mt-1',
-                          theme === 'dark' ? 'text-white' : 'text-slate-900'
-                        )}>{companies.reduce((sum, c) => sum + (c.usersCount || 0), 0)}</p>
-                      </div>
-                    </div>
+                <div className="flex items-center gap-3">
+                  <div className={cn(
+                    "w-12 h-12 rounded-xl flex items-center justify-center",
+                    theme === 'dark' ? "bg-exa-secondary/20" : "bg-exa-primary/20"
+                  )}>
+                    <Users className={cn(
+                      "w-6 h-6",
+                      theme === 'dark' ? "text-exa-secondary" : "text-exa-primary"
+                    )} />
                   </div>
-                  <div className="flex items-center gap-2">
-                    <div className="flex items-center gap-1">
-                      <div className="w-2 h-2 bg-amber-400 rounded-full"></div>
-                      <span className={cn(
-                        'text-xs font-medium',
-                        theme === 'dark' ? 'text-gray-500' : 'text-black'
-                      )}>En todas las empresas</span>
-                    </div>
+                  <div>
+                    <p className={cn(
+                      "text-2xl font-bold",
+                      theme === 'dark' ? "text-white" : "text-black"
+                    )}>
+                      {companies.reduce((sum, c) => sum + c.usersCount, 0)}
+                    </p>
+                    <p className={cn(
+                      "text-xs",
+                      theme === 'dark' ? "text-gray-400" : "text-gray-600"
+                    )}>
+                      Total Usuarios
+                    </p>
                   </div>
                 </div>
               </motion.div>
 
-              {/* Total de Sucursales */}
               <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
+                initial={{ opacity: 0, scale: 0.9 }}
+                animate={{ opacity: 1, scale: 1 }}
                 transition={{ delay: 0.4 }}
                 className={cn(
-                  'relative overflow-hidden',
-                  theme === 'dark'
-                    ? 'bg-gradient-to-br from-gray-800 to-gray-900 border-gray-700'
-                    : 'bg-gradient-to-br from-slate-50 to-white border-slate-200',
-                  'rounded-2xl border shadow-xl'
+                  "p-4 rounded-xl border",
+                  theme === 'dark' ? "bg-white/5 border-white/10" : "bg-white/90 border-gray-200"
                 )}
               >
-                <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-violet-400 to-purple-600"></div>
-                <div className="p-6">
-                  <div className="flex items-start justify-between mb-4">
-                    <div className="flex items-center gap-3">
-                      <div className={cn(
-                        'p-3 rounded-xl shadow-sm',
-                        theme === 'dark'
-                          ? 'bg-violet-900/30 border border-violet-800/50'
-                          : 'bg-gradient-to-br from-violet-50 to-purple-100 border border-violet-200'
-                      )}>
-                        <Building2 className="w-6 h-6 text-violet-600" />
-                      </div>
-                      <div>
-                        <p className={cn(
-                          'text-sm font-medium',
-                          theme === 'dark' ? 'text-gray-400' : 'text-black'
-                        )}>Total Sucursales</p>
-                        <p className={cn(
-                          'text-3xl font-bold mt-1',
-                          theme === 'dark' ? 'text-white' : 'text-slate-900'
-                        )}>{companies.filter((c: any) => c.isBranch).length}</p>
-                      </div>
-                    </div>
+                <div className="flex items-center gap-3">
+                  <div className={cn(
+                    "w-12 h-12 rounded-xl flex items-center justify-center",
+                    theme === 'dark' ? "bg-purple-500/20" : "bg-purple-500/20"
+                  )}>
+                    <TrendingUp className={cn(
+                      "w-6 h-6",
+                      theme === 'dark' ? "text-purple-400" : "text-purple-600"
+                    )} />
                   </div>
-                  <div className="flex items-center gap-2">
-                    <div className="flex items-center gap-1">
-                      <div className="w-2 h-2 bg-violet-400 rounded-full"></div>
-                      <span className={cn(
-                        'text-xs font-medium',
-                        theme === 'dark' ? 'text-gray-500' : 'text-black'
-                      )}>Empresas activas: {companies.filter((c: any) => c.status === 'active').length}</span>
-                    </div>
+                  <div>
+                    <p className={cn(
+                      "text-2xl font-bold",
+                      theme === 'dark' ? "text-white" : "text-black"
+                    )}>
+                      ${companies.reduce((sum, c) => sum + (parseFloat(c.walletBalance) || 0), 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </p>
+                    <p className={cn(
+                      "text-xs",
+                      theme === 'dark' ? "text-gray-400" : "text-gray-600"
+                    )}>
+                      Balance Total
+                    </p>
                   </div>
                 </div>
               </motion.div>
@@ -2494,11 +2456,10 @@ export default function CompaniesPage() {
               theme === 'dark' ? "bg-white/5 border-white/10" : "bg-white/90 border-gray-200"
             )}
           >
-            <div className="flex flex-col lg:flex-row gap-4 items-center">
-              {/* Buscador más pequeño */}
-              <div className="relative w-full lg:w-80">
+            <div className="flex flex-col sm:flex-row gap-4">
+              <div className="relative flex-1">
                 <Search className={cn(
-                  "absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4",
+                  "absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5",
                   theme === 'dark' ? "text-gray-400" : "text-gray-500"
                 )} />
                 <input
@@ -2507,7 +2468,7 @@ export default function CompaniesPage() {
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                   className={cn(
-                    "w-full pl-10 pr-4 py-2.5 text-sm rounded-lg border focus:outline-none focus:ring-2 transition-all duration-300",
+                    "w-full pl-12 pr-4 py-3 rounded-xl border focus:outline-none focus:ring-2 transition-all duration-300",
                     theme === 'dark'
                       ? "bg-gray-800/50 border-gray-700 text-white focus:border-exa-secondary focus:ring-exa-secondary/20"
                       : "bg-white border-gray-300 text-black focus:border-exa-primary focus:ring-exa-primary/20"
@@ -2515,83 +2476,66 @@ export default function CompaniesPage() {
                 />
               </div>
 
-              {/* Botones de filtro y acción */}
-              <div className="flex flex-wrap gap-2 flex-1 justify-between w-full lg:w-auto">
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => setSelectedFilter('all')}
-                    className={cn(
-                      "px-3 py-2 text-sm rounded-lg font-medium transition-all duration-300 border",
-                      selectedFilter === 'all'
-                        ? theme === 'dark'
-                          ? "bg-exa-secondary text-white border-exa-secondary hover:bg-exa-secondary/90"
-                          : "bg-exa-primary text-white border-exa-primary hover:bg-exa-primary/90"
-                        : theme === 'dark'
-                          ? "bg-gray-800/50 border-gray-700 text-gray-300 hover:bg-gray-700 hover:text-white"
-                          : "bg-gray-100 border-gray-300 text-gray-700 hover:bg-exa-primary hover:text-white"
-                    )}
-                  >
-                    Todas
-                  </button>
-                  <button
-                    onClick={() => setSelectedFilter('agency')}
-                    className={cn(
-                      "px-3 py-2 text-sm rounded-lg font-medium transition-all duration-300 border",
-                      selectedFilter === 'agency'
-                        ? theme === 'dark'
-                          ? "bg-exa-secondary text-white border-exa-secondary hover:bg-exa-secondary/90"
-                          : "bg-exa-primary text-white border-exa-primary hover:bg-exa-primary/90"
-                        : theme === 'dark'
-                          ? "bg-gray-800/50 border-gray-700 text-gray-300 hover:bg-gray-700 hover:text-white"
-                          : "bg-gray-100 border-gray-300 text-gray-700 hover:bg-exa-primary hover:text-white"
-                    )}
-                  >
-                    Agencias
-                  </button>
-                  <button
-                    onClick={() => setSelectedFilter('market')}
-                    className={cn(
-                      "px-3 py-2 text-sm rounded-lg font-medium transition-all duration-300 border",
-                      selectedFilter === 'market'
-                        ? theme === 'dark'
-                          ? "bg-exa-secondary text-white border-exa-secondary hover:bg-exa-secondary/90"
-                          : "bg-exa-primary text-white border-exa-primary hover:bg-exa-primary/90"
-                        : theme === 'dark'
-                          ? "bg-gray-800/50 border-gray-700 text-gray-300 hover:bg-gray-700 hover:text-white"
-                          : "bg-gray-100 border-gray-300 text-gray-700 hover:bg-exa-primary hover:text-white"
-                    )}
-                  >
-                    Mercados
-                  </button>
-                  <button
-                    onClick={() => setSelectedFilter('broker')}
-                    className={cn(
-                      "px-3 py-2 text-sm rounded-lg font-medium transition-all duration-300 border",
-                      selectedFilter === 'broker'
-                        ? theme === 'dark'
-                          ? "bg-exa-secondary text-white border-exa-secondary hover:bg-exa-secondary/90"
-                          : "bg-exa-primary text-white border-exa-primary/90"
-                        : theme === 'dark'
-                          ? "bg-gray-800/50 border-gray-700 text-gray-300 hover:bg-gray-700 hover:text-white"
-                          : "bg-gray-100 border-gray-300 text-gray-700 hover:bg-exa-primary hover:text-white"
-                    )}
-                  >
-                    Brokers
-                  </button>
-                </div>
-
-                {/* Botón Crear Empresa */}
+              <div className="flex gap-2">
                 <button
-                  onClick={() => setShowModal(true)}
+                  onClick={() => setSelectedFilter('all')}
                   className={cn(
-                    "flex items-center gap-2 px-4 py-2 text-sm rounded-lg font-medium transition-all duration-300",
-                    "bg-blue-600 hover:bg-blue-700 text-white",
-                    "shadow-sm hover:shadow-md",
-                    "focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                    "px-4 py-2 rounded-lg font-medium transition-all duration-300 border",
+                    selectedFilter === 'all'
+                      ? theme === 'dark'
+                        ? "bg-exa-secondary text-white border-exa-secondary hover:bg-exa-secondary/90"
+                        : "bg-exa-primary text-white border-exa-primary hover:bg-exa-primary/90"
+                      : theme === 'dark'
+                        ? "bg-gray-800/50 border-gray-700 text-gray-300 hover:bg-gray-700 hover:text-white"
+                        : "bg-gray-100 border-gray-300 text-gray-700 hover:bg-exa-primary hover:text-white"
                   )}
                 >
-                  <Plus className="w-4 h-4" />
-                  Crear Empresa
+                  Todas
+                </button>
+                <button
+                  onClick={() => setSelectedFilter('agency')}
+                  className={cn(
+                    "px-4 py-2 rounded-lg font-medium transition-all duration-300 border",
+                    selectedFilter === 'agency'
+                      ? theme === 'dark'
+                        ? "bg-exa-secondary text-white border-exa-secondary hover:bg-exa-secondary/90"
+                        : "bg-exa-primary text-white border-exa-primary hover:bg-exa-primary/90"
+                      : theme === 'dark'
+                        ? "bg-gray-800/50 border-gray-700 text-gray-300 hover:bg-gray-700 hover:text-white"
+                        : "bg-gray-100 border-gray-300 text-gray-700 hover:bg-exa-primary hover:text-white"
+                  )}
+                >
+                  Agencias
+                </button>
+                <button
+                  onClick={() => setSelectedFilter('market')}
+                  className={cn(
+                    "px-4 py-2 rounded-lg font-medium transition-all duration-300 border",
+                    selectedFilter === 'market'
+                      ? theme === 'dark'
+                        ? "bg-exa-secondary text-white border-exa-secondary hover:bg-exa-secondary/90"
+                        : "bg-exa-primary text-white border-exa-primary hover:bg-exa-primary/90"
+                      : theme === 'dark'
+                        ? "bg-gray-800/50 border-gray-700 text-gray-300 hover:bg-gray-700 hover:text-white"
+                        : "bg-gray-100 border-gray-300 text-gray-700 hover:bg-exa-primary hover:text-white"
+                  )}
+                >
+                  Mercados
+                </button>
+                <button
+                  onClick={() => setSelectedFilter('broker')}
+                  className={cn(
+                    "px-4 py-2 rounded-lg font-medium transition-all duration-300 border",
+                    selectedFilter === 'broker'
+                      ? theme === 'dark'
+                        ? "bg-exa-secondary text-white border-exa-secondary hover:bg-exa-secondary/90"
+                        : "bg-exa-primary text-white border-exa-primary/90"
+                      : theme === 'dark'
+                        ? "bg-gray-800/50 border-gray-700 text-gray-300 hover:bg-gray-700 hover:text-white"
+                        : "bg-gray-100 border-gray-300 text-gray-700 hover:bg-exa-primary hover:text-white"
+                  )}
+                >
+                  Brokers
                 </button>
               </div>
             </div>
@@ -2603,105 +2547,103 @@ export default function CompaniesPage() {
               <LoadingBox text="Cargando empresas..." size="md" />
             </div>
           ) : (
-            <div className="px-12">
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
-                {paginatedCompanies.map((company, index) => (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {filteredCompanies.map((company, index) => {
+                const isBranch = company.isBranch || false
+                const indicatorColor = isBranch ? '#cc0a46' : '#0374e5'
+                const badgeLabel = isBranch ? 'Sucursal' : 'Matriz'
+                const branchCount = companies.filter((c: any) => c.parentCompanyId === company.id).length
+
+                return (
                   <motion.div
                     key={company.id}
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: index * 0.05 }}
-                    whileHover={{ y: -4, transition: { duration: 0.2 } }}
                     className={cn(
-                      "relative overflow-hidden rounded-lg border-2 p-4 aspect-square flex flex-col justify-between",
-                      "transition-all duration-300 shadow-sm hover:shadow-xl",
-                      theme === 'dark' ? "bg-gray-800" : "bg-white",
-                      company.isBranch ? "border-[#cc0a46]" : "border-[#0374e5]"
+                      "bg-white dark:bg-gray-800 rounded-lg border p-4 hover:shadow-lg transition-all",
+                      theme === 'dark' ? "border-gray-700" : "border-gray-200"
                     )}
                   >
-
                     {/* Header Row */}
-                    <div className="flex items-start justify-between mb-3 relative z-10">
-                      <div className="flex items-center gap-2 flex-1 min-w-0">
-                        {/* Company/Branch indicator */}
-                        <div className={cn(
-                          "relative p-1.5 rounded-lg transition-all duration-200 shadow-sm flex-shrink-0",
-                          theme === 'dark'
-                            ? "bg-gray-700 border border-gray-600"
-                            : "bg-gray-50 border border-gray-200"
-                        )}>
-                          <Building2 className={cn(
-                            "w-4 h-4 transition-colors duration-200",
-                            theme === 'dark' ? "text-gray-400" : "text-gray-600"
-                          )} />
-                          {company.isBranch && (
-                            <div className="absolute -top-0.5 -right-0.5 w-2 h-2 bg-[#cc0a46] rounded-full" />
-                          )}
+                    <div className="flex items-start justify-between mb-3">
+                      <div className="flex items-center gap-3 flex-1">
+                        {/* Branch/Parent indicator */}
+                        <div className="relative p-2 rounded-lg bg-gray-50 dark:bg-gray-700">
+                          <Building2 className="w-5 h-5 text-gray-600 dark:text-gray-400" />
+                          <div
+                            className="absolute -top-1 -right-1 w-2 h-2 rounded-full"
+                            style={{ backgroundColor: indicatorColor }}
+                          />
                         </div>
 
                         {/* Company name and location */}
                         <div className="flex-1 min-w-0">
-                          <h3 className="font-semibold text-sm text-gray-900 dark:text-white truncate">
-                            {company.legalName}
-                          </h3>
-                          <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
-                            {company.city || 'N/A'}
+                          <div className="flex items-center gap-2 mb-1">
+                            <h3 className="font-semibold text-gray-900 dark:text-white truncate">
+                              {company.legalName}
+                            </h3>
+                            <span
+                              className="px-2 py-0.5 rounded-full text-xs font-medium"
+                              style={{
+                                backgroundColor: `${indicatorColor}1A`,
+                                color: indicatorColor
+                              }}
+                            >
+                              {badgeLabel}
+                            </span>
+                          </div>
+                          <p className="text-sm text-gray-500 dark:text-gray-400 truncate">
+                            {company.city || 'N/A'}, {company.state || ''} {company.country || ''}
                           </p>
                         </div>
                       </div>
 
                       {/* Status badge */}
                       <span className={cn(
-                        "px-2 py-0.5 rounded-full text-[10px] font-semibold whitespace-nowrap shadow-sm flex-shrink-0",
+                        "px-2 py-1 rounded-full text-xs font-medium whitespace-nowrap",
                         company.status === 'active'
-                          ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300"
-                          : "bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300"
+                          ? "bg-green-100 text-green-800 dark:bg-green-900 dark:bg-opacity-30 dark:text-green-400"
+                          : "bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-400"
                       )}>
-                        {company.status === 'active' ? "●" : "○"}
+                        {company.status === 'active' ? "Activo" : "Inactivo"}
                       </span>
                     </div>
 
                     {/* Info Grid */}
                     <div className={cn(
-                      "grid gap-2 mb-3 py-2 border-y relative z-10",
-                      company.isBranch ? "grid-cols-2" : "grid-cols-3",
+                      isBranch ? "grid grid-cols-2 gap-4" : "grid grid-cols-3 gap-4",
+                      "mb-3 py-3 border-y",
                       theme === 'dark' ? "border-gray-700" : "border-gray-200"
                     )}>
                       {/* Wallet Balance */}
                       <div>
-                        <p className="text-[10px] font-medium text-gray-500 dark:text-gray-400 mb-0.5">Balance</p>
-                        <p className="text-sm font-bold text-gray-900 dark:text-white truncate">
-                          ${(company.walletBalance || 0).toLocaleString()}
+                        <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">Balance</p>
+                        <p className="font-semibold text-gray-900 dark:text-white">
+                          ${(company.walletBalance || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                         </p>
                       </div>
 
                       {/* Users */}
                       <div>
-                        <p className="text-[10px] font-medium text-gray-500 dark:text-gray-400 mb-0.5">Usuarios</p>
-                        <p className="text-sm font-bold text-gray-900 dark:text-white">{company.usersCount || 0}</p>
+                        <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">Usuarios</p>
+                        <p className="font-semibold text-gray-900 dark:text-white">{company.usersCount || 0}</p>
                       </div>
 
                       {/* Branches (only for parent companies) */}
-                      {!company.isBranch && (
+                      {!isBranch && (
                         <div>
-                          <p className="text-[10px] font-medium text-gray-500 dark:text-gray-400 mb-0.5">Sucursales</p>
-                          <p className="text-sm font-bold text-gray-900 dark:text-white">
-                            {companies.filter((c: any) => c.parentCompanyId === company.id).length}
-                          </p>
+                          <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">Sucursales</p>
+                          <p className="font-semibold text-gray-900 dark:text-white">{branchCount}</p>
                         </div>
                       )}
                     </div>
 
                     {/* Action Buttons */}
-                    <div className="flex gap-1.5 justify-end relative z-10">
+                    <div className="flex gap-2 justify-end">
                       <button
                         onClick={() => setSelectedCompany(company)}
-                        className={cn(
-                          "p-2 rounded-lg transition-all duration-200",
-                          "text-gray-600 dark:text-gray-400",
-                          "hover:bg-gray-100 dark:hover:bg-gray-700",
-                          "hover:scale-105"
-                        )}
+                        className="p-2 rounded-lg text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
                         title="Ver detalles"
                       >
                         <Eye className="w-4 h-4" />
@@ -2709,12 +2651,17 @@ export default function CompaniesPage() {
                       <button
                         onClick={() => handleEditCompany(company.id)}
                         disabled={loading}
-                        className={cn(
-                          "p-2 rounded-lg transition-all duration-200",
-                          "text-[#0374e5]",
-                          "hover:bg-blue-50 dark:hover:bg-blue-900/20",
-                          "hover:scale-105"
-                        )}
+                        className="p-2 rounded-lg transition-colors"
+                        style={{
+                          color: indicatorColor,
+                          backgroundColor: `${indicatorColor}00`
+                        }}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.backgroundColor = `${indicatorColor}1A`
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.backgroundColor = `${indicatorColor}00`
+                        }}
                         title="Editar"
                       >
                         <Edit className="w-4 h-4" />
@@ -2723,10 +2670,10 @@ export default function CompaniesPage() {
                         onClick={() => handleToggleStatus(company.id, company.legalName, company.status)}
                         disabled={loading}
                         className={cn(
-                          "p-2 rounded-lg transition-all duration-200 hover:scale-105",
+                          "p-2 rounded-lg transition-colors",
                           company.status === 'active'
-                            ? "text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-900/20"
-                            : "text-green-600 hover:bg-green-50 dark:hover:bg-green-900/20"
+                            ? "text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-900 dark:hover:bg-opacity-20"
+                            : "text-green-600 hover:bg-green-50 dark:hover:bg-green-900 dark:hover:bg-opacity-20"
                         )}
                         title={company.status === 'active' ? 'Desactivar' : 'Activar'}
                       >
@@ -2740,12 +2687,7 @@ export default function CompaniesPage() {
                         <button
                           onClick={() => handleDeleteCompany(company.id, company.legalName)}
                           disabled={loading}
-                          className={cn(
-                            "p-2 rounded-lg transition-all duration-200",
-                            "text-red-600",
-                            "hover:bg-red-50 dark:hover:bg-red-900/20",
-                            "hover:scale-105"
-                          )}
+                          className="p-2 rounded-lg text-red-600 hover:bg-red-50 dark:hover:bg-red-900 dark:hover:bg-opacity-20 transition-colors"
                           title="Eliminar"
                         >
                           <Trash2 className="w-4 h-4" />
@@ -2753,88 +2695,8 @@ export default function CompaniesPage() {
                       )}
                     </div>
                   </motion.div>
-                ))
-              </div>
-            </div>
-          )}
-
-          {/* Paginador */}
-          {totalCompanies > COMPANIES_PER_PAGE && (
-            <div className="px-12">
-              <motion.div
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                className={cn(
-                  'mt-6 p-4 rounded-xl border',
-                  theme === 'dark' ? 'border-gray-700 bg-gray-800' : 'border-gray-200 bg-white'
-                )}
-              >
-              <div className="flex items-center justify-between">
-                <div className="text-sm text-black dark:text-gray-400">
-                  Mostrando {((currentPage - 1) * COMPANIES_PER_PAGE) + 1} a{' '}
-                  {Math.min(currentPage * COMPANIES_PER_PAGE, totalCompanies)} de {totalCompanies} empresas
-                </div>
-
-                <div className="flex items-center gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setCurrentPage(currentPage - 1)}
-                    disabled={currentPage === 1}
-                    className="flex items-center gap-1"
-                  >
-                    <ChevronLeft className="w-4 h-4" />
-                    Anterior
-                  </Button>
-
-                  <div className="flex items-center gap-1">
-                    {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
-                      let pageNum
-
-                      if (totalPages <= 5) {
-                        pageNum = i + 1
-                      } else if (currentPage <= 3) {
-                        pageNum = i + 1
-                      } else if (currentPage >= totalPages - 2) {
-                        pageNum = totalPages - 4 + i
-                      } else {
-                        pageNum = currentPage - 2 + i
-                      }
-
-                      return (
-                        <Button
-                          key={pageNum}
-                          variant={currentPage === pageNum ? "default" : "outline"}
-                          size="sm"
-                          onClick={() => setCurrentPage(pageNum)}
-                          className={cn(
-                            'w-8 h-8 p-0',
-                            currentPage === pageNum && theme === 'dark'
-                              ? 'bg-blue-600 hover:bg-blue-700'
-                              : currentPage === pageNum
-                              ? 'bg-[#0374e5] hover:bg-[#0374e5]/90 text-white'
-                              : ''
-                          )}
-                        >
-                          {pageNum}
-                        </Button>
-                      )
-                    })}
-                  </div>
-
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setCurrentPage(currentPage + 1)}
-                    disabled={currentPage >= totalPages}
-                    className="flex items-center gap-1"
-                  >
-                    Siguiente
-                    <ChevronRight className="w-4 h-4" />
-                  </Button>
-                </div>
-              </div>
-              </motion.div>
+                )
+              })}
             </div>
           )}
 
