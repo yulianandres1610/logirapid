@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
+import jwt from 'jsonwebtoken'
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl
@@ -30,31 +31,52 @@ export async function middleware(request: NextRequest) {
   // Para rutas API, inyectar headers de autenticación y multi-tenancy
   if (pathname.startsWith('/api')) {
     const authToken = request.cookies.get('auth-token')?.value
-    const userRole = request.cookies.get('user-role')?.value
-    const companyId = request.cookies.get('user-company-id')?.value
-    const companyName = request.cookies.get('user-company-name')?.value
-    const userId = request.cookies.get('user-id')?.value
-
-    // Crear respuesta con headers inyectados
     const response = NextResponse.next()
 
-    // Inyectar headers para que las APIs puedan acceder a la información del usuario
-    if (authToken) {
-      response.headers.set('x-auth-token', authToken)
-    }
-    if (userRole) {
-      response.headers.set('x-user-role', userRole)
-      // Inyectar flag de super admin para query-helpers.ts
-      response.headers.set('x-is-super-admin', userRole === 'SUPER_ADMIN' ? 'true' : 'false')
-    }
-    if (companyId) {
-      response.headers.set('x-company-id', companyId)
-    }
-    if (companyName) {
-      response.headers.set('x-company-name', companyName)
-    }
-    if (userId) {
-      response.headers.set('x-user-id', userId)
+    // Si hay token JWT, validarlo y extraer información
+    if (authToken && !pathname.includes('/api/auth/login')) {
+      try {
+        const jwtSecret = process.env.JWT_SECRET || 'fallback-secret-change-in-production'
+        const decodedToken = jwt.verify(authToken, jwtSecret) as any
+
+        // Inyectar headers desde el JWT decodificado
+        response.headers.set('x-auth-token', authToken)
+        response.headers.set('x-user-id', decodedToken.userId?.toString() || '')
+        response.headers.set('x-user-role', decodedToken.role || '')
+        response.headers.set('x-is-super-admin', decodedToken.role === 'SUPER_ADMIN' ? 'true' : 'false')
+        if (decodedToken.companyId) {
+          response.headers.set('x-company-id', decodedToken.companyId.toString())
+        }
+        if (decodedToken.companyName) {
+          response.headers.set('x-company-name', decodedToken.companyName)
+        }
+      } catch (error) {
+        // Token inválido - continuar sin inyectar headers
+        console.error('[MIDDLEWARE] Invalid JWT for API route:', error)
+      }
+    } else {
+      // Fallback para cookies (para compatibilidad temporal)
+      const userRole = request.cookies.get('user-role')?.value
+      const companyId = request.cookies.get('user-company-id')?.value
+      const companyName = request.cookies.get('user-company-name')?.value
+      const userId = request.cookies.get('user-id')?.value
+
+      if (authToken) {
+        response.headers.set('x-auth-token', authToken)
+      }
+      if (userRole) {
+        response.headers.set('x-user-role', userRole)
+        response.headers.set('x-is-super-admin', userRole === 'SUPER_ADMIN' ? 'true' : 'false')
+      }
+      if (companyId) {
+        response.headers.set('x-company-id', companyId)
+      }
+      if (companyName) {
+        response.headers.set('x-company-name', companyName)
+      }
+      if (userId) {
+        response.headers.set('x-user-id', userId)
+      }
     }
 
     return response
@@ -65,20 +87,32 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next()
   }
 
-  // Obtener el auth-token de las cookies (sistema actual)
+  // Obtener el auth-token de las cookies (JWT)
   const authToken = request.cookies.get('auth-token')?.value
 
-  // Obtener información del usuario de las cookies
-  const userRole = request.cookies.get('user-role')?.value
-  const companyId = request.cookies.get('user-company-id')?.value
-  const companyName = request.cookies.get('user-company-name')?.value
-
   // Si no hay token de autenticación, redirigir al login
-  if (!authToken || authToken !== 'authenticated') {
+  if (!authToken) {
     const loginUrl = new URL('/login', request.url)
     loginUrl.searchParams.set('callbackUrl', pathname)
     return NextResponse.redirect(loginUrl)
   }
+
+  // Validar JWT token
+  let decodedToken: any
+  try {
+    const jwtSecret = process.env.JWT_SECRET || 'fallback-secret-change-in-production'
+    decodedToken = jwt.verify(authToken, jwtSecret) as any
+  } catch (error) {
+    console.error('[MIDDLEWARE] Invalid JWT token:', error)
+    const loginUrl = new URL('/login', request.url)
+    loginUrl.searchParams.set('callbackUrl', pathname)
+    return NextResponse.redirect(loginUrl)
+  }
+
+  // Extraer información del token decodificado (tiene prioridad sobre las cookies)
+  const userRole = decodedToken.role || request.cookies.get('user-role')?.value
+  const companyId = decodedToken.companyId?.toString() || request.cookies.get('user-company-id')?.value
+  const companyName = decodedToken.companyName || request.cookies.get('user-company-name')?.value
 
   // Validación de acceso según rol
   const response = NextResponse.next()

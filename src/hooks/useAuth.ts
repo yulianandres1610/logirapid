@@ -68,7 +68,8 @@ export function useAuth(): UseAuthReturn {
           .find(row => row.startsWith('user-company-name='))
           ?.split('=')[1]
 
-        if (authToken === 'authenticated' && userId && userName && userEmail && userRole) {
+        // Validate JWT token presence (basic check - full validation in middleware)
+        if (authToken && userId && userName && userEmail && userRole) {
           const user: User = {
             id: userId,
             name: decodeURIComponent(userName),
@@ -79,6 +80,7 @@ export function useAuth(): UseAuthReturn {
             updatedAt: new Date(),
           }
           localStorage.setItem('user', JSON.stringify(user))
+          localStorage.setItem('auth-token', authToken)
           setState(prev => ({ ...prev, user, isLoading: false }))
         } else {
           setState(prev => ({ ...prev, isLoading: false }))
@@ -102,6 +104,7 @@ export function useAuth(): UseAuthReturn {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify(credentials),
+        credentials: 'include', // Ensure cookies are sent and received
       })
 
       const data = await response.json()
@@ -132,6 +135,10 @@ export function useAuth(): UseAuthReturn {
         // Persist in localStorage
         if (typeof window !== 'undefined') {
           localStorage.setItem('user', JSON.stringify(user))
+          // Store JWT token if provided
+          if (data.token) {
+            localStorage.setItem('auth-token', data.token)
+          }
         }
 
         // Update state
@@ -196,6 +203,7 @@ export function useAuth(): UseAuthReturn {
     // Clear localStorage and cookies
     if (typeof window !== 'undefined') {
       localStorage.removeItem('user')
+      localStorage.removeItem('auth-token')
       // Clear all auth cookies
       const cookiesToClear = [
         'auth-token',
@@ -206,7 +214,15 @@ export function useAuth(): UseAuthReturn {
         'user-company-id',
         'user-company-name',
       ]
+      const cookieDomain = window.location.hostname.includes('logirapid.com')
+        ? '.logirapid.com'
+        : undefined
       cookiesToClear.forEach(cookie => {
+        // Clear with domain if applicable
+        if (cookieDomain) {
+          document.cookie = `${cookie}=; path=/; domain=${cookieDomain}; expires=Thu, 01 Jan 1970 00:00:00 GMT`
+        }
+        // Also clear without domain for fallback
         document.cookie = `${cookie}=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT`
       })
     }

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/database'
 import { verifyPassword } from '@/lib/auth'
+import jwt from 'jsonwebtoken'
 
 // Force dynamic rendering
 export const dynamic = 'force-dynamic'
@@ -131,22 +132,42 @@ export async function POST(request: NextRequest) {
       updatedAt: user.createdAt, // Use createdAt as fallback
     }
 
+    // Generate JWT token
+    const jwtSecret = process.env.JWT_SECRET || 'fallback-secret-change-in-production'
+    const token = jwt.sign(
+      {
+        userId: user.id,
+        email: user.email,
+        role: user.role,
+        companyId: user.companyId,
+        companyName: user.companyName,
+      },
+      jwtSecret,
+      { expiresIn: '7d' }
+    )
+
     // Create response with cookies
     const response = NextResponse.json({
       success: true,
-      user: userData
+      user: userData,
+      token // Include token in response for localStorage
     })
 
-    // Set authentication cookies
+    // Set authentication cookies with domain for cross-subdomain support
+    const cookieDomain = process.env.COOKIE_DOMAIN || (
+      process.env.NODE_ENV === 'production' ? '.logirapid.com' : undefined
+    )
+
     const cookieOptions = {
       httpOnly: false, // Allow JavaScript access for client-side routing
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax' as const,
+      domain: cookieDomain,
       path: '/',
       maxAge: 60 * 60 * 24 * 7, // 7 days
     }
 
-    response.cookies.set('auth-token', 'authenticated', cookieOptions)
+    response.cookies.set('auth-token', token, cookieOptions)
     response.cookies.set('user-id', user.id.toString(), cookieOptions)
     response.cookies.set('user-name', encodeURIComponent(userData.name), cookieOptions)
     response.cookies.set('user-email', encodeURIComponent(user.email), cookieOptions)
