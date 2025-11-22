@@ -2654,7 +2654,7 @@ export default function CompaniesPage() {
                       <span className={cn(
                         "px-2 py-0.5 rounded-full text-[10px] font-semibold whitespace-nowrap shadow-sm flex-shrink-0",
                         company.status === 'active'
-                          ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300"
+                          ? "bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300"
                           : "bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300"
                       )}>
                         {company.status === 'active' ? "●" : "○"}
@@ -2712,7 +2712,7 @@ export default function CompaniesPage() {
                         className={cn(
                           "p-2 rounded-lg transition-all duration-200",
                           "text-[#0374e5]",
-                          "hover:bg-blue-50 dark:hover:bg-blue-900/20",
+                          "hover:bg-blue-50 dark:hover:bg-blue-900",
                           "hover:scale-105"
                         )}
                         title="Editar"
@@ -2725,8 +2725,8 @@ export default function CompaniesPage() {
                         className={cn(
                           "p-2 rounded-lg transition-all duration-200 hover:scale-105",
                           company.status === 'active'
-                            ? "text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-900/20"
-                            : "text-green-600 hover:bg-green-50 dark:hover:bg-green-900/20"
+                            ? "text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-900"
+                            : "text-green-600 hover:bg-green-50 dark:hover:bg-green-900"
                         )}
                         title={company.status === 'active' ? 'Desactivar' : 'Activar'}
                       >
@@ -2743,7 +2743,7 @@ export default function CompaniesPage() {
                           className={cn(
                             "p-2 rounded-lg transition-all duration-200",
                             "text-red-600",
-                            "hover:bg-red-50 dark:hover:bg-red-900/20",
+                            "hover:bg-red-50 dark:hover:bg-red-900",
                             "hover:scale-105"
                           )}
                           title="Eliminar"
