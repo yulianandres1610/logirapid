@@ -38,7 +38,9 @@ export async function GET(request: NextRequest) {
       }, { status: 200 })
     }
 
-    const adjustmentPercentage = parseFloat(config.adjustmentPercentage) || 0
+    const adjustmentPercentage = typeof config.adjustmentPercentage === 'number'
+      ? config.adjustmentPercentage
+      : parseFloat(config.adjustmentPercentage) || 0
     console.log(`[CRON] Using adjustment percentage: ${adjustmentPercentage}%`)
 
     // 2. Consultar tasas de ElToque

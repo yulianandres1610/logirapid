@@ -181,12 +181,25 @@ export function getPoolDirect() {
 export async function getAgencyConfig(companyId?: string) {
   try {
     const query = companyId
-      ? 'SELECT * FROM agency_rates_config WHERE "companyId" = $1 ORDER BY "updatedAt" DESC LIMIT 1'
-      : 'SELECT * FROM agency_rates_config WHERE "companyId" IS NULL ORDER BY "updatedAt" DESC LIMIT 1'
+      ? 'SELECT * FROM agency_rates_config WHERE companyid = $1 ORDER BY updatedat DESC LIMIT 1'
+      : 'SELECT * FROM agency_rates_config WHERE companyid IS NULL ORDER BY updatedat DESC LIMIT 1'
 
     const params = companyId ? [companyId] : []
     const result = await db.query(query, params)
-    return result.rows[0] || null
+
+    // Map lowercase column names to camelCase for consistency
+    if (result.rows[0]) {
+      return {
+        id: result.rows[0].id,
+        adjustmentPercentage: parseFloat(result.rows[0].adjustmentpercentage),
+        isActive: result.rows[0].isactive,
+        companyId: result.rows[0].companyid,
+        createdAt: result.rows[0].createdat,
+        updatedAt: result.rows[0].updatedat,
+        createdBy: result.rows[0].createdby
+      }
+    }
+    return null
   } catch (error) {
     console.error('Error getting agency config:', error)
     return null
@@ -196,7 +209,7 @@ export async function getAgencyConfig(companyId?: string) {
 export async function saveAgencyConfig(config: any) {
   try {
     const query = `
-      INSERT INTO agency_rates_config (id, "adjustmentPercentage", "isActive", "companyId", "createdBy")
+      INSERT INTO agency_rates_config (id, adjustmentpercentage, isactive, companyid, createdby)
       VALUES ($1, $2, $3, $4, $5)
       RETURNING *
     `
@@ -209,7 +222,20 @@ export async function saveAgencyConfig(config: any) {
     ]
     const result = await db.query(query, values)
     console.log('[DB] Agency config saved:', result.rows[0])
-    return result.rows[0]
+
+    // Map lowercase column names to camelCase
+    if (result.rows[0]) {
+      return {
+        id: result.rows[0].id,
+        adjustmentPercentage: parseFloat(result.rows[0].adjustmentpercentage),
+        isActive: result.rows[0].isactive,
+        companyId: result.rows[0].companyid,
+        createdAt: result.rows[0].createdat,
+        updatedAt: result.rows[0].updatedat,
+        createdBy: result.rows[0].createdby
+      }
+    }
+    return null
   } catch (error) {
     console.error('Error saving agency config:', error)
     return null
@@ -220,14 +246,27 @@ export async function updateAgencyConfig(id: string, config: any) {
   try {
     const query = `
       UPDATE agency_rates_config
-      SET "adjustmentPercentage" = $2, "isActive" = $3, "updatedAt" = CURRENT_TIMESTAMP
+      SET adjustmentpercentage = $2, isactive = $3, updatedat = CURRENT_TIMESTAMP
       WHERE id = $1
       RETURNING *
     `
     const values = [id, config.adjustmentPercentage, config.isActive]
     const result = await db.query(query, values)
     console.log('[DB] Agency config updated:', result.rows[0])
-    return result.rows[0]
+
+    // Map lowercase column names to camelCase
+    if (result.rows[0]) {
+      return {
+        id: result.rows[0].id,
+        adjustmentPercentage: parseFloat(result.rows[0].adjustmentpercentage),
+        isActive: result.rows[0].isactive,
+        companyId: result.rows[0].companyid,
+        createdAt: result.rows[0].createdat,
+        updatedAt: result.rows[0].updatedat,
+        createdBy: result.rows[0].createdby
+      }
+    }
+    return null
   } catch (error) {
     console.error('Error updating agency config:', error)
     return null
@@ -245,7 +284,7 @@ export async function saveAgencyRatesHistory(history: any[]) {
 
     const query = `
       INSERT INTO agency_rates_history
-      (id, "configId", currency, "baseRate", "agencyRate", "adjustmentPercentage")
+      (id, configid, currency, baserate, agencyrate, adjustmentpercentage)
       VALUES ${placeholders}
       RETURNING *
     `
@@ -272,7 +311,7 @@ export async function getAgencyRatesHistory(configId: string, days: number = 30)
   try {
     const query = `
       SELECT * FROM agency_rates_history
-      WHERE "configId" = $1
+      WHERE configid = $1
       AND timestamp >= CURRENT_TIMESTAMP - INTERVAL '${days} days'
       ORDER BY timestamp DESC
     `
@@ -324,7 +363,7 @@ export async function getCompanyAgencyConfig(companyId: string) {
 export async function getPublishedRates() {
   try {
     const query = `
-      SELECT currency, "agencyRate" as rate, timestamp
+      SELECT currency, agencyrate as rate, timestamp
       FROM agency_rates_history
       WHERE timestamp = (
         SELECT MAX(timestamp)
