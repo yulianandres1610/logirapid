@@ -1,129 +1,48 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
-  DollarSign,
-  TrendingUp,
   RefreshCw,
-  Euro,
-  CreditCard,
-  ArrowUpDown,
   AlertCircle,
   Clock,
-  CheckCircle
+  CheckCircle,
+  TrendingUp
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useTheme } from '@/contexts/theme-context'
 import { DashboardLayout } from '@/components/layout/dashboard-layout'
-import { useAgencyRates } from '@/hooks/useAgencyRates'
-
-interface ExchangeRate {
-  rate: number
-  formatted: string
-  lastUpdate: string
-}
-
-interface ExchangeRatesData {
-  USD: ExchangeRate
-  EUR: ExchangeRate
-  MLC: ExchangeRate
-}
-
-interface AgencyRate {
-  currency: string
-  baseRate: number
-  agencyRate: number
-  adjustmentPercentage: number
-  lastUpdate: string
-  formattedBaseRate: string
-  formattedAgencyRate: string
-}
-
-interface ConversionResult {
-  amount: number
-  rate: number
-  result: number
-}
+import { usePublishedRates } from '@/hooks/usePublishedRates'
 
 export default function ExchangeRatePage() {
   const { theme } = useTheme()
-  const { rates: agencyRates, config, loading, error, lastRefresh, refreshRates } = useAgencyRates()
+  const { rates, loading, error, lastRefresh, refreshRates } = usePublishedRates()
 
-  // Convertir tasas de agencia al formato existente para compatibilidad
-  const [rates, setRates] = useState<ExchangeRatesData | null>(null)
-  const [warning, setWarning] = useState<string | null>(null)
-
-  // Estados para conversor
-  const [showConverter, setShowConverter] = useState(false)
-  const [fromCurrency, setFromCurrency] = useState('USD')
-  const [toCurrency, setToCurrency] = useState('CUP')
-  const [amount, setAmount] = useState('')
-  const [conversion, setConversion] = useState<ConversionResult | null>(null)
-  const [converting, setConverting] = useState(false)
-  const [conversionError, setConversionError] = useState<string | null>(null)
-
-  // Efecto para convertir tasas de agencia al formato existente
-  useEffect(() => {
-    if (agencyRates) {
-      const convertedRates: ExchangeRatesData = {
-        USD: {
-          rate: agencyRates.USD?.agencyRate || 0,
-          formatted: agencyRates.USD?.formattedAgencyRate || '0.00',
-          lastUpdate: new Date(agencyRates.USD?.lastUpdate || Date.now()).toLocaleString('es-ES')
-        },
-        EUR: {
-          rate: agencyRates.EUR?.agencyRate || 0,
-          formatted: agencyRates.EUR?.formattedAgencyRate || '0.00',
-          lastUpdate: new Date(agencyRates.EUR?.lastUpdate || Date.now()).toLocaleString('es-ES')
-        },
-        MLC: {
-          rate: agencyRates.MLC?.agencyRate || 0,
-          formatted: agencyRates.MLC?.formattedAgencyRate || '0.00',
-          lastUpdate: new Date(agencyRates.MLC?.lastUpdate || Date.now()).toLocaleString('es-ES')
-        }
-      }
-
-      setRates(convertedRates)
-
-      }
-  }, [agencyRates, config])
-
-  // Convertir moneda
-  const handleConvert = async () => {
-    if (!amount || parseFloat(amount) <= 0) return
-
-    try {
-      setConverting(true)
-      setConversionError(null)
-
-      const response = await fetch(
-        `/api/exchange-rates?convert=true&from=${fromCurrency}&to=${toCurrency}&amount=${amount}`
-      )
-      const data = await response.json()
-
-      if (data.success) {
-        setConversion(data.data)
-      } else {
-        setConversionError(data.error || 'Error en la conversión')
-      }
-    } catch (err) {
-      console.error('Error converting currency:', err)
-      setConversionError('Error al realizar la conversión')
-    } finally {
-      setConverting(false)
-    }
-  }
-
-  
-  const currencyFlags = {
+  const currencyFlags: Record<string, string> = {
     USD: '🇺🇸',
     EUR: '🇪🇺',
     MLC: '💳',
-    CUP: '🇨🇺'
+    GBP: '🇬🇧',
+    CAD: '🇨🇦',
+    MXN: '🇲🇽',
+    BRL: '🇧🇷',
+    ZELLE: '💸',
+    CLA: '📱'
   }
 
-  if (loading && !rates) {
+  const currencyNames: Record<string, string> = {
+    USD: 'Dólar Americano',
+    EUR: 'Euro',
+    MLC: 'Tarjeta de Débito',
+    GBP: 'Libra Esterlina',
+    CAD: 'Dólar Canadiense',
+    MXN: 'Peso Mexicano',
+    BRL: 'Real Brasileño',
+    ZELLE: 'Zelle',
+    CLA: 'CashApp'
+  }
+
+  if (loading && rates.length === 0) {
     return (
       <DashboardLayout>
         <div className="min-h-screen flex items-center justify-center">
@@ -152,7 +71,7 @@ export default function ExchangeRatePage() {
                 "text-3xl font-bold",
                 theme === 'dark' ? "text-white" : "text-gray-900"
               )}>
-                Tasa de Cambio
+                Tasas de Cambio
               </h1>
               <p className={cn(
                 "mt-2 text-sm",
@@ -192,29 +111,15 @@ export default function ExchangeRatePage() {
                 >
                   <RefreshCw className="w-4 h-4" />
                 </motion.div>
-                {loading ? 'Actualizando...' : 'Actualizar'}
-              </button>
-
-              <button
-                onClick={() => setShowConverter(!showConverter)}
-                className={cn(
-                  "flex items-center gap-2 px-6 py-3 rounded-xl font-medium transition-all duration-300",
-                  theme === 'dark'
-                    ? "border border-gray-700 text-gray-300 hover:bg-gray-800"
-                    : "border border-gray-300 text-gray-700 hover:bg-gray-50"
-                )}
-              >
-                <ArrowUpDown className="w-4 h-4" />
-                Convertidor
+                {loading ? 'Actualizando...' : 'Actualizar Tasas'}
               </button>
             </div>
           </motion.div>
 
           {/* Alertas */}
           <AnimatePresence>
-            {conversionError && (
+            {error && (
               <motion.div
-                key="conversion-error"
                 initial={{ opacity: 0, y: -20 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -20 }}
@@ -226,29 +131,11 @@ export default function ExchangeRatePage() {
                 )}
               >
                 <AlertCircle className="w-5 h-5" />
-                <span>{conversionError}</span>
+                <span>{error}</span>
               </motion.div>
             )}
 
-            {warning && (
-              <motion.div
-                key="warning"
-                initial={{ opacity: 0, y: -20 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -20 }}
-                className={cn(
-                  "p-4 rounded-lg flex items-center gap-3",
-                  theme === 'dark'
-                    ? "bg-yellow-900/20 border border-yellow-800 text-yellow-400"
-                    : "bg-yellow-50 border border-yellow-200 text-yellow-700"
-                )}
-              >
-                <AlertCircle className="w-5 h-5" />
-                <span>{warning}</span>
-              </motion.div>
-            )}
-
-            {/* Alerta informativa sobre tasas de agencia */}
+            {/* Alerta informativa */}
             <motion.div
               initial={{ opacity: 0, y: -20 }}
               animate={{ opacity: 1, y: 0 }}
@@ -261,73 +148,58 @@ export default function ExchangeRatePage() {
             >
               <TrendingUp className="w-5 h-5" />
               <div>
-                <span className="font-medium">Tasas de agencia configuradas</span>
+                <span className="font-medium">Tasas actualizadas en tiempo real</span>
                 <p className="text-xs mt-1 opacity-80">
-                  Estas tasas son configuradas por el administrador y se aplican automáticamente en sus operaciones de remesas.
+                  Estas tasas se aplican automáticamente en sus operaciones de remesas y servicios.
                 </p>
               </div>
             </motion.div>
           </AnimatePresence>
 
-          {/* Tarjetas de Tasas */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            {rates && Object.entries(rates).map(([currency, data], index) => (
+          {/* Grid de Tasas - 9 monedas */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {rates.map((rateData, index) => (
               <motion.div
-                key={currency}
+                key={rateData.currency}
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: index * 0.1 }}
+                transition={{ delay: index * 0.05 }}
                 className={cn(
-                  "rounded-xl p-6 border relative overflow-hidden",
+                  "rounded-xl p-6 border relative overflow-hidden transition-all duration-300 hover:shadow-lg",
                   theme === 'dark'
                     ? "bg-gray-800 border-gray-700"
                     : "bg-white border-gray-200"
                 )}
               >
-                {/* Background gradient */}
-                <div className={cn(
-                  "absolute inset-0 opacity-10",
-                  currency === 'USD' && "bg-gradient-to-br from-blue-500 to-blue-600",
-                  currency === 'EUR' && "bg-gradient-to-br from-green-500 to-green-600",
-                  currency === 'MLC' && "bg-gradient-to-br from-purple-500 to-purple-600"
-                )} />
+                {/* Background gradient sutil */}
+                <div className="absolute inset-0 opacity-5 bg-gradient-to-br from-exa-primary to-exa-secondary" />
 
                 <div className="relative z-10">
                   <div className="flex items-center justify-between mb-4">
                     <div className="flex items-center gap-3">
                       <div className={cn(
                         "w-12 h-12 rounded-lg flex items-center justify-center text-2xl",
-                        currency === 'USD' && "bg-blue-500/20",
-                        currency === 'EUR' && "bg-green-500/20",
-                        currency === 'MLC' && "bg-purple-500/20"
+                        theme === 'dark' ? "bg-gray-700" : "bg-gray-100"
                       )}>
-                        {currencyFlags[currency as keyof typeof currencyFlags]}
+                        {currencyFlags[rateData.currency] || '💱'}
                       </div>
                       <div>
-                        <h3 className="font-semibold text-lg">
-                          {currency} / CUP
+                        <h3 className={cn(
+                          "font-semibold text-lg",
+                          theme === 'dark' ? "text-white" : "text-gray-900"
+                        )}>
+                          {rateData.currency} / CUP
                         </h3>
                         <p className={cn(
                           "text-xs",
                           theme === 'dark' ? "text-gray-400" : "text-gray-600"
                         )}>
-                          1 {currency} = {data.formatted} CUP
+                          {currencyNames[rateData.currency] || rateData.currency}
                         </p>
                       </div>
                     </div>
 
-                    <motion.div
-                      initial={{ scale: 0 }}
-                      animate={{ scale: 1 }}
-                      transition={{ delay: index * 0.1 + 0.2 }}
-                    >
-                      <CheckCircle className={cn(
-                        "w-5 h-5",
-                        currency === 'USD' && "text-blue-500",
-                        currency === 'EUR' && "text-green-500",
-                        currency === 'MLC' && "text-purple-500"
-                      )} />
-                    </motion.div>
+                    <CheckCircle className="w-5 h-5 text-green-500" />
                   </div>
 
                   <div className="space-y-3">
@@ -340,21 +212,17 @@ export default function ExchangeRatePage() {
                       </span>
                       <span className={cn(
                         "text-2xl font-bold",
-                        currency === 'USD' && "text-blue-500",
-                        currency === 'EUR' && "text-green-500",
-                        currency === 'MLC' && "text-purple-500"
+                        theme === 'dark' ? "text-white" : "text-gray-900"
                       )}>
-                        ${data.formatted}
+                        ${rateData.rate.toFixed(2)}
                       </span>
                     </div>
 
-                    <div className="flex items-center gap-2 text-xs">
-                      <Clock className="w-3 h-3" />
-                      <span className={cn(
-                        theme === 'dark' ? "text-gray-500" : "text-gray-500"
-                      )}>
-                        Última actualización: {data.lastUpdate}
-                      </span>
+                    <div className={cn(
+                      "text-xs pt-2 border-t",
+                      theme === 'dark' ? "border-gray-700 text-gray-500" : "border-gray-200 text-gray-500"
+                    )}>
+                      1 {rateData.currency} = {rateData.rate.toFixed(2)} CUP
                     </div>
                   </div>
                 </div>
@@ -362,171 +230,31 @@ export default function ExchangeRatePage() {
             ))}
           </div>
 
-          {/* Convertidor de Moneda */}
-          <AnimatePresence>
-            {showConverter && (
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -20 }}
-                className={cn(
-                  "rounded-xl p-6 border",
-                  theme === 'dark'
-                    ? "bg-gray-800 border-gray-700"
-                    : "bg-white border-gray-200"
-                )}
-              >
-                <h3 className={cn(
-                  "text-lg font-semibold mb-6 flex items-center gap-2",
-                  theme === 'dark' ? "text-white" : "text-gray-900"
-                )}>
-                  <ArrowUpDown className="w-5 h-5" />
-                  Convertidor de Moneda
-                </h3>
-
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                  <div>
-                    <label className={cn(
-                      "block text-sm font-medium mb-2",
-                      theme === 'dark' ? "text-gray-300" : "text-gray-700"
-                    )}>
-                      De
-                    </label>
-                    <select
-                      value={fromCurrency}
-                      onChange={(e) => setFromCurrency(e.target.value)}
-                      className={cn(
-                        "w-full p-3 rounded-lg border",
-                        theme === 'dark'
-                          ? "bg-gray-700 border-gray-600 text-white"
-                          : "bg-white border-gray-300 text-gray-900"
-                      )}
-                    >
-                      <option value="USD">🇺🇸 USD</option>
-                      <option value="EUR">🇪🇺 EUR</option>
-                      <option value="MLC">💳 MLC</option>
-                      <option value="CUP">🇨🇺 CUP</option>
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className={cn(
-                      "block text-sm font-medium mb-2",
-                      theme === 'dark' ? "text-gray-300" : "text-gray-700"
-                    )}>
-                      Cantidad
-                    </label>
-                    <input
-                      type="number"
-                      value={amount}
-                      onChange={(e) => setAmount(e.target.value)}
-                      placeholder="0.00"
-                      className={cn(
-                        "w-full p-3 rounded-lg border",
-                        theme === 'dark'
-                          ? "bg-gray-700 border-gray-600 text-white placeholder-gray-400"
-                          : "bg-white border-gray-300 text-gray-900 placeholder-gray-500"
-                      )}
-                    />
-                  </div>
-
-                  <div>
-                    <label className={cn(
-                      "block text-sm font-medium mb-2",
-                      theme === 'dark' ? "text-gray-300" : "text-gray-700"
-                    )}>
-                      A
-                    </label>
-                    <select
-                      value={toCurrency}
-                      onChange={(e) => setToCurrency(e.target.value)}
-                      className={cn(
-                        "w-full p-3 rounded-lg border",
-                        theme === 'dark'
-                          ? "bg-gray-700 border-gray-600 text-white"
-                          : "bg-white border-gray-300 text-gray-900"
-                      )}
-                    >
-                      <option value="CUP">🇨🇺 CUP</option>
-                      <option value="USD">🇺🇸 USD</option>
-                      <option value="EUR">🇪🇺 EUR</option>
-                      <option value="MLC">💳 MLC</option>
-                    </select>
-                  </div>
-
-                  <div className="flex items-end">
-                    <button
-                      onClick={handleConvert}
-                      disabled={!amount || parseFloat(amount) <= 0 || converting}
-                      className={cn(
-                        "w-full flex items-center justify-center gap-2 px-6 py-3 rounded-xl font-medium transition-all duration-300",
-                        (!amount || parseFloat(amount) <= 0 || converting) && "opacity-50",
-                        theme === 'dark'
-                          ? "bg-exa-secondary text-white hover:bg-exa-primary"
-                          : "bg-exa-primary text-white hover:bg-exa-secondary"
-                      )}
-                    >
-                      {converting ? (
-                        <motion.div
-                          animate={{ rotate: 360 }}
-                          transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
-                        >
-                          <RefreshCw className="w-4 h-4" />
-                        </motion.div>
-                      ) : (
-                        'Convertir'
-                      )}
-                    </button>
-                  </div>
-                </div>
-
-                {/* Resultado de conversión */}
-                {conversion && (
-                  <motion.div
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    className={cn(
-                      "mt-6 p-4 rounded-lg border",
-                      theme === 'dark'
-                        ? "bg-gray-700/50 border-gray-600"
-                        : "bg-gray-50 border-gray-200"
-                    )}
-                  >
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className={cn(
-                          "text-sm",
-                          theme === 'dark' ? "text-gray-400" : "text-gray-600"
-                        )}>
-                          {conversion.amount} {fromCurrency} =
-                        </p>
-                        <p className={cn(
-                          "text-2xl font-bold",
-                          theme === 'dark' ? "text-white" : "text-gray-900"
-                        )}>
-                          {conversion.result.toFixed(2)} {toCurrency}
-                        </p>
-                      </div>
-                      <div className="text-right">
-                        <p className={cn(
-                          "text-xs",
-                          theme === 'dark' ? "text-gray-500" : "text-gray-500"
-                        )}>
-                          Tasa utilizada
-                        </p>
-                        <p className={cn(
-                          "text-sm font-medium",
-                          theme === 'dark' ? "text-gray-300" : "text-gray-700"
-                        )}>
-                          1 {fromCurrency} = {conversion.rate} CUP
-                        </p>
-                      </div>
-                    </div>
-                  </motion.div>
-                )}
-              </motion.div>
-            )}
-          </AnimatePresence>
+          {/* Mensaje si no hay tasas */}
+          {rates.length === 0 && !loading && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              className={cn(
+                "text-center py-12 rounded-xl border",
+                theme === 'dark' ? "bg-gray-800 border-gray-700" : "bg-gray-50 border-gray-200"
+              )}
+            >
+              <AlertCircle className="w-12 h-12 mx-auto mb-4 text-gray-400" />
+              <p className={cn(
+                "text-lg font-medium",
+                theme === 'dark' ? "text-gray-300" : "text-gray-700"
+              )}>
+                No hay tasas disponibles
+              </p>
+              <p className={cn(
+                "text-sm mt-2",
+                theme === 'dark' ? "text-gray-500" : "text-gray-600"
+              )}>
+                Contacte al administrador para configurar las tasas de cambio
+              </p>
+            </motion.div>
+          )}
         </div>
       </div>
     </DashboardLayout>
