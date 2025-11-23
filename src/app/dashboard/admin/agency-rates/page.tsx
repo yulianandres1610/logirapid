@@ -23,6 +23,7 @@ import { cn } from '@/lib/utils'
 import { useTheme } from '@/contexts/theme-context'
 import { DashboardLayout } from '@/components/layout/dashboard-layout'
 import { AgencyRateConfig, CalculatedAgencyRate } from '@/lib/agency-rates'
+import LoadingBox from '@/components/ui/LoadingBox'
 
 interface AgencyRateCardProps {
   currency: string
@@ -248,6 +249,7 @@ export default function AgencyRatesPage() {
   const [baseRates, setBaseRates] = useState<Record<string, any>>({})
   const [calculatedRates, setCalculatedRates] = useState<Record<string, CalculatedAgencyRate>>({})
   const [loading, setLoading] = useState(true)
+  const [isDataReady, setIsDataReady] = useState(false)
   const [saving, setSaving] = useState(false)
   const [isEditing, setIsEditing] = useState(false)
   const [showNewAgencyForm, setShowNewAgencyForm] = useState(false)
@@ -267,45 +269,108 @@ export default function AgencyRatesPage() {
 
   const fetchAgencyConfigs = async () => {
     try {
-      const response = await fetch('/api/agency-rates')
-      const data = await response.json()
+      const response = await fetch('/api/agency-rates', {
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      })
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`)
+      }
+
+      const text = await response.text()
+      if (!text) {
+        console.warn('Empty response from /api/agency-rates')
+        setAgencyConfigs([])
+        return
+      }
+
+      const data = JSON.parse(text)
       if (data.success) {
-        setAgencyConfigs(data.data)
+        setAgencyConfigs(data.data || [])
+      } else {
+        setAgencyConfigs([])
       }
     } catch (error) {
       console.error('Error fetching agency configs:', error)
+      setAgencyConfigs([]) // Set empty array on error
     }
   }
 
   const fetchBaseRates = async () => {
     try {
-      const response = await fetch('/api/exchange-rates')
-      const data = await response.json()
+      const response = await fetch('/api/exchange-rates', {
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      })
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`)
+      }
+
+      const text = await response.text()
+      if (!text) {
+        console.warn('Empty response from /api/exchange-rates')
+        setBaseRates({})
+        return
+      }
+
+      const data = JSON.parse(text)
       if (data.success) {
-        setBaseRates(data.data)
+        setBaseRates(data.data || {})
+      } else {
+        setBaseRates({})
       }
     } catch (error) {
       console.error('Error fetching base rates:', error)
+      setBaseRates({}) // Set empty object on error
     }
   }
 
   const calculateRates = async (agencyConfig: AgencyRateConfig) => {
     try {
-      const response = await fetch(`/api/agency-rates/${agencyConfig.agencyId}`)
+      const response = await fetch(`/api/agency-rates/${agencyConfig.agencyId}`, {
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      })
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`)
+      }
+
       const data = await response.json()
       if (data.success) {
         setCalculatedRates(data.data.rates)
       }
     } catch (error) {
       console.error('Error calculating rates:', error)
+      setCalculatedRates({})
     }
   }
 
   useEffect(() => {
     const loadData = async () => {
-      setLoading(true)
-      await Promise.all([fetchAgencyConfigs(), fetchBaseRates()])
-      setLoading(false)
+      try {
+        setLoading(true)
+        setIsDataReady(false)
+
+        // Wait for both requests to complete
+        await Promise.all([fetchAgencyConfigs(), fetchBaseRates()])
+
+        // Add a small delay to ensure data is ready
+        await new Promise(resolve => setTimeout(resolve, 800))
+
+        setIsDataReady(true)
+      } catch (error) {
+        console.error('Error loading data:', error)
+        setIsDataReady(true) // Show UI even on error
+      } finally {
+        // Always set loading to false, even if there's an error
+        setLoading(false)
+      }
     }
     loadData()
   }, [])
@@ -437,6 +502,16 @@ export default function AgencyRatesPage() {
     } finally {
       setSaving(false)
     }
+  }
+
+  if (loading || !isDataReady) {
+    return (
+      <DashboardLayout>
+        <div className="min-h-screen p-6 flex items-center justify-center">
+          <LoadingBox text="Cargando tasas de cambio..." size="lg" />
+        </div>
+      </DashboardLayout>
+    )
   }
 
   return (
