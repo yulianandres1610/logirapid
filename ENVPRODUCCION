@@ -1,0 +1,109 @@
+# ====================================
+# LOGIRAPID - PRODUCTION ENVIRONMENT VARIABLES
+# ====================================
+# Este archivo contiene todas las variables de entorno necesarias para
+# desplegar LogiRapid en Vercel o cualquier otro entorno de producción.
+#
+# INSTRUCCIONES PARA IMPORTAR EN VERCEL:
+# 1. Ve a tu proyecto en Vercel Dashboard
+# 2. Settings → Environment Variables
+# 3. Copia y pega cada variable (nombre y valor) individualmente
+# 4. Asegúrate de seleccionar "Production" como entorno
+# ====================================
+
+# ====================================
+# 1. DATABASE - PostgreSQL (Supabase)
+# ====================================
+# Conexión a la base de datos PostgreSQL
+# CRÍTICO: Esta es la conexión actual a Supabase
+DATABASE_URL=postgresql://postgres.mmmcqpptupterlpthlhc:Power.27801610@aws-1-us-east-2.pooler.supabase.com:5432/postgres
+
+# ====================================
+# 2. SUPABASE - Storage y Servicios
+# ====================================
+# URL del proyecto Supabase (necesario para subir logos y documentos)
+# Formato: https://[tu-proyecto].supabase.co
+NEXT_PUBLIC_SUPABASE_URL=https://mmmcqpptupterlpthlhc.supabase.co
+
+# Service Role Key de Supabase (para operaciones administrativas)
+# IMPORTANTE: Esta clave tiene acceso completo, mantenerla segura
+# Se encuentra en: Supabase Dashboard → Settings → API → service_role key
+SUPABASE_SERVICE_ROLE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1tbW1jcXBwdHVwdGVybHB0aGxoYyIsInJvbGUiOiJzZXJ2aWNlX3JvbGUiLCJpYXQiOjE3MzM0MzYyNDMsImV4cCI6MjA0OTAxMjI0M30.xTQgM8Y8rH7vZqT4p5Z9jM2kP3L1nN6oR8sT4uV7wX0
+
+# ====================================
+# 3. MAPBOX - Mapas y Geocodificación
+# ====================================
+# Token de API de Mapbox para mapas, rutas y geocodificación
+# CRÍTICO: Necesario para optimización de rutas y visualización de mapas
+# Se encuentra en: https://account.mapbox.com/access-tokens/
+NEXT_PUBLIC_MAPBOX_TOKEN=pk.eyJ1IjoieXVsaWFuYW5kcmVzMTYxMCIsImEiOiJjbWgycTlsZGsxM200YnNvbnN2d2wwcHJ5In0.wlU7-bazAs2eYjknx7H97Q
+
+# ====================================
+# 4. NEXT.JS - Configuración
+# ====================================
+# Entorno de ejecución (siempre 'production' para Vercel)
+NODE_ENV=production
+
+# ====================================
+# 5. NEXTAUTH - Autenticación (Opcional)
+# ====================================
+# URL base de la aplicación en producción
+# Cambiar por tu dominio real: https://www.logirapid.com
+NEXTAUTH_URL=https://www.logirapid.com
+
+# Secret para firmar tokens JWT (generar uno nuevo con: openssl rand -base64 32)
+# IMPORTANTE: Generar un valor único y seguro para producción
+NEXTAUTH_SECRET=TU_SECRET_AQUI_GENERADO_CON_OPENSSL
+
+# ====================================
+# 6. AUTO.DEV API (Opcional)
+# ====================================
+# API Key para Auto.dev (si se usa para vehículos)
+# Dejar vacío si no se utiliza
+NEXT_PUBLIC_AUTO_DEV_API_KEY=
+
+# ====================================
+# NOTAS IMPORTANTES PARA VERCEL:
+# ====================================
+#
+# 1. Variables que DEBEN empezar con NEXT_PUBLIC_:
+#    - NEXT_PUBLIC_MAPBOX_TOKEN
+#    - NEXT_PUBLIC_SUPABASE_URL
+#    - NEXT_PUBLIC_AUTO_DEV_API_KEY
+#    Estas son accesibles desde el navegador (lado cliente)
+#
+# 2. Variables privadas (solo servidor):
+#    - DATABASE_URL
+#    - SUPABASE_SERVICE_ROLE_KEY
+#    - NEXTAUTH_SECRET
+#    Estas NUNCA deben exponerse al cliente
+#
+# 3. Verificación de Supabase:
+#    - Asegúrate de que Vercel IPs estén en whitelist
+#    - Ve a: Supabase Dashboard → Settings → Database → Connection Pooling
+#    - Habilita "Connection Pooling" y usa la connection string con :6543
+#
+# 4. Generar NEXTAUTH_SECRET:
+#    Ejecutar en terminal: openssl rand -base64 32
+#
+# 5. Dominio personalizado:
+#    - Actualizar NEXTAUTH_URL con tu dominio real
+#    - Configurar dominio en Vercel: Settings → Domains
+#
+# 6. Logs de debugging:
+#    - Para ver logs de login: Vercel Dashboard → Deployments → [tu deployment] → Functions
+#    - Buscar logs con prefijo [LOGIN]
+#
+# ====================================
+# CHECKLIST DE DEPLOYMENT:
+# ====================================
+# [ ] Copiar todas las variables a Vercel Environment Variables
+# [ ] Verificar que DATABASE_URL funciona desde Vercel (test de conexión)
+# [ ] Verificar que Supabase permite conexiones desde Vercel
+# [ ] Generar y configurar NEXTAUTH_SECRET único
+# [ ] Actualizar NEXTAUTH_URL con dominio de producción
+# [ ] Verificar que MAPBOX token es válido y tiene límites adecuados
+# [ ] Hacer deploy y probar login
+# [ ] Hacer deploy y probar subida de logos
+# [ ] Hacer deploy y probar creación de rutas con Mapbox
+# ====================================

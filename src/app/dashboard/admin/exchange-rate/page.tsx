@@ -497,16 +497,11 @@ export default function ExchangeRatePage() {
           signal: controller.signal
         })
       } catch (fetchError) {
-        // Si el error es por aborto del timeout, manejarlo silenciosamente
+        // Si el error es por aborto del timeout, manejar error
         if (fetchError instanceof Error && fetchError.name === 'AbortError') {
-          console.log('🚫 Request timed out, using emergency rates')
-          const emergencyRates = getEmergencyRates()
-          setRates(emergencyRates)
-          setWarning('El API está tardando en responder. Usando tasas de emergencia.')
-
-          // Guardar tasas de emergencia en caché por 5 minutos
-          saveRatesToCache(emergencyRates, true)
-
+          console.log('🚫 Request timed out')
+          setError('El servidor está tardando en responder. Por favor, intenta de nuevo.')
+          setRates(null)
           clearTimeout(timeoutId)
           abortControllerRef.current = null
           return
@@ -541,9 +536,8 @@ export default function ExchangeRatePage() {
         // Verificar si el request fue abortado antes de parsear
         if (controller.signal.aborted) {
           console.log('🚫 Request was aborted before JSON parsing')
-          const emergencyRates = getEmergencyRates()
-          setRates(emergencyRates)
-          setWarning('Usando tasas de emergencia. Conexión cancelada.')
+          setError('Conexión cancelada. Por favor, intenta de nuevo.')
+          setRates(null)
           return
         }
 
@@ -551,12 +545,11 @@ export default function ExchangeRatePage() {
       } catch (parseError) {
         console.error('❌ JSON parse error:', parseError)
 
-        // Si el error es por aborto, usar tasas de emergencia
+        // Si el error es por aborto, mostrar error
         if (controller.signal.aborted || (parseError instanceof Error && parseError.name === 'AbortError')) {
           console.log('🚫 JSON parsing aborted')
-          const emergencyRates = getEmergencyRates()
-          setRates(emergencyRates)
-          setWarning('Usando tasas de emergencia. Conexión interrumpida.')
+          setError('Conexión interrumpida. Por favor, intenta de nuevo.')
+          setRates(null)
           return
         }
 
@@ -590,11 +583,9 @@ export default function ExchangeRatePage() {
 
       // Manejo mejorado de errores de aborto
       if (err instanceof Error && err.name === 'AbortError') {
-        console.log('🚫 Request was cancelled or timed out - using emergency rates')
-        // Para abortos, usar tasas de emergencia en lugar de mostrar error
-        const emergencyRates = getEmergencyRates()
-        setRates(emergencyRates)
-        setWarning('Conexión interrumpida. Usando tasas de emergencia.')
+        console.log('🚫 Request was cancelled or timed out')
+        setError('Conexión interrumpida o tiempo de espera agotado. Por favor, intenta de nuevo.')
+        setRates(null)
         return
       }
 
@@ -606,54 +597,26 @@ export default function ExchangeRatePage() {
 
       // Mensaje de error más específico para el usuario
       if (errorMessage.includes('Empty response')) {
-        setError('El servidor no respondió. Usando tasas de emergencia.')
-        const emergencyRates = getEmergencyRates()
-        setRates(emergencyRates)
+        setError('El servidor no respondió. Por favor, intenta de nuevo.')
       } else if (errorMessage.includes('JSON')) {
-        setError('Error en el formato de respuesta. Usando tasas de emergencia.')
-        const emergencyRates = getEmergencyRates()
-        setRates(emergencyRates)
+        setError('Error en el formato de respuesta del servidor. Por favor, intenta de nuevo.')
       } else if (errorMessage.includes('HTTP error')) {
-        setError('Error del servidor. Usando tasas de emergencia.')
-        const emergencyRates = getEmergencyRates()
-        setRates(emergencyRates)
+        setError('Error del servidor. Por favor, intenta de nuevo más tarde.')
       } else if (errorMessage.includes('timeout') || errorMessage.includes('12 segundos')) {
-        setError('El servidor está tardando. Usando tasas de emergencia.')
-        const emergencyRates = getEmergencyRates()
-        setRates(emergencyRates)
+        setError('El servidor está tardando en responder. Por favor, intenta de nuevo.')
       } else {
-        setError('No se pudieron cargar las tasas. Usando tasas de emergencia.')
-        const emergencyRates = getEmergencyRates()
-        setRates(emergencyRates)
+        setError('No se pudieron cargar las tasas de cambio. Por favor, intenta de nuevo.')
       }
+
+      setRates(null)
     } finally {
       setLoading(false)
       isRefreshingRef.current = false // Resetear el estado de refresh
     }
   }
 
-  // Función para obtener tasas de emergencia
-  const getEmergencyRates = () => {
-    const now = new Date().toLocaleString('es-ES', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    })
-
-    return {
-      USD: { rate: 475, formatted: "475.00", lastUpdate: now, variacion: 5 },
-      EUR: { rate: 530, formatted: "530.00", lastUpdate: now, variacion: 5 },
-      MLC: { rate: 200, formatted: "200.00", lastUpdate: now, variacion: 0 },
-      GBP: { rate: 489.33, formatted: "489.33", lastUpdate: now, variacion: 2.24 },
-      CAD: { rate: 310, formatted: "310.00", lastUpdate: now, variacion: 20 },
-      MXN: { rate: 22.33, formatted: "22.33", lastUpdate: now, variacion: 0 },
-      BRL: { rate: 77.54, formatted: "77.54", lastUpdate: now, variacion: 0 },
-      ZELLE: { rate: 454.18, formatted: "454.18", lastUpdate: now, variacion: 2.04 },
-      CLA: { rate: 437.97, formatted: "437.97", lastUpdate: now, variacion: 3.19 }
-    }
-  }
+  // Nota: Las tasas de emergencia hardcodeadas fueron eliminadas
+  // Ahora el sistema solo usa tasas reales desde ElToque API o base de datos
 
   // Manejador de ajuste de porcentaje con debounce
   const handlePercentageChange = (value: number) => {

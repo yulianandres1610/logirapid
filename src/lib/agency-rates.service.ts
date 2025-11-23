@@ -16,8 +16,10 @@ export class AgencyRatesService {
   private isInitialized = false
 
   private constructor() {
-    this.initializeBaseRates()
+    // Inicializar baseRates vacío - se cargará desde BD o API externa
+    this.baseRates = {}
     this.loadConfigFromDB()
+    this.loadBaseRatesFromDB()
   }
 
   public static getInstance(): AgencyRatesService {
@@ -27,19 +29,55 @@ export class AgencyRatesService {
     return AgencyRatesService.instance
   }
 
-  private initializeBaseRates(): void {
-    // Tasas base simuladas desde eltoque
-    this.baseRates = {
-      USD: 475,
-      EUR: 530,
-      MLC: 200,
-      GBP: 488.84,
-      CAD: 310,
-      MXN: 22.33,
-      BRL: 77.14,
-      ZELLE: 453.08,
-      CLA: 438.27
+  /**
+   * Carga tasas base desde la base de datos (agency_rates_history)
+   * Usa las tasas más recientes disponibles
+   */
+  private async loadBaseRatesFromDB(): Promise<void> {
+    try {
+      const { db } = await import('./database')
+
+      const query = `
+        SELECT currency, baserate
+        FROM agency_rates_history
+        WHERE timestamp = (
+          SELECT MAX(timestamp)
+          FROM agency_rates_history
+        )
+      `
+
+      const result = await db.query(query)
+
+      if (result.rows.length > 0) {
+        const rates: Record<string, number> = {}
+        result.rows.forEach((row: any) => {
+          rates[row.currency] = parseFloat(row.baserate)
+        })
+
+        this.baseRates = rates
+        console.log('[AgencyRatesService] Loaded base rates from database:', Object.keys(rates))
+      } else {
+        console.warn('[AgencyRatesService] No base rates found in database')
+        this.baseRates = {}
+      }
+    } catch (error) {
+      console.error('[AgencyRatesService] Error loading base rates from database:', error)
+      this.baseRates = {}
     }
+  }
+
+  /**
+   * Asegura que las tasas base estén cargadas antes de usarlas
+   * Método público para que los endpoints puedan esperar a que las tasas estén listas
+   */
+  public async ensureBaseRatesLoaded(): Promise<void> {
+    // Si ya hay tasas cargadas, no hacer nada
+    if (Object.keys(this.baseRates).length > 0) {
+      return
+    }
+
+    // Si no hay tasas, cargar desde BD
+    await this.loadBaseRatesFromDB()
   }
 
   private async loadConfigFromDB(companyId?: string): Promise<void> {
