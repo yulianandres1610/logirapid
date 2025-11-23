@@ -22,39 +22,43 @@ export async function GET(
 
     const query = `
       SELECT
-        id,
-        legalname as "legalName",
-        einnumber as "einNumber",
-        phone,
-        customer_service_phone as "customerServicePhone",
-        email,
-        website,
-        address,
-        city,
-        state,
-        country,
-        zipcode as "zipCode",
-        walletnumber as "walletNumber",
-        currency,
-        ismulticurrency as "isMultiCurrency",
-        secondarycurrencies as "secondaryCurrencies",
-        haslimits as "hasLimits",
-        dailylimit as "dailyLimit",
-        monthlylimit as "monthlyLimit",
-        companytype as "companyType",
-        enabledservices as "enabledServices",
-        service_fees as "serviceFees",
-        walletbalance as "walletBalance",
-        transactionscount as "transactionsCount",
-        userscount as "usersCount",
-        logo_url as "logoUrl",
-        subdomain,
-        primary_color as "primaryColor",
-        secondary_color as "secondaryColor",
-        status,
-        createdat as "createdAt"
-      FROM companies
-      WHERE id = $1
+        c.id,
+        c.legalname as "legalName",
+        c.einnumber as "einNumber",
+        c.phone,
+        c.customer_service_phone as "customerServicePhone",
+        c.email,
+        c.website,
+        c.address,
+        c.city,
+        c.state,
+        c.country,
+        c.zipcode as "zipCode",
+        c.walletnumber as "walletNumber",
+        c.currency,
+        c.ismulticurrency as "isMultiCurrency",
+        c.secondarycurrencies as "secondaryCurrencies",
+        c.haslimits as "hasLimits",
+        c.dailylimit as "dailyLimit",
+        c.monthlylimit as "monthlyLimit",
+        c.companytype as "companyType",
+        c.enabledservices as "enabledServices",
+        c.service_fees as "serviceFees",
+        c.walletbalance as "walletBalance",
+        c.transactionscount as "transactionsCount",
+        c.userscount as "usersCount",
+        c.logo_url as "logoUrl",
+        c.subdomain,
+        c.primary_color as "primaryColor",
+        c.secondary_color as "secondaryColor",
+        c.status,
+        c.createdat as "createdAt",
+        c.parent_company_id as "parentCompanyId",
+        c.is_branch as "isBranch",
+        parent.legalname as "parentCompanyName"
+      FROM companies c
+      LEFT JOIN companies parent ON c.parent_company_id = parent.id
+      WHERE c.id = $1
     `
 
     const result = await db.query(query, [companyId])
@@ -166,6 +170,8 @@ export async function PUT(
       subdomain: 'subdomain',
       primaryColor: 'primary_color',
       secondaryColor: 'secondary_color',
+      parentCompanyId: 'parent_company_id',
+      isBranch: 'is_branch',
       status: 'status'
     }
 
@@ -266,13 +272,23 @@ export async function DELETE(
     )
 
     const ordersCheck = await db.query(
-      'SELECT COUNT(*) as count FROM package_orders WHERE companyid = $1',
+      'SELECT COUNT(*) as count FROM package_orders WHERE company_id = $1',
+      [companyId]
+    )
+
+    const customersCheck = await db.query(
+      'SELECT COUNT(*) as count FROM customers WHERE company_id = $1',
+      [companyId]
+    )
+
+    const branchesCheck = await db.query(
+      'SELECT COUNT(*) as count FROM companies WHERE parent_company_id = $1',
       [companyId]
     )
 
     if (parseInt(usersCheck.rows[0].count) > 0) {
       return NextResponse.json(
-        { success: false, error: `No se puede eliminar. Tiene ${usersCheck.rows[0].count} usuarios` },
+        { success: false, error: `No se puede eliminar. Tiene ${usersCheck.rows[0].count} usuarios asociados` },
         { status: 400 }
       )
     }
@@ -280,6 +296,20 @@ export async function DELETE(
     if (parseInt(ordersCheck.rows[0].count) > 0) {
       return NextResponse.json(
         { success: false, error: `No se puede eliminar. Tiene ${ordersCheck.rows[0].count} órdenes` },
+        { status: 400 }
+      )
+    }
+
+    if (parseInt(customersCheck.rows[0].count) > 0) {
+      return NextResponse.json(
+        { success: false, error: `No se puede eliminar. Tiene ${customersCheck.rows[0].count} clientes registrados` },
+        { status: 400 }
+      )
+    }
+
+    if (parseInt(branchesCheck.rows[0].count) > 0) {
+      return NextResponse.json(
+        { success: false, error: `No se puede eliminar. Tiene ${branchesCheck.rows[0].count} sucursales asociadas` },
         { status: 400 }
       )
     }

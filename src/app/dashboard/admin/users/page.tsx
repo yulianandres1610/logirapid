@@ -1192,195 +1192,215 @@ export default function UsersPage() {
         </div>
       ) : (
         // Users List View
-        <div className="max-w-7xl mx-auto p-6">
+        <div className="p-6">
           {loading ? (
             <div className="flex items-center justify-center h-64">
               <Spinner size="lg" text="Cargando usuarios..." />
             </div>
           ) : (
           <>
-          {/* Header */}
+          {/* Stats Cards with Gradients */}
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             className="mb-8"
           >
-            <div className="flex items-center justify-between mb-4">
-              <div>
-                <h1 className={cn(
-                  "text-3xl font-bold mb-2",
-                  theme === 'dark' ? "text-white" : "text-black"
-                )}>
-                  Usuarios Registrados
-                </h1>
-                <p className={cn(
-                  "text-sm",
-                  theme === 'dark' ? "text-gray-400" : "text-gray-600"
-                )}>
-                  Gestiona todos los usuarios del sistema
-                </p>
+            <div className="grid grid-cols-4 gap-5">
+            {/* Total Usuarios */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.1 }}
+              className={cn(
+                'relative overflow-hidden',
+                theme === 'dark'
+                  ? 'bg-gradient-to-br from-gray-800 to-gray-900 border-gray-700'
+                  : 'bg-gradient-to-br from-slate-50 to-white border-slate-200',
+                'rounded-2xl border shadow-xl'
+              )}
+            >
+              <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-400 to-blue-600"></div>
+              <div className="p-6">
+                <div className="flex items-start justify-between mb-4">
+                  <div className="flex items-center gap-3">
+                    <div className={cn(
+                      'p-3 rounded-xl shadow-sm',
+                      theme === 'dark'
+                        ? 'bg-blue-900/30 border border-blue-800/50'
+                        : 'bg-gradient-to-br from-blue-50 to-blue-100 border border-blue-200'
+                    )}>
+                      <Users className="w-6 h-6 text-blue-600" />
+                    </div>
+                    <div>
+                      <p className={cn(
+                        'text-sm font-medium',
+                        theme === 'dark' ? 'text-gray-400' : 'text-black'
+                      )}>Total Usuarios</p>
+                      <p className={cn(
+                        'text-3xl font-bold mt-1',
+                        theme === 'dark' ? 'text-white' : 'text-slate-900'
+                      )}>{users.length}</p>
+                    </div>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-1">
+                    <div className="w-2 h-2 bg-blue-400 rounded-full animate-pulse"></div>
+                    <span className={cn(
+                      'text-xs font-medium',
+                      theme === 'dark' ? 'text-gray-500' : 'text-black'
+                    )}>Registrados</span>
+                  </div>
+                </div>
               </div>
+            </motion.div>
 
-              <Button
-                onClick={() => {
-                  resetForm()
-                  setShowCreateForm(true)
-                }}
-                className={cn(
-                  "flex items-center gap-2 px-6 py-3 rounded-xl font-medium transition-all duration-300",
-                  theme === 'dark' ? "bg-exa-secondary text-white hover:bg-exa-secondary/90" : "bg-exa-primary text-white hover:bg-exa-primary/90"
-                )}
-              >
-                <Plus className="w-5 h-5" />
-                Nuevo Usuario
-              </Button>
-            </div>
-
-            {/* Stats */}
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-              <motion.div
-                initial={{ opacity: 0, scale: 0.9 }}
-                animate={{ opacity: 1, scale: 1 }}
-                transition={{ delay: 0.1 }}
-                className={cn(
-                  "p-4 rounded-xl border",
-                  theme === 'dark' ? "bg-white/5 border-white/10" : "bg-white/90 border-gray-200"
-                )}
-              >
-                <div className="flex items-center gap-3">
-                  <div className={cn(
-                    "w-12 h-12 rounded-xl flex items-center justify-center",
-                    theme === 'dark' ? "bg-blue-600/20" : "bg-blue-500/20"
-                  )}>
-                    <Users className={cn(
-                      "w-6 h-6",
-                      theme === 'dark' ? "text-blue-400" : "text-blue-600"
-                    )} />
-                  </div>
-                  <div>
-                    <p className={cn(
-                      "text-2xl font-bold",
-                      theme === 'dark' ? "text-white" : "text-black"
+            {/* Activos */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.2 }}
+              className={cn(
+                'relative overflow-hidden',
+                theme === 'dark'
+                  ? 'bg-gradient-to-br from-gray-800 to-gray-900 border-gray-700'
+                  : 'bg-gradient-to-br from-slate-50 to-white border-slate-200',
+                'rounded-2xl border shadow-xl'
+              )}
+            >
+              <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-amber-400 to-orange-600"></div>
+              <div className="p-6">
+                <div className="flex items-start justify-between mb-4">
+                  <div className="flex items-center gap-3">
+                    <div className={cn(
+                      'p-3 rounded-xl shadow-sm',
+                      theme === 'dark'
+                        ? 'bg-amber-900/30 border border-amber-800/50'
+                        : 'bg-gradient-to-br from-amber-50 to-orange-100 border border-amber-200'
                     )}>
-                      {users.length}
-                    </p>
-                    <p className={cn(
-                      "text-xs",
-                      theme === 'dark' ? "text-gray-400" : "text-gray-600"
-                    )}>
-                      Total Usuarios
-                    </p>
+                      <Activity className="w-6 h-6 text-amber-600" />
+                    </div>
+                    <div>
+                      <p className={cn(
+                        'text-sm font-medium',
+                        theme === 'dark' ? 'text-gray-400' : 'text-black'
+                      )}>Activos</p>
+                      <p className={cn(
+                        'text-3xl font-bold mt-1',
+                        theme === 'dark' ? 'text-white' : 'text-slate-900'
+                      )}>{users.filter(u => u.status === 'active').length}</p>
+                    </div>
                   </div>
                 </div>
-              </motion.div>
-
-              <motion.div
-                initial={{ opacity: 0, scale: 0.9 }}
-                animate={{ opacity: 1, scale: 1 }}
-                transition={{ delay: 0.2 }}
-                className={cn(
-                  "p-4 rounded-xl border",
-                  theme === 'dark' ? "bg-white/5 border-white/10" : "bg-white/90 border-gray-200"
-                )}
-              >
-                <div className="flex items-center gap-3">
-                  <div className={cn(
-                    "w-12 h-12 rounded-xl flex items-center justify-center",
-                    theme === 'dark' ? "bg-green-500/20" : "bg-green-500/20"
-                  )}>
-                    <Activity className={cn(
-                      "w-6 h-6",
-                      theme === 'dark' ? "text-green-400" : "text-green-600"
-                    )} />
-                  </div>
-                  <div>
-                    <p className={cn(
-                      "text-2xl font-bold",
-                      theme === 'dark' ? "text-white" : "text-black"
-                    )}>
-                      {users.filter(u => u.status === 'active').length}
-                    </p>
-                    <p className={cn(
-                      "text-xs",
-                      theme === 'dark' ? "text-gray-400" : "text-gray-600"
-                    )}>
-                      Activos
-                    </p>
+                <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-1">
+                    <div className="w-2 h-2 bg-amber-400 rounded-full animate-pulse"></div>
+                    <span className={cn(
+                      'text-xs font-medium',
+                      theme === 'dark' ? 'text-gray-500' : 'text-black'
+                    )}>En línea</span>
                   </div>
                 </div>
-              </motion.div>
+              </div>
+            </motion.div>
 
-              <motion.div
-                initial={{ opacity: 0, scale: 0.9 }}
-                animate={{ opacity: 1, scale: 1 }}
-                transition={{ delay: 0.3 }}
-                className={cn(
-                  "p-4 rounded-xl border",
-                  theme === 'dark' ? "bg-white/5 border-white/10" : "bg-white/90 border-gray-200"
-                )}
-              >
-                <div className="flex items-center gap-3">
-                  <div className={cn(
-                    "w-12 h-12 rounded-xl flex items-center justify-center",
-                    theme === 'dark' ? "bg-purple-500/20" : "bg-purple-500/20"
-                  )}>
-                    <Building2 className={cn(
-                      "w-6 h-6",
-                      theme === 'dark' ? "text-purple-400" : "text-purple-600"
-                    )} />
-                  </div>
-                  <div>
-                    <p className={cn(
-                      "text-2xl font-bold",
-                      theme === 'dark' ? "text-white" : "text-black"
+            {/* Super Admins */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.3 }}
+              className={cn(
+                'relative overflow-hidden',
+                theme === 'dark'
+                  ? 'bg-gradient-to-br from-gray-800 to-gray-900 border-gray-700'
+                  : 'bg-gradient-to-br from-slate-50 to-white border-slate-200',
+                'rounded-2xl border shadow-xl'
+              )}
+            >
+              <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-emerald-400 to-green-600"></div>
+              <div className="p-6">
+                <div className="flex items-start justify-between mb-4">
+                  <div className="flex items-center gap-3">
+                    <div className={cn(
+                      'p-3 rounded-xl shadow-sm',
+                      theme === 'dark'
+                        ? 'bg-emerald-900/30 border border-emerald-800/50'
+                        : 'bg-gradient-to-br from-emerald-50 to-green-100 border border-emerald-200'
                     )}>
-                      {users.reduce((sum, u) => sum + u.companies.length, 0)}
-                    </p>
-                    <p className={cn(
-                      "text-xs",
-                      theme === 'dark' ? "text-gray-400" : "text-gray-600"
-                    )}>
-                      Asignaciones
-                    </p>
+                      <Shield className="w-6 h-6 text-emerald-600" />
+                    </div>
+                    <div>
+                      <p className={cn(
+                        'text-sm font-medium',
+                        theme === 'dark' ? 'text-gray-400' : 'text-black'
+                      )}>Super Admins</p>
+                      <p className={cn(
+                        'text-3xl font-bold mt-1',
+                        theme === 'dark' ? 'text-white' : 'text-slate-900'
+                      )}>{users.filter(u => (u.role || '').toLowerCase() === 'super_admin').length}</p>
+                    </div>
                   </div>
                 </div>
-              </motion.div>
-
-              <motion.div
-                initial={{ opacity: 0, scale: 0.9 }}
-                animate={{ opacity: 1, scale: 1 }}
-                transition={{ delay: 0.4 }}
-                className={cn(
-                  "p-4 rounded-xl border",
-                  theme === 'dark' ? "bg-white/5 border-white/10" : "bg-white/90 border-gray-200"
-                )}
-              >
-                <div className="flex items-center gap-3">
-                  <div className={cn(
-                    "w-12 h-12 rounded-xl flex items-center justify-center",
-                    theme === 'dark' ? "bg-purple-500/20" : "bg-purple-500/20"
-                  )}>
-                    <TrendingUp className={cn(
-                      "w-6 h-6",
-                      theme === 'dark' ? "text-purple-400" : "text-purple-600"
-                    )} />
-                  </div>
-                  <div>
-                    <p className={cn(
-                      "text-2xl font-bold",
-                      theme === 'dark' ? "text-white" : "text-black"
-                    )}>
-                      {users.reduce((sum, u) => sum + u.transactionsCount, 0)}
-                    </p>
-                    <p className={cn(
-                      "text-xs",
-                      theme === 'dark' ? "text-gray-400" : "text-gray-600"
-                    )}>
-                      Transacciones
-                    </p>
+                <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-1">
+                    <div className="w-2 h-2 bg-emerald-400 rounded-full animate-pulse"></div>
+                    <span className={cn(
+                      'text-xs font-medium',
+                      theme === 'dark' ? 'text-gray-500' : 'text-black'
+                    )}>Máximos privilegios</span>
                   </div>
                 </div>
-              </motion.div>
+              </div>
+            </motion.div>
+
+            {/* Administradores */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.4 }}
+              className={cn(
+                'relative overflow-hidden',
+                theme === 'dark'
+                  ? 'bg-gradient-to-br from-gray-800 to-gray-900 border-gray-700'
+                  : 'bg-gradient-to-br from-slate-50 to-white border-slate-200',
+                'rounded-2xl border shadow-xl'
+              )}
+            >
+              <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-violet-400 to-purple-600"></div>
+              <div className="p-6">
+                <div className="flex items-start justify-between mb-4">
+                  <div className="flex items-center gap-3">
+                    <div className={cn(
+                      'p-3 rounded-xl shadow-sm',
+                      theme === 'dark'
+                        ? 'bg-violet-900/30 border border-violet-800/50'
+                        : 'bg-gradient-to-br from-violet-50 to-purple-100 border border-violet-200'
+                    )}>
+                      <UserCheck className="w-6 h-6 text-violet-600" />
+                    </div>
+                    <div>
+                      <p className={cn(
+                        'text-sm font-medium',
+                        theme === 'dark' ? 'text-gray-400' : 'text-black'
+                      )}>Administradores</p>
+                      <p className={cn(
+                        'text-3xl font-bold mt-1',
+                        theme === 'dark' ? 'text-white' : 'text-slate-900'
+                      )}>{users.filter(u => (u.role || '').toLowerCase() === 'admin').length}</p>
+                    </div>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-1">
+                    <div className="w-2 h-2 bg-violet-400 rounded-full animate-pulse"></div>
+                    <span className={cn(
+                      'text-xs font-medium',
+                      theme === 'dark' ? 'text-gray-500' : 'text-black'
+                    )}>Gestión completa</span>
+                  </div>
+                </div>
+              </div>
+            </motion.div>
             </div>
           </motion.div>
 
@@ -1408,280 +1428,216 @@ export default function UsersPage() {
                   className={cn(
                     "w-full pl-12 pr-4 py-3 rounded-xl border focus:outline-none focus:ring-2 transition-all duration-300",
                     theme === 'dark'
-                      ? "bg-gray-800/50 border-gray-700 text-white focus:border-blue-500 focus:ring-blue-500/20"
-                      : "bg-white border-gray-300 text-black focus:border-blue-500 focus:ring-blue-500/20"
+                      ? "bg-gray-800/50 border-gray-700 text-white focus:border-exa-secondary focus:ring-exa-secondary/20"
+                      : "bg-white border-gray-300 text-black focus:border-exa-primary focus:ring-exa-primary/20"
                   )}
                 />
               </div>
 
               <div className="flex gap-2">
-                <Button
-                  variant="outline"
+                <button
                   onClick={() => setSelectedFilter('all')}
                   className={cn(
+                    "px-4 py-2 rounded-lg font-medium transition-all duration-300 border",
                     selectedFilter === 'all'
-                      ? theme === 'dark' ? "bg-blue-600 text-white" : "bg-blue-500 text-white"
-                      : theme === 'dark' ? "border-gray-700 text-gray-300" : "border-gray-300 text-gray-700"
+                      ? theme === 'dark'
+                        ? "bg-exa-secondary text-white border-exa-secondary hover:bg-exa-secondary/90"
+                        : "bg-exa-primary text-white border-exa-primary hover:bg-exa-primary/90"
+                      : theme === 'dark'
+                        ? "bg-gray-800/50 border-gray-700 text-gray-300 hover:bg-gray-700 hover:text-white"
+                        : "bg-gray-100 border-gray-300 text-gray-700 hover:bg-exa-primary hover:text-white"
                   )}
                 >
                   Todos
-                </Button>
-                <Button
-                  variant="outline"
-                  onClick={() => setSelectedFilter('user')}
-                  className={cn(
-                    selectedFilter === 'user'
-                      ? theme === 'dark' ? "bg-blue-600 text-white" : "bg-blue-500 text-white"
-                      : theme === 'dark' ? "border-gray-700 text-gray-300" : "border-gray-300 text-gray-700"
-                  )}
-                >
-                  Usuarios
-                </Button>
-                <Button
-                  variant="outline"
-                  onClick={() => setSelectedFilter('admin')}
-                  className={cn(
-                    selectedFilter === 'admin'
-                      ? theme === 'dark' ? "bg-blue-600 text-white" : "bg-blue-500 text-white"
-                      : theme === 'dark' ? "border-gray-700 text-gray-300" : "border-gray-300 text-gray-700"
-                  )}
-                >
-                  Admins
-                </Button>
-                <Button
-                  variant="outline"
-                  onClick={() => setSelectedFilter('driver')}
-                  className={cn(
-                    selectedFilter === 'driver'
-                      ? theme === 'dark' ? "bg-blue-600 text-white" : "bg-blue-500 text-white"
-                      : theme === 'dark' ? "border-gray-700 text-gray-300" : "border-gray-300 text-gray-700"
-                  )}
-                >
-                  Drivers
-                </Button>
-                <Button
-                  variant="outline"
+                </button>
+                <button
                   onClick={() => setSelectedFilter('super_admin')}
                   className={cn(
+                    "px-4 py-2 rounded-lg font-medium transition-all duration-300 border",
                     selectedFilter === 'super_admin'
-                      ? theme === 'dark' ? "bg-blue-600 text-white" : "bg-blue-500 text-white"
-                      : theme === 'dark' ? "border-gray-700 text-gray-300" : "border-gray-300 text-gray-700"
+                      ? theme === 'dark'
+                        ? "bg-exa-secondary text-white border-exa-secondary hover:bg-exa-secondary/90"
+                        : "bg-exa-primary text-white border-exa-primary hover:bg-exa-primary/90"
+                      : theme === 'dark'
+                        ? "bg-gray-800/50 border-gray-700 text-gray-300 hover:bg-gray-700 hover:text-white"
+                        : "bg-gray-100 border-gray-300 text-gray-700 hover:bg-exa-primary hover:text-white"
                   )}
                 >
-                  Super Admin
-                </Button>
+                  SUPER_ADMIN
+                </button>
+                <button
+                  onClick={() => setSelectedFilter('admin')}
+                  className={cn(
+                    "px-4 py-2 rounded-lg font-medium transition-all duration-300 border",
+                    selectedFilter === 'admin'
+                      ? theme === 'dark'
+                        ? "bg-exa-secondary text-white border-exa-secondary hover:bg-exa-secondary/90"
+                        : "bg-exa-primary text-white border-exa-primary hover:bg-exa-primary/90"
+                      : theme === 'dark'
+                        ? "bg-gray-800/50 border-gray-700 text-gray-300 hover:bg-gray-700 hover:text-white"
+                        : "bg-gray-100 border-gray-300 text-gray-700 hover:bg-exa-primary hover:text-white"
+                  )}
+                >
+                  ADMIN
+                </button>
+                <button
+                  onClick={() => setSelectedFilter('manager')}
+                  className={cn(
+                    "px-4 py-2 rounded-lg font-medium transition-all duration-300 border",
+                    selectedFilter === 'manager'
+                      ? theme === 'dark'
+                        ? "bg-exa-secondary text-white border-exa-secondary hover:bg-exa-secondary/90"
+                        : "bg-exa-primary text-white border-exa-primary hover:bg-exa-primary/90"
+                      : theme === 'dark'
+                        ? "bg-gray-800/50 border-gray-700 text-gray-300 hover:bg-gray-700 hover:text-white"
+                        : "bg-gray-100 border-gray-300 text-gray-700 hover:bg-exa-primary hover:text-white"
+                  )}
+                >
+                  MANAGER
+                </button>
+                <button
+                  onClick={() => setSelectedFilter('user')}
+                  className={cn(
+                    "px-4 py-2 rounded-lg font-medium transition-all duration-300 border",
+                    selectedFilter === 'user'
+                      ? theme === 'dark'
+                        ? "bg-exa-secondary text-white border-exa-secondary hover:bg-exa-secondary/90"
+                        : "bg-exa-primary text-white border-exa-primary hover:bg-exa-primary/90"
+                      : theme === 'dark'
+                        ? "bg-gray-800/50 border-gray-700 text-gray-300 hover:bg-gray-700 hover:text-white"
+                        : "bg-gray-100 border-gray-300 text-gray-700 hover:bg-exa-primary hover:text-white"
+                  )}
+                >
+                  USER
+                </button>
+                <button
+                  onClick={() => {
+                    resetForm()
+                    setShowCreateForm(true)
+                  }}
+                  className="flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all duration-300 bg-blue-600 hover:bg-blue-700 text-white"
+                >
+                  <Plus className="w-4 h-4" />
+                  Crear Usuario
+                </button>
               </div>
             </div>
           </motion.div>
 
           {/* Users Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {filteredUsers.map((user, index) => {
-              const role = (user.role || '').toLowerCase()
-              return (
-                <motion.div
-                  key={user.id}
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: index * 0.1 }}
-                  whileHover={{ y: -4, scale: 1.02 }}
-                  className={cn(
-                    "relative overflow-hidden border rounded-2xl p-6 shadow-xl hover:shadow-2xl transition-all duration-300 cursor-pointer",
-                    theme === 'dark'
-                      ? "bg-gradient-to-br from-gray-800 to-gray-900 border-gray-700"
-                      : "bg-gradient-to-br from-slate-50 to-white border-slate-200"
-                  )}
-                  onClick={() => setSelectedUser(user)}
-                >
-                <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-400 to-blue-600"></div>
-                {/* Header */}
-                <div className="flex items-start justify-between mb-4">
-                  <div className="flex items-center gap-3">
-                    <div className={cn(
-                      "w-12 h-12 rounded-xl flex items-center justify-center",
-                      theme === 'dark' ? "bg-blue-600/20" : "bg-blue-500/20"
-                    )}>
-                      <User className={cn(
-                        "w-6 h-6",
-                        theme === 'dark' ? "text-blue-400" : "text-blue-600"
-                      )} />
-                    </div>
-                    <div>
-                      <h3 className={cn(
-                        "font-bold text-lg",
-                        theme === 'dark' ? "text-white" : "text-black"
+          <div className="max-w-[1400px] mx-auto">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+              {filteredUsers.map((user, index) => {
+                const role = (user.role || '').toLowerCase()
+                const borderColor = role === 'super_admin' ? 'border-l-purple-500' :
+                                   role === 'admin' ? 'border-l-blue-500' :
+                                   role === 'manager' ? 'border-l-green-500' :
+                                   'border-l-gray-500'
+                const badgeBorderColor = role === 'super_admin' ? 'border-purple-500 text-purple-600 dark:text-purple-400' :
+                                        role === 'admin' ? 'border-blue-500 text-blue-600 dark:text-blue-400' :
+                                        role === 'manager' ? 'border-green-500 text-green-600 dark:text-green-400' :
+                                        'border-gray-500 text-gray-600 dark:text-gray-400'
+                const iconColor = role === 'super_admin' ? 'text-purple-500' :
+                                 role === 'admin' ? 'text-blue-500' :
+                                 role === 'manager' ? 'text-green-500' :
+                                 'text-gray-500'
+                const roleLabel = role === 'super_admin' ? 'Super Admin' :
+                                 role === 'admin' ? 'Admin' :
+                                 role === 'manager' ? 'Manager' :
+                                 role === 'driver' ? 'Driver' :
+                                 'Usuario'
+
+                return (
+                  <motion.div
+                    key={user.id}
+                    initial={{ opacity: 0, scale: 0.95 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    transition={{ delay: index * 0.02 }}
+                    className={cn(
+                      'bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm hover:shadow-md transition-all duration-300 border-l-4',
+                      borderColor
+                    )}
+                  >
+                    {/* Header */}
+                    <div className="bg-gray-50 dark:bg-gray-900/50 p-3 flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-2 flex-1 min-w-0">
+                        <Users className={cn("w-5 h-5 flex-shrink-0", iconColor)} />
+                        <h3 className="font-semibold text-gray-900 dark:text-white truncate text-sm">
+                          {user.firstName} {user.lastName}
+                        </h3>
+                      </div>
+                      <span className={cn(
+                        "inline-block px-2 py-0.5 rounded text-xs font-medium border",
+                        badgeBorderColor
                       )}>
-                        {user.firstName} {user.lastName}
-                      </h3>
-                      <div className="flex items-center gap-1">
-                        <div className={cn(
-                          "w-2 h-2 rounded-full",
-                          user.status === 'active' ? "bg-green-500" : "bg-red-500"
-                        )} />
-                        <span className={cn(
-                          "text-xs",
-                          theme === 'dark' ? "text-gray-400" : "text-gray-600"
-                        )}>
-                          {user.status === 'active' ? 'Activo' : 'Inactivo'}
-                        </span>
+                        {roleLabel}
+                      </span>
+                    </div>
+
+                    {/* Content */}
+                    <div className="p-4 space-y-3">
+                      {/* Email */}
+                      <div className="flex items-center gap-1.5 text-gray-600 dark:text-gray-400 text-xs">
+                        <Mail className="w-3.5 h-3.5 flex-shrink-0" />
+                        <span className="truncate">{user.email}</span>
+                      </div>
+
+                      {/* Stats Grid */}
+                      <div className="grid grid-cols-2 gap-2">
+                        {/* Empresa */}
+                        <div className="bg-gray-50 dark:bg-gray-900/30 rounded-lg p-2">
+                          <div className="text-xs text-gray-600 dark:text-gray-400 mb-0.5">Empresa</div>
+                          <div className="text-xs font-bold text-gray-900 dark:text-white truncate">
+                            {user.companies && user.companies.length > 0 ? user.companies[0] : 'N/A'}
+                          </div>
+                        </div>
+
+                        {/* Estado */}
+                        <div className="bg-gray-50 dark:bg-gray-900/30 rounded-lg p-2">
+                          <div className="text-xs text-gray-600 dark:text-gray-400 mb-0.5">Estado</div>
+                          <div className={cn(
+                            "text-xs font-bold",
+                            user.status === 'active' ? "text-green-600 dark:text-green-400" : "text-gray-600 dark:text-gray-400"
+                          )}>
+                            {user.status === 'active' ? 'Activo' : 'Inactivo'}
+                          </div>
+                        </div>
                       </div>
                     </div>
-                  </div>
 
-                  <div className="flex items-center gap-1">
-                    <Shield className={cn(
-                      "w-4 h-4",
-                      role === 'super_admin' ? "text-purple-500" : role === 'admin' ? "text-blue-500" : role === 'driver' ? "text-amber-500" : "text-gray-500"
-                    )} />
-                    <span className={cn(
-                      "text-xs px-2 py-1 rounded-lg",
-                      role === 'super_admin' ? theme === 'dark' ? "bg-purple-500/20 text-purple-400" : "bg-purple-100 text-purple-800" :
-                      role === 'admin' ? theme === 'dark' ? "bg-blue-500/20 text-blue-400" : "bg-blue-100 text-blue-800" :
-                      role === 'driver' ? theme === 'dark' ? "bg-amber-500/20 text-amber-300" : "bg-amber-100 text-amber-700" :
-                      theme === 'dark' ? "bg-gray-700/20 text-gray-400" : "bg-gray-100 text-gray-800"
-                    )}>
-                      {role === 'super_admin' ? 'Super Admin' : role === 'admin' ? 'Admin' : role === 'driver' ? 'Driver' : 'Usuario'}
-                    </span>
-                  </div>
-                </div>
-
-                {/* Info */}
-                <div className="space-y-3 mb-4">
-                  <div className="flex items-center gap-2">
-                    <Mail className={cn(
-                      "w-4 h-4",
-                      theme === 'dark' ? "text-gray-400" : "text-gray-600"
-                    )} />
-                    <span className={cn(
-                      "text-sm",
-                      theme === 'dark' ? "text-gray-300" : "text-gray-700"
-                    )}>
-                      {user.email}
-                    </span>
-                  </div>
-
-                  <div className="flex items-center gap-2">
-                    <Phone className={cn(
-                      "w-4 h-4",
-                      theme === 'dark' ? "text-gray-400" : "text-gray-600"
-                    )} />
-                    <span className={cn(
-                      "text-sm",
-                      theme === 'dark' ? "text-gray-300" : "text-gray-700"
-                    )}>
-                      {user.phone}
-                    </span>
-                  </div>
-
-                  <div className="flex items-center gap-2">
-                    <MapPin className={cn(
-                      "w-4 h-4",
-                      theme === 'dark' ? "text-gray-400" : "text-gray-600"
-                    )} />
-                    <span className={cn(
-                      "text-sm",
-                      theme === 'dark' ? "text-gray-300" : "text-gray-700"
-                    )}>
-                      {user.city}, {user.country}
-                    </span>
-                  </div>
-                </div>
-
-                {/* Stats */}
-                <div className="grid grid-cols-2 gap-2 mb-4">
-                  <div className={cn(
-                    "p-2 rounded-lg text-center",
-                    theme === 'dark' ? "bg-gray-800/50" : "bg-gray-100"
-                  )}>
-                    <p className={cn(
-                      "text-xs font-bold",
-                      theme === 'dark' ? "text-green-400" : "text-green-600"
-                    )}>
-                      {user.transactionsCount}
-                    </p>
-                    <p className={cn(
-                      "text-xs",
-                      theme === 'dark' ? "text-gray-400" : "text-gray-600"
-                    )}>
-                      Transacciones
-                    </p>
-                  </div>
-                  <div className={cn(
-                    "p-2 rounded-lg text-center",
-                    theme === 'dark' ? "bg-gray-800/50" : "bg-gray-100"
-                  )}>
-                    <p className={cn(
-                      "text-xs font-bold",
-                      theme === 'dark' ? "text-purple-400" : "text-purple-600"
-                    )}>
-                      {user.companies.length}
-                    </p>
-                    <p className={cn(
-                      "text-xs",
-                      theme === 'dark' ? "text-gray-400" : "text-gray-600"
-                    )}>
-                      Empresas
-                    </p>
-                  </div>
-                </div>
-
-                {/* Companies */}
-                <div className="flex flex-wrap gap-1">
-                  {user.companies.slice(0, 2).map((company: any, idx: number) => (
-                    <span
-                      key={idx}
-                      className={cn(
-                        "px-2 py-1 rounded-full text-xs",
-                        theme === 'dark' ? "bg-exa-secondary/20 text-exa-secondary" : "bg-exa-primary/10 text-exa-primary"
-                      )}
-                    >
-                      {company}
-                    </span>
-                  ))}
-                  {user.companies.length > 2 && (
-                    <span className={cn(
-                      "px-2 py-1 rounded-full text-xs",
-                      theme === 'dark' ? "bg-gray-700/20 text-gray-400" : "bg-gray-100 text-gray-600"
-                    )}>
-                      +{user.companies.length - 2}
-                    </span>
-                  )}
-                </div>
-                <div className="flex items-center gap-2 mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      handleEditUser(user)
-                    }}
-                    className={cn(
-                      "flex-1 flex items-center justify-center gap-2 px-4 py-2 rounded-lg font-medium transition-all duration-300",
-                      theme === 'dark'
-                        ? "bg-blue-500/20 text-blue-400 hover:bg-blue-500/30 border border-blue-500/30"
-                        : "bg-blue-50 text-blue-600 hover:bg-blue-100 border border-blue-200"
-                    )}
-                  >
-                    <Edit className="w-4 h-4" />
-                    <span className="text-sm">Editar</span>
-                  </button>
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      handleDeleteUser(user)
-                    }}
-                    className={cn(
-                      "flex-1 flex items-center justify-center gap-2 px-4 py-2 rounded-lg font-medium transition-all duration-300",
-                      theme === 'dark'
-                        ? "bg-red-500/20 text-red-400 hover:bg-red-500/30 border border-red-500/30"
-                        : "bg-red-50 text-red-600 hover:bg-red-100 border border-red-200"
-                    )}
-                  >
-                    <Trash2 className="w-4 h-4" />
-                    <span className="text-sm">Eliminar</span>
-                  </button>
-                </div>
-              </motion.div>
-            )
-          })}
+                    {/* Footer - Actions */}
+                    <div className="flex items-center justify-between px-4 py-3 border-t border-gray-200 dark:border-gray-700">
+                      {/* Action Buttons */}
+                      <div className="flex gap-1.5 w-full">
+                        <button
+                          onClick={() => setSelectedUser(user)}
+                          className="p-1.5 rounded-lg text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors"
+                          title="Ver detalles"
+                        >
+                          <Eye className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          onClick={() => handleEditUser(user)}
+                          disabled={loading}
+                          className="p-1.5 rounded-lg text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors disabled:opacity-50"
+                          title="Editar"
+                        >
+                          <Edit className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          onClick={() => handleDeleteUser(user)}
+                          disabled={loading}
+                          className="p-1.5 rounded-lg text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors disabled:opacity-50"
+                          title="Eliminar"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </div>
+                  </motion.div>
+                )
+              })}
+            </div>
           </div>
 
           {/* User Detail Modal */}
