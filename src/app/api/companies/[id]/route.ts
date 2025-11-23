@@ -267,7 +267,7 @@ export async function DELETE(
     }
 
     const usersCheck = await db.query(
-      'SELECT COUNT(*) as count FROM user_companies WHERE company_id = $1',
+      'SELECT COUNT(*) as count FROM user_companies WHERE companyid = $1',
       [companyId]
     )
 
@@ -276,9 +276,19 @@ export async function DELETE(
       [companyId]
     )
 
+    const customersCheck = await db.query(
+      'SELECT COUNT(*) as count FROM customers WHERE company_id = $1',
+      [companyId]
+    )
+
+    const branchesCheck = await db.query(
+      'SELECT COUNT(*) as count FROM companies WHERE parent_company_id = $1',
+      [companyId]
+    )
+
     if (parseInt(usersCheck.rows[0].count) > 0) {
       return NextResponse.json(
-        { success: false, error: `No se puede eliminar. Tiene ${usersCheck.rows[0].count} usuarios` },
+        { success: false, error: `No se puede eliminar. Tiene ${usersCheck.rows[0].count} usuarios asociados` },
         { status: 400 }
       )
     }
@@ -286,6 +296,20 @@ export async function DELETE(
     if (parseInt(ordersCheck.rows[0].count) > 0) {
       return NextResponse.json(
         { success: false, error: `No se puede eliminar. Tiene ${ordersCheck.rows[0].count} órdenes` },
+        { status: 400 }
+      )
+    }
+
+    if (parseInt(customersCheck.rows[0].count) > 0) {
+      return NextResponse.json(
+        { success: false, error: `No se puede eliminar. Tiene ${customersCheck.rows[0].count} clientes registrados` },
+        { status: 400 }
+      )
+    }
+
+    if (parseInt(branchesCheck.rows[0].count) > 0) {
+      return NextResponse.json(
+        { success: false, error: `No se puede eliminar. Tiene ${branchesCheck.rows[0].count} sucursales asociadas` },
         { status: 400 }
       )
     }

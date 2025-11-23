@@ -1914,7 +1914,7 @@ export default function BranchesPage() {
         </div>
       ) : (
         // Companies List View
-        <div className="max-w-7xl mx-auto p-6">
+        <div className="p-6">
           {/* Header */}
           <motion.div
             initial={{ opacity: 0, y: 20 }}
@@ -1950,7 +1950,7 @@ export default function BranchesPage() {
             </div>
 
             {/* Stats - Estilo Órdenes */}
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-5">
+            <div className="grid grid-cols-4 gap-5">
               {/* Total de Sucursales */}
               <motion.div
                 initial={{ opacity: 0, y: 20 }}
@@ -2250,122 +2250,125 @@ export default function BranchesPage() {
               <LoadingBox text="Cargando empresas..." size="md" />
             </div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {filteredCompanies.map((company, index) => (
-              <motion.div
-                key={company.id}
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: index * 0.05 }}
-                className={cn(
-                  "bg-white dark:bg-gray-800 rounded-lg border p-4 hover:shadow-lg transition-all",
-                  theme === 'dark' ? "border-gray-700" : "border-gray-200"
-                )}
-              >
-                {/* Header Row */}
-                <div className="flex items-start justify-between mb-3">
-                  <div className="flex items-center gap-3 flex-1">
-                    {/* Branch indicator */}
-                    <div className="relative p-2 rounded-lg bg-gray-50 dark:bg-gray-700">
-                      <Building2 className="w-5 h-5 text-gray-600 dark:text-gray-400" />
-                      <div className="absolute -top-1 -right-1 w-2 h-2 bg-[#0374e5] rounded-full" />
-                    </div>
-
-                    {/* Company name and location */}
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-1">
-                        <h3 className="font-semibold text-gray-900 dark:text-white truncate">
-                          {company.legalName}
-                        </h3>
-                        <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-[#0374e5]/10 text-[#0374e5] dark:bg-[#0374e5]/20">
+            <div className="max-w-[1400px] mx-auto">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                {filteredCompanies.map((company, index) => {
+                  return (
+                    <motion.div
+                      key={company.id}
+                      initial={{ opacity: 0, scale: 0.95 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      transition={{ delay: index * 0.02 }}
+                      className={cn(
+                        'bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm hover:shadow-md transition-all duration-300 border-l-4 border-l-red-500'
+                      )}
+                    >
+                      {/* Header */}
+                      <div className="bg-gray-50 dark:bg-gray-900/50 p-3 flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-2 flex-1 min-w-0">
+                          <Building2 className="w-5 h-5 flex-shrink-0 text-red-500" />
+                          <h3 className="font-semibold text-gray-900 dark:text-white truncate text-sm">
+                            {company.legalName}
+                          </h3>
+                        </div>
+                        <span className="inline-block px-2 py-0.5 rounded text-xs font-medium border border-red-500 text-red-600 dark:text-red-400">
                           Sucursal
                         </span>
                       </div>
-                      <p className="text-sm text-gray-500 dark:text-gray-400 truncate">
-                        {company.city || 'N/A'}, {company.state || ''} {company.country || ''}
-                      </p>
-                    </div>
-                  </div>
 
-                  {/* Status badge */}
-                  <span className={cn(
-                    "px-2 py-1 rounded-full text-xs font-medium whitespace-nowrap",
-                    company.status === 'active'
-                      ? "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400"
-                      : "bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-400"
-                  )}>
-                    {company.status === 'active' ? "Activo" : "Inactivo"}
-                  </span>
-                </div>
+                      {/* Content */}
+                      <div className="p-4 space-y-3">
+                        {/* Location */}
+                        <div className="flex items-center gap-1.5 text-gray-600 dark:text-gray-400 text-xs">
+                          <MapPin className="w-3.5 h-3.5 flex-shrink-0" />
+                          <span className="truncate">
+                            {company.city || 'N/A'}, {company.state || ''} {company.country || ''}
+                          </span>
+                        </div>
 
-                {/* Info Grid */}
-                <div className={cn(
-                  "grid grid-cols-2 gap-4 mb-3 py-3 border-y",
-                  theme === 'dark' ? "border-gray-700" : "border-gray-200"
-                )}>
-                  {/* Wallet Balance */}
-                  <div>
-                    <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">Balance</p>
-                    <p className="font-semibold text-gray-900 dark:text-white">
-                      ${(company.walletBalance || 0).toLocaleString()}
-                    </p>
-                  </div>
+                        {/* Stats Grid */}
+                        <div className="grid grid-cols-2 gap-2">
+                          {/* Balance */}
+                          <div className="bg-gray-50 dark:bg-gray-900/30 rounded-lg p-2">
+                            <div className="text-xs text-gray-600 dark:text-gray-400 mb-0.5">Balance</div>
+                            <div className="text-sm font-bold text-gray-900 dark:text-white">
+                              ${(company.walletBalance || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            </div>
+                          </div>
 
-                  {/* Users */}
-                  <div>
-                    <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">Usuarios</p>
-                    <p className="font-semibold text-gray-900 dark:text-white">{company.usersCount || 0}</p>
-                  </div>
-                </div>
+                          {/* Usuarios */}
+                          <div className="bg-gray-50 dark:bg-gray-900/30 rounded-lg p-2">
+                            <div className="text-xs text-gray-600 dark:text-gray-400 mb-0.5">Usuarios</div>
+                            <div className="text-sm font-bold text-gray-900 dark:text-white">
+                              {company.usersCount || 0}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
 
-                {/* Action Buttons */}
-                <div className="flex gap-2 justify-end">
-                  <button
-                    onClick={() => setSelectedCompany(company)}
-                    className="p-2 rounded-lg text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-                    title="Ver detalles"
-                  >
-                    <Eye className="w-4 h-4" />
-                  </button>
-                  <button
-                    onClick={() => handleEditCompany(company.id)}
-                    disabled={loading}
-                    className="p-2 rounded-lg text-[#0374e5] hover:bg-[#0374e5]/10 dark:hover:bg-[#0374e5]/20 transition-colors"
-                    title="Editar"
-                  >
-                    <Edit className="w-4 h-4" />
-                  </button>
-                  <button
-                    onClick={() => handleToggleStatus(company.id, company.legalName, company.status)}
-                    disabled={loading}
-                    className={cn(
-                      "p-2 rounded-lg transition-colors",
-                      company.status === 'active'
-                        ? "text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-900/20"
-                        : "text-green-600 hover:bg-green-50 dark:hover:bg-green-900/20"
-                    )}
-                    title={company.status === 'active' ? 'Desactivar' : 'Activar'}
-                  >
-                    {company.status === 'active' ? (
-                      <XCircle className="w-4 h-4" />
-                    ) : (
-                      <CheckCircle className="w-4 h-4" />
-                    )}
-                  </button>
-                  {company.status !== 'active' && (
-                    <button
-                      onClick={() => handleDeleteCompany(company.id, company.legalName)}
-                      disabled={loading}
-                      className="p-2 rounded-lg text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
-                      title="Eliminar"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  )}
-                </div>
-              </motion.div>
-            ))}
-          </div>
+                      {/* Footer - Status Badge and Actions */}
+                      <div className="flex items-center justify-between px-4 py-3 border-t border-gray-200 dark:border-gray-700">
+                        {/* Status Badge */}
+                        <span className={cn(
+                          "inline-flex px-2 py-1 rounded-full text-xs font-medium",
+                          company.status === 'active'
+                            ? "bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400 border border-green-200 dark:border-green-800"
+                            : "bg-gray-50 dark:bg-gray-900/20 text-gray-700 dark:text-gray-400 border border-gray-200 dark:border-gray-700"
+                        )}>
+                          {company.status === 'active' ? "Activo" : "Inactivo"}
+                        </span>
+
+                        {/* Action Buttons */}
+                        <div className="flex gap-1.5">
+                          <button
+                            onClick={() => setSelectedCompany(company)}
+                            className="p-1.5 rounded-lg text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors"
+                            title="Ver detalles"
+                          >
+                            <Eye className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            onClick={() => handleEditCompany(company.id)}
+                            disabled={loading}
+                            className="p-1.5 rounded-lg text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors disabled:opacity-50"
+                            title="Editar"
+                          >
+                            <Edit className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            onClick={() => handleToggleStatus(company.id, company.legalName, company.status)}
+                            disabled={loading}
+                            className={cn(
+                              "p-1.5 rounded-lg transition-colors disabled:opacity-50",
+                              company.status === 'active'
+                                ? "text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20"
+                                : "text-green-600 dark:text-green-400 hover:bg-green-50 dark:hover:bg-green-900/20"
+                            )}
+                            title={company.status === 'active' ? 'Desactivar' : 'Activar'}
+                          >
+                            {company.status === 'active' ? (
+                              <XCircle className="w-3.5 h-3.5" />
+                            ) : (
+                              <CheckCircle className="w-3.5 h-3.5" />
+                            )}
+                          </button>
+                          {company.status !== 'active' && (
+                            <button
+                              onClick={() => handleDeleteCompany(company.id, company.legalName)}
+                              disabled={loading}
+                              className="p-1.5 rounded-lg text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors disabled:opacity-50"
+                              title="Eliminar"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    </motion.div>
+                  )
+                })}
+              </div>
+            </div>
           )}
 
           {/* Company Detail Modal */}
