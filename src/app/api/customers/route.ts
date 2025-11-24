@@ -247,13 +247,13 @@ export async function GET(request: NextRequest) {
           idnumber ILIKE $1 OR
           CONCAT(firstname, ' ', lastname) ILIKE $1)`
 
-      const queryParams: any[] = [searchPattern, searchPattern, searchPattern, searchPattern, searchPattern, searchPattern]
+      const queryParams: any[] = [searchPattern]
 
       if (!isSuperAdmin) {
-        query += '\n          AND company_id = $7'
+        query += '\n          AND company_id = $2'
         queryParams.push(headerCompanyId)
       } else if (companyIdParam) {
-        query += '\n          AND company_id = $7'
+        query += '\n          AND company_id = $2'
         queryParams.push(parseInt(companyIdParam))
       }
 
