@@ -304,7 +304,7 @@ export async function PUT(request: NextRequest) {
   }
 }
 
-// DELETE: Eliminar servicio (soft delete - marca como inactivo)
+// DELETE: Eliminar servicio permanentemente de la base de datos
 export async function DELETE(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url)
@@ -327,16 +327,15 @@ export async function DELETE(request: NextRequest) {
       }, { status: 400 })
     }
 
-    // Soft delete - marcar como inactivo en lugar de eliminar
-    const updateQuery = `
-      UPDATE services
-      SET active = false, updated_at = NOW()
+    // Hard delete - eliminar permanentemente de la base de datos
+    const deleteQuery = `
+      DELETE FROM services
       WHERE id = $1
       RETURNING id
     `
 
     console.log('[DELETE /api/services] Executing query with id:', serviceId)
-    const result = await db.query(updateQuery, [serviceId])
+    const result = await db.query(deleteQuery, [serviceId])
 
     if (result.rows.length === 0) {
       return NextResponse.json({
@@ -347,7 +346,7 @@ export async function DELETE(request: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      message: 'Servicio desactivado exitosamente'
+      message: 'Servicio eliminado exitosamente'
     })
 
   } catch (error) {
