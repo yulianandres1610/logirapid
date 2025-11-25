@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import { X, CheckCircle, AlertCircle, AlertTriangle, Info } from 'lucide-react'
 import { useNotifications } from '@/contexts/NotificationContext'
 import { motion, AnimatePresence } from 'framer-motion'
@@ -13,37 +13,58 @@ interface PopupNotification {
 }
 
 export default function NotificationPopup() {
-  const { notifications } = useNotifications()
+  const { notifications, markAsRead } = useNotifications()
   const [popups, setPopups] = useState<PopupNotification[]>([])
+  const processedIdsRef = useRef<Set<string>>(new Set())
+  const timersRef = useRef<Map<string, NodeJS.Timeout>>(new Map())
 
   useEffect(() => {
-    // Get only the 3 most recent unread notifications for popup display
-    const recentNotifications = notifications
-      .filter(n => !n.read)
-      .slice(0, 3)
-      .map(n => ({
+    // Solo procesar notificaciones nuevas que no hayan sido procesadas antes
+    const newNotifications = notifications.filter(n =>
+      !n.read && !processedIdsRef.current.has(n.id)
+    )
+
+    if (newNotifications.length > 0) {
+      // Agregar las nuevas notificaciones a los popups
+      const newPopups = newNotifications.map(n => ({
         id: n.id,
         type: n.type,
         title: n.title,
         message: n.message
       }))
 
-    setPopups(recentNotifications)
+      // Marcar como procesadas
+      newNotifications.forEach(n => {
+        processedIdsRef.current.add(n.id)
 
-    // Auto-remove after duration
-    if (recentNotifications.length > 0) {
-      const lastNotification = recentNotifications[0]
-      const autoHideTime = lastNotification.type === 'error' ? 7000 : 5000
+        // Configurar auto-dismiss para cada notificación nueva
+        const autoHideTime = n.type === 'error' ? 7000 : 5000
+        const timer = setTimeout(() => {
+          removePopup(n.id)
+        }, autoHideTime)
 
-      const timer = setTimeout(() => {
-        removePopup(lastNotification.id)
-      }, autoHideTime)
+        timersRef.current.set(n.id, timer)
+      })
 
-      return () => clearTimeout(timer)
+      setPopups(prev => [...newPopups, ...prev].slice(0, 3))
+    }
+
+    // Cleanup de timers cuando el componente se desmonte
+    return () => {
+      timersRef.current.forEach(timer => clearTimeout(timer))
     }
   }, [notifications])
 
   const removePopup = (id: string) => {
+    // Limpiar el timer si existe
+    const timer = timersRef.current.get(id)
+    if (timer) {
+      clearTimeout(timer)
+      timersRef.current.delete(id)
+    }
+    // Marcar como leída en el contexto
+    markAsRead(id)
+    // Remover del estado local de popups
     setPopups(prev => prev.filter(popup => popup.id !== id))
   }
 
