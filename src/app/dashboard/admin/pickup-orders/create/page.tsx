@@ -16,7 +16,8 @@ import {
   MapPin,
   Clock,
   Truck,
-  PackagePlus
+  PackagePlus,
+  RotateCcw
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useTheme } from '@/contexts/theme-context'
@@ -35,6 +36,7 @@ import PickupSchedulingStep from '@/components/pickup-orders/wizard/PickupSchedu
 import PickupServiceConfigurationStep from '@/components/pickup-orders/wizard/PickupServiceConfigurationStep'
 import EmpaqueSelectionStep from '@/components/pickup-orders/wizard/EmpaqueSelectionStep'
 import PickupOrderConfirmationStep from '@/components/pickup-orders/wizard/PickupOrderConfirmationStep'
+import ReturnOrderStep from '@/components/pickup-orders/wizard/ReturnOrderStep'
 
 // Force dynamic rendering
 export const dynamic = 'force-dynamic'
@@ -65,7 +67,7 @@ export default function CreatePickupOrderPage() {
   // Estado compartido del wizard
   const [wizardData, setWizardData] = useState({
     // Paso 0: Tipo de orden
-    orderType: null as 'recogida' | 'entrega' | null,
+    orderType: null as 'recogida' | 'entrega' | 'retorno' | null,
 
     // Paso 1: Remitente (Cliente que solicita la recogida o entrega)
     sender: null as any,
@@ -173,7 +175,7 @@ export default function CreatePickupOrderPage() {
           component: PickupOrderConfirmationStep
         }
       ]
-    } else {
+    } else if (wizardData.orderType === 'entrega') {
       // Flujo de ENTREGA: 6 pasos totales
       return [
         ...baseSteps,
@@ -191,6 +193,18 @@ export default function CreatePickupOrderPage() {
           description: 'Completar orden',
           icon: FileCheck,
           component: PickupOrderConfirmationStep
+        }
+      ]
+    } else {
+      // Flujo de RETORNO: 2 pasos (tipo + wizard de retorno integrado)
+      return [
+        ...baseSteps,
+        {
+          id: 2,
+          title: 'Crear Retorno',
+          description: 'Wizard de retorno',
+          icon: RotateCcw,
+          component: ReturnOrderStep
         }
       ]
     }

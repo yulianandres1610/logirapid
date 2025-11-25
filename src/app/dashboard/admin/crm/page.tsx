@@ -50,6 +50,7 @@ import DepartmentPill from '@/components/ui/department-pill'
 import NotificationPopup from '@/components/ui/NotificationPopup'
 import MapboxAddressAutofill from '@/components/ui/MapboxAddressAutofill'
 import Spinner from '@/components/ui/Spinner'
+import CustomerTransactionHistory from '@/components/crm/CustomerTransactionHistory'
 import { Fragment } from 'react'
 
 // Función para remover ceros iniciales de direcciones
@@ -2590,120 +2591,10 @@ export default function CRMPage() {
 
                 {/* Transactions Tab Content */}
                 {activeTab === 'transactions' && (
-                  <div>
-                    <div className="mb-6">
-                      <h3 className={cn(
-                        "text-lg font-semibold",
-                        theme === 'dark' ? "text-white" : "text-gray-900"
-                      )}>
-                        Historial de Transacciones
-                      </h3>
-                    </div>
-
-                    {getSampleTransactions(selectedCustomer.id).length > 0 ? (
-                      <div className="overflow-x-auto">
-                        <table className="w-full">
-                          <thead>
-                            <tr className={cn(
-                              "border-b",
-                              theme === 'dark' ? "border-gray-700" : "border-gray-200"
-                            )}>
-                              <th className={cn(
-                                "text-left py-3 px-4 font-medium text-sm",
-                                theme === 'dark' ? "text-gray-300" : "text-gray-700"
-                              )}>
-                                Fecha
-                              </th>
-                              <th className={cn(
-                                "text-left py-3 px-4 font-medium text-sm",
-                                theme === 'dark' ? "text-gray-300" : "text-gray-700"
-                              )}>
-                                Tipo
-                              </th>
-                              <th className={cn(
-                                "text-left py-3 px-4 font-medium text-sm",
-                                theme === 'dark' ? "text-gray-300" : "text-gray-700"
-                              )}>
-                                Descripción
-                              </th>
-                              <th className={cn(
-                                "text-left py-3 px-4 font-medium text-sm",
-                                theme === 'dark' ? "text-gray-300" : "text-gray-700"
-                              )}>
-                                Monto
-                              </th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {getSampleTransactions(selectedCustomer.id).map((transaction) => (
-                              <tr key={transaction.id} className={cn(
-                                "border-b hover:bg-opacity-50 transition-colors",
-                                theme === 'dark'
-                                  ? "border-gray-700 hover:bg-gray-700/50"
-                                  : "border-gray-100 hover:bg-gray-50"
-                              )}>
-                                <td className={cn(
-                                  "py-3 px-4 text-sm",
-                                  theme === 'dark' ? "text-gray-300" : "text-gray-600"
-                                )}>
-                                  {new Date(transaction.createdAt).toLocaleDateString('es-ES')}
-                                </td>
-                                <td className="py-3 px-4">
-                                  <span className={cn(
-                                    "inline-flex px-2 py-1 text-xs font-medium rounded-full",
-                                    transaction.type === 'payment'
-                                      ? "bg-green-100 text-green-800"
-                                      : transaction.type === 'credit'
-                                      ? "bg-blue-100 text-blue-800"
-                                      : "bg-orange-100 text-orange-800"
-                                  )}>
-                                    {transaction.type === 'payment' ? 'Pago' :
-                                     transaction.type === 'credit' ? 'Crédito' : 'Reembolso'}
-                                  </span>
-                                </td>
-                                <td className={cn(
-                                  "py-3 px-4 text-sm",
-                                  theme === 'dark' ? "text-gray-300" : "text-gray-700"
-                                )}>
-                                  {transaction.description}
-                                </td>
-                                <td className={cn(
-                                  "py-3 px-4 font-medium",
-                                  transaction.type === 'payment'
-                                    ? "text-green-600"
-                                    : transaction.type === 'credit'
-                                    ? "text-blue-600"
-                                    : "text-orange-600"
-                                )}>
-                                  {transaction.type === 'payment' ? '-' : '+'}
-                                  ${transaction.amount.toFixed(2)}
-                                </td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
-                    ) : (
-                      <div className="text-center py-12">
-                        <DollarSign className={cn(
-                          "w-16 h-16 mx-auto mb-4",
-                          theme === 'dark' ? "text-gray-600" : "text-gray-400"
-                        )} />
-                        <p className={cn(
-                          "text-lg font-medium mb-2",
-                          theme === 'dark' ? "text-gray-300" : "text-gray-700"
-                        )}>
-                          No hay transacciones registradas
-                        </p>
-                        <p className={cn(
-                          "text-sm",
-                          theme === 'dark' ? "text-gray-500" : "text-gray-500"
-                        )}>
-                          Este cliente aún no tiene transacciones en el sistema
-                        </p>
-                      </div>
-                    )}
-                  </div>
+                  <CustomerTransactionHistory
+                    customerId={selectedCustomer.id}
+                    companyId="1"
+                  />
                 )}
               </div>
             </div>
