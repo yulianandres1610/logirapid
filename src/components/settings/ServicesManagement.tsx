@@ -62,6 +62,7 @@ export default function ServicesManagement() {
   const [showServiceModal, setShowServiceModal] = useState(false)
   const [editingService, setEditingService] = useState<Service | null>(null)
   const [saving, setSaving] = useState(false)
+  const [deleting, setDeleting] = useState<number | null>(null)
 
   const [serviceForm, setServiceForm] = useState({
     name: '',
@@ -150,6 +151,7 @@ export default function ServicesManagement() {
   const handleDeleteService = async (id: number) => {
     if (!confirm('¿Está seguro de desactivar este servicio?')) return
 
+    setDeleting(id)
     try {
       const response = await fetch(`/api/services?id=${id}`, {
         method: 'DELETE'
@@ -158,13 +160,16 @@ export default function ServicesManagement() {
       const data = await response.json()
 
       if (data.success) {
-        await fetchServices()
+        // Actualizar localmente para respuesta inmediata
+        setServices(prev => prev.filter(s => s.id !== id))
       } else {
         alert(data.error || 'Error al desactivar servicio')
       }
     } catch (error) {
       console.error('Error deleting service:', error)
       alert('Error al desactivar servicio')
+    } finally {
+      setDeleting(null)
     }
   }
 
@@ -361,9 +366,14 @@ export default function ServicesManagement() {
               <Button
                 onClick={() => handleDeleteService(service.id)}
                 size="sm"
-                className="bg-red-500 hover:bg-red-600 text-white"
+                disabled={deleting === service.id}
+                className="bg-red-500 hover:bg-red-600 text-white disabled:opacity-50"
               >
-                <Trash2 className="w-4 h-4" />
+                {deleting === service.id ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <Trash2 className="w-4 h-4" />
+                )}
               </Button>
             </div>
           </motion.div>
