@@ -42,9 +42,21 @@ interface Service {
   updatedAt: string
 }
 
+interface PackageSize {
+  id: number
+  name: string
+  dimensions: string
+  weight: number
+  price: number
+  description: string | null
+  isdefault: boolean
+  status: string
+}
+
 export default function ServicesManagement() {
   const { theme } = useTheme()
   const [services, setServices] = useState<Service[]>([])
+  const [packageSizes, setPackageSizes] = useState<PackageSize[]>([])
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState('')
   const [showServiceModal, setShowServiceModal] = useState(false)
@@ -84,8 +96,21 @@ export default function ServicesManagement() {
     }
   }
 
+  const fetchPackageSizes = async () => {
+    try {
+      const response = await fetch('/api/package-sizes?status=active')
+      const data = await response.json()
+      if (data.success) {
+        setPackageSizes(data.data || [])
+      }
+    } catch (error) {
+      console.error('Error fetching package sizes:', error)
+    }
+  }
+
   useEffect(() => {
     fetchServices()
+    fetchPackageSizes()
   }, [])
 
   const handleSaveService = async () => {
@@ -468,7 +493,14 @@ export default function ServicesManagement() {
                     </label>
                     <select
                       value={serviceForm.pricingModel}
-                      onChange={(e) => setServiceForm({ ...serviceForm, pricingModel: e.target.value })}
+                      onChange={(e) => {
+                        const newModel = e.target.value
+                        if (newModel === 'free') {
+                          setServiceForm({ ...serviceForm, pricingModel: newModel, basePrice: 0, pricePerUnit: 0 })
+                        } else {
+                          setServiceForm({ ...serviceForm, pricingModel: newModel })
+                        }
+                      }}
                       className={cn(
                         "w-full px-3 py-2 rounded-lg border",
                         theme === 'dark'
@@ -476,6 +508,7 @@ export default function ServicesManagement() {
                           : 'bg-white border-gray-300'
                       )}
                     >
+                      <option value="free">Gratis</option>
                       <option value="fixed">Precio Fijo</option>
                       <option value="by_weight">Por Peso</option>
                       <option value="by_volume">Por Volumen</option>
@@ -485,62 +518,65 @@ export default function ServicesManagement() {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-3 gap-4">
-                  <div>
-                    <label className={cn(
-                      "block text-sm font-medium mb-2",
-                      theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
-                    )}>
-                      Precio Base ($)
-                    </label>
-                    <Input
-                      type="number"
-                      step="0.01"
-                      value={serviceForm.basePrice}
-                      onChange={(e) => setServiceForm({ ...serviceForm, basePrice: parseFloat(e.target.value) || 0 })}
-                      className={theme === 'dark' ? 'bg-gray-700 text-white' : ''}
-                    />
+                {/* Campos de precio - solo mostrar si no es gratis */}
+                {serviceForm.pricingModel !== 'free' && (
+                  <div className="grid grid-cols-3 gap-4">
+                    <div>
+                      <label className={cn(
+                        "block text-sm font-medium mb-2",
+                        theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
+                      )}>
+                        Precio Base ($)
+                      </label>
+                      <Input
+                        type="number"
+                        step="0.01"
+                        value={serviceForm.basePrice}
+                        onChange={(e) => setServiceForm({ ...serviceForm, basePrice: parseFloat(e.target.value) || 0 })}
+                        className={theme === 'dark' ? 'bg-gray-700 text-white' : ''}
+                      />
+                    </div>
+                    <div>
+                      <label className={cn(
+                        "block text-sm font-medium mb-2",
+                        theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
+                      )}>
+                        Precio por Unidad ($)
+                      </label>
+                      <Input
+                        type="number"
+                        step="0.01"
+                        value={serviceForm.pricePerUnit}
+                        onChange={(e) => setServiceForm({ ...serviceForm, pricePerUnit: parseFloat(e.target.value) || 0 })}
+                        className={theme === 'dark' ? 'bg-gray-700 text-white' : ''}
+                      />
+                    </div>
+                    <div>
+                      <label className={cn(
+                        "block text-sm font-medium mb-2",
+                        theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
+                      )}>
+                        Tipo de Unidad
+                      </label>
+                      <select
+                        value={serviceForm.unitType}
+                        onChange={(e) => setServiceForm({ ...serviceForm, unitType: e.target.value })}
+                        className={cn(
+                          "w-full px-3 py-2 rounded-lg border",
+                          theme === 'dark'
+                            ? 'bg-gray-700 text-white border-gray-600'
+                            : 'bg-white border-gray-300'
+                        )}
+                      >
+                        <option value="unit">Unidad</option>
+                        <option value="lb">Libra</option>
+                        <option value="kg">Kilogramo</option>
+                        <option value="m3">Metro Cúbico</option>
+                        <option value="ft3">Pie Cúbico</option>
+                      </select>
+                    </div>
                   </div>
-                  <div>
-                    <label className={cn(
-                      "block text-sm font-medium mb-2",
-                      theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
-                    )}>
-                      Precio por Unidad ($)
-                    </label>
-                    <Input
-                      type="number"
-                      step="0.01"
-                      value={serviceForm.pricePerUnit}
-                      onChange={(e) => setServiceForm({ ...serviceForm, pricePerUnit: parseFloat(e.target.value) || 0 })}
-                      className={theme === 'dark' ? 'bg-gray-700 text-white' : ''}
-                    />
-                  </div>
-                  <div>
-                    <label className={cn(
-                      "block text-sm font-medium mb-2",
-                      theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
-                    )}>
-                      Tipo de Unidad
-                    </label>
-                    <select
-                      value={serviceForm.unitType}
-                      onChange={(e) => setServiceForm({ ...serviceForm, unitType: e.target.value })}
-                      className={cn(
-                        "w-full px-3 py-2 rounded-lg border",
-                        theme === 'dark'
-                          ? 'bg-gray-700 text-white border-gray-600'
-                          : 'bg-white border-gray-300'
-                      )}
-                    >
-                      <option value="unit">Unidad</option>
-                      <option value="lb">Libra</option>
-                      <option value="kg">Kilogramo</option>
-                      <option value="m3">Metro Cúbico</option>
-                      <option value="ft3">Pie Cúbico</option>
-                    </select>
-                  </div>
-                </div>
+                )}
 
                 {serviceForm.serviceType === 'caja' && (
                   <div>
@@ -548,7 +584,7 @@ export default function ServicesManagement() {
                       "block text-sm font-medium mb-2",
                       theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
                     )}>
-                      Tipo de Caja
+                      Tamaño de Empaque
                     </label>
                     <select
                       value={serviceForm.boxType}
@@ -560,10 +596,12 @@ export default function ServicesManagement() {
                           : 'bg-white border-gray-300'
                       )}
                     >
-                      <option value="">Seleccionar...</option>
-                      <option value="pequeña">Pequeña</option>
-                      <option value="mediana">Mediana</option>
-                      <option value="grande">Grande</option>
+                      <option value="">Seleccionar tamaño...</option>
+                      {packageSizes.map((size) => (
+                        <option key={size.id} value={size.name}>
+                          {size.name} - {size.dimensions}
+                        </option>
+                      ))}
                     </select>
                   </div>
                 )}
@@ -581,7 +619,6 @@ export default function ServicesManagement() {
                   <div className="grid grid-cols-2 gap-3">
                     {[
                       { key: 'requiresBoxCode', label: 'Código de Caja' },
-                      { key: 'requiresDimensions', label: 'Dimensiones' },
                       { key: 'requiresWeight', label: 'Peso' },
                       { key: 'requiresRecipient', label: 'Destinatario' },
                       { key: 'requiresContentType', label: 'Tipo de Contenido' }
