@@ -331,7 +331,7 @@ export default function ServicesManagement() {
                   "font-medium",
                   theme === 'dark' ? 'text-white' : 'text-gray-900'
                 )}>
-                  {service.serviceType}
+                  {service.serviceType || 'caja'}
                 </span>
               </div>
               <div className="flex items-center justify-between text-sm">
@@ -342,9 +342,15 @@ export default function ServicesManagement() {
                   "font-medium flex items-center gap-1",
                   theme === 'dark' ? 'text-green-400' : 'text-green-600'
                 )}>
-                  <DollarSign className="w-4 h-4" />
-                  {Number(service.basePrice) > 0 && `${Number(service.basePrice).toFixed(2)}`}
-                  {Number(service.pricePerUnit) > 0 && ` + ${Number(service.pricePerUnit).toFixed(2)}/${service.unitType}`}
+                  {service.pricingModel === 'free' ? (
+                    'Gratis'
+                  ) : (
+                    <>
+                      <DollarSign className="w-4 h-4" />
+                      {Number(service.basePrice) > 0 ? `${Number(service.basePrice).toFixed(2)}` : '0.00'}
+                      {Number(service.pricePerUnit) > 0 && ` + ${Number(service.pricePerUnit).toFixed(2)}/${service.unitType}`}
+                    </>
+                  )}
                 </span>
               </div>
             </div>
