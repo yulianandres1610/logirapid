@@ -310,6 +310,8 @@ export async function DELETE(request: NextRequest) {
     const { searchParams } = new URL(request.url)
     const id = searchParams.get('id')
 
+    console.log('[DELETE /api/services] Received id:', id)
+
     if (!id) {
       return NextResponse.json({
         success: false,
@@ -317,15 +319,24 @@ export async function DELETE(request: NextRequest) {
       }, { status: 400 })
     }
 
+    const serviceId = parseInt(id)
+    if (isNaN(serviceId)) {
+      return NextResponse.json({
+        success: false,
+        error: 'ID de servicio inválido'
+      }, { status: 400 })
+    }
+
     // Soft delete - marcar como inactivo en lugar de eliminar
     const updateQuery = `
       UPDATE services
-      SET active = false
+      SET active = false, updated_at = NOW()
       WHERE id = $1
       RETURNING id
     `
 
-    const result = await db.query(updateQuery, [id])
+    console.log('[DELETE /api/services] Executing query with id:', serviceId)
+    const result = await db.query(updateQuery, [serviceId])
 
     if (result.rows.length === 0) {
       return NextResponse.json({

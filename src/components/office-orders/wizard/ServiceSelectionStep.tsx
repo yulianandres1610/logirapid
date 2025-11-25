@@ -147,11 +147,15 @@ export default function ServiceSelectionStep({ wizardData, updateWizardData, set
                   "font-bold text-lg",
                   isSelected ? 'text-blue-600' : theme === 'dark' ? 'text-green-400' : 'text-green-600'
                 )}>
-                  ${typeof service.basePrice === 'number' && service.basePrice > 0
-                    ? service.basePrice.toFixed(2)
-                    : parseFloat(service.basePrice) > 0
-                      ? parseFloat(service.basePrice).toFixed(2)
-                      : 'Variable'}
+                  {service.pricingModel === 'free'
+                    ? 'Gratis'
+                    : Number(service.basePrice) > 0
+                      ? `$${Number(service.basePrice).toFixed(2)}`
+                      : service.pricingModel === 'by_weight'
+                        ? 'Por Peso'
+                        : service.pricingModel === 'by_volume'
+                          ? 'Por Volumen'
+                          : 'Variable'}
                 </span>
               </div>
             </motion.div>

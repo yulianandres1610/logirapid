@@ -195,19 +195,19 @@ export default function ServicesManagement() {
       name: service.name,
       code: service.code,
       description: service.description || '',
-      serviceType: service.serviceType,
-      pricingModel: service.pricingModel,
-      basePrice: service.basePrice,
-      pricePerUnit: service.pricePerUnit,
+      serviceType: service.serviceType || 'caja',
+      pricingModel: service.pricingModel || 'fixed',
+      basePrice: service.basePrice || 0,
+      pricePerUnit: service.pricePerUnit || 0,
       unitType: service.unitType || 'unit',
-      requiresBoxCode: service.requiresBoxCode,
-      requiresDimensions: service.requiresDimensions,
-      requiresWeight: service.requiresWeight,
-      requiresRecipient: service.requiresRecipient,
-      requiresContentType: service.requiresContentType,
+      requiresBoxCode: service.requiresBoxCode || false,
+      requiresDimensions: service.requiresDimensions || false,
+      requiresWeight: service.requiresWeight || false,
+      requiresRecipient: service.requiresRecipient !== false,
+      requiresContentType: service.requiresContentType || false,
       boxType: service.boxType || '',
-      active: service.active,
-      displayOrder: service.displayOrder
+      active: service.active !== false,
+      displayOrder: service.displayOrder || 0
     })
     setShowServiceModal(true)
   }
@@ -599,7 +599,7 @@ export default function ServicesManagement() {
                       <option value="">Seleccionar tamaño...</option>
                       {packageSizes.map((size) => (
                         <option key={size.id} value={size.name}>
-                          {size.name} - {size.dimensions}
+                          {size.name}
                         </option>
                       ))}
                     </select>
