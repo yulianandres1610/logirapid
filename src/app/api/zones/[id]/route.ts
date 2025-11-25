@@ -111,8 +111,9 @@ export async function PUT(
 
     const result = await db.query(`
       UPDATE zones
-      SET name = $1, description = $2, zipcodes = $3, color = $4, timeslot = $5, status = $6
+      SET name = $1, description = $2, zipcodes = $3, color = $4, timeslot = $5, status = $6, updatedat = NOW()
       WHERE id = $7 AND companyid = $8
+      RETURNING *
     `, [
       name,
       description || '',

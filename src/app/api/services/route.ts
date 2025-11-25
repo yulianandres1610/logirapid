@@ -132,13 +132,13 @@ export async function POST(request: NextRequest) {
         base_price, price_per_unit, unit_type,
         requires_box_code, requires_dimensions, requires_weight,
         requires_recipient, requires_content_type, box_type,
-        active, display_order
+        active, display_order, company_id
       ) VALUES (
         $1, $2, $3, $4, $5,
         $6, $7, $8,
         $9, $10, $11,
         $12, $13, $14,
-        $15, $16
+        $15, $16, $17
       )
       RETURNING
         id,
@@ -178,7 +178,8 @@ export async function POST(request: NextRequest) {
       body.requiresContentType || false,
       body.boxType || null,
       body.active !== undefined ? body.active : true,
-      body.displayOrder || 0
+      body.displayOrder || 0,
+      body.companyId || 1
     ]
 
     const result = await db.query(insertQuery, values)
