@@ -1,7 +1,7 @@
 'use client'
 
 import { useRouter } from 'next/navigation'
-import DashboardLayout from '@/components/layout/DashboardLayout'
+import { DashboardLayout } from '@/components/layout/dashboard-layout'
 import ReturnOrderWizard from '@/components/orders/ReturnOrderWizard'
 import { ArrowLeft } from 'lucide-react'
 import Link from 'next/link'
