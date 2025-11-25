@@ -63,6 +63,7 @@ export default function ServicesManagement() {
   const [editingService, setEditingService] = useState<Service | null>(null)
   const [saving, setSaving] = useState(false)
   const [deleting, setDeleting] = useState<number | null>(null)
+  const [deleteConfirm, setDeleteConfirm] = useState<number | null>(null)
 
   const [serviceForm, setServiceForm] = useState({
     name: '',
@@ -148,10 +149,19 @@ export default function ServicesManagement() {
     }
   }
 
-  const handleDeleteService = async (id: number) => {
-    if (!confirm('¿Está seguro de desactivar este servicio?')) return
+  // Abre el modal de confirmación (no bloquea la UI)
+  const confirmDeleteService = (id: number) => {
+    setDeleteConfirm(id)
+  }
 
+  // Ejecuta la eliminación cuando el usuario confirma
+  const handleDeleteService = async () => {
+    if (!deleteConfirm) return
+
+    const id = deleteConfirm
+    setDeleteConfirm(null)
     setDeleting(id)
+
     try {
       const response = await fetch(`/api/services?id=${id}`, {
         method: 'DELETE'
@@ -160,7 +170,6 @@ export default function ServicesManagement() {
       const data = await response.json()
 
       if (data.success) {
-        // Actualizar localmente para respuesta inmediata
         setServices(prev => prev.filter(s => s.id !== id))
       } else {
         alert(data.error || 'Error al desactivar servicio')
@@ -370,7 +379,7 @@ export default function ServicesManagement() {
                 Editar
               </Button>
               <Button
-                onClick={() => handleDeleteService(service.id)}
+                onClick={() => confirmDeleteService(service.id)}
                 size="sm"
                 disabled={deleting === service.id}
                 className="bg-red-500 hover:bg-red-600 text-white disabled:opacity-50"
@@ -495,6 +504,7 @@ export default function ServicesManagement() {
                       )}
                     >
                       <option value="caja">Caja</option>
+                      <option value="caja_confeccion">Caja + Confección</option>
                       <option value="duradero">Duradero</option>
                       <option value="lb">Por Libra</option>
                       <option value="custom">Personalizado</option>
@@ -705,6 +715,61 @@ export default function ServicesManagement() {
                     )}
                   </Button>
                 </div>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Delete Confirmation Modal */}
+      <AnimatePresence>
+        {deleteConfirm && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
+            onClick={() => setDeleteConfirm(null)}
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              onClick={(e) => e.stopPropagation()}
+              className={cn(
+                "p-6 rounded-xl max-w-md w-full mx-4",
+                theme === 'dark' ? 'bg-gray-800' : 'bg-white'
+              )}
+            >
+              <h3 className={cn(
+                "text-lg font-bold mb-2",
+                theme === 'dark' ? 'text-white' : 'text-gray-900'
+              )}>
+                Confirmar desactivación
+              </h3>
+              <p className={cn(
+                "mb-6",
+                theme === 'dark' ? 'text-gray-400' : 'text-gray-600'
+              )}>
+                ¿Está seguro de desactivar este servicio?
+              </p>
+              <div className="flex gap-3 justify-end">
+                <Button
+                  onClick={() => setDeleteConfirm(null)}
+                  className={cn(
+                    theme === 'dark'
+                      ? 'bg-gray-700 hover:bg-gray-600 text-white'
+                      : 'bg-gray-200 hover:bg-gray-300 text-gray-900'
+                  )}
+                >
+                  Cancelar
+                </Button>
+                <Button
+                  onClick={handleDeleteService}
+                  className="bg-red-500 hover:bg-red-600 text-white"
+                >
+                  Desactivar
+                </Button>
               </div>
             </motion.div>
           </motion.div>
