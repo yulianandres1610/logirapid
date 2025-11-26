@@ -46,6 +46,19 @@ export default function BillingPOSStep({ wizardData, updateWizardData, setCanPro
   }, [payments, totalAmount])
 
   const addPayment = () => {
+    // Para Cash on Delivery, el monto es el total restante y no requiere pago inmediato
+    if (newPayment.method === 'cod') {
+      const remaining = totalAmount - paidAmount
+      setPayments([...payments, { ...newPayment, amount: remaining, isCOD: true }])
+      setNewPayment({
+        method: 'cash',
+        amount: 0,
+        reference: '',
+        cashReceived: 0
+      })
+      return
+    }
+
     if (newPayment.amount <= 0) {
       alert('Ingrese un monto válido')
       return
@@ -72,6 +85,7 @@ export default function BillingPOSStep({ wizardData, updateWizardData, setCanPro
 
   const paymentMethods = [
     { value: 'cash', label: 'Efectivo', icon: Banknote },
+    { value: 'cod', label: 'Cash on Delivery', icon: Banknote },
     { value: 'zelle', label: 'Zelle', icon: DollarSign },
     { value: 'card', label: 'Tarjeta', icon: CreditCard }
   ]
@@ -200,7 +214,7 @@ export default function BillingPOSStep({ wizardData, updateWizardData, setCanPro
             Agregar Pago
           </h3>
           <div className="grid grid-cols-2 gap-4">
-            <div>
+            <div className={newPayment.method === 'cod' ? 'col-span-2' : ''}>
               <label className={cn("block text-sm mb-2", theme === 'dark' ? 'text-gray-300' : 'text-gray-700')}>
                 Método de Pago
               </label>
@@ -217,22 +231,36 @@ export default function BillingPOSStep({ wizardData, updateWizardData, setCanPro
                 ))}
               </select>
             </div>
-            <div>
-              <label className={cn("block text-sm mb-2", theme === 'dark' ? 'text-gray-300' : 'text-gray-700')}>
-                Monto
-              </label>
-              <Input
-                type="number"
-                step="0.01"
-                value={newPayment.amount || ''}
-                onChange={(e) => setNewPayment({ ...newPayment, amount: parseFloat(e.target.value) || 0 })}
-                placeholder="0.00"
-                className={cn(
-                  "rounded-xl shadow-sm",
-                  theme === 'dark' ? 'bg-gray-700 text-white border-gray-600' : 'bg-white border-gray-300'
-                )}
-              />
-            </div>
+            {newPayment.method !== 'cod' && (
+              <div>
+                <label className={cn("block text-sm mb-2", theme === 'dark' ? 'text-gray-300' : 'text-gray-700')}>
+                  Monto
+                </label>
+                <Input
+                  type="number"
+                  step="0.01"
+                  value={newPayment.amount || ''}
+                  onChange={(e) => setNewPayment({ ...newPayment, amount: parseFloat(e.target.value) || 0 })}
+                  placeholder="0.00"
+                  className={cn(
+                    "rounded-xl shadow-sm",
+                    theme === 'dark' ? 'bg-gray-700 text-white border-gray-600' : 'bg-white border-gray-300'
+                  )}
+                />
+              </div>
+            )}
+            {newPayment.method === 'cod' && (
+              <div className="col-span-2">
+                <div className={cn(
+                  "p-4 rounded-xl border-2 border-dashed",
+                  theme === 'dark' ? 'bg-amber-900/20 border-amber-600 text-amber-300' : 'bg-amber-50 border-amber-400 text-amber-700'
+                )}>
+                  <p className="text-sm font-medium">
+                    💵 El cliente pagará <span className="font-bold">${remaining.toFixed(2)}</span> al momento de la recogida
+                  </p>
+                </div>
+              </div>
+            )}
             {newPayment.method === 'zelle' && (
               <div className="col-span-2">
                 <label className={cn("block text-sm mb-2", theme === 'dark' ? 'text-gray-300' : 'text-gray-700')}>
@@ -275,10 +303,15 @@ export default function BillingPOSStep({ wizardData, updateWizardData, setCanPro
           </div>
           <Button
             onClick={addPayment}
-            className="w-full mt-4 flex items-center justify-center gap-2 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white shadow-lg hover:shadow-xl transition-all duration-200 rounded-xl"
+            className={cn(
+              "w-full mt-4 flex items-center justify-center gap-2 text-white shadow-lg hover:shadow-xl transition-all duration-200 rounded-xl",
+              newPayment.method === 'cod'
+                ? 'bg-gradient-to-r from-amber-600 to-amber-700 hover:from-amber-700 hover:to-amber-800'
+                : 'bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800'
+            )}
           >
             <Plus className="w-4 h-4" />
-            Agregar Pago
+            {newPayment.method === 'cod' ? 'Marcar como Cash on Delivery' : 'Agregar Pago'}
           </Button>
         </motion.div>
       )}
@@ -297,20 +330,27 @@ export default function BillingPOSStep({ wizardData, updateWizardData, setCanPro
               transition={{ delay: index * 0.1 }}
               className={cn(
                 "flex items-center justify-between p-4 rounded-xl shadow-md backdrop-blur-sm border",
-                theme === 'dark' ? 'bg-gray-800/50 border-gray-700' : 'bg-white/80 border-gray-200'
+                payment.method === 'cod'
+                  ? theme === 'dark' ? 'bg-amber-900/30 border-amber-700' : 'bg-amber-50 border-amber-300'
+                  : theme === 'dark' ? 'bg-gray-800/50 border-gray-700' : 'bg-white/80 border-gray-200'
               )}
             >
               <div className="flex items-center gap-3">
                 {paymentMethods.find(m => m.value === payment.method)?.icon && (
                   React.createElement(
                     paymentMethods.find(m => m.value === payment.method)!.icon,
-                    { className: 'w-5 h-5 text-green-600' }
+                    { className: cn('w-5 h-5', payment.method === 'cod' ? 'text-amber-600' : 'text-green-600') }
                   )
                 )}
                 <div>
                   <p className={cn("font-medium", theme === 'dark' ? 'text-white' : 'text-gray-900')}>
                     {paymentMethods.find(m => m.value === payment.method)?.label}
                   </p>
+                  {payment.method === 'cod' && (
+                    <p className={cn("text-xs", theme === 'dark' ? 'text-amber-400' : 'text-amber-600')}>
+                      Pago al momento de la recogida
+                    </p>
+                  )}
                   {payment.reference && (
                     <p className={cn("text-xs", theme === 'dark' ? 'text-gray-400' : 'text-gray-600')}>
                       Ref: {payment.reference}
@@ -319,7 +359,9 @@ export default function BillingPOSStep({ wizardData, updateWizardData, setCanPro
                 </div>
               </div>
               <div className="flex items-center gap-3">
-                <span className="font-bold text-green-600">${payment.amount.toFixed(2)}</span>
+                <span className={cn("font-bold", payment.method === 'cod' ? 'text-amber-600' : 'text-green-600')}>
+                  ${payment.amount.toFixed(2)}
+                </span>
                 <Button
                   onClick={() => removePayment(index)}
                   size="sm"
