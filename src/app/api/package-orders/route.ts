@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/database'
 import { getCompanyFilter } from '@/lib/query-helpers'
+import { sendOrderCreatedSMS, isValidPhoneNumber } from '@/lib/sms-service'
 
 // Force dynamic rendering - don't execute during build
 export const dynamic = 'force-dynamic'
@@ -363,6 +364,52 @@ export async function POST(request: NextRequest) {
       lastName: newOrder.lastname,
       createdAt: newOrder.createdat,
       updatedAt: newOrder.updatedat
+    }
+
+    // ================================================
+    // ENVIAR SMS DE CONFIRMACION (solo para ordenes de recogida)
+    // ================================================
+    if (orderType === 'recogida' && body.customerId) {
+      try {
+        // Obtener telefono del cliente y nombre de la empresa
+        const customerQuery = await db.query(
+          'SELECT phone FROM customers WHERE id = $1',
+          [body.customerId]
+        )
+
+        const companyQuery = await db.query(
+          'SELECT legalname FROM companies WHERE id = $1',
+          [companyId]
+        )
+
+        const customerPhone = customerQuery.rows[0]?.phone
+        const companyName = companyQuery.rows[0]?.legalname || 'LogiRapid'
+
+        // Solo enviar SMS si hay telefono valido y fecha programada
+        if (customerPhone && isValidPhoneNumber(customerPhone)) {
+          const scheduledDate = newOrder.scheduleddate || new Date().toISOString()
+
+          console.log(`[SMS] Enviando SMS de confirmacion a ${customerPhone} para orden ${newOrder.ordernumber}`)
+
+          const smsResult = await sendOrderCreatedSMS(
+            customerPhone,
+            companyName,
+            newOrder.ordernumber,
+            scheduledDate
+          )
+
+          if (smsResult.success) {
+            console.log(`[SMS] SMS enviado exitosamente. SID: ${smsResult.messageId}`)
+          } else {
+            console.warn(`[SMS] Error al enviar SMS: ${smsResult.error}`)
+          }
+        } else {
+          console.log(`[SMS] No se envio SMS - telefono invalido o no disponible: ${customerPhone}`)
+        }
+      } catch (smsError) {
+        // No bloquear la creacion de la orden si falla el SMS
+        console.error('[SMS] Error al intentar enviar SMS:', smsError)
+      }
     }
 
     return NextResponse.json({

@@ -5,6 +5,7 @@ import { CheckCircle, Printer, FileText, Loader2, PartyPopper, Mail, MessageSqua
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { useTheme } from '@/contexts/theme-context'
+import { useNotifications } from '@/contexts/NotificationContext'
 import { motion } from 'framer-motion'
 import {
   generateReceiptHTML,
@@ -20,6 +21,7 @@ interface Props {
 
 export default function PickupOrderConfirmationStep({ wizardData, updateWizardData, setCanProceed }: Props) {
   const { theme } = useTheme()
+  const { showNotification } = useNotifications()
   const [creating, setCreating] = useState(false)
   const [orderCreated, setOrderCreated] = useState(false)
   const [orderNumber, setOrderNumber] = useState('')
@@ -292,16 +294,65 @@ export default function PickupOrderConfirmationStep({ wizardData, updateWizardDa
   const sendSMSNotification = async () => {
     setSendingSMS(true)
     try {
-      // TODO: Implementar envío de SMS
-      // Placeholder para integración futura con Twilio/similar
-      console.log('Enviando SMS a:', wizardData.sender.phone)
+      // Obtener nombre de la compañía desde cookies
+      const getCompanyName = (): string => {
+        try {
+          const cookies = document.cookie.split(';')
+          for (const cookie of cookies) {
+            const [name, value] = cookie.trim().split('=')
+            if (name === 'user-company-name') {
+              return decodeURIComponent(value)
+            }
+          }
+        } catch (error) {
+          console.error('Error reading company name:', error)
+        }
+        return 'LogiRapid'
+      }
 
-      await new Promise(resolve => setTimeout(resolve, 1500)) // Simular envío
+      const companyName = getCompanyName()
+      const scheduledDate = wizardData.scheduledDate || new Date().toISOString()
 
-      alert(`SMS enviado exitosamente a ${wizardData.sender.phone}`)
+      console.log('[SMS] Enviando SMS a:', wizardData.sender.phone)
+      console.log('[SMS] Datos:', { companyName, orderNumber, scheduledDate })
+
+      // Llamar a la API de SMS
+      const response = await fetch('/api/sms/send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          to: wizardData.sender.phone,
+          type: 'order_created',
+          companyName: companyName,
+          orderNumber: orderNumber,
+          scheduledDate: scheduledDate
+        })
+      })
+
+      const data = await response.json()
+
+      if (data.success) {
+        console.log('[SMS] SMS enviado exitosamente. SID:', data.data?.messageId)
+        showNotification(
+          'success',
+          'SMS Enviado',
+          `Mensaje enviado exitosamente a ${wizardData.sender.phone}`
+        )
+      } else {
+        console.error('[SMS] Error:', data.error)
+        showNotification(
+          'error',
+          'Error al enviar SMS',
+          data.error || 'No se pudo enviar el mensaje'
+        )
+      }
     } catch (error) {
       console.error('Error sending SMS:', error)
-      alert('Error al enviar SMS')
+      showNotification(
+        'error',
+        'Error de conexión',
+        'No se pudo conectar con el servicio de SMS'
+      )
     } finally {
       setSendingSMS(false)
     }
@@ -316,10 +367,18 @@ export default function PickupOrderConfirmationStep({ wizardData, updateWizardDa
 
       await new Promise(resolve => setTimeout(resolve, 1500)) // Simular envío
 
-      alert(`Email enviado exitosamente a ${wizardData.sender.email}`)
+      showNotification(
+        'info',
+        'Función en desarrollo',
+        'El envío de emails estará disponible próximamente'
+      )
     } catch (error) {
       console.error('Error sending email:', error)
-      alert('Error al enviar email')
+      showNotification(
+        'error',
+        'Error al enviar email',
+        'No se pudo enviar el correo electrónico'
+      )
     } finally {
       setSendingEmail(false)
     }
@@ -771,7 +830,7 @@ export default function PickupOrderConfirmationStep({ wizardData, updateWizardDa
           transition={{ delay: 0.2 }}
         >
           <h2 className={cn("text-3xl font-bold mb-2", theme === 'dark' ? 'text-white' : 'text-gray-900')}>
-            ¡Orden de {isDelivery ? 'Entrega' : 'Recogida'} Creada!
+            Orden Creada con Exito
           </h2>
           <p className={cn("text-base", theme === 'dark' ? 'text-gray-300' : 'text-gray-600')}>
             Número de Orden: <span className={cn("font-bold", isDelivery ? 'text-green-600' : 'text-amber-600')}>{orderNumber}</span>
