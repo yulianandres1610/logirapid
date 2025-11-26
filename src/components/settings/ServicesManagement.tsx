@@ -503,7 +503,8 @@ export default function ServicesManagement() {
                           : 'bg-white border-gray-300'
                       )}
                     >
-                      <option value="caja">Caja</option>
+                      <option value="recogida_caja">Recogida Caja</option>
+                      <option value="entrega_caja">Entrega Caja</option>
                       <option value="caja_confeccion">Caja + Confección</option>
                       <option value="duradero">Duradero</option>
                       <option value="lb">Por Libra</option>
@@ -604,7 +605,7 @@ export default function ServicesManagement() {
                   </div>
                 )}
 
-                {serviceForm.serviceType === 'caja' && (
+                {(serviceForm.serviceType === 'recogida_caja' || serviceForm.serviceType === 'entrega_caja') && (
                   <div>
                     <label className={cn(
                       "block text-sm font-medium mb-2",
