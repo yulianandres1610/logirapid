@@ -21,6 +21,7 @@ export default function SelectedServicesCard({ services }: SelectedServicesCardP
 
   // Función para obtener el icono según el nombre del servicio
   const getServiceIcon = (serviceName: string) => {
+    if (!serviceName) return <ShoppingBag className="w-5 h-5" />
     const name = serviceName.toLowerCase()
     if (name.includes('entrega') && name.includes('caja')) {
       return <Box className="w-5 h-5" />
@@ -36,6 +37,11 @@ export default function SelectedServicesCard({ services }: SelectedServicesCardP
 
   // Función para obtener el color según el tipo de servicio
   const getServiceColor = (serviceName: string) => {
+    if (!serviceName) {
+      return theme === 'dark'
+        ? 'from-blue-600 to-blue-700'
+        : 'from-blue-500 to-blue-600'
+    }
     const name = serviceName.toLowerCase()
     if (name.includes('entrega')) {
       return theme === 'dark'
@@ -52,11 +58,14 @@ export default function SelectedServicesCard({ services }: SelectedServicesCardP
       : 'from-blue-500 to-blue-600'
   }
 
-  if (!services || services.length === 0) {
+  // Filtrar servicios válidos (que tengan name o quantity)
+  const validServices = (services || []).filter(s => s && (s.name || s.quantity > 0))
+
+  if (validServices.length === 0) {
     return null
   }
 
-  const totalQuantity = services.reduce((sum, s) => sum + (s.quantity || 0), 0)
+  const totalQuantity = validServices.reduce((sum, s) => sum + (s.quantity || 0), 0)
 
   return (
     <motion.div
@@ -93,13 +102,13 @@ export default function SelectedServicesCard({ services }: SelectedServicesCardP
             'text-xs',
             theme === 'dark' ? 'text-gray-400' : 'text-gray-500'
           )}>
-            {services.length} servicio{services.length > 1 ? 's' : ''} • {totalQuantity} unidad{totalQuantity > 1 ? 'es' : ''}
+            {validServices.length} servicio{validServices.length > 1 ? 's' : ''} • {totalQuantity} unidad{totalQuantity > 1 ? 'es' : ''}
           </p>
         </div>
       </div>
 
       <div className="space-y-3">
-        {services.map((service, index) => (
+        {validServices.map((service, index) => (
           <div
             key={index}
             className={cn(
@@ -120,7 +129,7 @@ export default function SelectedServicesCard({ services }: SelectedServicesCardP
                 'text-sm font-semibold truncate',
                 theme === 'dark' ? 'text-white' : 'text-gray-900'
               )}>
-                {service.name}
+                {service.name || 'Servicio'}
               </p>
               {service.price !== undefined && service.price > 0 && (
                 <p className={cn(
