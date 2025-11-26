@@ -177,6 +177,65 @@ export default function AdminVehiclesPage() {
     }
   }
 
+  // Loading state UI
+  if (loading) {
+    return (
+      <DashboardLayout>
+        <div className="min-h-screen flex items-center justify-center p-6">
+          <div className="relative flex flex-col items-center space-y-6">
+            {/* Background glow effects */}
+            <div className="absolute inset-0 -z-10">
+              <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-64 h-64 bg-exa-primary/10 rounded-full filter blur-3xl animate-pulse" />
+              <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-48 h-48 bg-exa-secondary/10 rounded-full filter blur-2xl animate-pulse delay-500" />
+            </div>
+
+            {/* Logo with spinning circle */}
+            <div className="relative">
+              {/* Spinning circle border */}
+              <div className="absolute inset-0 w-32 h-32 border-4 border-transparent border-t-exa-primary border-r-exa-secondary rounded-full animate-spin" />
+
+              {/* Inner circle with logo */}
+              <div className={cn(
+                "w-32 h-32 rounded-full flex items-center justify-center shadow-2xl",
+                theme === 'dark'
+                  ? 'bg-gradient-to-br from-gray-800 to-gray-900 border border-gray-700'
+                  : 'bg-gradient-to-br from-white to-gray-100 border border-gray-200'
+              )}>
+                <Car className={cn(
+                  "w-12 h-12 animate-pulse",
+                  theme === 'dark' ? 'text-exa-primary' : 'text-exa-secondary'
+                )} />
+              </div>
+            </div>
+
+            {/* Loading text */}
+            <div className="text-center space-y-2">
+              <h3 className={cn(
+                "text-xl font-bold",
+                theme === 'dark' ? 'text-white' : 'text-gray-900'
+              )}>
+                Cargando Vehículos
+              </h3>
+              <p className={cn(
+                "text-sm animate-pulse",
+                theme === 'dark' ? 'text-gray-400' : 'text-gray-600'
+              )}>
+                Obteniendo datos de la flota...
+              </p>
+            </div>
+
+            {/* Progress dots */}
+            <div className="flex items-center gap-2">
+              <div className="w-2 h-2 bg-exa-primary rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+              <div className="w-2 h-2 bg-exa-secondary rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+              <div className="w-2 h-2 bg-purple-500 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+            </div>
+          </div>
+        </div>
+      </DashboardLayout>
+    )
+  }
+
   return (
     <DashboardLayout>
       <div className="min-h-screen p-6">

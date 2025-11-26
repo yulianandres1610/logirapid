@@ -191,7 +191,7 @@ export async function createVehicle(vehicleData: any): Promise<ApiResponse<Vehic
   try {
     console.log('createVehicle API called with data:', vehicleData);
 
-    const response = await fetch('/api/vehicles', {
+    const response = await fetch('/api/fleet/vehicles', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -233,7 +233,7 @@ export async function getVehicles(page: number = 1, limit: number = 10, search?:
     if (status && status !== 'all') params.append('status', status);
     if (availability && availability !== 'all') params.append('availability', availability);
 
-    const response = await fetch(`/api/vehicles?${params}`);
+    const response = await fetch(`/api/fleet/vehicles?${params}`);
 
     if (!response.ok) {
       const errorData = await response.json();
@@ -258,7 +258,7 @@ export async function getVehicles(page: number = 1, limit: number = 10, search?:
 
 export async function getVehicleById(id: string): Promise<ApiResponse<Vehicle>> {
   try {
-    const response = await fetch(`/api/vehicles/${id}`);
+    const response = await fetch(`/api/fleet/vehicles/${id}`);
 
     if (!response.ok) {
       const errorData = await response.json();
@@ -281,7 +281,7 @@ export async function getVehicleById(id: string): Promise<ApiResponse<Vehicle>> 
 
 export async function updateVehicle(id: string, updates: Partial<Vehicle>): Promise<ApiResponse<Vehicle>> {
   try {
-    const response = await fetch(`/api/vehicles/${id}`, {
+    const response = await fetch(`/api/fleet/vehicles/${id}`, {
       method: 'PUT',
       headers: {
         'Content-Type': 'application/json',
@@ -310,7 +310,7 @@ export async function updateVehicle(id: string, updates: Partial<Vehicle>): Prom
 
 export async function deleteVehicle(id: string): Promise<ApiResponse<void>> {
   try {
-    const response = await fetch(`/api/vehicles/${id}`, {
+    const response = await fetch(`/api/fleet/vehicles/${id}`, {
       method: 'DELETE',
     });
 

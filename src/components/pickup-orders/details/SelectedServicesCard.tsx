@@ -19,6 +19,9 @@ interface SelectedServicesCardProps {
 export default function SelectedServicesCard({ services }: SelectedServicesCardProps) {
   const { theme } = useTheme()
 
+  // Debug log
+  console.log('📦 [SelectedServicesCard] Received services:', services, 'Type:', typeof services, 'IsArray:', Array.isArray(services))
+
   // Función para obtener el icono según el nombre del servicio
   const getServiceIcon = (serviceName: string) => {
     if (!serviceName) return <ShoppingBag className="w-5 h-5" />
