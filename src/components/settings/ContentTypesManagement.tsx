@@ -16,6 +16,7 @@ import {
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import ConfirmDialog from '@/components/ui/ConfirmDialog'
 import { useTheme } from '@/contexts/theme-context'
 import { cn } from '@/lib/utils'
 
@@ -39,6 +40,7 @@ export default function ContentTypesManagement() {
   const [showContentTypeModal, setShowContentTypeModal] = useState(false)
   const [editingContentType, setEditingContentType] = useState<ContentType | null>(null)
   const [saving, setSaving] = useState(false)
+  const [deleteConfirm, setDeleteConfirm] = useState<{ id: number; name: string } | null>(null)
 
   const [contentTypeForm, setContentTypeForm] = useState({
     name: '',
@@ -101,11 +103,15 @@ export default function ContentTypesManagement() {
     }
   }
 
-  const handleDeleteContentType = async (id: number) => {
-    if (!confirm('¿Está seguro de desactivar este tipo de contenido?')) return
+  const handleDeleteContentType = (id: number, name: string) => {
+    setDeleteConfirm({ id, name })
+  }
+
+  const confirmDeleteContentType = async () => {
+    if (!deleteConfirm) return
 
     try {
-      const response = await fetch(`/api/package-content-types?id=${id}`, {
+      const response = await fetch(`/api/package-content-types?id=${deleteConfirm.id}`, {
         method: 'DELETE'
       })
 
@@ -119,6 +125,8 @@ export default function ContentTypesManagement() {
     } catch (error) {
       console.error('Error deleting content type:', error)
       alert('Error al desactivar tipo de contenido')
+    } finally {
+      setDeleteConfirm(null)
     }
   }
 
@@ -258,7 +266,7 @@ export default function ContentTypesManagement() {
                 Editar
               </Button>
               <Button
-                onClick={() => handleDeleteContentType(contentType.id)}
+                onClick={() => handleDeleteContentType(contentType.id, contentType.name)}
                 size="sm"
                 className="bg-red-500 hover:bg-red-600 text-white"
               >
@@ -441,6 +449,19 @@ export default function ContentTypesManagement() {
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* Confirm Delete Dialog */}
+      <ConfirmDialog
+        isOpen={!!deleteConfirm}
+        onClose={() => setDeleteConfirm(null)}
+        onConfirm={confirmDeleteContentType}
+        title="Desactivar Tipo de Contenido"
+        message={`¿Está seguro de desactivar el tipo de contenido "${deleteConfirm?.name}"? Esta acción marcará el tipo como inactivo.`}
+        confirmText="Desactivar"
+        cancelText="Cancelar"
+        type="danger"
+        theme={theme}
+      />
     </div>
   )
 }

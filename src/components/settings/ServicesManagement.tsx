@@ -445,7 +445,7 @@ export default function ServicesManagement() {
                       value={serviceForm.name}
                       onChange={(e) => setServiceForm({ ...serviceForm, name: e.target.value })}
                       placeholder="Ej: Envío de Caja Grande"
-                      className={theme === 'dark' ? 'bg-gray-700 text-white' : ''}
+                      className={theme === 'dark' ? 'bg-gray-700 text-white border-gray-600' : 'bg-white text-gray-900 border-gray-300'}
                     />
                   </div>
                   <div>
@@ -459,7 +459,7 @@ export default function ServicesManagement() {
                       value={serviceForm.code}
                       onChange={(e) => setServiceForm({ ...serviceForm, code: e.target.value.toUpperCase() })}
                       placeholder="CAJA_GRANDE"
-                      className={theme === 'dark' ? 'bg-gray-700 text-white' : ''}
+                      className={theme === 'dark' ? 'bg-gray-700 text-white border-gray-600' : 'bg-white text-gray-900 border-gray-300'}
                     />
                   </div>
                 </div>
@@ -560,7 +560,7 @@ export default function ServicesManagement() {
                         step="0.01"
                         value={serviceForm.basePrice}
                         onChange={(e) => setServiceForm({ ...serviceForm, basePrice: parseFloat(e.target.value) || 0 })}
-                        className={theme === 'dark' ? 'bg-gray-700 text-white' : ''}
+                        className={theme === 'dark' ? 'bg-gray-700 text-white border-gray-600' : 'bg-white text-gray-900 border-gray-300'}
                       />
                     </div>
                     <div>
@@ -575,7 +575,7 @@ export default function ServicesManagement() {
                         step="0.01"
                         value={serviceForm.pricePerUnit}
                         onChange={(e) => setServiceForm({ ...serviceForm, pricePerUnit: parseFloat(e.target.value) || 0 })}
-                        className={theme === 'dark' ? 'bg-gray-700 text-white' : ''}
+                        className={theme === 'dark' ? 'bg-gray-700 text-white border-gray-600' : 'bg-white text-gray-900 border-gray-300'}
                       />
                     </div>
                     <div>
