@@ -183,7 +183,7 @@ export default function NotificationPopup() {
               </div>
             </motion.div>
           ))}
-      </AnimatePresence>
+        </AnimatePresence>
     </div>
   )
 }

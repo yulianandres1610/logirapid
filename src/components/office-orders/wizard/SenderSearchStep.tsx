@@ -25,6 +25,103 @@ interface AddressData {
   country: string
 }
 
+// Lista de códigos de estados de USA
+const US_STATE_CODES = [
+  'AL', 'AK', 'AZ', 'AR', 'CA', 'CO', 'CT', 'DE', 'FL', 'GA',
+  'HI', 'ID', 'IL', 'IN', 'IA', 'KS', 'KY', 'LA', 'ME', 'MD',
+  'MA', 'MI', 'MN', 'MS', 'MO', 'MT', 'NE', 'NV', 'NH', 'NJ',
+  'NM', 'NY', 'NC', 'ND', 'OH', 'OK', 'OR', 'PA', 'RI', 'SC',
+  'SD', 'TN', 'TX', 'UT', 'VT', 'VA', 'WA', 'WV', 'WI', 'WY', 'DC'
+]
+
+/**
+ * Parsea una dirección en formato texto a componentes estructurados
+ * Maneja varios formatos comunes de direcciones de USA
+ */
+function parseAddressString(address: string): Partial<AddressData> {
+  const result: Partial<AddressData> = {}
+
+  if (!address) return result
+
+  // 1. Extraer zipcode usando regex (5 dígitos, opcionalmente seguidos de -4 dígitos)
+  const zipMatch = address.match(/\b(\d{5})(-\d{4})?\b/)
+  if (zipMatch) {
+    result.zipCode = zipMatch[1]
+  }
+
+  // 2. Buscar código de estado de USA
+  const upperAddress = address.toUpperCase()
+  for (const state of US_STATE_CODES) {
+    // Buscar el código de estado como palabra completa
+    const stateRegex = new RegExp(`\\b${state}\\b`)
+    if (stateRegex.test(upperAddress)) {
+      result.state = state
+      break
+    }
+  }
+
+  // 3. Buscar país
+  const countryPatterns = [
+    { pattern: /\bUSA?\b/i, country: 'US' },
+    { pattern: /\bUnited States\b/i, country: 'US' },
+    { pattern: /\bEstados Unidos\b/i, country: 'US' },
+    { pattern: /\bCuba\b/i, country: 'CU' }
+  ]
+  for (const { pattern, country } of countryPatterns) {
+    if (pattern.test(address)) {
+      result.country = country
+      break
+    }
+  }
+  if (!result.country) {
+    result.country = 'US' // Default to US
+  }
+
+  // 4. Parsear por comas para extraer street y city
+  const parts = address.split(',').map(p => p.trim())
+
+  if (parts.length >= 1) {
+    // Primera parte generalmente es la calle
+    result.street = parts[0]
+  }
+
+  if (parts.length >= 2) {
+    // Segunda parte puede ser ciudad o apt
+    const secondPart = parts[1]
+
+    // Si parece número de apartamento, lo extraemos
+    if (/^(apt|unit|#|suite)/i.test(secondPart)) {
+      result.apartment = secondPart
+      if (parts.length >= 3) {
+        result.city = parts[2].replace(/\b\d{5}(-\d{4})?\b/, '').replace(/\b[A-Z]{2}\b/g, '').trim()
+      }
+    } else {
+      // Probablemente es la ciudad
+      result.city = secondPart.replace(/\b\d{5}(-\d{4})?\b/, '').replace(/\b[A-Z]{2}\b/g, '').trim()
+    }
+  }
+
+  // 5. Si city aún no está, intentar extraerla del tercer elemento
+  if (!result.city && parts.length >= 3) {
+    // Limpiar el tercer elemento quitando zipcode y estado
+    let cityCandidate = parts[2]
+      .replace(/\b\d{5}(-\d{4})?\b/g, '') // Quitar zipcode
+      .replace(/\b[A-Z]{2}\b/g, '')        // Quitar estado
+      .trim()
+
+    if (cityCandidate && !cityCandidate.toLowerCase().includes('us')) {
+      result.city = cityCandidate
+    }
+  }
+
+  // 6. Limpiar city si quedó vacía
+  if (!result.city) {
+    result.city = ''
+  }
+
+  return result
+}
+
 export default function SenderSearchStep({ wizardData, updateWizardData, setCanProceed }: Props) {
   const { theme } = useTheme()
   const [searchPhone, setSearchPhone] = useState('')
@@ -131,46 +228,21 @@ export default function SenderSearchStep({ wizardData, updateWizardData, setCanP
             }
           }
 
-          // Ensure structured address fields are present
-          // If customer has structured fields (street, city, etc.), use them
-          // Otherwise, parse the legacy address field
+          // Ensure structured address fields are present using improved parsing
           if (!customerWithCoords.street && customerWithCoords.address) {
-            // Parse the address string to extract components
-            const addressParts = customerWithCoords.address.split(',').map((p: string) => p.trim())
-
-            if (addressParts.length >= 4) {
-              // Format: "street, city, state zipcode, country"
-              customerWithCoords.street = addressParts[0]
-              customerWithCoords.city = addressParts[1]
-
-              // Parse "state zipcode" part
-              const stateZip = addressParts[2].split(' ').filter(Boolean)
-              if (stateZip.length >= 2) {
-                customerWithCoords.state = stateZip[0]
-                customerWithCoords.zipCode = stateZip[1]
-              }
-
-              // Country is the last part
-              if (addressParts[3]) {
-                customerWithCoords.country = addressParts[3]
-              }
-            } else {
-              // Fallback: just use the address as street
-              customerWithCoords.street = customerWithCoords.address
-            }
+            const parsed = parseAddressString(customerWithCoords.address)
+            customerWithCoords.street = parsed.street || customerWithCoords.address
+            customerWithCoords.city = parsed.city || ''
+            customerWithCoords.state = parsed.state || ''
+            customerWithCoords.zipCode = parsed.zipCode || ''
+            customerWithCoords.apartment = parsed.apartment || ''
+            customerWithCoords.country = parsed.country || 'US'
           }
-          if (!customerWithCoords.city) {
-            customerWithCoords.city = ''
-          }
-          if (!customerWithCoords.state) {
-            customerWithCoords.state = ''
-          }
-          if (!customerWithCoords.zipCode && !customerWithCoords.zipcode) {
-            customerWithCoords.zipCode = customerWithCoords.zipcode || ''
-          }
-          if (!customerWithCoords.country) {
-            customerWithCoords.country = 'US'
-          }
+          // Ensure defaults for any missing fields
+          if (!customerWithCoords.city) customerWithCoords.city = ''
+          if (!customerWithCoords.state) customerWithCoords.state = ''
+          if (!customerWithCoords.zipCode) customerWithCoords.zipCode = customerWithCoords.zipcode || ''
+          if (!customerWithCoords.country) customerWithCoords.country = 'US'
 
           updateWizardData('sender', customerWithCoords)
           setCanProceed(true)
@@ -188,44 +260,21 @@ export default function SenderSearchStep({ wizardData, updateWizardData, setCanP
         }
       }
 
-      // Ensure structured address fields are present
+      // Ensure structured address fields are present using improved parsing
       if (!customerWithCoords.street && customerWithCoords.address) {
-        // Parse the address string to extract components
-        const addressParts = customerWithCoords.address.split(',').map((p: string) => p.trim())
-
-        if (addressParts.length >= 4) {
-          // Format: "street, city, state zipcode, country"
-          customerWithCoords.street = addressParts[0]
-          customerWithCoords.city = addressParts[1]
-
-          // Parse "state zipcode" part
-          const stateZip = addressParts[2].split(' ').filter(Boolean)
-          if (stateZip.length >= 2) {
-            customerWithCoords.state = stateZip[0]
-            customerWithCoords.zipCode = stateZip[1]
-          }
-
-          // Country is the last part
-          if (addressParts[3]) {
-            customerWithCoords.country = addressParts[3]
-          }
-        } else {
-          // Fallback: just use the address as street
-          customerWithCoords.street = customerWithCoords.address
-        }
+        const parsed = parseAddressString(customerWithCoords.address)
+        customerWithCoords.street = parsed.street || customerWithCoords.address
+        customerWithCoords.city = parsed.city || ''
+        customerWithCoords.state = parsed.state || ''
+        customerWithCoords.zipCode = parsed.zipCode || ''
+        customerWithCoords.apartment = parsed.apartment || ''
+        customerWithCoords.country = parsed.country || 'US'
       }
-      if (!customerWithCoords.city) {
-        customerWithCoords.city = ''
-      }
-      if (!customerWithCoords.state) {
-        customerWithCoords.state = ''
-      }
-      if (!customerWithCoords.zipCode && !customerWithCoords.zipcode) {
-        customerWithCoords.zipCode = customerWithCoords.zipcode || ''
-      }
-      if (!customerWithCoords.country) {
-        customerWithCoords.country = 'US'
-      }
+      // Ensure defaults for any missing fields
+      if (!customerWithCoords.city) customerWithCoords.city = ''
+      if (!customerWithCoords.state) customerWithCoords.state = ''
+      if (!customerWithCoords.zipCode) customerWithCoords.zipCode = customerWithCoords.zipcode || ''
+      if (!customerWithCoords.country) customerWithCoords.country = 'US'
 
       updateWizardData('sender', customerWithCoords)
       setCanProceed(true)

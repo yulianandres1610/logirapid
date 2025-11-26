@@ -12,6 +12,7 @@ import PickupOrderHeader from '@/components/pickup-orders/details/PickupOrderHea
 import PickupLocationMap from '@/components/pickup-orders/details/PickupLocationMap'
 import ZoneInfoCard from '@/components/pickup-orders/details/ZoneInfoCard'
 import PickupScheduleCard from '@/components/pickup-orders/details/PickupScheduleCard'
+import SelectedServicesCard from '@/components/pickup-orders/details/SelectedServicesCard'
 import RouteWaypointsCard from '@/components/pickup-orders/details/RouteWaypointsCard'
 import PackageTrackingCard from '@/components/pickup-orders/details/PackageTrackingCard'
 
@@ -330,6 +331,7 @@ export default function PickupOrderDetailsPage({ params }: PageProps) {
                 pickupInstructions={order.pickupInstructions}
                 status={order.status}
               />
+              <SelectedServicesCard services={order.services || []} />
               {route && (
                 <RouteWaypointsCard
                   route={route}

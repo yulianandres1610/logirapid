@@ -77,6 +77,8 @@ export default function EmpaquesTab({ warehouse }: EmpaquesTabProps) {
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [showTrazabilidadModal, setShowTrazabilidadModal] = useState(false)
   const [selectedEmpaqueForHistory, setSelectedEmpaqueForHistory] = useState<Empaque | null>(null)
+  const [selectedEmpaques, setSelectedEmpaques] = useState<number[]>([])
+  const [printingSelected, setPrintingSelected] = useState(false)
 
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1)
@@ -282,6 +284,44 @@ export default function EmpaquesTab({ warehouse }: EmpaquesTabProps) {
     setShowTrazabilidadModal(true)
   }
 
+  // Funciones de selección múltiple
+  const handleSelectEmpaque = (id: number) => {
+    setSelectedEmpaques(prev =>
+      prev.includes(id) ? prev.filter(e => e !== id) : [...prev, id]
+    )
+  }
+
+  const handleSelectAll = () => {
+    if (selectedEmpaques.length === empaques.length) {
+      setSelectedEmpaques([])
+    } else {
+      setSelectedEmpaques(empaques.map(e => e.id))
+    }
+  }
+
+  const handlePrintSelected = async () => {
+    if (selectedEmpaques.length === 0) return
+
+    setPrintingSelected(true)
+    try {
+      for (const empaqueId of selectedEmpaques) {
+        const empaque = empaques.find(e => e.id === empaqueId)
+        if (empaque) {
+          await handlePrintLabel(empaque)
+          // Pequeña pausa entre impresiones para evitar sobrecargar el navegador
+          await new Promise(resolve => setTimeout(resolve, 500))
+        }
+      }
+      showNotification('success', 'Impresión Completada', `Se generaron ${selectedEmpaques.length} etiquetas`)
+      setSelectedEmpaques([])
+    } catch (error) {
+      console.error('Error printing selected:', error)
+      showNotification('error', 'Error', 'Ocurrió un error al imprimir las etiquetas')
+    } finally {
+      setPrintingSelected(false)
+    }
+  }
+
   return (
     <div className="space-y-6">
       {/* Header Actions */}
@@ -296,6 +336,16 @@ export default function EmpaquesTab({ warehouse }: EmpaquesTabProps) {
         </div>
 
         <div className="flex gap-3">
+          {selectedEmpaques.length > 0 && (
+            <button
+              onClick={handlePrintSelected}
+              disabled={printingSelected}
+              className="flex items-center px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors shadow-lg disabled:opacity-50"
+            >
+              <Printer className="h-5 w-5 mr-2" />
+              {printingSelected ? 'Imprimiendo...' : `Imprimir (${selectedEmpaques.length})`}
+            </button>
+          )}
           <button
             onClick={() => setShowCreateModal(true)}
             className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors shadow-lg"
@@ -415,6 +465,14 @@ export default function EmpaquesTab({ warehouse }: EmpaquesTabProps) {
             <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
               <thead className="bg-gray-50 dark:bg-gray-900">
                 <tr>
+                  <th className="px-4 py-3 text-center">
+                    <input
+                      type="checkbox"
+                      checked={selectedEmpaques.length === empaques.length && empaques.length > 0}
+                      onChange={handleSelectAll}
+                      className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                    />
+                  </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                     Código
                   </th>
@@ -441,6 +499,14 @@ export default function EmpaquesTab({ warehouse }: EmpaquesTabProps) {
               <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
                 {empaques.map((empaque) => (
                   <tr key={empaque.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
+                    <td className="px-4 py-4 text-center">
+                      <input
+                        type="checkbox"
+                        checked={selectedEmpaques.includes(empaque.id)}
+                        onChange={() => handleSelectEmpaque(empaque.id)}
+                        className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                      />
+                    </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="flex items-center">
                         <QrCode className="h-5 w-5 text-gray-400 mr-2" />
