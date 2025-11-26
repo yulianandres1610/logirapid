@@ -225,8 +225,12 @@ export async function resolveCompany(host: string): Promise<CompanyInfo | null> 
     }
   }
 
-  // 3. Desarrollo local o dominio raíz: usar DEV_SUBDOMAIN env var o empresa por defecto
-  if (hostname === 'localhost' || hostname === '127.0.0.1' || hostname === 'logirapid.com' || hostname === 'www.logirapid.com') {
+  // 3. Desarrollo local, Vercel, o dominio raíz: usar DEV_SUBDOMAIN env var o empresa por defecto
+  const isLocalhost = hostname === 'localhost' || hostname === '127.0.0.1'
+  const isMainDomain = hostname === 'logirapid.com' || hostname === 'www.logirapid.com'
+  const isVercel = hostname.includes('vercel.app') || hostname.includes('.vercel.app')
+
+  if (isLocalhost || isMainDomain || isVercel) {
     const devSubdomain = process.env.DEV_SUBDOMAIN
 
     if (devSubdomain) {
