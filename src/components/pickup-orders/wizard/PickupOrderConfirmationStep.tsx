@@ -76,14 +76,29 @@ export default function PickupOrderConfirmationStep({ wizardData, updateWizardDa
       }
 
       // Construir dirección completa del remitente
+      // Formato: Street, Apt X, City, State ZipCode, Country
+      const street = wizardData.sender.street || wizardData.sender.address || ''
+      const apartment = wizardData.sender.apartment || ''
+      const city = wizardData.sender.city || ''
+      const state = wizardData.sender.state || ''
+      const zipCode = wizardData.sender.zipCode || wizardData.sender.zipcode || ''
+      const country = wizardData.sender.country || 'US'
+
+      // Construir el estado + zipcode juntos (ej: "FL 33186")
+      const stateZip = [state, zipCode].filter(Boolean).join(' ')
+
       const senderFullAddress = [
-        wizardData.sender.street || wizardData.sender.address || '',
-        wizardData.sender.apartment ? `Apt ${wizardData.sender.apartment}` : '',
-        wizardData.sender.city || '',
-        wizardData.sender.state || '',
-        wizardData.sender.zipCode || '',
-        wizardData.sender.country || ''
+        street,
+        apartment ? `Apt ${apartment}` : '',
+        city,
+        stateZip,
+        country
       ].filter(Boolean).join(', ')
+
+      console.log('📍 [PickupConfirmation] Building address:', {
+        street, apartment, city, state, zipCode, country,
+        fullAddress: senderFullAddress
+      })
 
       // Geocodificar la dirección si no tiene coordenadas
       let latitude = wizardData.sender.latitude || null
@@ -113,14 +128,14 @@ export default function PickupOrderConfirmationStep({ wizardData, updateWizardDa
         orderData = {
           customerId: wizardData.sender.id,
           customerName: `${wizardData.sender.firstName} ${wizardData.sender.lastName}`, // Remitente
-          customerAddress: senderFullAddress || wizardData.sender.address || null, // Dirección del remitente
+          customerAddress: senderFullAddress || null, // Dirección completa del remitente
           // Campos de dirección estructurados del remitente
-          street: wizardData.sender.street || wizardData.sender.address || null,
-          apartment: wizardData.sender.apartment || null,
-          city: wizardData.sender.city || null,
-          state: wizardData.sender.state || null,
-          country: wizardData.sender.country || 'US',
-          zipcode: wizardData.sender.zipCode || null,
+          street: street || null,
+          apartment: apartment || null,
+          city: city || null,
+          state: state || null,
+          country: country || 'US',
+          zipcode: zipCode || null,
           orderNumber: generatedOrderNumber,
           services: ['Entrega de Cajas Vacías'],
           notes: `Orden de entrega de ${totalEmpaques} empaques vacíos`,
@@ -177,14 +192,14 @@ export default function PickupOrderConfirmationStep({ wizardData, updateWizardDa
         orderData = {
           customerId: wizardData.sender.id,
           customerName: `${wizardData.sender.firstName} ${wizardData.sender.lastName}`,
-          customerAddress: senderFullAddress || wizardData.sender.address || null,
+          customerAddress: senderFullAddress || null,
           // Campos de dirección estructurados del remitente
-          street: wizardData.sender.street || wizardData.sender.address || null,
-          apartment: wizardData.sender.apartment || null,
-          city: wizardData.sender.city || null,
-          state: wizardData.sender.state || null,
-          country: wizardData.sender.country || 'US',
-          zipcode: wizardData.sender.zipCode || null,
+          street: street || null,
+          apartment: apartment || null,
+          city: city || null,
+          state: state || null,
+          country: country || 'US',
+          zipcode: zipCode || null,
           orderNumber: generatedOrderNumber,
           services: wizardData.selectedServices.map((s: any) => s.name),
           notes: 'Orden de recogida creada desde wizard',

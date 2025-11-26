@@ -218,31 +218,50 @@ export default function SenderSearchStep({ wizardData, updateWizardData, setCanP
           updateWizardData('sender', customer)
           setCanProceed(false) // Usuario debe seleccionar una dirección manualmente
         } else {
-          // No tiene direcciones guardadas, geocodificar la dirección legacy del customer
+          // No tiene direcciones guardadas, usar dirección del customer
           let customerWithCoords = { ...customer }
-          if (customer.address && !customer.latitude && !customer.longitude) {
-            const coords = await geocodeAddress(customer.address)
-            if (coords) {
-              customerWithCoords.latitude = coords.latitude
-              customerWithCoords.longitude = coords.longitude
-            }
-          }
 
-          // Ensure structured address fields are present using improved parsing
-          if (!customerWithCoords.street && customerWithCoords.address) {
-            const parsed = parseAddressString(customerWithCoords.address)
-            customerWithCoords.street = parsed.street || customerWithCoords.address
+          // Primero: Verificar si el cliente YA tiene campos estructurados de la BD
+          const hasStructuredAddress = customer.city || customer.state || customer.zipCode
+
+          if (hasStructuredAddress) {
+            // Usar los campos estructurados de la BD
+            customerWithCoords.street = customer.address || customer.street || ''
+            customerWithCoords.city = customer.city || ''
+            customerWithCoords.state = customer.state || ''
+            customerWithCoords.zipCode = customer.zipCode || customer.zipcode || ''
+            customerWithCoords.apartment = customer.apartment || ''
+            customerWithCoords.country = customer.country || 'US'
+            console.log('📍 [SenderSearchStep] Using structured address from DB:', {
+              street: customerWithCoords.street,
+              city: customerWithCoords.city,
+              state: customerWithCoords.state,
+              zipCode: customerWithCoords.zipCode
+            })
+          } else if (customer.address) {
+            // No hay campos estructurados, parsear la dirección legacy
+            console.log('📍 [SenderSearchStep] Parsing legacy address:', customer.address)
+            const parsed = parseAddressString(customer.address)
+            customerWithCoords.street = parsed.street || customer.address
             customerWithCoords.city = parsed.city || ''
             customerWithCoords.state = parsed.state || ''
             customerWithCoords.zipCode = parsed.zipCode || ''
             customerWithCoords.apartment = parsed.apartment || ''
             customerWithCoords.country = parsed.country || 'US'
+            console.log('📍 [SenderSearchStep] Parsed address result:', parsed)
           }
-          // Ensure defaults for any missing fields
-          if (!customerWithCoords.city) customerWithCoords.city = ''
-          if (!customerWithCoords.state) customerWithCoords.state = ''
-          if (!customerWithCoords.zipCode) customerWithCoords.zipCode = customerWithCoords.zipcode || ''
-          if (!customerWithCoords.country) customerWithCoords.country = 'US'
+
+          // Geocodificar si no tiene coordenadas
+          if (customer.address && !customer.latitude && !customer.longitude) {
+            const fullAddress = `${customerWithCoords.street}, ${customerWithCoords.city}, ${customerWithCoords.state} ${customerWithCoords.zipCode}, ${customerWithCoords.country}`
+            console.log('📍 [SenderSearchStep] Geocoding full address:', fullAddress)
+            const coords = await geocodeAddress(fullAddress)
+            if (coords) {
+              customerWithCoords.latitude = coords.latitude
+              customerWithCoords.longitude = coords.longitude
+              console.log('📍 [SenderSearchStep] Geocoding successful:', coords)
+            }
+          }
 
           updateWizardData('sender', customerWithCoords)
           setCanProceed(true)
@@ -250,31 +269,38 @@ export default function SenderSearchStep({ wizardData, updateWizardData, setCanP
       }
     } catch (error) {
       console.error('Error loading addresses:', error)
-      // Si falla, geocodificar dirección legacy antes de usar
+      // Fallback: usar datos del customer directamente
       let customerWithCoords = { ...customer }
-      if (customer.address && !customer.latitude && !customer.longitude) {
-        const coords = await geocodeAddress(customer.address)
-        if (coords) {
-          customerWithCoords.latitude = coords.latitude
-          customerWithCoords.longitude = coords.longitude
-        }
-      }
 
-      // Ensure structured address fields are present using improved parsing
-      if (!customerWithCoords.street && customerWithCoords.address) {
-        const parsed = parseAddressString(customerWithCoords.address)
-        customerWithCoords.street = parsed.street || customerWithCoords.address
+      // Verificar si el cliente YA tiene campos estructurados de la BD
+      const hasStructuredAddress = customer.city || customer.state || customer.zipCode
+
+      if (hasStructuredAddress) {
+        customerWithCoords.street = customer.address || customer.street || ''
+        customerWithCoords.city = customer.city || ''
+        customerWithCoords.state = customer.state || ''
+        customerWithCoords.zipCode = customer.zipCode || customer.zipcode || ''
+        customerWithCoords.apartment = customer.apartment || ''
+        customerWithCoords.country = customer.country || 'US'
+      } else if (customer.address) {
+        const parsed = parseAddressString(customer.address)
+        customerWithCoords.street = parsed.street || customer.address
         customerWithCoords.city = parsed.city || ''
         customerWithCoords.state = parsed.state || ''
         customerWithCoords.zipCode = parsed.zipCode || ''
         customerWithCoords.apartment = parsed.apartment || ''
         customerWithCoords.country = parsed.country || 'US'
       }
-      // Ensure defaults for any missing fields
-      if (!customerWithCoords.city) customerWithCoords.city = ''
-      if (!customerWithCoords.state) customerWithCoords.state = ''
-      if (!customerWithCoords.zipCode) customerWithCoords.zipCode = customerWithCoords.zipcode || ''
-      if (!customerWithCoords.country) customerWithCoords.country = 'US'
+
+      // Geocodificar si no tiene coordenadas
+      if (customer.address && !customer.latitude && !customer.longitude) {
+        const fullAddress = `${customerWithCoords.street}, ${customerWithCoords.city}, ${customerWithCoords.state} ${customerWithCoords.zipCode}, ${customerWithCoords.country}`
+        const coords = await geocodeAddress(fullAddress)
+        if (coords) {
+          customerWithCoords.latitude = coords.latitude
+          customerWithCoords.longitude = coords.longitude
+        }
+      }
 
       updateWizardData('sender', customerWithCoords)
       setCanProceed(true)

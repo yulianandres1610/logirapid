@@ -226,22 +226,29 @@ export async function POST(request: NextRequest) {
     const capacityWeightKg = (emptyBoxesInt + fullBoxesInt) * 25;
     const capacityVolumeM3 = (emptyBoxesInt + fullBoxesInt) * 0.1;
 
+    // Generar ID único
+    const vehicleId = `v_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    const capacityJson = JSON.stringify({ empty_boxes: emptyBoxesInt, full_boxes: fullBoxesInt });
+
     // Insertar vehículo
     const insertQuery = `
       INSERT INTO vehicles (
-        vin, license_plate, make, model, year, body_type, color, nickname,
+        id, vin, license_plate, make, model, year, model_year, body_type, color, nickname,
         status, availability, capacity_weight_kg, capacity_volume_m3,
-        empty_boxes, full_boxes, photos, insurance_documents,
+        empty_boxes, full_boxes, capacity, photos, insurance_documents,
         can_collect_durable, registration_date, mileage, insurance_expiry,
         oil_change_frequency, next_oil_change, company_id
       ) VALUES (
-        $1, $2, $3, $4, $5, $6, $7, $8,
-        $9, $10, $11, $12, $13, $14, $15, $16,
-        $17, $18, $19, $20, $21, $22, $23
+        $1, $2, $3, $4, $5, $6, $6, $7, $8, $9,
+        $10, $11, $12, $13,
+        $14, $15, $16, $17, $18,
+        $19, $20, $21, $22,
+        $23, $24, $25
       ) RETURNING *
     `;
 
     const result = await db.query(insertQuery, [
+      vehicleId,
       vin.toUpperCase(),
       finalLicensePlate.toUpperCase(),
       make.trim(),
@@ -256,6 +263,7 @@ export async function POST(request: NextRequest) {
       capacityVolumeM3,
       emptyBoxesInt,
       fullBoxesInt,
+      capacityJson,
       JSON.stringify(photos),
       JSON.stringify(insurance_documents),
       can_collect_durable,
@@ -264,7 +272,7 @@ export async function POST(request: NextRequest) {
       insurance_expiry || null,
       oil_change_frequency,
       next_oil_change || null,
-      companyId || null
+      companyId || 1
     ]);
 
     const vehicle = result.rows[0];
