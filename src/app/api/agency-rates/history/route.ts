@@ -5,11 +5,16 @@ export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url)
     const currency = searchParams.get('currency') || 'USD'
-    const days = parseInt(searchParams.get('days') || '30', 10)
+    const days = parseFloat(searchParams.get('days') || '30')
 
-    // Calcular fecha de inicio
+    // Calcular fecha de inicio - soportar días fraccionales para horas
     const startDate = new Date()
-    startDate.setDate(startDate.getDate() - days)
+    if (days < 1) {
+      // Para períodos menores a 1 día, usar horas
+      startDate.setHours(startDate.getHours() - Math.ceil(days * 24))
+    } else {
+      startDate.setDate(startDate.getDate() - Math.floor(days))
+    }
 
     // Consultar historial de tasas
     const query = `

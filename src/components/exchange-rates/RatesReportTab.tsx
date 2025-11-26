@@ -54,6 +54,7 @@ const CURRENCIES = [
 
 // Períodos de tiempo
 const TIME_PERIODS = [
+  { id: 'hour', label: '1H', days: 0.0417 }, // ~1 hora en días (1/24)
   { id: 'day', label: '24H', days: 1 },
   { id: 'week', label: '7D', days: 7 },
   { id: 'month', label: '30D', days: 30 },
@@ -109,7 +110,7 @@ function calculateStats(data: { rate: number }[]) {
 
 export default function RatesReportTab({ theme }: RatesReportTabProps) {
   const [selectedCurrency, setSelectedCurrency] = useState('USD')
-  const [selectedPeriod, setSelectedPeriod] = useState('month')
+  const [selectedPeriod, setSelectedPeriod] = useState('day')
   const [historyData, setHistoryData] = useState<RateHistoryEntry[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -178,10 +179,11 @@ export default function RatesReportTab({ theme }: RatesReportTabProps) {
 
   // Procesar datos para la gráfica
   const chartData = useMemo(() => {
+    const is1Hour = selectedPeriod === 'hour'
     const is24Hours = selectedPeriod === 'day'
 
     return historyData.map(entry => ({
-      date: is24Hours
+      date: (is1Hour || is24Hours)
         ? new Date(entry.timestamp).toLocaleTimeString('es-ES', {
             hour: '2-digit',
             minute: '2-digit'
