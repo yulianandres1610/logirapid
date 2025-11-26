@@ -26,8 +26,10 @@ import {
   EyeOff,
   Calculator,
   Info,
-  Plus
+  Plus,
+  BarChart3
 } from 'lucide-react'
+import RatesReportTab from '@/components/exchange-rates/RatesReportTab'
 import { cn } from '@/lib/utils'
 import { useTheme } from '@/contexts/theme-context'
 import { DashboardLayout } from '@/components/layout/dashboard-layout'
@@ -405,7 +407,7 @@ export default function ExchangeRatePage() {
   const searchParams = useSearchParams()
 
   // Estados principales
-  const [activeTab, setActiveTab] = useState<'rates' | 'agency'>('rates')
+  const [activeTab, setActiveTab] = useState<'rates' | 'agency' | 'report'>('rates')
   const [rates, setRates] = useState<ExchangeRatesData | null>(null)
   const [agencyRates, setAgencyRates] = useState<ExchangeRatesData | null>(null)
   const [loading, setLoading] = useState(true)
@@ -1254,7 +1256,8 @@ export default function ExchangeRatePage() {
           >
             {[
               { id: 'rates', label: 'Tasas deltoque', icon: TrendingUp },
-              { id: 'agency', label: 'Tasas Agencias', icon: Building2 }
+              { id: 'agency', label: 'Tasas Agencias', icon: Building2 },
+              { id: 'report', label: 'Reporte', icon: BarChart3 }
             ].map((tab) => (
               <button
                 key={tab.id}
@@ -1754,6 +1757,21 @@ export default function ExchangeRatePage() {
                     })}
                   </div>
                 </div>
+              </motion.div>
+            )}
+
+            {activeTab === 'report' && (
+              <motion.div
+                key="report"
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -20 }}
+                className={cn(
+                  "rounded-xl p-6 border-x border-b",
+                  theme === 'dark' ? "bg-gray-800 border-gray-700" : "bg-white border-gray-200"
+                )}
+              >
+                <RatesReportTab theme={theme} />
               </motion.div>
             )}
 
