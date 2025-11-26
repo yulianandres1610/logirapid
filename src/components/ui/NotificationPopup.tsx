@@ -10,13 +10,13 @@ interface PopupNotification {
   type: 'success' | 'error' | 'warning' | 'info'
   title: string
   message: string
+  autoHideTime: number
 }
 
 export default function NotificationPopup() {
   const { notifications, markAsRead } = useNotifications()
   const [popups, setPopups] = useState<PopupNotification[]>([])
   const processedIdsRef = useRef<Set<string>>(new Set())
-  const timersRef = useRef<Map<string, NodeJS.Timeout>>(new Map())
 
   useEffect(() => {
     // Solo procesar notificaciones nuevas que no hayan sido procesadas antes
@@ -30,41 +30,22 @@ export default function NotificationPopup() {
         id: n.id,
         type: n.type,
         title: n.title,
-        message: n.message
+        message: n.message,
+        autoHideTime: n.type === 'error' ? 7000 : 5000
       }))
 
-      // Marcar como procesadas
+      // Marcar como procesadas Y como leídas inmediatamente
       newNotifications.forEach(n => {
         processedIdsRef.current.add(n.id)
-
-        // Configurar auto-dismiss para cada notificación nueva
-        const autoHideTime = n.type === 'error' ? 7000 : 5000
-        const timer = setTimeout(() => {
-          removePopup(n.id)
-        }, autoHideTime)
-
-        timersRef.current.set(n.id, timer)
+        markAsRead(n.id) // Marcar como leída para que no vuelva a aparecer al navegar
       })
 
       setPopups(prev => [...newPopups, ...prev].slice(0, 3))
     }
+  }, [notifications, markAsRead])
 
-    // Cleanup de timers cuando el componente se desmonte
-    return () => {
-      timersRef.current.forEach(timer => clearTimeout(timer))
-    }
-  }, [notifications])
-
+  // Remover popup del estado local (ya está marcada como leída)
   const removePopup = (id: string) => {
-    // Limpiar el timer si existe
-    const timer = timersRef.current.get(id)
-    if (timer) {
-      clearTimeout(timer)
-      timersRef.current.delete(id)
-    }
-    // Marcar como leída en el contexto
-    markAsRead(id)
-    // Remover del estado local de popups
     setPopups(prev => prev.filter(popup => popup.id !== id))
   }
 
@@ -116,45 +97,43 @@ export default function NotificationPopup() {
   return (
     <div className="fixed top-20 right-4 z-50 space-y-3 pointer-events-none">
       <AnimatePresence>
-        {popups.map((popup, index) => {
-          const autoHideTime = popup.type === 'error' ? 7000 : 5000
-
-          return (
-            <motion.div
-              key={popup.id}
-              initial={{ opacity: 0, x: 100, scale: 0.9 }}
-              animate={{ opacity: 1, x: 0, scale: 1 }}
-              exit={{ opacity: 0, x: 100, scale: 0.9 }}
-              transition={{ duration: 0.3, ease: 'easeOut' }}
-              className="pointer-events-auto"
+        {popups.map((popup) => (
+          <motion.div
+            key={popup.id}
+            initial={{ opacity: 0, x: 100, scale: 0.9 }}
+            animate={{ opacity: 1, x: 0, scale: 1 }}
+            exit={{ opacity: 0, x: 100, scale: 0.9 }}
+            transition={{ duration: 0.3, ease: 'easeOut' }}
+            className="pointer-events-auto"
+          >
+            <div
+              className={`
+                relative overflow-hidden
+                min-w-80 max-w-md
+                ${getBgColor(popup.type)}
+                border-l-4 ${getBorderColor(popup.type)}
+                rounded-xl shadow-2xl
+                backdrop-blur-md
+              `}
             >
-              <div
-                className={`
-                  relative overflow-hidden
-                  min-w-80 max-w-md
-                  ${getBgColor(popup.type)}
-                  border-l-4 ${getBorderColor(popup.type)}
-                  rounded-xl shadow-2xl
-                  backdrop-blur-md
-                `}
-              >
-                {/* Progress bar */}
-                <div className="absolute bottom-0 left-0 right-0 h-1 bg-black/10 dark:bg-white/10">
-                  <motion.div
-                    initial={{ width: '100%' }}
-                    animate={{ width: '0%' }}
-                    transition={{ duration: autoHideTime / 1000, ease: 'linear' }}
-                    className={`h-full ${
-                      popup.type === 'error'
-                        ? 'bg-red-400'
-                        : popup.type === 'success'
-                        ? 'bg-green-500'
-                        : popup.type === 'warning'
-                        ? 'bg-yellow-500'
-                        : 'bg-blue-500'
-                    }`}
-                  />
-                </div>
+              {/* Progress bar - se remueve automáticamente cuando termina */}
+              <div className="absolute bottom-0 left-0 right-0 h-1 bg-black/10 dark:bg-white/10">
+                <motion.div
+                  initial={{ width: '100%' }}
+                  animate={{ width: '0%' }}
+                  transition={{ duration: popup.autoHideTime / 1000, ease: 'linear' }}
+                  onAnimationComplete={() => removePopup(popup.id)}
+                  className={`h-full ${
+                    popup.type === 'error'
+                      ? 'bg-red-400'
+                      : popup.type === 'success'
+                      ? 'bg-green-500'
+                      : popup.type === 'warning'
+                      ? 'bg-yellow-500'
+                      : 'bg-blue-500'
+                  }`}
+                />
+              </div>
 
                 <div className="p-4">
                   <div className="flex items-start gap-3">
@@ -203,8 +182,7 @@ export default function NotificationPopup() {
                 </div>
               </div>
             </motion.div>
-          )
-        })}
+          ))}
       </AnimatePresence>
     </div>
   )
