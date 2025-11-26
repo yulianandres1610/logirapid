@@ -155,7 +155,7 @@ export default function PickupScheduleCard({
               'text-xs font-medium',
               theme === 'dark' ? 'text-gray-400' : 'text-gray-600'
             )}>
-              Estado de Recogida:
+              Estado de Orden:
             </p>
             <span className={cn(
               'px-2 py-1 rounded-full text-xs font-semibold',

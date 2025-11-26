@@ -13,7 +13,7 @@ interface Service {
 }
 
 interface SelectedServicesCardProps {
-  services: Service[]
+  services: (Service | string)[]
 }
 
 export default function SelectedServicesCard({ services }: SelectedServicesCardProps) {
@@ -58,14 +58,22 @@ export default function SelectedServicesCard({ services }: SelectedServicesCardP
       : 'from-blue-500 to-blue-600'
   }
 
-  // Filtrar servicios válidos (que tengan name o quantity)
-  const validServices = (services || []).filter(s => s && (s.name || s.quantity > 0))
+  // Normalizar servicios: convertir strings a objetos Service
+  const normalizedServices: Service[] = (services || [])
+    .filter(s => s) // Filtrar null/undefined
+    .map(s => {
+      if (typeof s === 'string') {
+        return { name: s, quantity: 1 }
+      }
+      return s as Service
+    })
+    .filter(s => s.name || s.quantity > 0) // Filtrar servicios vacíos
 
-  if (validServices.length === 0) {
+  if (normalizedServices.length === 0) {
     return null
   }
 
-  const totalQuantity = validServices.reduce((sum, s) => sum + (s.quantity || 0), 0)
+  const totalQuantity = normalizedServices.reduce((sum, s) => sum + (s.quantity || 1), 0)
 
   return (
     <motion.div
@@ -102,13 +110,13 @@ export default function SelectedServicesCard({ services }: SelectedServicesCardP
             'text-xs',
             theme === 'dark' ? 'text-gray-400' : 'text-gray-500'
           )}>
-            {validServices.length} servicio{validServices.length > 1 ? 's' : ''} • {totalQuantity} unidad{totalQuantity > 1 ? 'es' : ''}
+            {normalizedServices.length} servicio{normalizedServices.length > 1 ? 's' : ''} • {totalQuantity} unidad{totalQuantity > 1 ? 'es' : ''}
           </p>
         </div>
       </div>
 
       <div className="space-y-3">
-        {validServices.map((service, index) => (
+        {normalizedServices.map((service, index) => (
           <div
             key={index}
             className={cn(
