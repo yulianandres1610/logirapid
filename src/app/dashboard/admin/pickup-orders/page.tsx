@@ -9,7 +9,7 @@ const removeLeadingZeros = (address: string): string => {
 }
 
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
-import { motion } from 'framer-motion'
+import { motion, AnimatePresence } from 'framer-motion'
 import {
   Package,
   Plus,
@@ -107,6 +107,8 @@ export default function PickupOrdersPage() {
   })
   const [allOrders, setAllOrders] = useState<PackageOrder[]>([])
   const [zones, setZones] = useState<any[]>([])
+  const [deleteConfirm, setDeleteConfirm] = useState<{id: number, orderNumber: string} | null>(null)
+  const [deleting, setDeleting] = useState(false)
 
   // Fetch orders - Show both recogida and entrega (both need routes)
   const fetchData = async () => {
@@ -237,14 +239,9 @@ export default function PickupOrdersPage() {
     router.push(`${basePath}/${orderId}/edit`)
   }
 
-  // Handle delete order
-  const handleDeleteOrder = async (orderId: number) => {
-    console.log('handleDeleteOrder called with orderId:', orderId)
-
-    // Find the order to check its status
+  // Abrir modal de confirmación de eliminación (no bloquea UI)
+  const confirmDeleteOrder = (orderId: number) => {
     const order = orders.find(o => o.id === orderId)
-    console.log('Found order:', order)
-
     if (!order) {
       console.error('Order not found with ID:', orderId)
       return
@@ -252,15 +249,20 @@ export default function PickupOrdersPage() {
 
     // Only allow deletion of pending orders
     if (order.status !== 'pending') {
-      console.error('Order not in pending status:', order.status)
       showNotification('error', 'No se puede eliminar', 'Solo se pueden eliminar órdenes en estado pendiente')
       return
     }
 
-    if (!confirm(`¿Estás seguro de que deseas eliminar la orden #${order.orderNumber}? Esta acción no se puede deshacer.`)) {
-      console.log('User cancelled deletion')
-      return
-    }
+    setDeleteConfirm({ id: orderId, orderNumber: order.orderNumber })
+  }
+
+  // Ejecutar eliminación cuando el usuario confirma
+  const handleDeleteOrder = async () => {
+    if (!deleteConfirm) return
+
+    const orderId = deleteConfirm.id
+    setDeleteConfirm(null)
+    setDeleting(true)
 
     console.log('Proceeding with deletion of order:', orderId)
 
@@ -291,6 +293,8 @@ export default function PickupOrdersPage() {
       if (response.ok) {
         console.log('Order deleted successfully')
         showNotification('success', 'Orden Eliminada', data.message || 'La orden ha sido eliminada exitosamente')
+        // Actualizar también allOrders para el mapa
+        fetchAllOrders()
         // If current page might be empty after deletion, go to previous page
         const totalPages = Math.ceil(totalOrders / ORDERS_PER_PAGE)
         if (currentPage > 1 && orders.length === 1 && currentPage === totalPages) {
@@ -306,6 +310,8 @@ export default function PickupOrdersPage() {
     } catch (error) {
       console.error('Error deleting order:', error)
       showNotification('error', 'Error de conexión', 'No se pudo conectar con el servidor. Intenta de nuevo.')
+    } finally {
+      setDeleting(false)
     }
   }
 
@@ -1074,7 +1080,7 @@ export default function PickupOrdersPage() {
                                   onClick={(e) => {
                                     e.preventDefault()
                                     e.stopPropagation()
-                                    handleDeleteOrder(order.id)
+                                    confirmDeleteOrder(order.id)
                                   }}
                                   className={cn(
                                     'relative p-2 rounded-lg transition-all duration-200',
@@ -1312,6 +1318,63 @@ export default function PickupOrdersPage() {
 
         </motion.div>
       </div>
+
+      {/* Modal de confirmación de eliminación */}
+      <AnimatePresence>
+        {deleteConfirm && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
+            onClick={() => setDeleteConfirm(null)}
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              onClick={(e) => e.stopPropagation()}
+              className={cn(
+                "p-6 rounded-xl max-w-md w-full mx-4",
+                theme === 'dark' ? 'bg-gray-800' : 'bg-white'
+              )}
+            >
+              <h3 className={cn(
+                "text-lg font-bold mb-2",
+                theme === 'dark' ? 'text-white' : 'text-gray-900'
+              )}>
+                Confirmar eliminación
+              </h3>
+              <p className={cn(
+                "mb-6",
+                theme === 'dark' ? 'text-gray-400' : 'text-gray-600'
+              )}>
+                ¿Estás seguro de que deseas eliminar la orden #{deleteConfirm.orderNumber}? Esta acción no se puede deshacer.
+              </p>
+              <div className="flex gap-3 justify-end">
+                <Button
+                  onClick={() => setDeleteConfirm(null)}
+                  disabled={deleting}
+                  className={cn(
+                    theme === 'dark'
+                      ? 'bg-gray-700 hover:bg-gray-600 text-white'
+                      : 'bg-gray-200 hover:bg-gray-300 text-gray-900'
+                  )}
+                >
+                  Cancelar
+                </Button>
+                <Button
+                  onClick={handleDeleteOrder}
+                  disabled={deleting}
+                  className="bg-red-500 hover:bg-red-600 text-white"
+                >
+                  {deleting ? 'Eliminando...' : 'Eliminar'}
+                </Button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </DashboardLayout>
   )
 }
