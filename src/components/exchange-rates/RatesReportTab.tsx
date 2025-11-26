@@ -108,6 +108,29 @@ function calculateStats(data: { rate: number }[]) {
   return { min, max, avg, variation, current: last }
 }
 
+// Calcular estabilidad basada en variaciones semanales
+function calculateStability(data: { rate: number }[]): {
+  isStable: boolean
+  weeklyVariations: number
+  label: string
+} {
+  if (data.length < 2) return { isStable: true, weeklyVariations: 0, label: '+Estable' }
+
+  // Contar variaciones significativas (cambios > 0.5%)
+  let variations = 0
+  for (let i = 1; i < data.length; i++) {
+    const change = Math.abs((data[i].rate - data[i - 1].rate) / data[i - 1].rate * 100)
+    if (change > 0.5) variations++
+  }
+
+  const isStable = variations < 2
+  return {
+    isStable,
+    weeklyVariations: variations,
+    label: isStable ? '+Estable' : '-Estable'
+  }
+}
+
 export default function RatesReportTab({ theme }: RatesReportTabProps) {
   const [selectedCurrency, setSelectedCurrency] = useState('USD')
   const [selectedPeriod, setSelectedPeriod] = useState('day')
@@ -208,6 +231,9 @@ export default function RatesReportTab({ theme }: RatesReportTabProps) {
 
   // Predicción
   const prediction = useMemo(() => predictNextValue(chartData), [chartData])
+
+  // Calcular estabilidad
+  const stability = useMemo(() => calculateStability(chartData), [chartData])
 
   const currencyInfo = CURRENCIES.find(c => c.code === selectedCurrency)
 
@@ -613,19 +639,23 @@ export default function RatesReportTab({ theme }: RatesReportTabProps) {
 
           <div className={cn(
             "flex items-center gap-2 px-4 py-2 rounded-full",
-            prediction.trend === 'up'
+            stability.isStable
               ? theme === 'dark' ? "bg-green-500/20 text-green-400" : "bg-green-100 text-green-700"
-              : prediction.trend === 'down'
-              ? theme === 'dark' ? "bg-red-500/20 text-red-400" : "bg-red-100 text-red-700"
-              : theme === 'dark' ? "bg-gray-600/50 text-gray-400" : "bg-gray-200 text-gray-600"
+              : theme === 'dark' ? "bg-red-500/20 text-red-400" : "bg-red-100 text-red-700"
           )}>
-            {prediction.trend === 'up' && <TrendingUp className="w-5 h-5" />}
-            {prediction.trend === 'down' && <TrendingDown className="w-5 h-5" />}
-            {prediction.trend === 'stable' && <Minus className="w-5 h-5" />}
+            {stability.isStable ? (
+              <TrendingUp className="w-5 h-5" />
+            ) : (
+              <TrendingDown className="w-5 h-5" />
+            )}
             <span className="font-medium">
-              {prediction.trend === 'up' && 'Tendencia alcista'}
-              {prediction.trend === 'down' && 'Tendencia bajista'}
-              {prediction.trend === 'stable' && 'Estable'}
+              {stability.label}
+            </span>
+            <span className={cn(
+              "text-xs",
+              theme === 'dark' ? "text-gray-400" : "text-gray-500"
+            )}>
+              ({stability.weeklyVariations} variaciones)
             </span>
           </div>
         </div>
