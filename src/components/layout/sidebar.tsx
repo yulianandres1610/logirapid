@@ -262,6 +262,7 @@ export function Sidebar({ isCollapsed, onToggle }: SidebarProps) {
         pathname.includes('/orders') ||
         pathname.includes('/office-orders') ||
         pathname.includes('/warehouses') ||
+        pathname.includes('/drivers') ||
         pathname.includes('/vehicles') ||
         pathname.includes('/routes') ||
         pathname.includes('/paqueteria/configuracion')) {
@@ -315,6 +316,7 @@ export function Sidebar({ isCollapsed, onToggle }: SidebarProps) {
         { icon: Truck, label: "Órdenes de Recogida", href: "/dashboard/admin/pickup-orders" },
         { icon: Store, label: "Órdenes de Oficina", href: "/dashboard/admin/office-orders" },
         { icon: Warehouse, label: "Almacenes", href: "/dashboard/admin/warehouses" },
+        { icon: User, label: "Drivers", href: "/dashboard/admin/drivers" },
         { icon: Car, label: "Vehículos", href: "/dashboard/admin/vehicles" },
         { icon: Route, label: "Rutas", href: "/dashboard/admin/routes" },
         { icon: Box, label: "Empaque", href: "/dashboard/admin/package-route" }
@@ -344,6 +346,7 @@ export function Sidebar({ isCollapsed, onToggle }: SidebarProps) {
         { icon: Truck, label: "Órdenes Recogida", href: "/dashboard/agency-admin/pickup-orders" },
         { icon: Store, label: "Órdenes Oficina", href: "/dashboard/agency-admin/office-orders" },
         { icon: Warehouse, label: "Almacenes", href: "/dashboard/agency-admin/warehouses" },
+        { icon: User, label: "Drivers", href: "/dashboard/agency-admin/drivers" },
         { icon: Car, label: "Vehículos", href: "/dashboard/agency-admin/vehicles" },
         { icon: Route, label: "Rutas", href: "/dashboard/agency-admin/routes" },
         { icon: Box, label: "Empaque", href: "/dashboard/agency-admin/package-route" }
@@ -370,6 +373,7 @@ export function Sidebar({ isCollapsed, onToggle }: SidebarProps) {
         { icon: Truck, label: "Órdenes Recogida", href: "/dashboard/manager/orders" },
         { icon: Store, label: "Órdenes Oficina", href: "/dashboard/manager/office-orders" },
         { icon: Warehouse, label: "Almacenes", href: "/dashboard/manager/warehouses" },
+        { icon: User, label: "Drivers", href: "/dashboard/manager/drivers" },
         { icon: Car, label: "Vehículos", href: "/dashboard/manager/vehicles" },
         { icon: Route, label: "Rutas", href: "/dashboard/manager/routes" },
         { icon: Box, label: "Empaque", href: "/dashboard/manager/package-route" }
@@ -635,7 +639,7 @@ export function Sidebar({ isCollapsed, onToggle }: SidebarProps) {
           >
             <Button
               variant="ghost"
-              onClick={() => console.log('🚀 Sidebar - Documentación solicitada')}
+              onClick={() => router.push('/developers')}
               className={cn(
                 "w-full justify-start gap-3 hover:bg-exa-primary/10",
                 theme === 'dark'

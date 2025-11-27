@@ -9,9 +9,18 @@ interface LogoUploadProps {
   onChange: (url: string) => void
   className?: string
   disabled?: boolean
+  uploadEndpoint?: string // Endpoint de carga (default: '/api/upload/logo')
+  label?: string // Etiqueta para el alt text (default: 'Logo de la empresa')
 }
 
-export default function LogoUpload({ value, onChange, className, disabled }: LogoUploadProps) {
+export default function LogoUpload({
+  value,
+  onChange,
+  className,
+  disabled,
+  uploadEndpoint = '/api/upload/logo',
+  label = 'Logo de la empresa'
+}: LogoUploadProps) {
   const [uploading, setUploading] = useState(false)
   const [dragActive, setDragActive] = useState(false)
   const [error, setError] = useState<string>('')
@@ -48,7 +57,7 @@ export default function LogoUpload({ value, onChange, className, disabled }: Log
         formData.append('oldLogoUrl', value)
       }
 
-      const response = await fetch('/api/upload/logo', {
+      const response = await fetch(uploadEndpoint, {
         method: 'POST',
         body: formData
       })
@@ -122,7 +131,7 @@ export default function LogoUpload({ value, onChange, className, disabled }: Log
             <div className="flex items-center justify-center">
               <img
                 src={value}
-                alt="Logo de la empresa"
+                alt={label}
                 className="max-h-40 max-w-full object-contain"
               />
             </div>

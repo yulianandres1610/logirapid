@@ -49,6 +49,7 @@ export async function GET(request: NextRequest) {
         c.transactionscount as "transactionsCount",
         c.userscount as "usersCount",
         c.logo_url as "logoUrl",
+        c.label_logo_url as "labelLogoUrl",
         c.subdomain,
         c.primary_color as "primaryColor",
         c.secondary_color as "secondaryColor",
@@ -117,6 +118,7 @@ export async function POST(request: NextRequest) {
       enabledServices,
       serviceFees,
       logoUrl,
+      labelLogoUrl,
       subdomain,
       primaryColor,
       secondaryColor,
@@ -211,15 +213,15 @@ export async function POST(request: NextRequest) {
         legalname, einnumber, phone, customer_service_phone, email, website, address, city, state, country, zipcode,
         walletnumber, currency, ismulticurrency, secondarycurrencies,
         haslimits, dailylimit, monthlylimit, companytype, enabledservices,
-        service_fees, logo_url, subdomain, primary_color, secondary_color,
+        service_fees, logo_url, label_logo_url, subdomain, primary_color, secondary_color,
         parent_company_id, is_branch,
         status, createdat, walletbalance, transactionscount, userscount
       ) VALUES (
         $1, $2, $3, $4, $5, $6, $7, $8, $9, $10,
         $11, $12, $13, $14, $15,
         $16, $17, $18, $19, $20,
-        $21, $22, $23, $24, $25,
-        $26, $27,
+        $21, $22, $23, $24, $25, $26,
+        $27, $28,
         'active', NOW(), 0, 0, 0
       ) RETURNING
         id,
@@ -254,6 +256,7 @@ export async function POST(request: NextRequest) {
       JSON.stringify(finalEnabledServices), // Usar servicios validados
       JSON.stringify(finalServiceFees), // Usar fees heredados o configurados
       logoUrl || null,
+      labelLogoUrl || null,
       finalSubdomain, // Usar subdominio heredado o configurado
       primaryColor || '#CC0A46',
       secondaryColor || '#0A46CC',

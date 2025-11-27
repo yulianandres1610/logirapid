@@ -227,6 +227,7 @@ export default function CompaniesPage() {
     einNumber: '',
     documents: [],
     logoUrl: '',
+    labelLogoUrl: '',
     subdomain: '',
     primaryColor: '#CC0A46',
     secondaryColor: '#0A46CC',
@@ -297,6 +298,7 @@ export default function CompaniesPage() {
       einNumber: '',
       documents: [],
       logoUrl: '',
+      labelLogoUrl: '',
       subdomain: '',
       primaryColor: '#CC0A46',
       secondaryColor: '#0A46CC',
@@ -570,6 +572,7 @@ export default function CompaniesPage() {
         einNumber: company.einNumber || '',
         documents: [],
         logoUrl: company.logoUrl || '',
+        labelLogoUrl: company.labelLogoUrl || '',
         subdomain: company.subdomain || '',
         primaryColor: company.primaryColor || '#CC0A46',
         secondaryColor: company.secondaryColor || '#0A46CC',
@@ -1546,17 +1549,40 @@ export default function CompaniesPage() {
                         "block text-sm font-medium mb-3",
                         theme === 'dark' ? "text-gray-300" : "text-gray-700"
                       )}>
-                        Logo de la Empresa
+                        Logo de la Empresa (Color)
                       </label>
                       <LogoUpload
                         value={formData.logoUrl}
                         onChange={(url) => setFormData({...formData, logoUrl: url})}
+                        label="Logo de la empresa"
                       />
                       <p className={cn(
                         "mt-2 text-xs",
                         theme === 'dark' ? "text-gray-400" : "text-gray-500"
                       )}>
-                        El logo se mostrará en el dashboard y documentos de la empresa. Formatos aceptados: PNG, JPG, SVG, WEBP (máx. 5GB)
+                        Logo a color para la aplicación y sitio web. Formatos: PNG, JPG, SVG, WEBP (máx. 5MB)
+                      </p>
+                    </div>
+
+                    {/* Label Logo Upload */}
+                    <div>
+                      <label className={cn(
+                        "block text-sm font-medium mb-3",
+                        theme === 'dark' ? "text-gray-300" : "text-gray-700"
+                      )}>
+                        Logo de Etiqueta (Blanco y Negro)
+                      </label>
+                      <LogoUpload
+                        value={formData.labelLogoUrl}
+                        onChange={(url) => setFormData({...formData, labelLogoUrl: url})}
+                        uploadEndpoint="/api/upload/label-logo"
+                        label="Logo de etiqueta"
+                      />
+                      <p className={cn(
+                        "mt-2 text-xs",
+                        theme === 'dark' ? "text-gray-400" : "text-gray-500"
+                      )}>
+                        Logo en blanco y negro para etiquetas de envío e impresión. Formatos: PNG, JPG, SVG, WEBP (máx. 5MB)
                       </p>
                     </div>
 
@@ -2607,7 +2633,7 @@ export default function CompaniesPage() {
                       animate={{ opacity: 1, scale: 1 }}
                       transition={{ delay: index * 0.02 }}
                       className={cn(
-                        'bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm hover:shadow-md transition-all duration-300 border-l-4',
+                        'bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-3xl shadow-sm hover:shadow-md transition-all duration-300 border-l-4 overflow-hidden',
                         borderColor
                       )}
                     >
