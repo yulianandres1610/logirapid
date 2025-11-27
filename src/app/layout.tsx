@@ -13,8 +13,8 @@ import { Analytics } from '@vercel/analytics/react'
 const inter = Inter({ subsets: ['latin'] })
 
 export const metadata: Metadata = {
-  title: 'LogiRapid - Plataforma Multi-Servicios',
-  description: 'Plataforma integral para la gestión de remesas, recargas, renta de autos, pasajes y mercado',
+  title: 'LogiRapid - Plataforma de Logistica y Entrega',
+  description: 'Plataforma integral de logistica, envios y entrega de paquetes con rastreo en tiempo real',
   icons: {
     icon: '/favicon.png',
     shortcut: '/favicon.png',

@@ -38,11 +38,27 @@ export default function DevelopersDocsPage() {
   const [activeSection, setActiveSection] = useState('overview')
   const [environment, setEnvironment] = useState<'production' | 'sandbox'>('sandbox')
   const contentRef = useRef<HTMLDivElement>(null)
+  const isScrollingRef = useRef(false)
+
+  // Read hash from URL on mount and scroll to section
+  useEffect(() => {
+    const hash = window.location.hash.replace('#', '')
+    if (hash) {
+      setActiveSection(hash)
+      // Small delay to ensure DOM is ready
+      setTimeout(() => {
+        const element = document.querySelector(`[data-section="${hash}"]`)
+        if (element) {
+          element.scrollIntoView({ behavior: 'smooth', block: 'start' })
+        }
+      }, 100)
+    }
+  }, [])
 
   // Update active section based on scroll position
   useEffect(() => {
     const handleScroll = () => {
-      if (!contentRef.current) return
+      if (!contentRef.current || isScrollingRef.current) return
 
       const sections = contentRef.current.querySelectorAll('[data-section]')
       let currentSection = 'overview'
@@ -54,19 +70,30 @@ export default function DevelopersDocsPage() {
         }
       })
 
-      setActiveSection(currentSection)
+      // Update URL hash without triggering scroll
+      if (currentSection !== activeSection) {
+        setActiveSection(currentSection)
+        window.history.replaceState(null, '', `#${currentSection}`)
+      }
     }
 
     window.addEventListener('scroll', handleScroll)
     return () => window.removeEventListener('scroll', handleScroll)
-  }, [])
+  }, [activeSection])
 
   const scrollToSection = (id: string) => {
     const element = document.querySelector(`[data-section="${id}"]`)
     if (element) {
+      isScrollingRef.current = true
       element.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      // Reset scrolling flag after animation
+      setTimeout(() => {
+        isScrollingRef.current = false
+      }, 1000)
     }
     setActiveSection(id)
+    // Update URL hash
+    window.history.pushState(null, '', `#${id}`)
   }
 
   const baseUrl = environment === 'production' ? baseUrls.production : baseUrls.sandbox

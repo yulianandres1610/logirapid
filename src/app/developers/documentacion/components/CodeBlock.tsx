@@ -40,13 +40,15 @@ export default function CodeBlock({ examples, title }: CodeBlockProps) {
     }
   }
 
+  const lines = examples[activeTab].code.split('\n')
+
   return (
-    <div className="rounded-lg overflow-hidden bg-[#1a1f2e] border border-white/10">
+    <div className="rounded-lg overflow-hidden bg-[#0d1117] border border-white/10">
       {/* Header with tabs */}
-      <div className="flex items-center justify-between border-b border-white/10 bg-[#0d1117]">
-        <div className="flex items-center">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between border-b border-white/10 bg-[#161b22]">
+        <div className="flex items-center overflow-x-auto scrollbar-hide">
           {title && (
-            <span className="px-4 py-2 text-xs font-medium text-gray-400 border-r border-white/10">
+            <span className="px-4 py-2.5 text-xs font-medium text-gray-400 border-r border-white/10 whitespace-nowrap">
               {title}
             </span>
           )}
@@ -56,10 +58,10 @@ export default function CodeBlock({ examples, title }: CodeBlockProps) {
                 key={example.language}
                 onClick={() => setActiveTab(index)}
                 className={`
-                  px-4 py-2 text-xs font-medium transition-colors
+                  px-4 py-2.5 text-xs font-medium transition-colors whitespace-nowrap
                   ${activeTab === index
-                    ? `${languageColors[example.language] || 'text-white'} bg-[#1a1f2e]`
-                    : 'text-gray-500 hover:text-gray-300'
+                    ? `${languageColors[example.language] || 'text-white'} bg-[#0d1117] border-b-2 border-current`
+                    : 'text-gray-500 hover:text-gray-300 border-b-2 border-transparent'
                   }
                 `}
               >
@@ -72,13 +74,13 @@ export default function CodeBlock({ examples, title }: CodeBlockProps) {
         {/* Copy button */}
         <button
           onClick={handleCopy}
-          className="px-3 py-2 text-gray-400 hover:text-white transition-colors flex items-center gap-1.5"
+          className="px-4 py-2.5 text-gray-400 hover:text-white transition-colors flex items-center gap-1.5 border-t sm:border-t-0 border-white/10"
           title="Copiar codigo"
         >
           {copied ? (
             <>
               <Check className="h-4 w-4 text-green-400" />
-              <span className="text-xs text-green-400">Copiado</span>
+              <span className="text-xs text-green-400">Copiado!</span>
             </>
           ) : (
             <>
@@ -90,10 +92,17 @@ export default function CodeBlock({ examples, title }: CodeBlockProps) {
       </div>
 
       {/* Code content */}
-      <div className="p-4 overflow-x-auto">
-        <pre className="text-sm leading-relaxed">
-          <code className="text-gray-300 font-mono whitespace-pre">
-            {examples[activeTab].code}
+      <div className="overflow-x-auto">
+        <pre className="p-4 text-sm leading-relaxed font-mono">
+          <code className="text-gray-300">
+            {lines.map((line, index) => (
+              <div key={index} className="flex">
+                <span className="w-8 pr-4 text-gray-600 select-none text-right shrink-0">
+                  {index + 1}
+                </span>
+                <span className="whitespace-pre">{line || ' '}</span>
+              </div>
+            ))}
           </code>
         </pre>
       </div>
