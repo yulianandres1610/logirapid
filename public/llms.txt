@@ -1,0 +1,182 @@
+# LogiRapid API Documentation
+
+> LogiRapid is a logistics and shipping platform API. This documentation covers authentication, orders, tracking, and webhooks.
+
+## Base URLs
+
+- Production: https://logirapid.com/api
+- Sandbox: https://sandbox.logirapid.com/api
+
+## Authentication
+
+LogiRapid uses JWT (JSON Web Tokens) for authentication. After logging in, you receive a token valid for 7 days.
+
+### Header Format
+```
+Authorization: Bearer <your_jwt_token>
+```
+
+## User Roles
+
+| Role | Description |
+|------|-------------|
+| SUPER_ADMIN | Full access to all platform functions and companies |
+| ADMIN | Company administrator, can manage users and settings |
+| MANAGER | Can create users, recharge wallets, no transfers |
+| USER | Standard user, can sell services and debit from wallet |
+| DRIVER | Driver, access to assigned routes and deliveries |
+| WAREHOUSE | Warehouse staff, inventory management |
+
+---
+
+## Endpoints
+
+### POST /auth/login
+
+Authenticates a user with email and password. Returns a JWT token.
+
+**Request Body:**
+```json
+{
+  "email": "user@example.com",
+  "password": "your_password"
+}
+```
+
+**Response 200:**
+```json
+{
+  "success": true,
+  "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "user": {
+    "id": 42,
+    "name": "Jane Doe",
+    "email": "jane@example.com",
+    "role": "ADMIN",
+    "companyId": 3,
+    "companyName": "Mi Empresa"
+  }
+}
+```
+
+**Response 400:**
+```json
+{
+  "success": false,
+  "error": "Email y password son requeridos"
+}
+```
+
+**Response 401:**
+```json
+{
+  "success": false,
+  "error": "Credenciales incorrectas"
+}
+```
+
+**Response 403:**
+```json
+{
+  "success": false,
+  "error": "Usuario inactivo"
+}
+```
+
+---
+
+### POST /auth/logout
+
+Closes the current user session. Requires Authorization header.
+
+**Headers:**
+- Authorization: Bearer {token} (required)
+
+**Response 200:**
+```json
+{
+  "success": true
+}
+```
+
+---
+
+### GET /auth/me
+
+Returns information about the authenticated user. Requires Authorization header.
+
+**Headers:**
+- Authorization: Bearer {token} (required)
+
+**Response 200:**
+```json
+{
+  "success": true,
+  "user": {
+    "id": 42,
+    "firstName": "Jane",
+    "lastName": "Doe",
+    "email": "jane@example.com",
+    "role": "ADMIN",
+    "companyId": 3,
+    "companyName": "Mi Empresa",
+    "phone": "+1234567890",
+    "isActive": true,
+    "createdAt": "2024-01-15T10:30:00Z",
+    "lastLogin": "2024-03-20T14:22:00Z"
+  }
+}
+```
+
+**Response 401:**
+```json
+{
+  "success": false,
+  "error": "No autorizado"
+}
+```
+
+---
+
+## Error Codes
+
+| Code | Name | Description |
+|------|------|-------------|
+| 400 | Bad Request | Invalid or missing parameters |
+| 401 | Unauthorized | Token not provided, invalid, or expired |
+| 403 | Forbidden | No permission to perform this action |
+| 404 | Not Found | Requested resource does not exist |
+| 409 | Conflict | Conflict with current resource state |
+| 422 | Unprocessable Entity | Invalid data sent |
+| 429 | Too Many Requests | Rate limit exceeded |
+| 500 | Internal Server Error | Server error |
+
+---
+
+## Coming Soon
+
+### Orders API
+- POST /orders - Create order
+- GET /orders/:id - Get order
+- PUT /orders/:id - Update order
+- DELETE /orders/:id - Cancel order
+
+### Tracking API
+- GET /tracking/:code - Track package
+- GET /tracking/:code/history - Get tracking history
+- GET /tracking/:code/location - Get current location
+
+### Webhooks
+Events: order.created, order.shipped, order.delivered, order.failed
+
+---
+
+## OpenAPI Specification
+
+Full OpenAPI 3.0 specification available at:
+https://logirapid.com/api/openapi.json
+
+## Support
+
+Phone: +1 645 2432404
+Portal: https://logirapid.com/developers

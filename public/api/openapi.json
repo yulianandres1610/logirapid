@@ -1,0 +1,349 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "LogiRapid API",
+    "description": "API de logistica y envios de LogiRapid. Permite gestionar autenticacion, ordenes de envio, tracking en tiempo real y webhooks.",
+    "version": "1.0.0",
+    "contact": {
+      "name": "Soporte LogiRapid",
+      "phone": "+1 645 2432404",
+      "url": "https://logirapid.com/developers"
+    },
+    "license": {
+      "name": "Propietario",
+      "url": "https://logirapid.com/terms"
+    }
+  },
+  "servers": [
+    {
+      "url": "https://logirapid.com/api",
+      "description": "Servidor de Produccion"
+    },
+    {
+      "url": "https://sandbox.logirapid.com/api",
+      "description": "Servidor Sandbox (desarrollo y pruebas)"
+    }
+  ],
+  "tags": [
+    {
+      "name": "Autenticacion",
+      "description": "Endpoints para autenticacion de usuarios mediante JWT"
+    },
+    {
+      "name": "Ordenes",
+      "description": "Gestion de ordenes de envio (proximamente)"
+    },
+    {
+      "name": "Tracking",
+      "description": "Rastreo de paquetes en tiempo real (proximamente)"
+    },
+    {
+      "name": "Webhooks",
+      "description": "Notificaciones automaticas de eventos (proximamente)"
+    }
+  ],
+  "paths": {
+    "/auth/login": {
+      "post": {
+        "tags": ["Autenticacion"],
+        "summary": "Iniciar sesion",
+        "description": "Autentica un usuario con email y contrasena. Devuelve un token JWT valido por 7 dias que debe incluirse en el header Authorization de todas las solicitudes autenticadas.",
+        "operationId": "login",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["email", "password"],
+                "properties": {
+                  "email": {
+                    "type": "string",
+                    "format": "email",
+                    "description": "Email del usuario registrado en la plataforma",
+                    "example": "user@example.com"
+                  },
+                  "password": {
+                    "type": "string",
+                    "format": "password",
+                    "description": "Contrasena del usuario",
+                    "example": "your_password"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Autenticacion exitosa",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LoginResponse"
+                },
+                "example": {
+                  "success": true,
+                  "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+                  "user": {
+                    "id": 42,
+                    "name": "Jane Doe",
+                    "email": "jane@example.com",
+                    "role": "ADMIN",
+                    "companyId": 3,
+                    "companyName": "Mi Empresa"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Campos requeridos faltantes",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "success": false,
+                  "error": "Email y password son requeridos"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Credenciales incorrectas",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "success": false,
+                  "error": "Credenciales incorrectas"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Usuario inactivo",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "success": false,
+                  "error": "Usuario inactivo"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/auth/logout": {
+      "post": {
+        "tags": ["Autenticacion"],
+        "summary": "Cerrar sesion",
+        "description": "Cierra la sesion del usuario actual eliminando las cookies de autenticacion. No requiere cuerpo en la solicitud.",
+        "operationId": "logout",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Sesion cerrada exitosamente",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/auth/me": {
+      "get": {
+        "tags": ["Autenticacion"],
+        "summary": "Obtener usuario actual",
+        "description": "Devuelve la informacion completa del usuario autenticado actual. Requiere un token JWT valido en el header Authorization.",
+        "operationId": "getCurrentUser",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Informacion del usuario",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserResponse"
+                },
+                "example": {
+                  "success": true,
+                  "user": {
+                    "id": 42,
+                    "firstName": "Jane",
+                    "lastName": "Doe",
+                    "email": "jane@example.com",
+                    "role": "ADMIN",
+                    "companyId": 3,
+                    "companyName": "Mi Empresa",
+                    "phone": "+1234567890",
+                    "isActive": true,
+                    "createdAt": "2024-01-15T10:30:00Z",
+                    "lastLogin": "2024-03-20T14:22:00Z"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Token no proporcionado o invalido",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "success": false,
+                  "error": "No autorizado"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT",
+        "description": "Token JWT obtenido del endpoint /auth/login. El token expira despues de 7 dias."
+      }
+    },
+    "schemas": {
+      "User": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "description": "ID unico del usuario"
+          },
+          "firstName": {
+            "type": "string",
+            "description": "Nombre del usuario"
+          },
+          "lastName": {
+            "type": "string",
+            "description": "Apellido del usuario"
+          },
+          "name": {
+            "type": "string",
+            "description": "Nombre completo del usuario"
+          },
+          "email": {
+            "type": "string",
+            "format": "email",
+            "description": "Email del usuario"
+          },
+          "role": {
+            "type": "string",
+            "enum": ["SUPER_ADMIN", "ADMIN", "MANAGER", "USER", "DRIVER", "WAREHOUSE"],
+            "description": "Rol del usuario en la plataforma"
+          },
+          "companyId": {
+            "type": "integer",
+            "description": "ID de la empresa a la que pertenece"
+          },
+          "companyName": {
+            "type": "string",
+            "description": "Nombre de la empresa"
+          },
+          "phone": {
+            "type": "string",
+            "description": "Telefono del usuario"
+          },
+          "isActive": {
+            "type": "boolean",
+            "description": "Estado activo del usuario"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Fecha de creacion"
+          },
+          "lastLogin": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Ultima fecha de login"
+          }
+        }
+      },
+      "LoginResponse": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean"
+          },
+          "token": {
+            "type": "string",
+            "description": "Token JWT para autenticacion"
+          },
+          "user": {
+            "$ref": "#/components/schemas/User"
+          }
+        }
+      },
+      "UserResponse": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean"
+          },
+          "user": {
+            "$ref": "#/components/schemas/User"
+          }
+        }
+      },
+      "ErrorResponse": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "example": false
+          },
+          "error": {
+            "type": "string",
+            "description": "Mensaje de error"
+          }
+        }
+      },
+      "UserRole": {
+        "type": "string",
+        "enum": ["SUPER_ADMIN", "ADMIN", "MANAGER", "USER", "DRIVER", "WAREHOUSE"],
+        "description": "Roles disponibles en la plataforma:\n- SUPER_ADMIN: Acceso completo a todas las funciones y empresas\n- ADMIN: Administrador de empresa, puede gestionar usuarios y configuraciones\n- MANAGER: Puede crear usuarios, recargar wallets, sin transferencias\n- USER: Usuario estandar, puede vender servicios y debitar del wallet\n- DRIVER: Conductor, acceso a rutas asignadas y entregas\n- WAREHOUSE: Personal de almacen, gestion de inventario"
+      }
+    }
+  },
+  "externalDocs": {
+    "description": "Documentacion completa de LogiRapid",
+    "url": "https://logirapid.com/developers/documentacion"
+  }
+}

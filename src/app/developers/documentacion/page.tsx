@@ -127,6 +127,14 @@ export default function DevelopersDocsPage() {
 
           {/* Environment Switcher */}
           <div className="flex items-center gap-3">
+            <a
+              href="/api/openapi.json"
+              target="_blank"
+              className="hidden sm:flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-gray-400 hover:text-white hover:border-white/20 transition-colors"
+            >
+              <Server className="h-3.5 w-3.5" />
+              OpenAPI
+            </a>
             <div className="flex items-center rounded-lg border border-white/10 bg-white/5 p-1">
               <button
                 onClick={() => setEnvironment('sandbox')}
