@@ -243,6 +243,7 @@ interface BrandingData {
 }
 
 export function Sidebar({ isCollapsed, onToggle }: SidebarProps) {
+  const router = useRouter()
   const pathname = usePathname()
   const { theme } = useTheme()
   const { user } = useAuth()
