@@ -417,7 +417,10 @@ export default function SenderSearchStep({ wizardData, updateWizardData, setCanP
     }
 
     try {
-      // Crear el cliente con la dirección
+      // Construir dirección completa para el campo address legacy
+      const fullAddress = `${newSender.address.street}${newSender.address.apartment ? ', ' + newSender.address.apartment : ''}, ${newSender.address.city}, ${newSender.address.state} ${newSender.address.zipCode}, ${newSender.address.country}`
+
+      // Crear el cliente con todos los campos de dirección estructurados
       const response = await fetch('/api/customers', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -431,7 +434,14 @@ export default function SenderSearchStep({ wizardData, updateWizardData, setCanP
           hasAlternateContact: newSender.hasAlternateContact,
           alternateContactName: newSender.alternateContactName || null,
           alternateContactPhone: newSender.alternateContactPhone || null,
-          address: `${newSender.address.street}${newSender.address.apartment ? ', ' + newSender.address.apartment : ''}, ${newSender.address.city}, ${newSender.address.state} ${newSender.address.zipCode}, ${newSender.address.country}`
+          // Dirección completa (legacy)
+          address: fullAddress,
+          // Campos estructurados de dirección
+          city: newSender.address.city || null,
+          state: newSender.address.state || null,
+          zipCode: newSender.address.zipCode || null,
+          country: newSender.address.country || 'US',
+          apartment: newSender.address.apartment || null
         })
       })
 

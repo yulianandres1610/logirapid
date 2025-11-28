@@ -184,6 +184,8 @@ export default function CompaniesPage() {
   const [searchTerm, setSearchTerm] = useState('')
   const [selectedFilter, setSelectedFilter] = useState('all')
   const [selectedCompany, setSelectedCompany] = useState<any>(null)
+  const [companyDrivers, setCompanyDrivers] = useState<any[]>([])
+  const [loadingDrivers, setLoadingDrivers] = useState(false)
   const [confirmDialog, setConfirmDialog] = useState<{
     isOpen: boolean
     title: string
@@ -255,6 +257,33 @@ export default function CompaniesPage() {
 
     fetchCompanies()
   }, [])
+
+  // Fetch drivers when a company is selected
+  useEffect(() => {
+    const fetchCompanyDrivers = async () => {
+      if (!selectedCompany?.id) {
+        setCompanyDrivers([])
+        return
+      }
+
+      try {
+        setLoadingDrivers(true)
+        const response = await fetch(`/api/drivers?companyId=${selectedCompany.id}&limit=100`)
+        const data = await response.json()
+
+        if (data.success) {
+          setCompanyDrivers(data.data || [])
+        }
+      } catch (error) {
+        console.error('Error loading company drivers:', error)
+        setCompanyDrivers([])
+      } finally {
+        setLoadingDrivers(false)
+      }
+    }
+
+    fetchCompanyDrivers()
+  }, [selectedCompany?.id])
 
   const generateWalletNumber = () => {
     const timestamp = Date.now().toString().slice(-14)
@@ -3061,6 +3090,207 @@ export default function CompaniesPage() {
                           ) : null
                         })}
                       </div>
+                    </div>
+
+                    {/* Drivers Section */}
+                    <div>
+                      <div className="flex items-center justify-between mb-4">
+                        <h3 className={cn(
+                          "text-lg font-semibold",
+                          theme === 'dark' ? "text-white" : "text-black"
+                        )}>
+                          Drivers de la Empresa
+                        </h3>
+                        <span className={cn(
+                          "text-sm px-3 py-1 rounded-full",
+                          theme === 'dark' ? "bg-blue-900/30 text-blue-400" : "bg-blue-100 text-blue-700"
+                        )}>
+                          {companyDrivers.length} drivers
+                        </span>
+                      </div>
+
+                      {loadingDrivers ? (
+                        <div className="flex items-center justify-center py-8">
+                          <Loader2 className="w-6 h-6 animate-spin text-blue-500" />
+                          <span className={cn(
+                            "ml-2 text-sm",
+                            theme === 'dark' ? "text-gray-400" : "text-gray-600"
+                          )}>
+                            Cargando drivers...
+                          </span>
+                        </div>
+                      ) : companyDrivers.length === 0 ? (
+                        <div className={cn(
+                          "text-center py-8 rounded-xl border",
+                          theme === 'dark' ? "bg-gray-800/50 border-gray-700" : "bg-gray-50 border-gray-200"
+                        )}>
+                          <Truck className={cn(
+                            "w-10 h-10 mx-auto mb-2",
+                            theme === 'dark' ? "text-gray-500" : "text-gray-400"
+                          )} />
+                          <p className={cn(
+                            "text-sm",
+                            theme === 'dark' ? "text-gray-400" : "text-gray-600"
+                          )}>
+                            No hay drivers registrados para esta empresa
+                          </p>
+                        </div>
+                      ) : (
+                        <div className={cn(
+                          "rounded-xl border overflow-hidden",
+                          theme === 'dark' ? "border-gray-700" : "border-gray-200"
+                        )}>
+                          <table className="w-full">
+                            <thead className={cn(
+                              "border-b",
+                              theme === 'dark' ? "bg-gray-800/50 border-gray-700" : "bg-gray-50 border-gray-200"
+                            )}>
+                              <tr>
+                                <th className={cn(
+                                  "px-4 py-3 text-left text-xs font-medium uppercase tracking-wider",
+                                  theme === 'dark' ? "text-gray-400" : "text-gray-500"
+                                )}>
+                                  Driver
+                                </th>
+                                <th className={cn(
+                                  "px-4 py-3 text-left text-xs font-medium uppercase tracking-wider",
+                                  theme === 'dark' ? "text-gray-400" : "text-gray-500"
+                                )}>
+                                  Contacto
+                                </th>
+                                <th className={cn(
+                                  "px-4 py-3 text-center text-xs font-medium uppercase tracking-wider",
+                                  theme === 'dark' ? "text-gray-400" : "text-gray-500"
+                                )}>
+                                  Estado
+                                </th>
+                                <th className={cn(
+                                  "px-4 py-3 text-center text-xs font-medium uppercase tracking-wider",
+                                  theme === 'dark' ? "text-gray-400" : "text-gray-500"
+                                )}>
+                                  Cajas Vacías
+                                </th>
+                                <th className={cn(
+                                  "px-4 py-3 text-center text-xs font-medium uppercase tracking-wider",
+                                  theme === 'dark' ? "text-gray-400" : "text-gray-500"
+                                )}>
+                                  Bultos
+                                </th>
+                              </tr>
+                            </thead>
+                            <tbody className={cn(
+                              "divide-y",
+                              theme === 'dark' ? "divide-gray-700" : "divide-gray-200"
+                            )}>
+                              {companyDrivers.map((driver) => (
+                                <tr
+                                  key={driver.id}
+                                  className={cn(
+                                    "transition-colors",
+                                    theme === 'dark' ? "hover:bg-gray-800/50" : "hover:bg-gray-50"
+                                  )}
+                                >
+                                  <td className="px-4 py-3">
+                                    <div className="flex items-center gap-3">
+                                      <div className={cn(
+                                        "w-8 h-8 rounded-full flex items-center justify-center",
+                                        theme === 'dark' ? "bg-gray-700" : "bg-gray-100"
+                                      )}>
+                                        <Users className="w-4 h-4 text-gray-500" />
+                                      </div>
+                                      <div>
+                                        <div className={cn(
+                                          "text-sm font-medium",
+                                          theme === 'dark' ? "text-white" : "text-black"
+                                        )}>
+                                          {driver.firstName} {driver.lastName}
+                                        </div>
+                                        <div className={cn(
+                                          "text-xs",
+                                          theme === 'dark' ? "text-gray-400" : "text-gray-500"
+                                        )}>
+                                          ID: {driver.id}
+                                        </div>
+                                      </div>
+                                    </div>
+                                  </td>
+                                  <td className="px-4 py-3">
+                                    <div className={cn(
+                                      "text-sm",
+                                      theme === 'dark' ? "text-gray-300" : "text-gray-700"
+                                    )}>
+                                      {driver.email}
+                                    </div>
+                                    {driver.phone && (
+                                      <div className={cn(
+                                        "text-xs",
+                                        theme === 'dark' ? "text-gray-400" : "text-gray-500"
+                                      )}>
+                                        {driver.phone}
+                                      </div>
+                                    )}
+                                  </td>
+                                  <td className="px-4 py-3 text-center">
+                                    <span className={cn(
+                                      "inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium",
+                                      driver.isActive
+                                        ? "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400"
+                                        : "bg-gray-100 text-gray-800 dark:bg-gray-900/30 dark:text-gray-400"
+                                    )}>
+                                      {driver.isActive ? (
+                                        <CheckCircle className="w-3 h-3 mr-1" />
+                                      ) : (
+                                        <XCircle className="w-3 h-3 mr-1" />
+                                      )}
+                                      {driver.isActive ? 'Activo' : 'Inactivo'}
+                                    </span>
+                                  </td>
+                                  <td className="px-4 py-3">
+                                    <div className="space-y-1">
+                                      <div className="flex items-center justify-center text-xs">
+                                        <span className={cn(
+                                          "font-medium",
+                                          theme === 'dark' ? "text-white" : "text-black"
+                                        )}>
+                                          {driver.cajas_vacias_count || 0}
+                                        </span>
+                                      </div>
+                                      <div className="w-full bg-purple-100 dark:bg-purple-900/30 rounded-full h-1.5">
+                                        <div
+                                          className="h-1.5 rounded-full bg-purple-500 transition-all duration-300"
+                                          style={{
+                                            width: `${(driver.cajas_vacias_capacity || 50) > 0 ? ((driver.cajas_vacias_count || 0) / (driver.cajas_vacias_capacity || 50) * 100) : 0}%`,
+                                          }}
+                                        />
+                                      </div>
+                                    </div>
+                                  </td>
+                                  <td className="px-4 py-3">
+                                    <div className="space-y-1">
+                                      <div className="flex items-center justify-center text-xs">
+                                        <span className={cn(
+                                          "font-medium",
+                                          theme === 'dark' ? "text-white" : "text-black"
+                                        )}>
+                                          {driver.bultos_count || 0}
+                                        </span>
+                                      </div>
+                                      <div className="w-full bg-amber-100 dark:bg-amber-900/30 rounded-full h-1.5">
+                                        <div
+                                          className="h-1.5 rounded-full bg-amber-500 transition-all duration-300"
+                                          style={{
+                                            width: `${(driver.bultos_capacity || 100) > 0 ? ((driver.bultos_count || 0) / (driver.bultos_capacity || 100) * 100) : 0}%`,
+                                          }}
+                                        />
+                                      </div>
+                                    </div>
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
                     </div>
                   </div>
                 </motion.div>

@@ -55,16 +55,34 @@ export const navigationItems = [
     ]
   },
   {
-    id: 'orders',
-    label: 'API de Ordenes',
-    badge: 'coming_soon' as const,
-    children: []
+    id: 'services',
+    label: 'Servicios Habilitados',
+    badge: 'available' as const,
+    children: [
+      { id: 'get-company-services', label: 'GET /companies/{id}' },
+    ]
   },
   {
-    id: 'tracking',
-    label: 'API de Tracking',
-    badge: 'coming_soon' as const,
-    children: []
+    id: 'tracker',
+    label: 'API de Rastreador',
+    badge: 'available' as const,
+    children: [
+      { id: 'tracker-search', label: 'GET /tracker' },
+    ]
+  },
+  {
+    id: 'paqueteria',
+    label: 'API de Paqueteria',
+    badge: 'available' as const,
+    children: [
+      { id: 'generate-order-number', label: 'POST /generate-number' },
+      { id: 'create-package-order', label: 'POST /package-orders' },
+      { id: 'list-package-orders', label: 'GET /package-orders' },
+      { id: 'get-order-detail', label: 'GET /pickup-orders/{id}' },
+      { id: 'update-order', label: 'PATCH /pickup-orders/{id}' },
+      { id: 'cancel-order', label: 'POST /cancel' },
+      { id: 'reprogram-order', label: 'POST /reprogram' },
+    ]
   },
   {
     id: 'webhooks',
@@ -553,4 +571,383 @@ export const userRoles = [
   { role: 'USER', description: 'Usuario estandar, puede vender servicios y debitar del wallet' },
   { role: 'DRIVER', description: 'Conductor, acceso a rutas asignadas y entregas' },
   { role: 'WAREHOUSE', description: 'Personal de almacen, gestion de inventario' },
+]
+
+// Services endpoint documentation
+export const servicesEndpoints: Endpoint[] = [
+  {
+    id: 'get-company-services',
+    method: 'GET',
+    path: '/api/companies/{id}',
+    title: 'Obtener Servicios Habilitados',
+    description: 'Obtiene la informacion de la empresa incluyendo los servicios habilitados. Usar el companyId obtenido del login para determinar que opciones mostrar en el menu de la app.',
+    headers: [
+      {
+        name: 'Authorization',
+        type: 'string',
+        required: true,
+        description: 'Token JWT en formato: Bearer {token}'
+      }
+    ],
+    parameters: [
+      {
+        name: 'id',
+        type: 'number',
+        required: true,
+        description: 'ID de la empresa (companyId del usuario autenticado)'
+      }
+    ],
+    responses: [
+      {
+        status: 200,
+        description: 'Informacion de la empresa con servicios',
+        body: `{
+  "success": true,
+  "data": {
+    "id": 5,
+    "legalName": "Mi Empresa Logistica",
+    "tradeName": "MiLogistica",
+    "email": "info@milogistica.com",
+    "phone": "+1 305 555 1000",
+    "enabledServices": [
+      "wallet",
+      "paqueteria",
+      "tracker",
+      "recharge",
+      "marketplace",
+      "exchange"
+    ],
+    "logoUrl": "https://logirapid.com/uploads/companies/5/logo.png",
+    "primaryColor": "#cc0a46",
+    "secondaryColor": "#1a1a2e",
+    "address": "100 Business Ave, Miami, FL 33101",
+    "isActive": true,
+    "createdAt": "2024-01-15T10:00:00Z"
+  }
+}`
+      },
+      {
+        status: 404,
+        description: 'Empresa no encontrada',
+        body: `{
+  "success": false,
+  "error": "Empresa no encontrada"
+}`
+      }
+    ],
+    examples: [
+      {
+        language: 'curl',
+        label: 'cURL',
+        code: `curl -X GET "https://logirapid.com/api/companies/5" \\
+  -H "Authorization: Bearer YOUR_TOKEN"`
+      },
+      {
+        language: 'javascript',
+        label: 'JavaScript',
+        code: `// Despues del login, obtener servicios habilitados
+async function getEnabledServices(companyId) {
+  const response = await fetch(\`/api/companies/\${companyId}\`, {
+    method: 'GET',
+    headers: {
+      'Authorization': \`Bearer \${token}\`
+    }
+  });
+
+  const data = await response.json();
+
+  if (data.success) {
+    const { enabledServices } = data.data;
+
+    // Construir menu dinamico basado en servicios
+    const menuItems = [];
+
+    if (enabledServices.includes('wallet')) {
+      menuItems.push({ id: 'wallet', label: 'Mi Billetera', icon: 'wallet' });
+    }
+    if (enabledServices.includes('paqueteria')) {
+      menuItems.push({ id: 'paqueteria', label: 'Paqueteria', icon: 'package' });
+    }
+    if (enabledServices.includes('tracker')) {
+      menuItems.push({ id: 'tracker', label: 'Rastreador', icon: 'search' });
+    }
+    if (enabledServices.includes('recharge')) {
+      menuItems.push({ id: 'recharge', label: 'Recargas', icon: 'phone' });
+    }
+    if (enabledServices.includes('marketplace')) {
+      menuItems.push({ id: 'marketplace', label: 'Marketplace', icon: 'store' });
+    }
+    if (enabledServices.includes('exchange')) {
+      menuItems.push({ id: 'exchange', label: 'Cambio', icon: 'exchange' });
+    }
+
+    return menuItems;
+  }
+
+  throw new Error(data.error);
+}
+
+// Flujo completo de login
+async function loginAndGetMenu(email, password) {
+  // 1. Login
+  const loginResponse = await login(email, password);
+  const { token, user } = loginResponse;
+
+  // 2. Obtener servicios de la empresa
+  const menuItems = await getEnabledServices(user.companyId);
+
+  return { user, menuItems };
+}`
+      },
+      {
+        language: 'swift',
+        label: 'Swift',
+        code: `struct CompanyResponse: Codable {
+    let success: Bool
+    let data: Company?
+    let error: String?
+}
+
+struct Company: Codable {
+    let id: Int
+    let legalName: String
+    let tradeName: String?
+    let email: String?
+    let phone: String?
+    let enabledServices: [String]
+    let logoUrl: String?
+    let primaryColor: String?
+    let secondaryColor: String?
+    let isActive: Bool
+}
+
+enum ServiceType: String, CaseIterable {
+    case wallet = "wallet"
+    case paqueteria = "paqueteria"
+    case tracker = "tracker"
+    case recharge = "recharge"
+    case marketplace = "marketplace"
+    case exchange = "exchange"
+
+    var title: String {
+        switch self {
+        case .wallet: return "Mi Billetera"
+        case .paqueteria: return "Paqueteria"
+        case .tracker: return "Rastreador"
+        case .recharge: return "Recargas"
+        case .marketplace: return "Marketplace"
+        case .exchange: return "Cambio"
+        }
+    }
+
+    var icon: String {
+        switch self {
+        case .wallet: return "wallet.pass"
+        case .paqueteria: return "shippingbox"
+        case .tracker: return "magnifyingglass"
+        case .recharge: return "phone.fill"
+        case .marketplace: return "storefront"
+        case .exchange: return "arrow.left.arrow.right"
+        }
+    }
+}
+
+class CompanyService {
+    func getEnabledServices(companyId: Int) async throws -> [ServiceType] {
+        let url = URL(string: "https://logirapid.com/api/companies/\\(companyId)")!
+        var request = URLRequest(url: url)
+        request.setValue("Bearer \\(token)", forHTTPHeaderField: "Authorization")
+
+        let (data, _) = try await URLSession.shared.data(for: request)
+        let response = try JSONDecoder().decode(CompanyResponse.self, from: data)
+
+        guard let company = response.data else {
+            throw NSError(domain: "", code: -1)
+        }
+
+        return ServiceType.allCases.filter { service in
+            company.enabledServices.contains(service.rawValue)
+        }
+    }
+}`
+      },
+      {
+        language: 'kotlin',
+        label: 'Kotlin',
+        code: `data class CompanyResponse(
+    val success: Boolean,
+    val data: Company?,
+    val error: String?
+)
+
+data class Company(
+    val id: Int,
+    val legalName: String,
+    val tradeName: String?,
+    val email: String?,
+    val phone: String?,
+    val enabledServices: List<String>,
+    val logoUrl: String?,
+    val primaryColor: String?,
+    val secondaryColor: String?,
+    val isActive: Boolean
+)
+
+enum class ServiceType(val key: String, val title: String, val icon: Int) {
+    WALLET("wallet", "Mi Billetera", R.drawable.ic_wallet),
+    PAQUETERIA("paqueteria", "Paqueteria", R.drawable.ic_package),
+    TRACKER("tracker", "Rastreador", R.drawable.ic_search),
+    RECHARGE("recharge", "Recargas", R.drawable.ic_phone),
+    MARKETPLACE("marketplace", "Marketplace", R.drawable.ic_store),
+    EXCHANGE("exchange", "Cambio", R.drawable.ic_exchange)
+}
+
+interface CompanyApi {
+    @GET("api/companies/{id}")
+    suspend fun getCompany(
+        @Header("Authorization") token: String,
+        @Path("id") companyId: Int
+    ): CompanyResponse
+}
+
+class CompanyRepository(private val api: CompanyApi) {
+    suspend fun getEnabledServices(companyId: Int): List<ServiceType> {
+        val response = api.getCompany("Bearer \$authToken", companyId)
+
+        return response.data?.enabledServices?.mapNotNull { serviceName ->
+            ServiceType.values().find { it.key == serviceName }
+        } ?: emptyList()
+    }
+}
+
+// En el ViewModel
+class MainViewModel(private val repository: CompanyRepository) : ViewModel() {
+    private val _menuItems = MutableStateFlow<List<ServiceType>>(emptyList())
+    val menuItems: StateFlow<List<ServiceType>> = _menuItems
+
+    fun loadMenu(companyId: Int) {
+        viewModelScope.launch {
+            _menuItems.value = repository.getEnabledServices(companyId)
+        }
+    }
+}`
+      },
+      {
+        language: 'dart',
+        label: 'Flutter',
+        code: `enum ServiceType {
+  wallet('wallet', 'Mi Billetera', Icons.account_balance_wallet),
+  paqueteria('paqueteria', 'Paqueteria', Icons.inventory_2),
+  tracker('tracker', 'Rastreador', Icons.search),
+  recharge('recharge', 'Recargas', Icons.phone_android),
+  marketplace('marketplace', 'Marketplace', Icons.storefront),
+  exchange('exchange', 'Cambio', Icons.currency_exchange);
+
+  final String key;
+  final String title;
+  final IconData icon;
+
+  const ServiceType(this.key, this.title, this.icon);
+}
+
+class CompanyService {
+  final String token;
+
+  CompanyService({required this.token});
+
+  Future<List<ServiceType>> getEnabledServices(int companyId) async {
+    final response = await http.get(
+      Uri.parse('https://logirapid.com/api/companies/\$companyId'),
+      headers: {'Authorization': 'Bearer \$token'},
+    );
+
+    final data = jsonDecode(response.body);
+
+    if (data['success']) {
+      final enabledServices = List<String>.from(data['data']['enabledServices']);
+
+      return ServiceType.values.where((service) {
+        return enabledServices.contains(service.key);
+      }).toList();
+    }
+
+    throw Exception(data['error']);
+  }
+}
+
+// Widget de menu dinamico
+class DynamicMenu extends StatelessWidget {
+  final List<ServiceType> services;
+
+  @override
+  Widget build(BuildContext context) {
+    return GridView.builder(
+      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 3,
+        mainAxisSpacing: 16,
+        crossAxisSpacing: 16,
+      ),
+      itemCount: services.length,
+      itemBuilder: (context, index) {
+        final service = services[index];
+        return GestureDetector(
+          onTap: () => navigateToService(context, service),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(service.icon, size: 32),
+              SizedBox(height: 8),
+              Text(service.title, textAlign: TextAlign.center),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  void navigateToService(BuildContext context, ServiceType service) {
+    switch (service) {
+      case ServiceType.tracker:
+        Navigator.pushNamed(context, '/tracker');
+        break;
+      case ServiceType.paqueteria:
+        Navigator.pushNamed(context, '/paqueteria');
+        break;
+      // ... otros casos
+    }
+  }
+}
+
+// Flujo completo de autenticacion
+class AuthService {
+  Future<Map<String, dynamic>> loginAndGetMenu(String email, String password) async {
+    // 1. Login
+    final loginData = await login(email, password);
+    final token = loginData['token'];
+    final user = loginData['user'];
+
+    // 2. Obtener servicios
+    final companyService = CompanyService(token: token);
+    final services = await companyService.getEnabledServices(user['companyId']);
+
+    return {
+      'user': user,
+      'token': token,
+      'services': services,
+    };
+  }
+}`
+      }
+    ]
+  }
+]
+
+// Available services list
+export const availableServices = [
+  { key: 'wallet', name: 'Billetera', description: 'Gestion de saldo y transacciones' },
+  { key: 'paqueteria', name: 'Paqueteria', description: 'Envio y recogida de paquetes' },
+  { key: 'tracker', name: 'Rastreador', description: 'Rastreo de ordenes y empaques' },
+  { key: 'recharge', name: 'Recargas', description: 'Recargas telefonicas' },
+  { key: 'marketplace', name: 'Marketplace', description: 'Tienda de productos' },
+  { key: 'exchange', name: 'Cambio', description: 'Cambio de divisas' },
 ]

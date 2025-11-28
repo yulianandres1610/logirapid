@@ -267,7 +267,10 @@ export default function RecipientSearchStep({ wizardData, updateWizardData, setC
     }
 
     try {
-      // Crear el cliente con la dirección
+      // Construir dirección completa para el campo address legacy
+      const fullAddress = `${newRecipient.address.street}${newRecipient.address.apartment ? ', ' + newRecipient.address.apartment : ''}, ${newRecipient.address.city}, ${newRecipient.address.state} ${newRecipient.address.zipCode}, ${newRecipient.address.country}`
+
+      // Crear el cliente con todos los campos de dirección estructurados
       const response = await fetch('/api/customers', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -281,7 +284,14 @@ export default function RecipientSearchStep({ wizardData, updateWizardData, setC
           hasAlternateContact: newRecipient.hasAlternateContact,
           alternateContactName: newRecipient.alternateContactName || null,
           alternateContactPhone: newRecipient.alternateContactPhone || null,
-          address: `${newRecipient.address.street}${newRecipient.address.apartment ? ', ' + newRecipient.address.apartment : ''}, ${newRecipient.address.city}, ${newRecipient.address.state} ${newRecipient.address.zipCode}, ${newRecipient.address.country}`
+          // Dirección completa (legacy)
+          address: fullAddress,
+          // Campos estructurados de dirección
+          city: newRecipient.address.city || null,
+          state: newRecipient.address.state || null,
+          zipCode: newRecipient.address.zipCode || null,
+          country: newRecipient.address.country || 'US',
+          apartment: newRecipient.address.apartment || null
         })
       })
 

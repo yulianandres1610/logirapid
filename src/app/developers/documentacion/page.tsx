@@ -23,8 +23,12 @@ import {
   baseUrls,
   authEndpoints,
   errorCodes,
-  userRoles
+  userRoles,
+  servicesEndpoints,
+  availableServices
 } from './data/auth-api'
+import { trackerEndpoints, searchTypePatterns } from './data/tracker-api'
+import { paqueteriaEndpoints, orderTypes, orderStatuses } from './data/paqueteria-api'
 
 const methodColors: Record<string, string> = {
   GET: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30',
@@ -395,6 +399,384 @@ export default function DevelopersDocsPage() {
               </section>
             ))}
 
+            {/* Services Endpoints */}
+            {servicesEndpoints.map((endpoint) => (
+              <section
+                key={endpoint.id}
+                data-section={endpoint.id}
+                className="mb-16 scroll-mt-24"
+              >
+                <div className="lg:grid lg:grid-cols-2 lg:gap-8">
+                  {/* Left Column - Description */}
+                  <div>
+                    <div className="flex items-center gap-3 mb-4">
+                      <span className={`px-2.5 py-1 rounded-md text-xs font-bold border ${methodColors[endpoint.method]}`}>
+                        {endpoint.method}
+                      </span>
+                      <code className="text-sm text-gray-300 font-mono">{endpoint.path}</code>
+                    </div>
+
+                    <h2 className="text-2xl font-bold text-white mb-3">{endpoint.title}</h2>
+                    <p className="text-gray-400 mb-6">{endpoint.description}</p>
+
+                    {/* Headers */}
+                    {endpoint.headers && endpoint.headers.length > 0 && (
+                      <ParameterTable
+                        parameters={endpoint.headers}
+                        title="Headers"
+                      />
+                    )}
+
+                    {/* Parameters */}
+                    {endpoint.parameters && endpoint.parameters.length > 0 && (
+                      <ParameterTable
+                        parameters={endpoint.parameters}
+                        title="Parametros de URL"
+                      />
+                    )}
+
+                    {/* Responses */}
+                    <div className="mt-6">
+                      <h4 className="text-sm font-semibold text-white mb-3">Respuestas</h4>
+                      <div className="space-y-3">
+                        {endpoint.responses.map((response) => (
+                          <div
+                            key={response.status}
+                            className="rounded-lg border border-white/10 overflow-hidden"
+                          >
+                            <div className="flex items-center gap-2 px-4 py-2 bg-white/5 border-b border-white/10">
+                              <span className={`px-2 py-0.5 rounded text-xs font-bold ${
+                                response.status === 200
+                                  ? 'bg-emerald-500/20 text-emerald-400'
+                                  : response.status >= 400
+                                    ? 'bg-red-500/20 text-red-400'
+                                    : 'bg-amber-500/20 text-amber-400'
+                              }`}>
+                                {response.status}
+                              </span>
+                              <span className="text-sm text-gray-400">{response.description}</span>
+                            </div>
+                            <pre className="p-4 text-xs text-gray-300 font-mono overflow-x-auto bg-[#1a1f2e]">
+                              {response.body}
+                            </pre>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Available Services Table */}
+                    <div className="mt-6">
+                      <h4 className="text-sm font-semibold text-white mb-3">Servicios Disponibles</h4>
+                      <div className="rounded-xl border border-white/10 overflow-hidden">
+                        <table className="w-full text-sm">
+                          <thead>
+                            <tr className="bg-white/5 border-b border-white/10">
+                              <th className="text-left px-4 py-3 text-gray-400 font-medium">Key</th>
+                              <th className="text-left px-4 py-3 text-gray-400 font-medium">Nombre</th>
+                              <th className="text-left px-4 py-3 text-gray-400 font-medium">Descripcion</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-white/5">
+                            {availableServices.map((service) => (
+                              <tr key={service.key} className="hover:bg-white/5 transition-colors">
+                                <td className="px-4 py-3">
+                                  <code className="text-[#cc0a46] font-mono text-xs bg-[#cc0a46]/10 px-2 py-1 rounded">
+                                    {service.key}
+                                  </code>
+                                </td>
+                                <td className="px-4 py-3 text-gray-300">{service.name}</td>
+                                <td className="px-4 py-3 text-gray-400">{service.description}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Right Column - Code Examples */}
+                  <div className="mt-8 lg:mt-0 lg:sticky lg:top-24 lg:self-start">
+                    <CodeBlock
+                      examples={endpoint.examples}
+                      title="Request"
+                    />
+                  </div>
+                </div>
+              </section>
+            ))}
+
+            {/* Tracker Endpoints */}
+            {trackerEndpoints.map((endpoint) => (
+              <section
+                key={endpoint.id}
+                data-section={endpoint.id}
+                className="mb-16 scroll-mt-24"
+              >
+                <div className="lg:grid lg:grid-cols-2 lg:gap-8">
+                  {/* Left Column - Description */}
+                  <div>
+                    <div className="flex items-center gap-3 mb-4">
+                      <span className={`px-2.5 py-1 rounded-md text-xs font-bold border ${methodColors[endpoint.method]}`}>
+                        {endpoint.method}
+                      </span>
+                      <code className="text-sm text-gray-300 font-mono">{endpoint.path}</code>
+                    </div>
+
+                    <h2 className="text-2xl font-bold text-white mb-3">{endpoint.title}</h2>
+                    <p className="text-gray-400 mb-6">{endpoint.description}</p>
+
+                    {/* Headers */}
+                    {endpoint.headers && endpoint.headers.length > 0 && (
+                      <ParameterTable
+                        parameters={endpoint.headers}
+                        title="Headers"
+                      />
+                    )}
+
+                    {/* Query Parameters */}
+                    {endpoint.parameters && endpoint.parameters.length > 0 && (
+                      <ParameterTable
+                        parameters={endpoint.parameters}
+                        title="Query Parameters"
+                      />
+                    )}
+
+                    {/* Auto-detection patterns */}
+                    <div className="mt-6">
+                      <h4 className="text-sm font-semibold text-white mb-3">Auto-deteccion de Tipo</h4>
+                      <div className="rounded-xl border border-white/10 overflow-hidden">
+                        <table className="w-full text-sm">
+                          <thead>
+                            <tr className="bg-white/5 border-b border-white/10">
+                              <th className="text-left px-4 py-3 text-gray-400 font-medium">Tipo</th>
+                              <th className="text-left px-4 py-3 text-gray-400 font-medium">Patron</th>
+                              <th className="text-left px-4 py-3 text-gray-400 font-medium">Ejemplo</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-white/5">
+                            {searchTypePatterns.map((pattern) => (
+                              <tr key={pattern.type} className="hover:bg-white/5 transition-colors">
+                                <td className="px-4 py-3">
+                                  <code className="text-[#cc0a46] font-mono text-xs bg-[#cc0a46]/10 px-2 py-1 rounded">
+                                    {pattern.type}
+                                  </code>
+                                </td>
+                                <td className="px-4 py-3 text-gray-300 text-xs">{pattern.patterns.join(', ')}</td>
+                                <td className="px-4 py-3 text-gray-400 text-xs font-mono">{pattern.example}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+
+                    {/* Responses */}
+                    <div className="mt-6">
+                      <h4 className="text-sm font-semibold text-white mb-3">Respuestas</h4>
+                      <div className="space-y-3">
+                        {endpoint.responses.map((response) => (
+                          <div
+                            key={response.status + response.description}
+                            className="rounded-lg border border-white/10 overflow-hidden"
+                          >
+                            <div className="flex items-center gap-2 px-4 py-2 bg-white/5 border-b border-white/10">
+                              <span className={`px-2 py-0.5 rounded text-xs font-bold ${
+                                response.status === 200
+                                  ? 'bg-emerald-500/20 text-emerald-400'
+                                  : response.status >= 400
+                                    ? 'bg-red-500/20 text-red-400'
+                                    : 'bg-amber-500/20 text-amber-400'
+                              }`}>
+                                {response.status}
+                              </span>
+                              <span className="text-sm text-gray-400">{response.description}</span>
+                            </div>
+                            <pre className="p-4 text-xs text-gray-300 font-mono overflow-x-auto bg-[#1a1f2e] max-h-96">
+                              {response.body}
+                            </pre>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Right Column - Code Examples */}
+                  <div className="mt-8 lg:mt-0 lg:sticky lg:top-24 lg:self-start">
+                    <CodeBlock
+                      examples={endpoint.examples}
+                      title="Request"
+                    />
+                  </div>
+                </div>
+              </section>
+            ))}
+
+            {/* Paqueteria Endpoints */}
+            {paqueteriaEndpoints.map((endpoint) => (
+              <section
+                key={endpoint.id}
+                data-section={endpoint.id}
+                className="mb-16 scroll-mt-24"
+              >
+                <div className="lg:grid lg:grid-cols-2 lg:gap-8">
+                  {/* Left Column - Description */}
+                  <div>
+                    <div className="flex items-center gap-3 mb-4">
+                      <span className={`px-2.5 py-1 rounded-md text-xs font-bold border ${methodColors[endpoint.method]}`}>
+                        {endpoint.method}
+                      </span>
+                      <code className="text-sm text-gray-300 font-mono">{endpoint.path}</code>
+                    </div>
+
+                    <h2 className="text-2xl font-bold text-white mb-3">{endpoint.title}</h2>
+                    <p className="text-gray-400 mb-6">{endpoint.description}</p>
+
+                    {/* Headers */}
+                    {endpoint.headers && endpoint.headers.length > 0 && (
+                      <ParameterTable
+                        parameters={endpoint.headers}
+                        title="Headers"
+                      />
+                    )}
+
+                    {/* URL Parameters */}
+                    {endpoint.parameters && endpoint.parameters.length > 0 && (
+                      <ParameterTable
+                        parameters={endpoint.parameters}
+                        title="Parametros"
+                      />
+                    )}
+
+                    {/* Request Body */}
+                    {endpoint.requestBody && endpoint.requestBody.length > 0 && (
+                      <ParameterTable
+                        parameters={endpoint.requestBody}
+                        title="Request Body"
+                      />
+                    )}
+
+                    {/* Responses */}
+                    <div className="mt-6">
+                      <h4 className="text-sm font-semibold text-white mb-3">Respuestas</h4>
+                      <div className="space-y-3">
+                        {endpoint.responses.map((response) => (
+                          <div
+                            key={response.status + response.description}
+                            className="rounded-lg border border-white/10 overflow-hidden"
+                          >
+                            <div className="flex items-center gap-2 px-4 py-2 bg-white/5 border-b border-white/10">
+                              <span className={`px-2 py-0.5 rounded text-xs font-bold ${
+                                response.status === 200
+                                  ? 'bg-emerald-500/20 text-emerald-400'
+                                  : response.status >= 400
+                                    ? 'bg-red-500/20 text-red-400'
+                                    : 'bg-amber-500/20 text-amber-400'
+                              }`}>
+                                {response.status}
+                              </span>
+                              <span className="text-sm text-gray-400">{response.description}</span>
+                            </div>
+                            <pre className="p-4 text-xs text-gray-300 font-mono overflow-x-auto bg-[#1a1f2e] max-h-96">
+                              {response.body}
+                            </pre>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Right Column - Code Examples */}
+                  <div className="mt-8 lg:mt-0 lg:sticky lg:top-24 lg:self-start">
+                    <CodeBlock
+                      examples={endpoint.examples}
+                      title="Request"
+                    />
+                  </div>
+                </div>
+              </section>
+            ))}
+
+            {/* Order Types Reference */}
+            <section data-section="order-types" className="mb-16">
+              <h2 className="text-xl font-bold text-white mb-4">Tipos de Orden</h2>
+              <div className="rounded-xl border border-white/10 overflow-hidden">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="bg-white/5 border-b border-white/10">
+                      <th className="text-left px-4 py-3 text-gray-400 font-medium">Tipo</th>
+                      <th className="text-left px-4 py-3 text-gray-400 font-medium">Prefijo</th>
+                      <th className="text-left px-4 py-3 text-gray-400 font-medium">Descripcion</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-white/5">
+                    {orderTypes.map((type) => (
+                      <tr key={type.type} className="hover:bg-white/5 transition-colors">
+                        <td className="px-4 py-3">
+                          <code className="text-[#cc0a46] font-mono text-xs bg-[#cc0a46]/10 px-2 py-1 rounded">
+                            {type.type}
+                          </code>
+                        </td>
+                        <td className="px-4 py-3 font-mono text-xs text-gray-300">{type.prefix}</td>
+                        <td className="px-4 py-3 text-gray-400">{type.description}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </section>
+
+            {/* Order Statuses Reference */}
+            <section data-section="order-statuses" className="mb-16">
+              <h2 className="text-xl font-bold text-white mb-4">Estados de Orden</h2>
+              <div className="rounded-xl border border-white/10 overflow-hidden">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="bg-white/5 border-b border-white/10">
+                      <th className="text-left px-4 py-3 text-gray-400 font-medium">Estado</th>
+                      <th className="text-left px-4 py-3 text-gray-400 font-medium">Label</th>
+                      <th className="text-left px-4 py-3 text-gray-400 font-medium">Descripcion</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-white/5">
+                    {orderStatuses.map((status) => (
+                      <tr key={status.status} className="hover:bg-white/5 transition-colors">
+                        <td className="px-4 py-3">
+                          <code className="text-[#cc0a46] font-mono text-xs bg-[#cc0a46]/10 px-2 py-1 rounded">
+                            {status.status}
+                          </code>
+                        </td>
+                        <td className="px-4 py-3 text-gray-300">{status.label}</td>
+                        <td className="px-4 py-3 text-gray-400">{status.description}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </section>
+
+            {/* Webhooks - Coming Soon */}
+            <section data-section="webhooks" className="mb-16">
+              <div className="rounded-xl border border-white/10 bg-gradient-to-br from-white/5 to-transparent p-8">
+                <div className="flex items-center gap-3 mb-4">
+                  <span className="px-2 py-0.5 rounded text-xs font-medium bg-gray-500/20 text-gray-400 border border-gray-500/30">
+                    Proximamente
+                  </span>
+                </div>
+                <h2 className="text-2xl font-bold text-white mb-2">Webhooks</h2>
+                <p className="text-gray-400 mb-6">
+                  Recibe notificaciones automaticas cuando ocurran eventos importantes como cambios de estado,
+                  entregas completadas o problemas de entrega.
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  {['order.created', 'order.shipped', 'order.delivered', 'order.failed'].map((event) => (
+                    <span key={event} className="px-3 py-1.5 rounded-lg bg-white/5 border border-white/10 text-xs text-gray-400 font-mono">
+                      {event}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            </section>
+
             {/* Error Codes Section */}
             <section data-section="errors" className="mb-16">
               <h2 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
@@ -435,73 +817,6 @@ export default function DevelopersDocsPage() {
                     ))}
                   </tbody>
                 </table>
-              </div>
-            </section>
-
-            {/* Coming Soon APIs */}
-            <section data-section="orders" className="mb-16">
-              <div className="rounded-xl border border-white/10 bg-gradient-to-br from-white/5 to-transparent p-8">
-                <div className="flex items-center gap-3 mb-4">
-                  <span className="px-2 py-0.5 rounded text-xs font-medium bg-gray-500/20 text-gray-400 border border-gray-500/30">
-                    Proximamente
-                  </span>
-                </div>
-                <h2 className="text-2xl font-bold text-white mb-2">API de Ordenes</h2>
-                <p className="text-gray-400 mb-6">
-                  Crea, consulta y gestiona ordenes de envio. Incluira endpoints para crear ordenes,
-                  obtener estados, cancelar y reprogramar entregas.
-                </p>
-                <div className="flex flex-wrap gap-2">
-                  {['POST /orders', 'GET /orders/:id', 'PUT /orders/:id', 'DELETE /orders/:id'].map((ep) => (
-                    <span key={ep} className="px-3 py-1.5 rounded-lg bg-white/5 border border-white/10 text-xs text-gray-400 font-mono">
-                      {ep}
-                    </span>
-                  ))}
-                </div>
-              </div>
-            </section>
-
-            <section data-section="tracking" className="mb-16">
-              <div className="rounded-xl border border-white/10 bg-gradient-to-br from-white/5 to-transparent p-8">
-                <div className="flex items-center gap-3 mb-4">
-                  <span className="px-2 py-0.5 rounded text-xs font-medium bg-gray-500/20 text-gray-400 border border-gray-500/30">
-                    Proximamente
-                  </span>
-                </div>
-                <h2 className="text-2xl font-bold text-white mb-2">API de Tracking</h2>
-                <p className="text-gray-400 mb-6">
-                  Rastrea paquetes en tiempo real con geolocalizacion. Obtendras actualizaciones de estado,
-                  ubicacion del conductor y tiempos estimados de entrega.
-                </p>
-                <div className="flex flex-wrap gap-2">
-                  {['GET /tracking/:code', 'GET /tracking/:code/history', 'GET /tracking/:code/location'].map((ep) => (
-                    <span key={ep} className="px-3 py-1.5 rounded-lg bg-white/5 border border-white/10 text-xs text-gray-400 font-mono">
-                      {ep}
-                    </span>
-                  ))}
-                </div>
-              </div>
-            </section>
-
-            <section data-section="webhooks" className="mb-16">
-              <div className="rounded-xl border border-white/10 bg-gradient-to-br from-white/5 to-transparent p-8">
-                <div className="flex items-center gap-3 mb-4">
-                  <span className="px-2 py-0.5 rounded text-xs font-medium bg-gray-500/20 text-gray-400 border border-gray-500/30">
-                    Proximamente
-                  </span>
-                </div>
-                <h2 className="text-2xl font-bold text-white mb-2">Webhooks</h2>
-                <p className="text-gray-400 mb-6">
-                  Recibe notificaciones automaticas cuando ocurran eventos importantes como cambios de estado,
-                  entregas completadas o problemas de entrega.
-                </p>
-                <div className="flex flex-wrap gap-2">
-                  {['order.created', 'order.shipped', 'order.delivered', 'order.failed'].map((event) => (
-                    <span key={event} className="px-3 py-1.5 rounded-lg bg-white/5 border border-white/10 text-xs text-gray-400 font-mono">
-                      {event}
-                    </span>
-                  ))}
-                </div>
               </div>
             </section>
 

@@ -65,6 +65,16 @@ export async function DELETE(
       )
     }
 
+    // Primero, desvincular empaques asociados (si existen)
+    if (order.ordernumber) {
+      await db.query(
+        `UPDATE empaques
+         SET order_number = NULL, delivery_order_number = NULL
+         WHERE order_number = $1 OR delivery_order_number = $1`,
+        [order.ordernumber]
+      )
+    }
+
     // Eliminar la orden
     const deleteParams = [orderId]
     let deleteQuery = 'DELETE FROM package_orders WHERE id = $1'
