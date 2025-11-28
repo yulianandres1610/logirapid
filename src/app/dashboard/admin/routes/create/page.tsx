@@ -1935,15 +1935,29 @@ export default function CreateRoutePage() {
         >
           <option value="">Seleccionar vehículo...</option>
           {vehicles.map(v => {
-            const capacityText = typeof v.capacity === 'object' && v.capacity?.weight_kg
-              ? `${v.capacity.weight_kg} kg`
-              : typeof v.capacity === 'number'
-              ? `${v.capacity} kg`
-              : 'Capacidad no especificada'
+            // Manejar diferentes formatos de capacity
+            let capacityText = 'Capacidad no especificada'
+            if (v.capacity) {
+              if (typeof v.capacity === 'object') {
+                if (v.capacity.weight_kg) {
+                  capacityText = `${v.capacity.weight_kg} kg`
+                } else if (v.capacity.empty_boxes !== undefined || v.capacity.full_boxes !== undefined) {
+                  const totalBoxes = (v.capacity.empty_boxes || 0) + (v.capacity.full_boxes || 0)
+                  capacityText = `${totalBoxes} cajas`
+                }
+              } else if (typeof v.capacity === 'number') {
+                capacityText = `${v.capacity} kg`
+              }
+            }
+
+            // Obtener la placa del vehículo (soportar diferentes formatos)
+            const plate = v.licensePlate || v.license_plate || v.vin || 'Sin placa'
+            const model = v.model || v.nickname || 'Sin modelo'
+            const make = v.make || ''
 
             return (
               <option key={v.id} value={v.id}>
-                {v.licensePlate} - {v.model} ({capacityText})
+                {plate} - {make} {model} ({capacityText})
               </option>
             )
           })}
