@@ -263,23 +263,84 @@ When modifying core features, verify:
 - [ ] Routes include warehouse as start/end point
 - [ ] Currency calculations handle decimal precision
 - [ ] Forms validate with Zod schemas before submission
-- # Error Type
-Console SyntaxError
 
-## Error Message
-Failed to execute 'json' on 'Response': Unexpected end of JSON input
+### Service Permissions System
 
+**Granular Service Permissions:**
+Each company can have specific services and submodules enabled. The permissions are stored in `companies.enabledServices` as a JSON array.
 
-    at handleDeleteOrder (src/app/dashboard/admin/pickup-orders/page.tsx:264:35)
+**Permission Format (Hierarchical):**
+```typescript
+// Simple services
+['wallet', 'tracker', 'exchange']
 
-## Code Frame
-  262 |       console.log('DELETE response status:', response.status)
-  263 |
-> 264 |       const data = await response.json()
-      |                                   ^
-  265 |       console.log('DELETE response data:', data)
-  266 |
-  267 |       if (response.ok) {
+// Services with submodules (paquetería)
+['wallet', 'paqueteria:routes', 'paqueteria:drivers', 'paqueteria:pickup-orders']
+```
 
-Next.js version: 15.5.6 (Webpack)
- hay error al eliminar una orden en estado pendiente y otro detalle es que las ordenes que se estan creando con el nuevo formulario no se esta guardando la direccion completa en la tabla no se esta mpstrando la direccion comppleta con el zipcode la ciudad el estado y el pais revisa y corrigelo
+**Available Services:**
+- `wallet` - Gestión de billeteras digitales
+- `recharge` - Recargas móviles
+- `remittance` - Envío de remesas
+- `tracker` - Seguimiento de envíos
+- `exchange` - Tasa de cambio
+- `marketplace` - Plataforma de compra/venta
+
+**Paquetería Submodules:**
+- `paqueteria:pickup-orders` - Órdenes de Recogida
+- `paqueteria:office-orders` - Órdenes de Oficina
+- `paqueteria:warehouses` - Almacenes
+- `paqueteria:drivers` - Drivers
+- `paqueteria:vehicles` - Vehículos
+- `paqueteria:routes` - Rutas
+- `paqueteria:package-route` - Empaque
+
+**Key Files:**
+- `src/hooks/useEnabledServices.ts` - Hook for checking permissions
+- `src/components/layout/sidebar.tsx` - Menu filtering by permissions
+- `src/app/dashboard/admin/companies/page.tsx` - Service configuration UI (Step 3)
+- `src/app/api/companies/[id]/services/route.ts` - API endpoint for app
+
+**API Endpoint:**
+```
+GET /api/companies/[id]/services
+
+Response:
+{
+  success: true,
+  data: {
+    companyId: number,
+    companyName: string,
+    enabledServices: string[],
+    services: [{
+      id: 'paqueteria',
+      name: 'Paquetería',
+      enabled: true,
+      hasSubmodules: true,
+      submodules: [{
+        id: 'paqueteria:routes',
+        name: 'Rutas',
+        enabled: true
+      }]
+    }],
+    hasPaqueteria: boolean
+  }
+}
+```
+
+**Using Permissions in Components:**
+```typescript
+import { useEnabledServices } from '@/hooks/useEnabledServices'
+
+function MyComponent() {
+  const { hasService, hasSubmodule, isSuperAdmin } = useEnabledServices()
+
+  // Check main service
+  if (hasService('paqueteria')) { ... }
+
+  // Check specific submodule
+  if (hasSubmodule('routes')) { ... }
+
+  // SUPER_ADMIN always returns true
+}
+```

@@ -82,6 +82,15 @@ export default function RoutesPage() {
   const router = useRouter()
   const searchParams = useSearchParams()
 
+  // Determinar el base path según el rol del usuario
+  const getBasePath = () => {
+    if (user?.role === 'SUPER_ADMIN') return '/dashboard/admin'
+    if (user?.role === 'ADMIN') return '/dashboard/agency-admin'
+    if (user?.role === 'MANAGER') return '/dashboard/manager'
+    return '/dashboard/user'
+  }
+  const basePath = getBasePath()
+
   const [routes, setRoutes] = useState<Route[]>([])
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState('')
@@ -588,7 +597,7 @@ export default function RoutesPage() {
                 compact={true}
               />
               <Button
-                onClick={() => router.push('/dashboard/admin/routes/create')}
+                onClick={() => router.push(`${basePath}/routes/create`)}
                 className="shadow-lg transform transition-all hover:scale-105 text-white px-4 py-2.5 h-10"
                 style={{
                   background: 'var(--brand-blue)',
@@ -797,7 +806,7 @@ export default function RoutesPage() {
                         <td className="px-6 py-4">
                           <div className="flex items-center gap-2">
                             <button
-                              onClick={() => router.push(`/dashboard/admin/routes/${route.id}`)}
+                              onClick={() => router.push(`${basePath}/routes/${route.id}`)}
                               className={cn(
                                 "p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors",
                                 theme === 'dark' ? "text-gray-400" : "text-gray-600"
@@ -807,7 +816,7 @@ export default function RoutesPage() {
                               <Eye className="w-4 h-4" />
                             </button>
                             <button
-                              onClick={() => router.push(`/dashboard/admin/routes/${route.id}/edit`)}
+                              onClick={() => router.push(`${basePath}/routes/${route.id}/edit`)}
                               className={cn(
                                 "p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors",
                                 theme === 'dark' ? "text-gray-400" : "text-gray-600"

@@ -45,21 +45,57 @@ export async function GET(
 
     const route = result.rows[0]
 
+    // Helper para parsear JSON (soporta tanto string como objeto)
+    const parseJsonField = (field: any, defaultValue: any = []) => {
+      if (!field) return defaultValue
+      if (typeof field === 'string') {
+        try {
+          return JSON.parse(field)
+        } catch {
+          return defaultValue
+        }
+      }
+      return field
+    }
+
     // Parsear JSON fields
-    try {
-      route.waypoints = route.stops ? JSON.parse(route.stops) : []
-      route.optimizedRoute = route.optimizedroute ? JSON.parse(route.optimizedroute) : null
-      route.timeWindows = route.timewindows ? JSON.parse(route.timewindows) : []
-    } catch (parseError) {
-      console.error('Error parsing route JSON fields:', parseError)
-      route.waypoints = []
-      route.optimizedRoute = null
-      route.timeWindows = []
+    const waypoints = parseJsonField(route.stops, [])
+    const optimizedRoute = parseJsonField(route.optimizedroute, null)
+    const timeWindows = parseJsonField(route.timewindows, [])
+
+    // Transformar a formato esperado por el frontend
+    const formattedRoute = {
+      id: route.id,
+      routeNumber: route.routenumber,
+      name: route.name,
+      driverId: route.driverid,
+      driverName: route.drivername,
+      vehicleId: route.vehicleid,
+      vehiclePlate: route.vehicleplate,
+      status: route.status,
+      totalPackages: route.totalpackages || 0,
+      deliveredPackages: route.deliveredpackages || 0,
+      estimatedDuration: route.estimatedduration,
+      actualDuration: route.actualduration,
+      distance: route.distance,
+      startTime: route.starttime,
+      endTime: route.endtime,
+      date: route.date,
+      notes: route.notes,
+      createdAt: route.createdat,
+      updatedAt: route.updatedat,
+      waypoints: waypoints,
+      mechanism: route.mechanism || 'automatic',
+      timeWindows: timeWindows,
+      warehouseId: route.warehouseid,
+      mapboxJobId: route.mapboxjobid,
+      optimizedRoute: optimizedRoute,
+      companyId: route.company_id
     }
 
     return NextResponse.json({
       success: true,
-      data: route
+      data: formattedRoute
     })
 
   } catch (error) {

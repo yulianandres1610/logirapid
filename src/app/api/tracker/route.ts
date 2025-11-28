@@ -1,8 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/database'
 import { getCompanyFilter } from '@/lib/query-helpers'
+import { createClient } from '@supabase/supabase-js'
 
 export const dynamic = 'force-dynamic'
+
+// Configurar cliente Supabase para URLs firmadas
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
+const BUCKET_NAME = 'company-private-documents'
 
 /**
  * GET /api/tracker
@@ -442,13 +448,109 @@ export async function GET(request: NextRequest) {
       }
     }
 
+    // Fetch delivery proof if order exists
+    let deliveryProof = null
+    if (orderResult?.id) {
+      try {
+        const proofQuery = `
+          SELECT
+            id,
+            order_id as "orderId",
+            signature_data as "signatureData",
+            signature_storage_path as "signatureStoragePath",
+            signer_name as "signerName",
+            signer_relation as "signerRelation",
+            photos,
+            delivery_latitude as "deliveryLatitude",
+            delivery_longitude as "deliveryLongitude",
+            notes,
+            created_at as "createdAt",
+            created_by_name as "createdByName"
+          FROM delivery_proofs
+          WHERE order_id = $1
+          LIMIT 1
+        `
+        const proofResult = await db.query(proofQuery, [orderResult.id])
+
+        if (proofResult.rows.length > 0) {
+          const proof = proofResult.rows[0]
+
+          // Parsear fotos
+          let photos: any[] = []
+          try {
+            photos = typeof proof.photos === 'string'
+              ? JSON.parse(proof.photos)
+              : (proof.photos || [])
+          } catch (e) {
+            photos = []
+          }
+
+          // Generar URLs firmadas para las fotos
+          if (photos.length > 0 && supabaseUrl && supabaseServiceKey) {
+            const supabase = createClient(supabaseUrl, supabaseServiceKey, {
+              auth: { autoRefreshToken: false, persistSession: false }
+            })
+
+            for (const photo of photos) {
+              if (photo.storagePath) {
+                try {
+                  const { data } = await supabase.storage
+                    .from(BUCKET_NAME)
+                    .createSignedUrl(photo.storagePath, 3600)
+
+                  if (data?.signedUrl) {
+                    photo.signedUrl = data.signedUrl
+                  }
+                } catch (e) {
+                  console.error('Error generating signed URL:', e)
+                }
+              }
+            }
+          }
+
+          deliveryProof = {
+            id: proof.id,
+            hasSignature: !!proof.signatureData || !!proof.signatureStoragePath,
+            signatureData: proof.signatureData,
+            signerName: proof.signerName,
+            signerRelation: proof.signerRelation,
+            photos,
+            location: {
+              latitude: proof.deliveryLatitude,
+              longitude: proof.deliveryLongitude
+            },
+            notes: proof.notes,
+            createdAt: proof.createdAt,
+            createdByName: proof.createdByName
+          }
+
+          // Agregar evento de entrega con comprobante al timeline
+          timeline.push({
+            action: 'Comprobante de Entrega Registrado',
+            date: proof.createdAt,
+            user: proof.createdByName || 'Sistema',
+            notes: proof.signerName ? `Firmado por: ${proof.signerName}` : null,
+            location: proof.deliveryLatitude && proof.deliveryLongitude
+              ? `${parseFloat(proof.deliveryLatitude).toFixed(4)}, ${parseFloat(proof.deliveryLongitude).toFixed(4)}`
+              : null
+          })
+
+          // Re-ordenar timeline
+          timeline.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+        }
+      } catch (proofError) {
+        console.error('Error fetching delivery proof:', proofError)
+      }
+    }
+
     return NextResponse.json({
       success: true,
       data: {
         order: orderResult,
         customer,
         empaques,
-        timeline
+        timeline,
+        deliveryProof
       },
       searchType
     })

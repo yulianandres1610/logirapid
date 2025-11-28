@@ -21,7 +21,9 @@ import {
   Fuel,
   DollarSign,
   Settings,
-  RefreshCw
+  RefreshCw,
+  FileCheck,
+  Edit3
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useTheme } from '@/contexts/theme-context'
@@ -30,6 +32,9 @@ import { useNotifications } from '@/contexts/NotificationContext'
 import { DashboardLayout } from '@/components/layout/dashboard-layout'
 import { Button } from '@/components/ui/button'
 import RouteMap from '@/components/maps/RouteMap'
+import RouteStopCard from '@/components/routes/RouteStopCard'
+import DeliveryProofForm from '@/components/routes/DeliveryProofForm'
+import DeliveryProofViewer from '@/components/routes/DeliveryProofViewer'
 
 interface RouteData {
   id: number
@@ -80,9 +85,123 @@ export default function RouteDetailPage() {
   const [activeTab, setActiveTab] = useState<'overview' | 'stops' | 'map'>('overview')
   const [routeOrders, setRouteOrders] = useState<any[]>([])
 
+  // Estados para comprobantes de entrega
+  const [routeStops, setRouteStops] = useState<any[]>([])
+  const [loadingStops, setLoadingStops] = useState(false)
+  const [selectedOrderForProof, setSelectedOrderForProof] = useState<{
+    orderId: number
+    orderNumber: string
+    recipientName?: string
+  } | null>(null)
+  const [viewingProofOrderId, setViewingProofOrderId] = useState<number | null>(null)
+
   useEffect(() => {
     fetchRouteDetails()
   }, [routeId])
+
+  // Cargar paradas cuando se cambia a la pestaña de paradas
+  useEffect(() => {
+    if (activeTab === 'stops' && routeId) {
+      fetchRouteStops()
+    }
+  }, [activeTab, routeId])
+
+  const fetchRouteStops = async () => {
+    try {
+      setLoadingStops(true)
+      const response = await fetch(`/api/routes/${routeId}/stops`)
+      const data = await response.json()
+
+      if (data.success) {
+        setRouteStops(data.data.stops || [])
+      } else {
+        console.error('Error fetching route stops:', data.error)
+      }
+    } catch (error) {
+      console.error('Error fetching route stops:', error)
+    } finally {
+      setLoadingStops(false)
+    }
+  }
+
+  const handleAddProof = (orderId: number) => {
+    const stop = routeStops.find(s => s.orders.some((o: any) => o.id === orderId))
+    const order = stop?.orders.find((o: any) => o.id === orderId)
+
+    if (order) {
+      setSelectedOrderForProof({
+        orderId: order.id,
+        orderNumber: order.orderNumber,
+        recipientName: order.senderName || order.recipientName // Usar remitente para primera milla
+      })
+    }
+  }
+
+  const handleViewProof = (orderId: number) => {
+    setViewingProofOrderId(orderId)
+  }
+
+  const handleViewStop = (stopNumber: number) => {
+    router.push(`/dashboard/admin/routes/${routeId}/stops/${stopNumber}`)
+  }
+
+  const handleProofSuccess = async () => {
+    setSelectedOrderForProof(null)
+
+    // Recargar paradas y ruta para actualizar contadores
+    await fetchRouteStops()
+    await fetchRouteDetails()
+
+    // Verificar si todas las órdenes están completadas para actualizar el estado de la ruta
+    await checkAndUpdateRouteStatus()
+
+    showNotification('success', 'Comprobante guardado', 'El comprobante de entrega se guardó correctamente')
+  }
+
+  const checkAndUpdateRouteStatus = async () => {
+    try {
+      // Obtener el estado actual de las paradas
+      const response = await fetch(`/api/routes/${routeId}/stops`)
+      const data = await response.json()
+
+      if (data.success && data.data.stops) {
+        const stops = data.data.stops
+
+        // Contar todas las órdenes y las entregadas
+        let totalOrders = 0
+        let deliveredOrders = 0
+
+        for (const stop of stops) {
+          for (const order of stop.orders || []) {
+            totalOrders++
+            if (order.status === 'delivered' || order.status === 'completed') {
+              deliveredOrders++
+            }
+          }
+        }
+
+        console.log(`📊 Progreso de ruta: ${deliveredOrders}/${totalOrders}`)
+
+        // Si todas las órdenes están entregadas, actualizar la ruta a 'completed'
+        if (totalOrders > 0 && deliveredOrders === totalOrders) {
+          console.log('✅ Todas las órdenes completadas, actualizando estado de ruta...')
+
+          const updateResponse = await fetch(`/api/routes/${routeId}/status`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ status: 'completed' })
+          })
+
+          if (updateResponse.ok) {
+            showNotification('success', 'Ruta completada', 'Todas las entregas han sido realizadas')
+            await fetchRouteDetails() // Recargar para mostrar nuevo estado
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Error checking route status:', error)
+    }
+  }
 
   const fetchRouteDetails = async () => {
     try {
@@ -162,27 +281,42 @@ export default function RouteDetailPage() {
     console.log('🔍 Preparando resultado de optimización para ruta:', route.routeNumber)
     console.log('📦 Total paquetes guardados:', route.totalPackages)
     console.log('📍 Waypoints guardados:', route.waypoints?.length || 0)
-    console.log('🗺️ OptimizedRoute guardado:', !!route.optimizedRoute)
-    console.log('📊 Distancia guardada:', route.distance)
-    console.log('⏱️ Duración guardada:', route.estimatedDuration)
 
     // Transformar waypoints al formato esperado por el mapa
-    const transformedStops = route.waypoints?.map((waypoint, index) => {
-      let address = 'Dirección no disponible'
-      if (typeof waypoint.address === 'string') {
-        address = waypoint.address
-      } else if (waypoint.address && typeof waypoint.address === 'object') {
-        address = (waypoint.address as any).street || 'Dirección no disponible'
+    // Soporta múltiples formatos de datos
+    const transformedStops = route.waypoints?.map((waypoint: any, index: number) => {
+      // Obtener dirección
+      let address = waypoint.address || 'Dirección no disponible'
+
+      // Obtener coordenadas (soporta diferentes formatos)
+      let lng = 0
+      let lat = 0
+      if (waypoint.coordinates && Array.isArray(waypoint.coordinates)) {
+        [lng, lat] = waypoint.coordinates
+      } else {
+        lng = parseFloat(waypoint.longitude || waypoint.lng || 0)
+        lat = parseFloat(waypoint.latitude || waypoint.lat || 0)
       }
 
+      // Obtener información de órdenes
+      const orders = waypoint.orders || []
+      const orderIds = waypoint.orderIds || (waypoint.orderId ? [waypoint.orderId] : [])
+      const orderNumbers = waypoint.orderNumbers || orders.map((o: any) => o.orderNumber) || []
+      const firstOrder = orders[0] || {}
+
       return {
-        id: waypoint.id,
+        id: orderIds[0] || index + 1,
         address,
-        customer: waypoint.customerName || 'Cliente',
-        type: 'delivery' as const,
-        coordinates: [waypoint.longitude, waypoint.latitude] as [number, number],
-        orderNumber: `#${waypoint.id}`,
-        waypointIndex: index
+        customer: firstOrder.customerName || waypoint.customerName || 'Cliente',
+        type: waypoint.type || 'delivery',
+        coordinates: [lng, lat] as [number, number],
+        orderNumber: orderNumbers[0] || `#${orderIds[0] || index + 1}`,
+        orderNumbers,
+        orderIds,
+        totalOrders: waypoint.totalOrders || orders.length || 1,
+        waypointIndex: index,
+        sequence: waypoint.sequence || index + 1,
+        status: waypoint.status || 'pending'
       }
     }) || []
 
@@ -201,49 +335,19 @@ export default function RouteDetailPage() {
       }
     }
 
-    // ✅ Usar datos guardados de optimizedRoute (contiene TODA la info de Mapbox)
+    // Usar datos guardados de optimizedRoute si existen
     if (route.optimizedRoute) {
-      console.log('🗺️ Usando datos completos guardados de Mapbox Optimization API')
-
-      // Geometría para el mapa
       if (route.optimizedRoute.geometry) {
         result.geometry = route.optimizedRoute.geometry
         result.coordinates = route.optimizedRoute.coordinates
       }
-
-      // Si hay resultado de optimización de Mapbox guardado, usarlo para info adicional
-      if (route.optimizedRoute.optimizationResult) {
-        const mapboxRoute = route.optimizedRoute.optimizationResult.routes?.[0]
-        if (mapboxRoute) {
-          const serviceStops = mapboxRoute.stops?.filter((stop: any) => stop.type === 'service') || []
-
-          // Enriquecer stops con datos de Mapbox (ETAs, odometer, etc.)
-          result.stops = transformedStops.map((stop: any, index: number) => {
-            const mapboxStop = serviceStops[index]
-            if (mapboxStop) {
-              return {
-                ...stop,
-                eta: mapboxStop.eta,
-                odometer: mapboxStop.odometer,
-                wait: mapboxStop.wait,
-                duration: mapboxStop.duration
-              }
-            }
-            return stop
-          })
-        }
-      }
-
       result.optimizedRoute = route.optimizedRoute
     }
 
-    console.log('✅ Resultado preparado con datos guardados en BD:', {
+    console.log('✅ Resultado preparado:', {
       totalOrders: result.totalOrders,
       stops: result.stops.length,
-      totalDistance: result.totalDistance,
-      estimatedDuration: result.estimatedDuration,
-      hasGeometry: !!result.geometry,
-      hasOptimizationData: !!route.optimizedRoute?.optimizationResult
+      totalDistance: result.totalDistance
     })
 
     return result
@@ -538,78 +642,84 @@ export default function RouteDetailPage() {
                 exit={{ opacity: 0, y: -20 }}
                 className="space-y-6"
               >
-                <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
-                  <div className="p-4 border-b border-gray-200 dark:border-gray-700">
-                    <h3 className="font-medium text-gray-900 dark:text-white flex items-center gap-2">
-                      <ListOrdered className="w-4 h-4" />
-                      Paradas de la Ruta ({route.waypoints?.length || 0} total)
-                    </h3>
-                  </div>
-
-                  <div className="max-h-96 overflow-y-auto">
-                    {/* Mostrar SOLAMENTE waypoints guardados en la BD */}
-                    {route.waypoints && route.waypoints.length > 0 ? (
-                      route.waypoints.map((waypoint, index) => (
-                        <div key={waypoint.id || `waypoint-${index}`} className="p-4 border-b border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
-                          <div className="flex items-start gap-3">
-                            <div className={cn(
-                              'flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold',
-                              waypoint.status === 'delivered'
-                                ? 'bg-green-500 text-white'
-                                : waypoint.status === 'failed'
-                                ? 'bg-red-500 text-white'
-                                : 'bg-blue-500 text-white'
-                            )}>
-                              {index + 1}
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <p className="font-medium text-gray-900 dark:text-white">
-                                {waypoint.customerName}
-                              </p>
-                              <p className="text-sm text-gray-600 dark:text-gray-400">
-                                {typeof waypoint.address === 'string'
-                                  ? waypoint.address
-                                  : (waypoint.address && typeof waypoint.address === 'object' ? (waypoint.address as any).street : undefined) || 'Dirección no disponible'}
-                              </p>
-                              <div className="flex items-center gap-4 mt-2 text-xs">
-                                <span className={cn(
-                                  'flex items-center gap-1',
-                                  waypoint.status === 'delivered'
-                                    ? 'text-green-600 dark:text-green-400'
-                                    : waypoint.status === 'failed'
-                                    ? 'text-red-600 dark:text-red-400'
-                                    : 'text-blue-600 dark:text-blue-400'
-                                )}>
-                                  <Package className="w-3 h-3" />
-                                  {waypoint.status === 'delivered'
-                                    ? 'Entregado'
-                                    : waypoint.status === 'failed'
-                                    ? 'Fallido'
-                                    : 'Pendiente'
-                                  }
-                                </span>
-                                <span className="flex items-center gap-1 text-gray-500">
-                                  <MapPin className="w-3 h-3" />
-                                  Parada #{index + 1}
-                                </span>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      ))
-                    ) : (
-                      <div className="p-8 text-center">
-                        <Package className="w-12 h-12 mx-auto text-gray-400 mb-4" />
-                        <p className="text-gray-600 dark:text-gray-400">
-                          No hay paradas asignadas a esta ruta
-                        </p>
-                        <p className="text-sm text-gray-500 dark:text-gray-500 mt-2">
-                          Los waypoints no se guardaron cuando se creó la ruta
-                        </p>
-                      </div>
-                    )}
-                  </div>
+                {/* Header con estadísticas */}
+                <div className="flex items-center justify-between">
+                  <h3 className="font-medium text-gray-900 dark:text-white flex items-center gap-2">
+                    <ListOrdered className="w-5 h-5" />
+                    Paradas de la Ruta
+                    <span className="text-gray-500">({routeStops.length} paradas)</span>
+                  </h3>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={fetchRouteStops}
+                    disabled={loadingStops}
+                  >
+                    <RefreshCw className={cn("w-4 h-4 mr-2", loadingStops && "animate-spin")} />
+                    Actualizar
+                  </Button>
                 </div>
+
+                {/* Indicador de comprobantes */}
+                {routeStops.length > 0 && (
+                  <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
+                    <div className="flex items-center gap-4 text-sm">
+                      <span className="flex items-center gap-2 text-blue-700 dark:text-blue-300">
+                        <FileCheck className="w-4 h-4" />
+                        Comprobantes:
+                      </span>
+                      {(() => {
+                        const totalOrders = routeStops.reduce((acc, s) => acc + s.orders.length, 0)
+                        const ordersWithProof = routeStops.reduce((acc, s) =>
+                          acc + s.orders.filter((o: any) => o.hasProof).length, 0)
+                        return (
+                          <span className={cn(
+                            "font-medium",
+                            ordersWithProof === totalOrders
+                              ? "text-green-600 dark:text-green-400"
+                              : "text-yellow-600 dark:text-yellow-400"
+                          )}>
+                            {ordersWithProof}/{totalOrders} órdenes con comprobante
+                          </span>
+                        )
+                      })()}
+                    </div>
+                  </div>
+                )}
+
+                {/* Lista de paradas con nuevo componente */}
+                {loadingStops ? (
+                  <div className="flex items-center justify-center py-12">
+                    <div className="text-center">
+                      <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+                      <p className="text-gray-600 dark:text-gray-400">Cargando paradas...</p>
+                    </div>
+                  </div>
+                ) : routeStops.length > 0 ? (
+                  <div className="space-y-4">
+                    {routeStops.map((stop, index) => (
+                      <RouteStopCard
+                        key={`stop-${index}`}
+                        stop={stop}
+                        routeId={parseInt(routeId)}
+                        onAddProof={handleAddProof}
+                        onViewProof={handleViewProof}
+                        onViewStop={handleViewStop}
+                        expandedByDefault={index === 0}
+                      />
+                    ))}
+                  </div>
+                ) : (
+                  <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-8 text-center">
+                    <Package className="w-12 h-12 mx-auto text-gray-400 mb-4" />
+                    <p className="text-gray-600 dark:text-gray-400">
+                      No hay paradas asignadas a esta ruta
+                    </p>
+                    <p className="text-sm text-gray-500 dark:text-gray-500 mt-2">
+                      Las órdenes se asignan al crear o editar la ruta
+                    </p>
+                  </div>
+                )}
               </motion.div>
             )}
 
@@ -684,6 +794,27 @@ export default function RouteDetailPage() {
           </AnimatePresence>
         </div>
       </div>
+
+      {/* Modal para agregar comprobante de entrega */}
+      {selectedOrderForProof && (
+        <DeliveryProofForm
+          orderId={selectedOrderForProof.orderId}
+          orderNumber={selectedOrderForProof.orderNumber}
+          companyId={user?.companyId || '1'}
+          recipientName={selectedOrderForProof.recipientName}
+          onSuccess={handleProofSuccess}
+          onCancel={() => setSelectedOrderForProof(null)}
+        />
+      )}
+
+      {/* Modal para ver comprobante existente */}
+      {viewingProofOrderId && (
+        <DeliveryProofViewer
+          orderId={viewingProofOrderId}
+          companyId={user?.companyId}
+          onClose={() => setViewingProofOrderId(null)}
+        />
+      )}
     </DashboardLayout>
   )
 }

@@ -22,7 +22,10 @@ import {
   Building2,
   RefreshCw,
   AlertCircle,
-  Loader2
+  Loader2,
+  PenLine,
+  Camera,
+  ExternalLink
 } from 'lucide-react'
 import { DashboardLayout } from '@/components/layout/dashboard-layout'
 import { Button } from '@/components/ui/button'
@@ -73,6 +76,18 @@ interface TrackerResult {
   customer: any
   empaques: any[]
   timeline: any[]
+  deliveryProof?: {
+    id: number
+    hasSignature: boolean
+    signatureData?: string
+    signerName?: string
+    signerRelation?: string
+    photos: Array<{ storagePath: string; signedUrl?: string; uploadedAt: string }>
+    location?: { latitude?: number; longitude?: number }
+    notes?: string
+    createdAt: string
+    createdByName?: string
+  }
 }
 
 export default function TrackerPage() {
@@ -679,6 +694,171 @@ export default function TrackerPage() {
                             </div>
                           )
                         })}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Comprobante de Entrega Card */}
+                {result.deliveryProof && (
+                  <div className={cn(
+                    'relative overflow-hidden rounded-2xl border shadow-xl',
+                    theme === 'dark'
+                      ? 'bg-gradient-to-br from-gray-800 to-gray-900 border-gray-700'
+                      : 'bg-gradient-to-br from-white to-gray-50 border-gray-200'
+                  )}>
+                    <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-emerald-400 to-green-600" />
+
+                    <div className="p-6">
+                      <h3 className={cn(
+                        'text-lg font-semibold mb-4 flex items-center gap-2',
+                        theme === 'dark' ? 'text-white' : 'text-gray-900'
+                      )}>
+                        <CheckCircle className="w-5 h-5 text-green-500" />
+                        Comprobante de Entrega
+                      </h3>
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {/* Firma */}
+                        {result.deliveryProof.hasSignature && (
+                          <div className={cn(
+                            'p-4 rounded-xl border',
+                            theme === 'dark' ? 'bg-gray-800/50 border-gray-700' : 'bg-gray-50 border-gray-200'
+                          )}>
+                            <h4 className={cn(
+                              'text-sm font-medium mb-3 flex items-center gap-2',
+                              theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
+                            )}>
+                              <PenLine className="w-4 h-4 text-blue-500" />
+                              Firma Electrónica
+                            </h4>
+                            {result.deliveryProof.signatureData && (
+                              <div className="bg-white rounded-lg p-2 border border-gray-200">
+                                <img
+                                  src={result.deliveryProof.signatureData}
+                                  alt="Firma"
+                                  className="max-h-24 mx-auto"
+                                />
+                              </div>
+                            )}
+                            <div className="mt-2 text-sm">
+                              <p className={theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}>
+                                <span className="font-medium">Firmante:</span> {result.deliveryProof.signerName || 'No especificado'}
+                              </p>
+                              {result.deliveryProof.signerRelation && (
+                                <p className={theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}>
+                                  <span className="font-medium">Relación:</span> {result.deliveryProof.signerRelation === 'recipient' ? 'Destinatario' : result.deliveryProof.signerRelation === 'family' ? 'Familiar' : result.deliveryProof.signerRelation === 'neighbor' ? 'Vecino' : result.deliveryProof.signerRelation === 'guard' ? 'Guardia' : result.deliveryProof.signerRelation}
+                                </p>
+                              )}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Fotos */}
+                        {result.deliveryProof.photos && result.deliveryProof.photos.length > 0 && (
+                          <div className={cn(
+                            'p-4 rounded-xl border',
+                            theme === 'dark' ? 'bg-gray-800/50 border-gray-700' : 'bg-gray-50 border-gray-200'
+                          )}>
+                            <h4 className={cn(
+                              'text-sm font-medium mb-3 flex items-center gap-2',
+                              theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
+                            )}>
+                              <Camera className="w-4 h-4 text-purple-500" />
+                              Fotos ({result.deliveryProof.photos.length})
+                            </h4>
+                            <div className="grid grid-cols-2 gap-2">
+                              {result.deliveryProof.photos.slice(0, 4).map((photo, idx) => (
+                                <div key={idx} className="aspect-square rounded-lg overflow-hidden bg-gray-100">
+                                  {photo.signedUrl ? (
+                                    <img
+                                      src={photo.signedUrl}
+                                      alt={`Foto ${idx + 1}`}
+                                      className="w-full h-full object-cover cursor-pointer hover:opacity-90 transition-opacity"
+                                      onClick={() => window.open(photo.signedUrl, '_blank')}
+                                    />
+                                  ) : (
+                                    <div className="w-full h-full flex items-center justify-center text-gray-400">
+                                      <Camera className="w-8 h-8" />
+                                    </div>
+                                  )}
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Ubicación */}
+                        {result.deliveryProof.location && (result.deliveryProof.location.latitude || result.deliveryProof.location.longitude) && (
+                          <div className={cn(
+                            'p-4 rounded-xl border',
+                            theme === 'dark' ? 'bg-gray-800/50 border-gray-700' : 'bg-gray-50 border-gray-200'
+                          )}>
+                            <h4 className={cn(
+                              'text-sm font-medium mb-3 flex items-center gap-2',
+                              theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
+                            )}>
+                              <MapPin className="w-4 h-4 text-red-500" />
+                              Ubicación de Entrega
+                            </h4>
+                            <div className="flex items-center justify-between">
+                              <span className={cn(
+                                'text-sm font-mono',
+                                theme === 'dark' ? 'text-gray-400' : 'text-gray-600'
+                              )}>
+                                {parseFloat(String(result.deliveryProof.location.latitude)).toFixed(6)}, {parseFloat(String(result.deliveryProof.location.longitude)).toFixed(6)}
+                              </span>
+                              <button
+                                onClick={() => window.open(`https://www.google.com/maps?q=${result.deliveryProof?.location?.latitude},${result.deliveryProof?.location?.longitude}`, '_blank')}
+                                className="flex items-center gap-1 text-blue-500 hover:text-blue-600 text-sm"
+                              >
+                                Ver mapa
+                                <ExternalLink className="w-3 h-3" />
+                              </button>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Notas */}
+                        {result.deliveryProof.notes && (
+                          <div className={cn(
+                            'p-4 rounded-xl border',
+                            theme === 'dark' ? 'bg-gray-800/50 border-gray-700' : 'bg-gray-50 border-gray-200'
+                          )}>
+                            <h4 className={cn(
+                              'text-sm font-medium mb-2 flex items-center gap-2',
+                              theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
+                            )}>
+                              <FileText className="w-4 h-4 text-gray-500" />
+                              Notas
+                            </h4>
+                            <p className={cn(
+                              'text-sm',
+                              theme === 'dark' ? 'text-gray-400' : 'text-gray-600'
+                            )}>
+                              {result.deliveryProof.notes}
+                            </p>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Metadatos */}
+                      <div className={cn(
+                        'mt-4 pt-4 border-t text-sm',
+                        theme === 'dark' ? 'border-gray-700 text-gray-400' : 'border-gray-200 text-gray-500'
+                      )}>
+                        <div className="flex items-center gap-4 flex-wrap">
+                          <span className="flex items-center gap-1">
+                            <Clock className="w-3 h-3" />
+                            {formatDate(result.deliveryProof.createdAt)}
+                          </span>
+                          {result.deliveryProof.createdByName && (
+                            <span className="flex items-center gap-1">
+                              <User className="w-3 h-3" />
+                              {result.deliveryProof.createdByName}
+                            </span>
+                          )}
+                        </div>
                       </div>
                     </div>
                   </div>

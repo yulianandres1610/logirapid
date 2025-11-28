@@ -102,7 +102,7 @@ export async function DELETE(
 
 /**
  * PATCH /api/package-orders/[id]
- * Actualiza campos de una orden de paquetería (warehouse_id, warehouse_name, officeOrderData, etc.)
+ * Actualiza campos de una orden de paquetería
  */
 export async function PATCH(
   request: NextRequest,
@@ -124,17 +124,25 @@ export async function PATCH(
     }
 
     const body = await request.json()
-    const { warehouse_id, warehouse_name, officeOrderData } = body
 
-    // Validar que al menos un campo esté presente
-    if (!warehouse_id && !warehouse_name && !officeOrderData) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: 'Debe proporcionar al menos un campo para actualizar (warehouse_id, warehouse_name, officeOrderData)'
-        },
-        { status: 400 }
-      )
+    // Mapeo de campos permitidos: clave del body -> nombre de columna en DB
+    const allowedFields: Record<string, string> = {
+      warehouse_id: 'warehouse_id',
+      warehouse_name: 'warehouse_name',
+      officeOrderData: 'office_order_data',
+      customername: 'customername',
+      phone: 'phone',
+      customeraddress: 'customeraddress',
+      street: 'street',
+      apartment: 'apartment',
+      city: 'city',
+      state: 'state',
+      country: 'country',
+      zipcode: 'zipcode',
+      firstname: 'firstname',
+      lastname: 'lastname',
+      status: 'status',
+      notes: 'notes'
     }
 
     // Construir query dinámicamente basado en los campos proporcionados
@@ -142,19 +150,22 @@ export async function PATCH(
     const values: any[] = []
     let paramCount = 1
 
-    if (warehouse_id !== undefined) {
-      updates.push(`warehouse_id = $${paramCount++}`)
-      values.push(warehouse_id)
+    for (const [bodyKey, dbColumn] of Object.entries(allowedFields)) {
+      if (body[bodyKey] !== undefined) {
+        updates.push(`${dbColumn} = $${paramCount++}`)
+        values.push(body[bodyKey])
+      }
     }
 
-    if (warehouse_name !== undefined) {
-      updates.push(`warehouse_name = $${paramCount++}`)
-      values.push(warehouse_name)
-    }
-
-    if (officeOrderData !== undefined) {
-      updates.push(`office_order_data = $${paramCount++}`)
-      values.push(officeOrderData)
+    // Validar que al menos un campo esté presente
+    if (updates.length === 0) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: 'Debe proporcionar al menos un campo válido para actualizar'
+        },
+        { status: 400 }
+      )
     }
 
     // Agregar el ID de la orden al final

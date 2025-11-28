@@ -25,6 +25,15 @@ import {
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useTheme } from '@/contexts/theme-context'
+
+// Helper para obtener el nombre del servicio (puede ser string u objeto)
+const getServiceName = (service: any): string => {
+  if (typeof service === 'string') return service
+  if (typeof service === 'object' && service !== null) {
+    return service.name || service.type || ''
+  }
+  return ''
+}
 import { useAuth } from '@/hooks/useAuth'
 import { useNotifications } from '@/contexts/NotificationContext'
 import { DashboardLayout } from '@/components/layout/dashboard-layout'
@@ -435,7 +444,7 @@ export default function PackageOrderDetailPage() {
     if (!order || !order.services) return []
 
     return order.services.filter(service => {
-      const serviceLower = service.toLowerCase()
+      const serviceLower = getServiceName(service).toLowerCase()
       if (type === 'entrega') {
         return serviceLower.includes('entrega') || serviceLower.includes('delivery')
       } else {
@@ -633,17 +642,17 @@ export default function PackageOrderDetailPage() {
                             key={index}
                             className={cn(
                               'inline-flex items-center px-3 py-2 rounded-lg text-sm font-medium',
-                              service.toLowerCase().includes('recogida') || service.toLowerCase().includes('pickup')
+                              getServiceName(service).toLowerCase().includes('recogida') || getServiceName(service).toLowerCase().includes('pickup')
                                 ? 'bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-400'
                                 : 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400'
                             )}
                           >
-                            {service.toLowerCase().includes('recogida') || service.toLowerCase().includes('pickup') ? (
+                            {getServiceName(service).toLowerCase().includes('recogida') || getServiceName(service).toLowerCase().includes('pickup') ? (
                               <Archive className="w-4 h-4 mr-2" />
                             ) : (
                               <Truck className="w-4 h-4 mr-2" />
                             )}
-                            {service}
+                            {getServiceName(service)}
                           </span>
                         ))}
                       </div>
@@ -660,13 +669,13 @@ export default function PackageOrderDetailPage() {
                               return (
                                 <div key={index} className="flex items-center justify-between p-3 bg-white dark:bg-gray-700 rounded-lg border border-gray-200 dark:border-gray-600">
                                   <div className="flex items-center gap-3">
-                                    {service.toLowerCase().includes('recogida') || service.toLowerCase().includes('pickup') ? (
+                                    {getServiceName(service).toLowerCase().includes('recogida') || getServiceName(service).toLowerCase().includes('pickup') ? (
                                       <Archive className="w-5 h-5 text-orange-600 dark:text-orange-400" />
                                     ) : (
                                       <Truck className="w-5 h-5 text-green-600 dark:text-green-400" />
                                     )}
                                     <div>
-                                      <p className="font-medium text-gray-900 dark:text-white">{service}</p>
+                                      <p className="font-medium text-gray-900 dark:text-white">{getServiceName(service)}</p>
                                       <div className="flex items-center gap-4 mt-1">
                                         <span className="text-sm text-gray-600 dark:text-gray-400">
                                           Cantidad: <strong>{quantity}</strong>
@@ -849,12 +858,12 @@ export default function PackageOrderDetailPage() {
                                 key={index}
                                 className={cn(
                                   'inline-flex items-center px-3 py-2 rounded-lg text-sm font-medium',
-                                  service.toLowerCase().includes('recogida') || service.toLowerCase().includes('pickup')
+                                  getServiceName(service).toLowerCase().includes('recogida') || getServiceName(service).toLowerCase().includes('pickup')
                                     ? 'bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-400'
                                     : 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400'
                                 )}
                               >
-                                {service}
+                                {getServiceName(service)}
                               </span>
                             ))}
                           </div>

@@ -1318,7 +1318,7 @@ export async function POST(request: NextRequest) {
       'planning',
       selectedOrders.length,
       0,
-      optimizedRouteData?.duration ? `${optimizedRouteData.duration}m` : body.estimatedDuration,
+      optimizedRouteData?.duration ? `${optimizedRouteData.duration}m` : (totalDuration > 0 ? `${Math.round(totalDuration)} min` : body.estimatedDuration),
       null,
       // Usar totalDistance/totalDuration si optimizedRouteData no tiene valores válidos
       optimizedRouteData?.distance ? parseFloat(optimizedRouteData.distance) : (totalDistance || body.distance || 0),

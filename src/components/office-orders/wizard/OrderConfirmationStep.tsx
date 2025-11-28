@@ -63,9 +63,10 @@ export default function OrderConfirmationStep({ wizardData, updateWizardData, se
       }, 0) || 0
 
       // Construir dirección completa del destinatario para el campo customerAddress
+      const apt = wizardData.recipient.apartment || ''
       const recipientFullAddress = [
         wizardData.recipient.street || '',
-        wizardData.recipient.apartment ? `Apt ${wizardData.recipient.apartment}` : '',
+        apt ? (apt.toLowerCase().startsWith('apt') ? apt : `Apt ${apt}`) : '',
         wizardData.recipient.city || '',
         wizardData.recipient.state || '',
         wizardData.recipient.zipCode || '',

@@ -192,7 +192,19 @@ export async function POST(request: NextRequest) {
         error: 'No se pudo determinar la empresa para la orden'
       }, { status: 400 })
     }
-    console.log('POST /api/package-orders received body:', body)
+    console.log('POST /api/package-orders received body:', {
+      customerId: body.customerId,
+      orderNumber: body.orderNumber,
+      customerAddress: body.customerAddress,
+      street: body.street,
+      apartment: body.apartment,
+      city: body.city,
+      state: body.state,
+      zipcode: body.zipcode,
+      country: body.country,
+      latitude: body.latitude,
+      longitude: body.longitude
+    })
 
     // Validar campos requeridos
     if (!body || !body.customerId || !body.orderNumber || !body.services || body.services.length === 0) {
@@ -267,7 +279,10 @@ export async function POST(request: NextRequest) {
     }
 
     // Extract zipcode from address if not provided
-    const zipcode = body.zipcode || (body.customerAddress ? extractZipcode(body.customerAddress) : null)
+    // Note: Use truthy check to handle empty strings
+    const zipcode = body.zipcode && body.zipcode.trim() !== ''
+      ? body.zipcode.trim()
+      : (body.customerAddress ? extractZipcode(body.customerAddress) : null)
 
     // Prepare services as JSON string
     const servicesJson = typeof body.services === 'string' ? body.services : JSON.stringify(body.services)
@@ -302,15 +317,18 @@ export async function POST(request: NextRequest) {
       RETURNING *
     `
 
+    // Helper to convert empty strings to null
+    const emptyToNull = (val: any) => val && String(val).trim() !== '' ? String(val).trim() : null
+
     const values = [
       body.customerId,
-      body.customerName || null,
-      body.customerAddress || null,
+      emptyToNull(body.customerName),
+      emptyToNull(body.customerAddress),
       body.orderNumber,
       servicesJson,
-      body.notes || null,
-      body.scheduledDate || null,
-      body.timeSlot || null,
+      emptyToNull(body.notes),
+      emptyToNull(body.scheduledDate),
+      emptyToNull(body.timeSlot),
       initialStatus,
       body.createdBy || 'system',
       body.latitude || null,
@@ -322,16 +340,16 @@ export async function POST(request: NextRequest) {
       body.boxPrice || 0,
       additionalServicesJson,
       boxesJson,
-      body.firstName || null,
-      body.lastName || null,
+      emptyToNull(body.firstName),
+      emptyToNull(body.lastName),
       orderType,
-      body.officeOrderData || null,
+      emptyToNull(body.officeOrderData),
       zipcode,
-      body.street || null,
-      body.apartment || null,
-      body.city || null,
-      body.state || null,
-      body.country || null,
+      emptyToNull(body.street),
+      emptyToNull(body.apartment),
+      emptyToNull(body.city),
+      emptyToNull(body.state),
+      emptyToNull(body.country),
       companyId
     ]
 

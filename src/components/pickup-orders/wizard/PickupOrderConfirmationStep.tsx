@@ -89,9 +89,14 @@ export default function PickupOrderConfirmationStep({ wizardData, updateWizardDa
       // Construir el estado + zipcode juntos (ej: "FL 33186")
       const stateZip = [state, zipCode].filter(Boolean).join(' ')
 
+      // Formatear apartamento sin duplicar "Apt"
+      const formattedApartment = apartment
+        ? (apartment.toLowerCase().startsWith('apt') ? apartment : `Apt ${apartment}`)
+        : ''
+
       const senderFullAddress = [
         street,
-        apartment ? `Apt ${apartment}` : '',
+        formattedApartment,
         city,
         stateZip,
         country
@@ -127,13 +132,18 @@ export default function PickupOrderConfirmationStep({ wizardData, updateWizardDa
         // Orden de ENTREGA de cajas vacías
         const totalEmpaques = wizardData.selectedEmpaques?.reduce((sum: number, e: any) => sum + e.quantity, 0) || 0
 
+        // Limpiar apartamento: quitar "Apt " si existe para guardar solo el número
+        const cleanApartment = apartment
+          ? apartment.replace(/^apt\s*/i, '').trim()
+          : null
+
         orderData = {
           customerId: wizardData.sender.id,
           customerName: `${wizardData.sender.firstName} ${wizardData.sender.lastName}`, // Remitente
           customerAddress: senderFullAddress || null, // Dirección completa del remitente
           // Campos de dirección estructurados del remitente
           street: street || null,
-          apartment: apartment || null,
+          apartment: cleanApartment,
           city: city || null,
           state: state || null,
           country: country || 'US',
@@ -191,13 +201,18 @@ export default function PickupOrderConfirmationStep({ wizardData, updateWizardDa
           city: wizardData.sender.city
         })
 
+        // Limpiar apartamento: quitar "Apt " si existe para guardar solo el número
+        const cleanApartment = apartment
+          ? apartment.replace(/^apt\s*/i, '').trim()
+          : null
+
         orderData = {
           customerId: wizardData.sender.id,
           customerName: `${wizardData.sender.firstName} ${wizardData.sender.lastName}`,
           customerAddress: senderFullAddress || null,
           // Campos de dirección estructurados del remitente
           street: street || null,
-          apartment: apartment || null,
+          apartment: cleanApartment,
           city: city || null,
           state: state || null,
           country: country || 'US',

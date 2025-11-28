@@ -28,6 +28,8 @@ export interface Endpoint {
   description: string
   headers?: Parameter[]
   parameters?: Parameter[]
+  queryParams?: Parameter[]
+  pathParams?: Parameter[]
   requestBody?: Parameter[]
   responses: ResponseExample[]
   examples: CodeExample[]

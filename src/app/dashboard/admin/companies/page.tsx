@@ -137,7 +137,21 @@ const SERVICES = [
   { id: 'wallet', name: 'Wallet', description: 'Gestión de billeteras digitales' },
   { id: 'recharge', name: 'Recarga', description: 'Recargas móviles y servicios' },
   { id: 'remittance', name: 'Remesa', description: 'Envío de remesas internacionales' },
-  { id: 'paqueteria', name: 'Paquetería', description: 'Servicio de envío y entrega de paquetes' },
+  {
+    id: 'paqueteria',
+    name: 'Paquetería',
+    description: 'Servicio de envío y entrega de paquetes',
+    hasSubmodules: true,
+    submodules: [
+      { id: 'paqueteria:pickup-orders', name: 'Órdenes de Recogida', description: 'Gestión de órdenes a domicilio' },
+      { id: 'paqueteria:office-orders', name: 'Órdenes de Oficina', description: 'Gestión de órdenes en oficina' },
+      { id: 'paqueteria:warehouses', name: 'Almacenes', description: 'Gestión de almacenes y depósitos' },
+      { id: 'paqueteria:drivers', name: 'Drivers', description: 'Gestión de conductores' },
+      { id: 'paqueteria:vehicles', name: 'Vehículos', description: 'Gestión de flota vehicular' },
+      { id: 'paqueteria:routes', name: 'Rutas', description: 'Planificación y optimización de rutas' },
+      { id: 'paqueteria:package-route', name: 'Empaque', description: 'Gestión de empaques y cajas' },
+    ]
+  },
   { id: 'tracker', name: 'Rastreador', description: 'Seguimiento de envíos' },
   { id: 'exchange', name: 'Tasa de Cambio', description: 'Gestión de tasas de cambio' },
   { id: 'marketplace', name: 'Mercado', description: 'Plataforma de compra y venta' },
@@ -1210,56 +1224,173 @@ export default function CompaniesPage() {
                   </h2>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {SERVICES.map(service => (
-                      <button
-                        key={service.id}
-                        onClick={() => {
-                          const newServices = formData.enabledServices.includes(service.id)
-                            ? formData.enabledServices.filter((s: string) => s !== service.id)
-                            : [...formData.enabledServices, service.id]
-                          setFormData({...formData, enabledServices: newServices})
-                        }}
-                        className={cn(
-                          "p-6 rounded-xl border transition-all duration-300 text-left",
-                          formData.enabledServices.includes(service.id)
-                            ? theme === 'dark' ? "border-exa-secondary bg-exa-secondary/20" : "border-exa-primary bg-exa-primary/20"
-                            : theme === 'dark' ? "border-gray-700 bg-gray-800/50" : "border-gray-200 bg-white"
-                        )}
-                      >
-                        <div className="flex items-start gap-4">
-                          <div className={cn(
-                            "w-12 h-12 rounded-xl flex items-center justify-center",
-                            formData.enabledServices.includes(service.id)
-                              ? theme === 'dark' ? "bg-exa-secondary" : "bg-exa-primary"
-                              : theme === 'dark' ? "bg-gray-700" : "bg-gray-200"
-                          )}>
-                            <Settings className={cn(
-                              "w-6 h-6",
-                              formData.enabledServices.includes(service.id) ? "text-white" : theme === 'dark' ? "text-gray-400" : "text-gray-600"
-                            )} />
-                          </div>
-                          <div className="flex-1">
-                            <h3 className={cn(
-                              "font-bold text-lg mb-2",
-                              theme === 'dark' ? "text-white" : "text-black"
+                    {SERVICES.map(service => {
+                      const isServiceEnabled = formData.enabledServices.some((s: string) =>
+                        s === service.id || s.startsWith(`${service.id}:`)
+                      )
+                      const hasSubmodules = (service as any).hasSubmodules
+                      const submodules = (service as any).submodules || []
+
+                      // Contar submódulos seleccionados
+                      const selectedSubmodules = hasSubmodules
+                        ? formData.enabledServices.filter((s: string) => s.startsWith(`${service.id}:`))
+                        : []
+
+                      return (
+                        <div key={service.id} className="space-y-2">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (hasSubmodules) {
+                                // Para servicios con submódulos, seleccionar/deseleccionar todos
+                                const allSubmoduleIds = submodules.map((sub: any) => sub.id)
+                                const hasAnySubmodule = formData.enabledServices.some((s: string) =>
+                                  allSubmoduleIds.includes(s)
+                                )
+
+                                if (hasAnySubmodule) {
+                                  // Deseleccionar todos los submódulos
+                                  const newServices = formData.enabledServices.filter((s: string) =>
+                                    !s.startsWith(`${service.id}:`)
+                                  )
+                                  setFormData({...formData, enabledServices: newServices})
+                                } else {
+                                  // Seleccionar todos los submódulos
+                                  const newServices = [
+                                    ...formData.enabledServices.filter((s: string) => !s.startsWith(`${service.id}:`)),
+                                    ...allSubmoduleIds
+                                  ]
+                                  setFormData({...formData, enabledServices: newServices})
+                                }
+                              } else {
+                                // Para servicios sin submódulos, toggle normal
+                                const newServices = formData.enabledServices.includes(service.id)
+                                  ? formData.enabledServices.filter((s: string) => s !== service.id)
+                                  : [...formData.enabledServices, service.id]
+                                setFormData({...formData, enabledServices: newServices})
+                              }
+                            }}
+                            className={cn(
+                              "w-full p-6 rounded-xl border transition-all duration-300 text-left",
+                              isServiceEnabled
+                                ? theme === 'dark' ? "border-exa-secondary bg-exa-secondary/20" : "border-exa-primary bg-exa-primary/20"
+                                : theme === 'dark' ? "border-gray-700 bg-gray-800/50" : "border-gray-200 bg-white"
+                            )}
+                          >
+                            <div className="flex items-start gap-4">
+                              <div className={cn(
+                                "w-12 h-12 rounded-xl flex items-center justify-center",
+                                isServiceEnabled
+                                  ? theme === 'dark' ? "bg-exa-secondary" : "bg-exa-primary"
+                                  : theme === 'dark' ? "bg-gray-700" : "bg-gray-200"
+                              )}>
+                                <Settings className={cn(
+                                  "w-6 h-6",
+                                  isServiceEnabled ? "text-white" : theme === 'dark' ? "text-gray-400" : "text-gray-600"
+                                )} />
+                              </div>
+                              <div className="flex-1">
+                                <h3 className={cn(
+                                  "font-bold text-lg mb-1",
+                                  theme === 'dark' ? "text-white" : "text-black"
+                                )}>
+                                  {service.name}
+                                  {hasSubmodules && selectedSubmodules.length > 0 && (
+                                    <span className={cn(
+                                      "ml-2 text-sm font-normal",
+                                      theme === 'dark' ? "text-exa-secondary" : "text-exa-primary"
+                                    )}>
+                                      ({selectedSubmodules.length}/{submodules.length} módulos)
+                                    </span>
+                                  )}
+                                </h3>
+                                <p className={cn(
+                                  "text-sm",
+                                  theme === 'dark' ? "text-gray-400" : "text-gray-600"
+                                )}>
+                                  {service.description}
+                                </p>
+                              </div>
+                              {isServiceEnabled && (
+                                <div className={cn("w-6 h-6 rounded-full flex items-center justify-center", theme === 'dark' ? "bg-exa-secondary" : "bg-exa-primary")}>
+                                  <Check className="w-4 h-4 text-white" />
+                                </div>
+                              )}
+                            </div>
+                          </button>
+
+                          {/* Submódulos de paquetería */}
+                          {hasSubmodules && isServiceEnabled && (
+                            <div className={cn(
+                              "ml-4 p-4 rounded-lg border space-y-2",
+                              theme === 'dark' ? "bg-gray-800/30 border-gray-700" : "bg-gray-50 border-gray-200"
                             )}>
-                              {service.name}
-                            </h3>
-                            <p className={cn(
-                              "text-sm",
-                              theme === 'dark' ? "text-gray-400" : "text-gray-600"
-                            )}>
-                              {service.description}
-                            </p>
-                          </div>
-                          {formData.enabledServices.includes(service.id) && (
-                            <div className={cn("w-6 h-6 rounded-full flex items-center justify-center", theme === 'dark' ? "bg-exa-secondary" : "bg-exa-primary")}>
-                              <Check className="w-4 h-4 text-white" />
+                              <p className={cn(
+                                "text-xs font-medium mb-3",
+                                theme === 'dark' ? "text-gray-400" : "text-gray-500"
+                              )}>
+                                Selecciona los módulos específicos:
+                              </p>
+                              <div className="grid grid-cols-1 gap-2">
+                                {submodules.map((submodule: any) => {
+                                  const isSubmoduleEnabled = formData.enabledServices.includes(submodule.id)
+                                  return (
+                                    <button
+                                      key={submodule.id}
+                                      type="button"
+                                      onClick={(e) => {
+                                        e.stopPropagation()
+                                        const newServices = isSubmoduleEnabled
+                                          ? formData.enabledServices.filter((s: string) => s !== submodule.id)
+                                          : [...formData.enabledServices, submodule.id]
+                                        setFormData({...formData, enabledServices: newServices})
+                                      }}
+                                      className={cn(
+                                        "flex items-center gap-3 p-3 rounded-lg border transition-all",
+                                        isSubmoduleEnabled
+                                          ? theme === 'dark'
+                                            ? "border-exa-secondary/50 bg-exa-secondary/10"
+                                            : "border-exa-primary/50 bg-exa-primary/10"
+                                          : theme === 'dark'
+                                            ? "border-gray-600 bg-gray-700/30 hover:bg-gray-700/50"
+                                            : "border-gray-300 bg-white hover:bg-gray-100"
+                                      )}
+                                    >
+                                      <div className={cn(
+                                        "w-5 h-5 rounded border-2 flex items-center justify-center transition-all",
+                                        isSubmoduleEnabled
+                                          ? theme === 'dark'
+                                            ? "bg-exa-secondary border-exa-secondary"
+                                            : "bg-exa-primary border-exa-primary"
+                                          : theme === 'dark'
+                                            ? "border-gray-500"
+                                            : "border-gray-400"
+                                      )}>
+                                        {isSubmoduleEnabled && <Check className="w-3 h-3 text-white" />}
+                                      </div>
+                                      <div className="flex-1 text-left">
+                                        <span className={cn(
+                                          "text-sm font-medium",
+                                          theme === 'dark' ? "text-white" : "text-gray-900"
+                                        )}>
+                                          {submodule.name}
+                                        </span>
+                                        <p className={cn(
+                                          "text-xs",
+                                          theme === 'dark' ? "text-gray-500" : "text-gray-500"
+                                        )}>
+                                          {submodule.description}
+                                        </p>
+                                      </div>
+                                    </button>
+                                  )
+                                })}
+                              </div>
                             </div>
                           )}
                         </div>
-                      </button>
-                    ))}
+                      )
+                    })}
                   </div>
                 </div>
               )}

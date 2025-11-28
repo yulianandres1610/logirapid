@@ -345,13 +345,13 @@ export function Sidebar({ isCollapsed, onToggle }: SidebarProps) {
       requiredService: 'paqueteria',
       hasSubmenu: true,
       submenuItems: [
-        { icon: Truck, label: "Órdenes Recogida", href: "/dashboard/agency-admin/pickup-orders" },
-        { icon: Store, label: "Órdenes Oficina", href: "/dashboard/agency-admin/office-orders" },
-        { icon: Warehouse, label: "Almacenes", href: "/dashboard/agency-admin/warehouses" },
-        { icon: User, label: "Drivers", href: "/dashboard/agency-admin/drivers" },
-        { icon: Car, label: "Vehículos", href: "/dashboard/agency-admin/vehicles" },
-        { icon: Route, label: "Rutas", href: "/dashboard/agency-admin/routes" },
-        { icon: Box, label: "Empaque", href: "/dashboard/agency-admin/package-route" }
+        { icon: Truck, label: "Órdenes Recogida", href: "/dashboard/agency-admin/pickup-orders", requiredSubmodule: 'pickup-orders' },
+        { icon: Store, label: "Órdenes Oficina", href: "/dashboard/agency-admin/office-orders", requiredSubmodule: 'office-orders' },
+        { icon: Warehouse, label: "Almacenes", href: "/dashboard/agency-admin/warehouses", requiredSubmodule: 'warehouses' },
+        { icon: User, label: "Drivers", href: "/dashboard/agency-admin/drivers", requiredSubmodule: 'drivers' },
+        { icon: Car, label: "Vehículos", href: "/dashboard/agency-admin/vehicles", requiredSubmodule: 'vehicles' },
+        { icon: Route, label: "Rutas", href: "/dashboard/agency-admin/routes", requiredSubmodule: 'routes' },
+        { icon: Box, label: "Empaque", href: "/dashboard/agency-admin/package-route", requiredSubmodule: 'package-route' }
       ]
     },
     { icon: Settings, label: "Configuración", href: "/dashboard/agency-admin/settings", requiredService: null },
@@ -372,13 +372,13 @@ export function Sidebar({ isCollapsed, onToggle }: SidebarProps) {
       requiredService: 'paqueteria',
       hasSubmenu: true,
       submenuItems: [
-        { icon: Truck, label: "Órdenes Recogida", href: "/dashboard/manager/orders" },
-        { icon: Store, label: "Órdenes Oficina", href: "/dashboard/manager/office-orders" },
-        { icon: Warehouse, label: "Almacenes", href: "/dashboard/manager/warehouses" },
-        { icon: User, label: "Drivers", href: "/dashboard/manager/drivers" },
-        { icon: Car, label: "Vehículos", href: "/dashboard/manager/vehicles" },
-        { icon: Route, label: "Rutas", href: "/dashboard/manager/routes" },
-        { icon: Box, label: "Empaque", href: "/dashboard/manager/package-route" }
+        { icon: Truck, label: "Órdenes Recogida", href: "/dashboard/manager/orders", requiredSubmodule: 'pickup-orders' },
+        { icon: Store, label: "Órdenes Oficina", href: "/dashboard/manager/office-orders", requiredSubmodule: 'office-orders' },
+        { icon: Warehouse, label: "Almacenes", href: "/dashboard/manager/warehouses", requiredSubmodule: 'warehouses' },
+        { icon: User, label: "Drivers", href: "/dashboard/manager/drivers", requiredSubmodule: 'drivers' },
+        { icon: Car, label: "Vehículos", href: "/dashboard/manager/vehicles", requiredSubmodule: 'vehicles' },
+        { icon: Route, label: "Rutas", href: "/dashboard/manager/routes", requiredSubmodule: 'routes' },
+        { icon: Box, label: "Empaque", href: "/dashboard/manager/package-route", requiredSubmodule: 'package-route' }
       ]
     },
     { icon: Settings, label: "Configuración", href: "/dashboard/manager/settings", requiredService: null },
@@ -409,17 +409,39 @@ export function Sidebar({ isCollapsed, onToggle }: SidebarProps) {
   ]
 
   // Hook para verificar servicios habilitados
-  const { hasService } = useEnabledServices()
+  const { hasService, hasSubmodule } = useEnabledServices()
 
   // Función para filtrar items del menú según servicios habilitados
   const filterMenuByServices = (items: any[]) => {
-    return items.filter(item => {
-      // Si no requiere servicio, siempre se muestra (ej: Dashboard, Usuarios, Configuración)
-      if (!item.requiredService) return true
+    return items
+      .filter(item => {
+        // Si no requiere servicio, siempre se muestra (ej: Dashboard, Usuarios, Configuración)
+        if (!item.requiredService) return true
 
-      // Si requiere servicio, verificar que esté habilitado
-      return hasService(item.requiredService)
-    })
+        // Si requiere servicio, verificar que esté habilitado
+        return hasService(item.requiredService)
+      })
+      .map(item => {
+        // Si tiene submenu, filtrar los subítems según permisos de submódulo
+        if (item.hasSubmenu && item.submenuItems) {
+          const filteredSubmenuItems = item.submenuItems.filter((subItem: any) => {
+            // Si no requiere submódulo, siempre se muestra
+            if (!subItem.requiredSubmodule) return true
+            // Verificar si tiene permiso para este submódulo
+            return hasSubmodule(subItem.requiredSubmodule)
+          })
+
+          // Si no hay submódulos visibles, ocultar el menú padre
+          if (filteredSubmenuItems.length === 0) return null
+
+          return {
+            ...item,
+            submenuItems: filteredSubmenuItems
+          }
+        }
+        return item
+      })
+      .filter(Boolean) // Eliminar items null (menús padres sin submódulos visibles)
   }
 
   // Seleccionar el menú adecuado según el rol del usuario

@@ -2,6 +2,15 @@ import { motion } from 'framer-motion'
 import { Store, AlertCircle, CheckCircle, Package, Truck, Eye, Edit, Trash2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
+// Helper para obtener el nombre del servicio (puede ser string u objeto)
+const getServiceName = (service: any): string => {
+  if (typeof service === 'string') return service
+  if (typeof service === 'object' && service !== null) {
+    return service.name || service.type || ''
+  }
+  return ''
+}
+
 interface PackageOrder {
   id: number
   orderNumber: string
@@ -241,19 +250,22 @@ export default function OrdersTableBody({
                 {/* Servicios */}
                 <td className="px-4 py-4">
                   <div className="flex flex-wrap gap-1">
-                    {order.services.map((service, index) => (
-                      <span
-                        key={index}
-                        className={cn(
-                          'inline-flex items-center px-2 py-1 rounded-full text-xs font-medium',
-                          service.toLowerCase().includes('recogida') || service.toLowerCase().includes('pickup')
-                            ? 'bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-400'
-                            : 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400'
-                        )}
-                      >
-                        {service}
-                      </span>
-                    ))}
+                    {order.services.map((service, index) => {
+                      const serviceName = getServiceName(service)
+                      return (
+                        <span
+                          key={index}
+                          className={cn(
+                            'inline-flex items-center px-2 py-1 rounded-full text-xs font-medium',
+                            serviceName.toLowerCase().includes('recogida') || serviceName.toLowerCase().includes('pickup')
+                              ? 'bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-400'
+                              : 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400'
+                          )}
+                        >
+                          {serviceName}
+                        </span>
+                      )
+                    })}
                   </div>
                 </td>
 

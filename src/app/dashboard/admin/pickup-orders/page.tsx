@@ -8,6 +8,15 @@ const removeLeadingZeros = (address: string): string => {
   return address.replace(/^0+/, '')
 }
 
+// Función helper para obtener el nombre de un servicio (puede ser string u objeto)
+const getServiceName = (service: any): string => {
+  if (typeof service === 'string') return service
+  if (typeof service === 'object' && service !== null) {
+    return service.name || service.type || ''
+  }
+  return ''
+}
+
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
@@ -169,12 +178,12 @@ export default function PickupOrdersPage() {
     total: orders.length,
     pickups: orders.filter(order =>
       order.services.some(service =>
-        service.toLowerCase().includes('recogida') || service.toLowerCase().includes('pickup')
+        getServiceName(service).toLowerCase().includes('recogida') || getServiceName(service).toLowerCase().includes('pickup')
       )
     ).length,
     deliveries: orders.filter(order =>
       order.services.some(service =>
-        service.toLowerCase().includes('entrega') || service.toLowerCase().includes('delivery')
+        getServiceName(service).toLowerCase().includes('entrega') || getServiceName(service).toLowerCase().includes('delivery')
       )
     ).length,
     scheduledToday: orders.filter(order => {
@@ -520,7 +529,7 @@ export default function PickupOrdersPage() {
                     )}>
                       {orders.filter(order =>
                         order.services.some(service =>
-                          (service.toLowerCase().includes('recogida') || service.toLowerCase().includes('pickup')) &&
+                          (getServiceName(service).toLowerCase().includes('recogida') || getServiceName(service).toLowerCase().includes('pickup')) &&
                           order.status === 'pending'
                         )
                       ).length}
@@ -532,7 +541,7 @@ export default function PickupOrdersPage() {
                       style={{
                         width: `${stats.pickups > 0 ? (orders.filter(order =>
                           order.services.some(service =>
-                            (service.toLowerCase().includes('recogida') || service.toLowerCase().includes('pickup')) &&
+                            (getServiceName(service).toLowerCase().includes('recogida') || getServiceName(service).toLowerCase().includes('pickup')) &&
                             order.status === 'pending'
                           )
                         ).length / stats.pickups * 100) : 0}%`
@@ -595,7 +604,7 @@ export default function PickupOrdersPage() {
                     )}>
                       {orders.filter(order =>
                         order.services.some(service =>
-                          (service.toLowerCase().includes('entrega') || service.toLowerCase().includes('delivery')) &&
+                          (getServiceName(service).toLowerCase().includes('entrega') || getServiceName(service).toLowerCase().includes('delivery')) &&
                           order.status === 'pending'
                         )
                       ).length}
@@ -607,7 +616,7 @@ export default function PickupOrdersPage() {
                       style={{
                         width: `${stats.deliveries > 0 ? (orders.filter(order =>
                           order.services.some(service =>
-                            (service.toLowerCase().includes('entrega') || service.toLowerCase().includes('delivery')) &&
+                            (getServiceName(service).toLowerCase().includes('entrega') || getServiceName(service).toLowerCase().includes('delivery')) &&
                             order.status === 'pending'
                           )
                         ).length / stats.deliveries * 100) : 0}%`
@@ -1011,12 +1020,12 @@ export default function PickupOrdersPage() {
                                   key={index}
                                   className={cn(
                                     'inline-flex items-center px-2 py-1 rounded-full text-xs font-medium',
-                                    service.toLowerCase().includes('recogida') || service.toLowerCase().includes('pickup')
+                                    getServiceName(service).toLowerCase().includes('recogida') || getServiceName(service).toLowerCase().includes('pickup')
                                       ? 'bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-400'
                                       : 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400'
                                   )}
                                 >
-                                  {service}
+                                  {getServiceName(service)}
                                 </span>
                               ))}
                             </div>
