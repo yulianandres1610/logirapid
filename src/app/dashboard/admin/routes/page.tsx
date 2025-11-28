@@ -47,6 +47,8 @@ interface Route {
   status: 'planning' | 'active' | 'completed' | 'cancelled'
   totalPackages: number
   deliveredPackages: number
+  totalStops: number
+  completedStops: number
   estimatedDuration?: string
   actualDuration?: string
   distance?: number
@@ -657,7 +659,7 @@ export default function RoutesPage() {
                       "text-left px-6 py-3 text-xs font-medium uppercase tracking-wider",
                       theme === 'dark' ? "text-gray-400" : "text-gray-500"
                     )}>
-                      Paquetes
+                      Paradas
                     </th>
                     <th className={cn(
                       "text-left px-6 py-3 text-xs font-medium uppercase tracking-wider",
@@ -767,13 +769,13 @@ export default function RoutesPage() {
                             "text-sm",
                             theme === 'dark' ? "text-gray-300" : "text-gray-700"
                           )}>
-                            {route.deliveredPackages}/{route.totalPackages}
+                            {route.completedStops || 0}/{route.totalStops || 0}
                           </div>
-                          <div className="w-full bg-gray-200 rounded-full h-1.5 mt-1">
+                          <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-1.5 mt-1">
                             <div
                               className="bg-green-600 h-1.5 rounded-full"
                               style={{
-                                width: `${route.totalPackages > 0 ? (route.deliveredPackages / route.totalPackages) * 100 : 0}%`
+                                width: `${(route.totalStops || 0) > 0 ? ((route.completedStops || 0) / (route.totalStops || 1)) * 100 : 0}%`
                               }}
                             />
                           </div>

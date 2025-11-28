@@ -269,7 +269,7 @@ export async function GET(request: NextRequest) {
     const result = await db.query(dataQuery, params)
 
     // Process the routes to parse JSON fields with error handling
-    const processedRoutes = result.rows.map(route => {
+    const processedRoutes = await Promise.all(result.rows.map(async (route) => {
       // Helper function to safely parse JSON
       const safeJSONParse = (data: any, defaultValue: any = null) => {
         // If data is null or undefined, return default
@@ -299,13 +299,73 @@ export async function GET(request: NextRequest) {
         }
       }
 
+      const waypoints = safeJSONParse(route.stops, [])
+
+      // Calcular paradas completadas consultando las órdenes
+      let totalStops = waypoints.length
+      let completedStops = 0
+      let calculatedStatus = route.status
+
+      if (totalStops > 0) {
+        // Obtener IDs de todas las órdenes en las paradas
+        const allOrderIds: number[] = []
+        waypoints.forEach((stop: any) => {
+          if (stop.orderIds && Array.isArray(stop.orderIds)) {
+            allOrderIds.push(...stop.orderIds)
+          }
+        })
+
+        if (allOrderIds.length > 0) {
+          // Consultar el estado de las órdenes
+          const orderStatusQuery = `
+            SELECT id, status FROM package_orders
+            WHERE id = ANY($1)
+          `
+          const orderStatusResult = await db.query(orderStatusQuery, [allOrderIds])
+          const orderStatuses = new Map(orderStatusResult.rows.map(o => [o.id, o.status]))
+
+          // Contar paradas completadas (todas las órdenes de la parada están delivered)
+          waypoints.forEach((stop: any) => {
+            if (stop.orderIds && Array.isArray(stop.orderIds)) {
+              const allDelivered = stop.orderIds.every((orderId: number) => {
+                const status = orderStatuses.get(orderId)
+                return status === 'delivered' || status === 'completed'
+              })
+              if (allDelivered) {
+                completedStops++
+              }
+            }
+          })
+
+          // Calcular estado de la ruta basado en paradas
+          if (completedStops === totalStops && totalStops > 0) {
+            calculatedStatus = 'completed'
+            // Actualizar en BD si es diferente
+            if (route.status !== 'completed') {
+              await db.query('UPDATE routes SET status = $1, updatedat = NOW() WHERE id = $2', ['completed', route.id])
+            }
+          } else if (completedStops > 0 && route.status === 'planning') {
+            calculatedStatus = 'active'
+            await db.query('UPDATE routes SET status = $1, updatedat = NOW() WHERE id = $2', ['active', route.id])
+          }
+        }
+      }
+
       return {
         ...route,
-        waypoints: safeJSONParse(route.stops, []),
+        waypoints,
         optimizedRoute: safeJSONParse(route.optimizedRoute, null),
-        timeWindows: safeJSONParse(route.timeWindows, [])
+        timeWindows: safeJSONParse(route.timeWindows, []),
+        // Usar paradas en lugar de paquetes
+        totalStops,
+        completedStops,
+        // Mantener compatibilidad con campos antiguos
+        totalPackages: totalStops,
+        deliveredPackages: completedStops,
+        // Estado calculado
+        status: calculatedStatus
       }
-    })
+    }))
 
     return NextResponse.json({
       routes: processedRoutes,
