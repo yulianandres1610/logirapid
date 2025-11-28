@@ -331,12 +331,32 @@ export async function GET(
       }
     })
 
+    // Calcular estado sugerido de la ruta basado en las paradas
+    const totalStops = stops.length
+    const completedStops = stops.filter(s => s.status === 'delivered').length
+    const failedStops = stops.filter(s => s.status === 'failed').length
+    const pendingStops = stops.filter(s => s.status === 'pending').length
+
+    // Determinar estado calculado de la ruta:
+    // - Si todas las paradas están completadas -> completed
+    // - Si hay al menos una parada completada o en progreso -> active
+    // - Si todas están pendientes -> planning (o active si ya se inició)
+    let calculatedRouteStatus = route.status
+    if (totalStops > 0) {
+      if (completedStops === totalStops) {
+        calculatedRouteStatus = 'completed'
+      } else if (completedStops > 0 || route.status === 'active') {
+        calculatedRouteStatus = 'active'
+      }
+    }
+
     return NextResponse.json({
       success: true,
       data: {
         routeId: route.id,
         routeNumber: route.route_number || route.routenumber,
         status: route.status,
+        calculatedStatus: calculatedRouteStatus,
         driverName: route.driver_name || route.drivername,
         driverId: route.driver_id || route.driverid,
         vehiclePlate: route.vehicle_plate || route.vehicleplate,
@@ -344,7 +364,14 @@ export async function GET(
         totalDistance: route.distance,
         totalDuration: route.duration,
         scheduledDate: route.scheduled_date || route.scheduleddate,
-        stops
+        stops,
+        // Resumen de paradas
+        stopsSummary: {
+          total: totalStops,
+          completed: completedStops,
+          pending: pendingStops,
+          failed: failedStops
+        }
       }
     })
 

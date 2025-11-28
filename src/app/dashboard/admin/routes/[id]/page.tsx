@@ -115,6 +115,19 @@ export default function RouteDetailPage() {
 
       if (data.success) {
         setRouteStops(data.data.stops || [])
+
+        // Sincronizar estado de ruta si es diferente al calculado
+        const currentStatus = route?.status
+        const calculatedStatus = data.data.calculatedStatus
+
+        if (currentStatus && calculatedStatus && currentStatus !== calculatedStatus) {
+          console.log(`📊 Estado de ruta: ${currentStatus} -> calculado: ${calculatedStatus}`)
+
+          // Solo actualizar automáticamente a 'completed' cuando todas las paradas están listas
+          if (calculatedStatus === 'completed') {
+            await syncRouteStatus(calculatedStatus)
+          }
+        }
       } else {
         console.error('Error fetching route stops:', data.error)
       }
@@ -122,6 +135,26 @@ export default function RouteDetailPage() {
       console.error('Error fetching route stops:', error)
     } finally {
       setLoadingStops(false)
+    }
+  }
+
+  // Sincronizar el estado de la ruta con la base de datos
+  const syncRouteStatus = async (newStatus: string) => {
+    try {
+      const updateResponse = await fetch(`/api/routes/${routeId}/status`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: newStatus })
+      })
+
+      if (updateResponse.ok) {
+        if (newStatus === 'completed') {
+          showNotification('success', 'Ruta completada', 'Todas las paradas han sido completadas')
+        }
+        await fetchRouteDetails()
+      }
+    } catch (error) {
+      console.error('Error syncing route status:', error)
     }
   }
 
@@ -161,48 +194,8 @@ export default function RouteDetailPage() {
   }
 
   const checkAndUpdateRouteStatus = async () => {
-    try {
-      // Obtener el estado actual de las paradas
-      const response = await fetch(`/api/routes/${routeId}/stops`)
-      const data = await response.json()
-
-      if (data.success && data.data.stops) {
-        const stops = data.data.stops
-
-        // Contar paradas completadas (todas las órdenes de la parada entregadas)
-        let totalStops = stops.length
-        let completedStops = 0
-
-        for (const stop of stops) {
-          const allOrdersDelivered = stop.orders?.every((o: any) =>
-            o.status === 'delivered' || o.status === 'completed'
-          )
-          if (allOrdersDelivered && stop.orders?.length > 0) {
-            completedStops++
-          }
-        }
-
-        console.log(`📊 Progreso de ruta: ${completedStops}/${totalStops} paradas completadas`)
-
-        // Si todas las paradas están completadas, actualizar la ruta a 'completed'
-        if (totalStops > 0 && completedStops === totalStops) {
-          console.log('✅ Todas las paradas completadas, actualizando estado de ruta...')
-
-          const updateResponse = await fetch(`/api/routes/${routeId}/status`, {
-            method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ status: 'completed' })
-          })
-
-          if (updateResponse.ok) {
-            showNotification('success', 'Ruta completada', 'Todas las paradas han sido completadas')
-            await fetchRouteDetails() // Recargar para mostrar nuevo estado
-          }
-        }
-      }
-    } catch (error) {
-      console.error('Error checking route status:', error)
-    }
+    // La sincronización ahora se hace en fetchRouteStops usando calculatedStatus
+    await fetchRouteStops()
   }
 
   const fetchRouteDetails = async () => {
