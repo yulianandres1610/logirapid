@@ -1,9 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import {
-  saveVehicleToDatabase,
-  getAllVehiclesFromDatabase,
-  getVehicleStatisticsFromDatabase
-} from '@/lib/vehicle-database';
+import { db } from '@/lib/database';
+import { getCompanyFilter } from '@/lib/query-helpers';
 
 // Force dynamic rendering - don't execute during build
 export const dynamic = 'force-dynamic'
@@ -13,90 +10,90 @@ export const runtime = 'nodejs'
 
 export async function GET(request: NextRequest) {
   try {
-    // Temporarily remove authentication requirement
-    // const session = await getServerSession();
-
-    // if (!session) {
-    //   return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    // }
-
     const { searchParams } = new URL(request.url);
+    const { isSuperAdmin, companyId: headerCompanyId } = getCompanyFilter(request);
     const page = parseInt(searchParams.get('page') || '1');
     const limit = parseInt(searchParams.get('limit') || '25');
     const search = searchParams.get('search') || '';
     const status = searchParams.get('status') || '';
     const availability = searchParams.get('availability') || '';
+    const companyIdParam = searchParams.get('companyId');
 
-    // Get all vehicles from database
-    let vehicles = getAllVehiclesFromDatabase();
+    // Build WHERE conditions for PostgreSQL
+    const conditions: string[] = [];
+    const params: any[] = [];
 
-    // Apply filters
+    // Search filter
     if (search) {
-      const searchLower = search.toLowerCase();
-      vehicles = vehicles.filter(vehicle =>
-        vehicle.make.toLowerCase().includes(searchLower) ||
-        vehicle.model.toLowerCase().includes(searchLower) ||
-        vehicle.vin.toLowerCase().includes(searchLower) ||
-        vehicle.nickname.toLowerCase().includes(searchLower)
-      );
+      const searchPattern = `%${search}%`;
+      params.push(searchPattern, searchPattern, searchPattern, searchPattern);
+      conditions.push(`(
+        make ILIKE $${params.length - 3} OR
+        model ILIKE $${params.length - 2} OR
+        vin ILIKE $${params.length - 1} OR
+        nickname ILIKE $${params.length}
+      )`);
     }
 
     if (status && status !== 'all') {
-      vehicles = vehicles.filter(vehicle => vehicle.status === status);
+      params.push(status);
+      conditions.push(`status = $${params.length}`);
     }
 
     if (availability && availability !== 'all') {
-      vehicles = vehicles.filter(vehicle => vehicle.availability === availability);
+      params.push(availability);
+      conditions.push(`availability = $${params.length}`);
     }
 
-    // Sort by created_at descending
-    vehicles.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+    // Filtro por empresa (multi-tenant)
+    if (!isSuperAdmin) {
+      if (headerCompanyId) {
+        params.push(headerCompanyId);
+        conditions.push(`company_id = $${params.length}`);
+      }
+    } else if (companyIdParam) {
+      params.push(parseInt(companyIdParam));
+      conditions.push(`company_id = $${params.length}`);
+    }
 
-    // Apply pagination
-    const total = vehicles.length;
-    const startIndex = (page - 1) * limit;
-    const endIndex = startIndex + limit;
-    const paginatedVehicles = vehicles.slice(startIndex, endIndex);
+    const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+
+    // Count total records
+    const countQuery = `SELECT COUNT(*) as total FROM vehicles ${whereClause}`;
+    const countResult = await db.query(countQuery, params.length > 0 ? params : undefined);
+    const total = parseInt(countResult.rows[0].total);
+
+    // Get paginated results
+    const offset = (page - 1) * limit;
+    const paginationParams = [...params, limit, offset];
+    const dataQuery = `
+      SELECT * FROM vehicles
+      ${whereClause}
+      ORDER BY created_at DESC
+      LIMIT $${params.length + 1} OFFSET $${params.length + 2}
+    `;
+
+    const result = await db.query(dataQuery, paginationParams);
 
     // Transform vehicles to match expected interface
-    const transformedVehicles = paginatedVehicles.map(vehicle => {
-      // Handle capacity transformation for new vs old format
-      let capacity;
-      if (vehicle.capacity && (vehicle.capacity.weight_lbs || vehicle.capacity.weight_kg)) {
-        // Old format with weight/volume - use as is
-        capacity = vehicle.capacity;
-      } else if (vehicle.capacity && ('empty_boxes' in vehicle.capacity || 'full_boxes' in vehicle.capacity)) {
-        // New format with boxes - convert to weight/volume for display compatibility
-        const emptyBoxes = (vehicle.capacity as any).empty_boxes || 0;
-        const fullBoxes = (vehicle.capacity as any).full_boxes || 0;
-        const totalBoxes = emptyBoxes + fullBoxes;
-
-        // Convert boxes to estimated weight/volume (assuming average box: 25 lbs, 1.5 ft³)
-        capacity = {
-          weight_lbs: totalBoxes * 25,
-          weight_kg: Math.round(totalBoxes * 25 * 0.453592),
-          volume_cubic_ft: Math.round(totalBoxes * 1.5),
-          volume_cubic_m: Math.round(totalBoxes * 1.5 * 0.0283168),
-          // Also preserve the new fields
-          empty_boxes: emptyBoxes,
-          full_boxes: fullBoxes
-        };
-      } else {
-        // Empty or invalid capacity - use defaults
-        capacity = {
-          weight_lbs: 2000,
-          weight_kg: 907,
-          volume_cubic_ft: 200,
-          volume_cubic_m: 5.7,
-          empty_boxes: 0,
-          full_boxes: 0
-        };
+    const transformedVehicles = result.rows.map(vehicle => {
+      // Handle capacity transformation
+      let capacity = vehicle.capacity;
+      if (typeof capacity === 'string') {
+        try {
+          capacity = JSON.parse(capacity);
+        } catch {
+          capacity = { empty_boxes: 0, full_boxes: 0 };
+        }
       }
 
       return {
         ...vehicle,
-        year: vehicle.model_year, // Keep both for compatibility
-        capacity
+        year: vehicle.model_year || vehicle.year,
+        capacity,
+        // Ensure these fields exist for compatibility
+        licensePlate: vehicle.license_plate,
+        modelYear: vehicle.model_year
       };
     });
 
@@ -135,13 +132,7 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    // Temporarily remove authentication requirement
-    // const session = await getServerSession();
-
-    // if (!session) {
-    //   return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    // }
-
+    const { isSuperAdmin, companyId: headerCompanyId } = getCompanyFilter(request);
     const body = await request.json();
     const {
       vin,
@@ -153,125 +144,117 @@ export async function POST(request: NextRequest) {
       color,
       nickname,
       photo_url,
+      license_plate,
       capacity,
       empty_boxes,
       full_boxes,
       status = 'ACTIVE',
       availability = 'AVAILABLE',
       vin_data,
-      // New maintenance fields
       mileage,
       insuranceexpiry,
       oil_change_frequency,
       next_oil_change,
-      can_collect_durable
+      can_collect_durable,
+      companyId
     } = body;
 
     // Validate required fields
     if (!vin || !make || !model || !year) {
       return NextResponse.json(
         { error: 'Missing required fields: vin, make, model, year' },
-        {
-          status: 400,
-          headers: {
-            'Access-Control-Allow-Origin': '*',
-            'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
-            'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-          }
-        }
+        { status: 400 }
       );
     }
+
+    // Determinar company_id
+    const companyIdToUse = companyId || headerCompanyId || 1;
 
     // Check if VIN already exists
-    const existingVehicles = getAllVehiclesFromDatabase();
-    const existingVehicle = existingVehicles.find(v => v.vin.toUpperCase() === vin.toUpperCase());
+    const existingCheck = await db.query(
+      'SELECT id FROM vehicles WHERE UPPER(vin) = UPPER($1)',
+      [vin]
+    );
 
-    if (existingVehicle) {
+    if (existingCheck.rows.length > 0) {
       return NextResponse.json(
         { error: 'Vehicle with this VIN already exists' },
-        {
-          status: 400,
-          headers: {
-            'Access-Control-Allow-Origin': '*',
-            'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
-            'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-          }
-        }
+        { status: 400 }
       );
     }
 
-    // Prepare vehicle data - handle new capacity format
-    let finalCapacity;
+    // Prepare capacity
+    let finalCapacity = { empty_boxes: 0, full_boxes: 0 };
     if (empty_boxes !== undefined || full_boxes !== undefined) {
-      // New format with boxes
       finalCapacity = {
         empty_boxes: empty_boxes || 0,
         full_boxes: full_boxes || 0
       };
-    } else if (capacity && (capacity.weight_lbs || capacity.weight_kg)) {
-      // Old format with weight/volume
+    } else if (capacity) {
       finalCapacity = capacity;
-    } else {
-      // Default empty capacity
-      finalCapacity = {
-        empty_boxes: 0,
-        full_boxes: 0
-      };
     }
 
-    const vehicleData = {
-      vin: vin.toUpperCase(),
+    // Generate unique ID
+    const vehicleId = `v_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+
+    // Insert into PostgreSQL
+    const insertQuery = `
+      INSERT INTO vehicles (
+        id, company_id, vin, license_plate, make, model, model_year, body_type,
+        color, nickname, photo_url, capacity, status, availability,
+        vin_data, mileage, insurance_expiry, oil_change_frequency,
+        next_oil_change, can_collect_durable, created_at, updated_at
+      ) VALUES (
+        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14,
+        $15, $16, $17, $18, $19, $20, NOW(), NOW()
+      )
+      RETURNING *
+    `;
+
+    const values = [
+      vehicleId,
+      companyIdToUse,
+      vin.toUpperCase(),
+      license_plate || null,
       make,
       model,
-      model_year: year || model_year,
-      body_type: body_type || 'Unknown',
-      color: color || 'Unknown',
-      nickname: nickname || `${make} ${model}`,
-      photo_url,
+      year || model_year,
+      body_type || 'Unknown',
+      color || 'Unknown',
+      nickname || `${make} ${model}`,
+      photo_url || null,
+      JSON.stringify(finalCapacity),
       status,
       availability,
-      capacity: finalCapacity,
-      vin_data: vin_data || {},
-      // Add maintenance fields with defaults
-      mileage: mileage || 0,
-      insurance_expiry: insuranceexpiry || null,
-      oil_change_frequency: oil_change_frequency || 5000,
-      next_oil_change: next_oil_change || null,
-      can_collect_durable: can_collect_durable || false,
-    };
+      vin_data ? JSON.stringify(vin_data) : null,
+      mileage || 0,
+      insuranceexpiry || null,
+      oil_change_frequency || 5000,
+      next_oil_change || null,
+      can_collect_durable || false
+    ];
 
-    const vehicle = saveVehicleToDatabase(vehicleData);
+    const result = await db.query(insertQuery, values);
+    const vehicle = result.rows[0];
 
-    // Transform response to match expected interface
+    // Transform response
     const transformedVehicle = {
       ...vehicle,
-      year: vehicle.model_year, // Keep both for compatibility
+      year: vehicle.model_year,
+      capacity: typeof vehicle.capacity === 'string' ? JSON.parse(vehicle.capacity) : vehicle.capacity
     };
 
     return NextResponse.json({
       success: true,
       data: transformedVehicle,
       message: 'Vehicle created successfully',
-    }, {
-      headers: {
-        'Access-Control-Allow-Origin': '*',
-        'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
-        'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-      }
     });
 
   } catch (error) {
     console.error('Error creating vehicle:', error);
     return NextResponse.json(
-      { error: 'Error creating vehicle' },
-      {
-        status: 500,
-        headers: {
-          'Access-Control-Allow-Origin': '*',
-          'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
-          'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-        }
-      }
+      { error: 'Error creating vehicle', details: error instanceof Error ? error.message : 'Unknown error' },
+      { status: 500 }
     );
   }
 }
