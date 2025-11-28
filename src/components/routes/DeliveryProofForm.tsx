@@ -21,11 +21,21 @@ interface Photo {
   isNew?: boolean
 }
 
+interface ServiceWithEmpaques {
+  type: string
+  name: string
+  quantity?: number
+  empaques?: Array<{ id: number; codigo: string }>
+  requiresWeight?: boolean
+  weight?: number
+}
+
 interface DeliveryProofFormProps {
   orderId: number
   orderNumber: string
   companyId: string | number
   recipientName?: string
+  services?: ServiceWithEmpaques[]
   onSuccess?: (proofData: any) => void
   onCancel?: () => void
   existingProof?: {
@@ -50,6 +60,7 @@ export default function DeliveryProofForm({
   orderNumber,
   companyId,
   recipientName,
+  services = [],
   onSuccess,
   onCancel,
   existingProof
@@ -67,6 +78,38 @@ export default function DeliveryProofForm({
   const [error, setError] = useState<string | null>(null)
   const [locationError, setLocationError] = useState<string | null>(null)
   const [markAsDelivered, setMarkAsDelivered] = useState(true)
+
+  // Validaciones de servicios (empaques y peso)
+  const validateServices = (): { isValid: boolean; errors: string[] } => {
+    const errors: string[] = []
+
+    for (const service of services) {
+      // Validar empaques para servicios de envío
+      const isEnvioService = service.type === 'envio' ||
+        service.type?.includes('envio') ||
+        service.name?.toLowerCase().includes('envio') ||
+        service.name?.toLowerCase().includes('caja') ||
+        service.name?.toLowerCase().includes('paquete')
+
+      if (isEnvioService) {
+        const requiredEmpaques = service.quantity || 1
+        const assignedEmpaques = service.empaques?.length || 0
+
+        if (assignedEmpaques < requiredEmpaques) {
+          errors.push(`Servicio "${service.name || service.type}": Faltan ${requiredEmpaques - assignedEmpaques} empaque(s) por asignar`)
+        }
+      }
+
+      // Validar peso si el servicio lo requiere
+      if (service.requiresWeight && (!service.weight || service.weight <= 0)) {
+        errors.push(`Servicio "${service.name || service.type}": Falta registrar el peso`)
+      }
+    }
+
+    return { isValid: errors.length === 0, errors }
+  }
+
+  const serviceValidation = validateServices()
 
   // Cargar datos existentes si hay
   useEffect(() => {
@@ -105,8 +148,8 @@ export default function DeliveryProofForm({
     }
   }, [])
 
-  // Validación
-  const isValid = signatureData.length > 0 && photos.length > 0
+  // Validación completa (firma, fotos y servicios)
+  const isValid = signatureData.length > 0 && photos.length > 0 && serviceValidation.isValid
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -120,6 +163,12 @@ export default function DeliveryProofForm({
 
     if (!photos || photos.length === 0) {
       setError('Al menos una foto es obligatoria')
+      return
+    }
+
+    // Validar servicios (empaques y peso)
+    if (!serviceValidation.isValid) {
+      setError(serviceValidation.errors[0]) // Mostrar el primer error
       return
     }
 
@@ -330,8 +379,32 @@ export default function DeliveryProofForm({
                   {photos.length > 0 ? <Check className="w-4 h-4" /> : <span className="w-4 h-4 border border-current rounded-full" />}
                   Al menos 1 foto
                 </span>
+                {services.length > 0 && (
+                  <span className={`flex items-center gap-2 ${serviceValidation.isValid ? 'text-green-600 dark:text-green-400' : 'text-orange-500 dark:text-orange-400'}`}>
+                    {serviceValidation.isValid ? <Check className="w-4 h-4" /> : <span className="w-4 h-4 border border-current rounded-full" />}
+                    Empaques asignados
+                  </span>
+                )}
               </div>
             </div>
+
+            {/* Advertencias de servicios incompletos */}
+            {!serviceValidation.isValid && serviceValidation.errors.length > 0 && (
+              <div className="p-3 bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 rounded-lg">
+                <p className="text-sm text-orange-700 dark:text-orange-300 font-medium mb-2 flex items-center gap-2">
+                  <AlertCircle className="w-4 h-4" />
+                  Servicios pendientes de completar:
+                </p>
+                <ul className="text-sm text-orange-600 dark:text-orange-400 list-disc list-inside space-y-1">
+                  {serviceValidation.errors.map((err, idx) => (
+                    <li key={idx}>{err}</li>
+                  ))}
+                </ul>
+                <p className="text-xs text-orange-500 dark:text-orange-500 mt-2">
+                  Debe asignar todos los empaques desde la vista de parada antes de completar la entrega.
+                </p>
+              </div>
+            )}
           </div>
         </form>
 

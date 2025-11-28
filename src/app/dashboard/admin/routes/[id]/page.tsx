@@ -92,6 +92,7 @@ export default function RouteDetailPage() {
     orderId: number
     orderNumber: string
     recipientName?: string
+    services?: any[]
   } | null>(null)
   const [viewingProofOrderId, setViewingProofOrderId] = useState<number | null>(null)
 
@@ -99,12 +100,12 @@ export default function RouteDetailPage() {
     fetchRouteDetails()
   }, [routeId])
 
-  // Cargar paradas cuando se cambia a la pestaña de paradas
+  // Cargar paradas para mostrar en el resumen y en la pestaña de paradas
   useEffect(() => {
-    if (activeTab === 'stops' && routeId) {
+    if (routeId) {
       fetchRouteStops()
     }
-  }, [activeTab, routeId])
+  }, [routeId])
 
   const fetchRouteStops = async () => {
     try {
@@ -132,7 +133,8 @@ export default function RouteDetailPage() {
       setSelectedOrderForProof({
         orderId: order.id,
         orderNumber: order.orderNumber,
-        recipientName: order.senderName || order.recipientName // Usar remitente para primera milla
+        recipientName: order.senderName || order.recipientName, // Usar remitente para primera milla
+        services: order.services || [] // Pasar servicios para validación de empaques
       })
     }
   }
@@ -167,24 +169,24 @@ export default function RouteDetailPage() {
       if (data.success && data.data.stops) {
         const stops = data.data.stops
 
-        // Contar todas las órdenes y las entregadas
-        let totalOrders = 0
-        let deliveredOrders = 0
+        // Contar paradas completadas (todas las órdenes de la parada entregadas)
+        let totalStops = stops.length
+        let completedStops = 0
 
         for (const stop of stops) {
-          for (const order of stop.orders || []) {
-            totalOrders++
-            if (order.status === 'delivered' || order.status === 'completed') {
-              deliveredOrders++
-            }
+          const allOrdersDelivered = stop.orders?.every((o: any) =>
+            o.status === 'delivered' || o.status === 'completed'
+          )
+          if (allOrdersDelivered && stop.orders?.length > 0) {
+            completedStops++
           }
         }
 
-        console.log(`📊 Progreso de ruta: ${deliveredOrders}/${totalOrders}`)
+        console.log(`📊 Progreso de ruta: ${completedStops}/${totalStops} paradas completadas`)
 
-        // Si todas las órdenes están entregadas, actualizar la ruta a 'completed'
-        if (totalOrders > 0 && deliveredOrders === totalOrders) {
-          console.log('✅ Todas las órdenes completadas, actualizando estado de ruta...')
+        // Si todas las paradas están completadas, actualizar la ruta a 'completed'
+        if (totalStops > 0 && completedStops === totalStops) {
+          console.log('✅ Todas las paradas completadas, actualizando estado de ruta...')
 
           const updateResponse = await fetch(`/api/routes/${routeId}/status`, {
             method: 'PATCH',
@@ -193,7 +195,7 @@ export default function RouteDetailPage() {
           })
 
           if (updateResponse.ok) {
-            showNotification('success', 'Ruta completada', 'Todas las entregas han sido realizadas')
+            showNotification('success', 'Ruta completada', 'Todas las paradas han sido completadas')
             await fetchRouteDetails() // Recargar para mostrar nuevo estado
           }
         }
@@ -478,22 +480,22 @@ export default function RouteDetailPage() {
                   <div className="bg-blue-50 dark:bg-blue-900/20 p-6 rounded-xl border border-blue-200 dark:border-blue-800">
                     <div className="flex items-center gap-3 mb-4">
                       <div className="w-10 h-10 bg-blue-500 rounded-lg flex items-center justify-center">
-                        <Package className="w-5 h-5 text-white" />
+                        <MapPin className="w-5 h-5 text-white" />
                       </div>
-                      <h3 className="font-semibold text-blue-900 dark:text-blue-100">Paquetes</h3>
+                      <h3 className="font-semibold text-blue-900 dark:text-blue-100">Paradas</h3>
                     </div>
                     <p className="text-3xl font-bold text-blue-900 dark:text-blue-100">
-                      {route.deliveredPackages}/{route.totalPackages}
+                      {routeStops.filter(s => s.status === 'delivered').length}/{routeStops.length}
                     </p>
                     <div className="mt-2">
                       <div className="w-full bg-blue-200 dark:bg-blue-800 rounded-full h-2">
                         <div
                           className="h-2 bg-blue-600 rounded-full transition-all duration-300"
-                          style={{ width: `${calculateProgress()}%` }}
+                          style={{ width: `${routeStops.length > 0 ? (routeStops.filter(s => s.status === 'delivered').length / routeStops.length) * 100 : 0}%` }}
                         ></div>
                       </div>
                       <p className="text-sm text-blue-700 dark:text-blue-300 mt-1">
-                        {calculateProgress().toFixed(0)}% completado
+                        {routeStops.length > 0 ? ((routeStops.filter(s => s.status === 'delivered').length / routeStops.length) * 100).toFixed(0) : 0}% completado
                       </p>
                     </div>
                   </div>
@@ -802,6 +804,7 @@ export default function RouteDetailPage() {
           orderNumber={selectedOrderForProof.orderNumber}
           companyId={user?.companyId || '1'}
           recipientName={selectedOrderForProof.recipientName}
+          services={selectedOrderForProof.services}
           onSuccess={handleProofSuccess}
           onCancel={() => setSelectedOrderForProof(null)}
         />
