@@ -29,6 +29,7 @@ import {
 } from './data/auth-api'
 import { trackerEndpoints, searchTypePatterns } from './data/tracker-api'
 import { paqueteriaEndpoints, orderTypes, orderStatuses } from './data/paqueteria-api'
+import { driverAppEndpoints, empaqueStates } from './data/driver-api'
 
 const methodColors: Record<string, string> = {
   GET: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30',
@@ -695,6 +696,136 @@ export default function DevelopersDocsPage() {
                 </div>
               </section>
             ))}
+
+            {/* Driver App Endpoints */}
+            {driverAppEndpoints.map((endpoint) => (
+              <section
+                key={endpoint.id}
+                data-section={endpoint.id}
+                className="mb-16 scroll-mt-24"
+              >
+                <div className="lg:grid lg:grid-cols-2 lg:gap-8">
+                  {/* Left Column - Description */}
+                  <div>
+                    <div className="flex items-center gap-3 mb-4">
+                      <span className={`px-2.5 py-1 rounded-md text-xs font-bold border ${methodColors[endpoint.method]}`}>
+                        {endpoint.method}
+                      </span>
+                      <code className="text-sm text-gray-300 font-mono">{endpoint.path}</code>
+                    </div>
+
+                    <h2 className="text-2xl font-bold text-white mb-3">{endpoint.title}</h2>
+                    <p className="text-gray-400 mb-6">{endpoint.description}</p>
+
+                    {/* Headers */}
+                    {endpoint.headers && endpoint.headers.length > 0 && (
+                      <ParameterTable
+                        parameters={endpoint.headers}
+                        title="Headers"
+                      />
+                    )}
+
+                    {/* Query Parameters */}
+                    {endpoint.queryParams && endpoint.queryParams.length > 0 && (
+                      <ParameterTable
+                        parameters={endpoint.queryParams}
+                        title="Query Parameters"
+                      />
+                    )}
+
+                    {/* Request Body */}
+                    {endpoint.requestBody && endpoint.requestBody.length > 0 && (
+                      <ParameterTable
+                        parameters={endpoint.requestBody}
+                        title="Request Body"
+                      />
+                    )}
+
+                    {/* Responses */}
+                    <div className="mt-6">
+                      <h4 className="text-sm font-semibold text-white mb-3">Respuestas</h4>
+                      <div className="space-y-3">
+                        {endpoint.responses.map((response) => (
+                          <div
+                            key={response.status + response.description}
+                            className="rounded-lg border border-white/10 overflow-hidden"
+                          >
+                            <div className="flex items-center gap-2 px-4 py-2 bg-white/5 border-b border-white/10">
+                              <span className={`px-2 py-0.5 rounded text-xs font-bold ${
+                                response.status === 200
+                                  ? 'bg-emerald-500/20 text-emerald-400'
+                                  : response.status >= 400
+                                    ? 'bg-red-500/20 text-red-400'
+                                    : 'bg-amber-500/20 text-amber-400'
+                              }`}>
+                                {response.status}
+                              </span>
+                              <span className="text-sm text-gray-400">{response.description}</span>
+                            </div>
+                            <pre className="p-4 text-xs text-gray-300 font-mono overflow-x-auto bg-[#1a1f2e] max-h-96">
+                              {response.body}
+                            </pre>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Right Column - Code Examples */}
+                  <div className="mt-8 lg:mt-0 lg:sticky lg:top-24 lg:self-start">
+                    <CodeBlock
+                      examples={endpoint.examples}
+                      title="Request"
+                    />
+                  </div>
+                </div>
+              </section>
+            ))}
+
+            {/* Empaque States Reference */}
+            <section data-section="empaque-states" className="mb-16">
+              <h2 className="text-xl font-bold text-white mb-4">Estados de Empaques</h2>
+              <p className="text-gray-400 mb-4">
+                Los empaques (cajas y bultos) siguen un flujo de estados que representa su ciclo de vida en el sistema.
+              </p>
+              <div className="rounded-xl border border-white/10 overflow-hidden">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="bg-white/5 border-b border-white/10">
+                      <th className="text-left px-4 py-3 text-gray-400 font-medium">Estado</th>
+                      <th className="text-left px-4 py-3 text-gray-400 font-medium">Descripcion</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-white/5">
+                    {empaqueStates.map((state) => (
+                      <tr key={state.estado} className="hover:bg-white/5 transition-colors">
+                        <td className="px-4 py-3">
+                          <code className="text-[#cc0a46] font-mono text-xs bg-[#cc0a46]/10 px-2 py-1 rounded">
+                            {state.estado}
+                          </code>
+                        </td>
+                        <td className="px-4 py-3 text-gray-400">{state.descripcion}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Flujo de estados */}
+              <div className="mt-6 p-4 rounded-xl border border-white/10 bg-white/5">
+                <h4 className="text-sm font-semibold text-white mb-3">Flujo de Estados</h4>
+                <div className="space-y-2 text-sm">
+                  <div>
+                    <span className="text-gray-400">Caja Vacía:</span>
+                    <code className="ml-2 text-xs text-emerald-400">disponible → en_reparto → recogida</code>
+                  </div>
+                  <div>
+                    <span className="text-gray-400">Bulto (Paquete):</span>
+                    <code className="ml-2 text-xs text-blue-400">recogida → en_almacen → en_transito → recibido_destino → en_reparto → entregado</code>
+                  </div>
+                </div>
+              </div>
+            </section>
 
             {/* Order Types Reference */}
             <section data-section="order-types" className="mb-16">

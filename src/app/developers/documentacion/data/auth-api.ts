@@ -87,6 +87,18 @@ export const navigationItems = [
     ]
   },
   {
+    id: 'driver-app',
+    label: 'API Driver App',
+    badge: 'available' as const,
+    children: [
+      { id: 'driver-dashboard', label: 'GET /dashboard' },
+      { id: 'driver-receive-box', label: 'POST /receive-box' },
+      { id: 'driver-receive-package', label: 'POST /receive-package' },
+      { id: 'driver-packages', label: 'GET /packages' },
+      { id: 'driver-empty-boxes', label: 'GET /empty-boxes' },
+    ]
+  },
+  {
     id: 'webhooks',
     label: 'Webhooks',
     badge: 'coming_soon' as const,
