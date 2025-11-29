@@ -29,7 +29,7 @@ import {
 } from './data/auth-api'
 import { trackerEndpoints, searchTypePatterns } from './data/tracker-api'
 import { paqueteriaEndpoints, orderTypes, orderStatuses } from './data/paqueteria-api'
-import { driverAppEndpoints, empaqueStates } from './data/driver-api'
+import { driverEndpoints, empaqueStates } from './data/driver-api'
 
 const methodColors: Record<string, string> = {
   GET: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30',
@@ -697,8 +697,8 @@ export default function DevelopersDocsPage() {
               </section>
             ))}
 
-            {/* Driver App Endpoints */}
-            {driverAppEndpoints.map((endpoint) => (
+            {/* Driver Endpoints */}
+            {driverEndpoints.map((endpoint) => (
               <section
                 key={endpoint.id}
                 data-section={endpoint.id}
