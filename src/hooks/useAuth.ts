@@ -162,13 +162,16 @@ export function useAuth(): UseAuthReturn {
               redirectPath = '/dashboard/agency-admin'
               break
             case 'MANAGER':
-              redirectPath = '/dashboard/agency-admin'
+              redirectPath = '/dashboard/manager'
               break
             case 'USER':
-              redirectPath = '/dashboard/agency-admin'
+              redirectPath = '/dashboard/user'
+              break
+            case 'DRIVER':
+              redirectPath = '/dashboard/agency-admin'  // Drivers use agency-admin dashboard
               break
             default:
-              redirectPath = '/dashboard/admin'
+              redirectPath = '/dashboard/agency-admin'
           }
 
           // Cookie polling: Wait until auth-token is available in document.cookie

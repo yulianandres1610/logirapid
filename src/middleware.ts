@@ -167,6 +167,11 @@ export async function middleware(request: NextRequest) {
     return response
   }
 
+  if (userRole === 'DRIVER' && pathname.startsWith('/dashboard/agency-admin')) {
+    console.log('✅ DRIVER accessing agency dashboard, companyId:', companyId)
+    return response
+  }
+
   if (userRole === 'MANAGER' && pathname.startsWith('/dashboard/manager')) {
     console.log('✅ MANAGER accessing manager dashboard, companyId:', companyId)
     return response
@@ -198,6 +203,25 @@ export async function middleware(request: NextRequest) {
 
   if (userRole === 'ADMIN' && pathname.startsWith('/dashboard/user')) {
     console.log('🔄 Redirecting ADMIN from user to agency dashboard')
+    const agencyDashboardUrl = new URL('/dashboard/agency-admin', request.url)
+    return NextResponse.redirect(agencyDashboardUrl)
+  }
+
+  // DRIVER redirects
+  if (userRole === 'DRIVER' && pathname.startsWith('/dashboard/admin')) {
+    console.log('🔄 Redirecting DRIVER from admin to agency dashboard')
+    const agencyDashboardUrl = new URL('/dashboard/agency-admin', request.url)
+    return NextResponse.redirect(agencyDashboardUrl)
+  }
+
+  if (userRole === 'DRIVER' && pathname.startsWith('/dashboard/manager')) {
+    console.log('🔄 Redirecting DRIVER from manager to agency dashboard')
+    const agencyDashboardUrl = new URL('/dashboard/agency-admin', request.url)
+    return NextResponse.redirect(agencyDashboardUrl)
+  }
+
+  if (userRole === 'DRIVER' && pathname.startsWith('/dashboard/user')) {
+    console.log('🔄 Redirecting DRIVER from user to agency dashboard')
     const agencyDashboardUrl = new URL('/dashboard/agency-admin', request.url)
     return NextResponse.redirect(agencyDashboardUrl)
   }
