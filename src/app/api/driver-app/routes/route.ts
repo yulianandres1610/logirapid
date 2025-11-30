@@ -86,7 +86,7 @@ export async function GET(request: NextRequest) {
     const limit = parseInt(searchParams.get('limit') || '20')
     const offset = (page - 1) * limit
 
-    // Construir query base
+    // Construir query base con JOIN a warehouses para obtener origen
     let query = `
       SELECT
         r.id,
@@ -94,14 +94,27 @@ export async function GET(request: NextRequest) {
         r.qrcode as "qrCode",
         r.status,
         r.distance,
-        r.estimatedduration as "duration",
+        r.estimatedduration as "estimatedDuration",
         r.date as "scheduledDate",
         r.vehicleplate as "vehiclePlate",
         r.vehicleid as "vehicleId",
         r.stops,
         r.createdat as "createdAt",
-        r.company_id as "companyId"
+        r.company_id as "companyId",
+        r.warehouseid as "warehouseId",
+        r.totalpackages as "totalPackages",
+        r.deliveredpackages as "deliveredPackages",
+        r.starttime as "startTime",
+        r.endtime as "endTime",
+        r.actualduration as "actualDuration",
+        w.name as "warehouseName",
+        w.address as "warehouseAddress",
+        w.city as "warehouseCity",
+        w.state as "warehouseState",
+        w.latitude as "warehouseLatitude",
+        w.longitude as "warehouseLongitude"
       FROM routes r
+      LEFT JOIN warehouses w ON r.warehouseid::integer = w.id
       WHERE r.driverid = $1
     `
     const params: any[] = [userId]
@@ -157,7 +170,7 @@ export async function GET(request: NextRequest) {
     const countResult = await db.query(countQuery, countParams)
     const total = parseInt(countResult.rows[0]?.total || '0')
 
-    // Procesar rutas para calcular paradas completadas
+    // Procesar rutas para calcular paradas completadas y extraer origen/destino
     const routes = routesResult.rows.map((route: any) => {
       // Parsear stops
       let stops: any[] = []
@@ -174,36 +187,119 @@ export async function GET(request: NextRequest) {
       const totalStops = orderStops.length
 
       // Calcular paradas completadas basado en status de órdenes
-      // Por ahora, usar el status de la parada si existe
       let completedStops = 0
       let pendingStops = 0
       let failedStops = 0
 
       orderStops.forEach((stop: any) => {
-        if (stop.status === 'delivered' || stop.status === 'completed') {
+        if (stop.status === 'delivered' || stop.status === 'completed' || stop.status === 'entregado') {
           completedStops++
-        } else if (stop.status === 'failed' || stop.status === 'cancelled') {
+        } else if (stop.status === 'failed' || stop.status === 'cancelled' || stop.status === 'fallido') {
           failedStops++
         } else {
           pendingStops++
         }
       })
 
+      // Construir información de origen (warehouse)
+      const origin = route.warehouseName ? {
+        name: route.warehouseName,
+        address: route.warehouseAddress,
+        city: route.warehouseCity,
+        state: route.warehouseState,
+        fullAddress: `${route.warehouseAddress || ''}, ${route.warehouseCity || ''}, ${route.warehouseState || ''}`.replace(/^,\s*|,\s*$/g, '').trim(),
+        coordinates: route.warehouseLatitude && route.warehouseLongitude ? {
+          latitude: parseFloat(route.warehouseLatitude),
+          longitude: parseFloat(route.warehouseLongitude)
+        } : null
+      } : null
+
+      // Obtener información del destino (última parada con órdenes)
+      const lastOrderStop = orderStops.length > 0 ? orderStops[orderStops.length - 1] : null
+      const destination = lastOrderStop ? {
+        address: lastOrderStop.address || 'Dirección no disponible',
+        coordinates: lastOrderStop.latitude && lastOrderStop.longitude ? {
+          latitude: parseFloat(lastOrderStop.latitude),
+          longitude: parseFloat(lastOrderStop.longitude)
+        } : (lastOrderStop.coordinates ? {
+          longitude: lastOrderStop.coordinates[0],
+          latitude: lastOrderStop.coordinates[1]
+        } : null),
+        orderNumbers: lastOrderStop.orderNumbers || (lastOrderStop.orderId ? [lastOrderStop.orderId] : [])
+      } : null
+
+      // Parsear distancia y duración
+      const distanceValue = parseFloat(route.distance) || 0
+      const durationStr = route.estimatedDuration || '0 min'
+
+      // Extraer minutos de la duración (formato: "43 min" o "1 hr 20 min")
+      let durationMinutes = 0
+      if (durationStr) {
+        const hrMatch = durationStr.match(/(\d+)\s*hr/)
+        const minMatch = durationStr.match(/(\d+)\s*min/)
+        if (hrMatch) durationMinutes += parseInt(hrMatch[1]) * 60
+        if (minMatch) durationMinutes += parseInt(minMatch[1])
+      }
+
       return {
         id: route.id,
+        routeCode: route.routeNumber, // Código de la ruta
         routeNumber: route.routeNumber,
         qrCode: route.qrCode,
         status: route.status,
+
+        // Información de paradas
         totalStops,
         completedStops,
         pendingStops,
         failedStops,
-        distance: route.distance,
-        duration: route.duration,
-        scheduledDate: route.scheduledDate,
+
+        // Información de distancia y tiempo
+        distance: {
+          value: distanceValue,
+          unit: 'miles',
+          formatted: `${distanceValue.toFixed(2)} mi`
+        },
+        estimatedDuration: {
+          minutes: durationMinutes,
+          formatted: durationStr
+        },
+        actualDuration: route.actualDuration,
+
+        // Origen y destino
+        origin,
+        destination,
+
+        // Información del vehículo
         vehiclePlate: route.vehiclePlate,
         vehicleId: route.vehicleId,
-        createdAt: route.createdAt
+
+        // Paquetes totales
+        totalPackages: route.totalPackages || totalStops,
+        deliveredPackages: route.deliveredPackages || completedStops,
+
+        // Fechas y tiempos
+        scheduledDate: route.scheduledDate,
+        startTime: route.startTime,
+        endTime: route.endTime,
+        createdAt: route.createdAt,
+
+        // Array de paradas con detalles para navegación
+        stops: orderStops.map((stop: any, index: number) => ({
+          sequence: stop.sequence || index + 1,
+          address: stop.address || 'Dirección no disponible',
+          coordinates: stop.latitude && stop.longitude ? {
+            latitude: parseFloat(stop.latitude),
+            longitude: parseFloat(stop.longitude)
+          } : (stop.coordinates ? {
+            longitude: stop.coordinates[0],
+            latitude: stop.coordinates[1]
+          } : null),
+          status: stop.status || 'pendiente',
+          orderNumbers: stop.orderNumbers || [],
+          totalOrders: stop.totalOrders || (stop.orderIds?.length || 1),
+          type: stop.type || 'delivery'
+        }))
       }
     })
 
