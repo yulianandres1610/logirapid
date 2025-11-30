@@ -28,11 +28,11 @@ export async function PATCH(
     const { status } = body
 
     // Validar status
-    const validStatuses = ['planning', 'active', 'completed', 'cancelled']
+    const validStatuses = ['planificada', 'asignada', 'en_curso', 'completada', 'cancelada']
     if (!status || !validStatuses.includes(status)) {
       return NextResponse.json({
         success: false,
-        error: 'Estado inválido. Debe ser: planning, active, completed o cancelled'
+        error: 'Estado inválido. Debe ser: planificada, asignada, en_curso, completada o cancelada'
       }, { status: 400 })
     }
 
@@ -61,8 +61,8 @@ export async function PATCH(
       UPDATE routes SET
         status = $1,
         updatedat = NOW()
-        ${status === 'completed' ? ', endtime = NOW()' : ''}
-        ${status === 'active' && currentRoute.status === 'planning' ? ', starttime = NOW()' : ''}
+        ${status === 'completada' ? ', endtime = NOW()' : ''}
+        ${status === 'en_curso' && currentRoute.status === 'asignada' ? ', starttime = NOW()' : ''}
       WHERE id = $2
       RETURNING *
     `
@@ -70,7 +70,7 @@ export async function PATCH(
     const result = await db.query(updateQuery, [status, routeId])
 
     // Si se marca como completada, actualizar también deliveredpackages
-    if (status === 'completed') {
+    if (status === 'completada') {
       // Contar órdenes entregadas
       const stopsQuery = 'SELECT stops FROM routes WHERE id = $1'
       const stopsResult = await db.query(stopsQuery, [routeId])

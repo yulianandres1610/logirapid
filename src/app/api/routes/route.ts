@@ -19,7 +19,7 @@ export interface Route {
   driverName?: string | null
   vehicleId?: number
   vehiclePlate?: string
-  status: 'planning' | 'active' | 'completed' | 'cancelled'
+  status: 'planificada' | 'asignada' | 'en_curso' | 'completada' | 'cancelada'
   totalPackages: number
   deliveredPackages: number
   estimatedDuration?: string
@@ -341,12 +341,13 @@ export async function GET(request: NextRequest) {
           if (completedStops === totalStops && totalStops > 0) {
             calculatedStatus = 'completed'
             // Actualizar en BD si es diferente
-            if (route.status !== 'completed') {
-              await db.query('UPDATE routes SET status = $1, updatedat = NOW() WHERE id = $2', ['completed', route.id])
+            if (route.status !== 'completada') {
+              await db.query('UPDATE routes SET status = $1, updatedat = NOW() WHERE id = $2', ['completada', route.id])
             }
-          } else if (completedStops > 0 && route.status === 'planning') {
-            calculatedStatus = 'active'
-            await db.query('UPDATE routes SET status = $1, updatedat = NOW() WHERE id = $2', ['active', route.id])
+          } else if (completedStops > 0 && route.status === 'asignada') {
+            // Si hay paradas completadas y la ruta estaba asignada, debería estar en_curso
+            calculatedStatus = 'en_curso'
+            await db.query('UPDATE routes SET status = $1, updatedat = NOW() WHERE id = $2', ['en_curso', route.id])
           }
         }
       }
@@ -1375,7 +1376,7 @@ export async function POST(request: NextRequest) {
       body.driverName || null,
       body.vehicleId || null,  // vehicleId es string, no convertir a int
       body.vehiclePlate || null,
-      'planning',
+      'planificada',
       selectedOrders.length,
       0,
       optimizedRouteData?.duration ? `${optimizedRouteData.duration}m` : (totalDuration > 0 ? `${Math.round(totalDuration)} min` : body.estimatedDuration),
@@ -1409,21 +1410,10 @@ export async function POST(request: NextRequest) {
     console.log(`✅ [DB] Ruta creada: ${routeNumber} (ID: ${routeId})`)
 
     // ==============================
-    // PASO 8: Actualizar estados de órdenes a "in_transit"
+    // PASO 8: Las órdenes permanecen en estado 'pending'
+    // El estado cambiará a 'en_ruta' cuando se asigne un driver
     // ==============================
-    console.log(`🔄 [Órdenes] Actualizando ${selectedOrders.length} órdenes a "in_transit"...`)
-
-    try {
-      for (const order of selectedOrders) {
-        await db.query(
-          'UPDATE package_orders SET status = $1, updatedat = NOW() WHERE id = $2',
-          ['in_transit', order.id]
-        )
-      }
-      console.log(`✅ [Órdenes] ${selectedOrders.length} órdenes actualizadas`)
-    } catch (error) {
-      console.error('❌ [Órdenes] Error actualizando estados:', error)
-    }
+    console.log(`📦 [Órdenes] ${selectedOrders.length} órdenes permanecen en estado 'pending' hasta asignar driver`)
 
     // ==============================
     // PASO 9: Retornar respuesta

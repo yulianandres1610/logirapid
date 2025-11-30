@@ -186,10 +186,30 @@ export function useAuth(): UseAuthReturn {
 
               if (hasAuthToken) {
                 console.log('[AUTH] Auth token cookie found, redirecting to:', redirectPath)
-                window.location.href = redirectPath
+
+                // Multi-domain redirect logic
+                const currentHost = window.location.hostname
+                const isMainDomain = currentHost === 'logirapid.com' || currentHost === 'www.logirapid.com'
+
+                if (isMainDomain) {
+                  // If logging in from main domain, redirect to agencias subdomain
+                  window.location.href = `https://agencias.logirapid.com${redirectPath}`
+                } else {
+                  // Normal redirect for agencias subdomain or localhost
+                  window.location.href = redirectPath
+                }
               } else if (attempts >= maxAttempts) {
                 console.error('[AUTH] Cookie not found after 3 seconds, redirecting anyway')
-                window.location.href = redirectPath
+
+                // Multi-domain redirect logic (fallback)
+                const currentHost = window.location.hostname
+                const isMainDomain = currentHost === 'logirapid.com' || currentHost === 'www.logirapid.com'
+
+                if (isMainDomain) {
+                  window.location.href = `https://agencias.logirapid.com${redirectPath}`
+                } else {
+                  window.location.href = redirectPath
+                }
               } else {
                 // Check again after 50ms
                 setTimeout(checkCookie, 50)

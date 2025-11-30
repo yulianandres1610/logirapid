@@ -44,7 +44,8 @@ interface RouteData {
   driverName?: string
   vehicleId?: number
   vehiclePlate?: string
-  status: 'planning' | 'active' | 'completed' | 'cancelled'
+  // Include legacy English states for backward compatibility
+  status: 'planificada' | 'asignada' | 'en_curso' | 'completada' | 'cancelada' | 'planning' | 'active' | 'completed' | 'cancelled'
   totalPackages: number
   deliveredPackages: number
   estimatedDuration?: string
@@ -233,21 +234,60 @@ export default function RouteDetailPage() {
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case 'planning': return 'text-blue-600 bg-blue-50 dark:bg-blue-900/20'
-      case 'active': return 'text-green-600 bg-green-50 dark:bg-green-900/20'
-      case 'completed': return 'text-gray-600 bg-gray-50 dark:bg-gray-900/20'
-      case 'cancelled': return 'text-red-600 bg-red-50 dark:bg-red-900/20'
+      case 'planificada':
+      case 'planning': // legacy
+        return 'text-blue-600 bg-blue-50 dark:bg-blue-900/20'
+      case 'asignada':
+        return 'text-blue-600 bg-blue-50 dark:bg-blue-900/20'
+      case 'en_curso':
+      case 'active': // legacy
+        return 'text-yellow-600 bg-yellow-50 dark:bg-yellow-900/20'
+      case 'completada':
+      case 'completed': // legacy
+        return 'text-green-600 bg-green-50 dark:bg-green-900/20'
+      case 'cancelada':
+      case 'cancelled': // legacy
+        return 'text-red-600 bg-red-50 dark:bg-red-900/20'
       default: return 'text-gray-600 bg-gray-50 dark:bg-gray-900/20'
     }
   }
 
   const getStatusText = (status: string) => {
     switch (status) {
-      case 'planning': return 'Planificación'
-      case 'active': return 'Activa'
-      case 'completed': return 'Completada'
-      case 'cancelled': return 'Cancelada'
+      case 'planificada':
+      case 'planning': // legacy
+        return 'Planificada'
+      case 'asignada':
+        return 'Asignada'
+      case 'en_curso':
+      case 'active': // legacy
+        return 'En Curso'
+      case 'completada':
+      case 'completed': // legacy
+        return 'Completada'
+      case 'cancelada':
+      case 'cancelled': // legacy
+        return 'Cancelada'
       default: return status
+    }
+  }
+
+  // Handler para iniciar la ruta
+  const handleStartRoute = async () => {
+    try {
+      const response = await fetch(`/api/routes/${routeId}/start`, {
+        method: 'POST'
+      })
+      const data = await response.json()
+      if (data.success) {
+        showNotification('success', 'Ruta Iniciada', data.message)
+        fetchRouteDetails()
+        fetchRouteStops()
+      } else {
+        showNotification('error', 'Error', data.error)
+      }
+    } catch (error) {
+      showNotification('error', 'Error', 'No se pudo iniciar la ruta')
     }
   }
 
@@ -415,6 +455,16 @@ export default function RouteDetailPage() {
               </div>
 
               <div className="flex items-center gap-3">
+                {/* Mostrar botón Iniciar para rutas asignadas o planning con driver */}
+                {(route?.status === 'asignada' || (route?.status === 'planning' && route?.driverId)) && (
+                  <Button
+                    onClick={handleStartRoute}
+                    className="bg-green-600 hover:bg-green-700 text-white"
+                  >
+                    <Navigation className="w-4 h-4 mr-2" />
+                    Iniciar Ruta
+                  </Button>
+                )}
                 <Button
                   variant="outline"
                   onClick={() => setShowMap(!showMap)}

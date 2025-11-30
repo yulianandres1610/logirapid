@@ -12,7 +12,11 @@ export async function middleware(request: NextRequest) {
     '/register',
     '/forgot-password',
     '/reset-password',
-    '/auth/error'
+    '/auth/error',
+    '/tracking',
+    '/pricing',
+    '/contact',
+    '/consentimiento-sms',
   ]
 
   // Recursos estáticos (pero NO API)
@@ -25,6 +29,11 @@ export async function middleware(request: NextRequest) {
 
   // Verificar si la ruta es pública
   if (publicRoutes.includes(pathname) || staticRoutes.some(route => pathname.startsWith(route))) {
+    return NextResponse.next()
+  }
+
+  // Para rutas API públicas, no requerir autenticación
+  if (pathname.startsWith('/api/public')) {
     return NextResponse.next()
   }
 

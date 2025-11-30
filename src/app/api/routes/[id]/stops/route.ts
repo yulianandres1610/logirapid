@@ -288,7 +288,9 @@ export async function GET(
             country: order.sendercountry || '',
             zipcode: order.senderzipcode || '',
             coordinates: [parseFloat(lng), parseFloat(lat)],
-            orders: []
+            orders: [],
+            // Guardar el estado del waypoint si existe (del JSON de la ruta)
+            waypointStatus: wp.status || null
           })
         }
 
@@ -319,34 +321,59 @@ export async function GET(
     }
 
     // Determinar estado de cada parada
+    // Priorizar el estado guardado en el waypoint (JSON de la ruta) sobre el calculado
     const stops = Array.from(stopsMap.values()).map(stop => {
-      const allDelivered = stop.orders.every((o: any) => o.status === 'delivered' || o.status === 'completed')
+      const allDelivered = stop.orders.every((o: any) => o.status === 'delivered' || o.status === 'completed' || o.status === 'en_bodega')
       const anyFailed = stop.orders.some((o: any) => o.status === 'failed' || o.status === 'cancelled')
       const allHaveProof = stop.orders.every((o: any) => o.hasProof)
+      const anyEnReparto = stop.orders.some((o: any) => o.status === 'en_reparto')
+
+      // Determinar estado final:
+      // 1. Si el waypoint tiene estado guardado (de iniciar ruta), usarlo
+      // 2. Si no, calcularlo basado en las órdenes
+      let finalStatus = stop.waypointStatus
+
+      if (!finalStatus) {
+        // Calcular basado en órdenes si no hay estado guardado
+        if (allDelivered) {
+          finalStatus = 'completada'
+        } else if (anyFailed) {
+          finalStatus = 'fallida'
+        } else if (anyEnReparto) {
+          finalStatus = 'en_curso'
+        } else {
+          finalStatus = 'pendiente'
+        }
+      }
+
+      // Limpiar el campo temporal waypointStatus antes de retornar
+      const { waypointStatus, ...stopWithoutWaypointStatus } = stop
 
       return {
-        ...stop,
-        status: allDelivered ? 'delivered' : (anyFailed ? 'failed' : 'pending'),
+        ...stopWithoutWaypointStatus,
+        status: finalStatus,
         proofComplete: allHaveProof
       }
     })
 
     // Calcular estado sugerido de la ruta basado en las paradas
     const totalStops = stops.length
-    const completedStops = stops.filter(s => s.status === 'delivered').length
-    const failedStops = stops.filter(s => s.status === 'failed').length
-    const pendingStops = stops.filter(s => s.status === 'pending').length
+    // Considerar tanto estados nuevos (español) como legacy (inglés)
+    const completedStops = stops.filter(s => s.status === 'delivered' || s.status === 'completada').length
+    const failedStops = stops.filter(s => s.status === 'failed' || s.status === 'fallida').length
+    const pendingStops = stops.filter(s => s.status === 'pending' || s.status === 'pendiente').length
+    const enCursoStops = stops.filter(s => s.status === 'en_curso').length
 
     // Determinar estado calculado de la ruta:
-    // - Si todas las paradas están completadas -> completed
-    // - Si hay al menos una parada completada o en progreso -> active
-    // - Si todas están pendientes -> planning (o active si ya se inició)
+    // - Si todas las paradas están completadas -> completada
+    // - Si hay al menos una parada en curso o completada -> en_curso
+    // - Si todas están pendientes -> depende del estado actual
     let calculatedRouteStatus = route.status
     if (totalStops > 0) {
       if (completedStops === totalStops) {
-        calculatedRouteStatus = 'completed'
-      } else if (completedStops > 0 || route.status === 'active') {
-        calculatedRouteStatus = 'active'
+        calculatedRouteStatus = 'completada'
+      } else if (completedStops > 0 || enCursoStops > 0 || route.status === 'active' || route.status === 'en_curso') {
+        calculatedRouteStatus = 'en_curso'
       }
     }
 
@@ -370,7 +397,8 @@ export async function GET(
           total: totalStops,
           completed: completedStops,
           pending: pendingStops,
-          failed: failedStops
+          failed: failedStops,
+          enCurso: enCursoStops
         }
       }
     })

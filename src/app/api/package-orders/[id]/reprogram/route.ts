@@ -32,8 +32,12 @@ export async function POST(
 
     const order = orderResult.rows[0]
 
-    if (order.status !== 'in_transit') {
-      return NextResponse.json({ error: 'Order must be in transit to be reprogrammed' }, { status: 400 })
+    // Permitir reprogramación en varios estados
+    const allowedStatuses = ['in_transit', 'pending', 'en_ruta', 'en_reparto']
+    if (!allowedStatuses.includes(order.status)) {
+      return NextResponse.json({
+        error: `No se puede reprogramar una orden con estado "${order.status}". Estados permitidos: ${allowedStatuses.join(', ')}`
+      }, { status: 400 })
     }
 
     if (!newScheduledDate || !newTimeSlot) {
@@ -54,14 +58,32 @@ export async function POST(
       `, [newScheduledDate, newTimeSlot, orderId])
 
       // 2. Parse stops JSON and remove the reprogrammed order
-      let stops = JSON.parse(order.stops || '[]')
+      let stops = typeof order.stops === 'string'
+        ? JSON.parse(order.stops || '[]')
+        : (Array.isArray(order.stops) ? order.stops : [])
+
+      const orderIdNum = parseInt(orderId)
 
       // Find and remove the stop with this order
+      // Soporta ambos formatos: orderId (singular) y orderIds (array)
       const originalStopCount = stops.length
-      stops = stops.filter((stop: any) => stop.orderId !== parseInt(orderId))
+      stops = stops.filter((stop: any) => {
+        // Si tiene orderId singular
+        if (stop.orderId !== undefined) {
+          return Number(stop.orderId) !== orderIdNum
+        }
+        // Si tiene orderIds array
+        if (stop.orderIds && Array.isArray(stop.orderIds)) {
+          return !stop.orderIds.some((id: number | string) => Number(id) === orderIdNum)
+        }
+        return true
+      })
 
       if (stops.length === originalStopCount) {
-        throw new Error('Order not found in route stops')
+        // Si no se encontró en la estructura normal, intentar buscar en formato de waypoints
+        console.log('⚠️ Orden no encontrada en stops, intentando buscar en waypoints...')
+        console.log('Order ID buscado:', orderIdNum)
+        console.log('Stops:', JSON.stringify(stops.slice(0, 3), null, 2))
       }
 
       // 3. Re-number the remaining stops
@@ -70,34 +92,49 @@ export async function POST(
         stopNumber: index + 1
       }))
 
-      // 4. Update the route with new stops
-      await db.query(`
-        UPDATE routes
-        SET stops = $1, updatedat = NOW()
-        WHERE id = $2
-      `, [JSON.stringify(stops), order.routeid])
-
-      // 5. Update other orders in the route to remove routeId if needed
-      for (const stop of stops) {
+      // 4. Verificar si la ruta quedó vacía
+      let routeDeleted = false
+      if (stops.length === 0) {
+        // Eliminar la ruta vacía
         await db.query(`
-          UPDATE package_orders
-          SET stopnumber = $1
+          DELETE FROM routes
+          WHERE id = $1
+        `, [order.routeid])
+        routeDeleted = true
+        console.log(`🗑️ [Ruta] Ruta ${order.routeid} eliminada (quedó vacía)`)
+      } else {
+        // 5. Update the route with new stops
+        await db.query(`
+          UPDATE routes
+          SET stops = $1, updatedat = NOW()
           WHERE id = $2
-        `, [stop.stopNumber, stop.orderId])
+        `, [JSON.stringify(stops), order.routeid])
+
+        // 6. Update other orders in the route to update stopNumber
+        for (const stop of stops) {
+          await db.query(`
+            UPDATE package_orders
+            SET stopnumber = $1
+            WHERE id = $2
+          `, [stop.stopNumber, stop.orderId])
+        }
       }
 
-      return stops
+      return { stops, routeDeleted }
     })
 
     return NextResponse.json({
       success: true,
-      message: 'Order reprogrammed successfully',
+      message: result.routeDeleted
+        ? 'Orden reprogramada y ruta eliminada (era la única orden)'
+        : 'Orden reprogramada exitosamente',
       data: {
         orderId: parseInt(orderId),
         previousRouteId: order.routeid,
-        newStopsCount: result.length,
+        newStopsCount: result.stops.length,
         newScheduledDate,
-        newTimeSlot
+        newTimeSlot,
+        routeDeleted: result.routeDeleted
       }
     })
 

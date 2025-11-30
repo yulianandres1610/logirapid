@@ -2399,5 +2399,934 @@ class _BultoValidationScreenState extends State<BultoValidationScreen> {
 }`
       }
     ]
+  },
+  // ==================== RUTAS - INICIAR Y COMPLETAR ====================
+  {
+    id: 'driver-route-start',
+    method: 'POST',
+    path: '/api/driver-app/routes/[code]/start',
+    title: 'Iniciar Ruta',
+    description: 'Inicia una ruta asignada al driver. Cambia el estado de la ruta a "en_curso", actualiza las paradas y marca las órdenes como "en_reparto". El code puede ser el QR, número de ruta o ID.',
+    headers: [
+      {
+        name: 'Cookie',
+        type: 'string',
+        required: true,
+        description: 'Token de autenticación: auth-token=<token>'
+      }
+    ],
+    responses: [
+      {
+        status: 200,
+        description: 'Ruta iniciada exitosamente',
+        body: `{
+  "success": true,
+  "message": "Ruta R-2024-001 iniciada exitosamente",
+  "data": {
+    "id": 123,
+    "routeNumber": "R-2024-001",
+    "qrCode": "RT-ABCD1234EFGH5678",
+    "status": "en_curso",
+    "startTime": "2024-01-15T10:30:00Z",
+    "driverName": "Juan Pérez",
+    "vehiclePlate": "ABC-123",
+    "totalStops": 12,
+    "totalOrders": 15,
+    "firstStop": {
+      "stopNumber": 1,
+      "address": "123 Main St, Miami, FL",
+      "coordinates": [-80.1234, 25.7890]
+    }
+  }
+}`
+      },
+      {
+        status: 400,
+        description: 'Estado inválido para iniciar',
+        body: `{
+  "success": false,
+  "error": "La ruta no puede ser iniciada. Estado actual: completada",
+  "currentStatus": "completada"
+}`
+      }
+    ],
+    examples: [
+      {
+        language: 'curl',
+        label: 'cURL',
+        code: `curl -X POST 'https://logirapid.com/api/driver-app/routes/RT-ABCD1234EFGH5678/start' \\
+  -H 'Cookie: auth-token=YOUR_TOKEN'`
+      },
+      {
+        language: 'javascript',
+        label: 'JavaScript',
+        code: `async function startRoute(routeCode) {
+  const response = await fetch(\`/api/driver-app/routes/\${routeCode}/start\`, {
+    method: 'POST',
+    credentials: 'include'
+  });
+
+  const data = await response.json();
+
+  if (data.success) {
+    console.log('Ruta iniciada:', data.data.routeNumber);
+    console.log('Primera parada:', data.data.firstStop?.address);
+    return data.data;
+  }
+
+  throw new Error(data.error);
+}`
+      },
+      {
+        language: 'dart',
+        label: 'Flutter',
+        code: `Future<RouteData> startRoute(String routeCode) async {
+  final token = await secureStorage.read(key: 'auth-token');
+
+  final response = await http.post(
+    Uri.parse('https://logirapid.com/api/driver-app/routes/\$routeCode/start'),
+    headers: {'Cookie': 'auth-token=\$token'},
+  );
+
+  final data = jsonDecode(response.body);
+
+  if (data['success']) {
+    // Navegar a la primera parada
+    final firstStop = data['data']['firstStop'];
+    if (firstStop != null) {
+      openNavigation(firstStop['coordinates']);
+    }
+    return RouteData.fromJson(data['data']);
+  }
+
+  throw Exception(data['error']);
+}`
+      }
+    ]
+  },
+  {
+    id: 'driver-route-complete',
+    method: 'POST',
+    path: '/api/driver-app/routes/[code]/complete',
+    title: 'Completar Ruta',
+    description: 'Finaliza una ruta en curso. Calcula estadísticas de entregas exitosas/fallidas. Si hay paradas pendientes, requiere forceComplete=true.',
+    headers: [
+      {
+        name: 'Cookie',
+        type: 'string',
+        required: true,
+        description: 'Token de autenticación: auth-token=<token>'
+      },
+      {
+        name: 'Content-Type',
+        type: 'string',
+        required: true,
+        description: 'application/json'
+      }
+    ],
+    requestBody: [
+      {
+        name: 'forceComplete',
+        type: 'boolean',
+        required: false,
+        description: 'Forzar cierre aunque haya paradas pendientes (las marca como fallidas)'
+      },
+      {
+        name: 'notes',
+        type: 'string',
+        required: false,
+        description: 'Notas de cierre de ruta'
+      }
+    ],
+    responses: [
+      {
+        status: 200,
+        description: 'Ruta completada exitosamente',
+        body: `{
+  "success": true,
+  "message": "Ruta R-2024-001 completada exitosamente",
+  "data": {
+    "id": 123,
+    "routeNumber": "R-2024-001",
+    "status": "completada",
+    "startTime": "2024-01-15T08:00:00Z",
+    "endTime": "2024-01-15T14:30:00Z",
+    "durationMinutes": 390,
+    "summary": {
+      "totalStops": 12,
+      "deliveredStops": 10,
+      "failedStops": 2,
+      "deliveredOrders": 13,
+      "failedOrders": 2
+    }
+  }
+}`
+      },
+      {
+        status: 400,
+        description: 'Hay paradas pendientes',
+        body: `{
+  "success": false,
+  "error": "Hay 3 paradas pendientes. Use forceComplete=true para completar de todas formas.",
+  "pendingStops": 3,
+  "completedStops": 9,
+  "totalStops": 12
+}`
+      }
+    ],
+    examples: [
+      {
+        language: 'curl',
+        label: 'cURL',
+        code: `# Completar ruta normal
+curl -X POST 'https://logirapid.com/api/driver-app/routes/R-2024-001/complete' \\
+  -H 'Cookie: auth-token=YOUR_TOKEN' \\
+  -H 'Content-Type: application/json' \\
+  -d '{}'
+
+# Forzar cierre con paradas pendientes
+curl -X POST 'https://logirapid.com/api/driver-app/routes/R-2024-001/complete' \\
+  -H 'Cookie: auth-token=YOUR_TOKEN' \\
+  -H 'Content-Type: application/json' \\
+  -d '{"forceComplete": true, "notes": "Fin de jornada"}'`
+      },
+      {
+        language: 'javascript',
+        label: 'JavaScript',
+        code: `async function completeRoute(routeCode, options = {}) {
+  const response = await fetch(\`/api/driver-app/routes/\${routeCode}/complete\`, {
+    method: 'POST',
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(options)
+  });
+
+  const data = await response.json();
+
+  if (data.success) {
+    console.log('Ruta completada!');
+    console.log('Duración:', data.data.durationMinutes, 'minutos');
+    console.log('Entregas:', data.data.summary.deliveredOrders);
+    console.log('Fallidas:', data.data.summary.failedOrders);
+    return data.data;
+  }
+
+  // Si hay paradas pendientes, mostrar confirmación
+  if (data.pendingStops) {
+    const confirm = window.confirm(
+      \`Hay \${data.pendingStops} paradas sin completar. ¿Desea cerrar de todas formas?\`
+    );
+    if (confirm) {
+      return completeRoute(routeCode, { forceComplete: true });
+    }
+  }
+
+  throw new Error(data.error);
+}`
+      },
+      {
+        language: 'dart',
+        label: 'Flutter',
+        code: `Future<RouteSummary> completeRoute(String routeCode, {bool force = false, String? notes}) async {
+  final token = await secureStorage.read(key: 'auth-token');
+
+  final response = await http.post(
+    Uri.parse('https://logirapid.com/api/driver-app/routes/\$routeCode/complete'),
+    headers: {
+      'Cookie': 'auth-token=\$token',
+      'Content-Type': 'application/json',
+    },
+    body: jsonEncode({
+      if (force) 'forceComplete': true,
+      if (notes != null) 'notes': notes,
+    }),
+  );
+
+  final data = jsonDecode(response.body);
+
+  if (data['success']) {
+    return RouteSummary.fromJson(data['data']);
+  }
+
+  // Mostrar diálogo si hay paradas pendientes
+  if (data['pendingStops'] != null && !force) {
+    final confirmed = await showConfirmDialog(
+      'Paradas Pendientes',
+      'Hay \${data['pendingStops']} paradas sin completar. ¿Cerrar ruta de todas formas?',
+    );
+    if (confirmed) {
+      return completeRoute(routeCode, force: true);
+    }
+  }
+
+  throw Exception(data['error']);
+}`
+      }
+    ]
+  },
+  // ==================== PARADAS - FALLA Y NAVEGACIÓN ====================
+  {
+    id: 'driver-stop-fail',
+    method: 'POST',
+    path: '/api/driver-app/stops/[routeId]/[stopNumber]/fail',
+    title: 'Marcar Parada como Fallida',
+    description: 'Marca una parada como fallida con razón. Las órdenes de la parada se marcan como "reprogrammed" para intentar de nuevo. Registra foto opcional y coordenadas.',
+    headers: [
+      {
+        name: 'Cookie',
+        type: 'string',
+        required: true,
+        description: 'Token de autenticación: auth-token=<token>'
+      },
+      {
+        name: 'Content-Type',
+        type: 'string',
+        required: true,
+        description: 'application/json'
+      }
+    ],
+    requestBody: [
+      {
+        name: 'reasonCode',
+        type: 'string',
+        required: true,
+        description: 'Código de razón: no_responde, direccion_incorrecta, cliente_rechazo, acceso_denegado, zona_peligrosa, horario_no_disponible, paquete_danado, otro'
+      },
+      {
+        name: 'reason',
+        type: 'string',
+        required: false,
+        description: 'Descripción personalizada de la razón (requerido si reasonCode es "otro")'
+      },
+      {
+        name: 'photo',
+        type: 'string',
+        required: false,
+        description: 'URL de foto como evidencia'
+      },
+      {
+        name: 'latitude',
+        type: 'number',
+        required: false,
+        description: 'Latitud donde se reporta la falla'
+      },
+      {
+        name: 'longitude',
+        type: 'number',
+        required: false,
+        description: 'Longitud donde se reporta la falla'
+      },
+      {
+        name: 'notes',
+        type: 'string',
+        required: false,
+        description: 'Notas adicionales'
+      }
+    ],
+    responses: [
+      {
+        status: 200,
+        description: 'Parada marcada como fallida',
+        body: `{
+  "success": true,
+  "message": "Parada marcada como fallida",
+  "data": {
+    "routeId": 123,
+    "routeNumber": "R-2024-001",
+    "stopNumber": 5,
+    "status": "failed",
+    "reason": "Nadie responde / No está",
+    "reasonCode": "no_responde",
+    "affectedOrders": 2,
+    "failedAt": "2024-01-15T11:30:00Z",
+    "failedBy": "Juan Pérez"
+  }
+}`
+      }
+    ],
+    examples: [
+      {
+        language: 'curl',
+        label: 'cURL',
+        code: `curl -X POST 'https://logirapid.com/api/driver-app/stops/123/5/fail' \\
+  -H 'Cookie: auth-token=YOUR_TOKEN' \\
+  -H 'Content-Type: application/json' \\
+  -d '{
+    "reasonCode": "no_responde",
+    "latitude": 25.7890,
+    "longitude": -80.1234,
+    "notes": "Toqué varias veces, nadie abrió"
+  }'`
+      },
+      {
+        language: 'javascript',
+        label: 'JavaScript',
+        code: `async function markStopAsFailed(routeId, stopNumber, failData) {
+  const response = await fetch(\`/api/driver-app/stops/\${routeId}/\${stopNumber}/fail\`, {
+    method: 'POST',
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(failData)
+  });
+
+  const data = await response.json();
+
+  if (data.success) {
+    console.log('Parada marcada como fallida');
+    console.log('Razón:', data.data.reason);
+    console.log('Órdenes afectadas:', data.data.affectedOrders);
+    return data.data;
+  }
+
+  throw new Error(data.error);
+}
+
+// Obtener razones disponibles
+async function getFailReasons() {
+  const response = await fetch('/api/driver-app/stops/123/1/fail', {
+    credentials: 'include'
+  });
+  const data = await response.json();
+  return data.data.reasons;
+}`
+      },
+      {
+        language: 'dart',
+        label: 'Flutter',
+        code: `// Razones de falla disponibles
+enum FailReasonCode {
+  noResponde,
+  direccionIncorrecta,
+  clienteRechazo,
+  accesoDenegado,
+  zonaPeligrosa,
+  horarioNoDisponible,
+  paqueteDanado,
+  otro,
+}
+
+Future<void> markStopAsFailed({
+  required int routeId,
+  required int stopNumber,
+  required FailReasonCode reasonCode,
+  String? reason,
+  String? photo,
+  double? latitude,
+  double? longitude,
+  String? notes,
+}) async {
+  final token = await secureStorage.read(key: 'auth-token');
+
+  final response = await http.post(
+    Uri.parse('https://logirapid.com/api/driver-app/stops/\$routeId/\$stopNumber/fail'),
+    headers: {
+      'Cookie': 'auth-token=\$token',
+      'Content-Type': 'application/json',
+    },
+    body: jsonEncode({
+      'reasonCode': reasonCode.toString().split('.').last.replaceAllMapped(
+        RegExp(r'[A-Z]'), (m) => '_\${m.group(0)!.toLowerCase()}'
+      ),
+      if (reason != null) 'reason': reason,
+      if (photo != null) 'photo': photo,
+      if (latitude != null) 'latitude': latitude,
+      if (longitude != null) 'longitude': longitude,
+      if (notes != null) 'notes': notes,
+    }),
+  );
+
+  final data = jsonDecode(response.body);
+  if (!data['success']) {
+    throw Exception(data['error']);
+  }
+}
+
+// Widget de selección de razón de falla
+class FailReasonSelector extends StatelessWidget {
+  final Function(FailReasonCode) onSelect;
+
+  @override
+  Widget build(BuildContext context) {
+    final reasons = [
+      {'code': FailReasonCode.noResponde, 'label': 'Nadie responde / No está'},
+      {'code': FailReasonCode.direccionIncorrecta, 'label': 'Dirección incorrecta'},
+      {'code': FailReasonCode.clienteRechazo, 'label': 'Cliente rechazó'},
+      {'code': FailReasonCode.accesoDenegado, 'label': 'Acceso denegado'},
+      {'code': FailReasonCode.zonaPeligrosa, 'label': 'Zona peligrosa'},
+      {'code': FailReasonCode.horarioNoDisponible, 'label': 'Fuera de horario'},
+      {'code': FailReasonCode.paqueteDanado, 'label': 'Paquete dañado'},
+      {'code': FailReasonCode.otro, 'label': 'Otra razón'},
+    ];
+
+    return ListView.builder(
+      itemCount: reasons.length,
+      itemBuilder: (context, index) => ListTile(
+        leading: Icon(Icons.warning_amber, color: Colors.orange),
+        title: Text(reasons[index]['label'] as String),
+        onTap: () => onSelect(reasons[index]['code'] as FailReasonCode),
+      ),
+    );
+  }
+}`
+      }
+    ]
+  },
+  {
+    id: 'driver-stop-navigate',
+    method: 'GET',
+    path: '/api/driver-app/stops/[routeId]/[stopNumber]/navigate',
+    title: 'Obtener Info de Navegación',
+    description: 'Obtiene información de navegación para una parada, incluyendo coordenadas y links para abrir en Google Maps, Apple Maps y Waze.',
+    headers: [
+      {
+        name: 'Cookie',
+        type: 'string',
+        required: true,
+        description: 'Token de autenticación: auth-token=<token>'
+      }
+    ],
+    queryParams: [
+      {
+        name: 'lat',
+        type: 'number',
+        required: false,
+        description: 'Latitud actual del driver (para calcular distancia)'
+      },
+      {
+        name: 'lng',
+        type: 'number',
+        required: false,
+        description: 'Longitud actual del driver'
+      }
+    ],
+    responses: [
+      {
+        status: 200,
+        description: 'Info de navegación',
+        body: `{
+  "success": true,
+  "data": {
+    "routeId": 123,
+    "routeNumber": "R-2024-001",
+    "stopNumber": 5,
+    "address": "123 Main St, Miami, FL 33101",
+    "coordinates": {
+      "latitude": 25.7890,
+      "longitude": -80.1234
+    },
+    "navigation": {
+      "googleMaps": "https://www.google.com/maps/dir/?api=1&destination=25.7890,-80.1234&travelmode=driving",
+      "appleMaps": "maps://maps.apple.com/?daddr=25.7890,-80.1234&dirflg=d",
+      "waze": "https://www.waze.com/ul?ll=25.7890,-80.1234&navigate=yes",
+      "geo": "geo:25.7890,-80.1234?q=25.7890,-80.1234(123%20Main%20St)"
+    },
+    "distance": {
+      "km": 3.5,
+      "text": "3.5 km"
+    }
+  }
+}`
+      }
+    ],
+    examples: [
+      {
+        language: 'curl',
+        label: 'cURL',
+        code: `# Sin posición actual
+curl -X GET 'https://logirapid.com/api/driver-app/stops/123/5/navigate' \\
+  -H 'Cookie: auth-token=YOUR_TOKEN'
+
+# Con posición actual para calcular distancia
+curl -X GET 'https://logirapid.com/api/driver-app/stops/123/5/navigate?lat=25.78&lng=-80.13' \\
+  -H 'Cookie: auth-token=YOUR_TOKEN'`
+      },
+      {
+        language: 'javascript',
+        label: 'JavaScript',
+        code: `async function getNavigationInfo(routeId, stopNumber, currentPosition) {
+  let url = \`/api/driver-app/stops/\${routeId}/\${stopNumber}/navigate\`;
+
+  if (currentPosition) {
+    url += \`?lat=\${currentPosition.lat}&lng=\${currentPosition.lng}\`;
+  }
+
+  const response = await fetch(url, {
+    credentials: 'include'
+  });
+
+  const data = await response.json();
+
+  if (data.success) {
+    return data.data;
+  }
+
+  throw new Error(data.error);
+}
+
+// Abrir en la app de mapas preferida
+function openNavigation(navData, preferredApp = 'googleMaps') {
+  const url = navData.navigation[preferredApp];
+  window.open(url, '_blank');
+}
+
+// Ejemplo de uso
+async function navigateToStop(routeId, stopNumber) {
+  const position = await getCurrentPosition();
+  const navData = await getNavigationInfo(routeId, stopNumber, position);
+
+  console.log('Distancia:', navData.distance?.text || 'Desconocida');
+  console.log('Dirección:', navData.address);
+
+  // Abrir Google Maps
+  openNavigation(navData, 'googleMaps');
+}`
+      },
+      {
+        language: 'dart',
+        label: 'Flutter',
+        code: `Future<NavigationData> getNavigationInfo(int routeId, int stopNumber) async {
+  final token = await secureStorage.read(key: 'auth-token');
+
+  // Obtener posición actual
+  final position = await Geolocator.getCurrentPosition();
+
+  final uri = Uri.parse(
+    'https://logirapid.com/api/driver-app/stops/\$routeId/\$stopNumber/navigate'
+  ).replace(queryParameters: {
+    'lat': position.latitude.toString(),
+    'lng': position.longitude.toString(),
+  });
+
+  final response = await http.get(
+    uri,
+    headers: {'Cookie': 'auth-token=\$token'},
+  );
+
+  final data = jsonDecode(response.body);
+  if (data['success']) {
+    return NavigationData.fromJson(data['data']);
+  }
+  throw Exception(data['error']);
+}
+
+// Abrir en app de mapas
+Future<void> openMapApp(NavigationData navData, String app) async {
+  final urls = navData.navigation;
+  String? url;
+
+  switch (app) {
+    case 'google':
+      url = urls['googleMaps'];
+      break;
+    case 'apple':
+      url = urls['appleMaps'];
+      break;
+    case 'waze':
+      url = urls['waze'];
+      break;
+  }
+
+  if (url != null && await canLaunchUrl(Uri.parse(url))) {
+    await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
+  }
+}
+
+// Widget de navegación
+class NavigateToStopButton extends StatelessWidget {
+  final int routeId;
+  final int stopNumber;
+
+  @override
+  Widget build(BuildContext context) {
+    return ElevatedButton.icon(
+      icon: Icon(Icons.navigation),
+      label: Text('Navegar'),
+      onPressed: () async {
+        final navData = await getNavigationInfo(routeId, stopNumber);
+
+        // Mostrar opciones de navegación
+        showModalBottomSheet(
+          context: context,
+          builder: (_) => Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (navData.distance != null)
+                Padding(
+                  padding: EdgeInsets.all(16),
+                  child: Text('Distancia: \${navData.distance!.text}'),
+                ),
+              ListTile(
+                leading: Icon(Icons.map, color: Colors.red),
+                title: Text('Google Maps'),
+                onTap: () => openMapApp(navData, 'google'),
+              ),
+              ListTile(
+                leading: Icon(Icons.map, color: Colors.blue),
+                title: Text('Apple Maps'),
+                onTap: () => openMapApp(navData, 'apple'),
+              ),
+              ListTile(
+                leading: Icon(Icons.map, color: Colors.lightBlue),
+                title: Text('Waze'),
+                onTap: () => openMapApp(navData, 'waze'),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}`
+      }
+    ]
+  },
+  // ==================== UBICACIÓN DEL DRIVER ====================
+  {
+    id: 'driver-location-update',
+    method: 'POST',
+    path: '/api/driver-app/location',
+    title: 'Actualizar Ubicación',
+    description: 'Actualiza la ubicación actual del driver. Usar para tracking en tiempo real durante rutas activas. Enviar periódicamente (cada 10-30 segundos).',
+    headers: [
+      {
+        name: 'Cookie',
+        type: 'string',
+        required: true,
+        description: 'Token de autenticación: auth-token=<token>'
+      },
+      {
+        name: 'Content-Type',
+        type: 'string',
+        required: true,
+        description: 'application/json'
+      }
+    ],
+    requestBody: [
+      {
+        name: 'latitude',
+        type: 'number',
+        required: true,
+        description: 'Latitud actual (-90 a 90)'
+      },
+      {
+        name: 'longitude',
+        type: 'number',
+        required: true,
+        description: 'Longitud actual (-180 a 180)'
+      },
+      {
+        name: 'accuracy',
+        type: 'number',
+        required: false,
+        description: 'Precisión en metros'
+      },
+      {
+        name: 'speed',
+        type: 'number',
+        required: false,
+        description: 'Velocidad en m/s'
+      },
+      {
+        name: 'heading',
+        type: 'number',
+        required: false,
+        description: 'Dirección en grados (0-360)'
+      },
+      {
+        name: 'routeId',
+        type: 'number',
+        required: false,
+        description: 'ID de la ruta activa (para tracking de ruta)'
+      }
+    ],
+    responses: [
+      {
+        status: 200,
+        description: 'Ubicación actualizada',
+        body: `{
+  "success": true,
+  "message": "Ubicación actualizada",
+  "data": {
+    "latitude": 25.7890,
+    "longitude": -80.1234,
+    "timestamp": "2024-01-15T11:30:00Z"
+  }
+}`
+      }
+    ],
+    examples: [
+      {
+        language: 'curl',
+        label: 'cURL',
+        code: `curl -X POST 'https://logirapid.com/api/driver-app/location' \\
+  -H 'Cookie: auth-token=YOUR_TOKEN' \\
+  -H 'Content-Type: application/json' \\
+  -d '{
+    "latitude": 25.7890,
+    "longitude": -80.1234,
+    "accuracy": 10,
+    "speed": 15.5,
+    "heading": 90,
+    "routeId": 123
+  }'`
+      },
+      {
+        language: 'javascript',
+        label: 'JavaScript',
+        code: `// Servicio de tracking de ubicación
+class LocationTracker {
+  constructor(routeId) {
+    this.routeId = routeId;
+    this.watchId = null;
+    this.intervalId = null;
+    this.lastPosition = null;
+  }
+
+  start() {
+    // Monitorear cambios de ubicación
+    this.watchId = navigator.geolocation.watchPosition(
+      (position) => {
+        this.lastPosition = position;
+      },
+      (error) => console.error('Error GPS:', error),
+      { enableHighAccuracy: true }
+    );
+
+    // Enviar ubicación cada 15 segundos
+    this.intervalId = setInterval(() => {
+      this.sendLocation();
+    }, 15000);
+
+    // Enviar ubicación inicial
+    this.sendLocation();
+  }
+
+  stop() {
+    if (this.watchId) {
+      navigator.geolocation.clearWatch(this.watchId);
+    }
+    if (this.intervalId) {
+      clearInterval(this.intervalId);
+    }
+  }
+
+  async sendLocation() {
+    if (!this.lastPosition) return;
+
+    const { coords } = this.lastPosition;
+
+    try {
+      await fetch('/api/driver-app/location', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          latitude: coords.latitude,
+          longitude: coords.longitude,
+          accuracy: coords.accuracy,
+          speed: coords.speed,
+          heading: coords.heading,
+          routeId: this.routeId
+        })
+      });
+    } catch (error) {
+      console.error('Error enviando ubicación:', error);
+    }
+  }
+}
+
+// Uso
+const tracker = new LocationTracker(123);
+tracker.start();
+
+// Al terminar la ruta
+tracker.stop();`
+      },
+      {
+        language: 'dart',
+        label: 'Flutter',
+        code: `class LocationTrackingService {
+  Timer? _timer;
+  StreamSubscription<Position>? _positionStream;
+  Position? _lastPosition;
+  final int? routeId;
+
+  LocationTrackingService({this.routeId});
+
+  Future<void> startTracking() async {
+    // Configurar stream de ubicación
+    const settings = LocationSettings(
+      accuracy: LocationAccuracy.high,
+      distanceFilter: 10, // metros
+    );
+
+    _positionStream = Geolocator.getPositionStream(locationSettings: settings)
+        .listen((position) {
+      _lastPosition = position;
+    });
+
+    // Enviar ubicación cada 15 segundos
+    _timer = Timer.periodic(Duration(seconds: 15), (_) {
+      _sendLocation();
+    });
+
+    // Enviar ubicación inicial
+    _sendLocation();
+  }
+
+  void stopTracking() {
+    _timer?.cancel();
+    _positionStream?.cancel();
+  }
+
+  Future<void> _sendLocation() async {
+    if (_lastPosition == null) return;
+
+    final token = await secureStorage.read(key: 'auth-token');
+
+    try {
+      await http.post(
+        Uri.parse('https://logirapid.com/api/driver-app/location'),
+        headers: {
+          'Cookie': 'auth-token=\$token',
+          'Content-Type': 'application/json',
+        },
+        body: jsonEncode({
+          'latitude': _lastPosition!.latitude,
+          'longitude': _lastPosition!.longitude,
+          'accuracy': _lastPosition!.accuracy,
+          'speed': _lastPosition!.speed,
+          'heading': _lastPosition!.heading,
+          if (routeId != null) 'routeId': routeId,
+        }),
+      );
+    } catch (e) {
+      print('Error enviando ubicación: \$e');
+    }
+  }
+}
+
+// Provider para uso en la app
+class LocationProvider extends ChangeNotifier {
+  LocationTrackingService? _service;
+
+  void startTracking(int routeId) {
+    _service = LocationTrackingService(routeId: routeId);
+    _service!.startTracking();
+  }
+
+  void stopTracking() {
+    _service?.stopTracking();
+    _service = null;
+  }
+
+  @override
+  void dispose() {
+    stopTracking();
+    super.dispose();
+  }
+}`
+      }
+    ]
   }
 ]

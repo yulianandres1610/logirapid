@@ -55,22 +55,68 @@ export async function POST(request: NextRequest) {
 
     console.log(`✅ [Ruta Encontrada] ${route.routenumber} (ID: ${route.id})`)
 
-    // Verificar que la ruta esté en estado planning
-    if (route.status !== 'planning') {
+    // Verificar que la ruta esté en estado planificada
+    if (route.status !== 'planificada') {
       return NextResponse.json(
         {
-          error: `La ruta está en estado "${route.status}" y no puede ser asignada. Solo rutas en "planning" pueden ser asignadas.`,
+          error: `La ruta está en estado "${route.status}" y no puede ser asignada. Solo rutas en "planificada" pueden ser asignadas.`,
           routeStatus: route.status
         },
         { status: 400 }
       )
     }
 
-    // Actualizar driver en la ruta
+    // Parsear las paradas para actualizar su estado
+    let stops = route.stops
+    if (typeof stops === 'string') {
+      try {
+        stops = JSON.parse(stops)
+      } catch (e) {
+        stops = []
+      }
+    }
+    stops = stops || []
+
+    // Obtener todos los IDs de órdenes de las paradas
+    const orderIds: number[] = []
+    for (const stop of stops) {
+      if (stop.orderId) {
+        orderIds.push(stop.orderId)
+      }
+      if (stop.orderIds && Array.isArray(stop.orderIds)) {
+        orderIds.push(...stop.orderIds)
+      }
+    }
+
+    // Actualizar paradas a estado 'pendiente'
+    const updatedStops = stops.map((stop: Record<string, unknown>) => ({
+      ...stop,
+      status: 'pendiente'
+    }))
+
+    // Actualizar driver, estado de ruta a 'asignada' y paradas
     const updateResult = await db.query(
-      'UPDATE routes SET driverid = $1, drivername = $2, updatedat = NOW() WHERE id = $3 RETURNING *',
-      [body.driverId, body.driverName || 'Driver', route.id]
+      `UPDATE routes
+       SET driverid = $1,
+           drivername = $2,
+           status = 'asignada',
+           stops = $3,
+           updatedat = NOW()
+       WHERE id = $4
+       RETURNING *`,
+      [body.driverId, body.driverName || 'Driver', JSON.stringify(updatedStops), route.id]
     )
+
+    // Actualizar órdenes a estado 'en_ruta'
+    if (orderIds.length > 0) {
+      await db.query(`
+        UPDATE package_orders
+        SET status = 'en_ruta',
+            updatedat = NOW()
+        WHERE id = ANY($1::int[])
+      `, [orderIds])
+      console.log(`✅ [Órdenes] ${orderIds.length} órdenes actualizadas a 'en_ruta'`)
+    }
 
     if (updateResult.rows.length === 0) {
       return NextResponse.json(
@@ -160,7 +206,7 @@ export async function GET(request: NextRequest) {
         distance: route.distance,
         estimatedDuration: route.estimatedduration,
         stops: route.stops ? JSON.parse(route.stops) : [],
-        canAssignDriver: route.status === 'planning' && !route.driverid
+        canAssignDriver: route.status === 'planificada' && !route.driverid
       }
     })
 

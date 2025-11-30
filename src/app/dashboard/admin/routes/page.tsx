@@ -44,7 +44,8 @@ interface Route {
   driverName?: string
   vehicleId?: number
   vehiclePlate?: string
-  status: 'planning' | 'active' | 'completed' | 'cancelled'
+  // Include legacy English states for backward compatibility
+  status: 'planificada' | 'asignada' | 'en_curso' | 'completada' | 'cancelada' | 'planning' | 'active' | 'completed' | 'cancelled'
   totalPackages: number
   deliveredPackages: number
   totalStops: number
@@ -112,16 +113,18 @@ export default function RoutesPage() {
   })
   const [allRoutes, setAllRoutes] = useState<Route[]>([])
 
-  // Calculate stats from routes data
+  // Calculate stats from routes data (include legacy states)
   const stats = useMemo(() => {
-    const active = routes.filter(route => route.status === 'active').length
-    const completed = routes.filter(route => route.status === 'completed').length
-    const planning = routes.filter(route => route.status === 'planning').length
+    const enCurso = routes.filter(route => route.status === 'en_curso' || route.status === 'active').length
+    const completadas = routes.filter(route => route.status === 'completada' || route.status === 'completed').length
+    const planificadas = routes.filter(route => route.status === 'planificada' || route.status === 'planning').length
+    const asignadas = routes.filter(route => route.status === 'asignada').length
 
     return {
-      active,
-      delivered: completed,
-      pending: planning
+      active: enCurso,
+      delivered: completadas,
+      pending: planificadas,
+      asignadas
     }
   }, [routes])
 
@@ -210,13 +213,20 @@ export default function RoutesPage() {
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case 'planning':
+      // Estados nuevos en español
+      case 'planificada':
+      case 'planning': // legacy
         return theme === 'dark' ? 'bg-blue-900/30 text-blue-400 border-blue-800' : 'bg-blue-50 text-blue-700 border-blue-200'
-      case 'active':
+      case 'asignada':
+        return theme === 'dark' ? 'bg-blue-900/30 text-blue-400 border-blue-800' : 'bg-blue-50 text-blue-700 border-blue-200'
+      case 'en_curso':
+      case 'active': // legacy
         return theme === 'dark' ? 'bg-yellow-900/30 text-yellow-400 border-yellow-800' : 'bg-yellow-50 text-yellow-700 border-yellow-200'
-      case 'completed':
+      case 'completada':
+      case 'completed': // legacy
         return theme === 'dark' ? 'bg-green-900/30 text-green-400 border-green-800' : 'bg-green-50 text-green-700 border-green-200'
-      case 'cancelled':
+      case 'cancelada':
+      case 'cancelled': // legacy
         return theme === 'dark' ? 'bg-red-900/30 text-red-400 border-red-800' : 'bg-red-50 text-red-700 border-red-200'
       default:
         return theme === 'dark' ? 'bg-gray-700 text-gray-300' : 'bg-gray-100 text-gray-700'
@@ -225,13 +235,19 @@ export default function RoutesPage() {
 
   const getStatusIcon = (status: string) => {
     switch (status) {
-      case 'planning':
+      case 'planificada':
+      case 'planning': // legacy
         return <Clock className="w-4 h-4" />
-      case 'active':
+      case 'asignada':
+        return <Users className="w-4 h-4" />
+      case 'en_curso':
+      case 'active': // legacy
         return <Navigation className="w-4 h-4" />
-      case 'completed':
+      case 'completada':
+      case 'completed': // legacy
         return <CheckCircle className="w-4 h-4" />
-      case 'cancelled':
+      case 'cancelada':
+      case 'cancelled': // legacy
         return <XCircle className="w-4 h-4" />
       default:
         return <AlertCircle className="w-4 h-4" />
@@ -240,16 +256,40 @@ export default function RoutesPage() {
 
   const getStatusText = (status: string) => {
     switch (status) {
-      case 'planning':
-        return 'Planificación'
-      case 'active':
-        return 'Activa'
-      case 'completed':
+      case 'planificada':
+      case 'planning': // legacy
+        return 'Planificada'
+      case 'asignada':
+        return 'Asignada'
+      case 'en_curso':
+      case 'active': // legacy
+        return 'En Curso'
+      case 'completada':
+      case 'completed': // legacy
         return 'Completada'
-      case 'cancelled':
+      case 'cancelada':
+      case 'cancelled': // legacy
         return 'Cancelada'
       default:
         return status
+    }
+  }
+
+  // Handler para iniciar ruta
+  const handleStartRoute = async (routeId: number) => {
+    try {
+      const response = await fetch(`/api/routes/${routeId}/start`, {
+        method: 'POST'
+      })
+      const data = await response.json()
+      if (data.success) {
+        showNotification('success', 'Ruta Iniciada', data.message)
+        fetchData()
+      } else {
+        showNotification('error', 'Error', data.error)
+      }
+    } catch (error) {
+      showNotification('error', 'Error', 'No se pudo iniciar la ruta')
     }
   }
 
@@ -534,10 +574,11 @@ export default function RoutesPage() {
                 )}
               >
                 <option value="all">Todos los estados</option>
-                <option value="planning">Planificación</option>
-                <option value="active">Activa</option>
-                <option value="completed">Completada</option>
-                <option value="cancelled">Cancelada</option>
+                <option value="planificada">Planificada</option>
+                <option value="asignada">Asignada</option>
+                <option value="en_curso">En Curso</option>
+                <option value="completada">Completada</option>
+                <option value="cancelada">Cancelada</option>
               </select>
               <select
                 value={dayFilter}
@@ -817,6 +858,21 @@ export default function RoutesPage() {
                             >
                               <Eye className="w-4 h-4" />
                             </button>
+                            {/* Mostrar botón Iniciar para rutas asignadas o planning con driver */}
+                            {(route.status === 'asignada' || (route.status === 'planning' && route.driverId)) && (
+                              <button
+                                onClick={() => handleStartRoute(route.id)}
+                                className={cn(
+                                  "p-1 rounded transition-colors",
+                                  theme === 'dark'
+                                    ? "text-green-400 hover:bg-green-900/30"
+                                    : "text-green-600 hover:bg-green-50"
+                                )}
+                                title="Iniciar ruta"
+                              >
+                                <Navigation className="w-4 h-4" />
+                              </button>
+                            )}
                             <button
                               onClick={() => router.push(`${basePath}/routes/${route.id}/edit`)}
                               className={cn(
