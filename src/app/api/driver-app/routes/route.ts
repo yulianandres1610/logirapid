@@ -80,6 +80,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Obtener otros parámetros de query
+    // Status puede ser: all, active (incluye asignada, en_curso, activa), completed (completada), cancelled (cancelada)
     const status = searchParams.get('status') || 'active'
     const page = parseInt(searchParams.get('page') || '1')
     const limit = parseInt(searchParams.get('limit') || '20')
@@ -107,7 +108,18 @@ export async function GET(request: NextRequest) {
     let paramIndex = 2
 
     // Filtrar por estado
-    if (status !== 'all') {
+    // 'active' incluye rutas asignadas, en curso, activas (todas las que el driver puede trabajar)
+    // 'completed' incluye rutas completadas
+    // 'cancelled' incluye rutas canceladas
+    // 'all' no filtra por estado
+    if (status === 'active') {
+      query += ` AND r.status IN ('asignada', 'en_curso', 'activa', 'active', 'planning')`
+    } else if (status === 'completed') {
+      query += ` AND r.status IN ('completada', 'completed')`
+    } else if (status === 'cancelled') {
+      query += ` AND r.status IN ('cancelada', 'cancelled')`
+    } else if (status !== 'all') {
+      // Si se pasa un status específico, filtrar exactamente por ese
       query += ` AND r.status = $${paramIndex}`
       params.push(status)
       paramIndex++
@@ -130,7 +142,14 @@ export async function GET(request: NextRequest) {
     `
     const countParams: any[] = [userId]
 
-    if (status !== 'all') {
+    // Usar el mismo criterio de filtro para el conteo
+    if (status === 'active') {
+      countQuery += ` AND r.status IN ('asignada', 'en_curso', 'activa', 'active', 'planning')`
+    } else if (status === 'completed') {
+      countQuery += ` AND r.status IN ('completada', 'completed')`
+    } else if (status === 'cancelled') {
+      countQuery += ` AND r.status IN ('cancelada', 'cancelled')`
+    } else if (status !== 'all') {
       countQuery += ` AND r.status = $2`
       countParams.push(status)
     }
