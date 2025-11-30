@@ -97,24 +97,24 @@ export async function POST(request: NextRequest) {
     const targetUserName = `${targetUser.firstname || ''} ${targetUser.lastname || ''}`.trim() || targetUser.email || userName
     const targetUserCompanyId = targetUser.company_id
 
-    // Buscar ruta por código QR o route_number
+    // Buscar ruta por código QR o routenumber
     const routeQuery = `
       SELECT
         r.id,
-        r.route_number as "routeNumber",
-        r.qr_code as "qrCode",
+        r.routenumber as "routeNumber",
+        r.qrcode as "qrCode",
         r.status,
-        r.driver_id as "driverId",
-        r.driver_name as "driverName",
+        r.driverid as "driverId",
+        r.drivername as "driverName",
         r.company_id as "companyId",
         r.stops,
         r.distance,
-        r.duration,
-        r.scheduled_date as "scheduledDate",
-        r.vehicle_plate as "vehiclePlate",
-        r.vehicle_id as "vehicleId"
+        r.estimatedduration as "duration",
+        r.date as "scheduledDate",
+        r.vehicleplate as "vehiclePlate",
+        r.vehicleid as "vehicleId"
       FROM routes r
-      WHERE r.qr_code = $1 OR r.route_number = $1
+      WHERE r.qrcode = $1 OR r.routenumber = $1
     `
     const routeResult = await db.query(routeQuery, [routeCode])
 
@@ -156,10 +156,10 @@ export async function POST(request: NextRequest) {
     const updateQuery = `
       UPDATE routes
       SET
-        driver_id = $1,
-        driver_name = $2,
+        driverid = $1,
+        drivername = $2,
         status = 'active',
-        updated_at = NOW()
+        updatedat = NOW()
       WHERE id = $3
       RETURNING *
     `
@@ -186,15 +186,15 @@ export async function POST(request: NextRequest) {
       data: {
         route: {
           id: updatedRoute.id,
-          routeNumber: updatedRoute.route_number,
-          qrCode: updatedRoute.qr_code,
+          routeNumber: updatedRoute.routenumber,
+          qrCode: updatedRoute.qrcode,
           status: updatedRoute.status,
           totalStops,
           distance: updatedRoute.distance,
-          duration: updatedRoute.duration,
-          scheduledDate: updatedRoute.scheduled_date,
-          vehiclePlate: updatedRoute.vehicle_plate,
-          vehicleId: updatedRoute.vehicle_id,
+          duration: updatedRoute.estimatedduration,
+          scheduledDate: updatedRoute.date,
+          vehiclePlate: updatedRoute.vehicleplate,
+          vehicleId: updatedRoute.vehicleid,
           assignedUserName: targetUserName,
           assignedUserId: targetUserId
         }

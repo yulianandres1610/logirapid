@@ -74,19 +74,19 @@ export async function GET(request: NextRequest) {
     let query = `
       SELECT
         r.id,
-        r.route_number as "routeNumber",
-        r.qr_code as "qrCode",
+        r.routenumber as "routeNumber",
+        r.qrcode as "qrCode",
         r.status,
         r.distance,
-        r.duration,
-        r.scheduled_date as "scheduledDate",
-        r.vehicle_plate as "vehiclePlate",
-        r.vehicle_id as "vehicleId",
+        r.estimatedduration as "duration",
+        r.date as "scheduledDate",
+        r.vehicleplate as "vehiclePlate",
+        r.vehicleid as "vehicleId",
         r.stops,
-        r.created_at as "createdAt",
+        r.createdat as "createdAt",
         r.company_id as "companyId"
       FROM routes r
-      WHERE r.driver_id = $1
+      WHERE r.driverid = $1
     `
     const params: any[] = [userId]
     let paramIndex = 2
@@ -99,7 +99,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Ordenar por fecha programada desc
-    query += ` ORDER BY r.scheduled_date DESC, r.created_at DESC`
+    query += ` ORDER BY r.date DESC, r.createdat DESC`
 
     // Agregar paginación
     query += ` LIMIT $${paramIndex} OFFSET $${paramIndex + 1}`
@@ -111,7 +111,7 @@ export async function GET(request: NextRequest) {
     let countQuery = `
       SELECT COUNT(*) as total
       FROM routes r
-      WHERE r.driver_id = $1
+      WHERE r.driverid = $1
     `
     const countParams: any[] = [userId]
 
