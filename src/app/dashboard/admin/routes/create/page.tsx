@@ -181,7 +181,7 @@ export default function CreateRoutePage() {
       const [warehousesRes, vehiclesRes, driversRes, ordersRes1, ordersRes2, zonesRes] = await Promise.all([
         fetch('/api/warehouses?limit=1000'),
         fetch('/api/vehicles?limit=1000'),
-        fetch('/api/users?role=driver&limit=1000'),
+        fetch('/api/users?limit=1000'),
         fetch('/api/package-orders?status=pending&limit=1000'),
         fetch('/api/package-orders?status=reprogrammed&limit=1000'),
         fetch('/api/zones')

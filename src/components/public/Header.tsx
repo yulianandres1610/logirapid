@@ -76,12 +76,12 @@ export function PublicHeader() {
 
           {/* CTA Button */}
           <div className="hidden lg:flex items-center space-x-4">
-            <Link
-              href="/login"
+            <a
+              href="https://agencias.logirapid.com/login"
               className="px-6 py-2.5 bg-[#0374e5] text-white rounded-lg font-semibold text-sm hover:bg-[#0262c4] transition-colors shadow-lg"
             >
               Iniciar Sesión
-            </Link>
+            </a>
           </div>
 
           {/* Mobile Menu Button */}
@@ -115,12 +115,12 @@ export function PublicHeader() {
                 </Link>
               ))}
               <div className="pt-4 border-t border-gray-800">
-                <Link
-                  href="/login"
+                <a
+                  href="https://agencias.logirapid.com/login"
                   className="block w-full px-6 py-3 bg-[#0374e5] text-white rounded-lg font-semibold text-sm text-center hover:bg-[#0262c4] transition-colors"
                 >
                   Iniciar Sesión
-                </Link>
+                </a>
               </div>
             </nav>
           </motion.div>
