@@ -3333,7 +3333,7 @@ class LocationProvider extends ChangeNotifier {
   // VALIDACIÓN DE EMPAQUES
   // ===========================================
   {
-    id: 'empaques-list-disponibles',
+    id: 'driver-empaques-list-disponibles',
     method: 'GET',
     path: '/api/driver-app/empaques/list-disponibles',
     title: 'Listar Empaques Disponibles (Cajas Vacías)',
@@ -3478,7 +3478,7 @@ if (data.success) {
     ]
   },
   {
-    id: 'empaques-list-bultos',
+    id: 'driver-empaques-list-bultos',
     method: 'GET',
     path: '/api/driver-app/empaques/list-bultos',
     title: 'Listar Bultos (Empaques con Orden)',
@@ -3624,7 +3624,7 @@ if (data.success) {
     ]
   },
   {
-    id: 'empaques-validate',
+    id: 'driver-empaques-validate',
     method: 'POST',
     path: '/api/driver-app/empaques/validate',
     title: 'Validar Código Individual',
