@@ -3328,5 +3328,409 @@ class LocationProvider extends ChangeNotifier {
 }`
       }
     ]
+  },
+  // ===========================================
+  // VALIDACIÓN DE EMPAQUES
+  // ===========================================
+  {
+    id: 'empaques-list-disponibles',
+    method: 'GET',
+    path: '/api/driver-app/empaques/list-disponibles',
+    title: 'Listar Empaques Disponibles (Cajas Vacías)',
+    description: 'Precargar todos los empaques en estado "disponible" (cajas vacías) de la empresa para validación local instantánea al escanear. Ideal para precargar al iniciar la pantalla de escaneo.',
+    headers: [
+      {
+        name: 'Cookie',
+        type: 'string',
+        required: true,
+        description: 'Token de autenticación: auth-token=<token>'
+      }
+    ],
+    queryParams: [
+      {
+        name: 'warehouseId',
+        type: 'number',
+        required: false,
+        description: 'Filtrar por almacén específico'
+      },
+      {
+        name: 'tipo',
+        type: 'string',
+        required: false,
+        description: 'Filtrar por tipo de empaque (CAJA, BULTO, etc.)'
+      }
+    ],
+    responses: [
+      {
+        status: 200,
+        description: 'Lista de empaques disponibles obtenida exitosamente',
+        body: `{
+  "success": true,
+  "data": {
+    "empaques": [
+      {
+        "id": 123,
+        "codigo": "EMP-001-2024",
+        "tipo": "CAJA",
+        "estado": "disponible",
+        "packageSizeId": 2,
+        "packageSizeName": "Mediana",
+        "warehouseId": 1,
+        "warehouseName": "Almacén Miami"
+      }
+    ],
+    "codigos": ["EMP-001-2024", "EMP-002-2024"],
+    "total": 150,
+    "companyId": 1
+  }
+}`
+      },
+      {
+        status: 401,
+        description: 'No autenticado',
+        body: `{"success": false, "error": "No autenticado"}`
+      }
+    ],
+    examples: [
+      {
+        language: 'curl',
+        label: 'cURL',
+        code: `curl -X GET 'https://logirapid.com/api/driver-app/empaques/list-disponibles' \\
+  -H 'Cookie: auth-token=YOUR_TOKEN'`
+      },
+      {
+        language: 'javascript',
+        label: 'JavaScript',
+        code: `// Precargar empaques disponibles para validación local
+const response = await fetch('/api/driver-app/empaques/list-disponibles', {
+  method: 'GET',
+  credentials: 'include'
+});
+const data = await response.json();
+if (data.success) {
+  const empaquesMap = new Map(data.data.empaques.map(e => [e.codigo, e]));
+  const codigosDisponibles = new Set(data.data.codigos);
+  // Validación instantánea O(1)
+  function validateScan(scannedCode) {
+    if (codigosDisponibles.has(scannedCode)) {
+      return { valid: true, empaque: empaquesMap.get(scannedCode) };
+    }
+    return { valid: false, error: 'NOT_FOUND' };
+  }
+}`
+      },
+      {
+        language: 'dart',
+        label: 'Flutter',
+        code: `class EmpaqueValidationService {
+  Map<String, dynamic> _empaquesMap = {};
+  Set<String> _codigosDisponibles = {};
+
+  Future<void> preloadEmpaques() async {
+    final token = await secureStorage.read(key: 'auth-token');
+    final response = await http.get(
+      Uri.parse('https://logirapid.com/api/driver-app/empaques/list-disponibles'),
+      headers: {'Cookie': 'auth-token=\$token'},
+    );
+    final data = jsonDecode(response.body);
+    if (data['success']) {
+      for (var emp in data['data']['empaques']) {
+        _empaquesMap[emp['codigo']] = emp;
+      }
+      _codigosDisponibles = Set.from(data['data']['codigos']);
+    }
+  }
+
+  ValidationResult validateScan(String code) {
+    if (_codigosDisponibles.contains(code)) {
+      return ValidationResult(valid: true, empaque: _empaquesMap[code]);
+    }
+    return ValidationResult(valid: false, error: 'NOT_FOUND');
+  }
+}`
+      },
+      {
+        language: 'kotlin',
+        label: 'Kotlin',
+        code: `class EmpaqueValidationRepository @Inject constructor(
+    private val api: DriverApi
+) {
+    private var empaquesMap: Map<String, Empaque> = emptyMap()
+    private var codigosDisponibles: Set<String> = emptySet()
+
+    suspend fun preloadEmpaques() {
+        val response = api.getEmpaquesDisponibles()
+        if (response.success) {
+            empaquesMap = response.data.empaques.associateBy { it.codigo }
+            codigosDisponibles = response.data.codigos.toSet()
+        }
+    }
+
+    fun validateScan(code: String): ValidationResult {
+        return if (code in codigosDisponibles) {
+            ValidationResult.Valid(empaquesMap[code]!!)
+        } else {
+            ValidationResult.Invalid("NOT_FOUND")
+        }
+    }
+}`
+      }
+    ]
+  },
+  {
+    id: 'empaques-list-bultos',
+    method: 'GET',
+    path: '/api/driver-app/empaques/list-bultos',
+    title: 'Listar Bultos (Empaques con Orden)',
+    description: 'Precargar todos los bultos (empaques con orden asignada) de la empresa para validación local. Usado para recepción/envío de bultos en almacén o driver.',
+    headers: [
+      {
+        name: 'Cookie',
+        type: 'string',
+        required: true,
+        description: 'Token de autenticación: auth-token=<token>'
+      }
+    ],
+    queryParams: [
+      {
+        name: 'warehouseId',
+        type: 'number',
+        required: false,
+        description: 'Filtrar por almacén específico'
+      },
+      {
+        name: 'estado',
+        type: 'string',
+        required: false,
+        description: 'Filtrar por estado (en_almacen, en_transito, etc.)'
+      }
+    ],
+    responses: [
+      {
+        status: 200,
+        description: 'Lista de bultos obtenida exitosamente',
+        body: `{
+  "success": true,
+  "data": {
+    "bultos": [
+      {
+        "id": 456,
+        "codigo": "EMP-100-2024",
+        "estado": "en_almacen",
+        "warehouseId": 1,
+        "warehouseName": "Almacén Miami",
+        "ordenId": 789,
+        "orderNumber": "ORD-2024-001",
+        "recipientName": "María García",
+        "recipientCity": "La Habana",
+        "weightLb": 15.5,
+        "boxNumber": 1,
+        "totalBoxes": 2
+      }
+    ],
+    "codigos": ["EMP-100-2024", "EMP-101-2024"],
+    "total": 75,
+    "companyId": 1
+  }
+}`
+      },
+      {
+        status: 401,
+        description: 'No autenticado',
+        body: `{"success": false, "error": "No autenticado"}`
+      }
+    ],
+    examples: [
+      {
+        language: 'curl',
+        label: 'cURL',
+        code: `# Obtener todos los bultos
+curl -X GET 'https://logirapid.com/api/driver-app/empaques/list-bultos' \\
+  -H 'Cookie: auth-token=YOUR_TOKEN'
+
+# Filtrar por almacén
+curl -X GET 'https://logirapid.com/api/driver-app/empaques/list-bultos?warehouseId=1' \\
+  -H 'Cookie: auth-token=YOUR_TOKEN'`
+      },
+      {
+        language: 'javascript',
+        label: 'JavaScript',
+        code: `// Precargar bultos para validación local
+const response = await fetch('/api/driver-app/empaques/list-bultos', {
+  method: 'GET', credentials: 'include'
+});
+const data = await response.json();
+if (data.success) {
+  const bultosMap = new Map(data.data.bultos.map(b => [b.codigo, b]));
+
+  function validateBulto(code, operacion, warehouseId) {
+    const bulto = bultosMap.get(code);
+    if (!bulto) return { valid: false, error: 'NOT_FOUND' };
+
+    if (operacion === 'recepcion') {
+      if (bulto.estado === 'disponible' || bulto.estado === 'entregado')
+        return { valid: false, error: 'INVALID_STATE' };
+      if (bulto.warehouseId === warehouseId && bulto.estado === 'en_almacen')
+        return { valid: false, status: 'already-here' };
+    }
+    if (operacion === 'envio') {
+      if (bulto.warehouseId !== warehouseId)
+        return { valid: false, error: 'WRONG_WAREHOUSE' };
+      if (bulto.estado !== 'en_almacen')
+        return { valid: false, error: 'INVALID_STATE' };
+    }
+    return { valid: true, bulto };
+  }
+}`
+      },
+      {
+        language: 'dart',
+        label: 'Flutter',
+        code: `class BultoValidationService {
+  Map<String, Bulto> _bultosMap = {};
+
+  Future<void> preloadBultos({int? warehouseId}) async {
+    final token = await secureStorage.read(key: 'auth-token');
+    var url = 'https://logirapid.com/api/driver-app/empaques/list-bultos';
+    if (warehouseId != null) url += '?warehouseId=\$warehouseId';
+
+    final response = await http.get(Uri.parse(url), headers: {'Cookie': 'auth-token=\$token'});
+    final data = jsonDecode(response.body);
+    if (data['success']) {
+      for (var b in data['data']['bultos']) {
+        _bultosMap[b['codigo']] = Bulto.fromJson(b);
+      }
+    }
+  }
+
+  ValidationResult validateBulto(String code, String operacion, int warehouseId) {
+    final bulto = _bultosMap[code];
+    if (bulto == null) return ValidationResult(valid: false, errorCode: 'NOT_FOUND');
+
+    if (operacion == 'recepcion') {
+      if (bulto.estado == 'disponible' || bulto.estado == 'entregado')
+        return ValidationResult(valid: false, errorCode: 'INVALID_STATE');
+      if (bulto.warehouseId == warehouseId && bulto.estado == 'en_almacen')
+        return ValidationResult(valid: false, status: 'already-here');
+    }
+    if (operacion == 'envio') {
+      if (bulto.warehouseId != warehouseId)
+        return ValidationResult(valid: false, errorCode: 'WRONG_WAREHOUSE');
+    }
+    return ValidationResult(valid: true, bulto: bulto);
+  }
+}`
+      }
+    ]
+  },
+  {
+    id: 'empaques-validate',
+    method: 'POST',
+    path: '/api/driver-app/empaques/validate',
+    title: 'Validar Código Individual',
+    description: 'Validar un código de empaque individual en tiempo real. Usar como fallback cuando el código no está en la lista precargada. Verifica propiedad de empresa y estado según la operación.',
+    headers: [
+      {
+        name: 'Cookie',
+        type: 'string',
+        required: true,
+        description: 'Token de autenticación: auth-token=<token>'
+      },
+      {
+        name: 'Content-Type',
+        type: 'string',
+        required: true,
+        description: 'application/json'
+      }
+    ],
+    requestBody: [
+      { name: 'codigo', type: 'string', required: true, description: 'Código del empaque a validar' },
+      { name: 'tipo', type: 'string', required: true, description: 'Tipo de validación: "empaque" o "bulto"' },
+      { name: 'operacion', type: 'string', required: false, description: 'Solo para bultos: "recepcion" o "envio"' },
+      { name: 'warehouseId', type: 'number', required: false, description: 'ID del almacén actual' }
+    ],
+    responses: [
+      {
+        status: 200,
+        description: 'Código válido',
+        body: `{"success": true, "data": {"valid": true, "status": "valid", "empaque": {...}}}`
+      },
+      {
+        status: 200,
+        description: 'Código no encontrado',
+        body: `{"success": true, "data": {"valid": false, "status": "invalid", "errorCode": "NOT_FOUND", "message": "El código no existe"}}`
+      },
+      {
+        status: 200,
+        description: 'Código de otra empresa',
+        body: `{"success": true, "data": {"valid": false, "status": "invalid", "errorCode": "WRONG_COMPANY", "message": "Este código no pertenece a tu empresa"}}`
+      },
+      {
+        status: 200,
+        description: 'Bulto ya está en este almacén',
+        body: `{"success": true, "data": {"valid": false, "status": "already-here", "errorCode": "ALREADY_HERE", "message": "El bulto ya se encuentra en este almacén"}}`
+      }
+    ],
+    examples: [
+      {
+        language: 'curl',
+        label: 'cURL',
+        code: `# Validar caja vacía
+curl -X POST 'https://logirapid.com/api/driver-app/empaques/validate' \\
+  -H 'Cookie: auth-token=YOUR_TOKEN' \\
+  -H 'Content-Type: application/json' \\
+  -d '{"codigo": "EMP-001-2024", "tipo": "empaque"}'
+
+# Validar bulto para recepción
+curl -X POST 'https://logirapid.com/api/driver-app/empaques/validate' \\
+  -H 'Cookie: auth-token=YOUR_TOKEN' \\
+  -H 'Content-Type: application/json' \\
+  -d '{"codigo": "EMP-100-2024", "tipo": "bulto", "operacion": "recepcion", "warehouseId": 1}'`
+      },
+      {
+        language: 'javascript',
+        label: 'JavaScript',
+        code: `// Validar código individual (fallback)
+async function validateCode(codigo, tipo, operacion, warehouseId) {
+  const response = await fetch('/api/driver-app/empaques/validate', {
+    method: 'POST', credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ codigo, tipo, operacion, warehouseId })
+  });
+  const data = await response.json();
+  if (data.success) {
+    const result = data.data;
+    if (result.valid) return { success: true, empaque: result.empaque };
+    // Errores: NOT_FOUND, WRONG_COMPANY, ALREADY_HERE, INVALID_STATE, WRONG_WAREHOUSE
+    return { success: false, error: result.errorCode, message: result.message };
+  }
+  return { success: false, error: 'API_ERROR' };
+}`
+      },
+      {
+        language: 'dart',
+        label: 'Flutter',
+        code: `Future<ValidationResult> validateCode({
+  required String codigo,
+  required String tipo,
+  String? operacion,
+  int? warehouseId,
+}) async {
+  final token = await secureStorage.read(key: 'auth-token');
+  final response = await http.post(
+    Uri.parse('https://logirapid.com/api/driver-app/empaques/validate'),
+    headers: {'Cookie': 'auth-token=\$token', 'Content-Type': 'application/json'},
+    body: jsonEncode({
+      'codigo': codigo, 'tipo': tipo,
+      if (operacion != null) 'operacion': operacion,
+      if (warehouseId != null) 'warehouseId': warehouseId,
+    }),
+  );
+  final data = jsonDecode(response.body);
+  if (data['success']) return ValidationResult.fromJson(data['data']);
+  throw Exception(data['error']);
+}`
+      }
+    ]
   }
 ]

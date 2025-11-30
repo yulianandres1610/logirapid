@@ -45,15 +45,59 @@ interface OrdersTableBodyProps {
   handleDeleteOrder: (id: number) => void
 }
 
-const STATUSES = {
+const STATUSES: Record<string, { label: string; color: string; icon: typeof AlertCircle }> = {
   pending: { label: 'Pendiente', color: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400', icon: AlertCircle },
   reprogrammed: { label: 'Reprogramado', color: 'bg-gradient-to-r from-yellow-500 to-orange-600 text-white shadow-lg border border-yellow-200 dark:from-yellow-600 dark:to-orange-700 dark:border-yellow-400', icon: AlertCircle },
   picked_up: { label: 'Recogido', color: 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-400', icon: Package },
   in_transit: { label: 'Enviado', color: 'bg-gradient-to-r from-blue-500 to-indigo-600 text-white shadow-lg border border-blue-200 dark:from-blue-600 dark:to-indigo-700 dark:border-blue-400', icon: Package },
   in_route: { label: 'En Reparto', color: 'bg-gradient-to-r from-purple-500 to-indigo-600 text-white shadow-lg border border-purple-200 dark:from-purple-600 dark:to-indigo-700 dark:border-purple-400', icon: Truck },
   en_ruta: { label: 'En Ruta', color: 'bg-gradient-to-r from-blue-500 to-cyan-600 text-white shadow-lg border border-blue-200 dark:from-blue-600 dark:to-cyan-700 dark:border-blue-400', icon: Truck },
-  en_reparto: { label: 'En Reparto', color: 'bg-gradient-to-r from-purple-500 to-indigo-600 text-white shadow-lg border border-purple-200 dark:from-purple-600 dark:to-indigo-700 dark:border-purple-400', icon: Truck },
+  en_reparto: { label: 'En Reparto', color: 'bg-gradient-to-r from-cyan-500 to-teal-600 text-white shadow-lg border border-cyan-200 dark:from-cyan-600 dark:to-teal-700 dark:border-cyan-400', icon: Truck },
   delivered: { label: 'Entregado', color: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400', icon: CheckCircle },
+  completed: { label: 'Completado', color: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400', icon: CheckCircle },
+  cancelled: { label: 'Cancelado', color: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400', icon: AlertCircle },
+  failed: { label: 'Fallido', color: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400', icon: AlertCircle },
+}
+
+// Función para normalizar el status
+const normalizeStatus = (status: string): string => {
+  if (!status) return 'pending'
+  // Primero normalizar: minúsculas, sin espacios extra, reemplazar espacios y guiones por _
+  const normalized = status.toLowerCase().trim().replace(/[\s-]+/g, '_')
+
+  // Mapear variantes comunes al status correcto
+  const statusMap: Record<string, string> = {
+    'en_reparto': 'en_reparto',
+    'en reparto': 'en_reparto',
+    'en-reparto': 'en_reparto',
+    'enreparto': 'en_reparto',
+    'en_ruta': 'en_ruta',
+    'en ruta': 'en_ruta',
+    'en-ruta': 'en_ruta',
+    'enruta': 'en_ruta',
+    'in_route': 'in_route',
+    'in route': 'in_route',
+    'in-route': 'in_route',
+    'in_transit': 'in_transit',
+    'in transit': 'in_transit',
+    'in-transit': 'in_transit',
+    'picked_up': 'picked_up',
+    'picked up': 'picked_up',
+    'picked-up': 'picked_up',
+  }
+
+  // Buscar primero en el mapa con el valor original (lowercase)
+  const lowerStatus = status.toLowerCase().trim()
+  if (statusMap[lowerStatus]) {
+    return statusMap[lowerStatus]
+  }
+
+  // Buscar con el valor normalizado
+  if (statusMap[normalized]) {
+    return statusMap[normalized]
+  }
+
+  return normalized
 }
 
 export default function OrdersTableBody({
@@ -273,16 +317,20 @@ export default function OrdersTableBody({
 
                 {/* Estado */}
                 <td className="px-4 py-4 whitespace-nowrap">
-                  <span className={cn(
-                    'inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium',
-                    STATUSES[order.status]?.color || 'bg-gray-100 text-gray-800 dark:bg-gray-900/30 dark:text-gray-400'
-                  )}>
-                    {(() => {
-                      const StatusIcon = STATUSES[order.status]?.icon || AlertCircle
-                      return <StatusIcon className="w-3 h-3 mr-1" />
-                    })()}
-                    {STATUSES[order.status]?.label || order.status || 'Desconocido'}
-                  </span>
+                  {(() => {
+                    const normalizedStatus = normalizeStatus(order.status)
+                    const statusConfig = STATUSES[normalizedStatus]
+                    const StatusIcon = statusConfig?.icon || AlertCircle
+                    return (
+                      <span className={cn(
+                        'inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium',
+                        statusConfig?.color || 'bg-gray-100 text-gray-800 dark:bg-gray-900/30 dark:text-gray-400'
+                      )}>
+                        <StatusIcon className="w-3 h-3 mr-1" />
+                        {statusConfig?.label || order.status || 'Desconocido'}
+                      </span>
+                    )
+                  })()}
                 </td>
               </>
             )}
@@ -356,16 +404,20 @@ export default function OrdersTableBody({
 
                 {/* Estado */}
                 <td className="px-4 py-4 whitespace-nowrap">
-                  <span className={cn(
-                    'inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium',
-                    STATUSES[order.status]?.color || 'bg-gray-100 text-gray-800 dark:bg-gray-900/30 dark:text-gray-400'
-                  )}>
-                    {(() => {
-                      const StatusIcon = STATUSES[order.status]?.icon || AlertCircle
-                      return <StatusIcon className="w-3 h-3 mr-1" />
-                    })()}
-                    {STATUSES[order.status]?.label || order.status || 'Desconocido'}
-                  </span>
+                  {(() => {
+                    const normalizedStatus = normalizeStatus(order.status)
+                    const statusConfig = STATUSES[normalizedStatus]
+                    const StatusIcon = statusConfig?.icon || AlertCircle
+                    return (
+                      <span className={cn(
+                        'inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium',
+                        statusConfig?.color || 'bg-gray-100 text-gray-800 dark:bg-gray-900/30 dark:text-gray-400'
+                      )}>
+                        <StatusIcon className="w-3 h-3 mr-1" />
+                        {statusConfig?.label || order.status || 'Desconocido'}
+                      </span>
+                    )
+                  })()}
                 </td>
               </>
             )}
@@ -428,16 +480,20 @@ export default function OrdersTableBody({
 
                 {/* Estado */}
                 <td className="px-4 py-4 whitespace-nowrap">
-                  <span className={cn(
-                    'inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium',
-                    STATUSES[order.status]?.color || 'bg-gray-100 text-gray-800 dark:bg-gray-900/30 dark:text-gray-400'
-                  )}>
-                    {(() => {
-                      const StatusIcon = STATUSES[order.status]?.icon || AlertCircle
-                      return <StatusIcon className="w-3 h-3 mr-1" />
-                    })()}
-                    {STATUSES[order.status]?.label || order.status || 'Desconocido'}
-                  </span>
+                  {(() => {
+                    const normalizedStatus = normalizeStatus(order.status)
+                    const statusConfig = STATUSES[normalizedStatus]
+                    const StatusIcon = statusConfig?.icon || AlertCircle
+                    return (
+                      <span className={cn(
+                        'inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium',
+                        statusConfig?.color || 'bg-gray-100 text-gray-800 dark:bg-gray-900/30 dark:text-gray-400'
+                      )}>
+                        <StatusIcon className="w-3 h-3 mr-1" />
+                        {statusConfig?.label || order.status || 'Desconocido'}
+                      </span>
+                    )
+                  })()}
                 </td>
               </>
             )}

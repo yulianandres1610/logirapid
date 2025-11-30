@@ -229,13 +229,18 @@ export default function PickupOrdersPage() {
     showNotification('info', 'Orden Seleccionada', `Orden ${order.orderNumber} seleccionada desde el mapa`)
   }
 
-  const STATUSES = {
+  const STATUSES: Record<string, { label: string; color: string; icon: typeof AlertCircle }> = {
     pending: { label: 'Pendiente', color: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400', icon: AlertCircle },
     reprogrammed: { label: 'Reprogramado', color: 'bg-gradient-to-r from-yellow-500 to-orange-600 text-white shadow-lg border border-yellow-200 dark:from-yellow-600 dark:to-orange-700 dark:border-yellow-400', icon: AlertCircle },
     picked_up: { label: 'Recogido', color: 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-400', icon: Package },
     in_transit: { label: 'Enviado', color: 'bg-gradient-to-r from-blue-500 to-indigo-600 text-white shadow-lg border border-blue-200 dark:from-blue-600 dark:to-indigo-700 dark:border-blue-400', icon: Package },
-    in_route: { label: 'En Reparto', color: 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900/30 dark:text-indigo-400', icon: Truck },
+    in_route: { label: 'En Reparto', color: 'bg-gradient-to-r from-purple-500 to-indigo-600 text-white shadow-lg border border-purple-200 dark:from-purple-600 dark:to-indigo-700 dark:border-purple-400', icon: Truck },
+    en_ruta: { label: 'En Ruta', color: 'bg-gradient-to-r from-blue-500 to-cyan-600 text-white shadow-lg border border-blue-200 dark:from-blue-600 dark:to-cyan-700 dark:border-blue-400', icon: Truck },
+    en_reparto: { label: 'En Reparto', color: 'bg-gradient-to-r from-cyan-500 to-teal-600 text-white shadow-lg border border-cyan-200 dark:from-cyan-600 dark:to-teal-700 dark:border-cyan-400', icon: Truck },
     delivered: { label: 'Entregado', color: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400', icon: CheckCircle },
+    completed: { label: 'Completado', color: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400', icon: CheckCircle },
+    cancelled: { label: 'Cancelado', color: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400', icon: XCircle },
+    failed: { label: 'Fallido', color: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400', icon: XCircle },
   }
 
   // Handle view order details

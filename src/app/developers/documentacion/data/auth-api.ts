@@ -112,6 +112,9 @@ export const navigationItems = [
     children: [
       { id: 'driver-empaques-disponibles', label: 'GET /empaques/disponibles' },
       { id: 'driver-empaques-servicio', label: 'POST /empaques/servicio' },
+      { id: 'empaques-list-disponibles', label: 'GET /empaques/list-disponibles' },
+      { id: 'empaques-list-bultos', label: 'GET /empaques/list-bultos' },
+      { id: 'empaques-validate', label: 'POST /empaques/validate' },
     ]
   },
   {
