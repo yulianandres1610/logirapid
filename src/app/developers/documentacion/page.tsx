@@ -45,16 +45,24 @@ export default function DevelopersDocsPage() {
   const contentRef = useRef<HTMLDivElement>(null)
   const isScrollingRef = useRef(false)
 
-  // Read hash from URL on mount and scroll to section
+  // Read section from URL on mount and scroll to section
   useEffect(() => {
+    // Support hash, path-based, and query param navigation for backwards compatibility
     const hash = window.location.hash.replace('#', '')
-    if (hash) {
-      setActiveSection(hash)
+    const pathSection = window.location.pathname.split('/developers/documentacion/')[1]
+    const urlParams = new URLSearchParams(window.location.search)
+    const querySection = urlParams.get('section')
+    const section = querySection || pathSection || hash
+
+    if (section) {
+      setActiveSection(section)
       // Small delay to ensure DOM is ready
       setTimeout(() => {
-        const element = document.querySelector(`[data-section="${hash}"]`)
+        const element = document.querySelector(`[data-section="${section}"]`)
         if (element) {
           element.scrollIntoView({ behavior: 'smooth', block: 'start' })
+          // Clean up URL by removing query param and using path-based URL
+          window.history.replaceState(null, '', `/developers/documentacion/${section}`)
         }
       }, 100)
     }
@@ -75,10 +83,10 @@ export default function DevelopersDocsPage() {
         }
       })
 
-      // Update URL hash without triggering scroll
+      // Update URL with path-based navigation without triggering scroll
       if (currentSection !== activeSection) {
         setActiveSection(currentSection)
-        window.history.replaceState(null, '', `#${currentSection}`)
+        window.history.replaceState(null, '', `/developers/documentacion/${currentSection}`)
       }
     }
 
@@ -97,8 +105,8 @@ export default function DevelopersDocsPage() {
       }, 1000)
     }
     setActiveSection(id)
-    // Update URL hash
-    window.history.pushState(null, '', `#${id}`)
+    // Update URL with path-based navigation
+    window.history.pushState(null, '', `/developers/documentacion/${id}`)
   }
 
   const baseUrl = environment === 'production' ? baseUrls.production : baseUrls.sandbox
