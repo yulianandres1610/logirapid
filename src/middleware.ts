@@ -17,6 +17,9 @@ export async function middleware(request: NextRequest) {
     '/pricing',
     '/contact',
     '/consentimiento-sms',
+    '/developers',
+    '/developers/documentacion',
+    '/developers/playground',
   ]
 
   // Recursos estáticos (pero NO API)
@@ -259,12 +262,13 @@ export const config = {
   matcher: [
     /*
      * Match all request paths except for the ones starting with:
-     * - api (API routes)
      * - _next/static (static files)
      * - _next/image (image optimization files)
      * - favicon.ico (favicon file)
      * - public folder
+     *
+     * Note: API routes are included so middleware can inject auth headers
      */
-    '/((?!api|_next/static|_next/image|favicon.ico|public).*)',
+    '/((?!_next/static|_next/image|favicon.ico|public).*)',
   ]
 }
