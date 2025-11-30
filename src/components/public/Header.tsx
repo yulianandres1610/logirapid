@@ -11,6 +11,7 @@ const navLinks = [
   { href: '#como-funciona', label: 'Cómo Funciona' },
   { href: '#precios', label: 'Precios' },
   { href: '/tracking', label: 'Rastrear' },
+  { href: '/developers', label: 'Developers' },
   { href: '#contacto', label: 'Contacto' },
 ]
 

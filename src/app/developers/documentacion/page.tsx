@@ -114,19 +114,11 @@ export default function DevelopersDocsPage() {
                 <Image src="/logo-blanco.png" alt="LogiRapid" fill className="object-contain" priority />
               </div>
             </a>
-            <nav className="hidden items-center gap-1 md:flex">
-              <a
-                href="/developers/documentacion"
-                className="rounded-lg bg-white/10 px-3 py-1.5 text-sm font-medium text-white"
-              >
-                Docs
-              </a>
-              <a
-                href="/developers/playground"
-                className="rounded-lg px-3 py-1.5 text-sm text-gray-400 hover:text-white transition-colors"
-              >
-                Playground
-              </a>
+            <nav className="hidden items-center gap-4 text-sm text-white/75 md:flex">
+              <a href="/" className="hover:text-white transition-colors">Inicio</a>
+              <a href="/developers" className="hover:text-white transition-colors">Developers</a>
+              <a href="/developers/documentacion" className="text-white font-medium">Docs</a>
+              <a href="/developers/playground" className="hover:text-white transition-colors">Playground</a>
             </nav>
           </div>
 

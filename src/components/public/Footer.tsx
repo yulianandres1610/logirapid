@@ -47,7 +47,7 @@ export function PublicFooter() {
                 className="h-10 w-auto"
               />
             </Link>
-            <p className="text-gray-400 text-sm mb-6 max-w-sm">
+            <p className="text-white text-sm mb-6 max-w-sm">
               Soluciones de logística inteligentes para conectar tu negocio con el mundo.
               Entregas rápidas, confiables y a tu alcance.
             </p>

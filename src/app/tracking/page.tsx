@@ -4,6 +4,7 @@ import { useState, useEffect, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { motion } from 'framer-motion'
 import { Search, Package, Truck, MapPin, CheckCircle, Clock, AlertCircle } from 'lucide-react'
+import { PublicHeader } from '@/components/public/Header'
 
 interface TrackingData {
   orderNumber: string
@@ -282,15 +283,18 @@ function TrackingContent() {
 
 export default function TrackingPage() {
   return (
-    <Suspense fallback={
-      <div className="min-h-screen pt-24 pb-20 bg-gray-900 flex items-center justify-center">
-        <div className="text-center">
-          <div className="w-12 h-12 border-4 border-[#0374e5] border-t-transparent rounded-full animate-spin mx-auto mb-4" />
-          <p className="text-gray-400">Cargando...</p>
+    <div className="min-h-screen bg-gray-900">
+      <PublicHeader />
+      <Suspense fallback={
+        <div className="min-h-screen pt-24 pb-20 bg-gray-900 flex items-center justify-center">
+          <div className="text-center">
+            <div className="w-12 h-12 border-4 border-[#0374e5] border-t-transparent rounded-full animate-spin mx-auto mb-4" />
+            <p className="text-gray-400">Cargando...</p>
+          </div>
         </div>
-      </div>
-    }>
-      <TrackingContent />
-    </Suspense>
+      }>
+        <TrackingContent />
+      </Suspense>
+    </div>
   )
 }

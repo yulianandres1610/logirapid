@@ -76,7 +76,8 @@ export default function DevelopersPlaygroundPage() {
             </div>
           </div>
           <nav className="hidden items-center gap-4 text-sm text-white/75 md:flex">
-            <a href="/developers" className="hover:text-white transition-colors">Inicio</a>
+            <a href="/" className="hover:text-white transition-colors">Inicio</a>
+            <a href="/developers" className="hover:text-white transition-colors">Developers</a>
             <a href="/developers/documentacion" className="hover:text-white transition-colors">Documentación</a>
           </nav>
         </div>
