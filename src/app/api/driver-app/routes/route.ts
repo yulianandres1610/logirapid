@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/database'
+import jwt from 'jsonwebtoken'
 
 // Force dynamic rendering
 export const dynamic = 'force-dynamic'
@@ -20,26 +21,40 @@ export const runtime = 'nodejs'
  */
 export async function GET(request: NextRequest) {
   try {
-    // Obtener usuario del token
+    // Obtener usuario del token o headers (inyectados por middleware)
     const token = request.cookies.get('auth-token')?.value
-    if (!token) {
-      return NextResponse.json(
-        { success: false, error: 'No autenticado' },
-        { status: 401 }
-      )
+
+    // Intentar obtener de headers primero (inyectados por middleware)
+    let tokenUserId: number | undefined = parseInt(request.headers.get('x-user-id') || '')
+    let userRole: string | undefined = request.headers.get('x-user-role') || undefined
+
+    // Si no hay headers válidos, decodificar JWT
+    if (!tokenUserId || isNaN(tokenUserId) || !userRole) {
+      if (!token) {
+        return NextResponse.json(
+          { success: false, error: 'No autenticado' },
+          { status: 401 }
+        )
+      }
+
+      // Decodificar JWT token
+      try {
+        const jwtSecret = process.env.JWT_SECRET || 'fallback-secret-change-in-production'
+        const decoded = jwt.verify(token, jwtSecret) as any
+        tokenUserId = decoded.userId
+        userRole = decoded.role
+      } catch (error) {
+        console.error('[driver-app/routes] JWT decode error:', error)
+        return NextResponse.json(
+          { success: false, error: 'Token inválido' },
+          { status: 401 }
+        )
+      }
     }
 
-    // Decodificar token
-    let tokenUserId: number
-    let userRole: string
-    try {
-      const decoded = Buffer.from(token, 'base64').toString('utf-8')
-      const [id, , role] = decoded.split(':')
-      tokenUserId = parseInt(id)
-      userRole = role
-    } catch {
+    if (!tokenUserId || !userRole) {
       return NextResponse.json(
-        { success: false, error: 'Token inválido' },
+        { success: false, error: 'No se pudo obtener información del usuario' },
         { status: 401 }
       )
     }
