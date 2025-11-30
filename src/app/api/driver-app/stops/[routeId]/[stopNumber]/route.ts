@@ -1,10 +1,40 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/database'
+import jwt from 'jsonwebtoken'
 
 // Force dynamic rendering
 export const dynamic = 'force-dynamic'
 export const dynamicParams = true
 export const runtime = 'nodejs'
+
+// Helper para autenticación JWT
+async function authenticateRequest(request: NextRequest): Promise<{ userId: number; userRole: string; userName: string } | null> {
+  const token = request.cookies.get('auth-token')?.value
+
+  // Intentar obtener de headers primero (inyectados por middleware)
+  let tokenUserId: number | undefined = parseInt(request.headers.get('x-user-id') || '')
+  let userRole: string | undefined = request.headers.get('x-user-role') || undefined
+  let userName: string = request.headers.get('x-user-email') || ''
+
+  // Si no hay headers válidos, decodificar JWT
+  if (!tokenUserId || isNaN(tokenUserId) || !userRole) {
+    if (!token) return null
+
+    try {
+      const jwtSecret = process.env.JWT_SECRET || 'fallback-secret-change-in-production'
+      const decoded = jwt.verify(token, jwtSecret) as any
+      tokenUserId = decoded.userId
+      userRole = decoded.role
+      userName = decoded.email || ''
+    } catch {
+      return null
+    }
+  }
+
+  if (!tokenUserId || !userRole) return null
+
+  return { userId: tokenUserId, userRole, userName }
+}
 
 /**
  * GET /api/driver-app/stops/[routeId]/[stopNumber]
@@ -15,34 +45,22 @@ export async function GET(
   { params }: { params: Promise<{ routeId: string; stopNumber: string }> }
 ) {
   try {
-    // Obtener usuario del token
-    const token = request.cookies.get('auth-token')?.value
-    if (!token) {
+    // Autenticar usuario
+    const auth = await authenticateRequest(request)
+    if (!auth) {
       return NextResponse.json(
         { success: false, error: 'No autenticado' },
         { status: 401 }
       )
     }
 
-    // Decodificar token
-    let userId: number
-    let userRole: string
-    try {
-      const decoded = Buffer.from(token, 'base64').toString('utf-8')
-      const [id, , role] = decoded.split(':')
-      userId = parseInt(id)
-      userRole = role
-    } catch {
-      return NextResponse.json(
-        { success: false, error: 'Token inválido' },
-        { status: 401 }
-      )
-    }
+    const { userId, userRole } = auth
 
-    // Verificar rol DRIVER
-    if (userRole !== 'DRIVER') {
+    // Solo DRIVER y roles admin pueden acceder
+    const allowedRoles = ['DRIVER', 'ADMIN', 'SUPER_ADMIN', 'MANAGER']
+    if (!allowedRoles.includes(userRole)) {
       return NextResponse.json(
-        { success: false, error: 'Acceso denegado. Solo drivers pueden acceder.' },
+        { success: false, error: 'Acceso denegado.' },
         { status: 403 }
       )
     }
@@ -62,9 +80,9 @@ export async function GET(
     const routeQuery = `
       SELECT
         r.id,
-        r.route_number as "routeNumber",
+        r.routenumber as "routeNumber",
         r.status,
-        r.driver_id as "driverId",
+        r.driverid as "driverId",
         r.company_id as "companyId",
         r.stops
       FROM routes r
@@ -81,8 +99,8 @@ export async function GET(
 
     const route = routeResult.rows[0]
 
-    // Verificar que el driver está asignado a la ruta
-    if (route.driverId && route.driverId !== userId) {
+    // Verificar que el driver está asignado a la ruta (solo para DRIVER)
+    if (userRole === 'DRIVER' && route.driverId && route.driverId !== userId) {
       return NextResponse.json(
         { success: false, error: 'No tiene permisos para ver esta parada' },
         { status: 403 }
@@ -373,36 +391,22 @@ export async function PUT(
   { params }: { params: Promise<{ routeId: string; stopNumber: string }> }
 ) {
   try {
-    // Obtener usuario del token
-    const token = request.cookies.get('auth-token')?.value
-    if (!token) {
+    // Autenticar usuario
+    const auth = await authenticateRequest(request)
+    if (!auth) {
       return NextResponse.json(
         { success: false, error: 'No autenticado' },
         { status: 401 }
       )
     }
 
-    // Decodificar token
-    let userId: number
-    let userRole: string
-    let userName: string
-    try {
-      const decoded = Buffer.from(token, 'base64').toString('utf-8')
-      const [id, email, role] = decoded.split(':')
-      userId = parseInt(id)
-      userRole = role
-      userName = email
-    } catch {
-      return NextResponse.json(
-        { success: false, error: 'Token inválido' },
-        { status: 401 }
-      )
-    }
+    const { userId, userRole, userName } = auth
 
-    // Verificar rol DRIVER
-    if (userRole !== 'DRIVER') {
+    // Solo DRIVER y roles admin pueden actualizar
+    const allowedRoles = ['DRIVER', 'ADMIN', 'SUPER_ADMIN', 'MANAGER']
+    if (!allowedRoles.includes(userRole)) {
       return NextResponse.json(
-        { success: false, error: 'Acceso denegado. Solo drivers pueden actualizar paradas.' },
+        { success: false, error: 'Acceso denegado.' },
         { status: 403 }
       )
     }
@@ -444,7 +448,7 @@ export async function PUT(
     const routeQuery = `
       SELECT
         r.id,
-        r.driver_id as "driverId",
+        r.driverid as "driverId",
         r.company_id as "companyId",
         r.stops
       FROM routes r
@@ -461,8 +465,8 @@ export async function PUT(
 
     const route = routeResult.rows[0]
 
-    // Verificar que el driver está asignado a la ruta
-    if (route.driverId && route.driverId !== userId) {
+    // Verificar que el driver está asignado a la ruta (solo para DRIVER)
+    if (userRole === 'DRIVER' && route.driverId && route.driverId !== userId) {
       return NextResponse.json(
         { success: false, error: 'No tiene permisos para actualizar esta parada' },
         { status: 403 }

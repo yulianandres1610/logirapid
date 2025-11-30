@@ -960,32 +960,135 @@ class EmptyBoxesSummary extends StatelessWidget {
     responses: [
       {
         status: 200,
-        description: 'Lista de rutas',
+        description: 'Lista de rutas con información completa',
         body: `{
   "success": true,
   "data": {
     "routes": [
       {
-        "id": 123,
-        "routeNumber": "R-2024-001",
-        "qrCode": "RT-ABCD1234EFGH5678",
-        "status": "active",
-        "totalStops": 12,
-        "completedStops": 5,
-        "pendingStops": 7,
+        "id": 21,
+        "routeCode": "RUT-2025-0021",
+        "routeNumber": "RUT-2025-0021",
+        "qrCode": null,
+        "status": "asignada",
+        "totalStops": 1,
+        "completedStops": 0,
+        "pendingStops": 1,
         "failedStops": 0,
-        "distance": 45.5,
-        "duration": 120,
-        "scheduledDate": "2024-01-15",
-        "vehiclePlate": "ABC-123",
-        "createdAt": "2024-01-14T10:00:00Z"
+        "distance": {
+          "value": 22.66,
+          "unit": "miles",
+          "formatted": "22.66 mi"
+        },
+        "estimatedDuration": {
+          "minutes": 43,
+          "formatted": "43 min"
+        },
+        "actualDuration": null,
+        "origin": {
+          "name": "HolaPacks 9550",
+          "address": "9550 Northwest 79th Avenue",
+          "city": "Hialeah Gardens",
+          "state": "FL",
+          "fullAddress": "9550 Northwest 79th Avenue, Hialeah Gardens, FL",
+          "coordinates": {
+            "latitude": 25.861064,
+            "longitude": -80.325922
+          }
+        },
+        "destination": {
+          "address": "3231 Southwest 95th Court, Miami, FL 33165, us",
+          "coordinates": {
+            "latitude": 25.739415,
+            "longitude": -80.34985
+          },
+          "orderNumbers": ["PICKUP00003"]
+        },
+        "vehiclePlate": "HONDA987654321XYZ",
+        "vehicleId": "v_1764186168951_1k6np0d7y",
+        "totalPackages": 1,
+        "deliveredPackages": 0,
+        "scheduledDate": "2025-11-30T05:00:00.000Z",
+        "startTime": "2025-11-30T18:00:00.000Z",
+        "endTime": null,
+        "createdAt": "2025-12-01T01:33:56.100Z",
+        "stops": [
+          {
+            "stopNumber": 1,
+            "sequence": 1,
+            "status": "pending",
+            "address": "3231 Southwest 95th Court, Miami, FL 33165, us",
+            "coordinates": {
+              "latitude": 25.739415,
+              "longitude": -80.34985
+            },
+            "type": "recogida",
+            "timeSlot": "8:00 AM - 12:00 PM",
+            "totalOrders": 1,
+            "completedOrders": 0,
+            "pendingOrders": 1,
+            "failedOrders": 0,
+            "orderNumbers": ["PICKUP00003"],
+            "orders": [
+              {
+                "id": 95,
+                "orderNumber": "PICKUP00003",
+                "status": "en_ruta",
+                "orderType": "recogida",
+                "customer": {
+                  "id": 21,
+                  "name": "Dulce Maria Fernandez",
+                  "firstName": "Dulce Maria",
+                  "lastName": "Fernandez",
+                  "phone": "7867245377",
+                  "email": null
+                },
+                "address": {
+                  "full": "3231 Southwest 95th Court, Miami, FL 33165, us",
+                  "street": "3231 Southwest 95th Court",
+                  "apartment": null,
+                  "city": "Miami",
+                  "state": "FL",
+                  "zipCode": "33165",
+                  "country": "us",
+                  "coordinates": {
+                    "latitude": 25.739415,
+                    "longitude": -80.34985
+                  }
+                },
+                "receiver": {
+                  "name": "Marta Castaneda Reyes",
+                  "phone": "54934188",
+                  "address": "Calle 10 Nro 15 A Entre Calle A y B..."
+                },
+                "delivery": {
+                  "scheduledDate": "2025-11-29T05:00:00.000Z",
+                  "timeSlot": "8:00 AM - 12:00 PM",
+                  "notes": "Orden de recogida creada desde wizard",
+                  "customerNotes": null
+                },
+                "packages": {
+                  "boxCount": 0,
+                  "boxes": [],
+                  "boxesDelivered": 0,
+                  "boxesReturned": 0,
+                  "pendingReturn": false,
+                  "returnStatus": "none"
+                },
+                "services": ["Entrega de Cajas 15x15x15"],
+                "proofStatus": "none",
+                "deliveredAt": null
+              }
+            ]
+          }
+        ]
       }
     ]
   },
   "pagination": {
     "page": 1,
     "limit": 20,
-    "total": 5,
+    "total": 1,
     "totalPages": 1
   }
 }`

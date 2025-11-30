@@ -147,6 +147,74 @@ export async function GET(request: NextRequest) {
 
     const routesResult = await db.query(query, params)
 
+    // Obtener todos los IDs de órdenes de todas las rutas para hacer una sola consulta
+    const allOrderIds: number[] = []
+    routesResult.rows.forEach((route: any) => {
+      let stops: any[] = []
+      try {
+        stops = typeof route.stops === 'string'
+          ? JSON.parse(route.stops)
+          : (Array.isArray(route.stops) ? route.stops : [])
+      } catch {
+        stops = []
+      }
+      stops.forEach((stop: any) => {
+        if (stop.orderIds) {
+          allOrderIds.push(...stop.orderIds)
+        } else if (stop.orderId) {
+          allOrderIds.push(stop.orderId)
+        }
+      })
+    })
+
+    // Consultar todas las órdenes de una vez
+    let ordersMap: Map<number, any> = new Map()
+    if (allOrderIds.length > 0) {
+      const uniqueOrderIds = [...new Set(allOrderIds)]
+      const ordersResult = await db.query(`
+        SELECT
+          id,
+          ordernumber as "orderNumber",
+          customerid as "customerId",
+          customername as "customerName",
+          customeraddress as "customerAddress",
+          firstname as "firstName",
+          lastname as "lastName",
+          phone,
+          email,
+          street,
+          apartment,
+          city,
+          state,
+          zipcode as "zipCode",
+          country,
+          latitude,
+          longitude,
+          status,
+          order_type as "orderType",
+          services,
+          notes,
+          customernotes as "customerNotes",
+          scheduleddate as "scheduledDate",
+          timeslot as "timeSlot",
+          boxcount as "boxCount",
+          boxes,
+          boxes_delivered as "boxesDelivered",
+          boxes_returned as "boxesReturned",
+          pending_return as "pendingReturn",
+          return_status as "returnStatus",
+          proof_status as "proofStatus",
+          delivered_at as "deliveredAt",
+          office_order_data as "officeOrderData"
+        FROM package_orders
+        WHERE id = ANY($1)
+      `, [uniqueOrderIds])
+
+      ordersResult.rows.forEach((order: any) => {
+        ordersMap.set(order.id, order)
+      })
+    }
+
     // Contar total para paginación
     let countQuery = `
       SELECT COUNT(*) as total
@@ -284,22 +352,128 @@ export async function GET(request: NextRequest) {
         endTime: route.endTime,
         createdAt: route.createdAt,
 
-        // Array de paradas con detalles para navegación
-        stops: orderStops.map((stop: any, index: number) => ({
-          sequence: stop.sequence || index + 1,
-          address: stop.address || 'Dirección no disponible',
-          coordinates: stop.latitude && stop.longitude ? {
-            latitude: parseFloat(stop.latitude),
-            longitude: parseFloat(stop.longitude)
-          } : (stop.coordinates ? {
-            longitude: stop.coordinates[0],
-            latitude: stop.coordinates[1]
-          } : null),
-          status: stop.status || 'pendiente',
-          orderNumbers: stop.orderNumbers || [],
-          totalOrders: stop.totalOrders || (stop.orderIds?.length || 1),
-          type: stop.type || 'delivery'
-        }))
+        // Array de paradas con detalles completos para navegación y gestión
+        stops: orderStops.map((stop: any, index: number) => {
+          // Obtener los IDs de órdenes de esta parada
+          const stopOrderIds: number[] = stop.orderIds || (stop.orderId ? [stop.orderId] : [])
+
+          // Obtener información completa de cada orden
+          const orders = stopOrderIds.map((orderId: number) => {
+            const order = ordersMap.get(orderId)
+            if (!order) {
+              return {
+                id: orderId,
+                orderNumber: stop.orderNumbers?.find((on: string) => on.includes(String(orderId))) || `ORD-${orderId}`,
+                status: 'unknown'
+              }
+            }
+
+            // Extraer información del receptor desde office_order_data si existe
+            const officeData = order.officeOrderData || {}
+            const receiverInfo = officeData.receiverName ? {
+              name: officeData.receiverName,
+              phone: officeData.receiverPhone,
+              address: officeData.destination?.fullAddress || officeData.destination?.street
+            } : null
+
+            return {
+              id: order.id,
+              orderNumber: order.orderNumber,
+              status: order.status,
+              orderType: order.orderType || 'delivery',
+
+              // Información del cliente/remitente
+              customer: {
+                id: order.customerId,
+                name: order.customerName || `${order.firstName || ''} ${order.lastName || ''}`.trim(),
+                firstName: order.firstName,
+                lastName: order.lastName,
+                phone: order.phone || officeData.senderPhone,
+                email: order.email || officeData.senderEmail
+              },
+
+              // Dirección de la parada
+              address: {
+                full: order.customerAddress,
+                street: order.street,
+                apartment: order.apartment,
+                city: order.city,
+                state: order.state,
+                zipCode: order.zipCode,
+                country: order.country,
+                coordinates: order.latitude && order.longitude ? {
+                  latitude: parseFloat(order.latitude),
+                  longitude: parseFloat(order.longitude)
+                } : null
+              },
+
+              // Información del receptor (para envíos)
+              receiver: receiverInfo,
+
+              // Información de entrega
+              delivery: {
+                scheduledDate: order.scheduledDate,
+                timeSlot: order.timeSlot,
+                notes: order.notes,
+                customerNotes: order.customerNotes
+              },
+
+              // Información de cajas/paquetes
+              packages: {
+                boxCount: order.boxCount || 0,
+                boxes: order.boxes || [],
+                boxesDelivered: order.boxesDelivered || 0,
+                boxesReturned: order.boxesReturned || 0,
+                pendingReturn: order.pendingReturn || false,
+                returnStatus: order.returnStatus || 'none'
+              },
+
+              // Servicios
+              services: order.services || [],
+
+              // Estado de prueba de entrega
+              proofStatus: order.proofStatus || 'none',
+              deliveredAt: order.deliveredAt
+            }
+          })
+
+          // Calcular el estado de la parada basado en las órdenes
+          const allDelivered = orders.every((o: any) => ['delivered', 'completada', 'entregado', 'completed'].includes(o.status))
+          const anyFailed = orders.some((o: any) => ['failed', 'fallido', 'cancelled', 'cancelada'].includes(o.status))
+          const computedStopStatus = allDelivered ? 'completed' : (anyFailed ? 'partial' : 'pending')
+
+          return {
+            stopNumber: index + 1,
+            sequence: stop.sequence || index + 1,
+            status: stop.status || computedStopStatus,
+
+            // Dirección de la parada
+            address: stop.address || orders[0]?.address?.full || 'Dirección no disponible',
+            coordinates: stop.latitude && stop.longitude ? {
+              latitude: parseFloat(stop.latitude),
+              longitude: parseFloat(stop.longitude)
+            } : (stop.coordinates ? {
+              latitude: stop.coordinates[1],
+              longitude: stop.coordinates[0]
+            } : orders[0]?.address?.coordinates || null),
+
+            // Tipo de parada
+            type: stop.type || orders[0]?.orderType || 'delivery',
+            timeSlot: stop.timeSlot || orders[0]?.delivery?.timeSlot,
+
+            // Resumen de órdenes
+            totalOrders: orders.length,
+            completedOrders: orders.filter((o: any) => ['delivered', 'completada', 'entregado', 'completed'].includes(o.status)).length,
+            pendingOrders: orders.filter((o: any) => !['delivered', 'completada', 'entregado', 'completed', 'failed', 'fallido', 'cancelled', 'cancelada'].includes(o.status)).length,
+            failedOrders: orders.filter((o: any) => ['failed', 'fallido', 'cancelled', 'cancelada'].includes(o.status)).length,
+
+            // Lista de números de orden
+            orderNumbers: orders.map((o: any) => o.orderNumber),
+
+            // Detalle completo de cada orden en esta parada
+            orders
+          }
+        })
       }
     })
 
