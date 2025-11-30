@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
 import { LoginForm } from '@/components/forms/LoginForm'
@@ -11,12 +11,91 @@ export default function LoginPage() {
   const router = useRouter()
   const [isRedirecting, setIsRedirecting] = useState(false)
   const [showLoadingOverlay, setShowLoadingOverlay] = useState(false)
+  const [isCheckingAuth, setIsCheckingAuth] = useState(true)
+
+  // Check if user is already authenticated on mount
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+
+    const checkAuthentication = () => {
+      // Check for auth token in cookies
+      const authToken = document.cookie
+        .split('; ')
+        .find(row => row.startsWith('auth-token='))
+        ?.split('=')[1]
+
+      // Also check localStorage
+      const localToken = localStorage.getItem('auth-token')
+      const userStr = localStorage.getItem('user')
+
+      if (authToken || (localToken && userStr)) {
+        console.log('[LOGIN] User already authenticated, redirecting to dashboard')
+        setShowLoadingOverlay(true)
+        setIsRedirecting(true)
+
+        // Determine redirect path based on user role
+        let redirectPath = '/dashboard/admin'
+        try {
+          if (userStr) {
+            const user = JSON.parse(userStr)
+            switch (user.role) {
+              case 'SUPER_ADMIN':
+                redirectPath = '/dashboard/admin'
+                break
+              case 'ADMIN':
+                redirectPath = '/dashboard/agency-admin'
+                break
+              case 'MANAGER':
+                redirectPath = '/dashboard/manager'
+                break
+              case 'USER':
+                redirectPath = '/dashboard/user'
+                break
+              case 'DRIVER':
+                redirectPath = '/dashboard/agency-admin'
+                break
+              default:
+                redirectPath = '/dashboard/agency-admin'
+            }
+          }
+        } catch (e) {
+          console.error('[LOGIN] Error parsing user from localStorage', e)
+        }
+
+        // Multi-domain redirect logic
+        const currentHost = window.location.hostname
+        const isMainDomain = currentHost === 'logirapid.com' || currentHost === 'www.logirapid.com'
+
+        if (isMainDomain) {
+          window.location.href = `https://agencias.logirapid.com${redirectPath}`
+        } else {
+          window.location.href = redirectPath
+        }
+      } else {
+        setIsCheckingAuth(false)
+      }
+    }
+
+    checkAuthentication()
+  }, [])
 
   const handleLoginSuccess = () => {
     setShowLoadingOverlay(true)
     setIsRedirecting(true)
     // useAuth hook will handle the redirect with proper cookie propagation delay
     // No need to manually redirect here
+  }
+
+  // Show loading while checking authentication
+  if (isCheckingAuth) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 flex items-center justify-center p-4">
+        <div className="text-center">
+          <div className="w-16 h-16 border-4 border-exa-primary border-t-transparent rounded-full animate-spin mx-auto mb-4" />
+          <p className="text-white text-lg">Verificando sesión...</p>
+        </div>
+      </div>
+    )
   }
 
   return (

@@ -18,6 +18,8 @@ const navLinks = [
 export function PublicHeader() {
   const [isScrolled, setIsScrolled] = useState(false)
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
+  const [isAuthenticated, setIsAuthenticated] = useState(false)
+  const [dashboardUrl, setDashboardUrl] = useState('https://agencias.logirapid.com/login')
 
   useEffect(() => {
     const handleScroll = () => {
@@ -25,6 +27,60 @@ export function PublicHeader() {
     }
     window.addEventListener('scroll', handleScroll)
     return () => window.removeEventListener('scroll', handleScroll)
+  }, [])
+
+  // Check authentication status on mount
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+
+    const checkAuth = () => {
+      // Check for auth token in cookies
+      const authToken = document.cookie
+        .split('; ')
+        .find(row => row.startsWith('auth-token='))
+        ?.split('=')[1]
+
+      // Also check localStorage
+      const localToken = localStorage.getItem('auth-token')
+      const userStr = localStorage.getItem('user')
+
+      if (authToken || (localToken && userStr)) {
+        setIsAuthenticated(true)
+
+        // Determine redirect path based on user role
+        let redirectPath = '/dashboard/admin'
+        try {
+          if (userStr) {
+            const user = JSON.parse(userStr)
+            switch (user.role) {
+              case 'SUPER_ADMIN':
+                redirectPath = '/dashboard/admin'
+                break
+              case 'ADMIN':
+                redirectPath = '/dashboard/agency-admin'
+                break
+              case 'MANAGER':
+                redirectPath = '/dashboard/manager'
+                break
+              case 'USER':
+                redirectPath = '/dashboard/user'
+                break
+              case 'DRIVER':
+                redirectPath = '/dashboard/agency-admin'
+                break
+              default:
+                redirectPath = '/dashboard/agency-admin'
+            }
+          }
+        } catch (e) {
+          console.error('[HEADER] Error parsing user from localStorage', e)
+        }
+
+        setDashboardUrl(`https://agencias.logirapid.com${redirectPath}`)
+      }
+    }
+
+    checkAuth()
   }, [])
 
   const handleNavClick = (e: React.MouseEvent<HTMLAnchorElement>, href: string) => {
@@ -77,10 +133,10 @@ export function PublicHeader() {
           {/* CTA Button */}
           <div className="hidden lg:flex items-center space-x-4">
             <a
-              href="https://agencias.logirapid.com/login"
+              href={dashboardUrl}
               className="px-6 py-2.5 bg-[#0374e5] text-white rounded-lg font-semibold text-sm hover:bg-[#0262c4] transition-colors shadow-lg"
             >
-              Iniciar Sesión
+              {isAuthenticated ? 'Ir al Dashboard' : 'Iniciar Sesión'}
             </a>
           </div>
 
@@ -116,10 +172,10 @@ export function PublicHeader() {
               ))}
               <div className="pt-4 border-t border-gray-800">
                 <a
-                  href="https://agencias.logirapid.com/login"
+                  href={dashboardUrl}
                   className="block w-full px-6 py-3 bg-[#0374e5] text-white rounded-lg font-semibold text-sm text-center hover:bg-[#0262c4] transition-colors"
                 >
-                  Iniciar Sesión
+                  {isAuthenticated ? 'Ir al Dashboard' : 'Iniciar Sesión'}
                 </a>
               </div>
             </nav>
