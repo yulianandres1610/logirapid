@@ -914,13 +914,13 @@ class EmptyBoxesSummary extends StatelessWidget {
       }
     ]
   },
-  // ==================== RUTAS DEL DRIVER ====================
+  // ==================== RUTAS DEL USUARIO ====================
   {
     id: 'driver-routes',
     method: 'GET',
     path: '/api/driver-app/routes',
-    title: 'Rutas Asignadas al Driver',
-    description: 'Obtiene todas las rutas asignadas al driver logueado. Incluye información de paradas completadas/pendientes.',
+    title: 'Rutas Asignadas al Usuario',
+    description: 'Obtiene todas las rutas asignadas al usuario logueado. Cualquier rol puede ver sus propias rutas. ADMIN/SUPER_ADMIN/MANAGER pueden ver rutas de otros usuarios pasando el userId.',
     headers: [
       {
         name: 'Cookie',
@@ -930,6 +930,12 @@ class EmptyBoxesSummary extends StatelessWidget {
       }
     ],
     queryParams: [
+      {
+        name: 'userId',
+        type: 'number',
+        required: false,
+        description: 'ID del usuario (opcional). Si no se especifica, usa el usuario del token. Solo ADMIN/SUPER_ADMIN/MANAGER pueden ver rutas de otros usuarios.'
+      },
       {
         name: 'status',
         type: 'string',
@@ -989,19 +995,29 @@ class EmptyBoxesSummary extends StatelessWidget {
       {
         language: 'curl',
         label: 'cURL',
-        code: `# Rutas activas
+        code: `# Rutas activas del usuario logueado
 curl -X GET 'https://logirapid.com/api/driver-app/routes' \\
   -H 'Cookie: auth-token=YOUR_TOKEN'
 
 # Todas las rutas
 curl -X GET 'https://logirapid.com/api/driver-app/routes?status=all' \\
+  -H 'Cookie: auth-token=YOUR_TOKEN'
+
+# Rutas de un usuario específico (requiere rol ADMIN/MANAGER)
+curl -X GET 'https://logirapid.com/api/driver-app/routes?userId=42' \\
   -H 'Cookie: auth-token=YOUR_TOKEN'`
       },
       {
         language: 'javascript',
         label: 'JavaScript',
-        code: `async function getDriverRoutes(status = 'active') {
-  const response = await fetch(\`/api/driver-app/routes?status=\${status}\`, {
+        code: `// Obtener rutas del usuario logueado
+async function getUserRoutes(status = 'active', userId = null) {
+  let url = \`/api/driver-app/routes?status=\${status}\`;
+  if (userId) {
+    url += \`&userId=\${userId}\`;
+  }
+
+  const response = await fetch(url, {
     credentials: 'include'
   });
 
@@ -1022,11 +1038,19 @@ curl -X GET 'https://logirapid.com/api/driver-app/routes?status=all' \\
       {
         language: 'dart',
         label: 'Flutter',
-        code: `Future<List<Route>> getDriverRoutes({String status = 'active'}) async {
+        code: `Future<List<Route>> getUserRoutes({
+  String status = 'active',
+  int? userId,
+}) async {
   final token = await secureStorage.read(key: 'auth-token');
 
+  String url = 'https://logirapid.com/api/driver-app/routes?status=\$status';
+  if (userId != null) {
+    url += '&userId=\$userId';
+  }
+
   final response = await http.get(
-    Uri.parse('https://logirapid.com/api/driver-app/routes?status=\$status'),
+    Uri.parse(url),
     headers: {'Cookie': 'auth-token=\$token'},
   );
 
@@ -1047,8 +1071,8 @@ curl -X GET 'https://logirapid.com/api/driver-app/routes?status=all' \\
     id: 'driver-routes-assign',
     method: 'POST',
     path: '/api/driver-app/routes/assign',
-    title: 'Asignar Ruta por QR',
-    description: 'El driver escanea el código QR de una ruta y se auto-asigna. La ruta cambia a estado "active".',
+    title: 'Asignar Ruta a Usuario',
+    description: 'Asigna una ruta a un usuario mediante código QR. Cualquier usuario puede asignarse a sí mismo. ADMIN/SUPER_ADMIN/MANAGER pueden asignar rutas a otros usuarios pasando el userId.',
     headers: [
       {
         name: 'Cookie',
@@ -1069,6 +1093,12 @@ curl -X GET 'https://logirapid.com/api/driver-app/routes?status=all' \\
         type: 'string',
         required: true,
         description: 'Código QR de la ruta (formato: RT-XXXXXXXX) o número de ruta'
+      },
+      {
+        name: 'userId',
+        type: 'number',
+        required: false,
+        description: 'ID del usuario a asignar (opcional). Si no se especifica, asigna al usuario del token. Solo ADMIN/SUPER_ADMIN/MANAGER pueden asignar a otros usuarios.'
       }
     ],
     responses: [
@@ -1089,17 +1119,26 @@ curl -X GET 'https://logirapid.com/api/driver-app/routes?status=all' \\
       "duration": 120,
       "scheduledDate": "2024-01-15",
       "vehiclePlate": "ABC-123",
-      "driverName": "Juan Pérez"
+      "assignedUserName": "Juan Pérez",
+      "assignedUserId": 42
     }
   }
 }`
       },
       {
         status: 400,
-        description: 'Ruta ya asignada a otro driver',
+        description: 'Ruta ya asignada a otro usuario',
         body: `{
   "success": false,
-  "error": "Esta ruta ya está asignada a otro driver: María García"
+  "error": "Esta ruta ya está asignada a otro usuario: María García"
+}`
+      },
+      {
+        status: 403,
+        description: 'Sin permisos para asignar a otros',
+        body: `{
+  "success": false,
+  "error": "No tienes permisos para asignar rutas a otros usuarios"
 }`
       },
       {
@@ -1115,36 +1154,52 @@ curl -X GET 'https://logirapid.com/api/driver-app/routes?status=all' \\
       {
         language: 'curl',
         label: 'cURL',
-        code: `curl -X POST 'https://logirapid.com/api/driver-app/routes/assign' \\
+        code: `# Auto-asignarse una ruta
+curl -X POST 'https://logirapid.com/api/driver-app/routes/assign' \\
   -H 'Cookie: auth-token=YOUR_TOKEN' \\
   -H 'Content-Type: application/json' \\
   -d '{
     "routeCode": "RT-ABCD1234EFGH5678"
+  }'
+
+# Asignar ruta a otro usuario (requiere rol ADMIN/MANAGER)
+curl -X POST 'https://logirapid.com/api/driver-app/routes/assign' \\
+  -H 'Cookie: auth-token=YOUR_TOKEN' \\
+  -H 'Content-Type: application/json' \\
+  -d '{
+    "routeCode": "RT-ABCD1234EFGH5678",
+    "userId": 42
   }'`
       },
       {
         language: 'javascript',
         label: 'JavaScript',
-        code: `async function assignRoute(routeCode) {
+        code: `// Asignar ruta a un usuario
+async function assignRoute(routeCode, userId = null) {
+  const body = { routeCode };
+  if (userId) {
+    body.userId = userId;
+  }
+
   const response = await fetch('/api/driver-app/routes/assign', {
     method: 'POST',
     credentials: 'include',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ routeCode })
+    body: JSON.stringify(body)
   });
 
   const data = await response.json();
 
   if (data.success) {
     console.log('Ruta asignada:', data.data.route.routeNumber);
-    console.log('Total paradas:', data.data.route.totalStops);
+    console.log('Asignada a:', data.data.route.assignedUserName);
     return data.data.route;
   }
 
   throw new Error(data.error);
 }
 
-// Uso con scanner QR
+// Uso con scanner QR (auto-asignación)
 async function onQRScanned(qrCode) {
   try {
     const route = await assignRoute(qrCode);
@@ -1158,8 +1213,13 @@ async function onQRScanned(qrCode) {
       {
         language: 'dart',
         label: 'Flutter',
-        code: `Future<Route> assignRoute(String routeCode) async {
+        code: `Future<Route> assignRoute(String routeCode, {int? userId}) async {
   final token = await secureStorage.read(key: 'auth-token');
+
+  final body = {'routeCode': routeCode};
+  if (userId != null) {
+    body['userId'] = userId.toString();
+  }
 
   final response = await http.post(
     Uri.parse('https://logirapid.com/api/driver-app/routes/assign'),
@@ -1167,7 +1227,7 @@ async function onQRScanned(qrCode) {
       'Cookie': 'auth-token=\$token',
       'Content-Type': 'application/json',
     },
-    body: jsonEncode({'routeCode': routeCode}),
+    body: jsonEncode(body),
   );
 
   final data = jsonDecode(response.body);
@@ -1179,7 +1239,7 @@ async function onQRScanned(qrCode) {
   throw Exception(data['error']);
 }
 
-// Widget de scanner QR
+// Widget de scanner QR (auto-asignación)
 class RouteScannerWidget extends StatelessWidget {
   @override
   Widget build(BuildContext context) {

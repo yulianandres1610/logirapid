@@ -8,7 +8,14 @@ export const runtime = 'nodejs'
 
 /**
  * POST /api/driver-app/routes/assign
- * Asignar driver a una ruta mediante escaneo de código QR
+ * Asignar usuario a una ruta mediante escaneo de código QR
+ *
+ * Request Body:
+ * - routeCode: (requerido) Código QR o número de ruta
+ * - userId: (opcional) ID del usuario a asignar. Si no se especifica, usa el usuario del token
+ *
+ * Roles permitidos: Cualquier usuario autenticado puede asignarse a sí mismo.
+ * ADMIN/SUPER_ADMIN/MANAGER pueden asignar rutas a otros usuarios.
  */
 export async function POST(request: NextRequest) {
   try {
@@ -22,13 +29,13 @@ export async function POST(request: NextRequest) {
     }
 
     // Decodificar token
-    let userId: number
+    let tokenUserId: number
     let userRole: string
     let userName: string
     try {
       const decoded = Buffer.from(token, 'base64').toString('utf-8')
       const [id, email, role] = decoded.split(':')
-      userId = parseInt(id)
+      tokenUserId = parseInt(id)
       userRole = role
       userName = email
     } catch {
@@ -38,17 +45,9 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Verificar rol DRIVER
-    if (userRole !== 'DRIVER') {
-      return NextResponse.json(
-        { success: false, error: 'Acceso denegado. Solo drivers pueden asignarse rutas.' },
-        { status: 403 }
-      )
-    }
-
     // Obtener datos del request
     const body = await request.json()
-    const { routeCode } = body
+    const { routeCode, userId: requestedUserId } = body
 
     if (!routeCode) {
       return NextResponse.json(
@@ -57,8 +56,23 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Obtener compañía del driver
-    const driverQuery = `
+    // Determinar el usuario a asignar
+    let targetUserId = tokenUserId
+
+    // Si se especifica un userId diferente, verificar permisos
+    if (requestedUserId && requestedUserId !== tokenUserId) {
+      const adminRoles = ['ADMIN', 'SUPER_ADMIN', 'MANAGER']
+      if (!adminRoles.includes(userRole)) {
+        return NextResponse.json(
+          { success: false, error: 'No tienes permisos para asignar rutas a otros usuarios' },
+          { status: 403 }
+        )
+      }
+      targetUserId = requestedUserId
+    }
+
+    // Obtener información del usuario a asignar
+    const userQuery = `
       SELECT
         u.id,
         u.firstname,
@@ -70,18 +84,18 @@ export async function POST(request: NextRequest) {
       WHERE u.id = $1
       LIMIT 1
     `
-    const driverResult = await db.query(driverQuery, [userId])
+    const userResult = await db.query(userQuery, [targetUserId])
 
-    if (driverResult.rows.length === 0) {
+    if (userResult.rows.length === 0) {
       return NextResponse.json(
-        { success: false, error: 'Driver no encontrado' },
+        { success: false, error: 'Usuario no encontrado' },
         { status: 404 }
       )
     }
 
-    const driver = driverResult.rows[0]
-    const driverName = `${driver.firstname || ''} ${driver.lastname || ''}`.trim() || userName
-    const driverCompanyId = driver.company_id
+    const targetUser = userResult.rows[0]
+    const targetUserName = `${targetUser.firstname || ''} ${targetUser.lastname || ''}`.trim() || targetUser.email || userName
+    const targetUserCompanyId = targetUser.company_id
 
     // Buscar ruta por código QR o route_number
     const routeQuery = `
@@ -113,8 +127,8 @@ export async function POST(request: NextRequest) {
 
     const route = routeResult.rows[0]
 
-    // Validar que la ruta pertenece a la misma compañía del driver
-    if (driverCompanyId && route.companyId && driverCompanyId !== route.companyId) {
+    // Validar que la ruta pertenece a la misma compañía del usuario
+    if (targetUserCompanyId && route.companyId && targetUserCompanyId !== route.companyId) {
       return NextResponse.json(
         { success: false, error: 'No tiene permisos para asignarse a esta ruta' },
         { status: 403 }
@@ -122,9 +136,9 @@ export async function POST(request: NextRequest) {
     }
 
     // Validar que la ruta está disponible para asignación
-    if (route.driverId && route.driverId !== userId) {
+    if (route.driverId && route.driverId !== targetUserId) {
       return NextResponse.json(
-        { success: false, error: `Esta ruta ya está asignada a otro driver: ${route.driverName}` },
+        { success: false, error: `Esta ruta ya está asignada a otro usuario: ${route.driverName}` },
         { status: 400 }
       )
     }
@@ -138,7 +152,7 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Asignar driver a la ruta
+    // Asignar usuario a la ruta
     const updateQuery = `
       UPDATE routes
       SET
@@ -149,7 +163,7 @@ export async function POST(request: NextRequest) {
       WHERE id = $3
       RETURNING *
     `
-    const updateResult = await db.query(updateQuery, [userId, driverName, route.id])
+    const updateResult = await db.query(updateQuery, [targetUserId, targetUserName, route.id])
     const updatedRoute = updateResult.rows[0]
 
     // Parsear stops para calcular resumen
@@ -181,15 +195,16 @@ export async function POST(request: NextRequest) {
           scheduledDate: updatedRoute.scheduled_date,
           vehiclePlate: updatedRoute.vehicle_plate,
           vehicleId: updatedRoute.vehicle_id,
-          driverName: driverName
+          assignedUserName: targetUserName,
+          assignedUserId: targetUserId
         }
       }
     })
 
   } catch (error) {
-    console.error('Error assigning route to driver:', error)
+    console.error('Error assigning route to user:', error)
     return NextResponse.json(
-      { success: false, error: 'Error al asignar ruta al driver' },
+      { success: false, error: 'Error al asignar ruta al usuario' },
       { status: 500 }
     )
   }

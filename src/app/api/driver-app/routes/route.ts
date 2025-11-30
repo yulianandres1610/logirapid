@@ -8,7 +8,15 @@ export const runtime = 'nodejs'
 
 /**
  * GET /api/driver-app/routes
- * Obtener las rutas asignadas al driver logueado
+ * Obtener las rutas asignadas al usuario logueado
+ *
+ * Query Params:
+ * - userId: (opcional) ID del usuario. Si no se especifica, usa el usuario del token
+ * - status: (opcional) Filtrar por estado de ruta (active, completed, cancelled, all)
+ * - page: (opcional) Número de página para paginación
+ * - limit: (opcional) Cantidad de resultados por página
+ *
+ * Roles permitidos: Cualquier usuario autenticado puede ver sus propias rutas
  */
 export async function GET(request: NextRequest) {
   try {
@@ -22,12 +30,12 @@ export async function GET(request: NextRequest) {
     }
 
     // Decodificar token
-    let userId: number
+    let tokenUserId: number
     let userRole: string
     try {
       const decoded = Buffer.from(token, 'base64').toString('utf-8')
       const [id, , role] = decoded.split(':')
-      userId = parseInt(id)
+      tokenUserId = parseInt(id)
       userRole = role
     } catch {
       return NextResponse.json(
@@ -36,16 +44,27 @@ export async function GET(request: NextRequest) {
       )
     }
 
-    // Verificar rol DRIVER
-    if (userRole !== 'DRIVER') {
-      return NextResponse.json(
-        { success: false, error: 'Acceso denegado. Solo drivers pueden acceder.' },
-        { status: 403 }
-      )
+    // Obtener userId de query params o usar el del token
+    const { searchParams } = new URL(request.url)
+    const queryUserId = searchParams.get('userId')
+
+    // Si se especifica un userId diferente, solo ADMIN/SUPER_ADMIN/MANAGER pueden ver rutas de otros
+    let userId = tokenUserId
+    if (queryUserId) {
+      const requestedUserId = parseInt(queryUserId)
+      if (requestedUserId !== tokenUserId) {
+        const adminRoles = ['ADMIN', 'SUPER_ADMIN', 'MANAGER']
+        if (!adminRoles.includes(userRole)) {
+          return NextResponse.json(
+            { success: false, error: 'No tienes permisos para ver rutas de otros usuarios' },
+            { status: 403 }
+          )
+        }
+      }
+      userId = requestedUserId
     }
 
-    // Obtener parámetros de query
-    const { searchParams } = new URL(request.url)
+    // Obtener otros parámetros de query
     const status = searchParams.get('status') || 'active'
     const page = parseInt(searchParams.get('page') || '1')
     const limit = parseInt(searchParams.get('limit') || '20')
@@ -168,9 +187,9 @@ export async function GET(request: NextRequest) {
     })
 
   } catch (error) {
-    console.error('Error getting driver routes:', error)
+    console.error('Error getting user routes:', error)
     return NextResponse.json(
-      { success: false, error: 'Error al obtener rutas del driver' },
+      { success: false, error: 'Error al obtener rutas del usuario' },
       { status: 500 }
     )
   }
