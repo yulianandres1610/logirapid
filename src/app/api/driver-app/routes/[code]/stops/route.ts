@@ -26,12 +26,10 @@ export async function GET(
 
     // Decodificar token
     let userId: number
-    let userRole: string
     try {
       const decoded = Buffer.from(token, 'base64').toString('utf-8')
-      const [id, , role] = decoded.split(':')
+      const [id] = decoded.split(':')
       userId = parseInt(id)
-      userRole = role
     } catch {
       return NextResponse.json(
         { success: false, error: 'Token inválido' },
@@ -39,35 +37,29 @@ export async function GET(
       )
     }
 
-    // Verificar rol DRIVER
-    if (userRole !== 'DRIVER') {
-      return NextResponse.json(
-        { success: false, error: 'Acceso denegado. Solo drivers pueden acceder.' },
-        { status: 403 }
-      )
-    }
+    // Cualquier usuario autenticado puede acceder
 
     const resolvedParams = await params
     const routeCode = decodeURIComponent(resolvedParams.code)
 
-    // Buscar ruta por código QR o route_number
+    // Buscar ruta por código QR o routenumber
     const routeQuery = `
       SELECT
         r.id,
-        r.route_number as "routeNumber",
-        r.qr_code as "qrCode",
+        r.routenumber as "routeNumber",
+        r.qrcode as "qrCode",
         r.status,
-        r.driver_id as "driverId",
-        r.driver_name as "driverName",
+        r.driverid as "driverId",
+        r.drivername as "driverName",
         r.company_id as "companyId",
         r.stops,
         r.distance,
-        r.duration,
-        r.scheduled_date as "scheduledDate",
-        r.vehicle_plate as "vehiclePlate",
-        r.vehicle_id as "vehicleId"
+        r.estimatedduration as "duration",
+        r.date as "scheduledDate",
+        r.vehicleplate as "vehiclePlate",
+        r.vehicleid as "vehicleId"
       FROM routes r
-      WHERE r.qr_code = $1 OR r.route_number = $1
+      WHERE r.qrcode = $1 OR r.routenumber = $1 OR r.id::text = $1
     `
     const routeResult = await db.query(routeQuery, [routeCode])
 
