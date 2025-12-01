@@ -6,11 +6,179 @@ Esta documentación describe los endpoints REST disponibles para la aplicación 
 
 **Base URL:** `/api/driver-app`
 
-**Autenticación:** Todos los endpoints requieren un token de autenticación en la cookie `auth-token`. Solo usuarios con rol `DRIVER` pueden acceder.
+**Autenticación:** Todos los endpoints requieren un token de autenticación en la cookie `auth-token`. La mayoría de los endpoints están disponibles para cualquier usuario autenticado (DRIVER, ADMIN, SUPER_ADMIN).
 
 ---
 
 ## Endpoints
+
+### Rutas
+
+#### Obtener Paradas de Ruta
+
+Obtiene información completa de una ruta con todas sus paradas, órdenes y estado de entregas.
+
+**Endpoint:** `GET /api/driver-app/routes/[code]/stops`
+
+**Parámetros de URL:**
+- `code`: Código QR de la ruta, número de ruta (ej: RUT-2025-0021), o ID de la ruta
+
+**Headers:**
+```
+Cookie: auth-token=<token>
+```
+
+**Response (200 OK):**
+```json
+{
+  "success": true,
+  "data": {
+    "routeId": 123,
+    "routeNumber": "RUT-2025-0021",
+    "qrCode": "QR-ABC123",
+    "status": "en_curso",
+    "driverName": "Juan Pérez",
+    "driverId": 456,
+    "vehiclePlate": "ABC-123",
+    "vehicleId": "v_123456789",
+    "distance": 45.5,
+    "duration": 120,
+    "scheduledDate": "2025-01-15",
+    "stops": [
+      {
+        "stopNumber": 1,
+        "address": "123 Main St, Miami, FL 33101",
+        "city": "Miami",
+        "state": "FL",
+        "country": "US",
+        "zipcode": "33101",
+        "coordinates": [-80.1918, 25.7617],
+        "status": "delivered",
+        "proofComplete": true,
+        "orders": [
+          {
+            "id": 789,
+            "orderNumber": "ORD-2025-001",
+            "customerId": 101,
+            "senderName": "María García",
+            "senderPhone": "+1234567890",
+            "senderAddress": "123 Main St",
+            "senderCity": "Miami",
+            "senderState": "FL",
+            "senderZipcode": "33101",
+            "services": [
+              {
+                "name": "Envío Express",
+                "type": "shipping",
+                "empaques": [
+                  {
+                    "id": 1,
+                    "codigo": "PKG-001",
+                    "tipo": "BULTO",
+                    "estado": "entregado"
+                  }
+                ]
+              }
+            ],
+            "status": "delivered",
+            "deliveryType": "first_mile",
+            "proofStatus": "completed",
+            "deliveredAt": "2025-01-15T14:30:00Z",
+            "hasProof": true,
+            "proof": {
+              "id": 50,
+              "hasSignature": true,
+              "signerName": "Carlos Rodríguez",
+              "signerRelation": "recipient",
+              "photosCount": 2,
+              "photos": ["photo1.jpg", "photo2.jpg"],
+              "latitude": 25.7617,
+              "longitude": -80.1918,
+              "notes": "Entregado sin problemas",
+              "createdAt": "2025-01-15T14:30:00Z",
+              "createdByName": "Juan Pérez"
+            }
+          }
+        ]
+      }
+    ],
+    "stopsSummary": {
+      "total": 5,
+      "completed": 2,
+      "pending": 2,
+      "failed": 1
+    }
+  }
+}
+```
+
+**Estados de Paradas:**
+- `pending`: Pendiente de entrega
+- `delivered`: Entregada exitosamente
+- `failed`: Fallida o cancelada
+
+**Errors:**
+- `401 Unauthorized`: Token no válido o no proporcionado
+- `403 Forbidden`: Usuario no tiene permiso para ver esta ruta
+- `404 Not Found`: Ruta no encontrada
+
+---
+
+#### Iniciar Ruta
+
+Inicia una ruta asignada, cambiando su estado a "en_curso".
+
+**Endpoint:** `POST /api/driver-app/routes/[code]/start`
+
+**Parámetros de URL:**
+- `code`: Código QR de la ruta, número de ruta (ej: RUT-2025-0021), o ID de la ruta
+
+**Headers:**
+```
+Cookie: auth-token=<token>
+```
+
+**Response (200 OK):**
+```json
+{
+  "success": true,
+  "message": "Ruta RUT-2025-0021 iniciada exitosamente",
+  "data": {
+    "id": 123,
+    "routeNumber": "RUT-2025-0021",
+    "qrCode": "QR-ABC123",
+    "status": "en_curso",
+    "startTime": "2025-01-15T10:00:00Z",
+    "driverName": "Juan Pérez",
+    "vehiclePlate": "ABC-123",
+    "totalStops": 5,
+    "totalOrders": 8,
+    "firstStop": {
+      "stopNumber": 1,
+      "address": "123 Main St, Miami, FL",
+      "coordinates": [-80.1918, 25.7617]
+    }
+  }
+}
+```
+
+**Estados válidos para iniciar:**
+- `asignada`
+- `active`
+- `planning`
+
+**Acciones realizadas:**
+1. Actualiza estado de la ruta a `en_curso`
+2. Establece `starttime` con timestamp actual
+3. Marca primera parada como `en_curso`
+4. Actualiza todas las órdenes a estado `en_reparto`
+
+**Errors:**
+- `400 Bad Request`: La ruta no puede ser iniciada (estado incorrecto)
+- `401 Unauthorized`: Token no válido
+- `404 Not Found`: Ruta no encontrada
+
+---
 
 ### 1. Dashboard
 
@@ -437,6 +605,27 @@ curl -X GET 'http://localhost:3000/api/driver-app/packages?page=1&limit=20&statu
 ### cURL - Lista de Cajas Vacías
 ```bash
 curl -X GET 'http://localhost:3000/api/driver-app/empty-boxes?page=1&limit=50' \
+  -H 'Cookie: auth-token=YOUR_TOKEN'
+```
+
+### cURL - Obtener Paradas de Ruta
+```bash
+# Por número de ruta
+curl -X GET 'http://localhost:3000/api/driver-app/routes/RUT-2025-0021/stops' \
+  -H 'Cookie: auth-token=YOUR_TOKEN'
+
+# Por código QR
+curl -X GET 'http://localhost:3000/api/driver-app/routes/QR-ABC123/stops' \
+  -H 'Cookie: auth-token=YOUR_TOKEN'
+
+# Por ID de ruta
+curl -X GET 'http://localhost:3000/api/driver-app/routes/123/stops' \
+  -H 'Cookie: auth-token=YOUR_TOKEN'
+```
+
+### cURL - Iniciar Ruta
+```bash
+curl -X POST 'http://localhost:3000/api/driver-app/routes/RUT-2025-0021/start' \
   -H 'Cookie: auth-token=YOUR_TOKEN'
 ```
 
