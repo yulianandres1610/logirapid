@@ -52,7 +52,7 @@ export async function POST(
         r.drivername as "driverName",
         r.vehicleplate as "vehiclePlate",
         r.company_id as "companyId",
-        r.scheduleddate as "scheduledDate",
+        r.date as "scheduledDate",
         r.stops
       FROM routes r
       WHERE (r.qrcode = $1 OR r.routenumber = $1 OR r.id::text = $1)
