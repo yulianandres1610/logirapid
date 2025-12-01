@@ -196,26 +196,29 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Verificar si VIN ya existe
+    // Determinar company_id a usar
+    const companyIdToUse = companyId || 1;
+
+    // Verificar si VIN ya existe EN LA MISMA EMPRESA
     const existingVin = await db.query(
-      'SELECT id FROM vehicles WHERE UPPER(vin) = UPPER($1)',
-      [vin]
+      'SELECT id FROM vehicles WHERE UPPER(vin) = UPPER($1) AND company_id = $2',
+      [vin, companyIdToUse]
     );
     if (existingVin.rows.length > 0) {
       return NextResponse.json(
-        { success: false, error: 'Vehicle with this VIN already exists' },
+        { success: false, error: 'Ya existe un vehículo con este VIN en su empresa' },
         { status: 400 }
       );
     }
 
-    // Verificar si placa ya existe
+    // Verificar si placa ya existe EN LA MISMA EMPRESA
     const existingPlate = await db.query(
-      'SELECT id FROM vehicles WHERE UPPER(license_plate) = UPPER($1)',
-      [finalLicensePlate]
+      'SELECT id FROM vehicles WHERE UPPER(license_plate) = UPPER($1) AND company_id = $2',
+      [finalLicensePlate, companyIdToUse]
     );
     if (existingPlate.rows.length > 0) {
       return NextResponse.json(
-        { success: false, error: 'Vehicle with this license plate already exists' },
+        { success: false, error: 'Ya existe un vehículo con esta placa en su empresa' },
         { status: 400 }
       );
     }
@@ -272,7 +275,7 @@ export async function POST(request: NextRequest) {
       insurance_expiry || null,
       oil_change_frequency,
       next_oil_change || null,
-      companyId || 1
+      companyIdToUse
     ]);
 
     const vehicle = result.rows[0];
