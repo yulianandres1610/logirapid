@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getAllVehiclesFromDatabase } from '@/lib/vehicle-database';
+import { db } from '@/lib/database';
+import { getCompanyFilter } from '@/lib/query-helpers';
 
 // Force dynamic rendering - don't execute during build
 export const dynamic = 'force-dynamic'
@@ -10,7 +11,8 @@ export const runtime = 'nodejs'
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { vin } = body;
+    const { vin, companyId: bodyCompanyId } = body;
+    const { isSuperAdmin, companyId: headerCompanyId } = getCompanyFilter(request);
 
     if (!vin) {
       return NextResponse.json(
@@ -19,13 +21,16 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Get all vehicles from database
-    const existingVehicles = getAllVehiclesFromDatabase();
+    // Determinar company_id a usar
+    const companyIdToUse = bodyCompanyId || headerCompanyId || 1;
 
-    // Check if VIN already exists (case insensitive)
-    const existingVehicle = existingVehicles.find(v =>
-      v.vin.toUpperCase() === vin.toUpperCase()
+    // Check if VIN already exists WITHIN THE SAME COMPANY (case insensitive)
+    const result = await db.query(
+      'SELECT id, make, model, model_year, nickname FROM vehicles WHERE UPPER(vin) = UPPER($1) AND company_id = $2',
+      [vin, companyIdToUse]
     );
+
+    const existingVehicle = result.rows[0];
 
     return NextResponse.json({
       exists: !!existingVehicle,
