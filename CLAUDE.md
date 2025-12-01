@@ -344,3 +344,191 @@ function MyComponent() {
   // SUPER_ADMIN always returns true
 }
 ```
+
+## API Documentation
+
+### Documentation Files
+- `docs/DRIVER_APP_API.md` - Complete Driver App API documentation
+- `docs/CUSTOMER_API_USAGE.md` - Customer API usage guide
+- `backend/docs/API_AGENCY_RATES.md` - Agency rates API documentation
+
+### Database Column Naming Convention
+**IMPORTANT:** The PostgreSQL database uses **lowercase column names without underscores**. When writing SQL queries, use:
+- `routenumber` (NOT `route_number`)
+- `qrcode` (NOT `qr_code`)
+- `driverid` (NOT `driver_id`)
+- `drivername` (NOT `driver_name`)
+- `vehicleplate` (NOT `vehicle_plate`)
+- `vehicleid` (NOT `vehicle_id`)
+- `companyid` or `company_id` (both exist)
+- `createdat` (NOT `created_at`)
+- `updatedat` (NOT `updated_at`)
+- `starttime` (NOT `start_time`)
+- `endtime` (NOT `end_time`)
+- `estimatedduration` (NOT `estimated_duration`)
+
+### Driver App API Endpoints
+
+**Base URL:** `/api/driver-app`
+
+**Authentication:** All endpoints require `auth-token` cookie. Most endpoints allow any authenticated user (DRIVER, ADMIN, SUPER_ADMIN).
+
+**Token Format:** Base64 encoded string: `base64(userId:email:role)`
+
+#### Route Management
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/driver-app/routes/[code]/stops` | Get route with all stops, orders, and delivery status |
+| POST | `/api/driver-app/routes/[code]/start` | Start a route (changes status to "en_curso") |
+
+**Route Code Parameter:** Can be route number (RUT-2025-XXXX), QR code, or route ID.
+
+#### GET /api/driver-app/routes/[code]/stops
+
+Returns complete route information with stops, orders, services, and delivery proofs.
+
+```typescript
+// Response structure
+{
+  success: true,
+  data: {
+    routeId: number,
+    routeNumber: string,        // e.g., "RUT-2025-0021"
+    qrCode: string,
+    status: string,             // "planning" | "active" | "en_curso" | "completed"
+    driverName: string,
+    driverId: number,
+    vehiclePlate: string,
+    vehicleId: string,
+    distance: number,           // in miles
+    duration: number,           // in minutes
+    scheduledDate: string,      // ISO date
+    stops: [{
+      stopNumber: number,
+      address: string,
+      city: string,
+      state: string,
+      coordinates: [lng, lat],  // [longitude, latitude]
+      status: string,           // "pending" | "delivered" | "failed"
+      proofComplete: boolean,
+      orders: [{
+        id: number,
+        orderNumber: string,
+        senderName: string,
+        senderPhone: string,
+        senderAddress: string,
+        services: [{
+          name: string,
+          type: string,
+          empaques: [{
+            id: number,
+            codigo: string,
+            tipo: string,
+            estado: string
+          }]
+        }],
+        status: string,
+        hasProof: boolean,
+        proof: { ... } | null
+      }]
+    }],
+    stopsSummary: {
+      total: number,
+      completed: number,
+      pending: number,
+      failed: number
+    }
+  }
+}
+```
+
+#### POST /api/driver-app/routes/[code]/start
+
+Starts a route. Valid for routes with status: `asignada`, `active`, `planning`.
+
+Actions performed:
+1. Updates route status to `en_curso`
+2. Sets `starttime` to current timestamp
+3. Marks first stop as `en_curso`
+4. Updates all orders to status `en_reparto`
+
+```typescript
+// Response structure
+{
+  success: true,
+  message: "Ruta RUT-2025-0021 iniciada exitosamente",
+  data: {
+    id: number,
+    routeNumber: string,
+    qrCode: string,
+    status: "en_curso",
+    startTime: string,          // ISO timestamp
+    driverName: string,
+    vehiclePlate: string,
+    totalStops: number,
+    totalOrders: number,
+    firstStop: {
+      stopNumber: 1,
+      address: string,
+      coordinates: [lng, lat]
+    }
+  }
+}
+```
+
+#### Other Driver App Endpoints
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/driver-app/dashboard` | Driver dashboard with stats and active route |
+| POST | `/api/driver-app/receive-box` | Receive empty box for delivery |
+| POST | `/api/driver-app/receive-package` | Receive package (bulto) for delivery |
+| GET | `/api/driver-app/packages` | List packages assigned to driver |
+| GET | `/api/driver-app/empty-boxes` | List empty boxes assigned to driver |
+
+### Fleet/Vehicles API
+
+**Multi-tenancy:** All vehicle operations filter by `company_id`. VIN and plate uniqueness is enforced per company, not globally.
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/fleet/vehicles` | List vehicles with pagination |
+| POST | `/api/fleet/vehicles` | Create new vehicle |
+| POST | `/api/vehicles/check-vin` | Check if VIN exists (within same company) |
+
+### Package Orders API
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/package-orders` | List orders with filters |
+| POST | `/api/package-orders` | Create new order |
+| GET | `/api/package-orders/[id]` | Get order details |
+| POST | `/api/package-orders/[id]/cancel` | Cancel order |
+| POST | `/api/package-orders/[id]/reprogram` | Reprogram order delivery |
+
+### Routes API
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/routes` | List routes with filters |
+| POST | `/api/routes` | Create optimized route |
+| GET | `/api/routes/[id]` | Get route details |
+| POST | `/api/routes/[id]/status` | Update route status |
+| POST | `/api/routes/assign-driver` | Assign driver to route |
+
+### Common Error Responses
+
+```typescript
+// 401 Unauthorized
+{ success: false, error: "No autenticado" }
+
+// 403 Forbidden
+{ success: false, error: "No tiene permisos para ver esta ruta" }
+
+// 404 Not Found
+{ success: false, error: "Ruta no encontrada" }
+
+// 500 Internal Server Error
+{ success: false, error: "Error al [action]" }
+```
