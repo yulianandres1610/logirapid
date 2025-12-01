@@ -170,15 +170,15 @@ export async function POST(request: NextRequest) {
     // Determinar company_id
     const companyIdToUse = companyId || headerCompanyId || 1;
 
-    // Check if VIN already exists
+    // Check if VIN already exists within the same company
     const existingCheck = await db.query(
-      'SELECT id FROM vehicles WHERE UPPER(vin) = UPPER($1)',
-      [vin]
+      'SELECT id FROM vehicles WHERE UPPER(vin) = UPPER($1) AND company_id = $2',
+      [vin, companyIdToUse]
     );
 
     if (existingCheck.rows.length > 0) {
       return NextResponse.json(
-        { error: 'Vehicle with this VIN already exists' },
+        { error: 'Ya existe un vehículo con este VIN en su empresa' },
         { status: 400 }
       );
     }
