@@ -490,8 +490,36 @@ export function Header({ onToggleSidebar, sidebarCollapsed }: HeaderProps) {
                         onClick={() => {
                           console.log('🚪 Header - Cerrando sesión')
                           if (typeof window !== 'undefined') {
+                            // Clear localStorage
                             localStorage.removeItem('user')
-                            document.cookie = 'auth-token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT'
+                            localStorage.removeItem('auth-token')
+
+                            // Clear all auth cookies
+                            const cookiesToClear = [
+                              'auth-token',
+                              'user-id',
+                              'user-name',
+                              'user-email',
+                              'user-role',
+                              'user-company-id',
+                              'user-company-name',
+                            ]
+
+                            // Determine domain for production
+                            const cookieDomain = window.location.hostname.includes('logirapid.com')
+                              ? '.logirapid.com'
+                              : undefined
+
+                            cookiesToClear.forEach(cookie => {
+                              // Clear with domain if applicable (production)
+                              if (cookieDomain) {
+                                document.cookie = `${cookie}=; path=/; domain=${cookieDomain}; expires=Thu, 01 Jan 1970 00:00:00 GMT`
+                              }
+                              // Also clear without domain (localhost and fallback)
+                              document.cookie = `${cookie}=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT`
+                            })
+
+                            // Redirect to login
                             window.location.href = '/login'
                           }
                         }}
