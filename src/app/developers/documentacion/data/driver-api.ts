@@ -2569,7 +2569,7 @@ class _BultoValidationScreenState extends State<BultoValidationScreen> {
     method: 'POST',
     path: '/api/driver-app/routes/[code]/start',
     title: 'Iniciar Ruta',
-    description: 'Inicia una ruta asignada al driver. Cambia el estado de la ruta a "en_curso", actualiza las paradas y marca las órdenes como "en_reparto". El code puede ser el QR, número de ruta o ID.',
+    description: 'Inicia una ruta asignada al driver. Cambia el estado de la ruta a "en_curso", actualiza las paradas y marca las órdenes como "en_reparto". Devuelve información completa de todas las paradas con órdenes, servicios y empaques. El code puede ser el QR, número de ruta o ID.',
     headers: [
       {
         name: 'Cookie',
@@ -2581,24 +2581,94 @@ class _BultoValidationScreenState extends State<BultoValidationScreen> {
     responses: [
       {
         status: 200,
-        description: 'Ruta iniciada exitosamente',
+        description: 'Ruta iniciada exitosamente con paradas detalladas',
         body: `{
   "success": true,
   "message": "Ruta R-2024-001 iniciada exitosamente",
   "data": {
     "id": 123,
     "routeNumber": "R-2024-001",
-    "qrCode": "RT-ABCD1234EFGH5678",
     "status": "en_curso",
+    "previousStatus": "asignada",
     "startTime": "2024-01-15T10:30:00Z",
+    "driverId": 5,
     "driverName": "Juan Pérez",
+    "vehicleId": 10,
     "vehiclePlate": "ABC-123",
-    "totalStops": 12,
-    "totalOrders": 15,
-    "firstStop": {
-      "stopNumber": 1,
-      "address": "123 Main St, Miami, FL",
-      "coordinates": [-80.1234, 25.7890]
+    "totalDistance": 25.5,
+    "totalDuration": 90,
+    "scheduledDate": "2024-01-15",
+    "stops": [
+      {
+        "stopNumber": 1,
+        "address": "123 Main St, Miami, FL 33186",
+        "city": "Miami",
+        "state": "FL",
+        "zipcode": "33186",
+        "coordinates": [-80.1234, 25.7890],
+        "status": "en_curso",
+        "orders": [
+          {
+            "id": 45,
+            "orderNumber": "PICKUP-2024-001",
+            "senderName": "María García",
+            "senderPhone": "+1-305-555-0100",
+            "senderAddress": "123 Main St",
+            "senderCity": "Miami",
+            "senderState": "FL",
+            "senderZipcode": "33186",
+            "services": [
+              {
+                "type": "envio",
+                "name": "Caja Mediana",
+                "price": 35.00,
+                "quantity": 2,
+                "empaques": [
+                  {
+                    "id": 101,
+                    "codigo": "PKG-001",
+                    "tipo": "caja",
+                    "estado": "recogida",
+                    "weightLb": 5.5,
+                    "weightKg": 2.5,
+                    "boxNumber": 1,
+                    "totalBoxes": 2
+                  },
+                  {
+                    "id": 102,
+                    "codigo": "PKG-002",
+                    "tipo": "caja",
+                    "estado": "recogida",
+                    "weightLb": 3.2,
+                    "weightKg": 1.45,
+                    "boxNumber": 2,
+                    "totalBoxes": 2
+                  }
+                ]
+              }
+            ],
+            "status": "en_reparto",
+            "totalAmount": 70.00
+          }
+        ]
+      },
+      {
+        "stopNumber": 2,
+        "address": "456 Oak Ave, Miami, FL 33155",
+        "city": "Miami",
+        "state": "FL",
+        "zipcode": "33155",
+        "coordinates": [-80.2567, 25.7234],
+        "status": "en_curso",
+        "orders": []
+      }
+    ],
+    "stopsSummary": {
+      "total": 5,
+      "pending": 0,
+      "enCurso": 5,
+      "completed": 0,
+      "failed": 0
     }
   }
 }`
@@ -2608,7 +2678,7 @@ class _BultoValidationScreenState extends State<BultoValidationScreen> {
         description: 'Estado inválido para iniciar',
         body: `{
   "success": false,
-  "error": "La ruta no puede ser iniciada. Estado actual: completada",
+  "error": "La ruta debe estar en estado \\"asignada\\" para iniciarla. Estado actual: \\"completada\\"",
   "currentStatus": "completada"
 }`
       }
@@ -2633,7 +2703,20 @@ class _BultoValidationScreenState extends State<BultoValidationScreen> {
 
   if (data.success) {
     console.log('Ruta iniciada:', data.data.routeNumber);
-    console.log('Primera parada:', data.data.firstStop?.address);
+    console.log('Total paradas:', data.data.stops.length);
+
+    // Procesar las paradas con sus órdenes y empaques
+    data.data.stops.forEach(stop => {
+      console.log(\`Parada \${stop.stopNumber}: \${stop.address}\`);
+      stop.orders.forEach(order => {
+        console.log(\`  - Orden \${order.orderNumber}: \${order.senderName}\`);
+        order.services.forEach(service => {
+          console.log(\`    Servicio: \${service.name} x\${service.quantity}\`);
+          console.log(\`    Empaques: \${service.empaques.length}\`);
+        });
+      });
+    });
+
     return data.data;
   }
 
@@ -2654,15 +2737,71 @@ class _BultoValidationScreenState extends State<BultoValidationScreen> {
   final data = jsonDecode(response.body);
 
   if (data['success']) {
-    // Navegar a la primera parada
-    final firstStop = data['data']['firstStop'];
-    if (firstStop != null) {
-      openNavigation(firstStop['coordinates']);
+    final routeData = data['data'];
+
+    // Procesar paradas con órdenes y empaques
+    final stops = routeData['stops'] as List;
+    for (var stop in stops) {
+      final orders = stop['orders'] as List;
+      for (var order in orders) {
+        final services = order['services'] as List;
+        for (var service in services) {
+          final empaques = service['empaques'] as List;
+          // Cada empaque tiene: codigo, tipo, estado, weightLb, weightKg, boxNumber, totalBoxes
+          print('Empaques: \${empaques.length}');
+        }
+      }
     }
-    return RouteData.fromJson(data['data']);
+
+    // Navegar a la primera parada
+    if (stops.isNotEmpty) {
+      openNavigation(stops[0]['coordinates']);
+    }
+
+    return RouteData.fromJson(routeData);
   }
 
   throw Exception(data['error']);
+}`
+      },
+      {
+        language: 'kotlin',
+        label: 'Kotlin',
+        code: `suspend fun startRoute(routeCode: String): RouteData {
+    val token = secureStorage.getString("auth-token", "")
+
+    val response = httpClient.post("https://logirapid.com/api/driver-app/routes/\$routeCode/start") {
+        header("Cookie", "auth-token=\$token")
+    }
+
+    val data = response.body<JsonObject>()
+
+    if (data["success"].jsonPrimitive.boolean) {
+        val routeData = data["data"].jsonObject
+
+        // Procesar paradas
+        val stops = routeData["stops"].jsonArray
+        stops.forEach { stopJson ->
+            val stop = stopJson.jsonObject
+            val orders = stop["orders"].jsonArray
+
+            orders.forEach { orderJson ->
+                val order = orderJson.jsonObject
+                val services = order["services"].jsonArray
+
+                services.forEach { serviceJson ->
+                    val service = serviceJson.jsonObject
+                    val empaques = service["empaques"].jsonArray
+                    // Cada empaque: codigo, tipo, estado, weightLb, boxNumber, totalBoxes
+                    Log.d("Route", "Empaques: \${empaques.size}")
+                }
+            }
+        }
+
+        return RouteData.fromJson(routeData)
+    }
+
+    throw Exception(data["error"].jsonPrimitive.content)
 }`
       }
     ]

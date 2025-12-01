@@ -15,6 +15,7 @@ export const runtime = 'nodejs'
  * - Cambia estado de todas las paradas a 'en_curso'
  * - Cambia estado de todas las órdenes a 'en_reparto'
  * - Establece startTime = NOW()
+ * - Devuelve información detallada de paradas con órdenes y empaques
  */
 export async function POST(
   request: NextRequest,
@@ -77,7 +78,7 @@ export async function POST(
     if (typeof stops === 'string') {
       try {
         stops = JSON.parse(stops)
-      } catch (e) {
+      } catch {
         stops = []
       }
     }
@@ -137,13 +138,155 @@ export async function POST(
       }
     })
 
+    // ========== OBTENER DATOS DETALLADOS PARA LA APP MÓVIL ==========
+
     // Obtener la ruta actualizada
     const updatedRouteResult = await db.query(
       'SELECT * FROM routes WHERE id = $1',
       [routeId]
     )
-
     const updatedRoute = updatedRouteResult.rows[0]
+
+    // Parsear stops actualizados
+    let stopsData = updatedRoute.stops
+    if (typeof stopsData === 'string') {
+      try {
+        stopsData = JSON.parse(stopsData)
+      } catch {
+        stopsData = []
+      }
+    }
+    stopsData = stopsData || []
+
+    // Obtener todos los IDs de órdenes
+    const allOrderIds: number[] = []
+    for (const stop of stopsData) {
+      if (stop.orderId) allOrderIds.push(stop.orderId)
+      if (stop.orderIds && Array.isArray(stop.orderIds)) {
+        allOrderIds.push(...stop.orderIds)
+      }
+    }
+
+    // Consultar órdenes con detalles
+    const ordersMap = new Map()
+    if (allOrderIds.length > 0) {
+      const ordersResult = await db.query(`
+        SELECT
+          id, ordernumber, customername, phone, customeraddress,
+          city, state, zipcode, latitude, longitude,
+          services, status, totalamount, order_type
+        FROM package_orders
+        WHERE id = ANY($1::int[])
+      `, [allOrderIds])
+
+      for (const order of ordersResult.rows) {
+        ordersMap.set(order.id, order)
+      }
+    }
+
+    // Consultar empaques de todas las órdenes
+    const orderNumbers = [...ordersMap.values()].map((o: { ordernumber: string }) => o.ordernumber)
+    const empaquesMap = new Map<string, Array<{
+      id: number
+      codigo: string
+      tipo: string
+      estado: string
+      order_number: string
+      service_name: string
+      weight_lb: number
+      weight_kg: number
+      box_number: number
+      total_boxes: number
+    }>>()
+
+    if (orderNumbers.length > 0) {
+      const empaquesResult = await db.query(`
+        SELECT
+          id, codigo, tipo, estado, order_number, service_name,
+          weight_lb, weight_kg, box_number, total_boxes
+        FROM empaques
+        WHERE order_number = ANY($1::text[])
+        ORDER BY box_number ASC
+      `, [orderNumbers])
+
+      for (const emp of empaquesResult.rows) {
+        if (!empaquesMap.has(emp.order_number)) {
+          empaquesMap.set(emp.order_number, [])
+        }
+        empaquesMap.get(emp.order_number)!.push(emp)
+      }
+    }
+
+    // Construir paradas detalladas con órdenes y empaques
+    interface ServiceType {
+      type?: string
+      name?: string
+      price?: number
+      quantity?: number
+    }
+
+    const detailedStops = stopsData.map((stop: Record<string, unknown>, index: number) => {
+      const stopOrderIds = (stop.orderIds as number[]) || (stop.orderId ? [stop.orderId as number] : [])
+
+      const orders = stopOrderIds.map((orderId: number) => {
+        const order = ordersMap.get(orderId)
+        if (!order) return null
+
+        // Parsear servicios
+        let services = order.services
+        if (typeof services === 'string') {
+          try {
+            services = JSON.parse(services)
+          } catch {
+            services = []
+          }
+        }
+        services = services || []
+
+        // Agregar empaques a cada servicio
+        const orderEmpaques = empaquesMap.get(order.ordernumber) || []
+        const servicesWithEmpaques = services.map((service: ServiceType) => ({
+          ...service,
+          empaques: orderEmpaques.filter((e) =>
+            e.service_name === service.name || !e.service_name
+          ).map((e) => ({
+            id: e.id,
+            codigo: e.codigo,
+            tipo: e.tipo,
+            estado: e.estado,
+            weightLb: e.weight_lb,
+            weightKg: e.weight_kg,
+            boxNumber: e.box_number,
+            totalBoxes: e.total_boxes
+          }))
+        }))
+
+        return {
+          id: order.id,
+          orderNumber: order.ordernumber,
+          senderName: order.customername,
+          senderPhone: order.phone,
+          senderAddress: order.customeraddress,
+          senderCity: order.city,
+          senderState: order.state,
+          senderZipcode: order.zipcode,
+          services: servicesWithEmpaques,
+          status: 'en_reparto',
+          totalAmount: order.totalamount
+        }
+      }).filter(Boolean)
+
+      return {
+        stopNumber: (stop.stopNumber as number) || index + 1,
+        address: stop.address,
+        city: stop.city,
+        state: stop.state,
+        zipcode: stop.zipcode,
+        coordinates: stop.coordinates || [stop.longitude, stop.latitude],
+        status: 'en_curso',
+        orders
+      }
+    })
 
     console.log(`🎉 [Completado] Ruta ${route.routenumber} iniciada exitosamente`)
 
@@ -151,14 +294,35 @@ export async function POST(
       success: true,
       message: `Ruta ${route.routenumber} iniciada exitosamente`,
       data: {
+        // Información de la ruta
         id: updatedRoute.id,
         routeNumber: updatedRoute.routenumber,
         status: updatedRoute.status,
         previousStatus: 'asignada',
         startTime: updatedRoute.starttime,
+
+        // Conductor y vehículo
+        driverId: updatedRoute.driverid,
         driverName: updatedRoute.drivername,
-        totalStops: stops.length,
-        totalOrders: orderIds.length
+        vehicleId: updatedRoute.vehicleid || null,
+        vehiclePlate: updatedRoute.vehicleplate || null,
+
+        // Métricas
+        totalDistance: updatedRoute.totaldistance || null,
+        totalDuration: updatedRoute.totalduration || null,
+        scheduledDate: updatedRoute.scheduleddate || null,
+
+        // Paradas detalladas
+        stops: detailedStops,
+
+        // Resumen
+        stopsSummary: {
+          total: detailedStops.length,
+          pending: 0,
+          enCurso: detailedStops.length,
+          completed: 0,
+          failed: 0
+        }
       }
     })
 
