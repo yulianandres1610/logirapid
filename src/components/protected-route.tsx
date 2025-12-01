@@ -4,7 +4,7 @@ import { useAuth } from '@/hooks/useAuth'
 
 interface ProtectedRouteProps {
   children: React.ReactNode
-  requiredRole?: string
+  requiredRole?: string | string[]
 }
 
 export function ProtectedRoute({ children, requiredRole }: ProtectedRouteProps) {
@@ -24,16 +24,37 @@ export function ProtectedRoute({ children, requiredRole }: ProtectedRouteProps) 
   }
 
   // Verificar si el usuario tiene el rol requerido
-  if (requiredRole && user.role !== requiredRole) {
-    // Redirigir automáticamente sin mostrar mensaje
-    if (typeof window !== 'undefined') {
-      window.location.href = '/login'
+  if (requiredRole) {
+    const allowedRoles = Array.isArray(requiredRole) ? requiredRole : [requiredRole]
+    const hasAccess = allowedRoles.includes(user.role)
+
+    if (!hasAccess) {
+      // Redirect based on user's actual role instead of always going to login
+      if (typeof window !== 'undefined') {
+        let redirectPath = '/login'
+        switch (user.role) {
+          case 'SUPER_ADMIN':
+            redirectPath = '/dashboard/admin'
+            break
+          case 'ADMIN':
+          case 'DRIVER':
+            redirectPath = '/dashboard/agency-admin'
+            break
+          case 'MANAGER':
+            redirectPath = '/dashboard/manager'
+            break
+          case 'USER':
+            redirectPath = '/dashboard/user'
+            break
+        }
+        window.location.href = redirectPath
+      }
+      return (
+        <div className="min-h-screen bg-gray-900 flex items-center justify-center">
+          <div className="w-12 h-12 border-4 border-exa-secondary border-t-transparent rounded-full animate-spin" />
+        </div>
+      )
     }
-    return (
-      <div className="min-h-screen bg-gray-900 flex items-center justify-center">
-        <div className="w-12 h-12 border-4 border-exa-secondary border-t-transparent rounded-full animate-spin" />
-      </div>
-    )
   }
 
   // Si todo está bien, renderizar los hijos

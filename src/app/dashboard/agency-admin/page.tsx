@@ -77,7 +77,7 @@ export default function AgencyAdminDashboard() {
   ]
 
   return (
-    <ProtectedRoute requiredRole="ADMIN">
+    <ProtectedRoute requiredRole={['ADMIN', 'DRIVER']}>
       <DashboardLayout>
         <div className="max-w-7xl mx-auto space-y-8">
           {/* Welcome Header - Agency Specific */}
