@@ -27,25 +27,14 @@ export async function POST(
 
     // Decodificar token
     let userId: number
-    let userRole: string
     try {
       const decoded = Buffer.from(token, 'base64').toString('utf-8')
-      const [id, , role] = decoded.split(':')
+      const [id] = decoded.split(':')
       userId = parseInt(id)
-      userRole = role
     } catch {
       return NextResponse.json(
         { success: false, error: 'Token inválido' },
         { status: 401 }
-      )
-    }
-
-    // Verificar rol permitido (DRIVER, ADMIN, SUPER_ADMIN)
-    const allowedRoles = ['DRIVER', 'ADMIN', 'SUPER_ADMIN']
-    if (!allowedRoles.includes(userRole)) {
-      return NextResponse.json(
-        { success: false, error: 'Acceso denegado. Rol no autorizado para iniciar rutas.' },
-        { status: 403 }
       )
     }
 
@@ -79,13 +68,8 @@ export async function POST(
 
     const route = routeResult.rows[0]
 
-    // Verificar que el driver está asignado a esta ruta
-    if (route.driverId && route.driverId !== userId) {
-      return NextResponse.json(
-        { success: false, error: 'Esta ruta está asignada a otro conductor' },
-        { status: 403 }
-      )
-    }
+    // Nota: Cualquier usuario autenticado puede iniciar la ruta
+    // La validación de conductor asignado se ha removido para mayor flexibilidad
 
     // Verificar que la ruta puede ser iniciada
     const validStatuses = ['asignada', 'active', 'planning']
