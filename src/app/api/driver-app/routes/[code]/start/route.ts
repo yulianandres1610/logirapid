@@ -40,10 +40,11 @@ export async function POST(
       )
     }
 
-    // Verificar rol DRIVER
-    if (userRole !== 'DRIVER') {
+    // Verificar rol permitido (DRIVER, ADMIN, SUPER_ADMIN)
+    const allowedRoles = ['DRIVER', 'ADMIN', 'SUPER_ADMIN']
+    if (!allowedRoles.includes(userRole)) {
       return NextResponse.json(
-        { success: false, error: 'Acceso denegado. Solo drivers pueden iniciar rutas.' },
+        { success: false, error: 'Acceso denegado. Rol no autorizado para iniciar rutas.' },
         { status: 403 }
       )
     }
