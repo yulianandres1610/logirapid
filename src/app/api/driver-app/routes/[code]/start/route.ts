@@ -45,17 +45,17 @@ export async function POST(
     const routeQuery = `
       SELECT
         r.id,
-        r.route_number as "routeNumber",
-        r.qr_code as "qrCode",
+        r.routenumber as "routeNumber",
+        r.qrcode as "qrCode",
         r.status,
-        r.driver_id as "driverId",
-        r.driver_name as "driverName",
-        r.vehicle_plate as "vehiclePlate",
+        r.driverid as "driverId",
+        r.drivername as "driverName",
+        r.vehicleplate as "vehiclePlate",
         r.company_id as "companyId",
-        r.scheduled_date as "scheduledDate",
+        r.scheduleddate as "scheduledDate",
         r.stops
       FROM routes r
-      WHERE (r.qr_code = $1 OR r.route_number = $1 OR r.id::text = $1)
+      WHERE (r.qrcode = $1 OR r.routenumber = $1 OR r.id::text = $1)
     `
     const routeResult = await db.query(routeQuery, [routeCode])
 
