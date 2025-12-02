@@ -70,18 +70,17 @@ export async function GET(request: NextRequest) {
     conditions.push(`r.driverid = $${filterParams.length}`)
 
     // Filtrar por estado
-    // Mapear 'active' a 'en_curso' para compatibilidad con la BD
-    if (status && status !== 'all') {
-      if (status === 'active') {
-        // 'active' en el frontend corresponde a 'en_curso' en la BD
-        conditions.push(`r.status IN ('active', 'en_curso')`)
-      } else if (status === 'completed') {
-        // 'completed' corresponde a 'completada' en la BD
-        conditions.push(`r.status IN ('completed', 'completada')`)
-      } else {
-        filterParams.push(status)
-        conditions.push(`r.status = $${filterParams.length}`)
-      }
+    // Por defecto, mostrar TODAS las rutas EXCEPTO las completadas
+    // A menos que se solicite específicamente 'completed' o 'all'
+    if (status === 'completed') {
+      // Solo mostrar rutas completadas
+      conditions.push(`r.status IN ('completed', 'completada')`)
+    } else if (status === 'all') {
+      // No agregar filtro de estado - mostrar todas incluyendo completadas
+    } else {
+      // Por defecto (sin status, status='active', o cualquier otro):
+      // Mostrar TODAS las rutas EXCEPTO las completadas
+      conditions.push(`r.status NOT IN ('completed', 'completada')`)
     }
 
     const whereClause = conditions.length > 0
@@ -119,29 +118,23 @@ export async function GET(request: NextRequest) {
 
     const result = await db.query(query, queryParams)
 
-    // Formatear respuesta para los cards
-    const routes = result.rows.map(route => ({
-      id: route.id,
-      routeCode: route.routeCode || `ROUTE-${route.id}`,
-      status: route.status || 'pending',
-      distance: {
-        value: parseFloat(route.distance) || 0,
-        unit: 'mi',
-        formatted: `${(parseFloat(route.distance) || 0).toFixed(1)} mi`
-      },
-      duration: {
-        value: route.estimatedDuration || '0 min',
-        formatted: route.estimatedDuration || '0 min'
-      },
-      date: route.date,
-      progress: {
-        total: route.totalStops || 0,
-        completed: route.completedStops || 0,
-        percentage: route.totalStops > 0
-          ? Math.round((route.completedStops / route.totalStops) * 100)
-          : 0
+    // Formatear respuesta simplificada para los cards (sin objetos anidados)
+    const routes = result.rows.map(route => {
+      const totalStops = route.totalStops || 0
+      const completedStops = route.completedStops || 0
+      const distanceValue = parseFloat(route.distance) || 0
+
+      return {
+        id: route.id,
+        routeCode: route.routeCode || `ROUTE-${route.id}`,
+        status: route.status || 'pending',
+        distance: `${distanceValue.toFixed(1)} mi`,
+        duration: route.estimatedDuration || '0 min',
+        stops: totalStops,
+        completedStops: completedStops,
+        progress: totalStops > 0 ? Math.round((completedStops / totalStops) * 100) : 0
       }
-    }))
+    })
 
     // Query para contar total (para paginación) - usa los mismos filterParams sin limit/offset
     const countQuery = `SELECT COUNT(*) as total FROM routes r ${whereClause}`
