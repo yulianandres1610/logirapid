@@ -1131,15 +1131,46 @@ export default function CreatePackageOrderPage() {
   const handleSendSMS = async () => {
     if (!createdOrder) return
 
+    // Validar que hay teléfono del cliente
+    if (!foundCustomer?.phone) {
+      showNotification('error', 'Error', 'No hay número de teléfono del cliente')
+      return
+    }
+
     try {
-      showNotification('info', 'Enviando', 'Enviando recibo por SMS...')
+      setLoading(true)
+      showNotification('info', 'Enviando', 'Enviando SMS al cliente...')
 
-      // Simular envío de SMS
-      await new Promise(resolve => setTimeout(resolve, 2000))
+      // Obtener nombre de compañía desde cookie
+      const companyName = document.cookie
+        .split('; ')
+        .find(row => row.startsWith('user-company-name='))
+        ?.split('=')[1] || 'LogiRapid'
 
-      showNotification('success', 'SMS Enviado', `Recibo enviado al ${foundCustomer?.phone || 'número del cliente'}`)
+      const response = await fetch('/api/sms/send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          to: foundCustomer.phone,
+          type: 'order_created',
+          companyName: decodeURIComponent(companyName),
+          orderNumber: createdOrder.orderNumber,
+          scheduledDate: createdOrder.scheduledDate || new Date().toISOString()
+        })
+      })
+
+      const result = await response.json()
+
+      if (result.success) {
+        showNotification('success', 'SMS Enviado', `Mensaje enviado a ${foundCustomer.phone}`)
+      } else {
+        throw new Error(result.error || 'Error al enviar SMS')
+      }
     } catch (error) {
-      showNotification('error', 'Error', 'No se pudo enviar el SMS')
+      console.error('Error sending SMS:', error)
+      showNotification('error', 'Error', error instanceof Error ? error.message : 'No se pudo enviar el SMS')
+    } finally {
+      setLoading(false)
     }
   }
 
