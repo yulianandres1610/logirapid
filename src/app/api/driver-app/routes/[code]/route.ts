@@ -63,8 +63,12 @@ export async function GET(
 
     const route = routeQuery.rows[0]
 
-    // 2. Obtener información del almacén (simplificado)
-    let warehouse: { name: string; address: string; latitude: number; longitude: number } | null = null
+    // 2. Obtener información del almacén (campos planos)
+    let warehouseName: string | null = null
+    let warehouseAddress: string | null = null
+    let warehouseLatitude: number | null = null
+    let warehouseLongitude: number | null = null
+
     if (route.warehouseid) {
       const warehouseQuery = await db.query(
         `SELECT
@@ -83,12 +87,10 @@ export async function GET(
 
       if (warehouseQuery.rows.length > 0) {
         const w = warehouseQuery.rows[0]
-        warehouse = {
-          name: w.name,
-          address: `${w.address}, ${w.city}, ${w.state} ${w.zip_code}`,
-          latitude: parseFloat(w.latitude) || 0,
-          longitude: parseFloat(w.longitude) || 0
-        }
+        warehouseName = w.name
+        warehouseAddress = `${w.address}, ${w.city}, ${w.state} ${w.zip_code}`
+        warehouseLatitude = parseFloat(w.latitude) || 0
+        warehouseLongitude = parseFloat(w.longitude) || 0
       }
     }
 
@@ -267,7 +269,10 @@ export async function GET(
         stops: totalStops,
         completedStops,
         progress,
-        warehouse,
+        warehouseName,
+        warehouseAddress,
+        warehouseLatitude,
+        warehouseLongitude,
         stopsList
       }
     }

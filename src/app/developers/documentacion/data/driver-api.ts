@@ -237,12 +237,10 @@ func getRoutes(status: String? = nil) async throws -> [RouteCard] {
     "stops": 15,
     "completedStops": 8,
     "progress": 53,
-    "warehouse": {
-      "name": "Almacén Miami",
-      "address": "123 Warehouse St, Miami, FL 33101",
-      "latitude": 25.7617,
-      "longitude": -80.1918
-    },
+    "warehouseName": "Almacén Miami",
+    "warehouseAddress": "123 Warehouse St, Miami, FL 33101",
+    "warehouseLatitude": 25.7617,
+    "warehouseLongitude": -80.1918,
     "stopsList": [
       {
         "stopNumber": 1,
@@ -305,10 +303,8 @@ if (data.success) {
   console.log(\`Distancia: \${route.distance}\`);
   console.log(\`Paradas: \${route.completedStops}/\${route.stops}\`);
   console.log(\`Progreso: \${route.progress}%\`);
-
-  if (route.warehouse) {
-    console.log(\`Almacén: \${route.warehouse.name}\`);
-  }
+  console.log(\`Almacén: \${route.warehouseName}\`);
+  console.log(\`Dirección almacén: \${route.warehouseAddress}\`);
 
   route.stopsList.forEach(stop => {
     console.log(\`Parada \${stop.stopNumber}: \${stop.address}\`);
@@ -337,25 +333,28 @@ if (data.success) {
   throw Exception(data['error']);
 }
 
-// Modelo simplificado
+// Modelo simplificado - todos los campos planos
 class RouteDetail {
   final int id;
   final String routeCode;
   final String status;
   final String date;
-  final String distance;     // "22.7 mi"
-  final String duration;     // "43 min"
+  final String distance;           // "22.7 mi"
+  final String duration;           // "43 min"
   final int stops;
   final int completedStops;
   final int progress;
-  final Warehouse? warehouse;
+  final String? warehouseName;     // Campo plano
+  final String? warehouseAddress;  // Campo plano
+  final double? warehouseLatitude; // Campo plano
+  final double? warehouseLongitude;// Campo plano
   final List<Stop> stopsList;
 
   // Para el mapa: obtener todas las coordenadas
   List<LatLng> get allCoordinates {
     final coords = <LatLng>[];
-    if (warehouse != null) {
-      coords.add(LatLng(warehouse!.latitude, warehouse!.longitude));
+    if (warehouseLatitude != null && warehouseLongitude != null) {
+      coords.add(LatLng(warehouseLatitude!, warehouseLongitude!));
     }
     for (final stop in stopsList) {
       coords.add(LatLng(stop.latitude, stop.longitude));
@@ -367,26 +366,22 @@ class RouteDetail {
       {
         language: 'kotlin',
         label: 'Kotlin',
-        code: `// Modelo simplificado - campos planos
+        code: `// Modelo simplificado - todos los campos planos
 data class RouteDetail(
     val id: Int,
     val routeCode: String,
     val status: String,
     val date: String,
-    val distance: String,      // "22.7 mi"
-    val duration: String,      // "43 min"
+    val distance: String,          // "22.7 mi"
+    val duration: String,          // "43 min"
     val stops: Int,
     val completedStops: Int,
-    val progress: Int,         // 0-100
-    val warehouse: Warehouse?,
+    val progress: Int,             // 0-100
+    val warehouseName: String?,    // Campo plano
+    val warehouseAddress: String?, // Campo plano
+    val warehouseLatitude: Double?,// Campo plano
+    val warehouseLongitude: Double?,// Campo plano
     val stopsList: List<Stop>
-)
-
-data class Warehouse(
-    val name: String,
-    val address: String,
-    val latitude: Double,
-    val longitude: Double
 )
 
 data class Stop(
