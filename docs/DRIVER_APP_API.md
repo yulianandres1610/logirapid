@@ -75,9 +75,14 @@ GET /api/driver-app/routes?status=pending&page=1&limit=10
 
 | Parametro | Tipo | Requerido | Default | Descripcion |
 |-----------|------|-----------|---------|-------------|
-| `status` | string | No | `all` | Filtrar: `pending`, `active`, `completed`, `all` |
+| `status` | string | No | - | Filtrar: `completed`, `all`. Por defecto excluye completadas |
 | `page` | integer | No | `1` | Numero de pagina |
 | `limit` | integer | No | `20` | Resultados por pagina |
+
+**Nota sobre filtro de estado:**
+- Sin parametro `status` o `status=active`: Muestra todas las rutas **excepto** las completadas
+- `status=completed`: Solo muestra rutas completadas
+- `status=all`: Muestra todas las rutas incluyendo completadas
 
 ### Ejemplo Request
 
@@ -94,24 +99,14 @@ curl -X GET "https://tu-dominio.com/api/driver-app/routes?status=active" \
   "data": {
     "routes": [
       {
-        "id": 123,
-        "routeCode": "ROUTE-2024-001",
-        "status": "active",
-        "distance": {
-          "value": 45.5,
-          "unit": "mi",
-          "formatted": "45.5 mi"
-        },
-        "duration": {
-          "value": "2h 30min",
-          "formatted": "2h 30min"
-        },
-        "date": "2024-12-02",
-        "progress": {
-          "total": 15,
-          "completed": 8,
-          "percentage": 53
-        }
+        "id": 21,
+        "routeCode": "RUT-2025-0021",
+        "status": "en_curso",
+        "distance": "22.7 mi",
+        "duration": "43 min",
+        "stops": 15,
+        "completedStops": 8,
+        "progress": 53
       }
     ],
     "pagination": {
@@ -130,17 +125,13 @@ curl -X GET "https://tu-dominio.com/api/driver-app/routes?status=active" \
 | Campo | Tipo | Descripcion |
 |-------|------|-------------|
 | `id` | integer | ID unico de la ruta |
-| `routeCode` | string | Codigo legible de la ruta |
-| `status` | string | Estado: `pending`, `active`, `completed`, `cancelled` |
-| `distance.value` | number | Distancia numerica |
-| `distance.unit` | string | Unidad: `mi` (millas) |
-| `distance.formatted` | string | Texto formateado |
-| `duration.value` | string | Duracion estimada |
-| `duration.formatted` | string | Texto formateado |
-| `date` | string | Fecha: YYYY-MM-DD |
-| `progress.total` | integer | Total de paradas |
-| `progress.completed` | integer | Paradas completadas |
-| `progress.percentage` | integer | Porcentaje: 0-100 |
+| `routeCode` | string | Codigo legible de la ruta (ej: "RUT-2025-0021") |
+| `status` | string | Estado: `pending`, `en_curso`, `completada`, `cancelled` |
+| `distance` | string | Distancia formateada (ej: "22.7 mi") |
+| `duration` | string | Duracion estimada formateada (ej: "43 min") |
+| `stops` | integer | Total de paradas |
+| `completedStops` | integer | Paradas completadas |
+| `progress` | integer | Porcentaje de progreso: 0-100 |
 
 ### Ordenamiento Automatico
 
@@ -729,5 +720,6 @@ curl -X GET "https://tu-dominio.com/api/driver-app/empaques/servicio/PICKUP-2024
 
 | Version | Fecha | Descripcion |
 |---------|-------|-------------|
+| 1.2.0 | 2025-12-02 | Respuesta simplificada en GET /routes (campos planos, sin objetos anidados). Por defecto excluye rutas completadas |
 | 1.1.0 | 2024-12-02 | Agregado GET /api/driver-app/routes/{code} para detalle de ruta |
 | 1.0.0 | 2024-12-02 | Endpoints de rutas y empaques |
