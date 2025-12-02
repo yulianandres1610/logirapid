@@ -64,13 +64,10 @@ export async function GET(request: NextRequest) {
     const conditions: string[] = []
     const filterParams: (string | number)[] = []
 
-    // SUPER_ADMIN y ADMIN ven todas las rutas, otros usuarios solo las suyas
-    if (userRole !== 'SUPER_ADMIN' && userRole !== 'ADMIN') {
-      // Cualquier usuario ve rutas donde esté asignado como driver
-      filterParams.push(parseInt(userId))
-      conditions.push(`r.driverid = $${filterParams.length}`)
-    }
-    // Si no hay filtro de driver, se muestran todas las rutas (para ADMIN/SUPER_ADMIN)
+    // Esta API siempre filtra por driverid = userId (rutas asignadas al usuario)
+    // Independientemente del rol, solo muestra las rutas donde el usuario es el driver
+    filterParams.push(parseInt(userId))
+    conditions.push(`r.driverid = $${filterParams.length}`)
 
     // Filtrar por estado
     if (status && status !== 'all') {
