@@ -36,18 +36,18 @@ export async function GET(request: NextRequest) {
 
     // Construir condiciones de filtro
     const conditions: string[] = []
-    const params: (string | number)[] = []
+    const filterParams: (string | number)[] = []
 
     // Filtrar por driver (excepto SUPER_ADMIN que ve todas)
     if (userRole !== 'SUPER_ADMIN') {
-      params.push(parseInt(userId))
-      conditions.push(`r.driverid = $${params.length}`)
+      filterParams.push(parseInt(userId))
+      conditions.push(`r.driverid = $${filterParams.length}`)
     }
 
     // Filtrar por estado
     if (status && status !== 'all') {
-      params.push(status)
-      conditions.push(`r.status = $${params.length}`)
+      filterParams.push(status)
+      conditions.push(`r.status = $${filterParams.length}`)
     }
 
     const whereClause = conditions.length > 0
@@ -55,7 +55,10 @@ export async function GET(request: NextRequest) {
       : ''
 
     // Query para obtener rutas con información resumida
-    params.push(limit, offset)
+    const queryParams = [...filterParams, limit, offset]
+    const limitParamNum = filterParams.length + 1
+    const offsetParamNum = filterParams.length + 2
+
     const query = `
       SELECT
         r.id,
@@ -77,10 +80,10 @@ export async function GET(request: NextRequest) {
         END,
         r.date DESC,
         r.createdat DESC
-      LIMIT $${params.length - 1} OFFSET $${params.length}
+      LIMIT $${limitParamNum} OFFSET $${offsetParamNum}
     `
 
-    const result = await db.query(query, params)
+    const result = await db.query(query, queryParams)
 
     // Formatear respuesta para los cards
     const routes = result.rows.map(route => ({
@@ -106,15 +109,9 @@ export async function GET(request: NextRequest) {
       }
     }))
 
-    // Query para contar total (para paginación)
-    const countConditions = conditions.slice(0, -2) // Remover limit y offset
-    const countParams = params.slice(0, -2)
-    const countWhereClause = countConditions.length > 0
-      ? `WHERE ${countConditions.join(' AND ')}`
-      : ''
-
-    const countQuery = `SELECT COUNT(*) as total FROM routes r ${countWhereClause}`
-    const countResult = await db.query(countQuery, countParams)
+    // Query para contar total (para paginación) - usa los mismos filterParams sin limit/offset
+    const countQuery = `SELECT COUNT(*) as total FROM routes r ${whereClause}`
+    const countResult = await db.query(countQuery, filterParams)
     const total = parseInt(countResult.rows[0]?.total || '0')
 
     return NextResponse.json({
