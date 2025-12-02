@@ -21,6 +21,7 @@ export const runtime = 'nodejs'
  * - orderNumber: string
  * - scheduledDate: string
  * - timeSlot: string (opcional - 'morning', 'afternoon', 'evening', 'all_day')
+ * - customerServicePhone: string (opcional - número de atención al cliente)
  */
 export async function POST(request: NextRequest) {
   try {
@@ -50,7 +51,8 @@ export async function POST(request: NextRequest) {
         body.companyName,
         body.orderNumber,
         body.scheduledDate,
-        body.timeSlot || null
+        body.timeSlot || null,
+        body.customerServicePhone || null
       )
     } else {
       // Mensaje genérico

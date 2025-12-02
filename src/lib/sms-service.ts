@@ -151,7 +151,8 @@ export function generateOrderCreatedMessage(
   companyName: string,
   orderNumber: string,
   scheduledDate: string,
-  timeSlot?: string | null
+  timeSlot?: string | null,
+  customerServicePhone?: string | null
 ): string {
   // Formatear fecha en espanol
   let formattedDate = scheduledDate
@@ -171,7 +172,12 @@ export function generateOrderCreatedMessage(
   const formattedTime = formatTimeSlot(timeSlot)
   const timeInfo = formattedTime ? ` entre ${formattedTime}` : ''
 
-  return `Gracias por confiar en ${companyName}! Su numero de orden: ${orderNumber}. Un driver pasara por su casa el ${formattedDate}${timeInfo}. Para ayuda: HELP | Cancelar SMS: STOP`
+  // Construir mensaje con teléfono de atención al cliente si existe
+  const contactInfo = customerServicePhone
+    ? `Para cualquier consulta puede llamarnos al ${customerServicePhone}.`
+    : ''
+
+  return `Gracias por confiar en ${companyName}! Su numero de orden: ${orderNumber}. Un driver pasara por su direccion el ${formattedDate}${timeInfo}. ${contactInfo} Para ayuda: HELP | Cancelar SMS: STOP`
 }
 
 /**
@@ -182,8 +188,9 @@ export async function sendOrderCreatedSMS(
   companyName: string,
   orderNumber: string,
   scheduledDate: string,
-  timeSlot?: string | null
+  timeSlot?: string | null,
+  customerServicePhone?: string | null
 ): Promise<SMSResult> {
-  const message = generateOrderCreatedMessage(companyName, orderNumber, scheduledDate, timeSlot)
+  const message = generateOrderCreatedMessage(companyName, orderNumber, scheduledDate, timeSlot, customerServicePhone)
   return sendSMS(customerPhone, message)
 }

@@ -396,12 +396,13 @@ export async function POST(request: NextRequest) {
         )
 
         const companyQuery = await db.query(
-          'SELECT legalname FROM companies WHERE id = $1',
+          'SELECT legalname, customer_service_phone FROM companies WHERE id = $1',
           [companyId]
         )
 
         const customerPhone = customerQuery.rows[0]?.phone
         const companyName = companyQuery.rows[0]?.legalname || 'LogiRapid'
+        const customerServicePhone = companyQuery.rows[0]?.customer_service_phone || null
 
         // Solo enviar SMS si hay telefono valido y fecha programada
         if (customerPhone && isValidPhoneNumber(customerPhone)) {
@@ -415,7 +416,8 @@ export async function POST(request: NextRequest) {
             companyName,
             newOrder.ordernumber,
             scheduledDate,
-            timeSlot
+            timeSlot,
+            customerServicePhone
           )
 
           if (smsResult.success) {
