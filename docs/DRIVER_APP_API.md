@@ -2,9 +2,12 @@
 
 API REST para la aplicacion movil de conductores (Driver App) de LogiRapid.
 
+---
+
 ## Informacion General
 
 ### Base URL
+
 ```
 /api/driver-app
 ```
@@ -13,17 +16,15 @@ API REST para la aplicacion movil de conductores (Driver App) de LogiRapid.
 
 Todos los endpoints requieren autenticacion mediante cookie `auth-token`.
 
-El middleware de autenticacion inyecta los siguientes headers en cada request:
+El middleware inyecta automaticamente estos headers en cada request:
 
 | Header | Tipo | Descripcion |
 |--------|------|-------------|
-| `x-user-id` | integer | ID unico del usuario autenticado |
-| `x-user-role` | string | Rol del usuario: `DRIVER`, `ADMIN`, `SUPER_ADMIN` |
+| `x-user-id` | integer | ID del usuario autenticado |
+| `x-user-role` | string | Rol: `DRIVER`, `ADMIN`, `SUPER_ADMIN`, `MANAGER`, `USER` |
 | `x-user-email` | string | Email del usuario |
 
-### Formato de Respuesta
-
-Todas las respuestas siguen este formato:
+### Formato de Respuesta Exitosa
 
 ```json
 {
@@ -32,48 +33,60 @@ Todas las respuestas siguen este formato:
 }
 ```
 
-En caso de error:
+### Formato de Respuesta de Error
 
 ```json
 {
   "success": false,
-  "error": "Mensaje de error"
+  "error": "Descripcion del error"
 }
 ```
 
 ### Codigos HTTP
 
-| Codigo | Significado |
+| Codigo | Descripcion |
 |--------|-------------|
 | 200 | Exito |
 | 400 | Solicitud invalida |
 | 401 | No autorizado |
+| 403 | Acceso denegado |
 | 404 | No encontrado |
 | 500 | Error del servidor |
 
 ---
 
-## Endpoints de Rutas
+# ENDPOINTS DE RUTAS
 
-### 1. GET /api/driver-app/routes
+---
 
-Lista las rutas asignadas al driver autenticado.
+## 1. GET /api/driver-app/routes
 
-#### Request
+Lista las rutas asignadas al driver. Devuelve informacion resumida para mostrar en tarjetas (cards).
+
+### Request
 
 ```http
-GET /api/driver-app/routes?status=active&page=1&limit=20
+GET /api/driver-app/routes
+GET /api/driver-app/routes?status=active
+GET /api/driver-app/routes?status=pending&page=1&limit=10
 ```
 
-#### Query Parameters
+### Query Parameters
 
 | Parametro | Tipo | Requerido | Default | Descripcion |
 |-----------|------|-----------|---------|-------------|
-| status | string | No | all | Filtrar: `pending`, `active`, `completed`, `all` |
-| page | integer | No | 1 | Numero de pagina |
-| limit | integer | No | 20 | Resultados por pagina |
+| `status` | string | No | `all` | Filtrar: `pending`, `active`, `completed`, `all` |
+| `page` | integer | No | `1` | Numero de pagina |
+| `limit` | integer | No | `20` | Resultados por pagina |
 
-#### Response
+### Ejemplo Request
+
+```bash
+curl -X GET "https://tu-dominio.com/api/driver-app/routes?status=active" \
+  -H "Cookie: auth-token=<tu-token>"
+```
+
+### Ejemplo Response
 
 ```json
 {
@@ -112,26 +125,25 @@ GET /api/driver-app/routes?status=active&page=1&limit=20
 }
 ```
 
-#### Campos de Route
+### Campos de Response
 
 | Campo | Tipo | Descripcion |
 |-------|------|-------------|
-| id | integer | ID unico de la ruta |
-| routeCode | string | Codigo legible: "ROUTE-2024-001" |
-| status | string | Estado: `pending`, `active`, `completed`, `cancelled` |
-| distance.value | number | Distancia numerica |
-| distance.unit | string | Unidad: `mi` (millas) |
-| distance.formatted | string | Texto formateado: "45.5 mi" |
-| duration.value | string | Duracion estimada |
-| duration.formatted | string | Texto formateado |
-| date | string | Fecha: YYYY-MM-DD |
-| progress.total | integer | Total de paradas |
-| progress.completed | integer | Paradas completadas |
-| progress.percentage | integer | Porcentaje: 0-100 |
+| `id` | integer | ID unico de la ruta |
+| `routeCode` | string | Codigo legible de la ruta |
+| `status` | string | Estado: `pending`, `active`, `completed`, `cancelled` |
+| `distance.value` | number | Distancia numerica |
+| `distance.unit` | string | Unidad: `mi` (millas) |
+| `distance.formatted` | string | Texto formateado |
+| `duration.value` | string | Duracion estimada |
+| `duration.formatted` | string | Texto formateado |
+| `date` | string | Fecha: YYYY-MM-DD |
+| `progress.total` | integer | Total de paradas |
+| `progress.completed` | integer | Paradas completadas |
+| `progress.percentage` | integer | Porcentaje: 0-100 |
 
-#### Ordenamiento
+### Ordenamiento Automatico
 
-Las rutas se ordenan automaticamente:
 1. Activas primero
 2. Pendientes segundo
 3. Completadas al final
@@ -139,23 +151,30 @@ Las rutas se ordenan automaticamente:
 
 ---
 
-### 2. GET /api/driver-app/routes/{code}
+## 2. GET /api/driver-app/routes/{code}
 
-Obtiene el detalle completo de una ruta por su codigo.
+Obtiene el detalle completo de una ruta por su codigo. Incluye vehiculo, almacen con coordenadas, paradas con coordenadas para el mapa, y ordenes agrupadas por parada.
 
-#### Request
+### Request
 
 ```http
 GET /api/driver-app/routes/ROUTE-2024-001
 ```
 
-#### Path Parameters
+### Path Parameters
 
 | Parametro | Tipo | Requerido | Descripcion |
 |-----------|------|-----------|-------------|
-| code | string | Si | Codigo unico de la ruta |
+| `code` | string | Si | Codigo unico de la ruta (routeCode) |
 
-#### Response
+### Ejemplo Request
+
+```bash
+curl -X GET "https://tu-dominio.com/api/driver-app/routes/ROUTE-2024-001" \
+  -H "Cookie: auth-token=<tu-token>"
+```
+
+### Ejemplo Response
 
 ```json
 {
@@ -194,13 +213,13 @@ GET /api/driver-app/routes/ROUTE-2024-001
         }
       },
       "summary": {
-        "totalStops": 15,
-        "completedStops": 8,
-        "pendingStops": 6,
+        "totalStops": 3,
+        "completedStops": 1,
+        "pendingStops": 1,
         "failedStops": 1,
-        "totalOrders": 22,
-        "completedOrders": 12,
-        "percentage": 53
+        "totalOrders": 4,
+        "completedOrders": 2,
+        "percentage": 50
       }
     },
     "stops": [
@@ -246,222 +265,469 @@ GET /api/driver-app/routes/ROUTE-2024-001
 }
 ```
 
-#### Objeto Route
+### Campos de Response - route
 
 | Campo | Tipo | Descripcion |
 |-------|------|-------------|
-| id | integer | ID unico en base de datos |
-| routeCode | string | Codigo legible de la ruta |
-| status | string | Estado: `pending`, `active`, `completed`, `cancelled` |
-| date | string | Fecha programada: YYYY-MM-DD |
-| distance | object | Informacion de distancia total |
-| duration | object | Informacion de duracion estimada |
-| vehicle | object/null | Vehiculo asignado |
-| driver | object/null | Driver asignado |
-| warehouse | object/null | Almacen origen con coordenadas |
-| summary | object | Resumen de progreso |
+| `id` | integer | ID unico en base de datos |
+| `routeCode` | string | Codigo legible de la ruta |
+| `status` | string | Estado: `pending`, `active`, `completed`, `cancelled` |
+| `date` | string | Fecha programada: YYYY-MM-DD |
+| `distance` | object | Informacion de distancia total |
+| `duration` | object | Informacion de duracion estimada |
+| `vehicle` | object/null | Vehiculo asignado |
+| `driver` | object/null | Driver asignado |
+| `warehouse` | object/null | Almacen origen con coordenadas |
+| `summary` | object | Resumen de progreso |
 
-#### Objeto Vehicle
-
-| Campo | Tipo | Descripcion |
-|-------|------|-------------|
-| id | integer | ID del vehiculo |
-| plate | string | Placa del vehiculo |
-| type | string/null | Tipo de vehiculo |
-
-#### Objeto Warehouse
+### Campos de Response - stops[]
 
 | Campo | Tipo | Descripcion |
 |-------|------|-------------|
-| id | integer | ID del almacen |
-| name | string | Nombre del almacen |
-| address | string | Direccion completa |
-| coordinates.latitude | number | Latitud para el mapa |
-| coordinates.longitude | number | Longitud para el mapa |
+| `stopNumber` | integer | Numero secuencial de la parada |
+| `status` | string | Estado: `pending`, `in_progress`, `completed`, `failed` |
+| `address` | object | Direccion desglosada |
+| `zone` | string | Zona: "Ciudad / CodigoPostal" |
+| `coordinates` | object | Latitud y longitud para el mapa |
+| `orders` | array | Lista de ordenes en esta parada |
+| `totalOrders` | integer | Total de ordenes en la parada |
+| `completedOrders` | integer | Ordenes completadas |
 
-#### Objeto Summary
-
-| Campo | Tipo | Descripcion |
-|-------|------|-------------|
-| totalStops | integer | Total de paradas |
-| completedStops | integer | Paradas completadas |
-| pendingStops | integer | Paradas pendientes |
-| failedStops | integer | Paradas fallidas |
-| totalOrders | integer | Total de ordenes |
-| completedOrders | integer | Ordenes entregadas |
-| percentage | integer | Porcentaje completado: 0-100 |
-
-#### Objeto Stop
+### Campos de Response - orders[]
 
 | Campo | Tipo | Descripcion |
 |-------|------|-------------|
-| stopNumber | integer | Numero secuencial de la parada |
-| status | string | Estado: `pending`, `in_progress`, `completed`, `failed` |
-| address | object | Direccion desglosada |
-| zone | string | Zona: "Ciudad / CodigoPostal" |
-| coordinates.latitude | number | Latitud para el mapa |
-| coordinates.longitude | number | Longitud para el mapa |
-| orders | array | Lista de ordenes en esta parada |
-| totalOrders | integer | Total de ordenes en la parada |
-| completedOrders | integer | Ordenes completadas |
-
-#### Objeto Address (dentro de Stop)
-
-| Campo | Tipo | Descripcion |
-|-------|------|-------------|
-| full | string | Direccion completa formateada |
-| street | string | Calle y numero |
-| apartment | string/null | Apartamento o unidad |
-| city | string | Ciudad |
-| state | string | Estado |
-| zipcode | string | Codigo postal |
-| country | string | Pais: "US" |
-
-#### Objeto Order (dentro de Stop)
-
-| Campo | Tipo | Descripcion |
-|-------|------|-------------|
-| id | integer | ID de la orden |
-| orderNumber | string | Numero de orden |
-| status | string | Estado de la orden |
-| customerName | string | Nombre del cliente |
-| customerPhone | string/null | Telefono del cliente |
-| services | array | Lista de servicios |
-| timeSlot | string/null | Ventana horaria |
-| hasProof | boolean | Tiene comprobante de entrega |
-
-#### Objeto Service (dentro de Order)
-
-| Campo | Tipo | Descripcion |
-|-------|------|-------------|
-| name | string | Nombre del servicio |
-| quantity | integer | Cantidad |
+| `id` | integer | ID de la orden |
+| `orderNumber` | string | Numero de orden |
+| `status` | string | Estado de la orden |
+| `customerName` | string | Nombre del cliente |
+| `customerPhone` | string/null | Telefono del cliente |
+| `services` | array | Lista de servicios [{name, quantity}] |
+| `timeSlot` | string/null | Ventana horaria |
+| `hasProof` | boolean | Tiene comprobante de entrega |
 
 ---
 
-## Estados
+# ENDPOINTS DE EMPAQUES (Servicios Habilitados)
 
-### Estados de Ruta
+---
 
-| Estado | Descripcion | Uso |
-|--------|-------------|-----|
-| pending | Pendiente de iniciar | Ruta programada |
-| active | En progreso | Driver trabajando |
-| completed | Finalizada | Todas las paradas visitadas |
-| cancelled | Cancelada | Ruta cancelada |
+## 3. POST /api/driver-app/empaques/validate
 
-### Estados de Parada
+Valida un codigo de empaque individual al escanearlo.
 
-| Estado | Descripcion | Color sugerido |
-|--------|-------------|----------------|
-| pending | Por visitar | Gris |
-| in_progress | En camino | Amarillo |
-| completed | Completada | Verde |
-| failed | Fallida | Rojo |
+### Request
 
-### Estados de Orden
+```http
+POST /api/driver-app/empaques/validate
+Content-Type: application/json
+
+{
+  "codigo": "EMP-001",
+  "tipo": "empaque",
+  "operacion": "recepcion",
+  "warehouseId": 1
+}
+```
+
+### Body Parameters
+
+| Parametro | Tipo | Requerido | Descripcion |
+|-----------|------|-----------|-------------|
+| `codigo` | string | Si | Codigo del empaque a validar |
+| `tipo` | string | Si | Tipo: `empaque` o `bulto` |
+| `operacion` | string | No | Solo para bultos: `recepcion` o `envio` |
+| `warehouseId` | integer | No | ID del almacen actual |
+
+### Ejemplo Request
+
+```bash
+curl -X POST "https://tu-dominio.com/api/driver-app/empaques/validate" \
+  -H "Cookie: auth-token=<tu-token>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "codigo": "EMP-001",
+    "tipo": "empaque"
+  }'
+```
+
+### Ejemplo Response - Valido
+
+```json
+{
+  "success": true,
+  "data": {
+    "valid": true,
+    "status": "valid",
+    "empaque": {
+      "id": 1,
+      "codigo": "EMP-001",
+      "tipo": "CAJA",
+      "estado": "disponible",
+      "warehouseId": 1,
+      "warehouseName": "Almacen Principal",
+      "packageSizeId": 2,
+      "packageSizeName": "Mediana"
+    }
+  }
+}
+```
+
+### Ejemplo Response - Invalido
+
+```json
+{
+  "success": true,
+  "data": {
+    "valid": false,
+    "status": "invalid",
+    "errorCode": "NOT_FOUND",
+    "message": "El codigo de empaque no existe"
+  }
+}
+```
+
+### Codigos de Error
+
+| errorCode | Descripcion |
+|-----------|-------------|
+| `NOT_FOUND` | Codigo no existe |
+| `WRONG_COMPANY` | Codigo pertenece a otra empresa |
+| `NOT_AVAILABLE` | Empaque no esta disponible |
+| `INVALID_STATE` | Estado no valido para la operacion |
+| `NO_ORDER` | Empaque sin orden asignada (para bultos) |
+| `WRONG_WAREHOUSE` | Empaque no esta en el almacen indicado |
+| `ALREADY_HERE` | El bulto ya se encuentra en este almacen |
+
+---
+
+## 4. GET /api/driver-app/empaques/disponibles
+
+Obtiene todos los empaques en estado 'disponible' para validar codigos al escanear.
+
+### Request
+
+```http
+GET /api/driver-app/empaques/disponibles
+GET /api/driver-app/empaques/disponibles?tipo=CAJA
+GET /api/driver-app/empaques/disponibles?search=EMP
+```
+
+### Query Parameters
+
+| Parametro | Tipo | Requerido | Descripcion |
+|-----------|------|-----------|-------------|
+| `tipo` | string | No | Filtrar por tipo: `CAJA`, `BULTO`, etc. |
+| `search` | string | No | Buscar por codigo |
+
+### Ejemplo Request
+
+```bash
+curl -X GET "https://tu-dominio.com/api/driver-app/empaques/disponibles" \
+  -H "Cookie: auth-token=<tu-token>"
+```
+
+### Ejemplo Response
+
+```json
+{
+  "success": true,
+  "data": {
+    "empaques": [
+      {
+        "id": 1,
+        "codigo": "EMP-001",
+        "tipo": "CAJA",
+        "estado": "disponible",
+        "packageSizeId": 2,
+        "packageSizeName": "Mediana",
+        "dimensions": "30x20x15",
+        "maxWeightLb": 50,
+        "warehouseId": 1,
+        "warehouseName": "Almacen Principal",
+        "createdAt": "2024-12-01T10:00:00Z"
+      }
+    ],
+    "codigosDisponibles": ["EMP-001", "EMP-002", "EMP-003"],
+    "totalDisponibles": 3,
+    "resumenPorTipo": {
+      "CAJA": 2,
+      "BULTO": 1
+    }
+  }
+}
+```
+
+---
+
+## 5. GET /api/driver-app/empaques/list-disponibles
+
+Precarga todos los empaques disponibles (cajas vacias) de la empresa para validacion local instantanea.
+
+### Request
+
+```http
+GET /api/driver-app/empaques/list-disponibles
+GET /api/driver-app/empaques/list-disponibles?warehouseId=1
+GET /api/driver-app/empaques/list-disponibles?tipo=CAJA
+```
+
+### Query Parameters
+
+| Parametro | Tipo | Requerido | Descripcion |
+|-----------|------|-----------|-------------|
+| `warehouseId` | integer | No | Filtrar por almacen |
+| `tipo` | string | No | Filtrar por tipo: `CAJA`, `BULTO`, etc. |
+
+### Ejemplo Request
+
+```bash
+curl -X GET "https://tu-dominio.com/api/driver-app/empaques/list-disponibles?warehouseId=1" \
+  -H "Cookie: auth-token=<tu-token>"
+```
+
+### Ejemplo Response
+
+```json
+{
+  "success": true,
+  "data": {
+    "empaques": [
+      {
+        "id": 1,
+        "codigo": "EMP-001",
+        "tipo": "CAJA",
+        "estado": "disponible",
+        "packageSizeId": 2,
+        "packageSizeName": "Mediana",
+        "dimensions": "30x20x15",
+        "maxWeightLb": 50,
+        "warehouseId": 1,
+        "warehouseName": "Almacen Principal",
+        "createdAt": "2024-12-01T10:00:00Z"
+      }
+    ],
+    "codigos": ["EMP-001", "EMP-002"],
+    "total": 2,
+    "companyId": 5
+  }
+}
+```
+
+---
+
+## 6. GET /api/driver-app/empaques/list-bultos
+
+Precarga todos los bultos (empaques con orden asignada) de la empresa para validacion local.
+
+### Request
+
+```http
+GET /api/driver-app/empaques/list-bultos
+GET /api/driver-app/empaques/list-bultos?warehouseId=1
+GET /api/driver-app/empaques/list-bultos?estado=en_almacen
+```
+
+### Query Parameters
+
+| Parametro | Tipo | Requerido | Descripcion |
+|-----------|------|-----------|-------------|
+| `warehouseId` | integer | No | Filtrar por almacen |
+| `estado` | string | No | Filtrar por estado |
+
+### Ejemplo Request
+
+```bash
+curl -X GET "https://tu-dominio.com/api/driver-app/empaques/list-bultos?estado=en_almacen" \
+  -H "Cookie: auth-token=<tu-token>"
+```
+
+### Ejemplo Response
+
+```json
+{
+  "success": true,
+  "data": {
+    "bultos": [
+      {
+        "id": 10,
+        "codigo": "BLT-001",
+        "tipo": "BULTO",
+        "estado": "en_almacen",
+        "warehouseId": 1,
+        "warehouseName": "Almacen Principal",
+        "ordenId": 100,
+        "orderNumber": "PICKUP-2024-001",
+        "packageSizeId": 3,
+        "packageSizeName": "Grande",
+        "serviceName": "Envio Express",
+        "recipientName": "Maria Garcia",
+        "recipientCity": "Miami",
+        "recipientState": "FL",
+        "weightLb": 25.5,
+        "weightKg": 11.6,
+        "boxNumber": 1,
+        "totalBoxes": 2,
+        "createdAt": "2024-12-01T10:00:00Z",
+        "updatedAt": "2024-12-01T12:00:00Z"
+      }
+    ],
+    "codigos": ["BLT-001", "BLT-002"],
+    "total": 2,
+    "companyId": 5
+  }
+}
+```
+
+---
+
+## 7. GET /api/driver-app/empaques/servicio/{orderNumber}/{serviceName}
+
+Obtiene todos los empaques (bultos) asociados a un servicio especifico de una orden.
+
+### Request
+
+```http
+GET /api/driver-app/empaques/servicio/PICKUP-2024-001/Envio%20Express
+```
+
+### Path Parameters
+
+| Parametro | Tipo | Requerido | Descripcion |
+|-----------|------|-----------|-------------|
+| `orderNumber` | string | Si | Numero de la orden |
+| `serviceName` | string | Si | Nombre del servicio (URL encoded) |
+
+### Ejemplo Request
+
+```bash
+curl -X GET "https://tu-dominio.com/api/driver-app/empaques/servicio/PICKUP-2024-001/Envio%20Express" \
+  -H "Cookie: auth-token=<tu-token>"
+```
+
+### Ejemplo Response
+
+```json
+{
+  "success": true,
+  "data": {
+    "orden": {
+      "orderNumber": "PICKUP-2024-001",
+      "customerName": "Maria Garcia",
+      "status": "in_transit"
+    },
+    "servicio": {
+      "name": "Envio Express",
+      "type": "express",
+      "quantity": 2,
+      "weight": 50,
+      "price": 25.00
+    },
+    "empaques": [
+      {
+        "id": 10,
+        "codigo": "BLT-001",
+        "tipo": "BULTO",
+        "estado": "en_reparto",
+        "boxNumber": 1,
+        "totalBoxes": 2,
+        "recipientName": "Maria Garcia",
+        "recipientCity": "Miami",
+        "recipientState": "FL",
+        "weightLb": 25.5,
+        "weightKg": 11.6,
+        "packageSizeName": "Grande",
+        "dimensions": "40x30x25",
+        "driverId": 10,
+        "driverName": "Juan Perez"
+      }
+    ],
+    "codigosEsperados": ["BLT-001", "BLT-002"],
+    "validacion": {
+      "totalBultos": 2,
+      "bultosEnReparto": 2,
+      "bultosEntregados": 0,
+      "bultosPendientes": 0,
+      "todosAsignados": true,
+      "todosEntregados": false
+    }
+  }
+}
+```
+
+---
+
+# ESTADOS
+
+## Estados de Ruta
+
+| Estado | Descripcion | Color |
+|--------|-------------|-------|
+| `pending` | Pendiente de iniciar | Gris |
+| `active` | En progreso | Amarillo |
+| `completed` | Finalizada | Verde |
+| `cancelled` | Cancelada | Rojo |
+
+## Estados de Parada
+
+| Estado | Descripcion | Color |
+|--------|-------------|-------|
+| `pending` | Por visitar | Gris |
+| `in_progress` | En camino | Amarillo |
+| `completed` | Completada | Verde |
+| `failed` | Fallida | Rojo |
+
+## Estados de Orden
 
 | Estado | Descripcion |
 |--------|-------------|
-| pending | Pendiente |
-| in_transit | En transito |
-| delivered | Entregada |
-| failed | Fallida |
-| cancelled | Cancelada |
+| `pending` | Pendiente |
+| `in_transit` | En transito |
+| `delivered` | Entregada |
+| `failed` | Fallida |
+| `cancelled` | Cancelada |
+
+## Estados de Empaque
+
+| Estado | Descripcion |
+|--------|-------------|
+| `disponible` | Caja vacia disponible |
+| `en_almacen` | Bulto en almacen |
+| `en_reparto` | Bulto en ruta de entrega |
+| `entregado` | Bulto entregado |
 
 ---
 
-## Ejemplos de Uso
+# NOTAS DE IMPLEMENTACION
 
-### Listar rutas activas
+## Filtrado por Empresa
 
-```bash
-curl -X GET "https://api.logirapid.com/api/driver-app/routes?status=active" \
-  -H "Cookie: auth-token=<token>"
-```
+- Los endpoints filtran automaticamente por la empresa del usuario autenticado
+- Usuarios con rol `SUPER_ADMIN` pueden ver datos de todas las empresas
 
-### Obtener detalle de ruta
+## Coordenadas para el Mapa
 
-```bash
-curl -X GET "https://api.logirapid.com/api/driver-app/routes/ROUTE-2024-001" \
-  -H "Cookie: auth-token=<token>"
-```
+- Latitud: rango -90 a 90
+- Longitud: rango -180 a 180
+- El almacen (`warehouse.coordinates`) es el punto de origen
+- Cada parada (`stops[].coordinates`) son los marcadores
 
-### Listar con paginacion
-
-```bash
-curl -X GET "https://api.logirapid.com/api/driver-app/routes?page=2&limit=10" \
-  -H "Cookie: auth-token=<token>"
-```
-
----
-
-## Errores Comunes
-
-### 401 No Autorizado
-
-```json
-{
-  "success": false,
-  "error": "No autorizado. Se requiere autenticacion."
-}
-```
-
-Causa: Falta cookie `auth-token` o token invalido.
-
-### 404 Ruta No Encontrada
-
-```json
-{
-  "success": false,
-  "error": "Ruta no encontrada"
-}
-```
-
-Causa: El codigo de ruta no existe.
-
-### 500 Error del Servidor
-
-```json
-{
-  "success": false,
-  "error": "Error al obtener rutas"
-}
-```
-
-Causa: Error interno. Verificar logs del servidor.
-
----
-
-## Notas de Implementacion
-
-### Filtrado por Driver
-
-- El endpoint filtra automaticamente por `driverid` del usuario autenticado
-- Usuarios con rol `SUPER_ADMIN` pueden ver todas las rutas
-
-### Coordenadas
-
-- Las coordenadas usan formato decimal: latitud (-90 a 90), longitud (-180 a 180)
-- El almacen (warehouse) proporciona el punto de origen para el mapa
-- Cada parada incluye coordenadas para pintar marcadores
-
-### Multiples Ordenes por Parada
+## Multiples Ordenes por Parada
 
 - Una parada puede contener multiples ordenes
-- Todas las ordenes de una parada comparten la misma direccion
 - El estado de la parada se calcula basado en los estados de sus ordenes
 
-### Calculo de Progreso
+## Validacion de Empaques
 
-- `percentage` se calcula en el servidor: (completedOrders / totalOrders) * 100
-- Evita calculos redundantes en el cliente
+- Usar `list-disponibles` y `list-bultos` para precargar codigos
+- Validar localmente primero, usar `validate` como fallback
+- Los codigos son case-insensitive
 
 ---
 
-## Changelog
+# CHANGELOG
 
-| Version | Fecha | Cambios |
-|---------|-------|---------|
+| Version | Fecha | Descripcion |
+|---------|-------|-------------|
 | 1.1.0 | 2024-12-02 | Agregado GET /api/driver-app/routes/{code} para detalle de ruta |
-| 1.0.0 | 2024-12-02 | Endpoint inicial GET /api/driver-app/routes para listar rutas |
+| 1.0.0 | 2024-12-02 | Endpoints de rutas y empaques |
