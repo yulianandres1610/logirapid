@@ -488,6 +488,530 @@ func createAnnotations(from detail: RouteDetail) -> [MKPointAnnotation] {
       }
     ]
   },
+  {
+    id: 'driver-route-stops',
+    method: 'GET',
+    path: '/api/driver-app/routes/{code}/stops',
+    title: 'Lista de Paradas con Ordenes Detalladas',
+    description: 'Obtiene la lista completa de paradas ordenadas con toda la información detallada de cada orden. Si la ruta está en estado pendiente o asignada, automáticamente la cambia a "en_curso" e inicia la ruta. Diseñado para la vista de lista de paradas en la app móvil.',
+    headers: [
+      {
+        name: 'Cookie',
+        type: 'string',
+        required: true,
+        description: 'Token de autenticación: auth-token=<token>'
+      }
+    ],
+    pathParams: [
+      {
+        name: 'code',
+        type: 'string',
+        required: true,
+        description: 'Código único de la ruta (routenumber)'
+      }
+    ],
+    responses: [
+      {
+        status: 200,
+        description: 'Lista de paradas obtenida exitosamente',
+        body: `{
+  "success": true,
+  "data": {
+    "routeId": 21,
+    "routeCode": "RUT-2025-0021",
+    "routeStatus": "en_curso",
+    "statusChanged": true,
+    "date": "2025-12-02",
+    "distance": "22.7 mi",
+    "duration": "43 min",
+    "driverName": "Juan Pérez",
+    "vehiclePlate": "ABC-123",
+    "totalStops": 15,
+    "completedStops": 8,
+    "totalOrders": 20,
+    "completedOrders": 12,
+    "progress": 60,
+    "stops": [
+      {
+        "stopNumber": 1,
+        "status": "completed",
+        "address": "456 Main St, Apt 2B, Miami, FL 33102",
+        "latitude": 25.7705,
+        "longitude": -80.1936,
+        "ordersCount": 2,
+        "completedOrders": 2,
+        "totalBoxes": 5,
+        "totalAmount": 125.50,
+        "orders": [
+          {
+            "id": 1001,
+            "orderNumber": "PICKUP-2024-001",
+            "status": "delivered",
+            "orderType": "pickup",
+            "scheduledDate": "2025-12-02",
+            "timeSlot": "morning",
+            "timeSlotFormatted": "8:00 AM - 12:00 PM",
+            "customerName": "María García",
+            "customerFirstName": "María",
+            "customerLastName": "García",
+            "customerPhone": "+1 305 555 1234",
+            "customerEmail": "maria@email.com",
+            "address": "456 Main St, Apt 2B, Miami, FL 33102",
+            "street": "456 Main St",
+            "apartment": "Apt 2B",
+            "city": "Miami",
+            "state": "FL",
+            "zipcode": "33102",
+            "country": "US",
+            "latitude": 25.7705,
+            "longitude": -80.1936,
+            "customerNotes": "Llamar antes de llegar",
+            "internalNotes": "Cliente frecuente",
+            "boxCount": 3,
+            "boxes": [
+              {"id": "BOX-001", "size": "M", "weight": 5.5},
+              {"id": "BOX-002", "size": "L", "weight": 8.2}
+            ],
+            "boxesDelivered": 3,
+            "boxesReturned": 0,
+            "pendingReturn": false,
+            "returnStatus": null,
+            "proofStatus": "completed",
+            "deliveredAt": "2025-12-02T10:30:00Z",
+            "subtotal": 50.00,
+            "tax": 3.50,
+            "total": 53.50,
+            "paymentMethod": "card",
+            "services": [
+              {"name": "Envío estándar", "price": 25.00, "quantity": 1}
+            ],
+            "createdAt": "2025-12-01T14:30:00Z"
+          }
+        ]
+      },
+      {
+        "stopNumber": 2,
+        "status": "pending",
+        "address": "789 Oak Ave, Miami, FL 33103",
+        "latitude": 25.7812,
+        "longitude": -80.2001,
+        "ordersCount": 1,
+        "completedOrders": 0,
+        "totalBoxes": 2,
+        "totalAmount": 72.00,
+        "orders": [
+          {
+            "id": 1002,
+            "orderNumber": "PICKUP-2024-002",
+            "status": "in_transit",
+            "orderType": "pickup",
+            "scheduledDate": "2025-12-02",
+            "timeSlot": "afternoon",
+            "timeSlotFormatted": "12:00 PM - 5:00 PM",
+            "customerName": "Carlos Rodríguez",
+            "customerFirstName": "Carlos",
+            "customerLastName": "Rodríguez",
+            "customerPhone": "+1 305 555 5678",
+            "customerEmail": "carlos@email.com",
+            "address": "789 Oak Ave, Miami, FL 33103",
+            "street": "789 Oak Ave",
+            "apartment": "",
+            "city": "Miami",
+            "state": "FL",
+            "zipcode": "33103",
+            "country": "US",
+            "latitude": 25.7812,
+            "longitude": -80.2001,
+            "customerNotes": "",
+            "internalNotes": "",
+            "boxCount": 2,
+            "boxes": null,
+            "boxesDelivered": 0,
+            "boxesReturned": 0,
+            "pendingReturn": false,
+            "returnStatus": null,
+            "proofStatus": null,
+            "deliveredAt": null,
+            "subtotal": 65.00,
+            "tax": 7.00,
+            "total": 72.00,
+            "paymentMethod": "cash",
+            "services": null,
+            "createdAt": "2025-12-01T15:00:00Z"
+          }
+        ]
+      }
+    ]
+  }
+}`
+      },
+      {
+        status: 401,
+        description: 'No autenticado',
+        body: `{
+  "success": false,
+  "error": "No autorizado. Se requiere autenticación."
+}`
+      },
+      {
+        status: 404,
+        description: 'Ruta no encontrada',
+        body: `{
+  "success": false,
+  "error": "Ruta no encontrada"
+}`
+      }
+    ],
+    examples: [
+      {
+        language: 'curl',
+        label: 'cURL',
+        code: `curl -X GET 'https://logirapid.com/api/driver-app/routes/RUT-2025-0021/stops' \\
+  -H 'Cookie: auth-token=YOUR_TOKEN'`
+      },
+      {
+        language: 'javascript',
+        label: 'JavaScript',
+        code: `const response = await fetch('/api/driver-app/routes/RUT-2025-0021/stops', {
+  method: 'GET',
+  credentials: 'include'
+});
+
+const data = await response.json();
+
+if (data.success) {
+  const { routeCode, routeStatus, statusChanged, stops } = data.data;
+
+  if (statusChanged) {
+    console.log('Ruta iniciada automáticamente');
+  }
+
+  console.log(\`Ruta: \${routeCode} - Estado: \${routeStatus}\`);
+  console.log(\`Progreso: \${data.data.progress}%\`);
+
+  stops.forEach(stop => {
+    console.log(\`\\nParada \${stop.stopNumber}: \${stop.address}\`);
+    console.log(\`  Estado: \${stop.status}\`);
+    console.log(\`  Órdenes: \${stop.completedOrders}/\${stop.ordersCount}\`);
+    console.log(\`  Cajas: \${stop.totalBoxes}\`);
+    console.log(\`  Total: $\${stop.totalAmount}\`);
+
+    stop.orders.forEach(order => {
+      console.log(\`    - \${order.orderNumber}: \${order.customerName}\`);
+      console.log(\`      Tel: \${order.customerPhone}\`);
+      console.log(\`      Horario: \${order.timeSlotFormatted}\`);
+      console.log(\`      Notas: \${order.customerNotes || 'Sin notas'}\`);
+    });
+  });
+}`
+      },
+      {
+        language: 'dart',
+        label: 'Flutter',
+        code: `Future<RouteStopsResponse> getRouteStops(String routeCode) async {
+  final token = await secureStorage.read(key: 'auth-token');
+
+  final response = await http.get(
+    Uri.parse('https://logirapid.com/api/driver-app/routes/\$routeCode/stops'),
+    headers: {'Cookie': 'auth-token=\$token'},
+  );
+
+  final data = jsonDecode(response.body);
+  if (data['success']) {
+    return RouteStopsResponse.fromJson(data['data']);
+  }
+  throw Exception(data['error']);
+}
+
+// Modelo para la respuesta de paradas
+class RouteStopsResponse {
+  final int routeId;
+  final String routeCode;
+  final String routeStatus;
+  final bool statusChanged;
+  final String date;
+  final String distance;
+  final String duration;
+  final String driverName;
+  final String vehiclePlate;
+  final int totalStops;
+  final int completedStops;
+  final int totalOrders;
+  final int completedOrders;
+  final int progress;
+  final List<StopDetail> stops;
+}
+
+// Modelo para cada parada
+class StopDetail {
+  final int stopNumber;
+  final String status;
+  final String address;
+  final double latitude;
+  final double longitude;
+  final int ordersCount;
+  final int completedOrders;
+  final int totalBoxes;
+  final double totalAmount;
+  final List<OrderDetail> orders;
+}
+
+// Modelo completo de orden
+class OrderDetail {
+  final int id;
+  final String orderNumber;
+  final String status;
+  final String orderType;
+  final String scheduledDate;
+  final String timeSlot;
+  final String timeSlotFormatted;
+  final String customerName;
+  final String customerFirstName;
+  final String customerLastName;
+  final String customerPhone;
+  final String customerEmail;
+  final String address;
+  final String street;
+  final String apartment;
+  final String city;
+  final String state;
+  final String zipcode;
+  final String country;
+  final double latitude;
+  final double longitude;
+  final String customerNotes;
+  final String internalNotes;
+  final int boxCount;
+  final List<dynamic>? boxes;
+  final int boxesDelivered;
+  final int boxesReturned;
+  final bool pendingReturn;
+  final String? returnStatus;
+  final String? proofStatus;
+  final String? deliveredAt;
+  final double subtotal;
+  final double tax;
+  final double total;
+  final String paymentMethod;
+  final List<dynamic>? services;
+  final String createdAt;
+}`
+      },
+      {
+        language: 'kotlin',
+        label: 'Kotlin',
+        code: `// Modelo completo para respuesta de paradas
+data class RouteStopsResponse(
+    val routeId: Int,
+    val routeCode: String,
+    val routeStatus: String,
+    val statusChanged: Boolean,
+    val date: String,
+    val distance: String,
+    val duration: String,
+    val driverName: String,
+    val vehiclePlate: String,
+    val totalStops: Int,
+    val completedStops: Int,
+    val totalOrders: Int,
+    val completedOrders: Int,
+    val progress: Int,
+    val stops: List<StopDetail>
+)
+
+data class StopDetail(
+    val stopNumber: Int,
+    val status: String,
+    val address: String,
+    val latitude: Double,
+    val longitude: Double,
+    val ordersCount: Int,
+    val completedOrders: Int,
+    val totalBoxes: Int,
+    val totalAmount: Double,
+    val orders: List<OrderDetail>
+)
+
+data class OrderDetail(
+    val id: Int,
+    val orderNumber: String,
+    val status: String,
+    val orderType: String,
+    val scheduledDate: String,
+    val timeSlot: String,
+    val timeSlotFormatted: String,
+    val customerName: String,
+    val customerFirstName: String,
+    val customerLastName: String,
+    val customerPhone: String,
+    val customerEmail: String,
+    val address: String,
+    val street: String,
+    val apartment: String,
+    val city: String,
+    val state: String,
+    val zipcode: String,
+    val country: String,
+    val latitude: Double,
+    val longitude: Double,
+    val customerNotes: String,
+    val internalNotes: String,
+    val boxCount: Int,
+    val boxes: List<Any>?,
+    val boxesDelivered: Int,
+    val boxesReturned: Int,
+    val pendingReturn: Boolean,
+    val returnStatus: String?,
+    val proofStatus: String?,
+    val deliveredAt: String?,
+    val subtotal: Double,
+    val tax: Double,
+    val total: Double,
+    val paymentMethod: String,
+    val services: List<Any>?,
+    val createdAt: String
+)
+
+interface DriverApi {
+    @GET("api/driver-app/routes/{code}/stops")
+    suspend fun getRouteStops(
+        @Header("Cookie") authToken: String,
+        @Path("code") routeCode: String
+    ): Response<ApiResponse<RouteStopsResponse>>
+}
+
+// Uso en ViewModel
+fun loadRouteStops(routeCode: String) {
+    viewModelScope.launch {
+        val response = driverApi.getRouteStops("auth-token=\$token", routeCode)
+        if (response.isSuccessful && response.body()?.success == true) {
+            val data = response.body()!!.data
+
+            if (data.statusChanged) {
+                showMessage("Ruta iniciada")
+            }
+
+            _stops.value = data.stops
+            _progress.value = data.progress
+        }
+    }
+}`
+      },
+      {
+        language: 'swift',
+        label: 'Swift',
+        code: `// Modelo completo para paradas
+struct RouteStopsResponse: Codable {
+    let routeId: Int
+    let routeCode: String
+    let routeStatus: String
+    let statusChanged: Bool
+    let date: String
+    let distance: String
+    let duration: String
+    let driverName: String
+    let vehiclePlate: String
+    let totalStops: Int
+    let completedStops: Int
+    let totalOrders: Int
+    let completedOrders: Int
+    let progress: Int
+    let stops: [StopDetail]
+}
+
+struct StopDetail: Codable {
+    let stopNumber: Int
+    let status: String
+    let address: String
+    let latitude: Double
+    let longitude: Double
+    let ordersCount: Int
+    let completedOrders: Int
+    let totalBoxes: Int
+    let totalAmount: Double
+    let orders: [OrderDetail]
+}
+
+struct OrderDetail: Codable {
+    let id: Int
+    let orderNumber: String
+    let status: String
+    let orderType: String
+    let scheduledDate: String
+    let timeSlot: String
+    let timeSlotFormatted: String
+    let customerName: String
+    let customerFirstName: String
+    let customerLastName: String
+    let customerPhone: String
+    let customerEmail: String
+    let address: String
+    let street: String
+    let apartment: String
+    let city: String
+    let state: String
+    let zipcode: String
+    let country: String
+    let latitude: Double
+    let longitude: Double
+    let customerNotes: String
+    let internalNotes: String
+    let boxCount: Int
+    let boxes: [Any]?
+    let boxesDelivered: Int
+    let boxesReturned: Int
+    let pendingReturn: Bool
+    let returnStatus: String?
+    let proofStatus: String?
+    let deliveredAt: String?
+    let subtotal: Double
+    let tax: Double
+    let total: Double
+    let paymentMethod: String
+    let services: [Any]?
+    let createdAt: String
+}
+
+func getRouteStops(routeCode: String) async throws -> RouteStopsResponse {
+    var request = URLRequest(url: URL(string: "https://logirapid.com/api/driver-app/routes/\\(routeCode)/stops")!)
+    request.setValue("auth-token=\\(token)", forHTTPHeaderField: "Cookie")
+
+    let (data, _) = try await URLSession.shared.data(for: request)
+    let response = try JSONDecoder().decode(ApiResponse<RouteStopsResponse>.self, from: data)
+
+    guard let stopsData = response.data else {
+        throw APIError.invalidResponse
+    }
+
+    if stopsData.statusChanged {
+        print("Ruta iniciada automáticamente")
+    }
+
+    return stopsData
+}
+
+// Uso en SwiftUI
+struct StopsListView: View {
+    @State private var stopsData: RouteStopsResponse?
+
+    var body: some View {
+        List(stopsData?.stops ?? [], id: \\.stopNumber) { stop in
+            VStack(alignment: .leading) {
+                Text("Parada \\(stop.stopNumber)")
+                    .font(.headline)
+                Text(stop.address)
+                    .font(.subheadline)
+
+                ForEach(stop.orders, id: \\.id) { order in
+                    OrderRow(order: order)
+                }
+            }
+        }
+    }
+}`
+      }
+    ]
+  },
 
   // ==========================================
   // EMPAQUES
