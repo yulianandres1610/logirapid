@@ -211,7 +211,7 @@ export default function SenderSearchStep({ wizardData, updateWizardData, setCanP
 
         // Si solo tiene una dirección, auto-seleccionarla
         if (addresses.length === 1) {
-          selectAddress(addresses[0])
+          selectAddress(addresses[0], customer)
         } else if (addresses.length > 1) {
           // Mostrar direcciones inline en el formulario
           // Actualizar wizardData para que la UI cambie al estado "seleccionado"
@@ -310,12 +310,15 @@ export default function SenderSearchStep({ wizardData, updateWizardData, setCanP
   }
 
   const selectCustomer = (customer: any) => {
+    console.log('📍 [SenderSearchStep] selectCustomer called with:', customer)
     setSelectedCustomer(customer)
     loadCustomerAddresses(customer)
   }
 
-  const selectAddress = async (address: any) => {
-    console.log('📍 [SenderSearchStep] selectAddress called with:', address)
+  const selectAddress = async (address: any, customer?: any) => {
+    // Usar el customer pasado como parámetro o el selectedCustomer del estado
+    const customerToUse = customer || selectedCustomer
+    console.log('📍 [SenderSearchStep] selectAddress called with:', { address, customer: customerToUse })
 
     // Extraer coordenadas del campo notes si están disponibles
     let latitude = null
@@ -360,7 +363,7 @@ export default function SenderSearchStep({ wizardData, updateWizardData, setCanP
     }
 
     const senderData = {
-      ...selectedCustomer,
+      ...customerToUse,
       street: address.street,
       apartment: address.apartment || '',
       city: address.city,
@@ -373,7 +376,7 @@ export default function SenderSearchStep({ wizardData, updateWizardData, setCanP
     }
 
     console.log('📍 [SenderSearchStep] Final senderData with coordinates:', {
-      name: `${selectedCustomer?.firstName} ${selectedCustomer?.lastName}`,
+      name: `${customerToUse?.firstName} ${customerToUse?.lastName}`,
       address: address.street,
       latitude,
       longitude
