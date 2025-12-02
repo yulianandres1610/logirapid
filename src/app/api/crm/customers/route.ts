@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/database'
+import { getCompanyFilter } from '@/lib/query-helpers'
 
 // Force dynamic rendering - don't execute during build
 export const dynamic = 'force-dynamic'
@@ -244,26 +245,38 @@ export async function POST(request: NextRequest) {
     console.log('🔝 NAME SPLITTING:', { fullName, firstName, lastName })
     console.log('📍 ADDRESS FIELDS:', { address, city, state, zipCode, country })
 
-    // Verificar si el teléfono ya existe
-    const existingQuery = 'SELECT id FROM customers WHERE phone = $1'
-    const existingResult = await db.query(existingQuery, [body.phone])
+    // Obtener company_id del filtro de compañía
+    const companyFilter = await getCompanyFilter(request)
+    const companyId = companyFilter.companyId
+
+    if (!companyId) {
+      return NextResponse.json({
+        success: false,
+        error: 'No se pudo determinar la compañía del usuario'
+      }, { status: 400 })
+    }
+
+    // Verificar si el teléfono ya existe EN LA MISMA COMPAÑÍA
+    const existingQuery = 'SELECT id FROM customers WHERE phone = $1 AND company_id = $2'
+    const existingResult = await db.query(existingQuery, [body.phone, companyId])
 
     if (existingResult.rows.length > 0) {
       return NextResponse.json({
         success: false,
-        error: 'Ya existe un cliente con este número de teléfono'
+        error: 'Ya existe un cliente con este número de teléfono en su compañía'
       }, { status: 400 })
     }
 
-    // Insertar nuevo cliente
+    // Insertar nuevo cliente con company_id
     const insertQuery = `
       INSERT INTO customers (
         firstname, lastname, idnumber, idtype, phone, email,
         address, city, state, country, notes, createdby,
         createdat, zipcode, apartment,
-        has_alternate_contact, alternate_contact_name, alternate_contact_phone
+        has_alternate_contact, alternate_contact_name, alternate_contact_phone,
+        company_id
       ) VALUES (
-        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, NOW(), $13, $14, $15, $16, $17
+        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, NOW(), $13, $14, $15, $16, $17, $18
       )
       RETURNING
         id,
@@ -304,7 +317,8 @@ export async function POST(request: NextRequest) {
       body.apartment || null,
       body.hasAlternateContact || false,
       body.alternateContactName || null,
-      body.alternateContactPhone || null
+      body.alternateContactPhone || null,
+      companyId
     ]
 
     const result = await db.query(insertQuery, values)
