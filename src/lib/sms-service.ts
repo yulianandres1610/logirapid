@@ -150,15 +150,7 @@ export function generateOrderCreatedMessage(
     // Si falla el formateo, usar la fecha original
   }
 
-  return `Gracias por confiar en ${companyName}!
-
-Su numero de orden: ${orderNumber}
-
-Un driver pasara por su casa el ${formattedDate}.
-
-Gracias por confiar en ${companyName}.
-
-Para ayuda: HELP | Cancelar SMS: STOP`
+  return `Gracias por confiar en ${companyName}! Su numero de orden: ${orderNumber}. Un driver pasara por su casa el ${formattedDate}. Para ayuda: HELP | Cancelar SMS: STOP`
 }
 
 /**
