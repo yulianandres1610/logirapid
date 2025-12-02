@@ -87,22 +87,12 @@ export const navigationItems = [
     ]
   },
   {
-    id: 'driver-general',
-    label: 'Driver - General',
+    id: 'driver-routes-section',
+    label: 'Driver - Rutas',
     badge: 'available' as const,
     children: [
-      { id: 'driver-dashboard', label: 'GET /dashboard' },
-    ]
-  },
-  {
-    id: 'driver-inventory',
-    label: 'Driver - Inventario',
-    badge: 'available' as const,
-    children: [
-      { id: 'driver-receive-box', label: 'POST /receive-box' },
-      { id: 'driver-receive-package', label: 'POST /receive-package' },
-      { id: 'driver-packages', label: 'GET /packages' },
-      { id: 'driver-empty-boxes', label: 'GET /empty-boxes' },
+      { id: 'driver-routes', label: 'GET /routes' },
+      { id: 'driver-route-detail', label: 'GET /routes/{code}' },
     ]
   },
   {
@@ -110,42 +100,11 @@ export const navigationItems = [
     label: 'Driver - Empaques',
     badge: 'available' as const,
     children: [
+      { id: 'driver-empaques-validate', label: 'POST /empaques/validate' },
       { id: 'driver-empaques-disponibles', label: 'GET /empaques/disponibles' },
-      { id: 'driver-empaques-servicio', label: 'POST /empaques/servicio' },
       { id: 'driver-empaques-list-disponibles', label: 'GET /empaques/list-disponibles' },
       { id: 'driver-empaques-list-bultos', label: 'GET /empaques/list-bultos' },
-      { id: 'driver-empaques-validate', label: 'POST /empaques/validate' },
-    ]
-  },
-  {
-    id: 'driver-routes-section',
-    label: 'Driver - Rutas',
-    badge: 'available' as const,
-    children: [
-      { id: 'driver-routes', label: 'GET /routes' },
-      { id: 'driver-routes-assign', label: 'POST /routes/assign' },
-      { id: 'driver-route-stops', label: 'GET /routes/{id}/stops' },
-      { id: 'driver-route-start', label: 'POST /routes/{code}/start' },
-      { id: 'driver-route-complete', label: 'POST /routes/{code}/complete' },
-    ]
-  },
-  {
-    id: 'driver-stops-section',
-    label: 'Driver - Paradas',
-    badge: 'available' as const,
-    children: [
-      { id: 'driver-stop-info', label: 'GET /stops/{routeId}/{stopNumber}' },
-      { id: 'driver-stop-update', label: 'POST /stops/{routeId}/{stopNumber}' },
-      { id: 'driver-stop-fail', label: 'POST /stops/.../fail' },
-      { id: 'driver-stop-navigate', label: 'GET /stops/.../navigate' },
-    ]
-  },
-  {
-    id: 'driver-location-section',
-    label: 'Driver - Ubicación',
-    badge: 'available' as const,
-    children: [
-      { id: 'driver-location-update', label: 'POST /location' },
+      { id: 'driver-empaques-servicio', label: 'GET /empaques/servicio/{orderNumber}/{serviceName}' },
     ]
   },
   {
