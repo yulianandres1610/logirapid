@@ -181,6 +181,68 @@ export function generateOrderCreatedMessage(
 }
 
 /**
+ * Genera el mensaje de WhatsApp para confirmación de orden
+ * Formato más visual con emojis y saltos de línea
+ */
+export function generateWhatsAppOrderMessage(
+  companyName: string,
+  orderNumber: string,
+  scheduledDate: string,
+  customerName?: string | null,
+  address?: string | null,
+  timeSlot?: string | null,
+  customerServicePhone?: string | null
+): string {
+  // Formatear fecha en español
+  let formattedDate = scheduledDate
+  try {
+    const date = new Date(scheduledDate)
+    formattedDate = date.toLocaleDateString('es-ES', {
+      weekday: 'long',
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric'
+    })
+  } catch (e) {
+    // Si falla el formateo, usar la fecha original
+  }
+
+  // Formatear horario
+  const formattedTime = formatTimeSlot(timeSlot)
+  const timeInfo = formattedTime ? `🕐 *Horario:* ${formattedTime}` : ''
+
+  // Construir mensaje con formato WhatsApp
+  let message = `✅ *Confirmación de Orden*\n\n`
+  message += `¡Gracias por confiar en *${companyName}*!\n\n`
+  message += `📦 *Número de orden:* ${orderNumber}\n`
+
+  if (customerName) {
+    message += `👤 *Cliente:* ${customerName}\n`
+  }
+
+  message += `📅 *Fecha de entrega:* ${formattedDate}\n`
+
+  if (timeInfo) {
+    message += `${timeInfo}\n`
+  }
+
+  if (address) {
+    message += `📍 *Dirección:* ${address}\n`
+  }
+
+  message += `\n🚚 Un driver pasará por su dirección en la fecha indicada.\n`
+
+  if (customerServicePhone) {
+    message += `\n📞 *Atención al cliente:* ${customerServicePhone}\n`
+    message += `Para cualquier consulta puede llamarnos.\n`
+  }
+
+  message += `\n¡Gracias por su preferencia! 🙏`
+
+  return message
+}
+
+/**
  * Envia SMS de confirmacion cuando se crea una orden
  */
 export async function sendOrderCreatedSMS(
