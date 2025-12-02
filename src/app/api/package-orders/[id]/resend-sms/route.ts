@@ -27,7 +27,7 @@ export async function POST(
       }, { status: 400 })
     }
 
-    // Obtener la orden con los datos necesarios (incluyendo teléfono directamente de la orden)
+    // Obtener la orden con los datos necesarios, incluyendo teléfono del cliente
     const orderQuery = await db.query(
       `SELECT
         po.id,
@@ -36,8 +36,10 @@ export async function POST(
         po.company_id,
         po.scheduleddate,
         po.timeslot,
-        po.phone
+        po.phone,
+        c.phone as customer_phone
       FROM package_orders po
+      LEFT JOIN customers c ON po.customerid = c.id
       WHERE po.id = $1`,
       [orderId]
     )
@@ -51,13 +53,13 @@ export async function POST(
 
     const order = orderQuery.rows[0]
 
-    // El teléfono está directamente en la orden
-    const customerPhone = order.phone
+    // Buscar teléfono: primero en la orden, luego en el cliente
+    const customerPhone = order.phone || order.customer_phone
 
     if (!customerPhone) {
       return NextResponse.json({
         success: false,
-        error: 'La orden no tiene teléfono registrado'
+        error: 'No se encontró teléfono en la orden ni en el cliente'
       }, { status: 400 })
     }
 
