@@ -16,9 +16,9 @@ export const runtime = 'nodejs'
  */
 export async function GET(request: NextRequest) {
   try {
-    // Obtener información del usuario desde headers (inyectados por middleware)
-    const userId = request.headers.get('x-user-id')
-    const userRole = request.headers.get('x-user-role')
+    // Obtener información del usuario desde headers (inyectados por middleware) o cookies (fallback)
+    const userId = request.headers.get('x-user-id') || request.cookies.get('user-id')?.value
+    const userRole = request.headers.get('x-user-role') || request.cookies.get('user-role')?.value
 
     if (!userId) {
       return NextResponse.json({
@@ -26,6 +26,9 @@ export async function GET(request: NextRequest) {
         error: 'No autorizado. Se requiere autenticación.'
       }, { status: 401 })
     }
+
+    // Debug log para verificar autenticación
+    console.log('[Driver App - Routes] Auth info:', { userId, userRole })
 
     // Obtener parámetros de query
     const { searchParams } = new URL(request.url)
@@ -38,8 +41,8 @@ export async function GET(request: NextRequest) {
     const conditions: string[] = []
     const filterParams: (string | number)[] = []
 
-    // Filtrar por driver (excepto SUPER_ADMIN que ve todas)
-    if (userRole !== 'SUPER_ADMIN') {
+    // Filtrar por driver (excepto SUPER_ADMIN y ADMIN que ven todas)
+    if (userRole !== 'SUPER_ADMIN' && userRole !== 'ADMIN') {
       filterParams.push(parseInt(userId))
       conditions.push(`r.driverid = $${filterParams.length}`)
     }
