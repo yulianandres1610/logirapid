@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/database'
 import { getCompanyFilter } from '@/lib/query-helpers'
-import { sendOrderCreatedSMS, isValidPhoneNumber } from '@/lib/sms-service'
+import { sendOrderCreatedSMS, sendWhatsAppOrderConfirmation, isValidPhoneNumber } from '@/lib/sms-service'
 
 // Force dynamic rendering - don't execute during build
 export const dynamic = 'force-dynamic'
@@ -385,13 +385,13 @@ export async function POST(request: NextRequest) {
     }
 
     // ================================================
-    // ENVIAR SMS DE CONFIRMACION (solo para ordenes de recogida)
+    // ENVIAR NOTIFICACION DE CONFIRMACION (WhatsApp automatico)
     // ================================================
     if (orderType === 'recogida' && body.customerId) {
       try {
-        // Obtener telefono del cliente y nombre de la empresa
+        // Obtener telefono del cliente, nombre y datos de la empresa
         const customerQuery = await db.query(
-          'SELECT phone FROM customers WHERE id = $1',
+          'SELECT phone, firstname, lastname FROM customers WHERE id = $1',
           [body.customerId]
         )
 
@@ -401,36 +401,60 @@ export async function POST(request: NextRequest) {
         )
 
         const customerPhone = customerQuery.rows[0]?.phone
+        const customerFirstName = customerQuery.rows[0]?.firstname || ''
+        const customerLastName = customerQuery.rows[0]?.lastname || ''
+        const customerFullName = `${customerFirstName} ${customerLastName}`.trim() || 'Cliente'
         const companyName = companyQuery.rows[0]?.legalname || 'LogiRapid'
         const customerServicePhone = companyQuery.rows[0]?.customer_service_phone || null
 
-        // Solo enviar SMS si hay telefono valido y fecha programada
+        // Solo enviar notificacion si hay telefono valido
         if (customerPhone && isValidPhoneNumber(customerPhone)) {
           const scheduledDate = newOrder.scheduleddate || new Date().toISOString()
           const timeSlot = newOrder.timeslot || null
+          const address = newOrder.customeraddress || ''
 
-          console.log(`[SMS] Enviando SMS de confirmacion a ${customerPhone} para orden ${newOrder.ordernumber}`)
+          // WhatsApp es el canal principal de notificaciones automaticas
+          console.log(`[WhatsApp] Enviando WhatsApp de confirmacion a ${customerPhone} para orden ${newOrder.ordernumber}`)
 
-          const smsResult = await sendOrderCreatedSMS(
+          const whatsappResult = await sendWhatsAppOrderConfirmation(
             customerPhone,
+            customerFullName,
             companyName,
             newOrder.ordernumber,
             scheduledDate,
             timeSlot,
+            address,
             customerServicePhone
           )
 
-          if (smsResult.success) {
-            console.log(`[SMS] SMS enviado exitosamente. SID: ${smsResult.messageId}`)
+          if (whatsappResult.success) {
+            console.log(`[WhatsApp] WhatsApp enviado exitosamente. SID: ${whatsappResult.messageId}`)
           } else {
-            console.warn(`[SMS] Error al enviar SMS: ${smsResult.error}`)
+            console.warn(`[WhatsApp] Error al enviar WhatsApp: ${whatsappResult.error}`)
+
+            // Fallback a SMS si WhatsApp falla
+            console.log(`[SMS] Intentando fallback a SMS...`)
+            const smsResult = await sendOrderCreatedSMS(
+              customerPhone,
+              companyName,
+              newOrder.ordernumber,
+              scheduledDate,
+              timeSlot,
+              customerServicePhone
+            )
+
+            if (smsResult.success) {
+              console.log(`[SMS] SMS de fallback enviado exitosamente. SID: ${smsResult.messageId}`)
+            } else {
+              console.warn(`[SMS] Error al enviar SMS de fallback: ${smsResult.error}`)
+            }
           }
         } else {
-          console.log(`[SMS] No se envio SMS - telefono invalido o no disponible: ${customerPhone}`)
+          console.log(`[Notificacion] No se envio notificacion - telefono invalido o no disponible: ${customerPhone}`)
         }
-      } catch (smsError) {
-        // No bloquear la creacion de la orden si falla el SMS
-        console.error('[SMS] Error al intentar enviar SMS:', smsError)
+      } catch (notificationError) {
+        // No bloquear la creacion de la orden si falla la notificacion
+        console.error('[Notificacion] Error al intentar enviar notificacion:', notificationError)
       }
     }
 

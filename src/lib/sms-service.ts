@@ -256,3 +256,115 @@ export async function sendOrderCreatedSMS(
   const message = generateOrderCreatedMessage(companyName, orderNumber, scheduledDate, timeSlot, customerServicePhone)
   return sendSMS(customerPhone, message)
 }
+
+/**
+ * Formatea fecha en español para WhatsApp
+ */
+function formatDateSpanish(dateString: string): string {
+  try {
+    const date = new Date(dateString)
+    return date.toLocaleDateString('es-ES', {
+      weekday: 'long',
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric'
+    })
+  } catch {
+    return dateString
+  }
+}
+
+/**
+ * Envía mensaje WhatsApp de confirmación de orden usando Content Template
+ * Usa el template aprobado por Meta/WhatsApp con ContentSid
+ */
+export async function sendWhatsAppOrderConfirmation(
+  customerPhone: string,
+  customerName: string,
+  companyName: string,
+  orderNumber: string,
+  scheduledDate: string,
+  timeSlot: string | null | undefined,
+  address: string,
+  customerServicePhone: string | null | undefined
+): Promise<SMSResult> {
+  try {
+    const contentSid = process.env.TWILIO_CONTENT_SID_ORDER_CREATED
+    const whatsappNumber = process.env.TWILIO_WHATSAPP_NUMBER ||
+      (twilioPhoneNumber ? `whatsapp:${twilioPhoneNumber}` : null)
+
+    if (!contentSid) {
+      console.error('[WhatsApp Service] TWILIO_CONTENT_SID_ORDER_CREATED not configured')
+      return {
+        success: false,
+        error: 'WhatsApp Content Template not configured'
+      }
+    }
+
+    if (!whatsappNumber) {
+      console.error('[WhatsApp Service] WhatsApp number not configured')
+      return {
+        success: false,
+        error: 'WhatsApp number not configured'
+      }
+    }
+
+    // Formatear y validar número destino
+    const formattedPhone = formatPhoneNumber(customerPhone)
+
+    if (!isValidPhoneNumber(formattedPhone)) {
+      console.warn(`[WhatsApp Service] Invalid phone number: ${customerPhone}`)
+      return {
+        success: false,
+        error: `Invalid phone number: ${customerPhone}`,
+        to: formattedPhone
+      }
+    }
+
+    // Obtener cliente de Twilio
+    const client = getClient()
+
+    // Formatear datos para el template
+    const formattedDate = formatDateSpanish(scheduledDate)
+    const formattedTime = formatTimeSlot(timeSlot) || 'A coordinar'
+    const formattedAddress = address || 'Por confirmar'
+    const formattedServicePhone = customerServicePhone || 'No disponible'
+
+    console.log(`[WhatsApp Service] Sending WhatsApp to ${formattedPhone}`)
+    console.log(`[WhatsApp Service] Using ContentSid: ${contentSid}`)
+
+    // Enviar mensaje usando Content Template
+    // Variables: 1=nombre, 2=empresa, 3=orden, 4=fecha, 5=horario, 6=dirección, 7=teléfono
+    const result = await client.messages.create({
+      contentSid,
+      contentVariables: JSON.stringify({
+        "1": customerName || 'Cliente',
+        "2": companyName,
+        "3": orderNumber,
+        "4": formattedDate,
+        "5": formattedTime,
+        "6": formattedAddress,
+        "7": formattedServicePhone
+      }),
+      from: whatsappNumber.startsWith('whatsapp:') ? whatsappNumber : `whatsapp:${whatsappNumber}`,
+      to: `whatsapp:${formattedPhone}`
+    })
+
+    console.log(`[WhatsApp Service] WhatsApp sent successfully. SID: ${result.sid}`)
+
+    return {
+      success: true,
+      messageId: result.sid,
+      to: formattedPhone
+    }
+
+  } catch (error: any) {
+    console.error('[WhatsApp Service] Error sending WhatsApp:', error)
+
+    return {
+      success: false,
+      error: error.message || 'Unknown error sending WhatsApp',
+      to: customerPhone
+    }
+  }
+}
