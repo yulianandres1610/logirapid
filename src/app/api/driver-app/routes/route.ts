@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/database'
+import { jwtVerify } from 'jose'
 
 // Force dynamic rendering
 export const dynamic = 'force-dynamic'
@@ -16,9 +17,31 @@ export const runtime = 'nodejs'
  */
 export async function GET(request: NextRequest) {
   try {
-    // Obtener información del usuario desde headers (inyectados por middleware) o cookies (fallback)
-    const userId = request.headers.get('x-user-id') || request.cookies.get('user-id')?.value
-    const userRole = request.headers.get('x-user-role') || request.cookies.get('user-role')?.value
+    // Intentar obtener info del JWT directamente
+    let userId: string | null = null
+    let userRole: string | null = null
+
+    const authToken = request.cookies.get('auth-token')?.value
+
+    if (authToken) {
+      try {
+        const jwtSecret = process.env.JWT_SECRET || 'fallback-secret-change-in-production'
+        const secret = new TextEncoder().encode(jwtSecret)
+        const { payload } = await jwtVerify(authToken, secret)
+        userId = payload.userId?.toString() || null
+        userRole = (payload.role as string) || null
+      } catch (jwtError) {
+        console.error('[Driver App - Routes] JWT error:', jwtError)
+      }
+    }
+
+    // Fallback a headers/cookies si no se pudo decodificar JWT
+    if (!userId) {
+      userId = request.headers.get('x-user-id') || request.cookies.get('user-id')?.value || null
+    }
+    if (!userRole) {
+      userRole = request.headers.get('x-user-role') || request.cookies.get('user-role')?.value || null
+    }
 
     if (!userId) {
       return NextResponse.json({
