@@ -52,100 +52,202 @@ export async function GET(request: NextRequest) {
     const phone = searchParams.get('phone')
     const search = searchParams.get('search')
 
+    // Obtener company_id del filtro de compañía
+    const companyFilter = getCompanyFilter(request)
+    const companyId = companyFilter.companyId
+
     let query: string
     let params: any[] = []
 
     if (phone) {
-      // Buscar por teléfono específico
-      query = `
-        SELECT
-          id,
-          firstname as "firstName",
-          lastname as "lastName",
-          idnumber as "idNumber",
-          idtype as "idType",
-          phone,
-          email,
-          address,
-          city,
-          state,
-          country,
-          notes,
-          createdby as "createdBy",
-          createdat as "createdAt",
-          zipcode as "zipCode",
-          apartment,
-          has_alternate_contact as "hasAlternateContact",
-          alternate_contact_name as "alternateContactName",
-          alternate_contact_phone as "alternateContactPhone"
-        FROM customers
-        WHERE phone = $1
-      `
-      params = [phone]
+      // Buscar por teléfono específico - filtrar por compañía si no es SUPER_ADMIN
+      if (companyId) {
+        query = `
+          SELECT
+            id,
+            firstname as "firstName",
+            lastname as "lastName",
+            idnumber as "idNumber",
+            idtype as "idType",
+            phone,
+            email,
+            address,
+            city,
+            state,
+            country,
+            notes,
+            createdby as "createdBy",
+            createdat as "createdAt",
+            zipcode as "zipCode",
+            apartment,
+            has_alternate_contact as "hasAlternateContact",
+            alternate_contact_name as "alternateContactName",
+            alternate_contact_phone as "alternateContactPhone"
+          FROM customers
+          WHERE phone = $1 AND company_id = $2
+        `
+        params = [phone, companyId]
+      } else {
+        // SUPER_ADMIN puede ver todos los clientes
+        query = `
+          SELECT
+            id,
+            firstname as "firstName",
+            lastname as "lastName",
+            idnumber as "idNumber",
+            idtype as "idType",
+            phone,
+            email,
+            address,
+            city,
+            state,
+            country,
+            notes,
+            createdby as "createdBy",
+            createdat as "createdAt",
+            zipcode as "zipCode",
+            apartment,
+            has_alternate_contact as "hasAlternateContact",
+            alternate_contact_name as "alternateContactName",
+            alternate_contact_phone as "alternateContactPhone"
+          FROM customers
+          WHERE phone = $1
+        `
+        params = [phone]
+      }
     } else if (search) {
-      // Buscar por texto
+      // Buscar por texto - filtrar por compañía si no es SUPER_ADMIN
       const searchPattern = `%${search}%`
-      query = `
-        SELECT
-          id,
-          firstname as "firstName",
-          lastname as "lastName",
-          idnumber as "idNumber",
-          idtype as "idType",
-          phone,
-          email,
-          address,
-          city,
-          state,
-          country,
-          notes,
-          createdby as "createdBy",
-          createdat as "createdAt",
-          zipcode as "zipCode",
-          apartment,
-          has_alternate_contact as "hasAlternateContact",
-          alternate_contact_name as "alternateContactName",
-          alternate_contact_phone as "alternateContactPhone"
-        FROM customers
-        WHERE
-          firstname ILIKE $1 OR
-          lastname ILIKE $1 OR
-          phone ILIKE $1 OR
-          email ILIKE $1 OR
-          idnumber ILIKE $1 OR
-          CONCAT(firstname, ' ', lastname) ILIKE $1
-        ORDER BY firstname, lastname
-        LIMIT 50
-      `
-      params = [searchPattern]
+      if (companyId) {
+        query = `
+          SELECT
+            id,
+            firstname as "firstName",
+            lastname as "lastName",
+            idnumber as "idNumber",
+            idtype as "idType",
+            phone,
+            email,
+            address,
+            city,
+            state,
+            country,
+            notes,
+            createdby as "createdBy",
+            createdat as "createdAt",
+            zipcode as "zipCode",
+            apartment,
+            has_alternate_contact as "hasAlternateContact",
+            alternate_contact_name as "alternateContactName",
+            alternate_contact_phone as "alternateContactPhone"
+          FROM customers
+          WHERE company_id = $1 AND (
+            firstname ILIKE $2 OR
+            lastname ILIKE $2 OR
+            phone ILIKE $2 OR
+            email ILIKE $2 OR
+            idnumber ILIKE $2 OR
+            CONCAT(firstname, ' ', lastname) ILIKE $2
+          )
+          ORDER BY firstname, lastname
+          LIMIT 50
+        `
+        params = [companyId, searchPattern]
+      } else {
+        // SUPER_ADMIN puede ver todos los clientes
+        query = `
+          SELECT
+            id,
+            firstname as "firstName",
+            lastname as "lastName",
+            idnumber as "idNumber",
+            idtype as "idType",
+            phone,
+            email,
+            address,
+            city,
+            state,
+            country,
+            notes,
+            createdby as "createdBy",
+            createdat as "createdAt",
+            zipcode as "zipCode",
+            apartment,
+            has_alternate_contact as "hasAlternateContact",
+            alternate_contact_name as "alternateContactName",
+            alternate_contact_phone as "alternateContactPhone"
+          FROM customers
+          WHERE
+            firstname ILIKE $1 OR
+            lastname ILIKE $1 OR
+            phone ILIKE $1 OR
+            email ILIKE $1 OR
+            idnumber ILIKE $1 OR
+            CONCAT(firstname, ' ', lastname) ILIKE $1
+          ORDER BY firstname, lastname
+          LIMIT 50
+        `
+        params = [searchPattern]
+      }
     } else {
-      // Obtener todos los clientes
-      query = `
-        SELECT
-          id,
-          firstname as "firstName",
-          lastname as "lastName",
-          idnumber as "idNumber",
-          idtype as "idType",
-          phone,
-          email,
-          address,
-          city,
-          state,
-          country,
-          notes,
-          createdby as "createdBy",
-          createdat as "createdAt",
-          zipcode as "zipCode",
-          apartment,
-          has_alternate_contact as "hasAlternateContact",
-          alternate_contact_name as "alternateContactName",
-          alternate_contact_phone as "alternateContactPhone"
-        FROM customers
-        ORDER BY createdat DESC
-        LIMIT 100
-      `
-      params = []
+      // Obtener todos los clientes - filtrar por compañía si no es SUPER_ADMIN
+      if (companyId) {
+        query = `
+          SELECT
+            id,
+            firstname as "firstName",
+            lastname as "lastName",
+            idnumber as "idNumber",
+            idtype as "idType",
+            phone,
+            email,
+            address,
+            city,
+            state,
+            country,
+            notes,
+            createdby as "createdBy",
+            createdat as "createdAt",
+            zipcode as "zipCode",
+            apartment,
+            has_alternate_contact as "hasAlternateContact",
+            alternate_contact_name as "alternateContactName",
+            alternate_contact_phone as "alternateContactPhone"
+          FROM customers
+          WHERE company_id = $1
+          ORDER BY createdat DESC
+          LIMIT 100
+        `
+        params = [companyId]
+      } else {
+        // SUPER_ADMIN puede ver todos los clientes
+        query = `
+          SELECT
+            id,
+            firstname as "firstName",
+            lastname as "lastName",
+            idnumber as "idNumber",
+            idtype as "idType",
+            phone,
+            email,
+            address,
+            city,
+            state,
+            country,
+            notes,
+            createdby as "createdBy",
+            createdat as "createdAt",
+            zipcode as "zipCode",
+            apartment,
+            has_alternate_contact as "hasAlternateContact",
+            alternate_contact_name as "alternateContactName",
+            alternate_contact_phone as "alternateContactPhone"
+          FROM customers
+          ORDER BY createdat DESC
+          LIMIT 100
+        `
+        params = []
+      }
     }
 
     const result = await db.query(query, params)
@@ -246,7 +348,7 @@ export async function POST(request: NextRequest) {
     console.log('📍 ADDRESS FIELDS:', { address, city, state, zipCode, country })
 
     // Obtener company_id del filtro de compañía
-    const companyFilter = await getCompanyFilter(request)
+    const companyFilter = getCompanyFilter(request)
     const companyId = companyFilter.companyId
 
     if (!companyId) {
