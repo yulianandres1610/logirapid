@@ -1141,11 +1141,20 @@ export default function CreatePackageOrderPage() {
       setLoading(true)
       showNotification('info', 'Enviando', 'Enviando SMS al cliente...')
 
-      // Obtener nombre de compañía desde cookie
-      const companyName = document.cookie
-        .split('; ')
-        .find(row => row.startsWith('user-company-name='))
-        ?.split('=')[1] || 'LogiRapid'
+      // Obtener nombre de compañía desde cookie y decodificar URL encoding
+      let companyName = 'LogiRapid'
+      try {
+        const cookieValue = document.cookie
+          .split('; ')
+          .find(row => row.startsWith('user-company-name='))
+          ?.split('=')[1]
+        if (cookieValue) {
+          // Decodificar URL encoding (ej: Hola%20Pack%20LLC -> Hola Pack LLC)
+          companyName = decodeURIComponent(cookieValue)
+        }
+      } catch (e) {
+        console.warn('Error decoding company name from cookie:', e)
+      }
 
       const response = await fetch('/api/sms/send', {
         method: 'POST',
@@ -1153,7 +1162,7 @@ export default function CreatePackageOrderPage() {
         body: JSON.stringify({
           to: foundCustomer.phone,
           type: 'order_created',
-          companyName: decodeURIComponent(companyName),
+          companyName: companyName,
           orderNumber: createdOrder.orderNumber,
           scheduledDate: createdOrder.scheduledDate || new Date().toISOString(),
           timeSlot: createdOrder.timeSlot || null
