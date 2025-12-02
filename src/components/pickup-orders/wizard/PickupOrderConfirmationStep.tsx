@@ -309,71 +309,34 @@ export default function PickupOrderConfirmationStep({ wizardData, updateWizardDa
   const sendSMSNotification = async () => {
     setSendingSMS(true)
     try {
-      // Obtener ID y nombre de la compañía desde cookies
-      const getCompanyInfo = (): { name: string; id: string | null } => {
-        let name = 'LogiRapid'
-        let id = null
-        try {
-          const cookies = document.cookie.split(';')
-          for (const cookie of cookies) {
-            const [cookieName, value] = cookie.trim().split('=')
-            if (cookieName === 'user-company-name') {
-              name = decodeURIComponent(value)
-            }
-            if (cookieName === 'user-company-id') {
-              id = decodeURIComponent(value)
-            }
-          }
-        } catch (error) {
-          console.error('Error reading company info:', error)
-        }
-        return { name, id }
+      // Usar el endpoint de reenvío que usa exactamente la misma lógica
+      // que el envío automático al crear la orden
+      const orderId = wizardData.orderId
+
+      if (!orderId) {
+        showNotification(
+          'error',
+          'Error',
+          'No se encontró el ID de la orden'
+        )
+        return
       }
 
-      const companyInfo = getCompanyInfo()
-      const scheduledDate = wizardData.scheduledDate || new Date().toISOString()
-      const timeSlot = wizardData.timeSlot || null
+      console.log('[SMS] Reenviando SMS para orden ID:', orderId)
 
-      // Obtener el teléfono de atención al cliente de la compañía
-      let customerServicePhone = null
-      if (companyInfo.id) {
-        try {
-          const companyResponse = await fetch(`/api/companies/${companyInfo.id}`)
-          const companyData = await companyResponse.json()
-          if (companyData.success && companyData.data?.customer_service_phone) {
-            customerServicePhone = companyData.data.customer_service_phone
-          }
-        } catch (error) {
-          console.error('[SMS] Error fetching company phone:', error)
-        }
-      }
-
-      console.log('[SMS] Enviando SMS a:', wizardData.sender.phone)
-      console.log('[SMS] Datos:', { companyName: companyInfo.name, orderNumber, scheduledDate, timeSlot, customerServicePhone })
-
-      // Llamar a la API de SMS
-      const response = await fetch('/api/sms/send', {
+      const response = await fetch(`/api/package-orders/${orderId}/resend-sms`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          to: wizardData.sender.phone,
-          type: 'order_created',
-          companyName: companyInfo.name,
-          orderNumber: orderNumber,
-          scheduledDate: scheduledDate,
-          timeSlot: timeSlot,
-          customerServicePhone: customerServicePhone
-        })
+        headers: { 'Content-Type': 'application/json' }
       })
 
       const data = await response.json()
 
       if (data.success) {
-        console.log('[SMS] SMS enviado exitosamente. SID:', data.data?.messageId)
+        console.log('[SMS] SMS reenviado exitosamente. SID:', data.data?.messageId)
         showNotification(
           'success',
           'SMS Enviado',
-          `Mensaje enviado exitosamente a ${wizardData.sender.phone}`
+          `Mensaje enviado exitosamente a ${data.data?.to || wizardData.sender.phone}`
         )
       } else {
         console.error('[SMS] Error:', data.error)
