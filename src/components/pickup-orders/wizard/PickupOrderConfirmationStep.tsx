@@ -309,27 +309,47 @@ export default function PickupOrderConfirmationStep({ wizardData, updateWizardDa
   const sendSMSNotification = async () => {
     setSendingSMS(true)
     try {
-      // Obtener nombre de la compañía desde cookies
-      const getCompanyName = (): string => {
+      // Obtener ID y nombre de la compañía desde cookies
+      const getCompanyInfo = (): { name: string; id: string | null } => {
+        let name = 'LogiRapid'
+        let id = null
         try {
           const cookies = document.cookie.split(';')
           for (const cookie of cookies) {
-            const [name, value] = cookie.trim().split('=')
-            if (name === 'user-company-name') {
-              return decodeURIComponent(value)
+            const [cookieName, value] = cookie.trim().split('=')
+            if (cookieName === 'user-company-name') {
+              name = decodeURIComponent(value)
+            }
+            if (cookieName === 'user-company-id') {
+              id = decodeURIComponent(value)
             }
           }
         } catch (error) {
-          console.error('Error reading company name:', error)
+          console.error('Error reading company info:', error)
         }
-        return 'LogiRapid'
+        return { name, id }
       }
 
-      const companyName = getCompanyName()
+      const companyInfo = getCompanyInfo()
       const scheduledDate = wizardData.scheduledDate || new Date().toISOString()
+      const timeSlot = wizardData.timeSlot || null
+
+      // Obtener el teléfono de atención al cliente de la compañía
+      let customerServicePhone = null
+      if (companyInfo.id) {
+        try {
+          const companyResponse = await fetch(`/api/companies/${companyInfo.id}`)
+          const companyData = await companyResponse.json()
+          if (companyData.success && companyData.data?.customer_service_phone) {
+            customerServicePhone = companyData.data.customer_service_phone
+          }
+        } catch (error) {
+          console.error('[SMS] Error fetching company phone:', error)
+        }
+      }
 
       console.log('[SMS] Enviando SMS a:', wizardData.sender.phone)
-      console.log('[SMS] Datos:', { companyName, orderNumber, scheduledDate })
+      console.log('[SMS] Datos:', { companyName: companyInfo.name, orderNumber, scheduledDate, timeSlot, customerServicePhone })
 
       // Llamar a la API de SMS
       const response = await fetch('/api/sms/send', {
@@ -338,9 +358,11 @@ export default function PickupOrderConfirmationStep({ wizardData, updateWizardDa
         body: JSON.stringify({
           to: wizardData.sender.phone,
           type: 'order_created',
-          companyName: companyName,
+          companyName: companyInfo.name,
           orderNumber: orderNumber,
-          scheduledDate: scheduledDate
+          scheduledDate: scheduledDate,
+          timeSlot: timeSlot,
+          customerServicePhone: customerServicePhone
         })
       })
 
