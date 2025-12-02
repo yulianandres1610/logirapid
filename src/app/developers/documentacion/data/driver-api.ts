@@ -37,8 +37,8 @@ export const driverEndpoints: Endpoint[] = [
         name: 'status',
         type: 'string',
         required: false,
-        description: 'Filtrar por estado: pending, active, completed, all',
-        default: 'all'
+        description: 'Filtrar: completed (solo completadas), all (todas). Por defecto excluye completadas.',
+        default: '-'
       },
       {
         name: 'limit',
@@ -64,24 +64,14 @@ export const driverEndpoints: Endpoint[] = [
   "data": {
     "routes": [
       {
-        "id": 123,
-        "routeCode": "ROUTE-2024-001",
-        "status": "active",
-        "distance": {
-          "value": 45.5,
-          "unit": "mi",
-          "formatted": "45.5 mi"
-        },
-        "duration": {
-          "value": "2h 30min",
-          "formatted": "2h 30min"
-        },
-        "date": "2024-12-02",
-        "progress": {
-          "total": 15,
-          "completed": 8,
-          "percentage": 53
-        }
+        "id": 21,
+        "routeCode": "RUT-2025-0021",
+        "status": "en_curso",
+        "distance": "22.7 mi",
+        "duration": "43 min",
+        "stops": 15,
+        "completedStops": 8,
+        "progress": 53
       }
     ],
     "pagination": {
@@ -113,7 +103,7 @@ export const driverEndpoints: Endpoint[] = [
       {
         language: 'javascript',
         label: 'JavaScript',
-        code: `const response = await fetch('/api/driver-app/routes?status=active', {
+        code: `const response = await fetch('/api/driver-app/routes', {
   method: 'GET',
   credentials: 'include'
 });
@@ -123,7 +113,9 @@ const data = await response.json();
 if (data.success) {
   data.data.routes.forEach(route => {
     console.log(\`Ruta: \${route.routeCode}\`);
-    console.log(\`Progreso: \${route.progress.percentage}%\`);
+    console.log(\`Distancia: \${route.distance}\`);
+    console.log(\`Paradas: \${route.completedStops}/\${route.stops}\`);
+    console.log(\`Progreso: \${route.progress}%\`);
   });
 }`
       },
@@ -153,14 +145,16 @@ if (data.success) {
       {
         language: 'kotlin',
         label: 'Kotlin',
-        code: `data class RouteCard(
+        code: `// Modelo simplificado - todos los campos son strings o números
+data class RouteCard(
     val id: Int,
     val routeCode: String,
     val status: String,
-    val distance: Distance,
-    val duration: Duration,
-    val date: String,
-    val progress: Progress
+    val distance: String,      // "22.7 mi"
+    val duration: String,      // "43 min"
+    val stops: Int,
+    val completedStops: Int,
+    val progress: Int          // 0-100
 )
 
 interface DriverApi {
@@ -176,14 +170,16 @@ interface DriverApi {
       {
         language: 'swift',
         label: 'Swift',
-        code: `struct RouteCard: Codable {
+        code: `// Modelo simplificado - todos los campos son strings o números
+struct RouteCard: Codable {
     let id: Int
     let routeCode: String
     let status: String
-    let distance: Distance
-    let duration: Duration
-    let date: String
-    let progress: Progress
+    let distance: String      // "22.7 mi"
+    let duration: String      // "43 min"
+    let stops: Int
+    let completedStops: Int
+    let progress: Int         // 0-100
 }
 
 func getRoutes(status: String? = nil) async throws -> [RouteCard] {
