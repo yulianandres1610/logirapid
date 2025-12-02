@@ -63,7 +63,7 @@ export async function GET(request: NextRequest) {
 
       try {
         const timeoutPromise = new Promise((_, reject) => {
-          setTimeout(() => reject(new Error('Timeout obteniendo tasas del API externa')), 20000)
+          setTimeout(() => reject(new Error('Timeout obteniendo tasas del API externa')), 5000) // Reducido de 20s a 5s para mejor UX
         })
 
         const fetchPromise = fetch(`${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3002'}/api/exchange-rates`)

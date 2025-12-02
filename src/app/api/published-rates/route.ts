@@ -6,14 +6,40 @@ import { AgencyRatesService } from '@/lib/agency-rates.service'
 export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
 
+// Caché en memoria para mejorar rendimiento
+interface CachedData {
+  rates: any[]
+  lastUpdated: string
+  source: string
+}
+let cachedRates: CachedData | null = null
+let cacheTimestamp = 0
+const CACHE_TTL = 60000 // 60 segundos
+
 /**
  * Endpoint para que las AGENCIAS consulten las tasas publicadas
  * Solo retorna las tasas finales (con ajuste aplicado)
  * NO retorna el porcentaje de ajuste ni las tasas base de ElToque
+ *
+ * OPTIMIZACIÓN: Caché en memoria con TTL de 60 segundos
  */
 export async function GET(request: NextRequest) {
   try {
-    console.log('[PUBLISHED_RATES] Fetching published rates for agencies...')
+    const now = Date.now()
+
+    // Si hay caché válido, retornar inmediatamente
+    if (cachedRates && (now - cacheTimestamp) < CACHE_TTL) {
+      console.log('[PUBLISHED_RATES] Returning cached rates (TTL remaining: ' + Math.round((CACHE_TTL - (now - cacheTimestamp)) / 1000) + 's)')
+      return NextResponse.json({
+        success: true,
+        rates: cachedRates.rates,
+        lastUpdated: cachedRates.lastUpdated,
+        source: cachedRates.source,
+        cached: true
+      })
+    }
+
+    console.log('[PUBLISHED_RATES] Cache miss, fetching fresh rates...')
 
     // Intentar obtener tasas publicadas desde historial
     let rates = await getPublishedRates()
@@ -41,12 +67,17 @@ export async function GET(request: NextRequest) {
         lastUpdated: rateData.lastUpdate
       }))
 
-      console.log(`[PUBLISHED_RATES] Returning ${formattedRates.length} calculated rates (no history)`)
+      // Guardar en caché
+      const lastUpdated = new Date().toISOString()
+      cachedRates = { rates: formattedRates, lastUpdated, source: 'calculated' }
+      cacheTimestamp = now
+
+      console.log(`[PUBLISHED_RATES] Returning ${formattedRates.length} calculated rates (no history) - cached`)
 
       return NextResponse.json({
         success: true,
         rates: formattedRates,
-        lastUpdated: new Date().toISOString(),
+        lastUpdated,
         source: 'calculated'
       })
     }
@@ -58,12 +89,17 @@ export async function GET(request: NextRequest) {
       lastUpdated: r.timestamp
     }))
 
-    console.log(`[PUBLISHED_RATES] Returning ${formattedRates.length} published rates from history`)
+    // Guardar en caché
+    const lastUpdated = rates[0]?.timestamp || new Date().toISOString()
+    cachedRates = { rates: formattedRates, lastUpdated, source: 'history' }
+    cacheTimestamp = now
+
+    console.log(`[PUBLISHED_RATES] Returning ${formattedRates.length} published rates from history - cached`)
 
     return NextResponse.json({
       success: true,
       rates: formattedRates,
-      lastUpdated: rates[0]?.timestamp || new Date().toISOString(),
+      lastUpdated,
       source: 'history'
     })
 

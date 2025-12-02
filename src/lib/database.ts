@@ -360,17 +360,13 @@ export async function getCompanyAgencyConfig(companyId: string) {
 }
 
 // Nueva función para obtener tasas publicadas (solo resultado final para agencias)
+// OPTIMIZACIÓN: Usar DISTINCT ON en lugar de subconsulta correlacionada
 export async function getPublishedRates() {
   try {
     const query = `
-      SELECT currency, agencyrate as rate, timestamp
+      SELECT DISTINCT ON (currency) currency, agencyrate as rate, timestamp
       FROM agency_rates_history
-      WHERE timestamp = (
-        SELECT MAX(timestamp)
-        FROM agency_rates_history AS arh2
-        WHERE arh2.currency = agency_rates_history.currency
-      )
-      ORDER BY currency
+      ORDER BY currency, timestamp DESC
     `
     const result = await db.query(query)
     return result.rows
