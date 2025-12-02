@@ -70,9 +70,18 @@ export async function GET(request: NextRequest) {
     conditions.push(`r.driverid = $${filterParams.length}`)
 
     // Filtrar por estado
+    // Mapear 'active' a 'en_curso' para compatibilidad con la BD
     if (status && status !== 'all') {
-      filterParams.push(status)
-      conditions.push(`r.status = $${filterParams.length}`)
+      if (status === 'active') {
+        // 'active' en el frontend corresponde a 'en_curso' en la BD
+        conditions.push(`r.status IN ('active', 'en_curso')`)
+      } else if (status === 'completed') {
+        // 'completed' corresponde a 'completada' en la BD
+        conditions.push(`r.status IN ('completed', 'completada')`)
+      } else {
+        filterParams.push(status)
+        conditions.push(`r.status = $${filterParams.length}`)
+      }
     }
 
     const whereClause = conditions.length > 0
@@ -98,9 +107,9 @@ export async function GET(request: NextRequest) {
       ${whereClause}
       ORDER BY
         CASE
-          WHEN r.status = 'active' THEN 1
+          WHEN r.status IN ('active', 'en_curso') THEN 1
           WHEN r.status = 'pending' THEN 2
-          WHEN r.status = 'completed' THEN 3
+          WHEN r.status IN ('completed', 'completada') THEN 3
           ELSE 4
         END,
         r.date DESC,
