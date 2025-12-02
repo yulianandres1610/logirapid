@@ -114,7 +114,7 @@ export default function RecipientSearchStep({ wizardData, updateWizardData, setC
 
         // Si solo tiene una dirección, auto-seleccionarla
         if (addresses.length === 1) {
-          selectAddress(addresses[0])
+          selectAddress(addresses[0], customer)
         } else if (addresses.length > 1) {
           // Mostrar direcciones inline en el formulario
           // Actualizar wizardData para que la UI cambie al estado "seleccionado"
@@ -218,17 +218,26 @@ export default function RecipientSearchStep({ wizardData, updateWizardData, setC
     loadCustomerAddresses(customer)
   }
 
-  const selectAddress = (address: any) => {
+  const selectAddress = (address: any, customer?: any) => {
+    // Usar el customer pasado como parámetro o el selectedCustomer del estado
+    const customerToUse = customer || selectedCustomer
+    console.log('📍 [RecipientSearchStep] selectAddress called with:', { address, customer: customerToUse })
+
+    // Construir la dirección completa para el campo address legacy
+    const fullAddress = `${address.street}${address.apartment ? ', ' + address.apartment : ''}, ${address.city}, ${address.state} ${address.zipCode}, ${address.country || 'US'}`
+
     const recipientData = {
-      ...selectedCustomer,
+      ...customerToUse,
       street: address.street,
       apartment: address.apartment || '',
       city: address.city,
       state: address.state,
       zipCode: address.zipCode,
       country: address.country,
-      addressId: address.id
+      addressId: address.id,
+      address: fullAddress
     }
+    console.log('📍 [RecipientSearchStep] Final recipientData:', recipientData)
     setSelectedAddressId(address.id)
     updateWizardData('recipient', recipientData)
     setCanProceed(true)

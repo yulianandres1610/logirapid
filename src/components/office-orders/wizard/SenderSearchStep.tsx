@@ -362,6 +362,9 @@ export default function SenderSearchStep({ wizardData, updateWizardData, setCanP
       }
     }
 
+    // Construir la dirección completa para el campo address legacy
+    const fullAddressText = `${address.street}${address.apartment ? ', ' + address.apartment : ''}, ${address.city}, ${address.state} ${address.zipCode}, ${address.country || 'US'}`
+
     const senderData = {
       ...customerToUse,
       street: address.street,
@@ -371,6 +374,7 @@ export default function SenderSearchStep({ wizardData, updateWizardData, setCanP
       zipCode: address.zipCode,
       country: address.country,
       addressId: address.id,
+      address: fullAddressText,
       latitude,
       longitude
     }
@@ -863,6 +867,19 @@ export default function SenderSearchStep({ wizardData, updateWizardData, setCanP
                     </div>
                   )}
                 </div>
+                {/* Mostrar dirección del remitente */}
+                {(wizardData.sender.address || wizardData.sender.street) && (
+                  <div className="flex items-start gap-2 mt-3">
+                    <MapPin className="w-4 h-4 text-green-600 mt-0.5" />
+                    <span className={cn(
+                      "font-medium text-sm",
+                      theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
+                    )}>
+                      {wizardData.sender.address ||
+                       `${wizardData.sender.street}${wizardData.sender.apartment ? ', ' + wizardData.sender.apartment : ''}, ${wizardData.sender.city}, ${wizardData.sender.state} ${wizardData.sender.zipCode}`}
+                    </span>
+                  </div>
+                )}
               </div>
             </div>
             <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
