@@ -1155,7 +1155,8 @@ export default function CreatePackageOrderPage() {
           type: 'order_created',
           companyName: decodeURIComponent(companyName),
           orderNumber: createdOrder.orderNumber,
-          scheduledDate: createdOrder.scheduledDate || new Date().toISOString()
+          scheduledDate: createdOrder.scheduledDate || new Date().toISOString(),
+          timeSlot: createdOrder.timeSlot || null
         })
       })
 

@@ -129,12 +129,29 @@ export async function sendSMS(to: string, message: string): Promise<SMSResult> {
 }
 
 /**
+ * Convierte el codigo de timeSlot a texto legible
+ */
+function formatTimeSlot(timeSlot: string | null | undefined): string {
+  if (!timeSlot) return ''
+
+  const timeSlotMap: { [key: string]: string } = {
+    'morning': '8:00 AM - 12:00 PM',
+    'afternoon': '12:00 PM - 5:00 PM',
+    'evening': '5:00 PM - 8:00 PM',
+    'all_day': '8:00 AM - 8:00 PM'
+  }
+
+  return timeSlotMap[timeSlot] || timeSlot
+}
+
+/**
  * Genera el mensaje de confirmacion de orden creada
  */
 export function generateOrderCreatedMessage(
   companyName: string,
   orderNumber: string,
-  scheduledDate: string
+  scheduledDate: string,
+  timeSlot?: string | null
 ): string {
   // Formatear fecha en espanol
   let formattedDate = scheduledDate
@@ -150,7 +167,11 @@ export function generateOrderCreatedMessage(
     // Si falla el formateo, usar la fecha original
   }
 
-  return `Gracias por confiar en ${companyName}! Su numero de orden: ${orderNumber}. Un driver pasara por su casa el ${formattedDate}. Para ayuda: HELP | Cancelar SMS: STOP`
+  // Agregar horario si existe
+  const formattedTime = formatTimeSlot(timeSlot)
+  const timeInfo = formattedTime ? ` entre ${formattedTime}` : ''
+
+  return `Gracias por confiar en ${companyName}! Su numero de orden: ${orderNumber}. Un driver pasara por su casa el ${formattedDate}${timeInfo}. Para ayuda: HELP | Cancelar SMS: STOP`
 }
 
 /**
@@ -160,8 +181,9 @@ export async function sendOrderCreatedSMS(
   customerPhone: string,
   companyName: string,
   orderNumber: string,
-  scheduledDate: string
+  scheduledDate: string,
+  timeSlot?: string | null
 ): Promise<SMSResult> {
-  const message = generateOrderCreatedMessage(companyName, orderNumber, scheduledDate)
+  const message = generateOrderCreatedMessage(companyName, orderNumber, scheduledDate, timeSlot)
   return sendSMS(customerPhone, message)
 }

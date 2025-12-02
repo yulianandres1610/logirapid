@@ -20,6 +20,7 @@ export const runtime = 'nodejs'
  * - companyName: string
  * - orderNumber: string
  * - scheduledDate: string
+ * - timeSlot: string (opcional - 'morning', 'afternoon', 'evening', 'all_day')
  */
 export async function POST(request: NextRequest) {
   try {
@@ -48,7 +49,8 @@ export async function POST(request: NextRequest) {
         body.to,
         body.companyName,
         body.orderNumber,
-        body.scheduledDate
+        body.scheduledDate,
+        body.timeSlot || null
       )
     } else {
       // Mensaje genérico

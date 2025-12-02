@@ -406,6 +406,7 @@ export async function POST(request: NextRequest) {
         // Solo enviar SMS si hay telefono valido y fecha programada
         if (customerPhone && isValidPhoneNumber(customerPhone)) {
           const scheduledDate = newOrder.scheduleddate || new Date().toISOString()
+          const timeSlot = newOrder.timeslot || null
 
           console.log(`[SMS] Enviando SMS de confirmacion a ${customerPhone} para orden ${newOrder.ordernumber}`)
 
@@ -413,7 +414,8 @@ export async function POST(request: NextRequest) {
             customerPhone,
             companyName,
             newOrder.ordernumber,
-            scheduledDate
+            scheduledDate,
+            timeSlot
           )
 
           if (smsResult.success) {
