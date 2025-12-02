@@ -9,11 +9,11 @@ export const runtime = 'nodejs'
  * GET /api/driver-app/routes/[code]
  *
  * Obtiene el detalle completo de una ruta para la app móvil del driver.
- * Incluye: información de ruta, vehículo, almacén, paradas y órdenes.
+ * Devuelve respuesta simplificada sin objetos anidados para fácil consumo.
  *
  * @authentication Requiere cookie auth-token
  * @param code - Código de la ruta (routenumber)
- * @returns Detalle completo de la ruta con paradas y órdenes
+ * @returns Detalle de la ruta con paradas y órdenes (estructura plana)
  */
 export async function GET(
   request: NextRequest,
@@ -63,8 +63,8 @@ export async function GET(
 
     const route = routeQuery.rows[0]
 
-    // 2. Obtener información del almacén
-    let warehouse = null
+    // 2. Obtener información del almacén (simplificado)
+    let warehouse: { name: string; address: string; latitude: number; longitude: number } | null = null
     if (route.warehouseid) {
       const warehouseQuery = await db.query(
         `SELECT
@@ -84,13 +84,10 @@ export async function GET(
       if (warehouseQuery.rows.length > 0) {
         const w = warehouseQuery.rows[0]
         warehouse = {
-          id: w.id,
           name: w.name,
           address: `${w.address}, ${w.city}, ${w.state} ${w.zip_code}`,
-          coordinates: {
-            latitude: parseFloat(w.latitude) || 0,
-            longitude: parseFloat(w.longitude) || 0
-          }
+          latitude: parseFloat(w.latitude) || 0,
+          longitude: parseFloat(w.longitude) || 0
         }
       }
     }
@@ -139,9 +136,6 @@ export async function GET(
       zipcode: string
       latitude: number
       longitude: number
-      timeslot: string
-      services: string
-      proof_image_url: string
     }> = {}
 
     if (allOrderIds.length > 0) {
@@ -160,10 +154,7 @@ export async function GET(
           state,
           zipcode,
           latitude,
-          longitude,
-          timeslot,
-          services,
-          proof_image_url
+          longitude
         FROM package_orders
         WHERE id = ANY($1)`,
         [allOrderIds]
@@ -174,8 +165,8 @@ export async function GET(
       })
     }
 
-    // 6. Construir array de paradas con órdenes
-    const stops = stopsData.map((stop, index) => {
+    // 6. Construir array de paradas simplificadas
+    const stopsList = stopsData.map((stop, index) => {
       const stopOrders = (stop.orderIds || [])
         .map(orderId => ordersMap[orderId])
         .filter(Boolean)
@@ -202,7 +193,7 @@ export async function GET(
       // Usar status de la parada si está definido, sino calcular
       const finalStatus = stop.status || stopStatus
 
-      // Construir dirección
+      // Construir dirección completa como string
       const street = firstOrder?.street || ''
       const apartment = firstOrder?.apartment || ''
       const city = firstOrder?.city || ''
@@ -217,49 +208,23 @@ export async function GET(
       const fullAddress = addressParts.join(', ')
 
       // Coordenadas: usar de la parada si existe, sino de la primera orden
-      const latitude = stop.latitude || firstOrder?.latitude || 0
-      const longitude = stop.longitude || firstOrder?.longitude || 0
-
-      // Contar órdenes completadas
-      const completedOrders = stopOrders.filter(
-        o => o.status === 'delivered' || o.status === 'completed'
-      ).length
+      const latitude = parseFloat(String(stop.latitude || firstOrder?.latitude || 0)) || 0
+      const longitude = parseFloat(String(stop.longitude || firstOrder?.longitude || 0)) || 0
 
       return {
         stopNumber: stop.stopNumber || index + 1,
         status: finalStatus,
-        address: {
-          full: fullAddress,
-          street: street,
-          apartment: apartment || null,
-          city: city,
-          state: state,
-          zipcode: zipcode,
-          country: 'US'
-        },
-        zone: city && zipcode ? `${city} / ${zipcode}` : city || zipcode || 'Sin zona',
-        coordinates: {
-          latitude: parseFloat(String(latitude)) || 0,
-          longitude: parseFloat(String(longitude)) || 0
-        },
+        address: fullAddress,
+        latitude,
+        longitude,
         orders: stopOrders.map(order => {
-          // Parsear servicios
-          let services: Array<{ name: string; quantity: number }> = []
-          if (order.services) {
-            try {
-              const parsed = typeof order.services === 'string'
-                ? JSON.parse(order.services)
-                : order.services
-              if (Array.isArray(parsed)) {
-                services = parsed.map((s: { name?: string; type?: string; quantity?: number }) => ({
-                  name: s.name || s.type || 'Servicio',
-                  quantity: s.quantity || 1
-                }))
-              }
-            } catch {
-              services = []
-            }
-          }
+          // Construir dirección del cliente
+          const orderAddressParts = [order.street]
+          if (order.apartment) orderAddressParts.push(order.apartment)
+          if (order.city) orderAddressParts.push(order.city)
+          if (order.state) orderAddressParts.push(order.state)
+          if (order.zipcode) orderAddressParts.push(order.zipcode)
+          const orderAddress = orderAddressParts.join(', ')
 
           // Nombre del cliente
           const customerName = order.customername ||
@@ -272,65 +237,38 @@ export async function GET(
             orderNumber: order.ordernumber,
             status: order.status || 'pending',
             customerName,
-            customerPhone: order.phone || null,
-            services,
-            timeSlot: order.timeslot || null,
-            hasProof: !!order.proof_image_url
+            address: orderAddress
           }
-        }),
-        totalOrders: stopOrders.length,
-        completedOrders
+        })
       }
     })
 
     // 7. Calcular resumen
-    const totalStops = stops.length
-    const completedStops = stops.filter(s => s.status === 'completed').length
-    const pendingStops = stops.filter(s => s.status === 'pending' || s.status === 'in_progress').length
-    const failedStops = stops.filter(s => s.status === 'failed').length
-    const totalOrders = stops.reduce((sum, s) => sum + s.totalOrders, 0)
-    const completedOrders = stops.reduce((sum, s) => sum + s.completedOrders, 0)
-    const percentage = totalOrders > 0 ? Math.round((completedOrders / totalOrders) * 100) : 0
+    const totalStops = stopsList.length
+    const completedStops = stopsList.filter(s => s.status === 'completed').length
+    const totalOrders = stopsList.reduce((sum, s) => sum + s.orders.length, 0)
+    const completedOrders = stopsList.reduce((sum, s) =>
+      sum + s.orders.filter(o => o.status === 'delivered' || o.status === 'completed').length, 0
+    )
+    const progress = totalOrders > 0 ? Math.round((completedOrders / totalOrders) * 100) : 0
 
-    // 8. Formatear respuesta
+    // 8. Formatear respuesta simplificada (sin objetos anidados)
+    const distanceValue = parseFloat(route.distance) || 0
+
     const response = {
       success: true,
       data: {
-        route: {
-          id: route.id,
-          routeCode: route.routenumber,
-          status: route.status || 'pending',
-          date: route.date,
-          distance: {
-            value: parseFloat(route.distance) || 0,
-            unit: 'mi',
-            formatted: `${(parseFloat(route.distance) || 0).toFixed(1)} mi`
-          },
-          duration: {
-            value: route.estimatedduration || '0 min',
-            formatted: route.estimatedduration || '0 min'
-          },
-          vehicle: route.vehicleid ? {
-            id: route.vehicleid,
-            plate: route.vehicleplate || 'Sin placa',
-            type: null // Se podría obtener de la tabla vehicles si existe
-          } : null,
-          driver: route.driverid ? {
-            id: route.driverid,
-            name: route.drivername || 'Sin nombre'
-          } : null,
-          warehouse,
-          summary: {
-            totalStops,
-            completedStops,
-            pendingStops,
-            failedStops,
-            totalOrders,
-            completedOrders,
-            percentage
-          }
-        },
-        stops
+        id: route.id,
+        routeCode: route.routenumber,
+        status: route.status || 'pending',
+        date: route.date,
+        distance: `${distanceValue.toFixed(1)} mi`,
+        duration: route.estimatedduration || '0 min',
+        stops: totalStops,
+        completedStops,
+        progress,
+        warehouse,
+        stopsList
       }
     }
 

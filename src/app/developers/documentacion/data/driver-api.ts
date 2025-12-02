@@ -204,7 +204,7 @@ func getRoutes(status: String? = nil) async throws -> [RouteCard] {
     method: 'GET',
     path: '/api/driver-app/routes/{code}',
     title: 'Detalle de Ruta',
-    description: 'Obtiene el detalle completo de una ruta para la app móvil. Incluye información de la ruta, vehículo, almacén origen, lista de paradas con coordenadas para el mapa, y órdenes agrupadas por parada.',
+    description: 'Obtiene el detalle completo de una ruta para la app móvil. Respuesta simplificada sin objetos anidados. Incluye datos de ruta, almacén, paradas y órdenes con coordenadas para el mapa.',
     headers: [
       {
         name: 'Cookie',
@@ -228,82 +228,37 @@ func getRoutes(status: String? = nil) async throws -> [RouteCard] {
         body: `{
   "success": true,
   "data": {
-    "route": {
-      "id": 123,
-      "routeCode": "ROUTE-2024-001",
-      "status": "active",
-      "date": "2024-12-02",
-      "distance": {
-        "value": 45.5,
-        "unit": "mi",
-        "formatted": "45.5 mi"
-      },
-      "duration": {
-        "value": "2h 30min",
-        "formatted": "2h 30min"
-      },
-      "vehicle": {
-        "id": 5,
-        "plate": "ABC-123",
-        "type": null
-      },
-      "driver": {
-        "id": 10,
-        "name": "Juan Pérez"
-      },
-      "warehouse": {
-        "id": 1,
-        "name": "Almacén Principal",
-        "address": "123 Warehouse St, Miami, FL 33101",
-        "coordinates": {
-          "latitude": 25.7617,
-          "longitude": -80.1918
-        }
-      },
-      "summary": {
-        "totalStops": 15,
-        "completedStops": 8,
-        "pendingStops": 6,
-        "failedStops": 1,
-        "totalOrders": 22,
-        "completedOrders": 12,
-        "percentage": 53
-      }
+    "id": 21,
+    "routeCode": "RUT-2025-0021",
+    "status": "en_curso",
+    "date": "2025-12-02",
+    "distance": "22.7 mi",
+    "duration": "43 min",
+    "stops": 15,
+    "completedStops": 8,
+    "progress": 53,
+    "warehouse": {
+      "name": "Almacén Miami",
+      "address": "123 Warehouse St, Miami, FL 33101",
+      "latitude": 25.7617,
+      "longitude": -80.1918
     },
-    "stops": [
+    "stopsList": [
       {
         "stopNumber": 1,
         "status": "completed",
-        "address": {
-          "full": "456 Main St, Apt 2B, Miami, FL 33102",
-          "street": "456 Main St",
-          "apartment": "Apt 2B",
-          "city": "Miami",
-          "state": "FL",
-          "zipcode": "33102",
-          "country": "US"
-        },
-        "zone": "Miami / 33102",
-        "coordinates": {
-          "latitude": 25.7705,
-          "longitude": -80.1936
-        },
+        "address": "456 Main St, Apt 2B, Miami, FL 33102",
+        "latitude": 25.7705,
+        "longitude": -80.1936,
         "orders": [
           {
             "id": 1001,
             "orderNumber": "PICKUP-2024-001",
             "status": "delivered",
             "customerName": "María García",
-            "customerPhone": "+1234567890",
-            "services": [
-              { "name": "Envío Express", "quantity": 2 }
-            ],
-            "timeSlot": "morning",
-            "hasProof": true
+            "address": "456 Main St, Apt 2B, Miami, FL 33102"
           }
-        ],
-        "totalOrders": 2,
-        "completedOrders": 2
+        ]
       }
     ]
   }
@@ -330,13 +285,13 @@ func getRoutes(status: String? = nil) async throws -> [RouteCard] {
       {
         language: 'curl',
         label: 'cURL',
-        code: `curl -X GET 'https://logirapid.com/api/driver-app/routes/ROUTE-2024-001' \\
+        code: `curl -X GET 'https://logirapid.com/api/driver-app/routes/RUT-2025-0021' \\
   -H 'Cookie: auth-token=YOUR_TOKEN'`
       },
       {
         language: 'javascript',
         label: 'JavaScript',
-        code: `const response = await fetch('/api/driver-app/routes/ROUTE-2024-001', {
+        code: `const response = await fetch('/api/driver-app/routes/RUT-2025-0021', {
   method: 'GET',
   credentials: 'include'
 });
@@ -344,16 +299,23 @@ func getRoutes(status: String? = nil) async throws -> [RouteCard] {
 const data = await response.json();
 
 if (data.success) {
-  const { route, stops } = data.data;
+  const route = data.data;
 
   console.log(\`Ruta: \${route.routeCode}\`);
-  console.log(\`Almacén: \${route.warehouse.name}\`);
-  console.log(\`Paradas: \${route.summary.totalStops}\`);
+  console.log(\`Distancia: \${route.distance}\`);
+  console.log(\`Paradas: \${route.completedStops}/\${route.stops}\`);
+  console.log(\`Progreso: \${route.progress}%\`);
 
-  stops.forEach(stop => {
-    console.log(\`Parada \${stop.stopNumber}: \${stop.address.full}\`);
-    console.log(\`  Órdenes: \${stop.orders.length}\`);
-    console.log(\`  Coordenadas: \${stop.coordinates.latitude}, \${stop.coordinates.longitude}\`);
+  if (route.warehouse) {
+    console.log(\`Almacén: \${route.warehouse.name}\`);
+  }
+
+  route.stopsList.forEach(stop => {
+    console.log(\`Parada \${stop.stopNumber}: \${stop.address}\`);
+    console.log(\`  Coordenadas: \${stop.latitude}, \${stop.longitude}\`);
+    stop.orders.forEach(order => {
+      console.log(\`  - \${order.customerName}: \${order.address}\`);
+    });
   });
 }`
       },
@@ -375,25 +337,28 @@ if (data.success) {
   throw Exception(data['error']);
 }
 
-// Modelo
+// Modelo simplificado
 class RouteDetail {
-  final RouteInfo route;
-  final List<Stop> stops;
+  final int id;
+  final String routeCode;
+  final String status;
+  final String date;
+  final String distance;     // "22.7 mi"
+  final String duration;     // "43 min"
+  final int stops;
+  final int completedStops;
+  final int progress;
+  final Warehouse? warehouse;
+  final List<Stop> stopsList;
 
   // Para el mapa: obtener todas las coordenadas
   List<LatLng> get allCoordinates {
     final coords = <LatLng>[];
-    if (route.warehouse != null) {
-      coords.add(LatLng(
-        route.warehouse!.coordinates.latitude,
-        route.warehouse!.coordinates.longitude
-      ));
+    if (warehouse != null) {
+      coords.add(LatLng(warehouse!.latitude, warehouse!.longitude));
     }
-    for (final stop in stops) {
-      coords.add(LatLng(
-        stop.coordinates.latitude,
-        stop.coordinates.longitude
-      ));
+    for (final stop in stopsList) {
+      coords.add(LatLng(stop.latitude, stop.longitude));
     }
     return coords;
   }
@@ -402,20 +367,43 @@ class RouteDetail {
       {
         language: 'kotlin',
         label: 'Kotlin',
-        code: `data class RouteDetail(
-    val route: RouteInfo,
-    val stops: List<Stop>
+        code: `// Modelo simplificado - campos planos
+data class RouteDetail(
+    val id: Int,
+    val routeCode: String,
+    val status: String,
+    val date: String,
+    val distance: String,      // "22.7 mi"
+    val duration: String,      // "43 min"
+    val stops: Int,
+    val completedStops: Int,
+    val progress: Int,         // 0-100
+    val warehouse: Warehouse?,
+    val stopsList: List<Stop>
+)
+
+data class Warehouse(
+    val name: String,
+    val address: String,
+    val latitude: Double,
+    val longitude: Double
 )
 
 data class Stop(
     val stopNumber: Int,
     val status: String,
-    val address: Address,
-    val zone: String,
-    val coordinates: Coordinates,
-    val orders: List<Order>,
-    val totalOrders: Int,
-    val completedOrders: Int
+    val address: String,
+    val latitude: Double,
+    val longitude: Double,
+    val orders: List<Order>
+)
+
+data class Order(
+    val id: Int,
+    val orderNumber: String,
+    val status: String,
+    val customerName: String,
+    val address: String
 )
 
 interface DriverApi {
@@ -427,30 +415,53 @@ interface DriverApi {
 }
 
 // Uso para mostrar en mapa
-val detail = driverApi.getRouteDetail("auth-token=\$token", "ROUTE-2024-001")
-val markers = detail.data.stops.map { stop ->
+val detail = driverApi.getRouteDetail("auth-token=\$token", "RUT-2025-0021")
+val markers = detail.data.stopsList.map { stop ->
     MarkerOptions()
-        .position(LatLng(stop.coordinates.latitude, stop.coordinates.longitude))
+        .position(LatLng(stop.latitude, stop.longitude))
         .title("Parada \${stop.stopNumber}")
 }`
       },
       {
         language: 'swift',
         label: 'Swift',
-        code: `struct RouteDetail: Codable {
-    let route: RouteInfo
-    let stops: [Stop]
+        code: `// Modelo simplificado - campos planos
+struct RouteDetail: Codable {
+    let id: Int
+    let routeCode: String
+    let status: String
+    let date: String
+    let distance: String      // "22.7 mi"
+    let duration: String      // "43 min"
+    let stops: Int
+    let completedStops: Int
+    let progress: Int         // 0-100
+    let warehouse: Warehouse?
+    let stopsList: [Stop]
+}
+
+struct Warehouse: Codable {
+    let name: String
+    let address: String
+    let latitude: Double
+    let longitude: Double
 }
 
 struct Stop: Codable {
     let stopNumber: Int
     let status: String
-    let address: Address
-    let zone: String
-    let coordinates: Coordinates
+    let address: String
+    let latitude: Double
+    let longitude: Double
     let orders: [Order]
-    let totalOrders: Int
-    let completedOrders: Int
+}
+
+struct Order: Codable {
+    let id: Int
+    let orderNumber: String
+    let status: String
+    let customerName: String
+    let address: String
 }
 
 func getRouteDetail(routeCode: String) async throws -> RouteDetail {
@@ -468,14 +479,14 @@ func getRouteDetail(routeCode: String) async throws -> RouteDetail {
 
 // Para MapKit
 func createAnnotations(from detail: RouteDetail) -> [MKPointAnnotation] {
-    detail.stops.map { stop in
+    detail.stopsList.map { stop in
         let annotation = MKPointAnnotation()
         annotation.coordinate = CLLocationCoordinate2D(
-            latitude: stop.coordinates.latitude,
-            longitude: stop.coordinates.longitude
+            latitude: stop.latitude,
+            longitude: stop.longitude
         )
         annotation.title = "Parada \\(stop.stopNumber)"
-        annotation.subtitle = stop.address.full
+        annotation.subtitle = stop.address
         return annotation
     }
 }`
