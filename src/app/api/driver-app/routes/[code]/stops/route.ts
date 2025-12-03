@@ -5,6 +5,186 @@ import { db } from '@/lib/database'
 export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
 
+// Interfaz para servicios normalizados
+interface NormalizedService {
+  id: number | string
+  serviceCode: string
+  serviceName: string
+  serviceType: string
+  quantity: number
+  price: number
+  weight: number | null
+  dimensions: {
+    length: number | null
+    width: number | null
+    height: number | null
+    unit: string
+  } | null
+  boxNumbers: string[]
+  requiresWeight: boolean
+  requiresDimensions: boolean
+  requiresBoxNumber: boolean
+  addedAt: string | null
+}
+
+// Mapa de tipos de servicio y sus requisitos
+const serviceTypeConfig: Record<string, { requiresWeight: boolean; requiresDimensions: boolean; requiresBoxNumber: boolean }> = {
+  'entrega_caja': { requiresWeight: true, requiresDimensions: true, requiresBoxNumber: true },
+  'recogida_caja': { requiresWeight: true, requiresDimensions: true, requiresBoxNumber: true },
+  'delivery_box': { requiresWeight: true, requiresDimensions: true, requiresBoxNumber: true },
+  'pickup_box': { requiresWeight: true, requiresDimensions: true, requiresBoxNumber: true },
+  'envio_aereo': { requiresWeight: true, requiresDimensions: false, requiresBoxNumber: true },
+  'envio_maritimo': { requiresWeight: true, requiresDimensions: true, requiresBoxNumber: true },
+  'seguro': { requiresWeight: false, requiresDimensions: false, requiresBoxNumber: false },
+  'embalaje': { requiresWeight: false, requiresDimensions: false, requiresBoxNumber: false },
+  'default': { requiresWeight: false, requiresDimensions: false, requiresBoxNumber: false }
+}
+
+// Funcion para extraer dimensiones del nombre del servicio
+function extractDimensionsFromName(serviceName: string): { length: number; width: number; height: number } | null {
+  // Buscar patrones como "15x15x15", "12x12x12", etc.
+  const match = serviceName.match(/(\d+)x(\d+)x(\d+)/i)
+  if (match) {
+    return {
+      length: parseInt(match[1]),
+      width: parseInt(match[2]),
+      height: parseInt(match[3])
+    }
+  }
+  return null
+}
+
+// Funcion para determinar el tipo de servicio desde el nombre
+function getServiceTypeFromName(serviceName: string): string {
+  const nameLower = serviceName.toLowerCase()
+  if (nameLower.includes('entrega') && (nameLower.includes('caja') || nameLower.includes('box'))) {
+    return 'entrega_caja'
+  }
+  if (nameLower.includes('recogida') && (nameLower.includes('caja') || nameLower.includes('box'))) {
+    return 'recogida_caja'
+  }
+  if (nameLower.includes('pickup') && (nameLower.includes('caja') || nameLower.includes('box'))) {
+    return 'pickup_box'
+  }
+  if (nameLower.includes('delivery') && (nameLower.includes('caja') || nameLower.includes('box'))) {
+    return 'delivery_box'
+  }
+  if (nameLower.includes('aereo') || nameLower.includes('air')) {
+    return 'envio_aereo'
+  }
+  if (nameLower.includes('maritimo') || nameLower.includes('sea')) {
+    return 'envio_maritimo'
+  }
+  if (nameLower.includes('seguro') || nameLower.includes('insurance')) {
+    return 'seguro'
+  }
+  if (nameLower.includes('embalaje') || nameLower.includes('packaging')) {
+    return 'embalaje'
+  }
+  return 'default'
+}
+
+// Funcion para generar codigo de servicio
+function generateServiceCode(serviceName: string, index: number): string {
+  const nameParts = serviceName.split(' ')
+  const prefix = nameParts.slice(0, 2).map(p => p.charAt(0).toUpperCase()).join('')
+  return `${prefix}-${String(index + 1).padStart(3, '0')}`
+}
+
+// Funcion para normalizar servicios
+function normalizeServices(services: unknown): NormalizedService[] {
+  if (!services) return []
+
+  let servicesArray: unknown[] = []
+  try {
+    servicesArray = typeof services === 'string' ? JSON.parse(services) : services
+    if (!Array.isArray(servicesArray)) return []
+  } catch {
+    return []
+  }
+
+  return servicesArray.map((service, index) => {
+    // Si es un string simple
+    if (typeof service === 'string') {
+      const serviceType = getServiceTypeFromName(service)
+      const config = serviceTypeConfig[serviceType] || serviceTypeConfig['default']
+      const dimensions = extractDimensionsFromName(service)
+
+      return {
+        id: `SRV-${Date.now()}-${index}`,
+        serviceCode: generateServiceCode(service, index),
+        serviceName: service,
+        serviceType: serviceType,
+        quantity: 1,
+        price: 0,
+        weight: null,
+        dimensions: dimensions ? { ...dimensions, unit: 'in' } : null,
+        boxNumbers: [],
+        requiresWeight: config.requiresWeight,
+        requiresDimensions: config.requiresDimensions,
+        requiresBoxNumber: config.requiresBoxNumber,
+        addedAt: null
+      }
+    }
+
+    // Si es un objeto con propiedades
+    const svc = service as Record<string, unknown>
+    const serviceName = (svc.name || svc.serviceName || 'Servicio') as string
+    const serviceType = (svc.type || svc.serviceType || getServiceTypeFromName(serviceName)) as string
+    const config = serviceTypeConfig[serviceType] || serviceTypeConfig['default']
+
+    // Extraer dimensiones del objeto o del nombre
+    let dimensions: { length: number | null; width: number | null; height: number | null; unit: string } | null = null
+    if (svc.dimensions && typeof svc.dimensions === 'object') {
+      const dims = svc.dimensions as Record<string, unknown>
+      dimensions = {
+        length: dims.length as number | null || null,
+        width: dims.width as number | null || null,
+        height: dims.height as number | null || null,
+        unit: (dims.unit as string) || 'in'
+      }
+    } else if (svc.length || svc.width || svc.height) {
+      dimensions = {
+        length: svc.length as number | null || null,
+        width: svc.width as number | null || null,
+        height: svc.height as number | null || null,
+        unit: 'in'
+      }
+    } else {
+      const extractedDims = extractDimensionsFromName(serviceName)
+      if (extractedDims) {
+        dimensions = { ...extractedDims, unit: 'in' }
+      }
+    }
+
+    // Box numbers puede venir como array o string
+    let boxNumbers: string[] = []
+    if (svc.boxNumbers) {
+      boxNumbers = Array.isArray(svc.boxNumbers)
+        ? svc.boxNumbers as string[]
+        : [svc.boxNumbers as string]
+    } else if (svc.boxNumber) {
+      boxNumbers = [svc.boxNumber as string]
+    }
+
+    return {
+      id: (svc.id as number | string) || `SRV-${Date.now()}-${index}`,
+      serviceCode: (svc.code || svc.serviceCode || generateServiceCode(serviceName, index)) as string,
+      serviceName: serviceName,
+      serviceType: serviceType,
+      quantity: (svc.quantity as number) || 1,
+      price: (svc.price as number) || 0,
+      weight: (svc.weight as number) || null,
+      dimensions: dimensions,
+      boxNumbers: boxNumbers,
+      requiresWeight: config.requiresWeight,
+      requiresDimensions: config.requiresDimensions,
+      requiresBoxNumber: config.requiresBoxNumber,
+      addedAt: (svc.addedAt as string) || null
+    }
+  })
+}
+
 /**
  * GET /api/driver-app/routes/[code]/stops
  *
@@ -279,17 +459,8 @@ export async function GET(
           }
         }
 
-        // Parsear services si es JSON
-        let servicesData = null
-        if (order.services) {
-          try {
-            servicesData = typeof order.services === 'string'
-              ? JSON.parse(order.services)
-              : order.services
-          } catch {
-            servicesData = null
-          }
-        }
+        // Normalizar servicios con toda la informacion necesaria
+        const servicesData = normalizeServices(order.services)
 
         // Formatear timeSlot
         const timeSlotMap: { [key: string]: string } = {
@@ -299,6 +470,12 @@ export async function GET(
           'all_day': '8:00 AM - 8:00 PM'
         }
         const timeSlotFormatted = timeSlotMap[order.timeslot] || order.timeslot || ''
+
+        // Calcular resumen de servicios
+        const servicesRequiringBoxNumber = servicesData.filter(s => s.requiresBoxNumber)
+        const totalServiceQuantity = servicesData.reduce((sum, s) => sum + s.quantity, 0)
+        const totalServicesPrice = servicesData.reduce((sum, s) => sum + (s.price * s.quantity), 0)
+        const pendingBoxAssignments = servicesRequiringBoxNumber.filter(s => s.boxNumbers.length === 0).length
 
         return {
           id: order.id,
@@ -337,6 +514,14 @@ export async function GET(
           total: parseFloat(order.totalamount) || 0,
           paymentMethod: order.paymentmethod || '',
           services: servicesData,
+          servicesSummary: {
+            totalServices: servicesData.length,
+            totalQuantity: totalServiceQuantity,
+            totalPrice: Math.round(totalServicesPrice * 100) / 100,
+            servicesRequiringBoxNumber: servicesRequiringBoxNumber.length,
+            pendingBoxAssignments: pendingBoxAssignments,
+            hasAllBoxesAssigned: pendingBoxAssignments === 0
+          },
           createdAt: order.createdat
         }
       })

@@ -583,8 +583,50 @@ func createAnnotations(from detail: RouteDetail) -> [MKPointAnnotation] {
             "total": 53.50,
             "paymentMethod": "card",
             "services": [
-              {"name": "Envío estándar", "price": 25.00, "quantity": 1}
+              {
+                "id": "SRV-1733100000-0",
+                "serviceCode": "EC-001",
+                "serviceName": "Entrega de Cajas 15x15x15",
+                "serviceType": "entrega_caja",
+                "quantity": 2,
+                "price": 25.00,
+                "weight": 5.5,
+                "dimensions": {
+                  "length": 15,
+                  "width": 15,
+                  "height": 15,
+                  "unit": "in"
+                },
+                "boxNumbers": ["BOX-001", "BOX-002"],
+                "requiresWeight": true,
+                "requiresDimensions": true,
+                "requiresBoxNumber": true,
+                "addedAt": "2025-12-01T10:00:00Z"
+              },
+              {
+                "id": "SRV-1733100000-1",
+                "serviceCode": "SE-002",
+                "serviceName": "Seguro Premium",
+                "serviceType": "seguro",
+                "quantity": 1,
+                "price": 10.00,
+                "weight": null,
+                "dimensions": null,
+                "boxNumbers": [],
+                "requiresWeight": false,
+                "requiresDimensions": false,
+                "requiresBoxNumber": false,
+                "addedAt": null
+              }
             ],
+            "servicesSummary": {
+              "totalServices": 2,
+              "totalQuantity": 3,
+              "totalPrice": 60.00,
+              "servicesRequiringBoxNumber": 1,
+              "pendingBoxAssignments": 0,
+              "hasAllBoxesAssigned": true
+            },
             "createdAt": "2025-12-01T14:30:00Z"
           }
         ]
@@ -636,7 +678,36 @@ func createAnnotations(from detail: RouteDetail) -> [MKPointAnnotation] {
             "tax": 7.00,
             "total": 72.00,
             "paymentMethod": "cash",
-            "services": null,
+            "services": [
+              {
+                "id": "SRV-1733100000-0",
+                "serviceCode": "RC-001",
+                "serviceName": "Recogida de Caja 15x15x15",
+                "serviceType": "recogida_caja",
+                "quantity": 2,
+                "price": 0,
+                "weight": null,
+                "dimensions": {
+                  "length": 15,
+                  "width": 15,
+                  "height": 15,
+                  "unit": "in"
+                },
+                "boxNumbers": [],
+                "requiresWeight": true,
+                "requiresDimensions": true,
+                "requiresBoxNumber": true,
+                "addedAt": null
+              }
+            ],
+            "servicesSummary": {
+              "totalServices": 1,
+              "totalQuantity": 2,
+              "totalPrice": 0,
+              "servicesRequiringBoxNumber": 1,
+              "pendingBoxAssignments": 1,
+              "hasAllBoxesAssigned": false
+            },
             "createdAt": "2025-12-01T15:00:00Z"
           }
         ]
@@ -756,6 +827,39 @@ class StopDetail {
   final List<OrderDetail> orders;
 }
 
+// Modelo de servicio normalizado
+class NormalizedService {
+  final String id;
+  final String serviceCode;
+  final String serviceName;
+  final String serviceType;
+  final int quantity;
+  final double price;
+  final double? weight;
+  final ServiceDimensions? dimensions;
+  final List<String> boxNumbers;
+  final bool requiresWeight;
+  final bool requiresDimensions;
+  final bool requiresBoxNumber;
+  final String? addedAt;
+}
+
+class ServiceDimensions {
+  final int? length;
+  final int? width;
+  final int? height;
+  final String unit;
+}
+
+class ServicesSummary {
+  final int totalServices;
+  final int totalQuantity;
+  final double totalPrice;
+  final int servicesRequiringBoxNumber;
+  final int pendingBoxAssignments;
+  final bool hasAllBoxesAssigned;
+}
+
 // Modelo completo de orden
 class OrderDetail {
   final int id;
@@ -793,8 +897,16 @@ class OrderDetail {
   final double tax;
   final double total;
   final String paymentMethod;
-  final List<dynamic>? services;
+  final List<NormalizedService> services;
+  final ServicesSummary servicesSummary;
   final String createdAt;
+
+  // Verificar si necesita asignar numeros de caja
+  bool get needsBoxAssignment => !servicesSummary.hasAllBoxesAssigned;
+
+  // Obtener servicios que requieren numero de caja
+  List<NormalizedService> get servicesNeedingBoxNumber =>
+    services.where((s) => s.requiresBoxNumber && s.boxNumbers.isEmpty).toList();
 }`
       },
       {
@@ -830,6 +942,39 @@ data class StopDetail(
     val totalBoxes: Int,
     val totalAmount: Double,
     val orders: List<OrderDetail>
+)
+
+// Modelo de servicio normalizado
+data class NormalizedService(
+    val id: String,
+    val serviceCode: String,
+    val serviceName: String,
+    val serviceType: String,
+    val quantity: Int,
+    val price: Double,
+    val weight: Double?,
+    val dimensions: ServiceDimensions?,
+    val boxNumbers: List<String>,
+    val requiresWeight: Boolean,
+    val requiresDimensions: Boolean,
+    val requiresBoxNumber: Boolean,
+    val addedAt: String?
+)
+
+data class ServiceDimensions(
+    val length: Int?,
+    val width: Int?,
+    val height: Int?,
+    val unit: String
+)
+
+data class ServicesSummary(
+    val totalServices: Int,
+    val totalQuantity: Int,
+    val totalPrice: Double,
+    val servicesRequiringBoxNumber: Int,
+    val pendingBoxAssignments: Int,
+    val hasAllBoxesAssigned: Boolean
 )
 
 data class OrderDetail(
@@ -868,9 +1013,18 @@ data class OrderDetail(
     val tax: Double,
     val total: Double,
     val paymentMethod: String,
-    val services: List<Any>?,
+    val services: List<NormalizedService>,
+    val servicesSummary: ServicesSummary,
     val createdAt: String
-)
+) {
+    // Verificar si necesita asignar numeros de caja
+    val needsBoxAssignment: Boolean
+        get() = !servicesSummary.hasAllBoxesAssigned
+
+    // Obtener servicios que requieren numero de caja
+    fun getServicesNeedingBoxNumber(): List<NormalizedService> =
+        services.filter { it.requiresBoxNumber && it.boxNumbers.isEmpty() }
+}
 
 interface DriverApi {
     @GET("api/driver-app/routes/{code}/stops")
@@ -932,6 +1086,39 @@ struct StopDetail: Codable {
     let orders: [OrderDetail]
 }
 
+// Modelo de servicio normalizado
+struct NormalizedService: Codable {
+    let id: String
+    let serviceCode: String
+    let serviceName: String
+    let serviceType: String
+    let quantity: Int
+    let price: Double
+    let weight: Double?
+    let dimensions: ServiceDimensions?
+    let boxNumbers: [String]
+    let requiresWeight: Bool
+    let requiresDimensions: Bool
+    let requiresBoxNumber: Bool
+    let addedAt: String?
+}
+
+struct ServiceDimensions: Codable {
+    let length: Int?
+    let width: Int?
+    let height: Int?
+    let unit: String
+}
+
+struct ServicesSummary: Codable {
+    let totalServices: Int
+    let totalQuantity: Int
+    let totalPrice: Double
+    let servicesRequiringBoxNumber: Int
+    let pendingBoxAssignments: Int
+    let hasAllBoxesAssigned: Bool
+}
+
 struct OrderDetail: Codable {
     let id: Int
     let orderNumber: String
@@ -957,7 +1144,7 @@ struct OrderDetail: Codable {
     let customerNotes: String
     let internalNotes: String
     let boxCount: Int
-    let boxes: [Any]?
+    let boxes: [AnyCodable]?
     let boxesDelivered: Int
     let boxesReturned: Int
     let pendingReturn: Bool
@@ -968,8 +1155,19 @@ struct OrderDetail: Codable {
     let tax: Double
     let total: Double
     let paymentMethod: String
-    let services: [Any]?
+    let services: [NormalizedService]
+    let servicesSummary: ServicesSummary
     let createdAt: String
+
+    // Verificar si necesita asignar numeros de caja
+    var needsBoxAssignment: Bool {
+        return !servicesSummary.hasAllBoxesAssigned
+    }
+
+    // Obtener servicios que requieren numero de caja
+    var servicesNeedingBoxNumber: [NormalizedService] {
+        return services.filter { $0.requiresBoxNumber && $0.boxNumbers.isEmpty }
+    }
 }
 
 func getRouteStops(routeCode: String) async throws -> RouteStopsResponse {
