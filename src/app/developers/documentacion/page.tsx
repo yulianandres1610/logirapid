@@ -13,7 +13,10 @@ import {
   Shield,
   Terminal,
   AlertTriangle,
-  Info
+  Info,
+  Palette,
+  MapPin,
+  Layers
 } from 'lucide-react'
 import CodeBlock from './components/CodeBlock'
 import ParameterTable from './components/ParameterTable'
@@ -30,6 +33,7 @@ import {
 import { trackerEndpoints, searchTypePatterns } from './data/tracker-api'
 import { paqueteriaEndpoints, orderTypes, orderStatuses } from './data/paqueteria-api'
 import { driverEndpoints, empaqueStates } from './data/driver-api'
+import { componentSections, zoneColors } from './data/components-data'
 
 const methodColors: Record<string, string> = {
   GET: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30',
@@ -884,6 +888,71 @@ export default function DevelopersDocsPage() {
                 </table>
               </div>
             </section>
+
+            {/* Components UI Section */}
+            {componentSections.map((section) => (
+              <section key={section.id} data-section={section.id} className="mb-16">
+                <h2 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
+                  <Palette className="h-5 w-5 text-gray-400" />
+                  {section.title}
+                </h2>
+                <p className="text-gray-400 mb-6">{section.description}</p>
+
+                {/* Zone Colors Reference */}
+                <div className="mb-8">
+                  <h3 className="text-lg font-semibold text-white mb-3">Colores de Zona Disponibles</h3>
+                  <div className="flex flex-wrap gap-2">
+                    {zoneColors.map((color) => (
+                      <div key={color.hex} className="flex items-center gap-2 px-3 py-2 rounded-lg bg-white/5 border border-white/10">
+                        <div
+                          className="w-4 h-4 rounded-full border border-white/20"
+                          style={{ backgroundColor: color.hex }}
+                        />
+                        <span className="text-sm text-gray-300">{color.name}</span>
+                        <code className="text-xs text-gray-500">{color.hex}</code>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Components */}
+                {section.components.map((component) => (
+                  <section
+                    key={component.id}
+                    data-section={component.id}
+                    className="mb-12 scroll-mt-24"
+                  >
+                    <div className="lg:grid lg:grid-cols-2 lg:gap-8">
+                      {/* Left Column - Description */}
+                      <div>
+                        <div className="flex items-center gap-3 mb-4">
+                          <MapPin className="h-5 w-5 text-[#cc0a46]" />
+                          <h3 className="text-lg font-semibold text-white">{component.title}</h3>
+                        </div>
+
+                        <p className="text-gray-400 mb-6">{component.description}</p>
+
+                        {/* Preview */}
+                        <div className="mb-6">
+                          <h4 className="text-sm font-semibold text-white mb-3">Vista Previa (ASCII)</h4>
+                          <pre className="p-4 text-xs text-gray-300 font-mono overflow-x-auto bg-[#1a1f2e] rounded-lg border border-white/10 whitespace-pre">
+                            {component.preview}
+                          </pre>
+                        </div>
+                      </div>
+
+                      {/* Right Column - Code Examples */}
+                      <div className="mt-8 lg:mt-0 lg:sticky lg:top-24 lg:self-start">
+                        <CodeBlock
+                          examples={component.examples}
+                          title="Implementacion"
+                        />
+                      </div>
+                    </div>
+                  </section>
+                ))}
+              </section>
+            ))}
 
             {/* Webhooks - Coming Soon */}
             <section data-section="webhooks" className="mb-16">

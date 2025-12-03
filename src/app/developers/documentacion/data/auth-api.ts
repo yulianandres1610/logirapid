@@ -108,6 +108,24 @@ export const navigationItems = [
     ]
   },
   {
+    id: 'driver-routes-stops-section',
+    label: 'Driver - Paradas',
+    badge: 'available' as const,
+    children: [
+      { id: 'driver-route-stops', label: 'GET /routes/{code}/stops' },
+    ]
+  },
+  {
+    id: 'components',
+    label: 'Componentes UI',
+    badge: 'available' as const,
+    children: [
+      { id: 'warehouse-marker', label: 'Marcador de Almacen' },
+      { id: 'stop-marker', label: 'Marcador de Parada' },
+      { id: 'stop-marker-multi', label: 'Marcador Multiple' },
+    ]
+  },
+  {
     id: 'webhooks',
     label: 'Webhooks',
     badge: 'coming_soon' as const,
