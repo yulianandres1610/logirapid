@@ -327,6 +327,8 @@ export async function GET(
       taxamount: string
       totalamount: string
       paymentmethod: string
+      payment_status: string
+      paid_amount: string
       services: string
       servicepackages: string
       createdat: string
@@ -370,6 +372,8 @@ export async function GET(
           taxamount,
           totalamount,
           paymentmethod,
+          payment_status,
+          paid_amount,
           services,
           servicepackages,
           createdat
@@ -513,6 +517,10 @@ export async function GET(
           tax: parseFloat(order.taxamount) || 0,
           total: parseFloat(order.totalamount) || 0,
           paymentMethod: order.paymentmethod || '',
+          paymentStatus: order.payment_status || 'pending_payment',
+          paidAmount: parseFloat(order.paid_amount) || 0,
+          remainingAmount: Math.max(0, (parseFloat(order.totalamount) || 0) - (parseFloat(order.paid_amount) || 0)),
+          requiresPayment: order.paymentmethod === 'cod' && order.payment_status !== 'paid',
           services: servicesData,
           servicesSummary: {
             totalServices: servicesData.length,

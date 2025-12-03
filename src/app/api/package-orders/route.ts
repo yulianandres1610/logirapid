@@ -135,6 +135,9 @@ export async function GET(request: NextRequest) {
         po.company_id as "companyId",
         c.legalname as "companyName",
         po.createdat as "createdAt",
+        po.payment_status as "paymentStatus",
+        po.paid_amount as "paidAmount",
+        po.paymentmethod as "paymentMethod",
         COUNT(*) OVER() as total_count
       FROM package_orders po
       LEFT JOIN companies c ON po.company_id = c.id
@@ -151,7 +154,9 @@ export async function GET(request: NextRequest) {
       ...row,
       latitude: row.latitude ? parseFloat(row.latitude) : null,
       longitude: row.longitude ? parseFloat(row.longitude) : null,
-      totalAmount: row.totalAmount ? parseFloat(row.totalAmount) : null
+      totalAmount: row.totalAmount ? parseFloat(row.totalAmount) : null,
+      paidAmount: row.paidAmount ? parseFloat(row.paidAmount) : 0,
+      paymentStatus: row.paymentStatus || 'pending_payment'
     }))
 
     return NextResponse.json({
@@ -294,6 +299,10 @@ export async function POST(request: NextRequest) {
     // Determine initial status based on order type
     const initialStatus = body.status || (orderType === 'oficina' ? 'picked_up' : 'pending')
 
+    // Determine payment status based on payment method
+    const paymentMethod = body.paymentMethod || 'cod'
+    const paymentStatus = paymentMethod === 'cod' ? 'pending_payment' : 'pending_payment'
+
     const insertQuery = `
       INSERT INTO package_orders (
         customerid, customername, customeraddress, ordernumber, services,
@@ -302,7 +311,7 @@ export async function POST(request: NextRequest) {
         boxcount, boxprice, additionalservices, boxes,
         firstname, lastname, order_type, office_order_data,
         zipcode, street, apartment, city, state, country,
-        company_id,
+        company_id, paymentmethod, payment_status,
         createdat, updatedat
       ) VALUES (
         $1, $2, $3, $4, $5,
@@ -311,7 +320,7 @@ export async function POST(request: NextRequest) {
         $16, $17, $18, $19,
         $20, $21, $22, $23,
         $24, $25, $26, $27, $28, $29,
-        $30,
+        $30, $31, $32,
         NOW(), NOW()
       )
       RETURNING *
@@ -350,7 +359,9 @@ export async function POST(request: NextRequest) {
       emptyToNull(body.city),
       emptyToNull(body.state),
       emptyToNull(body.country),
-      companyId
+      companyId,
+      paymentMethod,
+      paymentStatus
     ]
 
     const result = await db.query(insertQuery, values)
@@ -381,7 +392,9 @@ export async function POST(request: NextRequest) {
       firstName: newOrder.firstname,
       lastName: newOrder.lastname,
       createdAt: newOrder.createdat,
-      updatedAt: newOrder.updatedat
+      updatedAt: newOrder.updatedat,
+      paymentMethod: newOrder.paymentmethod,
+      paymentStatus: newOrder.payment_status
     }
 
     // ================================================

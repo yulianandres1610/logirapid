@@ -1,6 +1,7 @@
 import { motion } from 'framer-motion'
-import { Store, AlertCircle, CheckCircle, Package, Truck, Eye, Edit, Trash2 } from 'lucide-react'
+import { Store, AlertCircle, CheckCircle, Package, Truck, Eye, Edit, Trash2, DollarSign, Clock } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import PaymentStatusBadge from './PaymentStatusBadge'
 
 // Helper para obtener el nombre del servicio (puede ser string u objeto)
 const getServiceName = (service: any): string => {
@@ -34,6 +35,9 @@ interface PackageOrder {
   orderType?: 'recogida' | 'oficina'
   latitude?: number | null
   longitude?: number | null
+  paymentMethod?: string
+  paymentStatus?: string
+  paidAmount?: number
 }
 
 interface OrdersTableBodyProps {
@@ -312,6 +316,26 @@ export default function OrdersTableBody({
                         </span>
                       )
                     })}
+                  </div>
+                </td>
+
+                {/* Pago */}
+                <td className="px-4 py-4 whitespace-nowrap">
+                  <div className="flex flex-col gap-1">
+                    <PaymentStatusBadge
+                      status={order.paymentStatus || 'pending_payment'}
+                      size="sm"
+                    />
+                    {order.total && order.total > 0 && (
+                      <div className="text-xs text-gray-500 dark:text-gray-400">
+                        ${order.total.toFixed(2)}
+                        {order.paymentStatus === 'partial' && order.paidAmount && (
+                          <span className="text-green-600 dark:text-green-400 ml-1">
+                            (${order.paidAmount.toFixed(2)} pagado)
+                          </span>
+                        )}
+                      </div>
+                    )}
                   </div>
                 </td>
 

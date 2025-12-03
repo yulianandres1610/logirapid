@@ -1212,6 +1212,262 @@ struct StopsListView: View {
   },
 
   // ==========================================
+  // PAGOS
+  // ==========================================
+  {
+    id: 'driver-confirm-payment',
+    method: 'POST',
+    path: '/api/driver-app/orders/{id}/confirm-payment',
+    title: 'Confirmar Pago COD',
+    description: 'Permite al driver confirmar el pago Cash on Delivery (COD) al momento de la entrega. Solo funciona para órdenes con método de pago COD y estado de pago pendiente. Registra el pago y actualiza el estado de la orden.',
+    headers: [
+      {
+        name: 'Cookie',
+        type: 'string',
+        required: true,
+        description: 'Token de autenticación: auth-token=<token>'
+      }
+    ],
+    pathParams: [
+      {
+        name: 'id',
+        type: 'number',
+        required: true,
+        description: 'ID de la orden'
+      }
+    ],
+    requestBody: [
+      {
+        name: 'amount',
+        type: 'number',
+        required: false,
+        description: 'Monto del pago. Si no se especifica, se usa el total de la orden.'
+      },
+      {
+        name: 'cashReceived',
+        type: 'number',
+        required: false,
+        description: 'Efectivo recibido del cliente (para calcular cambio)'
+      },
+      {
+        name: 'notes',
+        type: 'string',
+        required: false,
+        description: 'Notas adicionales sobre el pago'
+      }
+    ],
+    responses: [
+      {
+        status: 200,
+        description: 'Pago confirmado exitosamente',
+        body: `{
+  "success": true,
+  "message": "Pago COD confirmado exitosamente",
+  "data": {
+    "orderId": 1001,
+    "orderNumber": "PICKUP-2024-001",
+    "paymentStatus": "paid",
+    "amountPaid": 72.00,
+    "totalPaid": 72.00,
+    "totalAmount": 72.00,
+    "remainingAmount": 0,
+    "changeAmount": 8.00,
+    "confirmedBy": "driver@example.com",
+    "confirmedAt": "2025-12-02T14:30:00Z"
+  }
+}`
+      },
+      {
+        status: 400,
+        description: 'Orden no es COD o ya está pagada',
+        body: `{
+  "success": false,
+  "error": "Esta orden no es Cash on Delivery (COD)"
+}`
+      },
+      {
+        status: 401,
+        description: 'No autenticado',
+        body: `{
+  "success": false,
+  "error": "No autorizado - token invalido"
+}`
+      },
+      {
+        status: 404,
+        description: 'Orden no encontrada',
+        body: `{
+  "success": false,
+  "error": "Orden no encontrada"
+}`
+      }
+    ],
+    examples: [
+      {
+        language: 'curl',
+        label: 'cURL',
+        code: `curl -X POST 'https://logirapid.com/api/driver-app/orders/1001/confirm-payment' \\
+  -H 'Cookie: auth-token=YOUR_TOKEN' \\
+  -H 'Content-Type: application/json' \\
+  -d '{
+    "cashReceived": 80.00,
+    "notes": "Cliente pagó con billete de $100"
+  }'`
+      },
+      {
+        language: 'javascript',
+        label: 'JavaScript',
+        code: `const confirmPayment = async (orderId, cashReceived) => {
+  const response = await fetch(\`/api/driver-app/orders/\${orderId}/confirm-payment\`, {
+    method: 'POST',
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      cashReceived: cashReceived,
+      notes: 'Pago confirmado en entrega'
+    })
+  });
+
+  const data = await response.json();
+
+  if (data.success) {
+    console.log('Pago confirmado:', data.data.amountPaid);
+    if (data.data.changeAmount > 0) {
+      console.log('Dar cambio:', data.data.changeAmount);
+    }
+  } else {
+    console.error('Error:', data.error);
+  }
+};`
+      },
+      {
+        language: 'dart',
+        label: 'Flutter',
+        code: `Future<PaymentConfirmation> confirmCODPayment(
+  int orderId, {
+  double? cashReceived,
+  String? notes,
+}) async {
+  final token = await secureStorage.read(key: 'auth-token');
+
+  final response = await http.post(
+    Uri.parse('https://logirapid.com/api/driver-app/orders/\$orderId/confirm-payment'),
+    headers: {
+      'Cookie': 'auth-token=\$token',
+      'Content-Type': 'application/json',
+    },
+    body: jsonEncode({
+      if (cashReceived != null) 'cashReceived': cashReceived,
+      if (notes != null) 'notes': notes,
+    }),
+  );
+
+  final data = jsonDecode(response.body);
+  if (data['success']) {
+    return PaymentConfirmation.fromJson(data['data']);
+  }
+  throw Exception(data['error']);
+}
+
+class PaymentConfirmation {
+  final int orderId;
+  final String orderNumber;
+  final String paymentStatus;
+  final double amountPaid;
+  final double totalPaid;
+  final double totalAmount;
+  final double remainingAmount;
+  final double? changeAmount;
+  final String confirmedBy;
+  final String confirmedAt;
+}`
+      },
+      {
+        language: 'kotlin',
+        label: 'Kotlin',
+        code: `data class PaymentConfirmation(
+    val orderId: Int,
+    val orderNumber: String,
+    val paymentStatus: String,
+    val amountPaid: Double,
+    val totalPaid: Double,
+    val totalAmount: Double,
+    val remainingAmount: Double,
+    val changeAmount: Double?,
+    val confirmedBy: String,
+    val confirmedAt: String
+)
+
+interface DriverApi {
+    @POST("api/driver-app/orders/{id}/confirm-payment")
+    suspend fun confirmCODPayment(
+        @Header("Cookie") authToken: String,
+        @Path("id") orderId: Int,
+        @Body request: ConfirmPaymentRequest
+    ): Response<PaymentConfirmationResponse>
+}
+
+data class ConfirmPaymentRequest(
+    val cashReceived: Double? = null,
+    val notes: String? = null
+)
+
+// Uso
+val result = driverApi.confirmCODPayment(
+    "auth-token=\$token",
+    orderId,
+    ConfirmPaymentRequest(cashReceived = 80.0)
+)
+
+if (result.isSuccessful && result.body()?.success == true) {
+    val data = result.body()!!.data
+    if (data.changeAmount != null && data.changeAmount > 0) {
+        showChangeDialog(data.changeAmount)
+    }
+}`
+      },
+      {
+        language: 'swift',
+        label: 'Swift',
+        code: `struct PaymentConfirmation: Codable {
+    let orderId: Int
+    let orderNumber: String
+    let paymentStatus: String
+    let amountPaid: Double
+    let totalPaid: Double
+    let totalAmount: Double
+    let remainingAmount: Double
+    let changeAmount: Double?
+    let confirmedBy: String
+    let confirmedAt: String
+}
+
+func confirmCODPayment(orderId: Int, cashReceived: Double? = nil) async throws -> PaymentConfirmation {
+    var request = URLRequest(url: URL(string: "https://logirapid.com/api/driver-app/orders/\\(orderId)/confirm-payment")!)
+    request.httpMethod = "POST"
+    request.setValue("auth-token=\\(token)", forHTTPHeaderField: "Cookie")
+    request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+
+    var body: [String: Any] = [:]
+    if let cash = cashReceived {
+        body["cashReceived"] = cash
+    }
+    request.httpBody = try JSONSerialization.data(withJSONObject: body)
+
+    let (data, _) = try await URLSession.shared.data(for: request)
+    let response = try JSONDecoder().decode(PaymentResponse.self, from: data)
+
+    guard let confirmation = response.data else {
+        throw APIError.paymentFailed(response.error ?? "Error desconocido")
+    }
+
+    return confirmation
+}`
+      }
+    ]
+  },
+
+  // ==========================================
   // EMPAQUES
   // ==========================================
   {

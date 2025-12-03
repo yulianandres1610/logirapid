@@ -47,6 +47,7 @@ import { DashboardLayout } from '@/components/layout/dashboard-layout'
 import { Button } from '@/components/ui/button'
 import ViewToggle from '@/components/ui/ViewToggle'
 import PackageDeliveryMap from '@/components/maps/PackageDeliveryMap'
+import PaymentStatusBadge from '@/components/package-orders/PaymentStatusBadge'
 
 interface PackageOrder {
   id: number
@@ -80,6 +81,11 @@ interface PackageOrder {
   // Coordinates for mapping
   latitude?: number | null
   longitude?: number | null
+  // Payment fields
+  paymentMethod?: string
+  paymentStatus?: string
+  paidAmount?: number
+  totalAmount?: number
 }
 
 // Force dynamic rendering to avoid static generation issues with useSearchParams
@@ -862,6 +868,9 @@ export default function PickupOrdersPage() {
                         Servicios
                       </th>
                       <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider w-28">
+                        Pago
+                      </th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider w-28">
                         Estado
                       </th>
                       <th className="px-2 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider w-36">
@@ -1033,6 +1042,26 @@ export default function PickupOrdersPage() {
                                   {getServiceName(service)}
                                 </span>
                               ))}
+                            </div>
+                          </td>
+
+                          {/* Pago */}
+                          <td className="px-4 py-4 whitespace-nowrap">
+                            <div className="flex flex-col gap-1">
+                              <PaymentStatusBadge
+                                status={order.paymentStatus || 'pending_payment'}
+                                size="sm"
+                              />
+                              {(order.totalAmount || order.total) && (order.totalAmount || order.total || 0) > 0 && (
+                                <div className="text-xs text-gray-500 dark:text-gray-400">
+                                  ${(order.totalAmount || order.total || 0).toFixed(2)}
+                                  {order.paymentStatus === 'partial' && order.paidAmount && (
+                                    <span className="text-green-600 dark:text-green-400 ml-1">
+                                      (${order.paidAmount.toFixed(2)} pagado)
+                                    </span>
+                                  )}
+                                </div>
+                              )}
                             </div>
                           </td>
 
