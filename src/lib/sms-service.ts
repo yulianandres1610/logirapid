@@ -330,22 +330,26 @@ export async function sendWhatsAppOrderConfirmation(
     const formattedAddress = address || 'Por confirmar'
     const formattedServicePhone = customerServicePhone || 'No disponible'
 
+    // Preparar variables del template - asegurar que todas sean strings válidos
+    const contentVars = {
+      "1": String(customerName || 'Cliente'),
+      "2": String(companyName || 'LogiRapid'),
+      "3": String(orderNumber || 'N/A'),
+      "4": String(formattedDate || 'Por confirmar'),
+      "5": String(formattedTime || 'A coordinar'),
+      "6": String(formattedAddress || 'Por confirmar'),
+      "7": String(formattedServicePhone || 'No disponible')
+    }
+
     console.log(`[WhatsApp Service] Sending WhatsApp to ${formattedPhone}`)
     console.log(`[WhatsApp Service] Using ContentSid: ${contentSid}`)
+    console.log(`[WhatsApp Service] Content Variables:`, JSON.stringify(contentVars, null, 2))
 
     // Enviar mensaje usando Content Template
     // Variables: 1=nombre, 2=empresa, 3=orden, 4=fecha, 5=horario, 6=dirección, 7=teléfono
     const result = await client.messages.create({
       contentSid,
-      contentVariables: JSON.stringify({
-        "1": customerName || 'Cliente',
-        "2": companyName,
-        "3": orderNumber,
-        "4": formattedDate,
-        "5": formattedTime,
-        "6": formattedAddress,
-        "7": formattedServicePhone
-      }),
+      contentVariables: JSON.stringify(contentVars),
       from: whatsappNumber.startsWith('whatsapp:') ? whatsappNumber : `whatsapp:${whatsappNumber}`,
       to: `whatsapp:${formattedPhone}`
     })
