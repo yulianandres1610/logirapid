@@ -330,15 +330,24 @@ export async function sendWhatsAppOrderConfirmation(
     const formattedAddress = address || 'Por confirmar'
     const formattedServicePhone = customerServicePhone || 'No disponible'
 
-    // Preparar variables del template - asegurar que todas sean strings válidos
+    // Función para sanitizar variables - eliminar newlines, tabs y espacios múltiples
+    const sanitize = (value: string | null | undefined, defaultVal: string): string => {
+      if (!value) return defaultVal
+      return String(value)
+        .replace(/[\n\r\t]/g, ' ')  // Reemplazar newlines y tabs por espacios
+        .replace(/\s{4,}/g, '   ')  // Reducir 4+ espacios a 3
+        .trim() || defaultVal
+    }
+
+    // Preparar variables del template - asegurar que todas sean strings válidos y sanitizados
     const contentVars = {
-      "1": String(customerName || 'Cliente'),
-      "2": String(companyName || 'LogiRapid'),
-      "3": String(orderNumber || 'N/A'),
-      "4": String(formattedDate || 'Por confirmar'),
-      "5": String(formattedTime || 'A coordinar'),
-      "6": String(formattedAddress || 'Por confirmar'),
-      "7": String(formattedServicePhone || 'No disponible')
+      "1": sanitize(customerName, 'Cliente'),
+      "2": sanitize(companyName, 'LogiRapid'),
+      "3": sanitize(orderNumber, 'N/A'),
+      "4": sanitize(formattedDate, 'Por confirmar'),
+      "5": sanitize(formattedTime, 'A coordinar'),
+      "6": sanitize(formattedAddress, 'Por confirmar'),
+      "7": sanitize(formattedServicePhone, 'No disponible')
     }
 
     console.log(`[WhatsApp Service] Sending WhatsApp to ${formattedPhone}`)
