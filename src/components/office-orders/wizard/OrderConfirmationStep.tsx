@@ -69,12 +69,17 @@ export default function OrderConfirmationStep({ wizardData, updateWizardData, se
       }, 0) || 0
       const totalAmount = wizardData.totalAmount || calculatedTotalAmount
 
-      // Calcular monto pagado y determinar estado de pago
-      const paidAmount = wizardData.payments?.reduce((sum: number, p: any) => sum + (p.amount || 0), 0) || 0
-
       // IMPORTANTE: Solo es COD si el método es explícitamente 'cod'
       // 'cash' (efectivo) es un pago inmediato, NO es COD (Cash on Delivery)
       const hasCODPayment = wizardData.payments?.some((p: any) => p.method === 'cod')
+
+      // Calcular monto pagado - NO incluir pagos COD porque aún no se han recibido
+      // COD significa "Cash on Delivery" - el cliente pagará al momento de la entrega
+      const paidAmount = wizardData.payments?.reduce((sum: number, p: any) => {
+        // Solo sumar pagos que NO son COD (efectivo, zelle, tarjeta)
+        if (p.method === 'cod') return sum
+        return sum + (p.amount || 0)
+      }, 0) || 0
 
       console.log('=== PAYMENT STATUS DEBUG ===')
       console.log('totalAmount:', totalAmount)
@@ -131,6 +136,9 @@ export default function OrderConfirmationStep({ wizardData, updateWizardData, se
         customerId: wizardData.sender.id,
         customerName: `${wizardData.sender.firstName} ${wizardData.sender.lastName}`,
         customerAddress: recipientFullAddress || wizardData.recipient.address || null,
+        // Campos del destinatario (para mostrar en la tabla)
+        firstName: wizardData.recipient.firstName || null,
+        lastName: wizardData.recipient.lastName || null,
         // Campos de dirección estructurados
         street: wizardData.recipient.street || null,
         apartment: wizardData.recipient.apartment || null,
