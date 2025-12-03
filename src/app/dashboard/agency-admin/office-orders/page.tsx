@@ -35,6 +35,7 @@ interface PackageOrder {
   orderNumber: string
   customerId: number
   customerName: string
+  customerAddress?: string
   status: 'pending' | 'reprogrammed' | 'picked_up' | 'in_transit' | 'in_route' | 'delivered'
   createdAt: string
   updatedAt: string
@@ -43,6 +44,15 @@ interface PackageOrder {
   orderType?: 'recogida' | 'oficina'
   companyName?: string
   companyId?: number
+  // Address fields (fallback if officeOrderData is empty)
+  firstName?: string
+  lastName?: string
+  street?: string
+  apartment?: string
+  city?: string
+  state?: string
+  country?: string
+  zipcode?: string
   // Payment fields
   paymentMethod?: string
   paymentStatus?: string
@@ -678,7 +688,10 @@ export default function AgencyOfficeOrdersPage() {
                             <div className="flex items-center gap-2">
                               <User className="w-4 h-4 text-gray-400 flex-shrink-0" />
                               <div className="text-sm font-medium text-black dark:text-gray-100">
-                                {officeData?.receiverName || 'N/A'}
+                                {officeData?.receiverName ||
+                                  (order.firstName && order.lastName
+                                    ? `${order.firstName} ${order.lastName}`.trim()
+                                    : 'N/A')}
                               </div>
                             </div>
                           </td>
@@ -686,14 +699,14 @@ export default function AgencyOfficeOrdersPage() {
                           {/* Municipio */}
                           <td className="px-6 py-3">
                             <div className="text-sm text-black dark:text-gray-100">
-                              {officeData?.destination?.city || 'N/A'}
+                              {officeData?.destination?.city || order.city || 'N/A'}
                             </div>
                           </td>
 
                           {/* Provincia */}
                           <td className="px-6 py-3">
                             <div className="text-sm text-black dark:text-gray-100">
-                              {officeData?.destination?.state || 'N/A'}
+                              {officeData?.destination?.state || order.state || 'N/A'}
                             </div>
                           </td>
 
@@ -701,7 +714,21 @@ export default function AgencyOfficeOrdersPage() {
                           <td className="px-6 py-3">
                             <div className="text-sm text-black dark:text-gray-400 flex items-start gap-2">
                               <MapPin className="w-4 h-4 text-gray-400 mt-0.5 flex-shrink-0" />
-                              <span>{officeData?.destination ? formatAddress(officeData.destination) : 'Sin dirección'}</span>
+                              <span>
+                                {officeData?.destination
+                                  ? formatAddress(officeData.destination)
+                                  : (order.customerAddress || order.street
+                                    ? formatAddress({
+                                        street: order.street,
+                                        apartment: order.apartment,
+                                        city: order.city,
+                                        state: order.state,
+                                        zipCode: order.zipcode,
+                                        country: order.country,
+                                        fullAddress: order.customerAddress
+                                      })
+                                    : 'Sin dirección')}
+                              </span>
                             </div>
                           </td>
 
