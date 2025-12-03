@@ -206,6 +206,45 @@ export default function PickupOrderConfirmationStep({ wizardData, updateWizardDa
           ? apartment.replace(/^apt\s*/i, '').trim()
           : null
 
+        // ===== CÁLCULO DE ESTADO DE PAGO =====
+        // Verificar si hay pago COD (Cash on Delivery)
+        const hasCODPayment = wizardData.payments?.some((p: any) => p.method === 'cod')
+
+        // Calcular monto pagado - NO incluir pagos COD porque aún no se han recibido
+        const paidAmount = wizardData.payments?.reduce((sum: number, p: any) => {
+          if (p.method === 'cod') return sum
+          return sum + (p.amount || 0)
+        }, 0) || 0
+
+        const totalAmount = wizardData.totalAmount || 0
+
+        // Determinar paymentMethod y paymentStatus
+        let paymentMethod = 'cod' // Default
+        let paymentStatus = 'pending_payment' // Default
+
+        if (wizardData.payments && wizardData.payments.length > 0) {
+          paymentMethod = wizardData.payments[0].method || 'cod'
+
+          if (hasCODPayment) {
+            paymentStatus = 'pending_payment'
+            paymentMethod = 'cod'
+          } else if (paidAmount >= totalAmount && totalAmount > 0) {
+            paymentStatus = 'paid'
+          } else if (paidAmount > 0) {
+            paymentStatus = 'partial'
+          }
+        }
+
+        console.log('=== PAYMENT STATUS DEBUG (PICKUP) ===')
+        console.log('totalAmount:', totalAmount)
+        console.log('paidAmount:', paidAmount)
+        console.log('hasCODPayment:', hasCODPayment)
+        console.log('paymentMethod:', paymentMethod)
+        console.log('paymentStatus:', paymentStatus)
+        console.log('payments:', wizardData.payments)
+        console.log('=====================================')
+        // ===== FIN CÁLCULO DE ESTADO DE PAGO =====
+
         orderData = {
           customerId: wizardData.sender.id,
           customerName: `${wizardData.sender.firstName} ${wizardData.sender.lastName}`,
@@ -230,6 +269,10 @@ export default function PickupOrderConfirmationStep({ wizardData, updateWizardDa
           taxAmount: 0,
           totalAmount: wizardData.totalAmount,
           orderType: 'recogida',
+          // Campos de pago
+          paymentMethod: paymentMethod,
+          paymentStatus: paymentStatus,
+          paidAmount: paidAmount,
           firstName: wizardData.sender.firstName,
           lastName: wizardData.sender.lastName,
           officeOrderData: JSON.stringify({
