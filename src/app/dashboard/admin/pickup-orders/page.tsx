@@ -48,6 +48,7 @@ import { Button } from '@/components/ui/button'
 import ViewToggle from '@/components/ui/ViewToggle'
 import PackageDeliveryMap from '@/components/maps/PackageDeliveryMap'
 import PaymentStatusBadge from '@/components/package-orders/PaymentStatusBadge'
+import OrderStatusBadge from '@/components/package-orders/OrderStatusBadge'
 
 interface PackageOrder {
   id: number
@@ -1047,36 +1048,18 @@ export default function PickupOrdersPage() {
 
                           {/* Pago */}
                           <td className="px-4 py-4 whitespace-nowrap">
-                            <div className="flex flex-col gap-1">
-                              <PaymentStatusBadge
-                                status={order.paymentStatus || 'pending_payment'}
-                                size="sm"
-                              />
-                              {(order.totalAmount || order.total) && (order.totalAmount || order.total || 0) > 0 && (
-                                <div className="text-xs text-gray-500 dark:text-gray-400">
-                                  ${(order.totalAmount || order.total || 0).toFixed(2)}
-                                  {order.paymentStatus === 'partial' && order.paidAmount && (
-                                    <span className="text-green-600 dark:text-green-400 ml-1">
-                                      (${order.paidAmount.toFixed(2)} pagado)
-                                    </span>
-                                  )}
-                                </div>
-                              )}
-                            </div>
+                            <PaymentStatusBadge
+                              status={order.paymentStatus || 'pending_payment'}
+                              size="sm"
+                            />
                           </td>
 
                           {/* Estado */}
                           <td className="px-4 py-4 whitespace-nowrap">
-                            <span className={cn(
-                              'inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium',
-                              STATUSES[order.status]?.color || 'bg-gray-100 text-gray-800 dark:bg-gray-900/30 dark:text-gray-400'
-                            )}>
-                              {(() => {
-                                const StatusIcon = STATUSES[order.status]?.icon || AlertCircle
-                                return <StatusIcon className="w-3 h-3 mr-1" />
-                              })()}
-                              {STATUSES[order.status]?.label || order.status || 'Desconocido'}
-                            </span>
+                            <OrderStatusBadge
+                              status={order.status || 'pending'}
+                              size="sm"
+                            />
                           </td>
 
                           {/* Acciones */}
