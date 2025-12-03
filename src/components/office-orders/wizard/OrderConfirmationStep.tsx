@@ -62,6 +62,29 @@ export default function OrderConfirmationStep({ wizardData, updateWizardData, se
         return sum + (config.boxes?.length || 0)
       }, 0) || 0
 
+      // Calcular monto pagado y determinar estado de pago
+      const paidAmount = wizardData.payments?.reduce((sum: number, p: any) => sum + (p.amount || 0), 0) || 0
+      const hasCODPayment = wizardData.payments?.some((p: any) => p.method === 'cod' || p.isCOD)
+
+      // Determinar paymentMethod y paymentStatus
+      let paymentMethod = 'cod' // Default
+      let paymentStatus = 'pending_payment' // Default
+
+      if (wizardData.payments && wizardData.payments.length > 0) {
+        // Usar el primer método de pago como el principal
+        paymentMethod = wizardData.payments[0].method || 'cod'
+
+        // Si se pagó el total, marcar como pagado
+        if (paidAmount >= wizardData.totalAmount && !hasCODPayment) {
+          paymentStatus = 'paid'
+        } else if (paidAmount > 0 && !hasCODPayment) {
+          paymentStatus = 'partial'
+        } else if (hasCODPayment) {
+          paymentStatus = 'pending_payment'
+          paymentMethod = 'cod'
+        }
+      }
+
       // Construir dirección completa del destinatario para el campo customerAddress
       const apt = wizardData.recipient.apartment || ''
       const recipientFullAddress = [
@@ -94,6 +117,9 @@ export default function OrderConfirmationStep({ wizardData, updateWizardData, se
         taxAmount: 0,
         totalAmount: wizardData.totalAmount,
         orderType: 'oficina',
+        paymentMethod: paymentMethod,
+        paymentStatus: paymentStatus,
+        paidAmount: paidAmount,
         officeOrderData: JSON.stringify({
           senderName: `${wizardData.sender.firstName || ''} ${wizardData.sender.lastName || ''}`.trim(),
           senderPhone: wizardData.sender.phone || '',

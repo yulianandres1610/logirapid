@@ -300,8 +300,11 @@ export async function POST(request: NextRequest) {
     const initialStatus = body.status || (orderType === 'oficina' ? 'picked_up' : 'pending')
 
     // Determine payment status based on payment method
+    // If paymentStatus is explicitly provided (e.g., from wizard), use it
+    // Otherwise, default to 'pending_payment'
     const paymentMethod = body.paymentMethod || 'cod'
-    const paymentStatus = paymentMethod === 'cod' ? 'pending_payment' : 'pending_payment'
+    const paymentStatus = body.paymentStatus || 'pending_payment'
+    const paidAmount = body.paidAmount || 0
 
     const insertQuery = `
       INSERT INTO package_orders (
@@ -311,7 +314,7 @@ export async function POST(request: NextRequest) {
         boxcount, boxprice, additionalservices, boxes,
         firstname, lastname, order_type, office_order_data,
         zipcode, street, apartment, city, state, country,
-        company_id, paymentmethod, payment_status,
+        company_id, paymentmethod, payment_status, paid_amount,
         createdat, updatedat
       ) VALUES (
         $1, $2, $3, $4, $5,
@@ -320,7 +323,7 @@ export async function POST(request: NextRequest) {
         $16, $17, $18, $19,
         $20, $21, $22, $23,
         $24, $25, $26, $27, $28, $29,
-        $30, $31, $32,
+        $30, $31, $32, $33,
         NOW(), NOW()
       )
       RETURNING *
@@ -361,7 +364,8 @@ export async function POST(request: NextRequest) {
       emptyToNull(body.country),
       companyId,
       paymentMethod,
-      paymentStatus
+      paymentStatus,
+      paidAmount
     ]
 
     const result = await db.query(insertQuery, values)
