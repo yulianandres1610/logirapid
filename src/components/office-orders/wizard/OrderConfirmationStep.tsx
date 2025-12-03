@@ -62,9 +62,26 @@ export default function OrderConfirmationStep({ wizardData, updateWizardData, se
         return sum + (config.boxes?.length || 0)
       }, 0) || 0
 
+      // Recalcular el monto total para asegurar que tenemos el valor correcto
+      const calculatedTotalAmount = wizardData.serviceConfigs?.reduce((sum: number, config: any) => {
+        const boxCount = config.boxes?.length || 0
+        return sum + (config.basePrice * boxCount)
+      }, 0) || 0
+      const totalAmount = wizardData.totalAmount || calculatedTotalAmount
+
       // Calcular monto pagado y determinar estado de pago
       const paidAmount = wizardData.payments?.reduce((sum: number, p: any) => sum + (p.amount || 0), 0) || 0
-      const hasCODPayment = wizardData.payments?.some((p: any) => p.method === 'cod' || p.isCOD)
+
+      // IMPORTANTE: Solo es COD si el método es explícitamente 'cod'
+      // 'cash' (efectivo) es un pago inmediato, NO es COD (Cash on Delivery)
+      const hasCODPayment = wizardData.payments?.some((p: any) => p.method === 'cod')
+
+      console.log('=== PAYMENT STATUS DEBUG ===')
+      console.log('totalAmount:', totalAmount)
+      console.log('paidAmount:', paidAmount)
+      console.log('hasCODPayment:', hasCODPayment)
+      console.log('payments:', wizardData.payments)
+      console.log('============================')
 
       // Determinar paymentMethod y paymentStatus
       let paymentMethod = 'cod' // Default
@@ -74,16 +91,29 @@ export default function OrderConfirmationStep({ wizardData, updateWizardData, se
         // Usar el primer método de pago como el principal
         paymentMethod = wizardData.payments[0].method || 'cod'
 
-        // Si se pagó el total, marcar como pagado
-        if (paidAmount >= wizardData.totalAmount && !hasCODPayment) {
-          paymentStatus = 'paid'
-        } else if (paidAmount > 0 && !hasCODPayment) {
-          paymentStatus = 'partial'
-        } else if (hasCODPayment) {
+        // Lógica de estado de pago:
+        // 1. Si hay COD -> siempre pending_payment (se paga en la entrega)
+        // 2. Si se pagó el total con cash/zelle/card -> paid
+        // 3. Si se pagó parcialmente con cash/zelle/card -> partial
+        // 4. Sin pagos -> pending_payment
+        if (hasCODPayment) {
+          // COD: el pago se realizará en la entrega
           paymentStatus = 'pending_payment'
           paymentMethod = 'cod'
+        } else if (paidAmount >= totalAmount && totalAmount > 0) {
+          // Pago completo con efectivo, zelle o tarjeta
+          paymentStatus = 'paid'
+        } else if (paidAmount > 0) {
+          // Pago parcial
+          paymentStatus = 'partial'
         }
+        // Si ninguna condición se cumple, se mantiene pending_payment
       }
+
+      console.log('=== FINAL PAYMENT STATUS ===')
+      console.log('paymentMethod:', paymentMethod)
+      console.log('paymentStatus:', paymentStatus)
+      console.log('============================')
 
       // Construir dirección completa del destinatario para el campo customerAddress
       const apt = wizardData.recipient.apartment || ''
