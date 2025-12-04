@@ -401,11 +401,32 @@ export default function ProductPricingStep({
                         </td>
 
                         <td className="px-4 py-3 text-right">
-                          {/* Mi Costo is always read-only (inherited) */}
-                          <span className="text-gray-700 dark:text-gray-300 flex items-center justify-end gap-1">
-                            <Lock className="w-3 h-3 text-gray-400" />
-                            ${miCosto.toFixed(2)}{unitLabel}
-                          </span>
+                          {canEditCost ? (
+                            /* Provider can edit cost */
+                            <div className="flex items-center justify-end gap-1">
+                              <span className="text-gray-500">$</span>
+                              <input
+                                type="number"
+                                value={localPrice?.costPrice ?? miCosto}
+                                onChange={(e) => handlePriceChange(
+                                  product.id,
+                                  'costPrice',
+                                  e.target.value,
+                                  product
+                                )}
+                                min={0}
+                                step="0.01"
+                                className="w-24 px-2 py-1 text-right border rounded dark:bg-gray-700 dark:border-gray-600 border-amber-300 dark:border-amber-600"
+                              />
+                              <span className="text-gray-500 text-xs">{unitLabel}</span>
+                            </div>
+                          ) : (
+                            /* Non-providers see read-only cost */
+                            <span className="text-gray-700 dark:text-gray-300 flex items-center justify-end gap-1">
+                              <Lock className="w-3 h-3 text-gray-400" />
+                              ${miCosto.toFixed(2)}{unitLabel}
+                            </span>
+                          )}
                         </td>
 
                         {showPrecioSucursalesColumn && (
