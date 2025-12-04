@@ -505,7 +505,18 @@ export default function ProductCatalogPage() {
                                     P. Publico
                                   </div>
                                 </th>
-                                <th className="px-4 py-3 w-32 text-center">Margen</th>
+                                <th className="px-4 py-3 w-32 text-center">
+                                  <div className="flex flex-col items-center">
+                                    <span>Margen Mayorista</span>
+                                    <span className="text-[10px] font-normal opacity-60">(P.May - Costo)</span>
+                                  </div>
+                                </th>
+                                <th className="px-4 py-3 w-32 text-center">
+                                  <div className="flex flex-col items-center">
+                                    <span>Margen Cliente</span>
+                                    <span className="text-[10px] font-normal opacity-60">(P.Pub - P.May)</span>
+                                  </div>
+                                </th>
                               </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
@@ -515,10 +526,16 @@ export default function ProductCatalogPage() {
                                 const precioMayorista = editing?.precioMayorista ?? product.precioMayorista
                                 const precioPublico = editing?.precioPublico ?? product.precioPublico
 
-                                // Calculate margin (precioMayorista - miCosto)
-                                const margin = precioMayorista - miCosto
-                                const marginPercent = miCosto > 0
-                                  ? ((margin / miCosto) * 100).toFixed(1)
+                                // Calculate Margen Mayorista (precioMayorista - miCosto)
+                                const margenMayorista = precioMayorista - miCosto
+                                const margenMayoristaPct = miCosto > 0
+                                  ? ((margenMayorista / miCosto) * 100).toFixed(1)
+                                  : '0'
+
+                                // Calculate Margen Cliente (precioPublico - precioMayorista)
+                                const margenCliente = precioPublico - precioMayorista
+                                const margenClientePct = precioMayorista > 0
+                                  ? ((margenCliente / precioMayorista) * 100).toFixed(1)
                                   : '0'
 
                                 const hasEdits = editing !== undefined
@@ -605,16 +622,30 @@ export default function ProductCatalogPage() {
                                         )}
                                       />
                                     </td>
+                                    {/* Margen Mayorista */}
                                     <td className="px-4 py-3 text-center">
                                       <span className={cn(
                                         "text-sm font-medium whitespace-nowrap",
-                                        margin > 0
-                                          ? "text-green-500"
-                                          : margin < 0
+                                        margenMayorista > 0
+                                          ? "text-blue-500"
+                                          : margenMayorista < 0
                                             ? "text-red-500"
                                             : theme === 'dark' ? "text-gray-400" : "text-gray-500"
                                       )}>
-                                        ${margin.toFixed(2)} ({marginPercent}%)
+                                        ${margenMayorista.toFixed(2)} ({margenMayoristaPct}%)
+                                      </span>
+                                    </td>
+                                    {/* Margen Cliente */}
+                                    <td className="px-4 py-3 text-center">
+                                      <span className={cn(
+                                        "text-sm font-medium whitespace-nowrap",
+                                        margenCliente > 0
+                                          ? "text-green-500"
+                                          : margenCliente < 0
+                                            ? "text-red-500"
+                                            : theme === 'dark' ? "text-gray-400" : "text-gray-500"
+                                      )}>
+                                        ${margenCliente.toFixed(2)} ({margenClientePct}%)
                                       </span>
                                     </td>
                                   </tr>
