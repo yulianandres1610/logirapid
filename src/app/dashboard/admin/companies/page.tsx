@@ -1475,14 +1475,14 @@ export default function CompaniesPage() {
                     <ProductPricingStep
                       products={productCatalog.products.map(p => ({
                         id: p.id,
-                        code: p.code,
-                        name: p.name,
-                        serviceCategory: p.serviceCategory,
-                        productType: p.productType,
-                        unitType: p.unitType,
-                        pricingModel: p.pricingModel,
-                        costPrice: p.platformPrice,
-                        minPrice: p.minPrice
+                        code: p.code || '',
+                        name: p.name || '',
+                        serviceCategory: p.serviceCategory || '',
+                        productType: p.productType || '',
+                        unitType: p.unitType || 'unit',
+                        pricingModel: p.pricingModel || 'fixed',
+                        costPrice: p.platformPrice ?? 0,
+                        minPrice: p.minPrice ?? 0
                       }))}
                       prices={formData.productPrices}
                       onChange={(prices) => {

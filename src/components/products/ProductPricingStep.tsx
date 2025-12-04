@@ -105,16 +105,18 @@ export default function ProductPricingStep({
 
   const handlePriceChange = (productId: number, field: 'sellPrice' | 'costPrice', value: string, product: Product) => {
     const numValue = parseFloat(value) || 0
-    const current = localPrices[productId] || { sellPrice: product.costPrice }
+    const productCost = product.costPrice ?? 0
+    const productMinPrice = product.minPrice ?? 0
+    const current = localPrices[productId] || { sellPrice: productCost }
 
     // Validate
     let error = ''
     if (field === 'sellPrice') {
-      const effectiveCost = current.costPrice ?? product.costPrice
+      const effectiveCost = current.costPrice ?? productCost
       if (numValue < effectiveCost) {
         error = `Min: $${effectiveCost.toFixed(2)}`
-      } else if (numValue < product.minPrice && product.minPrice > 0) {
-        error = `Min permitido: $${product.minPrice.toFixed(2)}`
+      } else if (numValue < productMinPrice && productMinPrice > 0) {
+        error = `Min permitido: $${productMinPrice.toFixed(2)}`
       }
     }
 
@@ -135,16 +137,17 @@ export default function ProductPricingStep({
 
     // Update parent with all prices
     const newPrices = filteredProducts.map(p => {
+      const pCost = p.costPrice ?? 0
       if (p.id === productId) {
         return {
           productId: p.id,
-          sellPrice: field === 'sellPrice' ? numValue : (localPrices[p.id]?.sellPrice || p.costPrice),
+          sellPrice: field === 'sellPrice' ? numValue : (localPrices[p.id]?.sellPrice ?? pCost),
           costPrice: field === 'costPrice' ? numValue : localPrices[p.id]?.costPrice
         }
       }
       return {
         productId: p.id,
-        sellPrice: localPrices[p.id]?.sellPrice || p.costPrice,
+        sellPrice: localPrices[p.id]?.sellPrice ?? pCost,
         costPrice: localPrices[p.id]?.costPrice
       }
     })
@@ -168,11 +171,12 @@ export default function ProductPricingStep({
     if (!isBranch) return
 
     const newPrices = filteredProducts.map(p => {
-      let sellPrice = p.costPrice
+      const baseCost = p.costPrice ?? 0
+      let sellPrice = baseCost
       if (markupType === 'percentage') {
-        sellPrice = p.costPrice * (1 + markupValue / 100)
+        sellPrice = baseCost * (1 + markupValue / 100)
       } else {
-        sellPrice = p.costPrice + markupValue
+        sellPrice = baseCost + markupValue
       }
       return { productId: p.id, sellPrice }
     })
@@ -300,8 +304,8 @@ export default function ProductPricingStep({
                 <tbody className="divide-y dark:divide-gray-700">
                   {categoryProducts.map(product => {
                     const localPrice = localPrices[product.id]
-                    const effectiveCost = localPrice?.costPrice ?? product.costPrice
-                    const sellPrice = localPrice?.sellPrice ?? product.costPrice
+                    const effectiveCost = localPrice?.costPrice ?? product.costPrice ?? 0
+                    const sellPrice = localPrice?.sellPrice ?? product.costPrice ?? 0
                     const { margin, percentage } = calculateMargin(effectiveCost, sellPrice)
                     const error = errors[product.id]
                     const unitLabel = getUnitLabel(product.unitType, product.pricingModel)
