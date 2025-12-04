@@ -430,14 +430,17 @@ export default function ProductPricingStep({
                                 step="0.01"
                                 className="w-24 px-2 py-1 text-right border rounded dark:bg-gray-700 dark:border-gray-600 border-amber-300 dark:border-amber-600"
                               />
-                              <span className="text-gray-500 text-xs">{unitLabel}</span>
+                              <span className="text-gray-500 text-xs w-6 text-left">{unitLabel}</span>
                             </div>
                           ) : (
                             /* Non-providers see read-only cost */
-                            <span className="text-gray-700 dark:text-gray-300 flex items-center justify-end gap-1">
+                            <div className="flex items-center justify-end gap-1">
                               <Lock className="w-3 h-3 text-gray-400" />
-                              ${miCosto.toFixed(2)}{unitLabel}
-                            </span>
+                              <span className="text-gray-700 dark:text-gray-300">
+                                ${miCosto.toFixed(2)}
+                              </span>
+                              <span className="text-gray-500 text-xs w-6 text-left">{unitLabel}</span>
+                            </div>
                           )}
                         </td>
 
@@ -466,7 +469,7 @@ export default function ProductPricingStep({
                                       productErrors?.sucursales && "border-red-500 dark:border-red-500"
                                     )}
                                   />
-                                  <span className="text-gray-500 text-xs">{unitLabel}</span>
+                                  <span className="text-gray-500 text-xs w-6 text-left">{unitLabel}</span>
                                 </div>
                                 {productErrors?.sucursales && (
                                   <div className="flex items-center justify-end gap-1 mt-1 text-xs text-red-600 dark:text-red-400">
@@ -498,7 +501,7 @@ export default function ProductPricingStep({
                                 productErrors?.clientes && "border-red-500 dark:border-red-500"
                               )}
                             />
-                            <span className="text-gray-500 text-xs">{unitLabel}</span>
+                            <span className="text-gray-500 text-xs w-6 text-left">{unitLabel}</span>
                           </div>
                           {productErrors?.clientes && (
                             <div className="flex items-center justify-end gap-1 mt-1 text-xs text-red-600 dark:text-red-400">
