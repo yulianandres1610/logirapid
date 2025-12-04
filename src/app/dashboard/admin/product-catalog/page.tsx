@@ -200,17 +200,17 @@ export default function ProductCatalogPage() {
 
         {/* Summary Cards */}
         {!loading && !error && (
-          <motion.div
-            className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4"
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.3 }}
-          >
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
             {/* Total Products Card */}
-            <div className={cn(
-              "rounded-2xl border p-5",
-              theme === 'dark' ? "bg-white/5 border-white/10" : "bg-white border-gray-200"
-            )}>
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.3 }}
+              className={cn(
+                "rounded-2xl border p-6",
+                theme === 'dark' ? "bg-white/5 border-white/10" : "bg-white border-gray-200"
+              )}
+            >
               <div className="flex items-center justify-between">
                 <div>
                   <p className={cn(
@@ -233,13 +233,18 @@ export default function ProductCatalogPage() {
                   <Package className="w-6 h-6 text-blue-500" />
                 </div>
               </div>
-            </div>
+            </motion.div>
 
             {/* Categories Card */}
-            <div className={cn(
-              "rounded-2xl border p-5",
-              theme === 'dark' ? "bg-white/5 border-white/10" : "bg-white border-gray-200"
-            )}>
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.3, delay: 0.1 }}
+              className={cn(
+                "rounded-2xl border p-6",
+                theme === 'dark' ? "bg-white/5 border-white/10" : "bg-white border-gray-200"
+              )}
+            >
               <div className="flex items-center justify-between">
                 <div>
                   <p className={cn(
@@ -262,13 +267,18 @@ export default function ProductCatalogPage() {
                   <Layers className="w-6 h-6 text-purple-500" />
                 </div>
               </div>
-            </div>
+            </motion.div>
 
             {/* Avg Margin Card */}
-            <div className={cn(
-              "rounded-2xl border p-5",
-              theme === 'dark' ? "bg-white/5 border-white/10" : "bg-white border-gray-200"
-            )}>
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.3, delay: 0.2 }}
+              className={cn(
+                "rounded-2xl border p-6",
+                theme === 'dark' ? "bg-white/5 border-white/10" : "bg-white border-gray-200"
+              )}
+            >
               <div className="flex items-center justify-between">
                 <div>
                   <p className={cn(
@@ -291,92 +301,65 @@ export default function ProductCatalogPage() {
                   <TrendingUp className="w-6 h-6 text-green-500" />
                 </div>
               </div>
-            </div>
+            </motion.div>
 
-            {/* Provider Card */}
-            <div className={cn(
-              "rounded-2xl border p-5",
-              theme === 'dark' ? "bg-white/5 border-white/10" : "bg-white border-gray-200"
-            )}>
+            {/* Providers Card */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.3, delay: 0.3 }}
+              className={cn(
+                "rounded-2xl border p-6",
+                theme === 'dark' ? "bg-white/5 border-white/10" : "bg-white border-gray-200"
+              )}
+            >
               <div className="flex items-center justify-between">
-                <div className="flex-1 min-w-0">
+                <div>
                   <p className={cn(
                     "text-sm font-medium",
                     theme === 'dark' ? "text-gray-400" : "text-gray-600"
                   )}>
-                    Proveedor
+                    Proveedores
                   </p>
-                  {providerCompanies.length > 0 ? (
-                    <div className="mt-1">
-                      <p className={cn(
-                        "text-lg font-bold truncate",
-                        theme === 'dark' ? "text-white" : "text-gray-900"
-                      )}>
-                        {providerCompanies[0].name}
-                      </p>
-                      <div className="flex flex-wrap gap-1 mt-1">
-                        {providerCompanies[0].categories.slice(0, 2).map(cat => (
-                          <span
-                            key={cat}
-                            className={cn(
-                              "text-xs px-2 py-0.5 rounded-full",
-                              theme === 'dark' ? "bg-amber-500/20 text-amber-400" : "bg-amber-100 text-amber-700"
-                            )}
-                          >
-                            {categoryLabels[cat] || cat}
-                          </span>
-                        ))}
-                        {providerCompanies[0].categories.length > 2 && (
-                          <span className={cn(
-                            "text-xs",
-                            theme === 'dark' ? "text-gray-500" : "text-gray-400"
-                          )}>
-                            +{providerCompanies[0].categories.length - 2}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  ) : (
-                    <p className={cn(
-                      "text-lg font-bold mt-1",
-                      theme === 'dark' ? "text-gray-500" : "text-gray-400"
-                    )}>
-                      Sin asignar
-                    </p>
-                  )}
+                  <p className={cn(
+                    "text-2xl font-bold mt-1",
+                    theme === 'dark' ? "text-white" : "text-gray-900"
+                  )}>
+                    {providerCompanies.length}
+                  </p>
                 </div>
                 <div className={cn(
-                  "w-12 h-12 rounded-full flex items-center justify-center flex-shrink-0 ml-3",
-                  providerCompanies.length > 0 ? "bg-amber-500/20" : "bg-gray-500/20"
+                  "w-12 h-12 rounded-full flex items-center justify-center",
+                  "bg-amber-500/20"
                 )}>
-                  <Truck className={cn(
-                    "w-6 h-6",
-                    providerCompanies.length > 0 ? "text-amber-500" : "text-gray-500"
-                  )} />
+                  <Truck className="w-6 h-6 text-amber-500" />
                 </div>
               </div>
-            </div>
-          </motion.div>
+            </motion.div>
+          </div>
         )}
 
         {/* Search */}
-        <div className="relative max-w-md">
-          <Search className={cn(
-            "absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4",
-            theme === 'dark' ? "text-gray-500" : "text-gray-400"
-          )} />
-          <input
-            type="text"
-            placeholder="Buscar productos..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className={cn(
-              "w-full pl-10 pr-4 py-2 rounded-lg border transition-colors",
-              theme === 'dark'
-                ? "bg-gray-800 border-gray-700 text-white placeholder:text-gray-500"
-                : "bg-white border-gray-200 text-gray-900 placeholder:text-gray-400"
-            )}
-          />
+        <div className="flex items-center gap-4">
+          <div className="relative flex-1 max-w-md">
+            <Search className={cn(
+              "absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5",
+              theme === 'dark' ? "text-gray-500" : "text-gray-400"
+            )} />
+            <input
+              type="text"
+              placeholder="Buscar por nombre o codigo..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className={cn(
+                "w-full pl-11 pr-4 py-2.5 rounded-xl border transition-all duration-200",
+                "focus:outline-none focus:ring-2 focus:ring-blue-500/20",
+                theme === 'dark'
+                  ? "bg-white/5 border-white/10 text-white placeholder:text-gray-500"
+                  : "bg-white border-gray-200 text-gray-900 placeholder:text-gray-400"
+              )}
+            />
+          </div>
         </div>
 
         {/* Loading State */}
@@ -398,33 +381,6 @@ export default function ProductCatalogPage() {
             <div className="flex items-center gap-2">
               <AlertCircle className="w-5 h-5" />
               <span>{error}</span>
-            </div>
-          </div>
-        )}
-
-        {/* Legend */}
-        {!loading && !error && (
-          <div className={cn(
-            "flex flex-wrap gap-4 text-sm p-3 rounded-lg",
-            theme === 'dark' ? "bg-gray-800/50" : "bg-gray-50"
-          )}>
-            <div className="flex items-center gap-2">
-              <DollarSign className="w-4 h-4 text-amber-500" />
-              <span className={theme === 'dark' ? "text-gray-300" : "text-gray-700"}>
-                Mi Costo: Costo real del proveedor
-              </span>
-            </div>
-            <div className="flex items-center gap-2">
-              <Building2 className="w-4 h-4 text-blue-500" />
-              <span className={theme === 'dark' ? "text-gray-300" : "text-gray-700"}>
-                Precio Mayorista: Lo que cobra a LogiRapid
-              </span>
-            </div>
-            <div className="flex items-center gap-2">
-              <Users className="w-4 h-4 text-green-500" />
-              <span className={theme === 'dark' ? "text-gray-300" : "text-gray-700"}>
-                Precio al Publico: Precio sugerido al cliente
-              </span>
             </div>
           </div>
         )}
