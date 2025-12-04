@@ -629,7 +629,7 @@ export default function CompaniesPage() {
         monthlyLimit: company.monthlyLimit || '',
         rechargeLimits: { daily: '', monthly: '' },
         transferLimits: { daily: '', monthly: '' },
-        enabledServices: company.enabledServices || [],
+        enabledServices: Array.isArray(company.enabledServices) ? company.enabledServices : [],
         companyType: company.companyType || '',
         serviceFees: company.serviceFees || {},
         prices: {},
@@ -1459,7 +1459,7 @@ export default function CompaniesPage() {
                     Configura los precios a los que esta empresa venderá cada servicio. El precio de compra viene de la plataforma.
                   </p>
 
-                  {formData.enabledServices.length === 0 ? (
+                  {!Array.isArray(formData.enabledServices) || formData.enabledServices.length === 0 ? (
                     <div className={cn(
                       "p-8 text-center rounded-xl border-2 border-dashed",
                       theme === 'dark' ? "border-gray-700 bg-gray-800/30" : "border-gray-200 bg-gray-50"
