@@ -63,7 +63,6 @@ export async function GET(request: NextRequest) {
     const activeOnly = searchParams.get('active') !== 'false'
 
     // Use new column names after migration 40
-    // Support both old and new column names for backwards compatibility
     let query = `
       SELECT
         id,
@@ -75,10 +74,9 @@ export async function GET(request: NextRequest) {
         dimensions,
         weight_capacity,
         unit_type,
-        -- New names (after migration 40)
-        COALESCE(mi_costo, provider_cost) as mi_costo,
-        COALESCE(precio_mayorista, provider_b2b_price) as precio_mayorista,
-        COALESCE(precio_publico, platform_min_b2c) as precio_publico,
+        mi_costo,
+        precio_mayorista,
+        precio_publico,
         pricing_model,
         provider_company_id,
         is_active,
@@ -296,10 +294,7 @@ export async function PUT(request: NextRequest) {
 
         // Get current values for history
         const current = await db.query(
-          `SELECT
-            COALESCE(mi_costo, provider_cost) as mi_costo,
-            COALESCE(precio_mayorista, provider_b2b_price) as precio_mayorista,
-            COALESCE(precio_publico, platform_min_b2c) as precio_publico
+          `SELECT mi_costo, precio_mayorista, precio_publico
           FROM product_catalog WHERE id = $1`,
           [id]
         )

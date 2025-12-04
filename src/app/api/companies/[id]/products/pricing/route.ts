@@ -112,30 +112,27 @@ export async function GET(
           pc.unit_type,
           pc.pricing_model,
           -- Catalog prices (provider level)
-          COALESCE(pc.mi_costo, pc.provider_cost) as catalog_mi_costo,
-          COALESCE(pc.precio_mayorista, pc.provider_b2b_price) as catalog_precio_mayorista,
-          COALESCE(pc.precio_publico, pc.platform_min_b2c) as catalog_precio_publico,
+          pc.mi_costo as catalog_mi_costo,
+          pc.precio_mayorista as catalog_precio_mayorista,
+          pc.precio_publico as catalog_precio_publico,
           pc.is_active,
           pc.display_order,
           -- For branches: mi_costo is parent's precio_sucursales or precio_clientes
           COALESCE(
             parent_pricing.precio_sucursales,
-            parent_pricing.b2b_price,
             parent_pricing.precio_clientes,
-            parent_pricing.b2c_price,
             parent_pricing.mi_costo,
-            pc.precio_mayorista,
-            pc.provider_b2b_price
+            pc.precio_mayorista
           ) as mi_costo,
           -- Current company pricing
           cpp.id as pricing_id,
           cpp.mi_costo as current_mi_costo,
-          COALESCE(cpp.precio_sucursales, cpp.b2b_price) as precio_sucursales,
-          COALESCE(cpp.precio_clientes, cpp.b2c_price) as precio_clientes,
+          cpp.precio_sucursales,
+          cpp.precio_clientes,
           cpp.markup_type,
           cpp.markup_value,
-          COALESCE(cpp.margen_clientes, cpp.margin) as margen_clientes,
-          COALESCE(cpp.margen_clientes_pct, cpp.margin_percentage) as margen_clientes_pct,
+          cpp.margen_clientes,
+          cpp.margen_clientes_pct,
           cpp.price_source,
           cpp.is_active as pricing_active
         FROM product_catalog pc
@@ -164,22 +161,22 @@ export async function GET(
           pc.unit_type,
           pc.pricing_model,
           -- Catalog prices (provider level)
-          COALESCE(pc.mi_costo, pc.provider_cost) as catalog_mi_costo,
-          COALESCE(pc.precio_mayorista, pc.provider_b2b_price) as catalog_precio_mayorista,
-          COALESCE(pc.precio_publico, pc.platform_min_b2c) as catalog_precio_publico,
+          pc.mi_costo as catalog_mi_costo,
+          pc.precio_mayorista as catalog_precio_mayorista,
+          pc.precio_publico as catalog_precio_publico,
           pc.is_active,
           pc.display_order,
           -- For matrix: mi_costo is catalog's precio_mayorista
-          COALESCE(pc.precio_mayorista, pc.provider_b2b_price, pc.platform_price) as mi_costo,
+          pc.precio_mayorista as mi_costo,
           -- Current company pricing
           cpp.id as pricing_id,
           cpp.mi_costo as current_mi_costo,
-          COALESCE(cpp.precio_sucursales, cpp.b2b_price) as precio_sucursales,
-          COALESCE(cpp.precio_clientes, cpp.b2c_price) as precio_clientes,
+          cpp.precio_sucursales,
+          cpp.precio_clientes,
           cpp.markup_type,
           cpp.markup_value,
-          COALESCE(cpp.margen_clientes, cpp.margin) as margen_clientes,
-          COALESCE(cpp.margen_clientes_pct, cpp.margin_percentage) as margen_clientes_pct,
+          cpp.margen_clientes,
+          cpp.margen_clientes_pct,
           cpp.price_source,
           cpp.is_active as pricing_active
         FROM product_catalog pc
@@ -387,16 +384,13 @@ export async function POST(
           costPriceQuery = `
             SELECT
               pc.id,
-              COALESCE(pc.precio_mayorista, pc.provider_b2b_price, pc.platform_price) as catalog_cost,
-              COALESCE(pc.precio_publico, pc.platform_min_b2c) as catalog_publico,
+              pc.precio_mayorista as catalog_cost,
+              pc.precio_publico as catalog_publico,
               COALESCE(
                 parent.precio_sucursales,
-                parent.b2b_price,
                 parent.precio_clientes,
-                parent.b2c_price,
                 parent.mi_costo,
-                pc.precio_mayorista,
-                pc.provider_b2b_price
+                pc.precio_mayorista
               ) as mi_costo
             FROM product_catalog pc
             LEFT JOIN company_product_pricing parent
@@ -410,8 +404,8 @@ export async function POST(
           costPriceQuery = `
             SELECT
               id,
-              COALESCE(precio_mayorista, provider_b2b_price, platform_price) as mi_costo,
-              COALESCE(precio_publico, platform_min_b2c) as catalog_publico
+              precio_mayorista as mi_costo,
+              precio_publico as catalog_publico
             FROM product_catalog
             WHERE id = $1
           `
