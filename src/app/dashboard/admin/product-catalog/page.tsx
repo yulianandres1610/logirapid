@@ -130,56 +130,39 @@ export default function ProductCatalogPage() {
   return (
     <DashboardLayout>
       <div className="p-6 space-y-6">
-        {/* Header */}
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-          <div>
-            <h1 className={cn(
-              "text-2xl font-bold",
-              theme === 'dark' ? "text-white" : "text-gray-900"
-            )}>
-              Catalogo de Productos
-            </h1>
-            <p className={cn(
-              "text-sm mt-1",
-              theme === 'dark' ? "text-gray-400" : "text-gray-600"
-            )}>
-              Gestiona precios del catalogo de plataforma
-            </p>
-          </div>
+        {/* Actions */}
+        <div className="flex items-center justify-end gap-3">
+          <button
+            onClick={refresh}
+            className={cn(
+              "p-2 rounded-lg border transition-colors",
+              theme === 'dark'
+                ? "border-gray-700 hover:bg-gray-800"
+                : "border-gray-200 hover:bg-gray-100"
+            )}
+          >
+            <RefreshCw className="w-4 h-4" />
+          </button>
 
-          <div className="flex items-center gap-3">
+          {hasChanges && (
             <button
-              onClick={refresh}
+              onClick={handleSaveAll}
+              disabled={saving}
               className={cn(
-                "p-2 rounded-lg border transition-colors",
-                theme === 'dark'
-                  ? "border-gray-700 hover:bg-gray-800"
-                  : "border-gray-200 hover:bg-gray-100"
+                "flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors",
+                saving
+                  ? "bg-gray-400 cursor-not-allowed"
+                  : "bg-green-600 hover:bg-green-700 text-white"
               )}
             >
-              <RefreshCw className="w-4 h-4" />
+              {saving ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <Save className="w-4 h-4" />
+              )}
+              Guardar Cambios ({Object.keys(editingPrices).length})
             </button>
-
-            {hasChanges && (
-              <button
-                onClick={handleSaveAll}
-                disabled={saving}
-                className={cn(
-                  "flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors",
-                  saving
-                    ? "bg-gray-400 cursor-not-allowed"
-                    : "bg-green-600 hover:bg-green-700 text-white"
-                )}
-              >
-                {saving ? (
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                ) : (
-                  <Save className="w-4 h-4" />
-                )}
-                Guardar Cambios ({Object.keys(editingPrices).length})
-              </button>
-            )}
-          </div>
+          )}
         </div>
 
         {/* Search */}
@@ -294,11 +277,6 @@ export default function ProductCatalogPage() {
                           theme === 'dark' ? "text-gray-400" : "text-gray-500"
                         )}>
                           {products.length} producto{products.length !== 1 ? 's' : ''}
-                          {products[0]?.providerCompanyName && (
-                            <span className="ml-2 text-blue-500">
-                              - Proveedor: {products[0].providerCompanyName}
-                            </span>
-                          )}
                         </p>
                       </div>
                     </div>
