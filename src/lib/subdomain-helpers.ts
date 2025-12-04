@@ -249,9 +249,9 @@ export async function resolveCompany(host: string): Promise<CompanyInfo | null> 
       }
     }
 
-    console.log(`[resolveCompany] No subdomain or DEV_SUBDOMAIN, falling back to company ID=1`)
+    console.log(`[resolveCompany] No subdomain or DEV_SUBDOMAIN, falling back to first active company`)
 
-    // 4. Fallback: empresa por defecto (ID = 1) - Super Admin company
+    // 4. Fallback: primera empresa activa (para agencias, admin, etc.)
     try {
       const query = `
         SELECT
@@ -264,14 +264,15 @@ export async function resolveCompany(host: string): Promise<CompanyInfo | null> 
           custom_domain,
           status
         FROM companies
-        WHERE id = 1
+        WHERE status = 'active'
+        ORDER BY id ASC
         LIMIT 1
       `
 
       const result = await db.query(query)
 
       if (result.rows.length === 0) {
-        console.error('[resolveCompany] Default company (ID=1) not found in database')
+        console.error('[resolveCompany] No active company found in database')
         return null
       }
 
