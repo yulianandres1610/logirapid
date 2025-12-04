@@ -407,12 +407,6 @@ export default function ProductCatalogPage() {
                                       )}>
                                         ${miCosto.toFixed(2)}
                                       </span>
-                                      <div className={cn(
-                                        "text-xs",
-                                        theme === 'dark' ? "text-gray-500" : "text-gray-400"
-                                      )}>
-                                        (Proveedor)
-                                      </div>
                                     </td>
                                     <td className="px-4 py-3 text-center">
                                       <input
