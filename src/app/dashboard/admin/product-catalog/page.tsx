@@ -172,30 +172,37 @@ export default function ProductCatalogPage() {
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.3 }}
               className={cn(
-                "rounded-2xl border p-6",
-                theme === 'dark' ? "bg-white/5 border-white/10" : "bg-white border-gray-200"
+                "relative overflow-hidden rounded-2xl border shadow-xl",
+                theme === 'dark'
+                  ? "bg-gradient-to-br from-gray-800 to-gray-900 border-gray-700"
+                  : "bg-gradient-to-br from-white to-gray-50 border-gray-200"
               )}
             >
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className={cn(
-                    "text-sm font-medium",
-                    theme === 'dark' ? "text-gray-400" : "text-gray-600"
+              <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-400 to-blue-600" />
+              <div className="p-6">
+                <div className="flex items-center gap-3">
+                  <div className={cn(
+                    "p-3 rounded-xl shadow-sm border",
+                    theme === 'dark'
+                      ? "bg-blue-900/30 border-blue-800/50"
+                      : "bg-blue-50 border-blue-200"
                   )}>
-                    Total Productos
-                  </p>
-                  <p className={cn(
-                    "text-2xl font-bold mt-1",
-                    theme === 'dark' ? "text-white" : "text-gray-900"
-                  )}>
-                    {stats.totalProducts}
-                  </p>
-                </div>
-                <div className={cn(
-                  "w-12 h-12 rounded-full flex items-center justify-center",
-                  "bg-blue-500/20"
-                )}>
-                  <Package className="w-6 h-6 text-blue-500" />
+                    <Package className="w-6 h-6 text-blue-500" />
+                  </div>
+                  <div>
+                    <p className={cn(
+                      "text-sm font-medium",
+                      theme === 'dark' ? "text-gray-400" : "text-gray-600"
+                    )}>
+                      Total Productos
+                    </p>
+                    <p className={cn(
+                      "text-3xl font-bold mt-1",
+                      theme === 'dark' ? "text-white" : "text-gray-900"
+                    )}>
+                      {stats.totalProducts}
+                    </p>
+                  </div>
                 </div>
               </div>
             </motion.div>
@@ -206,30 +213,37 @@ export default function ProductCatalogPage() {
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.3, delay: 0.1 }}
               className={cn(
-                "rounded-2xl border p-6",
-                theme === 'dark' ? "bg-white/5 border-white/10" : "bg-white border-gray-200"
+                "relative overflow-hidden rounded-2xl border shadow-xl",
+                theme === 'dark'
+                  ? "bg-gradient-to-br from-gray-800 to-gray-900 border-gray-700"
+                  : "bg-gradient-to-br from-white to-gray-50 border-gray-200"
               )}
             >
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className={cn(
-                    "text-sm font-medium",
-                    theme === 'dark' ? "text-gray-400" : "text-gray-600"
+              <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-purple-400 to-purple-600" />
+              <div className="p-6">
+                <div className="flex items-center gap-3">
+                  <div className={cn(
+                    "p-3 rounded-xl shadow-sm border",
+                    theme === 'dark'
+                      ? "bg-purple-900/30 border-purple-800/50"
+                      : "bg-purple-50 border-purple-200"
                   )}>
-                    Categorias
-                  </p>
-                  <p className={cn(
-                    "text-2xl font-bold mt-1",
-                    theme === 'dark' ? "text-white" : "text-gray-900"
-                  )}>
-                    {stats.totalCategories}
-                  </p>
-                </div>
-                <div className={cn(
-                  "w-12 h-12 rounded-full flex items-center justify-center",
-                  "bg-purple-500/20"
-                )}>
-                  <Layers className="w-6 h-6 text-purple-500" />
+                    <Layers className="w-6 h-6 text-purple-500" />
+                  </div>
+                  <div>
+                    <p className={cn(
+                      "text-sm font-medium",
+                      theme === 'dark' ? "text-gray-400" : "text-gray-600"
+                    )}>
+                      Categorias
+                    </p>
+                    <p className={cn(
+                      "text-3xl font-bold mt-1",
+                      theme === 'dark' ? "text-white" : "text-gray-900"
+                    )}>
+                      {stats.totalCategories}
+                    </p>
+                  </div>
                 </div>
               </div>
             </motion.div>
@@ -240,30 +254,37 @@ export default function ProductCatalogPage() {
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.3, delay: 0.2 }}
               className={cn(
-                "rounded-2xl border p-6",
-                theme === 'dark' ? "bg-white/5 border-white/10" : "bg-white border-gray-200"
+                "relative overflow-hidden rounded-2xl border shadow-xl",
+                theme === 'dark'
+                  ? "bg-gradient-to-br from-gray-800 to-gray-900 border-gray-700"
+                  : "bg-gradient-to-br from-white to-gray-50 border-gray-200"
               )}
             >
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className={cn(
-                    "text-sm font-medium",
-                    theme === 'dark' ? "text-gray-400" : "text-gray-600"
+              <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-green-400 to-green-600" />
+              <div className="p-6">
+                <div className="flex items-center gap-3">
+                  <div className={cn(
+                    "p-3 rounded-xl shadow-sm border",
+                    theme === 'dark'
+                      ? "bg-green-900/30 border-green-800/50"
+                      : "bg-green-50 border-green-200"
                   )}>
-                    Margen Promedio
-                  </p>
-                  <p className={cn(
-                    "text-2xl font-bold mt-1",
-                    stats.avgMargin > 0 ? "text-green-500" : theme === 'dark' ? "text-white" : "text-gray-900"
-                  )}>
-                    {stats.avgMargin.toFixed(1)}%
-                  </p>
-                </div>
-                <div className={cn(
-                  "w-12 h-12 rounded-full flex items-center justify-center",
-                  "bg-green-500/20"
-                )}>
-                  <TrendingUp className="w-6 h-6 text-green-500" />
+                    <TrendingUp className="w-6 h-6 text-green-500" />
+                  </div>
+                  <div>
+                    <p className={cn(
+                      "text-sm font-medium",
+                      theme === 'dark' ? "text-gray-400" : "text-gray-600"
+                    )}>
+                      Margen Promedio
+                    </p>
+                    <p className={cn(
+                      "text-3xl font-bold mt-1",
+                      stats.avgMargin > 0 ? "text-green-500" : theme === 'dark' ? "text-white" : "text-gray-900"
+                    )}>
+                      {stats.avgMargin.toFixed(1)}%
+                    </p>
+                  </div>
                 </div>
               </div>
             </motion.div>
@@ -274,30 +295,37 @@ export default function ProductCatalogPage() {
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.3, delay: 0.3 }}
               className={cn(
-                "rounded-2xl border p-6",
-                theme === 'dark' ? "bg-white/5 border-white/10" : "bg-white border-gray-200"
+                "relative overflow-hidden rounded-2xl border shadow-xl",
+                theme === 'dark'
+                  ? "bg-gradient-to-br from-gray-800 to-gray-900 border-gray-700"
+                  : "bg-gradient-to-br from-white to-gray-50 border-gray-200"
               )}
             >
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className={cn(
-                    "text-sm font-medium",
-                    theme === 'dark' ? "text-gray-400" : "text-gray-600"
+              <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-amber-400 to-amber-600" />
+              <div className="p-6">
+                <div className="flex items-center gap-3">
+                  <div className={cn(
+                    "p-3 rounded-xl shadow-sm border",
+                    theme === 'dark'
+                      ? "bg-amber-900/30 border-amber-800/50"
+                      : "bg-amber-50 border-amber-200"
                   )}>
-                    Proveedores
-                  </p>
-                  <p className={cn(
-                    "text-2xl font-bold mt-1",
-                    theme === 'dark' ? "text-white" : "text-gray-900"
-                  )}>
-                    {providerCompanies.length}
-                  </p>
-                </div>
-                <div className={cn(
-                  "w-12 h-12 rounded-full flex items-center justify-center",
-                  "bg-amber-500/20"
-                )}>
-                  <Truck className="w-6 h-6 text-amber-500" />
+                    <Truck className="w-6 h-6 text-amber-500" />
+                  </div>
+                  <div>
+                    <p className={cn(
+                      "text-sm font-medium",
+                      theme === 'dark' ? "text-gray-400" : "text-gray-600"
+                    )}>
+                      Proveedores
+                    </p>
+                    <p className={cn(
+                      "text-3xl font-bold mt-1",
+                      theme === 'dark' ? "text-white" : "text-gray-900"
+                    )}>
+                      {providerCompanies.length}
+                    </p>
+                  </div>
                 </div>
               </div>
             </motion.div>
