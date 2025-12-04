@@ -62,6 +62,8 @@ export async function GET(request: NextRequest) {
     const category = searchParams.get('category')
     const activeOnly = searchParams.get('active') !== 'false'
 
+    // Use new column names after migration 40
+    // Support both old and new column names for backwards compatibility
     let query = `
       SELECT
         id,
@@ -73,12 +75,11 @@ export async function GET(request: NextRequest) {
         dimensions,
         weight_capacity,
         unit_type,
-        provider_cost,
-        provider_b2b_price,
-        platform_price,
-        platform_min_b2c,
+        -- New names (after migration 40)
+        COALESCE(mi_costo, provider_cost) as mi_costo,
+        COALESCE(precio_mayorista, provider_b2b_price) as precio_mayorista,
+        COALESCE(precio_publico, platform_min_b2c) as precio_publico,
         pricing_model,
-        min_price,
         provider_company_id,
         is_active,
         display_order,
@@ -152,12 +153,15 @@ export async function POST(request: NextRequest) {
       dimensions,
       weight_capacity,
       unit_type,
+      // New field names
+      mi_costo,
+      precio_mayorista,
+      precio_publico,
+      // Legacy support
       provider_cost,
       provider_b2b_price,
-      platform_price,
       platform_min_b2c,
       pricing_model,
-      min_price,
       provider_company_id,
       display_order
     } = body
@@ -179,16 +183,18 @@ export async function POST(request: NextRequest) {
       }, { status: 400 })
     }
 
-    // Calculate B2B and min_b2c if not provided
-    const calculatedB2BPrice = provider_b2b_price ?? (provider_cost ? provider_cost * 1.2 : 0)
-    const calculatedMinB2C = platform_min_b2c ?? (platform_price ? platform_price * 0.9 : 0)
+    // Use new field names, fallback to legacy
+    const finalMiCosto = mi_costo ?? provider_cost ?? 0
+    const finalPrecioMayorista = precio_mayorista ?? provider_b2b_price ?? (finalMiCosto * 1.2)
+    const finalPrecioPublico = precio_publico ?? platform_min_b2c ?? (finalPrecioMayorista * 1.5)
 
     const result = await db.query(`
       INSERT INTO product_catalog (
         code, name, description, service_category, product_type,
-        dimensions, weight_capacity, unit_type, provider_cost, provider_b2b_price,
-        platform_price, platform_min_b2c, pricing_model, min_price, provider_company_id, display_order
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
+        dimensions, weight_capacity, unit_type,
+        mi_costo, precio_mayorista, precio_publico,
+        pricing_model, provider_company_id, display_order
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
       RETURNING *
     `, [
       code,
@@ -199,12 +205,10 @@ export async function POST(request: NextRequest) {
       dimensions || null,
       weight_capacity || null,
       unit_type || 'unit',
-      provider_cost || 0,
-      calculatedB2BPrice,
-      platform_price || 0,
-      calculatedMinB2C,
+      finalMiCosto,
+      finalPrecioMayorista,
+      finalPrecioPublico,
       pricing_model || 'fixed',
-      min_price || 0,
       provider_company_id || null,
       display_order || 0
     ])
@@ -218,8 +222,8 @@ export async function POST(request: NextRequest) {
       ) VALUES ($1, 'create', 'platform', $2, $3, $4, $5, $6)
     `, [
       result.rows[0].id,
-      provider_cost || 0,
-      platform_price || 0,
+      finalMiCosto,
+      finalPrecioMayorista,
       user.userId,
       user.email,
       `Producto creado: ${name}`
@@ -273,7 +277,17 @@ export async function PUT(request: NextRequest) {
 
     for (const product of products) {
       try {
-        const { id, provider_cost, provider_b2b_price, platform_price, platform_min_b2c } = product
+        const {
+          id,
+          // New field names
+          mi_costo,
+          precio_mayorista,
+          precio_publico,
+          // Legacy support
+          provider_cost,
+          provider_b2b_price,
+          platform_min_b2c
+        } = product
 
         if (!id) {
           results.push({ id: 0, success: false, error: 'ID requerido' })
@@ -282,7 +296,11 @@ export async function PUT(request: NextRequest) {
 
         // Get current values for history
         const current = await db.query(
-          'SELECT provider_cost, provider_b2b_price, platform_price, platform_min_b2c FROM product_catalog WHERE id = $1',
+          `SELECT
+            COALESCE(mi_costo, provider_cost) as mi_costo,
+            COALESCE(precio_mayorista, provider_b2b_price) as precio_mayorista,
+            COALESCE(precio_publico, platform_min_b2c) as precio_publico
+          FROM product_catalog WHERE id = $1`,
           [id]
         )
 
@@ -291,16 +309,20 @@ export async function PUT(request: NextRequest) {
           continue
         }
 
-        // Update product with B2B/B2C fields
+        // Use new names, fallback to legacy
+        const newMiCosto = mi_costo ?? provider_cost
+        const newPrecioMayorista = precio_mayorista ?? provider_b2b_price
+        const newPrecioPublico = precio_publico ?? platform_min_b2c
+
+        // Update product with new field names
         await db.query(`
           UPDATE product_catalog
-          SET provider_cost = COALESCE($1, provider_cost),
-              provider_b2b_price = COALESCE($2, provider_b2b_price),
-              platform_price = COALESCE($3, platform_price),
-              platform_min_b2c = COALESCE($4, platform_min_b2c),
+          SET mi_costo = COALESCE($1, mi_costo),
+              precio_mayorista = COALESCE($2, precio_mayorista),
+              precio_publico = COALESCE($3, precio_publico),
               updated_at = NOW()
-          WHERE id = $5
-        `, [provider_cost, provider_b2b_price, platform_price, platform_min_b2c, id])
+          WHERE id = $4
+        `, [newMiCosto, newPrecioMayorista, newPrecioPublico, id])
 
         // Log history
         await db.query(`
@@ -312,10 +334,10 @@ export async function PUT(request: NextRequest) {
           ) VALUES ($1, 'update', 'platform', $2, $3, $4, $5, $6, $7, $8)
         `, [
           id,
-          current.rows[0].provider_cost,
-          current.rows[0].platform_price,
-          provider_cost ?? current.rows[0].provider_cost,
-          platform_price ?? current.rows[0].platform_price,
+          current.rows[0].mi_costo,
+          current.rows[0].precio_mayorista,
+          newMiCosto ?? current.rows[0].mi_costo,
+          newPrecioMayorista ?? current.rows[0].precio_mayorista,
           user.userId,
           user.email,
           notes || 'Actualizacion de precio de plataforma'

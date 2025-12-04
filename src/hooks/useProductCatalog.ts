@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 
-// Types for product catalog
+// Types for product catalog - NEW SIMPLIFIED NAMES
 export interface Product {
   id: number
   code: string
@@ -13,15 +13,20 @@ export interface Product {
   dimensions: string | null
   weightCapacity: number | null
   unitType: string
-  providerCost: number
-  providerB2BPrice: number // B2B price provider charges to LogiRapid
-  platformPrice: number // Default B2B price LogiRapid charges companies
-  platformMinB2C: number // Minimum B2C price companies must charge
+  // New simplified price names (provider level)
+  miCosto: number          // Provider's cost of production
+  precioMayorista: number  // Price provider charges to LogiRapid
+  precioPublico: number    // Suggested price to end customer
   pricingModel: string
-  minPrice: number
   providerCompanyId: number | null
   isActive: boolean
   displayOrder: number
+  // Legacy names (for backwards compatibility)
+  providerCost?: number
+  providerB2BPrice?: number
+  platformPrice?: number
+  platformMinB2C?: number
+  minPrice?: number
 }
 
 export interface ProductCatalogData {
@@ -30,7 +35,7 @@ export interface ProductCatalogData {
   total: number
 }
 
-// Types for company product pricing
+// Types for company product pricing - NEW SIMPLIFIED NAMES
 export interface CompanyProductPricing {
   productId: number
   code: string
@@ -42,22 +47,39 @@ export interface CompanyProductPricing {
   weightCapacity: number | null
   unitType: string
   pricingModel: string
-  minPrice: number
   displayOrder: number
-  costPrice: number
-  sellPrice: number | null
-  b2bPrice: number | null // Price for branches/children
-  b2cPrice: number | null // Price for end customers
-  minB2BPrice: number | null // Minimum B2B price floor
+  // Catalog level prices (provider level - for reference)
+  catalogMiCosto: number
+  catalogPrecioMayorista: number
+  catalogPrecioPublico: number
+  // Company level pricing - NEW SIMPLIFIED NAMES
+  miCosto: number              // Inherited cost - NOT EDITABLE
+  precioSucursales: number | null  // Price for branches (only matrices)
+  precioClientes: number | null    // Price for end customers
+  // Legacy names (for backwards compatibility)
+  costPrice?: number
+  b2bPrice?: number | null
+  b2cPrice?: number | null
+  sellPrice?: number | null
+  minB2BPrice?: number | null
+  // Markup
   markupType: string | null
   markupValue: number | null
-  margin: number | null
-  marginPercentage: number | null
-  marginB2B: number | null
-  marginB2BPercentage: number | null
+  // Margins
+  margenClientes: number | null
+  margenClientesPct: number | null
+  // Legacy margin names
+  margin?: number | null
+  marginPercentage?: number | null
+  marginB2B?: number | null
+  marginB2BPercentage?: number | null
+  // Metadata
   priceSource: string | null
   hasPricing: boolean
   pricingId: number | null
+  // Company type flags
+  isBranch?: boolean
+  canEditPrecioSucursales?: boolean
 }
 
 export interface CompanyPricingData {
@@ -65,6 +87,9 @@ export interface CompanyPricingData {
   companyName: string
   isBranch: boolean
   parentCompanyId: number | null
+  parentCompanyName?: string | null
+  isProvider?: boolean
+  providerCategories?: string[]
   products: CompanyProductPricing[]
   byCategory: Record<string, CompanyProductPricing[]>
   total: number
@@ -92,7 +117,7 @@ export function useProductCatalog(category?: string) {
         throw new Error(result.error || 'Error al obtener productos')
       }
 
-      // Transform to camelCase
+      // Transform to camelCase with new field names
       const products = result.data.products.map((p: any) => ({
         id: p.id,
         code: p.code,
@@ -103,10 +128,15 @@ export function useProductCatalog(category?: string) {
         dimensions: p.dimensions,
         weightCapacity: p.weight_capacity ? parseFloat(p.weight_capacity) : null,
         unitType: p.unit_type,
-        providerCost: parseFloat(p.provider_cost || 0),
-        providerB2BPrice: parseFloat(p.provider_b2b_price || 0),
-        platformPrice: parseFloat(p.platform_price || 0),
-        platformMinB2C: parseFloat(p.platform_min_b2c || 0),
+        // New field names
+        miCosto: parseFloat(p.mi_costo || p.provider_cost || 0),
+        precioMayorista: parseFloat(p.precio_mayorista || p.provider_b2b_price || 0),
+        precioPublico: parseFloat(p.precio_publico || p.platform_min_b2c || 0),
+        // Legacy names for compatibility
+        providerCost: parseFloat(p.mi_costo || p.provider_cost || 0),
+        providerB2BPrice: parseFloat(p.precio_mayorista || p.provider_b2b_price || 0),
+        platformPrice: parseFloat(p.precio_mayorista || p.platform_price || 0),
+        platformMinB2C: parseFloat(p.precio_publico || p.platform_min_b2c || 0),
         pricingModel: p.pricing_model,
         minPrice: parseFloat(p.min_price || 0),
         providerCompanyId: p.provider_company_id,
@@ -139,14 +169,26 @@ export function useProductCatalog(category?: string) {
 
   const updatePlatformPrices = useCallback(async (products: Array<{
     id: number
+    miCosto?: number
+    precioMayorista?: number
+    precioPublico?: number
+    // Legacy support
     providerCost?: number
     platformPrice?: number
   }>, notes?: string) => {
     try {
+      // Transform to API format
+      const apiProducts = products.map(p => ({
+        id: p.id,
+        mi_costo: p.miCosto ?? p.providerCost,
+        precio_mayorista: p.precioMayorista ?? p.platformPrice,
+        precio_publico: p.precioPublico
+      }))
+
       const response = await fetch('/api/products', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ products, notes })
+        body: JSON.stringify({ products: apiProducts, notes })
       })
 
       const result = await response.json()
@@ -211,6 +253,10 @@ export function useCompanyProductPricing(companyId: number | null) {
 
   const updatePrices = useCallback(async (products: Array<{
     productId: number
+    // New field names
+    precioSucursales?: number
+    precioClientes?: number
+    // Legacy support
     sellPrice?: number
     b2bPrice?: number
     b2cPrice?: number
@@ -222,10 +268,19 @@ export function useCompanyProductPricing(companyId: number | null) {
     }
 
     try {
+      // Transform to API format with new names
+      const apiProducts = products.map(p => ({
+        productId: p.productId,
+        precioSucursales: p.precioSucursales ?? p.b2bPrice,
+        precioClientes: p.precioClientes ?? p.b2cPrice ?? p.sellPrice,
+        markupType: p.markupType,
+        markupValue: p.markupValue
+      }))
+
       const response = await fetch(`/api/companies/${companyId}/products/pricing`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ products, notes })
+        body: JSON.stringify({ products: apiProducts, notes })
       })
 
       const result = await response.json()

@@ -43,10 +43,9 @@ const categoryLabels: Record<string, string> = {
 }
 
 interface EditingPrice {
-  providerCost: number
-  providerB2BPrice: number
-  platformPrice: number
-  platformMinB2C: number
+  miCosto: number           // Costo real del proveedor
+  precioMayorista: number   // Precio que cobra el proveedor a LogiRapid
+  precioPublico: number     // Precio sugerido al cliente final
 }
 
 export default function ProductCatalogPage() {
@@ -80,10 +79,9 @@ export default function ProductCatalogPage() {
     setEditingPrices(prev => ({
       ...prev,
       [productId]: {
-        providerCost: prev[productId]?.providerCost ?? originalProduct.providerCost,
-        providerB2BPrice: prev[productId]?.providerB2BPrice ?? originalProduct.providerB2BPrice,
-        platformPrice: prev[productId]?.platformPrice ?? originalProduct.platformPrice,
-        platformMinB2C: prev[productId]?.platformMinB2C ?? originalProduct.platformMinB2C,
+        miCosto: prev[productId]?.miCosto ?? originalProduct.miCosto,
+        precioMayorista: prev[productId]?.precioMayorista ?? originalProduct.precioMayorista,
+        precioPublico: prev[productId]?.precioPublico ?? originalProduct.precioPublico,
         [field]: value
       }
     }))
@@ -98,13 +96,12 @@ export default function ProductCatalogPage() {
     try {
       const products = Object.entries(editingPrices).map(([id, prices]) => ({
         id: parseInt(id),
-        provider_cost: prices.providerCost,
-        provider_b2b_price: prices.providerB2BPrice,
-        platform_price: prices.platformPrice,
-        platform_min_b2c: prices.platformMinB2C
+        miCosto: prices.miCosto,
+        precioMayorista: prices.precioMayorista,
+        precioPublico: prices.precioPublico
       }))
 
-      await updatePlatformPrices(products, 'Actualizacion de precios B2B/B2C desde catalogo')
+      await updatePlatformPrices(products, 'Actualizacion de precios desde catalogo')
 
       showNotification('success', 'Precios actualizados', `${products.length} producto(s) actualizado(s) correctamente`)
 
@@ -146,7 +143,7 @@ export default function ProductCatalogPage() {
               "text-sm mt-1",
               theme === 'dark' ? "text-gray-400" : "text-gray-600"
             )}>
-              Gestiona precios B2B y B2C del catalogo de plataforma
+              Gestiona precios del catalogo de plataforma
             </p>
           </div>
 
@@ -237,19 +234,19 @@ export default function ProductCatalogPage() {
             <div className="flex items-center gap-2">
               <DollarSign className="w-4 h-4 text-amber-500" />
               <span className={theme === 'dark' ? "text-gray-300" : "text-gray-700"}>
-                Costo Proveedor: Lo que paga el proveedor
+                Mi Costo: Costo real del proveedor
               </span>
             </div>
             <div className="flex items-center gap-2">
               <Building2 className="w-4 h-4 text-blue-500" />
               <span className={theme === 'dark' ? "text-gray-300" : "text-gray-700"}>
-                Precio B2B: Lo que LogiRapid cobra a empresas
+                Precio Mayorista: Lo que cobra a LogiRapid
               </span>
             </div>
             <div className="flex items-center gap-2">
               <Users className="w-4 h-4 text-green-500" />
               <span className={theme === 'dark' ? "text-gray-300" : "text-gray-700"}>
-                Min B2C: Precio minimo al publico
+                Precio al Publico: Precio sugerido al cliente
               </span>
             </div>
           </div>
@@ -331,25 +328,19 @@ export default function ProductCatalogPage() {
                                 <th className="px-4 py-3 text-right">
                                   <div className="flex items-center justify-end gap-1">
                                     <DollarSign className="w-3 h-3 text-amber-500" />
-                                    Costo Prov.
+                                    Mi Costo
                                   </div>
                                 </th>
                                 <th className="px-4 py-3 text-right">
                                   <div className="flex items-center justify-end gap-1">
                                     <Building2 className="w-3 h-3 text-blue-500" />
-                                    B2B Prov.
-                                  </div>
-                                </th>
-                                <th className="px-4 py-3 text-right">
-                                  <div className="flex items-center justify-end gap-1">
-                                    <Building2 className="w-3 h-3 text-indigo-500" />
-                                    Precio B2B
+                                    Precio Mayorista
                                   </div>
                                 </th>
                                 <th className="px-4 py-3 text-right">
                                   <div className="flex items-center justify-end gap-1">
                                     <Users className="w-3 h-3 text-green-500" />
-                                    Min B2C
+                                    Precio al Publico
                                   </div>
                                 </th>
                                 <th className="px-4 py-3 text-center">Margen</th>
@@ -358,15 +349,14 @@ export default function ProductCatalogPage() {
                             <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
                               {products.map((product) => {
                                 const editing = editingPrices[product.id]
-                                const providerCost = editing?.providerCost ?? product.providerCost
-                                const providerB2BPrice = editing?.providerB2BPrice ?? product.providerB2BPrice
-                                const platformPrice = editing?.platformPrice ?? product.platformPrice
-                                const platformMinB2C = editing?.platformMinB2C ?? product.platformMinB2C
+                                const miCosto = editing?.miCosto ?? product.miCosto
+                                const precioMayorista = editing?.precioMayorista ?? product.precioMayorista
+                                const precioPublico = editing?.precioPublico ?? product.precioPublico
 
-                                // Calculate margin
-                                const margin = platformPrice - providerB2BPrice
-                                const marginPercent = providerB2BPrice > 0
-                                  ? ((margin / providerB2BPrice) * 100).toFixed(1)
+                                // Calculate margin (precioMayorista - miCosto)
+                                const margin = precioMayorista - miCosto
+                                const marginPercent = miCosto > 0
+                                  ? ((margin / miCosto) * 100).toFixed(1)
                                   : '0'
 
                                 const hasEdits = editing !== undefined
@@ -411,10 +401,10 @@ export default function ProductCatalogPage() {
                                       <input
                                         type="number"
                                         step="0.01"
-                                        value={providerCost}
+                                        value={miCosto}
                                         onChange={(e) => handlePriceChange(
                                           product.id,
-                                          'providerCost',
+                                          'miCosto',
                                           parseFloat(e.target.value) || 0,
                                           product
                                         )}
@@ -430,10 +420,10 @@ export default function ProductCatalogPage() {
                                       <input
                                         type="number"
                                         step="0.01"
-                                        value={providerB2BPrice}
+                                        value={precioMayorista}
                                         onChange={(e) => handlePriceChange(
                                           product.id,
-                                          'providerB2BPrice',
+                                          'precioMayorista',
                                           parseFloat(e.target.value) || 0,
                                           product
                                         )}
@@ -449,29 +439,10 @@ export default function ProductCatalogPage() {
                                       <input
                                         type="number"
                                         step="0.01"
-                                        value={platformPrice}
+                                        value={precioPublico}
                                         onChange={(e) => handlePriceChange(
                                           product.id,
-                                          'platformPrice',
-                                          parseFloat(e.target.value) || 0,
-                                          product
-                                        )}
-                                        className={cn(
-                                          "w-24 px-2 py-1 text-right rounded border text-sm",
-                                          theme === 'dark'
-                                            ? "bg-gray-900 border-gray-700 text-indigo-400"
-                                            : "bg-white border-gray-200 text-indigo-600"
-                                        )}
-                                      />
-                                    </td>
-                                    <td className="px-4 py-3">
-                                      <input
-                                        type="number"
-                                        step="0.01"
-                                        value={platformMinB2C}
-                                        onChange={(e) => handlePriceChange(
-                                          product.id,
-                                          'platformMinB2C',
+                                          'precioPublico',
                                           parseFloat(e.target.value) || 0,
                                           product
                                         )}
@@ -552,17 +523,22 @@ export default function ProductCatalogPage() {
                   "font-medium mb-1",
                   theme === 'dark' ? "text-blue-300" : "text-blue-800"
                 )}>
-                  Piramide de Precios B2B/B2C
+                  Piramide de Precios (Nivel Proveedor)
                 </h4>
                 <ul className={cn(
                   "text-sm space-y-1",
                   theme === 'dark' ? "text-blue-200/80" : "text-blue-700"
                 )}>
-                  <li><strong>Costo Proveedor:</strong> Lo que le cuesta al proveedor producir/adquirir el producto</li>
-                  <li><strong>B2B Proveedor:</strong> Precio que el proveedor cobra a LogiRapid (su margen)</li>
-                  <li><strong>Precio B2B:</strong> Precio que LogiRapid cobra a las empresas cliente (default)</li>
-                  <li><strong>Min B2C:</strong> Precio minimo que las empresas deben cobrar al publico</li>
+                  <li><strong>Mi Costo:</strong> Lo que le cuesta al proveedor producir/adquirir el producto</li>
+                  <li><strong>Precio Mayorista:</strong> Lo que el proveedor cobra a LogiRapid (su margen)</li>
+                  <li><strong>Precio al Publico:</strong> Precio sugerido de venta al cliente final</li>
                 </ul>
+                <p className={cn(
+                  "text-xs mt-2",
+                  theme === 'dark' ? "text-blue-200/60" : "text-blue-600"
+                )}>
+                  Nota: El Precio Mayorista se convierte en &quot;Mi Costo&quot; para las empresas clientes.
+                </p>
               </div>
             </div>
           </div>

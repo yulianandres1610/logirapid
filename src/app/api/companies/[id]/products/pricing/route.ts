@@ -27,19 +27,21 @@ async function getUserFromToken() {
 /**
  * GET /api/companies/[id]/products/pricing
  *
- * Get all products with B2B/B2C pricing for a company
+ * Get all products with simplified pricing for a company
+ *
+ * New nomenclature (migration 40):
+ *   - mi_costo = Costo heredado (NO EDITABLE)
+ *   - precio_sucursales = Precio de venta a sucursales (solo matrices)
+ *   - precio_clientes = Precio de venta al cliente final
  *
  * For matrix companies (no parent):
- *   - cost_price = platform_price (what LogiRapid charges them)
- *   - min_b2b_price = platform_price (floor for B2B they can assign)
- *   - b2b_price = price they give to their branches
- *   - b2c_price = price to end customers
+ *   - mi_costo = precio_mayorista (what LogiRapid charges them)
+ *   - precio_sucursales = price they give to their branches
+ *   - precio_clientes = price to end customers
  *
  * For branches (has parent):
- *   - cost_price = parent's b2b_price (what parent charges them)
- *   - min_b2b_price = parent's b2b_price (floor for their B2B)
- *   - b2b_price = price they could give to sub-branches (if applicable)
- *   - b2c_price = price to end customers
+ *   - mi_costo = parent's precio_sucursales (what parent charges them)
+ *   - precio_clientes = price to end customers (no precio_sucursales for branches)
  */
 export async function GET(
   request: NextRequest,
@@ -96,7 +98,7 @@ export async function GET(
     let costParams: any[]
 
     if (isBranch) {
-      // For branches: cost is parent's b2b_price, min_b2b is also parent's b2b_price
+      // For branches: mi_costo is parent's precio_sucursales
       costSourceQuery = `
         SELECT
           pc.id,
@@ -109,29 +111,31 @@ export async function GET(
           pc.weight_capacity,
           pc.unit_type,
           pc.pricing_model,
-          pc.provider_cost,
-          pc.provider_b2b_price,
-          pc.platform_price,
-          pc.platform_min_b2c,
-          pc.min_price,
+          -- Catalog prices (provider level)
+          COALESCE(pc.mi_costo, pc.provider_cost) as catalog_mi_costo,
+          COALESCE(pc.precio_mayorista, pc.provider_b2b_price) as catalog_precio_mayorista,
+          COALESCE(pc.precio_publico, pc.platform_min_b2c) as catalog_precio_publico,
           pc.is_active,
           pc.display_order,
-          -- For branches: cost is parent's B2B price or platform_price
-          COALESCE(parent_pricing.b2b_price, parent_pricing.sell_price, pc.platform_price) as cost_price,
-          COALESCE(parent_pricing.b2b_price, parent_pricing.sell_price, pc.platform_price) as min_b2b_price_inherited,
+          -- For branches: mi_costo is parent's precio_sucursales or precio_clientes
+          COALESCE(
+            parent_pricing.precio_sucursales,
+            parent_pricing.b2b_price,
+            parent_pricing.precio_clientes,
+            parent_pricing.b2c_price,
+            parent_pricing.mi_costo,
+            pc.precio_mayorista,
+            pc.provider_b2b_price
+          ) as mi_costo,
           -- Current company pricing
           cpp.id as pricing_id,
-          cpp.cost_price as current_cost,
-          cpp.b2b_price,
-          cpp.b2c_price,
-          cpp.sell_price,
-          cpp.min_b2b_price,
+          cpp.mi_costo as current_mi_costo,
+          COALESCE(cpp.precio_sucursales, cpp.b2b_price) as precio_sucursales,
+          COALESCE(cpp.precio_clientes, cpp.b2c_price) as precio_clientes,
           cpp.markup_type,
           cpp.markup_value,
-          cpp.margin,
-          cpp.margin_percentage,
-          cpp.margin_b2b,
-          cpp.margin_b2b_percentage,
+          COALESCE(cpp.margen_clientes, cpp.margin) as margen_clientes,
+          COALESCE(cpp.margen_clientes_pct, cpp.margin_percentage) as margen_clientes_pct,
           cpp.price_source,
           cpp.is_active as pricing_active
         FROM product_catalog pc
@@ -146,7 +150,7 @@ export async function GET(
       `
       costParams = [companyId, company.parent_company_id]
     } else {
-      // Matrix company - cost is platform_price
+      // Matrix company - mi_costo is catalog's precio_mayorista
       costSourceQuery = `
         SELECT
           pc.id,
@@ -159,29 +163,23 @@ export async function GET(
           pc.weight_capacity,
           pc.unit_type,
           pc.pricing_model,
-          pc.provider_cost,
-          pc.provider_b2b_price,
-          pc.platform_price,
-          pc.platform_min_b2c,
-          pc.min_price,
+          -- Catalog prices (provider level)
+          COALESCE(pc.mi_costo, pc.provider_cost) as catalog_mi_costo,
+          COALESCE(pc.precio_mayorista, pc.provider_b2b_price) as catalog_precio_mayorista,
+          COALESCE(pc.precio_publico, pc.platform_min_b2c) as catalog_precio_publico,
           pc.is_active,
           pc.display_order,
-          -- For matrix: cost is platform_price
-          pc.platform_price as cost_price,
-          pc.platform_price as min_b2b_price_inherited,
+          -- For matrix: mi_costo is catalog's precio_mayorista
+          COALESCE(pc.precio_mayorista, pc.provider_b2b_price, pc.platform_price) as mi_costo,
           -- Current company pricing
           cpp.id as pricing_id,
-          cpp.cost_price as current_cost,
-          cpp.b2b_price,
-          cpp.b2c_price,
-          cpp.sell_price,
-          cpp.min_b2b_price,
+          cpp.mi_costo as current_mi_costo,
+          COALESCE(cpp.precio_sucursales, cpp.b2b_price) as precio_sucursales,
+          COALESCE(cpp.precio_clientes, cpp.b2c_price) as precio_clientes,
           cpp.markup_type,
           cpp.markup_value,
-          cpp.margin,
-          cpp.margin_percentage,
-          cpp.margin_b2b,
-          cpp.margin_b2b_percentage,
+          COALESCE(cpp.margen_clientes, cpp.margin) as margen_clientes,
+          COALESCE(cpp.margen_clientes_pct, cpp.margin_percentage) as margen_clientes_pct,
           cpp.price_source,
           cpp.is_active as pricing_active
         FROM product_catalog pc
@@ -196,7 +194,7 @@ export async function GET(
 
     const result = await db.query(costSourceQuery, costParams)
 
-    // Format response with B2B/B2C fields
+    // Format response with new field names
     const products = result.rows.map(row => ({
       productId: row.id,
       code: row.code,
@@ -210,36 +208,36 @@ export async function GET(
       pricingModel: row.pricing_model,
       displayOrder: row.display_order,
 
-      // Platform level prices (for reference)
-      providerCost: parseFloat(row.provider_cost || 0),
-      providerB2BPrice: parseFloat(row.provider_b2b_price || 0),
-      platformPrice: parseFloat(row.platform_price || 0),
-      platformMinB2C: parseFloat(row.platform_min_b2c || 0),
-      minPrice: parseFloat(row.min_price || 0),
+      // Catalog level prices (for reference - provider level)
+      catalogMiCosto: parseFloat(row.catalog_mi_costo || 0),
+      catalogPrecioMayorista: parseFloat(row.catalog_precio_mayorista || 0),
+      catalogPrecioPublico: parseFloat(row.catalog_precio_publico || 0),
 
-      // Company level pricing
-      costPrice: parseFloat(row.cost_price || 0),
-      minB2BPriceInherited: parseFloat(row.min_b2b_price_inherited || 0),
+      // Company level pricing - NEW SIMPLIFIED NAMES
+      miCosto: parseFloat(row.mi_costo || 0),  // Inherited cost - NOT EDITABLE
+      precioSucursales: row.precio_sucursales ? parseFloat(row.precio_sucursales) : null, // For branches (only matrices)
+      precioClientes: row.precio_clientes ? parseFloat(row.precio_clientes) : null, // For end customers
 
-      // Current pricing configuration
-      b2bPrice: row.b2b_price ? parseFloat(row.b2b_price) : null,
-      b2cPrice: row.b2c_price ? parseFloat(row.b2c_price) : null,
-      sellPrice: row.sell_price ? parseFloat(row.sell_price) : null, // Legacy
-      minB2BPrice: row.min_b2b_price ? parseFloat(row.min_b2b_price) : null,
+      // Legacy field names (for backwards compatibility)
+      costPrice: parseFloat(row.mi_costo || 0),
+      b2bPrice: row.precio_sucursales ? parseFloat(row.precio_sucursales) : null,
+      b2cPrice: row.precio_clientes ? parseFloat(row.precio_clientes) : null,
 
       markupType: row.markup_type,
       markupValue: row.markup_value ? parseFloat(row.markup_value) : null,
 
       // Margins
-      marginB2C: row.margin ? parseFloat(row.margin) : null,
-      marginB2CPercentage: row.margin_percentage ? parseFloat(row.margin_percentage) : null,
-      marginB2B: row.margin_b2b ? parseFloat(row.margin_b2b) : null,
-      marginB2BPercentage: row.margin_b2b_percentage ? parseFloat(row.margin_b2b_percentage) : null,
+      margenClientes: row.margen_clientes ? parseFloat(row.margen_clientes) : null,
+      margenClientesPct: row.margen_clientes_pct ? parseFloat(row.margen_clientes_pct) : null,
 
       // Metadata
       priceSource: row.price_source,
       hasPricing: row.pricing_id !== null,
       pricingId: row.pricing_id,
+
+      // Company type flags
+      isBranch,
+      canEditPrecioSucursales: !isBranch, // Only matrices can set precio_sucursales
 
       // Provider info
       isProviderCategory: isProvider && providerCategories.includes(row.service_category)
@@ -283,13 +281,13 @@ export async function GET(
 /**
  * POST /api/companies/[id]/products/pricing
  *
- * Set or update B2B/B2C pricing for products
+ * Set or update pricing for products - NEW SIMPLIFIED MODEL
  *
  * Body: {
  *   products: [{
  *     productId: number,
- *     b2bPrice?: number,  // Price for branches/children
- *     b2cPrice?: number,  // Price for end customers
+ *     precioSucursales?: number,  // Price for branches (only matrices)
+ *     precioClientes?: number,    // Price for end customers
  *     markupType?: 'percentage' | 'fixed',
  *     markupValue?: number
  *   }],
@@ -297,9 +295,8 @@ export async function GET(
  * }
  *
  * Validation rules:
- * - b2b_price >= min_b2b_price (cannot sell B2B cheaper than what you received)
- * - b2c_price >= cost_price (cannot lose money on B2C sales)
- * - b2b_price >= cost_price (cannot lose money on B2B sales)
+ * - precio_sucursales >= mi_costo (cannot sell to branches cheaper than cost)
+ * - precio_clientes >= mi_costo (cannot lose money on sales)
  */
 export async function POST(
   request: NextRequest,
@@ -364,27 +361,43 @@ export async function POST(
 
     for (const product of products) {
       try {
-        const { productId, b2bPrice, b2cPrice, markupType, markupValue } = product
+        const {
+          productId,
+          // New field names
+          precioSucursales,
+          precioClientes,
+          // Legacy support
+          b2bPrice,
+          b2cPrice,
+          markupType,
+          markupValue
+        } = product
 
         if (!productId) {
           results.push({ productId: 0, success: false, error: 'productId requerido' })
           continue
         }
 
-        // Get product info and determine cost_price and min_b2b_price
+        // Get product info and determine mi_costo
         let costPriceQuery: string
         let costParams: any[]
 
         if (isBranch) {
-          // For branches: cost and min_b2b is parent's b2b_price
+          // For branches: mi_costo is parent's precio_sucursales
           costPriceQuery = `
             SELECT
               pc.id,
-              pc.platform_price,
-              pc.platform_min_b2c,
-              pc.min_price,
-              COALESCE(parent.b2b_price, parent.sell_price, pc.platform_price) as cost_price,
-              COALESCE(parent.b2b_price, parent.sell_price, pc.platform_price) as min_b2b_price
+              COALESCE(pc.precio_mayorista, pc.provider_b2b_price, pc.platform_price) as catalog_cost,
+              COALESCE(pc.precio_publico, pc.platform_min_b2c) as catalog_publico,
+              COALESCE(
+                parent.precio_sucursales,
+                parent.b2b_price,
+                parent.precio_clientes,
+                parent.b2c_price,
+                parent.mi_costo,
+                pc.precio_mayorista,
+                pc.provider_b2b_price
+              ) as mi_costo
             FROM product_catalog pc
             LEFT JOIN company_product_pricing parent
               ON parent.product_id = pc.id
@@ -393,14 +406,12 @@ export async function POST(
           `
           costParams = [productId, company.parent_company_id]
         } else {
-          // For matrix: cost is platform_price, min_b2b is also platform_price
+          // For matrix: mi_costo is catalog's precio_mayorista
           costPriceQuery = `
             SELECT
               id,
-              platform_price as cost_price,
-              platform_price as min_b2b_price,
-              platform_min_b2c,
-              min_price
+              COALESCE(precio_mayorista, provider_b2b_price, platform_price) as mi_costo,
+              COALESCE(precio_publico, platform_min_b2c) as catalog_publico
             FROM product_catalog
             WHERE id = $1
           `
@@ -415,99 +426,88 @@ export async function POST(
         }
 
         const productInfo = productResult.rows[0]
-        const costPrice = parseFloat(productInfo.cost_price)
-        const minB2BPrice = parseFloat(productInfo.min_b2b_price)
-        const platformMinB2C = parseFloat(productInfo.platform_min_b2c || 0)
+        const miCosto = parseFloat(productInfo.mi_costo || 0)
+        const catalogPrecioPublico = parseFloat(productInfo.catalog_publico || 0)
 
-        // Calculate final prices
-        let finalB2BPrice = b2bPrice
-        let finalB2CPrice = b2cPrice
+        // Use new names, fallback to legacy
+        let finalPrecioSucursales = precioSucursales ?? b2bPrice
+        let finalPrecioClientes = precioClientes ?? b2cPrice
 
         // If markup is provided for branches, calculate prices from markup
         if (isBranch && markupType && markupValue !== undefined) {
           if (markupType === 'percentage') {
-            finalB2CPrice = costPrice * (1 + markupValue / 100)
-            // B2B could be slightly less than B2C if provided
-            if (!finalB2BPrice) {
-              finalB2BPrice = finalB2CPrice
-            }
+            finalPrecioClientes = miCosto * (1 + markupValue / 100)
           } else if (markupType === 'fixed') {
-            finalB2CPrice = costPrice + markupValue
-            if (!finalB2BPrice) {
-              finalB2BPrice = finalB2CPrice
-            }
+            finalPrecioClientes = miCosto + markupValue
           }
         }
 
-        // CRITICAL VALIDATION: b2b_price >= min_b2b_price
-        if (finalB2BPrice !== undefined && finalB2BPrice !== null && finalB2BPrice < minB2BPrice) {
+        // Branches cannot set precio_sucursales (they don't have branches)
+        if (isBranch && finalPrecioSucursales !== undefined && finalPrecioSucursales !== null) {
+          // Silently ignore - branches cannot have precio_sucursales
+          finalPrecioSucursales = null
+        }
+
+        // Validation: precio_sucursales >= mi_costo (for matrices)
+        if (!isBranch && finalPrecioSucursales !== undefined && finalPrecioSucursales !== null && finalPrecioSucursales < miCosto) {
           results.push({
             productId,
             success: false,
-            error: `Precio B2B ($${finalB2BPrice}) no puede ser menor que el precio B2B mínimo ($${minB2BPrice})`
+            error: `Precio Sucursales ($${finalPrecioSucursales}) no puede ser menor que Mi Costo ($${miCosto})`
           })
           continue
         }
 
-        // Validation: b2b_price >= cost_price
-        if (finalB2BPrice !== undefined && finalB2BPrice !== null && finalB2BPrice < costPrice) {
+        // Validation: precio_clientes >= mi_costo
+        if (finalPrecioClientes !== undefined && finalPrecioClientes !== null && finalPrecioClientes < miCosto) {
           results.push({
             productId,
             success: false,
-            error: `Precio B2B ($${finalB2BPrice}) no puede ser menor que el costo ($${costPrice})`
+            error: `Precio Clientes ($${finalPrecioClientes}) no puede ser menor que Mi Costo ($${miCosto})`
           })
           continue
         }
 
-        // Validation: b2c_price >= cost_price
-        if (finalB2CPrice !== undefined && finalB2CPrice !== null && finalB2CPrice < costPrice) {
-          results.push({
-            productId,
-            success: false,
-            error: `Precio B2C ($${finalB2CPrice}) no puede ser menor que el costo ($${costPrice})`
-          })
-          continue
-        }
-
-        // Validation: b2c_price >= platform_min_b2c (if set)
-        if (finalB2CPrice !== undefined && finalB2CPrice !== null && platformMinB2C > 0 && finalB2CPrice < platformMinB2C) {
-          results.push({
-            productId,
-            success: false,
-            error: `Precio B2C ($${finalB2CPrice}) no puede ser menor que el precio B2C mínimo de plataforma ($${platformMinB2C})`
-          })
-          continue
+        // Calculate margin
+        let margenClientes = null
+        let margenClientesPct = null
+        if (finalPrecioClientes !== undefined && finalPrecioClientes !== null && miCosto > 0) {
+          margenClientes = finalPrecioClientes - miCosto
+          margenClientesPct = ((finalPrecioClientes - miCosto) / miCosto) * 100
         }
 
         // Determine price_source
         const priceSource = isBranch ? 'parent_company' : 'platform'
 
-        // Upsert pricing with B2B/B2C fields
+        // Upsert pricing with new field names
         await db.query(`
           INSERT INTO company_product_pricing (
-            company_id, product_id, cost_price, b2b_price, b2c_price, sell_price,
-            min_b2b_price, price_source, parent_company_id,
+            company_id, product_id, mi_costo,
+            precio_sucursales, precio_clientes,
+            margen_clientes, margen_clientes_pct,
+            price_source, parent_company_id,
             markup_type, markup_value
-          ) VALUES ($1, $2, $3, $4, $5, $5, $6, $7, $8, $9, $10)
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
           ON CONFLICT (company_id, product_id)
           DO UPDATE SET
-            cost_price = $3,
-            b2b_price = COALESCE($4, company_product_pricing.b2b_price),
-            b2c_price = COALESCE($5, company_product_pricing.b2c_price),
-            sell_price = COALESCE($5, company_product_pricing.sell_price),
-            min_b2b_price = $6,
-            price_source = $7,
-            parent_company_id = $8,
-            markup_type = COALESCE($9, company_product_pricing.markup_type),
-            markup_value = COALESCE($10, company_product_pricing.markup_value),
+            mi_costo = $3,
+            precio_sucursales = COALESCE($4, company_product_pricing.precio_sucursales),
+            precio_clientes = COALESCE($5, company_product_pricing.precio_clientes),
+            margen_clientes = COALESCE($6, company_product_pricing.margen_clientes),
+            margen_clientes_pct = COALESCE($7, company_product_pricing.margen_clientes_pct),
+            price_source = $8,
+            parent_company_id = $9,
+            markup_type = COALESCE($10, company_product_pricing.markup_type),
+            markup_value = COALESCE($11, company_product_pricing.markup_value),
             updated_at = NOW()
         `, [
           companyId,
           productId,
-          costPrice,
-          finalB2BPrice || null,
-          finalB2CPrice || null,
-          minB2BPrice,
+          miCosto,
+          finalPrecioSucursales || null,
+          finalPrecioClientes || null,
+          margenClientes,
+          margenClientesPct,
           priceSource,
           isBranch ? company.parent_company_id : null,
           markupType || null,

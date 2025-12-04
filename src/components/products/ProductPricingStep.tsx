@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Package, DollarSign, Smartphone, Store, AlertCircle, Check, Edit3, Building2, Users } from 'lucide-react'
+import { Package, DollarSign, Smartphone, Store, AlertCircle, Check, Edit3, Building2, Users, Lock } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 interface Product {
@@ -12,29 +12,38 @@ interface Product {
   productType: string
   unitType: string
   pricingModel: string
-  costPrice: number
-  minPrice: number
-  minB2BPrice?: number // Minimum B2B price (floor)
-  platformMinB2C?: number // Platform minimum B2C price
+  // New simplified names
+  miCosto?: number // Inherited cost - NOT EDITABLE
+  precioSucursales?: number // Price for branches (only for matrices)
+  precioClientes?: number // Price for end customers
+  // Legacy names for compatibility
+  costPrice?: number
+  minPrice?: number
+  minB2BPrice?: number
+  platformMinB2C?: number
 }
 
 interface ProductPrice {
   productId: number
-  b2bPrice?: number // Price for branches/children
-  b2cPrice?: number // Price for end customers
-  sellPrice?: number // Legacy - same as b2cPrice
-  costPrice?: number // Only editable if provider
+  // New simplified names
+  precioSucursales?: number // Price for branches
+  precioClientes?: number // Price for end customers
+  // Legacy names for compatibility
+  b2bPrice?: number
+  b2cPrice?: number
+  sellPrice?: number
+  costPrice?: number
 }
 
 interface ProductPricingStepProps {
   products: Product[]
   prices: ProductPrice[]
   onChange: (prices: ProductPrice[]) => void
-  enabledCategories?: string[] // Enabled service categories
-  isProvider?: boolean // If company is a provider
-  providerCategories?: string[] // Categories where company is provider
-  isBranch?: boolean // If it's a branch (sucursal)
-  hasSubBranches?: boolean // If company can have sub-branches (shows B2B column)
+  enabledCategories?: string[]
+  isProvider?: boolean
+  providerCategories?: string[]
+  isBranch?: boolean // If it's a branch (sucursal) - cannot edit precioSucursales
+  hasSubBranches?: boolean // If company has branches (shows Precio Sucursales column)
   markupType?: 'percentage' | 'fixed'
   markupValue?: number
   onMarkupChange?: (type: 'percentage' | 'fixed', value: number) => void
@@ -48,7 +57,7 @@ const categoryIcons: Record<string, typeof Package> = {
 }
 
 const categoryLabels: Record<string, string> = {
-  paqueteria: 'Paquetería',
+  paqueteria: 'Paqueteria',
   remesa: 'Remesa',
   recarga: 'Recarga',
   mercado: 'Mercado'
@@ -67,8 +76,8 @@ export default function ProductPricingStep({
   markupValue = 0,
   onMarkupChange
 }: ProductPricingStepProps) {
-  const [localPrices, setLocalPrices] = useState<Record<number, { b2bPrice?: number; b2cPrice?: number; costPrice?: number }>>({})
-  const [errors, setErrors] = useState<Record<number, { b2b?: string; b2c?: string }>>({})
+  const [localPrices, setLocalPrices] = useState<Record<number, { precioSucursales?: number; precioClientes?: number; costPrice?: number }>>({})
+  const [errors, setErrors] = useState<Record<number, { sucursales?: string; clientes?: string }>>({})
 
   // Ensure products is always an array
   const safeProducts = Array.isArray(products) ? products : []
@@ -85,12 +94,12 @@ export default function ProductPricingStep({
 
   // Initialize local prices from props
   useEffect(() => {
-    const priceMap: Record<number, { b2bPrice?: number; b2cPrice?: number; costPrice?: number }> = {}
+    const priceMap: Record<number, { precioSucursales?: number; precioClientes?: number; costPrice?: number }> = {}
     const pricesArray = Array.isArray(prices) ? prices : []
     for (const price of pricesArray) {
       priceMap[price.productId] = {
-        b2bPrice: price.b2bPrice,
-        b2cPrice: price.b2cPrice ?? price.sellPrice,
+        precioSucursales: price.precioSucursales ?? price.b2bPrice,
+        precioClientes: price.precioClientes ?? price.b2cPrice ?? price.sellPrice,
         costPrice: price.costPrice
       }
     }
@@ -112,39 +121,34 @@ export default function ProductPricingStep({
     return isProvider && providerCategories.includes(category)
   }
 
+  // Get the effective cost for a product (miCosto is inherited and not editable)
+  const getEffectiveCost = (product: Product, localPrice?: { costPrice?: number }) => {
+    return Number(product.miCosto ?? localPrice?.costPrice ?? product.costPrice ?? 0) || 0
+  }
+
   const handlePriceChange = (
     productId: number,
-    field: 'b2bPrice' | 'b2cPrice' | 'costPrice',
+    field: 'precioSucursales' | 'precioClientes' | 'costPrice',
     value: string,
     product: Product
   ) => {
     const numValue = parseFloat(value) || 0
-    const productCost = product.costPrice ?? 0
-    const minB2BPrice = product.minB2BPrice ?? productCost
-    const platformMinB2C = product.platformMinB2C ?? 0
-    const current = localPrices[productId] || { b2cPrice: productCost }
+    const miCosto = getEffectiveCost(product, localPrices[productId])
+    const current = localPrices[productId] || { precioClientes: miCosto }
 
     // Validate
-    const newErrors: { b2b?: string; b2c?: string } = {}
+    const newErrors: { sucursales?: string; clientes?: string } = {}
 
-    if (field === 'b2bPrice') {
-      // CRITICAL: B2B price cannot be lower than min_b2b_price
-      if (numValue < minB2BPrice) {
-        newErrors.b2b = `Min B2B: $${minB2BPrice.toFixed(2)}`
-      }
-      // B2B cannot be lower than cost
-      if (numValue < productCost) {
-        newErrors.b2b = `Min: $${productCost.toFixed(2)}`
+    if (field === 'precioSucursales') {
+      // Precio Sucursales cannot be lower than Mi Costo
+      if (numValue < miCosto) {
+        newErrors.sucursales = `Min: $${miCosto.toFixed(2)}`
       }
     }
 
-    if (field === 'b2cPrice') {
-      const effectiveCost = current.costPrice ?? productCost
-      if (numValue < effectiveCost) {
-        newErrors.b2c = `Min: $${effectiveCost.toFixed(2)}`
-      }
-      if (platformMinB2C > 0 && numValue < platformMinB2C) {
-        newErrors.b2c = `Min B2C plataforma: $${platformMinB2C.toFixed(2)}`
+    if (field === 'precioClientes') {
+      if (numValue < miCosto) {
+        newErrors.clientes = `Min: $${miCosto.toFixed(2)}`
       }
     }
 
@@ -165,28 +169,28 @@ export default function ProductPricingStep({
 
     // Update parent with all prices
     const newPrices = filteredProducts.map(p => {
-      const pCost = p.costPrice ?? 0
+      const pCost = getEffectiveCost(p, localPrices[p.id])
       if (p.id === productId) {
         return {
           productId: p.id,
-          b2bPrice: field === 'b2bPrice' ? numValue : localPrices[p.id]?.b2bPrice,
-          b2cPrice: field === 'b2cPrice' ? numValue : (localPrices[p.id]?.b2cPrice ?? pCost),
+          precioSucursales: field === 'precioSucursales' ? numValue : localPrices[p.id]?.precioSucursales,
+          precioClientes: field === 'precioClientes' ? numValue : (localPrices[p.id]?.precioClientes ?? pCost),
           costPrice: field === 'costPrice' ? numValue : localPrices[p.id]?.costPrice
         }
       }
       return {
         productId: p.id,
-        b2bPrice: localPrices[p.id]?.b2bPrice,
-        b2cPrice: localPrices[p.id]?.b2cPrice ?? pCost,
+        precioSucursales: localPrices[p.id]?.precioSucursales,
+        precioClientes: localPrices[p.id]?.precioClientes ?? pCost,
         costPrice: localPrices[p.id]?.costPrice
       }
     })
     onChange(newPrices)
   }
 
-  const calculateMargin = (costPrice: number, sellPrice: number) => {
-    const cost = Number(costPrice) || 0
-    const sell = Number(sellPrice) || 0
+  const calculateMargin = (miCosto: number, precioClientes: number) => {
+    const cost = Number(miCosto) || 0
+    const sell = Number(precioClientes) || 0
     const margin = sell - cost
     const percentage = cost > 0 ? ((sell - cost) / cost * 100) : 0
     return { margin: isNaN(margin) ? 0 : margin, percentage: isNaN(percentage) ? 0 : percentage }
@@ -203,23 +207,23 @@ export default function ProductPricingStep({
     if (!isBranch) return
 
     const newPrices = filteredProducts.map(p => {
-      const baseCost = p.costPrice ?? 0
-      let b2cPrice = baseCost
+      const miCosto = getEffectiveCost(p, localPrices[p.id])
+      let precioClientes = miCosto
       if (markupType === 'percentage') {
-        b2cPrice = baseCost * (1 + markupValue / 100)
+        precioClientes = miCosto * (1 + markupValue / 100)
       } else {
-        b2cPrice = baseCost + markupValue
+        precioClientes = miCosto + markupValue
       }
       return {
         productId: p.id,
-        b2bPrice: b2cPrice, // For branches, B2B same as B2C unless they have sub-branches
-        b2cPrice
+        precioClientes
+        // Branches cannot set precioSucursales
       }
     })
 
-    const priceMap: Record<number, { b2bPrice?: number; b2cPrice?: number }> = {}
+    const priceMap: Record<number, { precioSucursales?: number; precioClientes?: number }> = {}
     for (const price of newPrices) {
-      priceMap[price.productId] = { b2bPrice: price.b2bPrice, b2cPrice: price.b2cPrice }
+      priceMap[price.productId] = { precioClientes: price.precioClientes }
     }
     setLocalPrices(priceMap)
     onChange(newPrices)
@@ -230,14 +234,14 @@ export default function ProductPricingStep({
       <div className="p-8 text-center rounded-xl border-2 border-dashed border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/30">
         <Package className="w-12 h-12 mx-auto mb-4 text-gray-400 dark:text-gray-600" />
         <p className="text-sm text-gray-500 dark:text-gray-400">
-          No hay productos disponibles para las categorías de servicios seleccionados.
+          No hay productos disponibles para las categorias de servicios seleccionados.
         </p>
       </div>
     )
   }
 
   // Determine which columns to show
-  const showB2BColumn = !isBranch || hasSubBranches // Matrix companies always show B2B, branches only if they have sub-branches
+  const showPrecioSucursalesColumn = !isBranch || hasSubBranches
 
   return (
     <div className="space-y-6">
@@ -245,20 +249,18 @@ export default function ProductPricingStep({
       <div className="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 rounded-lg p-4 border border-blue-200 dark:border-blue-800">
         <h4 className="text-sm font-medium text-blue-900 dark:text-blue-100 mb-2 flex items-center gap-2">
           {isBranch ? <Building2 className="w-4 h-4" /> : <Users className="w-4 h-4" />}
-          {isBranch ? 'Configuración de Precios de Sucursal' : 'Configuración de Precios B2B/B2C'}
+          {isBranch ? 'Configurar Mis Precios de Venta' : 'Configurar Precios de Venta'}
         </h4>
         <p className="text-xs text-blue-700 dark:text-blue-300">
           {isBranch
-            ? 'Los precios base se heredan de la empresa matriz. Configure sus precios de venta al público.'
-            : 'Configure los precios B2B (para sucursales/distribuidores) y B2C (para clientes finales).'
+            ? 'Mi Costo es heredado de la matriz y no se puede modificar. Configure su Precio a Clientes.'
+            : 'Mi Costo es heredado de la plataforma. Configure Precio a Sucursales y Precio a Clientes.'
           }
         </p>
-        {!isBranch && (
-          <div className="mt-2 text-xs text-amber-700 dark:text-amber-400 flex items-center gap-1">
-            <AlertCircle className="w-3 h-3" />
-            Regla: El precio B2B no puede ser menor al costo asignado por la plataforma.
-          </div>
-        )}
+        <div className="mt-2 text-xs text-amber-700 dark:text-amber-400 flex items-center gap-1">
+          <Lock className="w-3 h-3" />
+          Regla: Los precios de venta no pueden ser menores a Mi Costo.
+        </div>
       </div>
 
       {/* Markup configuration for branches */}
@@ -347,34 +349,37 @@ export default function ProductPricingStep({
                       Producto
                     </th>
                     <th className="text-right px-4 py-2 text-gray-600 dark:text-gray-300 font-medium">
-                      {canEditCost ? 'Costo (Editable)' : 'Costo'}
+                      <div className="flex items-center justify-end gap-1">
+                        <Lock className="w-3 h-3" />
+                        Mi Costo
+                      </div>
                     </th>
-                    {showB2BColumn && (
+                    {showPrecioSucursalesColumn && (
                       <th className="text-right px-4 py-2 text-gray-600 dark:text-gray-300 font-medium">
                         <div className="flex items-center justify-end gap-1">
                           <Building2 className="w-3 h-3" />
-                          Precio B2B
+                          Precio Sucursales
                         </div>
                       </th>
                     )}
                     <th className="text-right px-4 py-2 text-gray-600 dark:text-gray-300 font-medium">
                       <div className="flex items-center justify-end gap-1">
                         <Users className="w-3 h-3" />
-                        Precio B2C
+                        Precio Clientes
                       </div>
                     </th>
                     <th className="text-right px-4 py-2 text-gray-600 dark:text-gray-300 font-medium">
-                      Margen B2C
+                      Margen
                     </th>
                   </tr>
                 </thead>
                 <tbody className="divide-y dark:divide-gray-700">
                   {categoryProducts.map(product => {
                     const localPrice = localPrices[product.id]
-                    const effectiveCost = Number(localPrice?.costPrice ?? product.costPrice ?? 0) || 0
-                    const b2bPrice = localPrice?.b2bPrice
-                    const b2cPrice = Number(localPrice?.b2cPrice ?? product.costPrice ?? 0) || 0
-                    const { margin, percentage } = calculateMargin(effectiveCost, b2cPrice)
+                    const miCosto = getEffectiveCost(product, localPrice)
+                    const precioSucursales = localPrice?.precioSucursales
+                    const precioClientes = Number(localPrice?.precioClientes ?? miCosto) || 0
+                    const { margin, percentage } = calculateMargin(miCosto, precioClientes)
                     const productErrors = errors[product.id]
                     const unitLabel = getUnitLabel(product.unitType || 'unit', product.pricingModel || 'fixed')
 
@@ -383,7 +388,7 @@ export default function ProductPricingStep({
                         key={product.id}
                         className={cn(
                           "hover:bg-gray-50 dark:hover:bg-gray-700/30",
-                          (productErrors?.b2b || productErrors?.b2c) && "bg-red-50 dark:bg-red-900/10"
+                          (productErrors?.sucursales || productErrors?.clientes) && "bg-red-50 dark:bg-red-900/10"
                         )}
                       >
                         <td className="px-4 py-3">
@@ -396,59 +401,47 @@ export default function ProductPricingStep({
                         </td>
 
                         <td className="px-4 py-3 text-right">
-                          {canEditCost ? (
-                            <div className="flex items-center justify-end gap-1">
-                              <span className="text-gray-500">$</span>
-                              <input
-                                type="number"
-                                value={effectiveCost}
-                                onChange={(e) => handlePriceChange(
-                                  product.id,
-                                  'costPrice',
-                                  e.target.value,
-                                  product
-                                )}
-                                min="0"
-                                step="0.01"
-                                className="w-24 px-2 py-1 text-right border rounded dark:bg-gray-700 dark:border-gray-600 border-amber-300 dark:border-amber-600"
-                              />
-                              <span className="text-gray-500 text-xs">{unitLabel}</span>
-                            </div>
-                          ) : (
-                            <span className="text-gray-700 dark:text-gray-300">
-                              ${effectiveCost.toFixed(2)}{unitLabel}
-                            </span>
-                          )}
+                          {/* Mi Costo is always read-only (inherited) */}
+                          <span className="text-gray-700 dark:text-gray-300 flex items-center justify-end gap-1">
+                            <Lock className="w-3 h-3 text-gray-400" />
+                            ${miCosto.toFixed(2)}{unitLabel}
+                          </span>
                         </td>
 
-                        {showB2BColumn && (
+                        {showPrecioSucursalesColumn && (
                           <td className="px-4 py-3 text-right">
-                            <div className="flex items-center justify-end gap-1">
-                              <span className="text-gray-500">$</span>
-                              <input
-                                type="number"
-                                value={b2bPrice ?? ''}
-                                placeholder={effectiveCost.toFixed(2)}
-                                onChange={(e) => handlePriceChange(
-                                  product.id,
-                                  'b2bPrice',
-                                  e.target.value,
-                                  product
+                            {isBranch ? (
+                              <span className="text-gray-400 dark:text-gray-500">-</span>
+                            ) : (
+                              <>
+                                <div className="flex items-center justify-end gap-1">
+                                  <span className="text-gray-500">$</span>
+                                  <input
+                                    type="number"
+                                    value={precioSucursales ?? ''}
+                                    placeholder={miCosto.toFixed(2)}
+                                    onChange={(e) => handlePriceChange(
+                                      product.id,
+                                      'precioSucursales',
+                                      e.target.value,
+                                      product
+                                    )}
+                                    min={miCosto}
+                                    step="0.01"
+                                    className={cn(
+                                      "w-24 px-2 py-1 text-right border rounded dark:bg-gray-700 dark:border-gray-600",
+                                      productErrors?.sucursales && "border-red-500 dark:border-red-500"
+                                    )}
+                                  />
+                                  <span className="text-gray-500 text-xs">{unitLabel}</span>
+                                </div>
+                                {productErrors?.sucursales && (
+                                  <div className="flex items-center justify-end gap-1 mt-1 text-xs text-red-600 dark:text-red-400">
+                                    <AlertCircle className="w-3 h-3" />
+                                    {productErrors.sucursales}
+                                  </div>
                                 )}
-                                min={effectiveCost}
-                                step="0.01"
-                                className={cn(
-                                  "w-24 px-2 py-1 text-right border rounded dark:bg-gray-700 dark:border-gray-600",
-                                  productErrors?.b2b && "border-red-500 dark:border-red-500"
-                                )}
-                              />
-                              <span className="text-gray-500 text-xs">{unitLabel}</span>
-                            </div>
-                            {productErrors?.b2b && (
-                              <div className="flex items-center justify-end gap-1 mt-1 text-xs text-red-600 dark:text-red-400">
-                                <AlertCircle className="w-3 h-3" />
-                                {productErrors.b2b}
-                              </div>
+                              </>
                             )}
                           </td>
                         )}
@@ -458,26 +451,26 @@ export default function ProductPricingStep({
                             <span className="text-gray-500">$</span>
                             <input
                               type="number"
-                              value={b2cPrice}
+                              value={precioClientes}
                               onChange={(e) => handlePriceChange(
                                 product.id,
-                                'b2cPrice',
+                                'precioClientes',
                                 e.target.value,
                                 product
                               )}
-                              min={effectiveCost}
+                              min={miCosto}
                               step="0.01"
                               className={cn(
                                 "w-24 px-2 py-1 text-right border rounded dark:bg-gray-700 dark:border-gray-600",
-                                productErrors?.b2c && "border-red-500 dark:border-red-500"
+                                productErrors?.clientes && "border-red-500 dark:border-red-500"
                               )}
                             />
                             <span className="text-gray-500 text-xs">{unitLabel}</span>
                           </div>
-                          {productErrors?.b2c && (
+                          {productErrors?.clientes && (
                             <div className="flex items-center justify-end gap-1 mt-1 text-xs text-red-600 dark:text-red-400">
                               <AlertCircle className="w-3 h-3" />
-                              {productErrors.b2c}
+                              {productErrors.clientes}
                             </div>
                           )}
                         </td>
@@ -513,10 +506,10 @@ export default function ProductPricingStep({
             {Object.keys(localPrices).length} / {filteredProducts.length}
           </span>
         </div>
-        {Object.values(errors).some(e => e?.b2b || e?.b2c) && (
+        {Object.values(errors).some(e => e?.sucursales || e?.clientes) && (
           <div className="mt-2 flex items-center gap-2 text-sm text-red-600 dark:text-red-400">
             <AlertCircle className="w-4 h-4" />
-            Hay errores en algunos precios. Corrígelos antes de continuar.
+            Hay errores en algunos precios. Corrigelos antes de continuar.
           </div>
         )}
       </div>
