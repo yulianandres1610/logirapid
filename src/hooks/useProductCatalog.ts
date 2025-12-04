@@ -14,7 +14,9 @@ export interface Product {
   weightCapacity: number | null
   unitType: string
   providerCost: number
-  platformPrice: number
+  providerB2BPrice: number // B2B price provider charges to LogiRapid
+  platformPrice: number // Default B2B price LogiRapid charges companies
+  platformMinB2C: number // Minimum B2C price companies must charge
   pricingModel: string
   minPrice: number
   providerCompanyId: number | null
@@ -44,10 +46,16 @@ export interface CompanyProductPricing {
   displayOrder: number
   costPrice: number
   sellPrice: number | null
+  b2bPrice: number | null // Price for branches/children
+  b2cPrice: number | null // Price for end customers
+  minB2BPrice: number | null // Minimum B2B price floor
   markupType: string | null
   markupValue: number | null
   margin: number | null
   marginPercentage: number | null
+  marginB2B: number | null
+  marginB2BPercentage: number | null
+  priceSource: string | null
   hasPricing: boolean
   pricingId: number | null
 }
@@ -96,7 +104,9 @@ export function useProductCatalog(category?: string) {
         weightCapacity: p.weight_capacity ? parseFloat(p.weight_capacity) : null,
         unitType: p.unit_type,
         providerCost: parseFloat(p.provider_cost || 0),
+        providerB2BPrice: parseFloat(p.provider_b2b_price || 0),
         platformPrice: parseFloat(p.platform_price || 0),
+        platformMinB2C: parseFloat(p.platform_min_b2c || 0),
         pricingModel: p.pricing_model,
         minPrice: parseFloat(p.min_price || 0),
         providerCompanyId: p.provider_company_id,
@@ -201,7 +211,9 @@ export function useCompanyProductPricing(companyId: number | null) {
 
   const updatePrices = useCallback(async (products: Array<{
     productId: number
-    sellPrice: number
+    sellPrice?: number
+    b2bPrice?: number
+    b2cPrice?: number
     markupType?: string
     markupValue?: number
   }>, notes?: string) => {

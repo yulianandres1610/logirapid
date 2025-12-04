@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Package, DollarSign, Smartphone, Store, AlertCircle, Check, Edit3 } from 'lucide-react'
+import { Package, DollarSign, Smartphone, Store, AlertCircle, Check, Edit3, Building2, Users } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 interface Product {
@@ -14,22 +14,27 @@ interface Product {
   pricingModel: string
   costPrice: number
   minPrice: number
+  minB2BPrice?: number // Minimum B2B price (floor)
+  platformMinB2C?: number // Platform minimum B2C price
 }
 
 interface ProductPrice {
   productId: number
-  sellPrice: number
-  costPrice?: number // Solo si es proveedor
+  b2bPrice?: number // Price for branches/children
+  b2cPrice?: number // Price for end customers
+  sellPrice?: number // Legacy - same as b2cPrice
+  costPrice?: number // Only editable if provider
 }
 
 interface ProductPricingStepProps {
   products: Product[]
   prices: ProductPrice[]
   onChange: (prices: ProductPrice[]) => void
-  enabledCategories?: string[] // Categorías habilitadas para filtrar productos
-  isProvider?: boolean // Si la empresa es proveedora
-  providerCategories?: string[] // Categorías donde la empresa es proveedora
-  isBranch?: boolean
+  enabledCategories?: string[] // Enabled service categories
+  isProvider?: boolean // If company is a provider
+  providerCategories?: string[] // Categories where company is provider
+  isBranch?: boolean // If it's a branch (sucursal)
+  hasSubBranches?: boolean // If company can have sub-branches (shows B2B column)
   markupType?: 'percentage' | 'fixed'
   markupValue?: number
   onMarkupChange?: (type: 'percentage' | 'fixed', value: number) => void
@@ -57,18 +62,17 @@ export default function ProductPricingStep({
   isProvider = false,
   providerCategories = [],
   isBranch = false,
+  hasSubBranches = false,
   markupType = 'percentage',
   markupValue = 0,
   onMarkupChange
 }: ProductPricingStepProps) {
-  const [localPrices, setLocalPrices] = useState<Record<number, { sellPrice: number; costPrice?: number }>>({})
-  const [errors, setErrors] = useState<Record<number, string>>({})
+  const [localPrices, setLocalPrices] = useState<Record<number, { b2bPrice?: number; b2cPrice?: number; costPrice?: number }>>({})
+  const [errors, setErrors] = useState<Record<number, { b2b?: string; b2c?: string }>>({})
 
-  // Filtrar productos por categorías habilitadas
+  // Filter products by enabled categories
   const filteredProducts = enabledCategories && enabledCategories.length > 0
     ? products.filter(p => {
-        // Extraer la categoría principal de los servicios habilitados
-        // Por ejemplo: "paqueteria:routes" -> "paqueteria"
         return enabledCategories.some(cat => {
           const mainCategory = cat.includes(':') ? cat.split(':')[0] : cat
           return p.serviceCategory === mainCategory
@@ -78,10 +82,11 @@ export default function ProductPricingStep({
 
   // Initialize local prices from props
   useEffect(() => {
-    const priceMap: Record<number, { sellPrice: number; costPrice?: number }> = {}
+    const priceMap: Record<number, { b2bPrice?: number; b2cPrice?: number; costPrice?: number }> = {}
     for (const price of prices) {
       priceMap[price.productId] = {
-        sellPrice: price.sellPrice,
+        b2bPrice: price.b2bPrice,
+        b2cPrice: price.b2cPrice ?? price.sellPrice,
         costPrice: price.costPrice
       }
     }
@@ -98,31 +103,50 @@ export default function ProductPricingStep({
     return acc
   }, {} as Record<string, Product[]>)
 
-  // Verificar si la empresa es proveedora de una categoría específica
+  // Check if company is provider for specific category
   const isProviderForCategory = (category: string) => {
     return isProvider && providerCategories.includes(category)
   }
 
-  const handlePriceChange = (productId: number, field: 'sellPrice' | 'costPrice', value: string, product: Product) => {
+  const handlePriceChange = (
+    productId: number,
+    field: 'b2bPrice' | 'b2cPrice' | 'costPrice',
+    value: string,
+    product: Product
+  ) => {
     const numValue = parseFloat(value) || 0
     const productCost = product.costPrice ?? 0
-    const productMinPrice = product.minPrice ?? 0
-    const current = localPrices[productId] || { sellPrice: productCost }
+    const minB2BPrice = product.minB2BPrice ?? productCost
+    const platformMinB2C = product.platformMinB2C ?? 0
+    const current = localPrices[productId] || { b2cPrice: productCost }
 
     // Validate
-    let error = ''
-    if (field === 'sellPrice') {
+    const newErrors: { b2b?: string; b2c?: string } = {}
+
+    if (field === 'b2bPrice') {
+      // CRITICAL: B2B price cannot be lower than min_b2b_price
+      if (numValue < minB2BPrice) {
+        newErrors.b2b = `Min B2B: $${minB2BPrice.toFixed(2)}`
+      }
+      // B2B cannot be lower than cost
+      if (numValue < productCost) {
+        newErrors.b2b = `Min: $${productCost.toFixed(2)}`
+      }
+    }
+
+    if (field === 'b2cPrice') {
       const effectiveCost = current.costPrice ?? productCost
       if (numValue < effectiveCost) {
-        error = `Min: $${effectiveCost.toFixed(2)}`
-      } else if (numValue < productMinPrice && productMinPrice > 0) {
-        error = `Min permitido: $${productMinPrice.toFixed(2)}`
+        newErrors.b2c = `Min: $${effectiveCost.toFixed(2)}`
+      }
+      if (platformMinB2C > 0 && numValue < platformMinB2C) {
+        newErrors.b2c = `Min B2C plataforma: $${platformMinB2C.toFixed(2)}`
       }
     }
 
     setErrors(prev => ({
       ...prev,
-      [productId]: error
+      [productId]: { ...prev[productId], ...newErrors }
     }))
 
     const newLocal = {
@@ -141,13 +165,15 @@ export default function ProductPricingStep({
       if (p.id === productId) {
         return {
           productId: p.id,
-          sellPrice: field === 'sellPrice' ? numValue : (localPrices[p.id]?.sellPrice ?? pCost),
+          b2bPrice: field === 'b2bPrice' ? numValue : localPrices[p.id]?.b2bPrice,
+          b2cPrice: field === 'b2cPrice' ? numValue : (localPrices[p.id]?.b2cPrice ?? pCost),
           costPrice: field === 'costPrice' ? numValue : localPrices[p.id]?.costPrice
         }
       }
       return {
         productId: p.id,
-        sellPrice: localPrices[p.id]?.sellPrice ?? pCost,
+        b2bPrice: localPrices[p.id]?.b2bPrice,
+        b2cPrice: localPrices[p.id]?.b2cPrice ?? pCost,
         costPrice: localPrices[p.id]?.costPrice
       }
     })
@@ -166,24 +192,28 @@ export default function ProductPricingStep({
     return ''
   }
 
-  // For branches - apply markup to all products
+  // Apply markup to all products (for branches)
   const handleApplyMarkup = () => {
     if (!isBranch) return
 
     const newPrices = filteredProducts.map(p => {
       const baseCost = p.costPrice ?? 0
-      let sellPrice = baseCost
+      let b2cPrice = baseCost
       if (markupType === 'percentage') {
-        sellPrice = baseCost * (1 + markupValue / 100)
+        b2cPrice = baseCost * (1 + markupValue / 100)
       } else {
-        sellPrice = baseCost + markupValue
+        b2cPrice = baseCost + markupValue
       }
-      return { productId: p.id, sellPrice }
+      return {
+        productId: p.id,
+        b2bPrice: b2cPrice, // For branches, B2B same as B2C unless they have sub-branches
+        b2cPrice
+      }
     })
 
-    const priceMap: Record<number, { sellPrice: number }> = {}
+    const priceMap: Record<number, { b2bPrice?: number; b2cPrice?: number }> = {}
     for (const price of newPrices) {
-      priceMap[price.productId] = { sellPrice: price.sellPrice }
+      priceMap[price.productId] = { b2bPrice: price.b2bPrice, b2cPrice: price.b2cPrice }
     }
     setLocalPrices(priceMap)
     onChange(newPrices)
@@ -200,17 +230,37 @@ export default function ProductPricingStep({
     )
   }
 
+  // Determine which columns to show
+  const showB2BColumn = !isBranch || hasSubBranches // Matrix companies always show B2B, branches only if they have sub-branches
+
   return (
     <div className="space-y-6">
-      {/* For branches - Markup configuration */}
+      {/* Header info */}
+      <div className="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 rounded-lg p-4 border border-blue-200 dark:border-blue-800">
+        <h4 className="text-sm font-medium text-blue-900 dark:text-blue-100 mb-2 flex items-center gap-2">
+          {isBranch ? <Building2 className="w-4 h-4" /> : <Users className="w-4 h-4" />}
+          {isBranch ? 'Configuración de Precios de Sucursal' : 'Configuración de Precios B2B/B2C'}
+        </h4>
+        <p className="text-xs text-blue-700 dark:text-blue-300">
+          {isBranch
+            ? 'Los precios base se heredan de la empresa matriz. Configure sus precios de venta al público.'
+            : 'Configure los precios B2B (para sucursales/distribuidores) y B2C (para clientes finales).'
+          }
+        </p>
+        {!isBranch && (
+          <div className="mt-2 text-xs text-amber-700 dark:text-amber-400 flex items-center gap-1">
+            <AlertCircle className="w-3 h-3" />
+            Regla: El precio B2B no puede ser menor al costo asignado por la plataforma.
+          </div>
+        )}
+      </div>
+
+      {/* Markup configuration for branches */}
       {isBranch && onMarkupChange && (
         <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-4 border border-blue-200 dark:border-blue-800">
           <h4 className="text-sm font-medium text-blue-900 dark:text-blue-100 mb-3">
-            Configurar Markup de Sucursal
+            Configurar Markup Masivo
           </h4>
-          <p className="text-xs text-blue-700 dark:text-blue-300 mb-4">
-            Los precios base se heredan de la empresa matriz. Configure el markup adicional.
-          </p>
 
           <div className="flex flex-wrap gap-4 items-end">
             <div>
@@ -293,11 +343,22 @@ export default function ProductPricingStep({
                     <th className="text-right px-4 py-2 text-gray-600 dark:text-gray-300 font-medium">
                       {canEditCost ? 'Costo (Editable)' : 'Costo'}
                     </th>
+                    {showB2BColumn && (
+                      <th className="text-right px-4 py-2 text-gray-600 dark:text-gray-300 font-medium">
+                        <div className="flex items-center justify-end gap-1">
+                          <Building2 className="w-3 h-3" />
+                          Precio B2B
+                        </div>
+                      </th>
+                    )}
                     <th className="text-right px-4 py-2 text-gray-600 dark:text-gray-300 font-medium">
-                      Precio Venta
+                      <div className="flex items-center justify-end gap-1">
+                        <Users className="w-3 h-3" />
+                        Precio B2C
+                      </div>
                     </th>
                     <th className="text-right px-4 py-2 text-gray-600 dark:text-gray-300 font-medium">
-                      Margen
+                      Margen B2C
                     </th>
                   </tr>
                 </thead>
@@ -305,9 +366,10 @@ export default function ProductPricingStep({
                   {categoryProducts.map(product => {
                     const localPrice = localPrices[product.id]
                     const effectiveCost = localPrice?.costPrice ?? product.costPrice ?? 0
-                    const sellPrice = localPrice?.sellPrice ?? product.costPrice ?? 0
-                    const { margin, percentage } = calculateMargin(effectiveCost, sellPrice)
-                    const error = errors[product.id]
+                    const b2bPrice = localPrice?.b2bPrice
+                    const b2cPrice = localPrice?.b2cPrice ?? product.costPrice ?? 0
+                    const { margin, percentage } = calculateMargin(effectiveCost, b2cPrice)
+                    const productErrors = errors[product.id]
                     const unitLabel = getUnitLabel(product.unitType, product.pricingModel)
 
                     return (
@@ -315,7 +377,7 @@ export default function ProductPricingStep({
                         key={product.id}
                         className={cn(
                           "hover:bg-gray-50 dark:hover:bg-gray-700/30",
-                          error && "bg-red-50 dark:bg-red-900/10"
+                          (productErrors?.b2b || productErrors?.b2c) && "bg-red-50 dark:bg-red-900/10"
                         )}
                       >
                         <td className="px-4 py-3">
@@ -353,15 +415,47 @@ export default function ProductPricingStep({
                           )}
                         </td>
 
+                        {showB2BColumn && (
+                          <td className="px-4 py-3 text-right">
+                            <div className="flex items-center justify-end gap-1">
+                              <span className="text-gray-500">$</span>
+                              <input
+                                type="number"
+                                value={b2bPrice ?? ''}
+                                placeholder={effectiveCost.toFixed(2)}
+                                onChange={(e) => handlePriceChange(
+                                  product.id,
+                                  'b2bPrice',
+                                  e.target.value,
+                                  product
+                                )}
+                                min={effectiveCost}
+                                step="0.01"
+                                className={cn(
+                                  "w-24 px-2 py-1 text-right border rounded dark:bg-gray-700 dark:border-gray-600",
+                                  productErrors?.b2b && "border-red-500 dark:border-red-500"
+                                )}
+                              />
+                              <span className="text-gray-500 text-xs">{unitLabel}</span>
+                            </div>
+                            {productErrors?.b2b && (
+                              <div className="flex items-center justify-end gap-1 mt-1 text-xs text-red-600 dark:text-red-400">
+                                <AlertCircle className="w-3 h-3" />
+                                {productErrors.b2b}
+                              </div>
+                            )}
+                          </td>
+                        )}
+
                         <td className="px-4 py-3 text-right">
                           <div className="flex items-center justify-end gap-1">
                             <span className="text-gray-500">$</span>
                             <input
                               type="number"
-                              value={sellPrice}
+                              value={b2cPrice}
                               onChange={(e) => handlePriceChange(
                                 product.id,
-                                'sellPrice',
+                                'b2cPrice',
                                 e.target.value,
                                 product
                               )}
@@ -369,15 +463,15 @@ export default function ProductPricingStep({
                               step="0.01"
                               className={cn(
                                 "w-24 px-2 py-1 text-right border rounded dark:bg-gray-700 dark:border-gray-600",
-                                error && "border-red-500 dark:border-red-500"
+                                productErrors?.b2c && "border-red-500 dark:border-red-500"
                               )}
                             />
                             <span className="text-gray-500 text-xs">{unitLabel}</span>
                           </div>
-                          {error && (
+                          {productErrors?.b2c && (
                             <div className="flex items-center justify-end gap-1 mt-1 text-xs text-red-600 dark:text-red-400">
                               <AlertCircle className="w-3 h-3" />
-                              {error}
+                              {productErrors.b2c}
                             </div>
                           )}
                         </td>
@@ -413,7 +507,7 @@ export default function ProductPricingStep({
             {Object.keys(localPrices).length} / {filteredProducts.length}
           </span>
         </div>
-        {Object.values(errors).some(e => e) && (
+        {Object.values(errors).some(e => e?.b2b || e?.b2c) && (
           <div className="mt-2 flex items-center gap-2 text-sm text-red-600 dark:text-red-400">
             <AlertCircle className="w-4 h-4" />
             Hay errores en algunos precios. Corrígelos antes de continuar.

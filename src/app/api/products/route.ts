@@ -74,7 +74,9 @@ export async function GET(request: NextRequest) {
         weight_capacity,
         unit_type,
         provider_cost,
+        provider_b2b_price,
         platform_price,
+        platform_min_b2c,
         pricing_model,
         min_price,
         provider_company_id,
@@ -151,7 +153,9 @@ export async function POST(request: NextRequest) {
       weight_capacity,
       unit_type,
       provider_cost,
+      provider_b2b_price,
       platform_price,
+      platform_min_b2c,
       pricing_model,
       min_price,
       provider_company_id,
@@ -175,12 +179,16 @@ export async function POST(request: NextRequest) {
       }, { status: 400 })
     }
 
+    // Calculate B2B and min_b2c if not provided
+    const calculatedB2BPrice = provider_b2b_price ?? (provider_cost ? provider_cost * 1.2 : 0)
+    const calculatedMinB2C = platform_min_b2c ?? (platform_price ? platform_price * 0.9 : 0)
+
     const result = await db.query(`
       INSERT INTO product_catalog (
         code, name, description, service_category, product_type,
-        dimensions, weight_capacity, unit_type, provider_cost, platform_price,
-        pricing_model, min_price, provider_company_id, display_order
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+        dimensions, weight_capacity, unit_type, provider_cost, provider_b2b_price,
+        platform_price, platform_min_b2c, pricing_model, min_price, provider_company_id, display_order
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
       RETURNING *
     `, [
       code,
@@ -192,7 +200,9 @@ export async function POST(request: NextRequest) {
       weight_capacity || null,
       unit_type || 'unit',
       provider_cost || 0,
+      calculatedB2BPrice,
       platform_price || 0,
+      calculatedMinB2C,
       pricing_model || 'fixed',
       min_price || 0,
       provider_company_id || null,
@@ -263,7 +273,7 @@ export async function PUT(request: NextRequest) {
 
     for (const product of products) {
       try {
-        const { id, provider_cost, platform_price } = product
+        const { id, provider_cost, provider_b2b_price, platform_price, platform_min_b2c } = product
 
         if (!id) {
           results.push({ id: 0, success: false, error: 'ID requerido' })
@@ -272,7 +282,7 @@ export async function PUT(request: NextRequest) {
 
         // Get current values for history
         const current = await db.query(
-          'SELECT provider_cost, platform_price FROM product_catalog WHERE id = $1',
+          'SELECT provider_cost, provider_b2b_price, platform_price, platform_min_b2c FROM product_catalog WHERE id = $1',
           [id]
         )
 
@@ -281,14 +291,16 @@ export async function PUT(request: NextRequest) {
           continue
         }
 
-        // Update product
+        // Update product with B2B/B2C fields
         await db.query(`
           UPDATE product_catalog
           SET provider_cost = COALESCE($1, provider_cost),
-              platform_price = COALESCE($2, platform_price),
+              provider_b2b_price = COALESCE($2, provider_b2b_price),
+              platform_price = COALESCE($3, platform_price),
+              platform_min_b2c = COALESCE($4, platform_min_b2c),
               updated_at = NOW()
-          WHERE id = $3
-        `, [provider_cost, platform_price, id])
+          WHERE id = $5
+        `, [provider_cost, provider_b2b_price, platform_price, platform_min_b2c, id])
 
         // Log history
         await db.query(`

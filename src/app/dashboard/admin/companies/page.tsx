@@ -1482,7 +1482,9 @@ export default function CompaniesPage() {
                         unitType: p.unitType || 'unit',
                         pricingModel: p.pricingModel || 'fixed',
                         costPrice: p.platformPrice ?? 0,
-                        minPrice: p.minPrice ?? 0
+                        minPrice: p.minPrice ?? 0,
+                        minB2BPrice: p.platformPrice ?? 0,
+                        platformMinB2C: p.platformMinB2C ?? 0
                       }))}
                       prices={formData.productPrices}
                       onChange={(prices) => {
@@ -1491,6 +1493,8 @@ export default function CompaniesPage() {
                       enabledCategories={Array.isArray(formData.enabledServices) ? formData.enabledServices : []}
                       isProvider={formData.isProvider}
                       providerCategories={formData.providerCategories || []}
+                      isBranch={false}
+                      hasSubBranches={true}
                     />
                   ) : (
                     <div className={cn(
