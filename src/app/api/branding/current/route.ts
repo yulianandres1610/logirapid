@@ -11,8 +11,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { resolveCompany, extractSubdomain } from '@/lib/subdomain-helpers'
 
-// Logo de LogiRapid (plataforma) - usar logo-rojo.png que existe en public/
-const PLATFORM_LOGO = '/logo-rojo.png'
+// Logos de LogiRapid (plataforma) - diferentes para tema claro y oscuro
+const PLATFORM_LOGO_LIGHT = '/logo-rojo.png'     // Logo para tema claro
+const PLATFORM_LOGO_DARK = '/logo-blanco.png'    // Logo para tema oscuro
 const PLATFORM_NAME = 'LogiRapid'
 const PLATFORM_PRIMARY_COLOR = '#DC2626'
 const PLATFORM_SECONDARY_COLOR = '#1E40AF'
@@ -36,7 +37,9 @@ const SPECIAL_SUBDOMAINS = ['agencias', 'admin', 'app', 'panel']
  *     companyId: number | null,
  *     companyName: string,
  *     subdomain: string | null,
- *     logoUrl: string | null,
+ *     logoUrl: string | null,          // Deprecated: usar logoUrlLight/logoUrlDark
+ *     logoUrlLight: string | null,     // Logo para tema claro
+ *     logoUrlDark: string | null,      // Logo para tema oscuro
  *     primaryColor: string,
  *     secondaryColor: string,
  *     isPlatformBranding: boolean
@@ -72,7 +75,9 @@ export async function GET(request: NextRequest) {
           companyId: null,
           companyName: PLATFORM_NAME,
           subdomain: null,
-          logoUrl: PLATFORM_LOGO,
+          logoUrl: PLATFORM_LOGO_LIGHT,           // Mantener por compatibilidad
+          logoUrlLight: PLATFORM_LOGO_LIGHT,      // Logo para tema claro (rojo)
+          logoUrlDark: PLATFORM_LOGO_DARK,        // Logo para tema oscuro (blanco)
           primaryColor: PLATFORM_PRIMARY_COLOR,
           secondaryColor: PLATFORM_SECONDARY_COLOR,
           isPlatformBranding: true
@@ -91,7 +96,9 @@ export async function GET(request: NextRequest) {
           companyId: null,
           companyName: PLATFORM_NAME,
           subdomain: null,
-          logoUrl: PLATFORM_LOGO,
+          logoUrl: PLATFORM_LOGO_LIGHT,           // Mantener por compatibilidad
+          logoUrlLight: PLATFORM_LOGO_LIGHT,      // Logo para tema claro (rojo)
+          logoUrlDark: PLATFORM_LOGO_DARK,        // Logo para tema oscuro (blanco)
           primaryColor: PLATFORM_PRIMARY_COLOR,
           secondaryColor: PLATFORM_SECONDARY_COLOR,
           isPlatformBranding: true
@@ -100,13 +107,17 @@ export async function GET(request: NextRequest) {
     }
 
     // Retornar branding de la empresa
+    // Si la empresa no tiene logo, usar los logos de plataforma como fallback
+    const companyLogo = company.logoUrl || null
     return NextResponse.json({
       success: true,
       data: {
         companyId: company.id,
         companyName: company.legalName,
         subdomain: company.subdomain,
-        logoUrl: company.logoUrl || PLATFORM_LOGO, // Fallback al logo de plataforma si no tiene
+        logoUrl: companyLogo || PLATFORM_LOGO_LIGHT,      // Mantener por compatibilidad
+        logoUrlLight: companyLogo || PLATFORM_LOGO_LIGHT, // Logo de empresa o fallback plataforma
+        logoUrlDark: companyLogo || PLATFORM_LOGO_DARK,   // Logo de empresa o fallback plataforma
         primaryColor: company.primaryColor,
         secondaryColor: company.secondaryColor,
         isPlatformBranding: false

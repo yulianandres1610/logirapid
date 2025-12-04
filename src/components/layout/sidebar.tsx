@@ -238,6 +238,8 @@ interface BrandingData {
   companyName: string
   subdomain: string
   logoUrl: string | null
+  logoUrlLight?: string | null  // Logo para tema claro
+  logoUrlDark?: string | null   // Logo para tema oscuro
   primaryColor: string
   secondaryColor: string
 }
@@ -572,7 +574,9 @@ export function Sidebar({ isCollapsed, onToggle }: SidebarProps) {
                   className="flex items-center justify-start w-full"
                 >
                   <img
-                    src={branding?.logoUrl || (theme === 'light' ? "/logo-rojo.png" : "/logo-blanco.png")}
+                    src={theme === 'light'
+                      ? (branding?.logoUrlLight || branding?.logoUrl || "/logo-rojo.png")
+                      : (branding?.logoUrlDark || branding?.logoUrl || "/logo-blanco.png")}
                     alt={branding?.companyName || "LogiRapid"}
                     className={cn(
                       "h-14 object-contain transition-all duration-300",
