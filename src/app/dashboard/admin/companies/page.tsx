@@ -1605,7 +1605,14 @@ export default function CompaniesPage() {
                   )}
 
                   {/* Product Catalog Pricing */}
-                  {productCatalog && productCatalog.products.length > 0 && (
+                  {loadingCatalog ? (
+                    <div className="mt-8 pt-8 border-t border-gray-200 dark:border-gray-700">
+                      <div className="flex items-center justify-center py-8">
+                        <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
+                        <span className="ml-2 text-gray-500">Cargando catálogo de productos...</span>
+                      </div>
+                    </div>
+                  ) : productCatalog && productCatalog.products && productCatalog.products.length > 0 ? (
                     <div className="mt-8 pt-8 border-t border-gray-200 dark:border-gray-700">
                       <h3 className={cn(
                         "text-lg font-bold mb-2",
@@ -1620,32 +1627,25 @@ export default function CompaniesPage() {
                         Configura los precios de venta de los productos físicos (cajas, empaques, etc.) que esta empresa ofrecerá a sus clientes.
                       </p>
 
-                      {loadingCatalog ? (
-                        <div className="flex items-center justify-center py-8">
-                          <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
-                          <span className="ml-2 text-gray-500">Cargando catálogo de productos...</span>
-                        </div>
-                      ) : (
-                        <ProductPricingStep
-                          products={productCatalog.products.map(p => ({
-                            id: p.id,
-                            code: p.code,
-                            name: p.name,
-                            serviceCategory: p.serviceCategory,
-                            productType: p.productType,
-                            unitType: p.unitType,
-                            pricingModel: p.pricingModel,
-                            costPrice: p.platformPrice,
-                            minPrice: p.minPrice
-                          }))}
-                          prices={formData.productPrices}
-                          onChange={(prices) => {
-                            setFormData({ ...formData, productPrices: prices })
-                          }}
-                        />
-                      )}
+                      <ProductPricingStep
+                        products={productCatalog.products.map(p => ({
+                          id: p.id,
+                          code: p.code,
+                          name: p.name,
+                          serviceCategory: p.serviceCategory,
+                          productType: p.productType,
+                          unitType: p.unitType,
+                          pricingModel: p.pricingModel,
+                          costPrice: p.platformPrice,
+                          minPrice: p.minPrice
+                        }))}
+                        prices={formData.productPrices}
+                        onChange={(prices) => {
+                          setFormData({ ...formData, productPrices: prices })
+                        }}
+                      />
                     </div>
-                  )}
+                  ) : null}
                 </div>
               )}
 
