@@ -304,7 +304,7 @@ export function Sidebar({ isCollapsed, onToggle }: SidebarProps) {
     { icon: BarChart3, label: "Tasa de Cambio", href: "/dashboard/admin/exchange-rate" },
     { icon: Users, label: "Usuarios", href: "/dashboard/admin/users" },
     { icon: Building2, label: "Empresas", href: "/dashboard/admin/companies" },
-    { icon: Box, label: "Catálogo Productos", href: "/dashboard/admin/product-catalog" },
+    { icon: Box, label: "Lista de Precios", href: "/dashboard/admin/product-catalog" },
     { icon: UserCheck, label: "CRM", href: "/dashboard/admin/crm" },
     { icon: Wallet, label: "Wallet", href: "/dashboard/admin/wallets" },
     { icon: Send, label: "Remesa", href: "/dashboard/admin/remittance" },
