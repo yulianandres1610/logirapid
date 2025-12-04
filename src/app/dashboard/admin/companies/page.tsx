@@ -48,6 +48,9 @@ import LogoUpload from '@/components/ui/LogoUpload'
 import MapboxAddressAutofill from '@/components/ui/MapboxAddressAutofill'
 import LoadingBox from '@/components/ui/LoadingBox'
 import ConfirmDialog from '@/components/ui/ConfirmDialog'
+import ProviderCheckbox from '@/components/products/ProviderCheckbox'
+import ProductPricingStep from '@/components/products/ProductPricingStep'
+import { useProductCatalog } from '@/hooks/useProductCatalog'
 
 // Placeholder while data loads
 const LOADING_COMPANIES:any[] = []
@@ -194,6 +197,10 @@ const getPrimaryCurrencyForCountry = (country: string) => {
 export default function CompaniesPage() {
   const { theme } = useTheme()
   const { showNotification } = useNotifications()
+
+  // Fetch product catalog for pricing step
+  const { data: productCatalog, loading: loadingCatalog } = useProductCatalog()
+
   const [companies, setCompanies] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [showCreateForm, setShowCreateForm] = useState(false)
@@ -240,7 +247,10 @@ export default function CompaniesPage() {
     transferLimits: { daily: '', monthly: '' },
     enabledServices: [],
     isProvider: false,
+    providerType: null as 'products' | 'services' | 'both' | null,
+    providerCategories: [] as string[],
     providerServices: [],
+    productPrices: [] as Array<{ productId: number; sellPrice: number }>,
     companyType: '',
     serviceFees: {},
     servicePrices: {} as Record<string, { buyPrice: number; sellPrice: number }>,
@@ -340,8 +350,14 @@ export default function CompaniesPage() {
       rechargeLimits: { daily: '', monthly: '' },
       transferLimits: { daily: '', monthly: '' },
       enabledServices: [],
+      isProvider: false,
+      providerType: null,
+      providerCategories: [],
+      providerServices: [],
+      productPrices: [],
       companyType: '',
       serviceFees: {},
+      servicePrices: {},
       prices: { wallet: 0, recharge: 0, tracker: 0, marketplace: 0, paqueteria: 0 },
       einNumber: '',
       documents: [],
@@ -1228,99 +1244,28 @@ export default function CompaniesPage() {
                     Servicios Activados
                   </h2>
 
-                  {/* Checkbox para marcar como proveedor */}
-                  <div className={cn(
-                    "mb-6 p-4 rounded-xl border",
-                    formData.isProvider
-                      ? theme === 'dark' ? "border-amber-500/50 bg-amber-900/20" : "border-amber-400 bg-amber-50"
-                      : theme === 'dark' ? "border-gray-700 bg-gray-800/30" : "border-gray-200 bg-gray-50"
-                  )}>
-                    <label className="flex items-start gap-3 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={formData.isProvider}
-                        onChange={(e) => {
-                          const isProvider = e.target.checked
-                          setFormData({
-                            ...formData,
-                            isProvider,
-                            providerServices: isProvider ? formData.enabledServices : []
-                          })
-                        }}
-                        className={cn(
-                          "mt-1 w-5 h-5 rounded border-2 cursor-pointer",
-                          theme === 'dark'
-                            ? "bg-gray-900 border-gray-600 checked:bg-amber-500 checked:border-amber-500"
-                            : "bg-white border-gray-300 checked:bg-amber-500 checked:border-amber-500"
-                        )}
-                      />
-                      <div>
-                        <span className={cn(
-                          "font-semibold text-sm",
-                          theme === 'dark' ? "text-white" : "text-gray-900"
-                        )}>
-                          Esta empresa es proveedor de servicios
-                        </span>
-                        <p className={cn(
-                          "text-xs mt-1",
-                          theme === 'dark' ? "text-gray-400" : "text-gray-600"
-                        )}>
-                          Marcar si esta empresa proporciona servicios a la plataforma (ej: empresa de logística, procesador de pagos).
-                          Los proveedores tienen precios de costo diferentes.
-                        </p>
-                      </div>
-                    </label>
-
-                    {formData.isProvider && formData.enabledServices.length > 0 && (
-                      <div className={cn(
-                        "mt-4 pt-4 border-t",
-                        theme === 'dark' ? "border-gray-700" : "border-gray-200"
-                      )}>
-                        <p className={cn(
-                          "text-xs font-medium mb-2",
-                          theme === 'dark' ? "text-amber-400" : "text-amber-700"
-                        )}>
-                          Servicios que provee esta empresa:
-                        </p>
-                        <div className="flex flex-wrap gap-2">
-                          {formData.enabledServices.map((serviceId: string) => {
-                            const isSelected = formData.providerServices.includes(serviceId)
-                            const isSubmodule = serviceId.includes(':')
-                            const mainServiceId = isSubmodule ? serviceId.split(':')[0] : serviceId
-                            const mainService = SERVICES.find(s => s.id === mainServiceId)
-                            let serviceName = serviceId
-
-                            if (isSubmodule && mainService && (mainService as any).submodules) {
-                              const submodule = (mainService as any).submodules.find((s: any) => s.id === serviceId)
-                              serviceName = submodule?.name || serviceId
-                            } else if (mainService) {
-                              serviceName = mainService.name
-                            }
-
-                            return (
-                              <button
-                                key={serviceId}
-                                type="button"
-                                onClick={() => {
-                                  const newProviderServices = isSelected
-                                    ? formData.providerServices.filter((s: string) => s !== serviceId)
-                                    : [...formData.providerServices, serviceId]
-                                  setFormData({ ...formData, providerServices: newProviderServices })
-                                }}
-                                className={cn(
-                                  "px-3 py-1 rounded-full text-xs font-medium transition-all",
-                                  isSelected
-                                    ? theme === 'dark' ? "bg-amber-500 text-black" : "bg-amber-500 text-white"
-                                    : theme === 'dark' ? "bg-gray-700 text-gray-300 hover:bg-gray-600" : "bg-gray-200 text-gray-700 hover:bg-gray-300"
-                                )}
-                              >
-                                {serviceName}
-                              </button>
-                            )
-                          })}
-                        </div>
-                      </div>
-                    )}
+                  {/* Checkbox para marcar como proveedor - usa componente ProviderCheckbox */}
+                  <div className="mb-6">
+                    <ProviderCheckbox
+                      isProvider={formData.isProvider}
+                      providerType={formData.providerType}
+                      providerCategories={formData.providerCategories || []}
+                      onProviderChange={(isProvider) => {
+                        setFormData({
+                          ...formData,
+                          isProvider,
+                          providerType: isProvider ? 'both' : null,
+                          providerCategories: [],
+                          providerServices: isProvider ? formData.enabledServices : []
+                        })
+                      }}
+                      onProviderTypeChange={(type) => {
+                        setFormData({ ...formData, providerType: type })
+                      }}
+                      onCategoriesChange={(categories) => {
+                        setFormData({ ...formData, providerCategories: categories })
+                      }}
+                    />
                   </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -1656,6 +1601,49 @@ export default function CompaniesPage() {
                           Los precios de venta que configures aquí serán los que esta empresa cobrará a sus clientes.
                         </p>
                       </div>
+                    </div>
+                  )}
+
+                  {/* Product Catalog Pricing */}
+                  {productCatalog && productCatalog.products.length > 0 && (
+                    <div className="mt-8 pt-8 border-t border-gray-200 dark:border-gray-700">
+                      <h3 className={cn(
+                        "text-lg font-bold mb-2",
+                        theme === 'dark' ? "text-white" : "text-black"
+                      )}>
+                        Precios de Productos del Catálogo
+                      </h3>
+                      <p className={cn(
+                        "text-sm mb-6",
+                        theme === 'dark' ? "text-gray-400" : "text-gray-600"
+                      )}>
+                        Configura los precios de venta de los productos físicos (cajas, empaques, etc.) que esta empresa ofrecerá a sus clientes.
+                      </p>
+
+                      {loadingCatalog ? (
+                        <div className="flex items-center justify-center py-8">
+                          <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
+                          <span className="ml-2 text-gray-500">Cargando catálogo de productos...</span>
+                        </div>
+                      ) : (
+                        <ProductPricingStep
+                          products={productCatalog.products.map(p => ({
+                            id: p.id,
+                            code: p.code,
+                            name: p.name,
+                            serviceCategory: p.serviceCategory,
+                            productType: p.productType,
+                            unitType: p.unitType,
+                            pricingModel: p.pricingModel,
+                            costPrice: p.platformPrice,
+                            minPrice: p.minPrice
+                          }))}
+                          prices={formData.productPrices}
+                          onChange={(prices) => {
+                            setFormData({ ...formData, productPrices: prices })
+                          }}
+                        />
+                      )}
                     </div>
                   )}
                 </div>
