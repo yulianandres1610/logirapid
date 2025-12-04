@@ -323,8 +323,8 @@ export default function ProductCatalogPage() {
                                   ? "bg-gray-900/50 text-gray-400"
                                   : "bg-gray-50 text-gray-500"
                               )}>
-                                <th className="pl-4 pr-8 py-3 w-28">Codigo</th>
-                                <th className="pl-2 pr-4 py-3 w-auto">Producto</th>
+                                <th className="pl-4 pr-16 py-3 w-36">Codigo</th>
+                                <th className="pl-10 pr-4 py-3 w-auto">Producto</th>
                                 <th className="px-4 py-3 w-32 text-center">
                                   <div className="flex items-center justify-center gap-1">
                                     <DollarSign className="w-3 h-3 text-amber-500" />
@@ -371,7 +371,7 @@ export default function ProductCatalogPage() {
                                         : theme === 'dark' ? "hover:bg-gray-800/50" : "hover:bg-gray-50"
                                     )}
                                   >
-                                    <td className="pl-4 pr-8 py-3">
+                                    <td className="pl-4 pr-16 py-3">
                                       <span className={cn(
                                         "font-mono text-sm",
                                         theme === 'dark' ? "text-gray-400" : "text-gray-600"
@@ -379,7 +379,7 @@ export default function ProductCatalogPage() {
                                         {product.code}
                                       </span>
                                     </td>
-                                    <td className="pl-2 pr-4 py-3">
+                                    <td className="pl-10 pr-4 py-3">
                                       <div>
                                         <div className={cn(
                                           "font-medium truncate",
