@@ -212,7 +212,10 @@ export async function resolveCompany(host: string): Promise<CompanyInfo | null> 
   // 2. Intentar extraer subdomain
   const subdomain = extractSubdomain(host)
 
-  if (subdomain) {
+  // Subdomains especiales que deben usar el fallback en lugar de retornar 404
+  const specialSubdomains = ['agencias', 'admin', 'app', 'panel']
+
+  if (subdomain && !specialSubdomains.includes(subdomain)) {
     const company = await getCompanyBySubdomain(subdomain)
     if (company) {
       if (process.env.NODE_ENV === 'development') {
@@ -225,12 +228,13 @@ export async function resolveCompany(host: string): Promise<CompanyInfo | null> 
     }
   }
 
-  // 3. Desarrollo local, Vercel, o dominio raíz: usar DEV_SUBDOMAIN env var o empresa por defecto
+  // 3. Desarrollo local, Vercel, subdomain especial, o dominio raíz: usar DEV_SUBDOMAIN env var o empresa por defecto
   const isLocalhost = hostname === 'localhost' || hostname === '127.0.0.1'
   const isMainDomain = hostname === 'logirapid.com' || hostname === 'www.logirapid.com'
   const isVercel = hostname.includes('vercel.app') || hostname.includes('.vercel.app')
+  const isSpecialSubdomain = subdomain && specialSubdomains.includes(subdomain)
 
-  if (isLocalhost || isMainDomain || isVercel) {
+  if (isLocalhost || isMainDomain || isVercel || isSpecialSubdomain) {
     const devSubdomain = process.env.DEV_SUBDOMAIN
 
     if (devSubdomain) {
