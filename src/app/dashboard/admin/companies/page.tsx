@@ -35,7 +35,8 @@ import {
   XCircle,
   Package,
   Archive,
-  Truck
+  Truck,
+  Tag
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useTheme } from '@/contexts/theme-context'
@@ -127,10 +128,11 @@ const STEPS = [
   { id: 1, title: 'Información Básica', icon: Building2 },
   { id: 2, title: 'Wallet', icon: CreditCard },
   { id: 3, title: 'Servicios', icon: Settings },
-  { id: 4, title: 'Fee de Plataforma', icon: DollarSign },
-  { id: 5, title: 'Branding', icon: Palette },
-  { id: 6, title: 'Documentos', icon: FileText },
-  { id: 7, title: 'Revisión', icon: Check }
+  { id: 4, title: 'Precios de Venta', icon: Tag },
+  { id: 5, title: 'Fee de Plataforma', icon: DollarSign },
+  { id: 6, title: 'Branding', icon: Palette },
+  { id: 7, title: 'Documentos', icon: FileText },
+  { id: 8, title: 'Revisión', icon: Check }
 ]
 
 const SERVICES = [
@@ -237,8 +239,11 @@ export default function CompaniesPage() {
     rechargeLimits: { daily: '', monthly: '' },
     transferLimits: { daily: '', monthly: '' },
     enabledServices: [],
+    isProvider: false,
+    providerServices: [],
     companyType: '',
     serviceFees: {},
+    servicePrices: {} as Record<string, { buyPrice: number; sellPrice: number }>,
     prices: { wallet: 0, recharge: 0, tracker: 0, marketplace: 0, paqueteria: 0 },
     einNumber: '',
     documents: [],
@@ -1217,11 +1222,106 @@ export default function CompaniesPage() {
                   theme === 'dark' ? "bg-white/5 border-white/10" : "bg-white/90 border-gray-200"
                 )}>
                   <h2 className={cn(
-                    "text-xl font-bold mb-6",
+                    "text-xl font-bold mb-2",
                     theme === 'dark' ? "text-white" : "text-black"
                   )}>
                     Servicios Activados
                   </h2>
+
+                  {/* Checkbox para marcar como proveedor */}
+                  <div className={cn(
+                    "mb-6 p-4 rounded-xl border",
+                    formData.isProvider
+                      ? theme === 'dark' ? "border-amber-500/50 bg-amber-900/20" : "border-amber-400 bg-amber-50"
+                      : theme === 'dark' ? "border-gray-700 bg-gray-800/30" : "border-gray-200 bg-gray-50"
+                  )}>
+                    <label className="flex items-start gap-3 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={formData.isProvider}
+                        onChange={(e) => {
+                          const isProvider = e.target.checked
+                          setFormData({
+                            ...formData,
+                            isProvider,
+                            providerServices: isProvider ? formData.enabledServices : []
+                          })
+                        }}
+                        className={cn(
+                          "mt-1 w-5 h-5 rounded border-2 cursor-pointer",
+                          theme === 'dark'
+                            ? "bg-gray-900 border-gray-600 checked:bg-amber-500 checked:border-amber-500"
+                            : "bg-white border-gray-300 checked:bg-amber-500 checked:border-amber-500"
+                        )}
+                      />
+                      <div>
+                        <span className={cn(
+                          "font-semibold text-sm",
+                          theme === 'dark' ? "text-white" : "text-gray-900"
+                        )}>
+                          Esta empresa es proveedor de servicios
+                        </span>
+                        <p className={cn(
+                          "text-xs mt-1",
+                          theme === 'dark' ? "text-gray-400" : "text-gray-600"
+                        )}>
+                          Marcar si esta empresa proporciona servicios a la plataforma (ej: empresa de logística, procesador de pagos).
+                          Los proveedores tienen precios de costo diferentes.
+                        </p>
+                      </div>
+                    </label>
+
+                    {formData.isProvider && formData.enabledServices.length > 0 && (
+                      <div className={cn(
+                        "mt-4 pt-4 border-t",
+                        theme === 'dark' ? "border-gray-700" : "border-gray-200"
+                      )}>
+                        <p className={cn(
+                          "text-xs font-medium mb-2",
+                          theme === 'dark' ? "text-amber-400" : "text-amber-700"
+                        )}>
+                          Servicios que provee esta empresa:
+                        </p>
+                        <div className="flex flex-wrap gap-2">
+                          {formData.enabledServices.map((serviceId: string) => {
+                            const isSelected = formData.providerServices.includes(serviceId)
+                            const isSubmodule = serviceId.includes(':')
+                            const mainServiceId = isSubmodule ? serviceId.split(':')[0] : serviceId
+                            const mainService = SERVICES.find(s => s.id === mainServiceId)
+                            let serviceName = serviceId
+
+                            if (isSubmodule && mainService && (mainService as any).submodules) {
+                              const submodule = (mainService as any).submodules.find((s: any) => s.id === serviceId)
+                              serviceName = submodule?.name || serviceId
+                            } else if (mainService) {
+                              serviceName = mainService.name
+                            }
+
+                            return (
+                              <button
+                                key={serviceId}
+                                type="button"
+                                onClick={() => {
+                                  const newProviderServices = isSelected
+                                    ? formData.providerServices.filter((s: string) => s !== serviceId)
+                                    : [...formData.providerServices, serviceId]
+                                  setFormData({ ...formData, providerServices: newProviderServices })
+                                }}
+                                className={cn(
+                                  "px-3 py-1 rounded-full text-xs font-medium transition-all",
+                                  isSelected
+                                    ? theme === 'dark' ? "bg-amber-500 text-black" : "bg-amber-500 text-white"
+                                    : theme === 'dark' ? "bg-gray-700 text-gray-300 hover:bg-gray-600" : "bg-gray-200 text-gray-700 hover:bg-gray-300"
+                                )}
+                              >
+                                {serviceName}
+                              </button>
+                            )
+                          })}
+                        </div>
+                      </div>
+                    )}
+                  </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     {SERVICES.map(service => {
@@ -1395,8 +1495,174 @@ export default function CompaniesPage() {
                 </div>
               )}
 
-              {/* Step 4: Platform Fees */}
+              {/* Step 4: Precios de Venta */}
               {currentStep === 4 && (
+                <div className={cn(
+                  "backdrop-blur-sm border rounded-2xl p-8",
+                  theme === 'dark' ? "bg-white/5 border-white/10" : "bg-white/90 border-gray-200"
+                )}>
+                  <h2 className={cn(
+                    "text-xl font-bold mb-2",
+                    theme === 'dark' ? "text-white" : "text-black"
+                  )}>
+                    Precios de Venta
+                  </h2>
+                  <p className={cn(
+                    "text-sm mb-6",
+                    theme === 'dark' ? "text-gray-400" : "text-gray-600"
+                  )}>
+                    Configura los precios a los que esta empresa venderá cada servicio. El precio de compra viene de la plataforma.
+                  </p>
+
+                  {formData.enabledServices.length === 0 ? (
+                    <div className={cn(
+                      "p-8 text-center rounded-xl border-2 border-dashed",
+                      theme === 'dark' ? "border-gray-700 bg-gray-800/30" : "border-gray-200 bg-gray-50"
+                    )}>
+                      <Tag className={cn("w-12 h-12 mx-auto mb-4", theme === 'dark' ? "text-gray-600" : "text-gray-400")} />
+                      <p className={cn("text-sm", theme === 'dark' ? "text-gray-400" : "text-gray-600")}>
+                        No hay servicios habilitados. Vuelve al paso anterior para seleccionar servicios.
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="space-y-4">
+                      {formData.enabledServices.map((serviceId: string) => {
+                        const isSubmodule = serviceId.includes(':')
+                        const mainServiceId = isSubmodule ? serviceId.split(':')[0] : serviceId
+                        const mainService = SERVICES.find(s => s.id === mainServiceId)
+                        let serviceName = serviceId
+
+                        if (isSubmodule && mainService && (mainService as any).submodules) {
+                          const submodule = (mainService as any).submodules.find((s: any) => s.id === serviceId)
+                          serviceName = submodule?.name || serviceId
+                        } else if (mainService) {
+                          serviceName = mainService.name
+                        }
+
+                        const currentPrice = formData.servicePrices?.[serviceId] || { buyPrice: 0, sellPrice: 0 }
+
+                        return (
+                          <div
+                            key={serviceId}
+                            className={cn(
+                              "p-4 rounded-xl border transition-all",
+                              theme === 'dark' ? "bg-gray-800/50 border-gray-700" : "bg-white border-gray-200"
+                            )}
+                          >
+                            <div className="flex items-center justify-between gap-4">
+                              <div className="flex-1 min-w-0">
+                                <h4 className={cn(
+                                  "font-medium text-sm",
+                                  theme === 'dark' ? "text-white" : "text-gray-900"
+                                )}>
+                                  {serviceName}
+                                </h4>
+                                <p className={cn(
+                                  "text-xs",
+                                  theme === 'dark' ? "text-gray-500" : "text-gray-500"
+                                )}>
+                                  {isSubmodule ? `Submódulo de ${mainService?.name}` : 'Servicio principal'}
+                                </p>
+                              </div>
+
+                              <div className="flex items-center gap-4">
+                                <div className="text-center">
+                                  <label className={cn(
+                                    "block text-xs mb-1",
+                                    theme === 'dark' ? "text-gray-400" : "text-gray-500"
+                                  )}>
+                                    Precio Compra
+                                  </label>
+                                  <div className={cn(
+                                    "px-3 py-2 rounded-lg text-sm font-medium",
+                                    theme === 'dark' ? "bg-gray-700 text-gray-300" : "bg-gray-100 text-gray-700"
+                                  )}>
+                                    ${currentPrice.buyPrice.toFixed(2)}
+                                  </div>
+                                </div>
+
+                                <div className="text-center">
+                                  <label className={cn(
+                                    "block text-xs mb-1",
+                                    theme === 'dark' ? "text-gray-400" : "text-gray-500"
+                                  )}>
+                                    Precio Venta
+                                  </label>
+                                  <input
+                                    type="number"
+                                    step="0.01"
+                                    min={currentPrice.buyPrice}
+                                    value={currentPrice.sellPrice || ''}
+                                    onChange={(e) => {
+                                      const sellPrice = parseFloat(e.target.value) || 0
+                                      setFormData({
+                                        ...formData,
+                                        servicePrices: {
+                                          ...formData.servicePrices,
+                                          [serviceId]: {
+                                            ...currentPrice,
+                                            sellPrice
+                                          }
+                                        }
+                                      })
+                                    }}
+                                    placeholder={currentPrice.buyPrice.toFixed(2)}
+                                    className={cn(
+                                      "w-24 px-3 py-2 rounded-lg text-sm font-medium border text-center",
+                                      theme === 'dark'
+                                        ? "bg-gray-900 border-gray-600 text-white focus:border-exa-secondary focus:ring-exa-secondary/20"
+                                        : "bg-white border-gray-300 text-black focus:border-blue-500 focus:ring-blue-500/20"
+                                    )}
+                                  />
+                                </div>
+
+                                <div className="text-center">
+                                  <label className={cn(
+                                    "block text-xs mb-1",
+                                    theme === 'dark' ? "text-gray-400" : "text-gray-500"
+                                  )}>
+                                    Margen
+                                  </label>
+                                  <div className={cn(
+                                    "px-3 py-2 rounded-lg text-sm font-medium",
+                                    (currentPrice.sellPrice - currentPrice.buyPrice) >= 0
+                                      ? theme === 'dark' ? "bg-green-900/30 text-green-400" : "bg-green-100 text-green-700"
+                                      : theme === 'dark' ? "bg-red-900/30 text-red-400" : "bg-red-100 text-red-700"
+                                  )}>
+                                    ${(currentPrice.sellPrice - currentPrice.buyPrice).toFixed(2)}
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+
+                            {currentPrice.sellPrice > 0 && currentPrice.sellPrice < currentPrice.buyPrice && (
+                              <p className="text-xs text-red-500 mt-2">
+                                El precio de venta no puede ser menor al precio de compra
+                              </p>
+                            )}
+                          </div>
+                        )
+                      })}
+
+                      <div className={cn(
+                        "mt-6 p-4 rounded-xl border-2 border-dashed",
+                        theme === 'dark' ? "border-gray-700 bg-gray-800/20" : "border-gray-200 bg-gray-50"
+                      )}>
+                        <p className={cn(
+                          "text-xs text-center",
+                          theme === 'dark' ? "text-gray-500" : "text-gray-500"
+                        )}>
+                          Los precios de compra se actualizan automáticamente desde la configuración global de la plataforma.
+                          Los precios de venta que configures aquí serán los que esta empresa cobrará a sus clientes.
+                        </p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Step 5: Platform Fees */}
+              {currentStep === 5 && (
                 <div className={cn(
                   "backdrop-blur-sm border rounded-2xl p-8",
                   theme === 'dark' ? "bg-white/5 border-white/10" : "bg-white/90 border-gray-200"
@@ -1683,8 +1949,8 @@ export default function CompaniesPage() {
                 </div>
               )}
 
-              {/* Step 5: Branding */}
-              {currentStep === 5 && (
+              {/* Step 6: Branding */}
+              {currentStep === 6 && (
                 <div className={cn(
                   "backdrop-blur-sm border rounded-2xl p-8",
                   theme === 'dark' ? "bg-white/5 border-white/10" : "bg-white/90 border-gray-200"
@@ -2005,8 +2271,8 @@ export default function CompaniesPage() {
                 </div>
               )}
 
-              {/* Step 6: Documents */}
-              {currentStep === 6 && (
+              {/* Step 7: Documents */}
+              {currentStep === 7 && (
                 <div className={cn(
                   "backdrop-blur-sm border rounded-2xl p-8",
                   theme === 'dark' ? "bg-white/5 border-white/10" : "bg-white/90 border-gray-200"
@@ -2202,8 +2468,8 @@ export default function CompaniesPage() {
                 </div>
               )}
 
-              {/* Step 7: Review */}
-              {currentStep === 7 && (
+              {/* Step 8: Review */}
+              {currentStep === 8 && (
                 <div className={cn(
                   "backdrop-blur-sm border rounded-2xl p-8",
                   theme === 'dark' ? "bg-white/5 border-white/10" : "bg-white/90 border-gray-200"
