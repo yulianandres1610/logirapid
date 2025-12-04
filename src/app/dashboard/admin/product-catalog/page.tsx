@@ -315,7 +315,7 @@ export default function ProductCatalogPage() {
                         className="overflow-hidden"
                       >
                         <div className="overflow-x-auto">
-                          <table className="w-full">
+                          <table className="w-full table-fixed">
                             <thead>
                               <tr className={cn(
                                 "text-left text-xs uppercase tracking-wider",
@@ -323,27 +323,27 @@ export default function ProductCatalogPage() {
                                   ? "bg-gray-900/50 text-gray-400"
                                   : "bg-gray-50 text-gray-500"
                               )}>
-                                <th className="px-4 py-3">Codigo</th>
-                                <th className="px-4 py-3">Producto</th>
-                                <th className="px-4 py-3 text-right">
-                                  <div className="flex items-center justify-end gap-1">
+                                <th className="px-4 py-3 w-24">Codigo</th>
+                                <th className="px-4 py-3 w-auto">Producto</th>
+                                <th className="px-4 py-3 w-32 text-center">
+                                  <div className="flex items-center justify-center gap-1">
                                     <DollarSign className="w-3 h-3 text-amber-500" />
                                     Mi Costo
                                   </div>
                                 </th>
-                                <th className="px-4 py-3 text-right">
-                                  <div className="flex items-center justify-end gap-1">
+                                <th className="px-4 py-3 w-36 text-center">
+                                  <div className="flex items-center justify-center gap-1">
                                     <Building2 className="w-3 h-3 text-blue-500" />
-                                    Precio Mayorista
+                                    P. Mayorista
                                   </div>
                                 </th>
-                                <th className="px-4 py-3 text-right">
-                                  <div className="flex items-center justify-end gap-1">
+                                <th className="px-4 py-3 w-36 text-center">
+                                  <div className="flex items-center justify-center gap-1">
                                     <Users className="w-3 h-3 text-green-500" />
-                                    Precio al Publico
+                                    P. Publico
                                   </div>
                                 </th>
-                                <th className="px-4 py-3 text-center">Margen</th>
+                                <th className="px-4 py-3 w-32 text-center">Margen</th>
                               </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
@@ -382,14 +382,14 @@ export default function ProductCatalogPage() {
                                     <td className="px-4 py-3">
                                       <div>
                                         <div className={cn(
-                                          "font-medium",
+                                          "font-medium truncate",
                                           theme === 'dark' ? "text-white" : "text-gray-900"
                                         )}>
                                           {product.name}
                                         </div>
                                         {product.description && (
                                           <div className={cn(
-                                            "text-xs",
+                                            "text-xs truncate",
                                             theme === 'dark' ? "text-gray-500" : "text-gray-400"
                                           )}>
                                             {product.description}
@@ -397,7 +397,7 @@ export default function ProductCatalogPage() {
                                         )}
                                       </div>
                                     </td>
-                                    <td className="px-4 py-3">
+                                    <td className="px-4 py-3 text-center">
                                       <input
                                         type="number"
                                         step="0.01"
@@ -409,14 +409,14 @@ export default function ProductCatalogPage() {
                                           product
                                         )}
                                         className={cn(
-                                          "w-24 px-2 py-1 text-right rounded border text-sm",
+                                          "w-full max-w-[100px] px-2 py-1 text-center rounded border text-sm mx-auto",
                                           theme === 'dark'
                                             ? "bg-gray-900 border-gray-700 text-amber-400"
                                             : "bg-white border-gray-200 text-amber-600"
                                         )}
                                       />
                                     </td>
-                                    <td className="px-4 py-3">
+                                    <td className="px-4 py-3 text-center">
                                       <input
                                         type="number"
                                         step="0.01"
@@ -428,14 +428,14 @@ export default function ProductCatalogPage() {
                                           product
                                         )}
                                         className={cn(
-                                          "w-24 px-2 py-1 text-right rounded border text-sm",
+                                          "w-full max-w-[100px] px-2 py-1 text-center rounded border text-sm mx-auto",
                                           theme === 'dark'
                                             ? "bg-gray-900 border-gray-700 text-blue-400"
                                             : "bg-white border-gray-200 text-blue-600"
                                         )}
                                       />
                                     </td>
-                                    <td className="px-4 py-3">
+                                    <td className="px-4 py-3 text-center">
                                       <input
                                         type="number"
                                         step="0.01"
@@ -447,7 +447,7 @@ export default function ProductCatalogPage() {
                                           product
                                         )}
                                         className={cn(
-                                          "w-24 px-2 py-1 text-right rounded border text-sm",
+                                          "w-full max-w-[100px] px-2 py-1 text-center rounded border text-sm mx-auto",
                                           theme === 'dark'
                                             ? "bg-gray-900 border-gray-700 text-green-400"
                                             : "bg-white border-gray-200 text-green-600"
@@ -456,7 +456,7 @@ export default function ProductCatalogPage() {
                                     </td>
                                     <td className="px-4 py-3 text-center">
                                       <span className={cn(
-                                        "text-sm font-medium",
+                                        "text-sm font-medium whitespace-nowrap",
                                         margin > 0
                                           ? "text-green-500"
                                           : margin < 0
