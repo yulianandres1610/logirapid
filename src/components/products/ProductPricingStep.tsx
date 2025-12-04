@@ -132,23 +132,24 @@ export default function ProductPricingStep({
     value: string,
     product: Product
   ) => {
-    const numValue = parseFloat(value) || 0
+    // Allow empty string for clearing the field
+    const numValue = value === '' ? undefined : (parseFloat(value) || 0)
     const miCosto = getEffectiveCost(product, localPrices[productId])
     const current = localPrices[productId] || { precioClientes: miCosto }
 
-    // Validate - only show error if value > 0 and less than minimum
+    // Validate - only show error if value is defined, > 0, and less than minimum
     const newErrors: { sucursales?: string; clientes?: string } = {}
 
     if (field === 'precioSucursales') {
-      // Precio Sucursales cannot be lower than Mi Costo (only validate if value > 0)
-      if (numValue > 0 && numValue < miCosto) {
+      // Precio Sucursales cannot be lower than Mi Costo (only validate if value is defined and > 0)
+      if (numValue !== undefined && numValue > 0 && numValue < miCosto) {
         newErrors.sucursales = `Min: $${miCosto.toFixed(2)}`
       }
-      // No error if value >= miCosto or value is 0/empty
+      // No error if value >= miCosto, undefined, or 0/empty
     }
 
     if (field === 'precioClientes') {
-      if (numValue > 0 && numValue < miCosto) {
+      if (numValue !== undefined && numValue > 0 && numValue < miCosto) {
         newErrors.clientes = `Min: $${miCosto.toFixed(2)}`
       }
     }
@@ -344,20 +345,20 @@ export default function ProductPricingStep({
 
             {/* Products table */}
             <div className="overflow-x-auto">
-              <table className="w-full text-sm">
+              <table className="w-full text-sm table-fixed">
                 <thead className="bg-gray-50/50 dark:bg-gray-700/30">
                   <tr>
-                    <th className="text-left px-4 py-2 text-gray-600 dark:text-gray-300 font-medium">
+                    <th className="text-left px-4 py-2 text-gray-600 dark:text-gray-300 font-medium w-auto">
                       Producto
                     </th>
-                    <th className="text-right px-4 py-2 text-gray-600 dark:text-gray-300 font-medium">
+                    <th className="text-right px-4 py-2 text-gray-600 dark:text-gray-300 font-medium w-36">
                       <div className="flex items-center justify-end gap-1">
                         <Lock className="w-3 h-3" />
                         Mi Costo
                       </div>
                     </th>
                     {showPrecioSucursalesColumn && (
-                      <th className="text-right px-4 py-2 text-gray-600 dark:text-gray-300 font-medium">
+                      <th className="text-right px-4 py-2 text-gray-600 dark:text-gray-300 font-medium w-40">
                         <div className="flex items-center justify-end gap-1">
                           {canEditCost ? (
                             <>
@@ -373,13 +374,13 @@ export default function ProductPricingStep({
                         </div>
                       </th>
                     )}
-                    <th className="text-right px-4 py-2 text-gray-600 dark:text-gray-300 font-medium">
+                    <th className="text-right px-4 py-2 text-gray-600 dark:text-gray-300 font-medium w-36">
                       <div className="flex items-center justify-end gap-1">
                         <Users className="w-3 h-3" />
                         Precio Clientes
                       </div>
                     </th>
-                    <th className="text-right px-4 py-2 text-gray-600 dark:text-gray-300 font-medium">
+                    <th className="text-right px-4 py-2 text-gray-600 dark:text-gray-300 font-medium w-28">
                       Margen
                     </th>
                   </tr>
