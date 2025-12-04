@@ -632,6 +632,7 @@ export default function CompaniesPage() {
         enabledServices: Array.isArray(company.enabledServices) ? company.enabledServices : [],
         companyType: company.companyType || '',
         serviceFees: company.serviceFees || {},
+        servicePrices: company.servicePrices || {},
         prices: {},
         einNumber: company.einNumber || '',
         documents: [],
@@ -1522,7 +1523,7 @@ export default function CompaniesPage() {
                                     "px-3 py-2 rounded-lg text-sm font-medium",
                                     theme === 'dark' ? "bg-gray-700 text-gray-300" : "bg-gray-100 text-gray-700"
                                   )}>
-                                    ${currentPrice.buyPrice.toFixed(2)}
+                                    ${(currentPrice.buyPrice ?? 0).toFixed(2)}
                                   </div>
                                 </div>
 
