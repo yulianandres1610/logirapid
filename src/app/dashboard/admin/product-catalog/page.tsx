@@ -294,6 +294,11 @@ export default function ProductCatalogPage() {
                           theme === 'dark' ? "text-gray-400" : "text-gray-500"
                         )}>
                           {products.length} producto{products.length !== 1 ? 's' : ''}
+                          {products[0]?.providerCompanyName && (
+                            <span className="ml-2 text-blue-500">
+                              - Proveedor: {products[0].providerCompanyName}
+                            </span>
+                          )}
                         </p>
                       </div>
                     </div>

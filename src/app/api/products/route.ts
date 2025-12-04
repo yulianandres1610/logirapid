@@ -65,25 +65,27 @@ export async function GET(request: NextRequest) {
     // Use new column names after migration 40
     let query = `
       SELECT
-        id,
-        code,
-        name,
-        description,
-        service_category,
-        product_type,
-        dimensions,
-        weight_capacity,
-        unit_type,
-        mi_costo,
-        precio_mayorista,
-        precio_publico,
-        pricing_model,
-        provider_company_id,
-        is_active,
-        display_order,
-        created_at,
-        updated_at
-      FROM product_catalog
+        pc.id,
+        pc.code,
+        pc.name,
+        pc.description,
+        pc.service_category,
+        pc.product_type,
+        pc.dimensions,
+        pc.weight_capacity,
+        pc.unit_type,
+        pc.mi_costo,
+        pc.precio_mayorista,
+        pc.precio_publico,
+        pc.pricing_model,
+        pc.provider_company_id,
+        c.legalname as provider_company_name,
+        pc.is_active,
+        pc.display_order,
+        pc.created_at,
+        pc.updated_at
+      FROM product_catalog pc
+      LEFT JOIN companies c ON pc.provider_company_id = c.id
       WHERE 1=1
     `
     const params: any[] = []

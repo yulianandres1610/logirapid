@@ -19,6 +19,7 @@ export interface Product {
   precioPublico: number    // Suggested price to end customer
   pricingModel: string
   providerCompanyId: number | null
+  providerCompanyName: string | null
   isActive: boolean
   displayOrder: number
   // Legacy names (for backwards compatibility)
@@ -140,6 +141,7 @@ export function useProductCatalog(category?: string) {
         pricingModel: p.pricing_model,
         minPrice: parseFloat(p.min_price || 0),
         providerCompanyId: p.provider_company_id,
+        providerCompanyName: p.provider_company_name || null,
         isActive: p.is_active,
         displayOrder: p.display_order
       }))
