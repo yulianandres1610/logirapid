@@ -326,9 +326,12 @@ export default function ProductCatalogPage() {
                                 <th className="pl-4 pr-16 py-3 w-36">Codigo</th>
                                 <th className="pl-10 pr-4 py-3 w-auto">Producto</th>
                                 <th className="px-4 py-3 w-32 text-center">
-                                  <div className="flex items-center justify-center gap-1">
-                                    <DollarSign className="w-3 h-3 text-amber-500" />
-                                    Mi Costo
+                                  <div className="flex flex-col items-center">
+                                    <div className="flex items-center gap-1">
+                                      <DollarSign className="w-3 h-3 text-amber-500" />
+                                      Costo
+                                    </div>
+                                    <span className="text-[10px] font-normal opacity-60">(Proveedor)</span>
                                   </div>
                                 </th>
                                 <th className="px-4 py-3 w-36 text-center">
@@ -398,23 +401,18 @@ export default function ProductCatalogPage() {
                                       </div>
                                     </td>
                                     <td className="px-4 py-3 text-center">
-                                      <input
-                                        type="number"
-                                        step="0.01"
-                                        value={miCosto}
-                                        onChange={(e) => handlePriceChange(
-                                          product.id,
-                                          'miCosto',
-                                          parseFloat(e.target.value) || 0,
-                                          product
-                                        )}
-                                        className={cn(
-                                          "w-full max-w-[100px] px-2 py-1 text-center rounded border text-sm mx-auto",
-                                          theme === 'dark'
-                                            ? "bg-gray-900 border-gray-700 text-amber-400"
-                                            : "bg-white border-gray-200 text-amber-600"
-                                        )}
-                                      />
+                                      <span className={cn(
+                                        "text-sm font-medium",
+                                        theme === 'dark' ? "text-amber-400" : "text-amber-600"
+                                      )}>
+                                        ${miCosto.toFixed(2)}
+                                      </span>
+                                      <div className={cn(
+                                        "text-xs",
+                                        theme === 'dark' ? "text-gray-500" : "text-gray-400"
+                                      )}>
+                                        (Proveedor)
+                                      </div>
                                     </td>
                                     <td className="px-4 py-3 text-center">
                                       <input
