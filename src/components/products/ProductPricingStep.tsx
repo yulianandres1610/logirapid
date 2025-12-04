@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Package, DollarSign, Smartphone, Store, ArrowRight, AlertCircle, Check } from 'lucide-react'
+import { Package, DollarSign, Smartphone, Store, AlertCircle, Check, Edit3 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 interface Product {
@@ -19,12 +19,16 @@ interface Product {
 interface ProductPrice {
   productId: number
   sellPrice: number
+  costPrice?: number // Solo si es proveedor
 }
 
 interface ProductPricingStepProps {
   products: Product[]
   prices: ProductPrice[]
   onChange: (prices: ProductPrice[]) => void
+  enabledCategories?: string[] // Categorías habilitadas para filtrar productos
+  isProvider?: boolean // Si la empresa es proveedora
+  providerCategories?: string[] // Categorías donde la empresa es proveedora
   isBranch?: boolean
   markupType?: 'percentage' | 'fixed'
   markupValue?: number
@@ -39,7 +43,7 @@ const categoryIcons: Record<string, typeof Package> = {
 }
 
 const categoryLabels: Record<string, string> = {
-  paqueteria: 'Paqueteria',
+  paqueteria: 'Paquetería',
   remesa: 'Remesa',
   recarga: 'Recarga',
   mercado: 'Mercado'
@@ -49,25 +53,43 @@ export default function ProductPricingStep({
   products,
   prices,
   onChange,
+  enabledCategories,
+  isProvider = false,
+  providerCategories = [],
   isBranch = false,
   markupType = 'percentage',
   markupValue = 0,
   onMarkupChange
 }: ProductPricingStepProps) {
-  const [localPrices, setLocalPrices] = useState<Record<number, number>>({})
+  const [localPrices, setLocalPrices] = useState<Record<number, { sellPrice: number; costPrice?: number }>>({})
   const [errors, setErrors] = useState<Record<number, string>>({})
+
+  // Filtrar productos por categorías habilitadas
+  const filteredProducts = enabledCategories && enabledCategories.length > 0
+    ? products.filter(p => {
+        // Extraer la categoría principal de los servicios habilitados
+        // Por ejemplo: "paqueteria:routes" -> "paqueteria"
+        return enabledCategories.some(cat => {
+          const mainCategory = cat.includes(':') ? cat.split(':')[0] : cat
+          return p.serviceCategory === mainCategory
+        })
+      })
+    : products
 
   // Initialize local prices from props
   useEffect(() => {
-    const priceMap: Record<number, number> = {}
+    const priceMap: Record<number, { sellPrice: number; costPrice?: number }> = {}
     for (const price of prices) {
-      priceMap[price.productId] = price.sellPrice
+      priceMap[price.productId] = {
+        sellPrice: price.sellPrice,
+        costPrice: price.costPrice
+      }
     }
     setLocalPrices(priceMap)
   }, [prices])
 
   // Group products by category
-  const productsByCategory = products.reduce((acc, product) => {
+  const productsByCategory = filteredProducts.reduce((acc, product) => {
     const cat = product.serviceCategory
     if (!acc[cat]) {
       acc[cat] = []
@@ -76,15 +98,24 @@ export default function ProductPricingStep({
     return acc
   }, {} as Record<string, Product[]>)
 
-  const handlePriceChange = (productId: number, value: string, costPrice: number, minPrice: number) => {
+  // Verificar si la empresa es proveedora de una categoría específica
+  const isProviderForCategory = (category: string) => {
+    return isProvider && providerCategories.includes(category)
+  }
+
+  const handlePriceChange = (productId: number, field: 'sellPrice' | 'costPrice', value: string, product: Product) => {
     const numValue = parseFloat(value) || 0
+    const current = localPrices[productId] || { sellPrice: product.costPrice }
 
     // Validate
     let error = ''
-    if (numValue < costPrice) {
-      error = `Min: $${costPrice.toFixed(2)}`
-    } else if (numValue < minPrice && minPrice > 0) {
-      error = `Min permitido: $${minPrice.toFixed(2)}`
+    if (field === 'sellPrice') {
+      const effectiveCost = current.costPrice ?? product.costPrice
+      if (numValue < effectiveCost) {
+        error = `Min: $${effectiveCost.toFixed(2)}`
+      } else if (numValue < product.minPrice && product.minPrice > 0) {
+        error = `Min permitido: $${product.minPrice.toFixed(2)}`
+      }
     }
 
     setErrors(prev => ({
@@ -92,16 +123,31 @@ export default function ProductPricingStep({
       [productId]: error
     }))
 
+    const newLocal = {
+      ...current,
+      [field]: numValue
+    }
+
     setLocalPrices(prev => ({
       ...prev,
-      [productId]: numValue
+      [productId]: newLocal
     }))
 
     // Update parent with all prices
-    const newPrices = products.map(p => ({
-      productId: p.id,
-      sellPrice: p.id === productId ? numValue : (localPrices[p.id] || p.costPrice)
-    }))
+    const newPrices = filteredProducts.map(p => {
+      if (p.id === productId) {
+        return {
+          productId: p.id,
+          sellPrice: field === 'sellPrice' ? numValue : (localPrices[p.id]?.sellPrice || p.costPrice),
+          costPrice: field === 'costPrice' ? numValue : localPrices[p.id]?.costPrice
+        }
+      }
+      return {
+        productId: p.id,
+        sellPrice: localPrices[p.id]?.sellPrice || p.costPrice,
+        costPrice: localPrices[p.id]?.costPrice
+      }
+    })
     onChange(newPrices)
   }
 
@@ -121,7 +167,7 @@ export default function ProductPricingStep({
   const handleApplyMarkup = () => {
     if (!isBranch) return
 
-    const newPrices = products.map(p => {
+    const newPrices = filteredProducts.map(p => {
       let sellPrice = p.costPrice
       if (markupType === 'percentage') {
         sellPrice = p.costPrice * (1 + markupValue / 100)
@@ -131,12 +177,23 @@ export default function ProductPricingStep({
       return { productId: p.id, sellPrice }
     })
 
-    const priceMap: Record<number, number> = {}
+    const priceMap: Record<number, { sellPrice: number }> = {}
     for (const price of newPrices) {
-      priceMap[price.productId] = price.sellPrice
+      priceMap[price.productId] = { sellPrice: price.sellPrice }
     }
     setLocalPrices(priceMap)
     onChange(newPrices)
+  }
+
+  if (filteredProducts.length === 0) {
+    return (
+      <div className="p-8 text-center rounded-xl border-2 border-dashed border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/30">
+        <Package className="w-12 h-12 mx-auto mb-4 text-gray-400 dark:text-gray-600" />
+        <p className="text-sm text-gray-500 dark:text-gray-400">
+          No hay productos disponibles para las categorías de servicios seleccionados.
+        </p>
+      </div>
+    )
   }
 
   return (
@@ -200,6 +257,7 @@ export default function ProductPricingStep({
       {Object.entries(productsByCategory).map(([category, categoryProducts]) => {
         const Icon = categoryIcons[category] || Package
         const label = categoryLabels[category] || category
+        const canEditCost = isProviderForCategory(category)
 
         return (
           <div key={category} className="bg-white dark:bg-gray-800 rounded-lg border dark:border-gray-700 overflow-hidden">
@@ -207,8 +265,14 @@ export default function ProductPricingStep({
             <div className="bg-gray-50 dark:bg-gray-700/50 px-4 py-3 border-b dark:border-gray-600 flex items-center gap-2">
               <Icon className="w-5 h-5 text-blue-600 dark:text-blue-400" />
               <h3 className="font-medium text-gray-900 dark:text-white">
-                Precios de {label}
+                Productos de {label}
               </h3>
+              {canEditCost && (
+                <span className="ml-2 px-2 py-0.5 text-xs rounded-full bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 flex items-center gap-1">
+                  <Edit3 className="w-3 h-3" />
+                  Proveedor
+                </span>
+              )}
               <span className="ml-auto text-xs text-gray-500 dark:text-gray-400">
                 {categoryProducts.length} productos
               </span>
@@ -223,7 +287,7 @@ export default function ProductPricingStep({
                       Producto
                     </th>
                     <th className="text-right px-4 py-2 text-gray-600 dark:text-gray-300 font-medium">
-                      Costo
+                      {canEditCost ? 'Costo (Editable)' : 'Costo'}
                     </th>
                     <th className="text-right px-4 py-2 text-gray-600 dark:text-gray-300 font-medium">
                       Precio Venta
@@ -235,8 +299,10 @@ export default function ProductPricingStep({
                 </thead>
                 <tbody className="divide-y dark:divide-gray-700">
                   {categoryProducts.map(product => {
-                    const sellPrice = localPrices[product.id] ?? product.costPrice
-                    const { margin, percentage } = calculateMargin(product.costPrice, sellPrice)
+                    const localPrice = localPrices[product.id]
+                    const effectiveCost = localPrice?.costPrice ?? product.costPrice
+                    const sellPrice = localPrice?.sellPrice ?? product.costPrice
+                    const { margin, percentage } = calculateMargin(effectiveCost, sellPrice)
                     const error = errors[product.id]
                     const unitLabel = getUnitLabel(product.unitType, product.pricingModel)
 
@@ -258,9 +324,29 @@ export default function ProductPricingStep({
                         </td>
 
                         <td className="px-4 py-3 text-right">
-                          <span className="text-gray-700 dark:text-gray-300">
-                            ${product.costPrice.toFixed(2)}{unitLabel}
-                          </span>
+                          {canEditCost ? (
+                            <div className="flex items-center justify-end gap-1">
+                              <span className="text-gray-500">$</span>
+                              <input
+                                type="number"
+                                value={effectiveCost}
+                                onChange={(e) => handlePriceChange(
+                                  product.id,
+                                  'costPrice',
+                                  e.target.value,
+                                  product
+                                )}
+                                min="0"
+                                step="0.01"
+                                className="w-24 px-2 py-1 text-right border rounded dark:bg-gray-700 dark:border-gray-600 border-amber-300 dark:border-amber-600"
+                              />
+                              <span className="text-gray-500 text-xs">{unitLabel}</span>
+                            </div>
+                          ) : (
+                            <span className="text-gray-700 dark:text-gray-300">
+                              ${effectiveCost.toFixed(2)}{unitLabel}
+                            </span>
+                          )}
                         </td>
 
                         <td className="px-4 py-3 text-right">
@@ -271,11 +357,11 @@ export default function ProductPricingStep({
                               value={sellPrice}
                               onChange={(e) => handlePriceChange(
                                 product.id,
+                                'sellPrice',
                                 e.target.value,
-                                product.costPrice,
-                                product.minPrice
+                                product
                               )}
-                              min={product.costPrice}
+                              min={effectiveCost}
                               step="0.01"
                               className={cn(
                                 "w-24 px-2 py-1 text-right border rounded dark:bg-gray-700 dark:border-gray-600",
@@ -320,13 +406,13 @@ export default function ProductPricingStep({
             Total de productos configurados:
           </span>
           <span className="font-medium text-gray-900 dark:text-white">
-            {Object.keys(localPrices).length} / {products.length}
+            {Object.keys(localPrices).length} / {filteredProducts.length}
           </span>
         </div>
         {Object.values(errors).some(e => e) && (
           <div className="mt-2 flex items-center gap-2 text-sm text-red-600 dark:text-red-400">
             <AlertCircle className="w-4 h-4" />
-            Hay errores en algunos precios. Corrijalos antes de continuar.
+            Hay errores en algunos precios. Corrígelos antes de continuar.
           </div>
         )}
       </div>

@@ -1451,202 +1451,58 @@ export default function CompaniesPage() {
                     "text-xl font-bold mb-2",
                     theme === 'dark' ? "text-white" : "text-black"
                   )}>
-                    Precios de Venta
+                    Precios de Productos
                   </h2>
                   <p className={cn(
                     "text-sm mb-6",
                     theme === 'dark' ? "text-gray-400" : "text-gray-600"
                   )}>
-                    Configura los precios a los que esta empresa venderá cada servicio. El precio de compra viene de la plataforma.
+                    Configura los precios de venta de los productos del catálogo según los servicios habilitados.
+                    {formData.isProvider && formData.providerCategories && formData.providerCategories.length > 0 && (
+                      <span className="block mt-1 text-amber-600 dark:text-amber-400">
+                        Como proveedor, puedes editar el costo de los productos en las categorías donde eres proveedor.
+                      </span>
+                    )}
                   </p>
 
-                  {!Array.isArray(formData.enabledServices) || formData.enabledServices.length === 0 ? (
+                  {/* Product Catalog Pricing */}
+                  {loadingCatalog ? (
+                    <div className="flex items-center justify-center py-8">
+                      <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
+                      <span className="ml-2 text-gray-500">Cargando catálogo de productos...</span>
+                    </div>
+                  ) : productCatalog && productCatalog.products && productCatalog.products.length > 0 ? (
+                    <ProductPricingStep
+                      products={productCatalog.products.map(p => ({
+                        id: p.id,
+                        code: p.code,
+                        name: p.name,
+                        serviceCategory: p.serviceCategory,
+                        productType: p.productType,
+                        unitType: p.unitType,
+                        pricingModel: p.pricingModel,
+                        costPrice: p.platformPrice,
+                        minPrice: p.minPrice
+                      }))}
+                      prices={formData.productPrices}
+                      onChange={(prices) => {
+                        setFormData({ ...formData, productPrices: prices })
+                      }}
+                      enabledCategories={Array.isArray(formData.enabledServices) ? formData.enabledServices : []}
+                      isProvider={formData.isProvider}
+                      providerCategories={formData.providerCategories || []}
+                    />
+                  ) : (
                     <div className={cn(
                       "p-8 text-center rounded-xl border-2 border-dashed",
                       theme === 'dark' ? "border-gray-700 bg-gray-800/30" : "border-gray-200 bg-gray-50"
                     )}>
                       <Tag className={cn("w-12 h-12 mx-auto mb-4", theme === 'dark' ? "text-gray-600" : "text-gray-400")} />
                       <p className={cn("text-sm", theme === 'dark' ? "text-gray-400" : "text-gray-600")}>
-                        No hay servicios habilitados. Vuelve al paso anterior para seleccionar servicios.
+                        No hay productos en el catálogo. Puedes continuar al siguiente paso.
                       </p>
-                    </div>
-                  ) : (
-                    <div className="space-y-4">
-                      {formData.enabledServices.map((serviceId: string) => {
-                        const isSubmodule = serviceId.includes(':')
-                        const mainServiceId = isSubmodule ? serviceId.split(':')[0] : serviceId
-                        const mainService = SERVICES.find(s => s.id === mainServiceId)
-                        let serviceName = serviceId
-
-                        if (isSubmodule && mainService && (mainService as any).submodules) {
-                          const submodule = (mainService as any).submodules.find((s: any) => s.id === serviceId)
-                          serviceName = submodule?.name || serviceId
-                        } else if (mainService) {
-                          serviceName = mainService.name
-                        }
-
-                        const currentPrice = formData.servicePrices?.[serviceId] || { buyPrice: 0, sellPrice: 0 }
-
-                        return (
-                          <div
-                            key={serviceId}
-                            className={cn(
-                              "p-4 rounded-xl border transition-all",
-                              theme === 'dark' ? "bg-gray-800/50 border-gray-700" : "bg-white border-gray-200"
-                            )}
-                          >
-                            <div className="flex items-center justify-between gap-4">
-                              <div className="flex-1 min-w-0">
-                                <h4 className={cn(
-                                  "font-medium text-sm",
-                                  theme === 'dark' ? "text-white" : "text-gray-900"
-                                )}>
-                                  {serviceName}
-                                </h4>
-                                <p className={cn(
-                                  "text-xs",
-                                  theme === 'dark' ? "text-gray-500" : "text-gray-500"
-                                )}>
-                                  {isSubmodule ? `Submódulo de ${mainService?.name}` : 'Servicio principal'}
-                                </p>
-                              </div>
-
-                              <div className="flex items-center gap-4">
-                                <div className="text-center">
-                                  <label className={cn(
-                                    "block text-xs mb-1",
-                                    theme === 'dark' ? "text-gray-400" : "text-gray-500"
-                                  )}>
-                                    Precio Compra
-                                  </label>
-                                  <div className={cn(
-                                    "px-3 py-2 rounded-lg text-sm font-medium",
-                                    theme === 'dark' ? "bg-gray-700 text-gray-300" : "bg-gray-100 text-gray-700"
-                                  )}>
-                                    ${(currentPrice.buyPrice ?? 0).toFixed(2)}
-                                  </div>
-                                </div>
-
-                                <div className="text-center">
-                                  <label className={cn(
-                                    "block text-xs mb-1",
-                                    theme === 'dark' ? "text-gray-400" : "text-gray-500"
-                                  )}>
-                                    Precio Venta
-                                  </label>
-                                  <input
-                                    type="number"
-                                    step="0.01"
-                                    min={currentPrice.buyPrice}
-                                    value={currentPrice.sellPrice || ''}
-                                    onChange={(e) => {
-                                      const sellPrice = parseFloat(e.target.value) || 0
-                                      setFormData({
-                                        ...formData,
-                                        servicePrices: {
-                                          ...formData.servicePrices,
-                                          [serviceId]: {
-                                            ...currentPrice,
-                                            sellPrice
-                                          }
-                                        }
-                                      })
-                                    }}
-                                    placeholder={currentPrice.buyPrice.toFixed(2)}
-                                    className={cn(
-                                      "w-24 px-3 py-2 rounded-lg text-sm font-medium border text-center",
-                                      theme === 'dark'
-                                        ? "bg-gray-900 border-gray-600 text-white focus:border-exa-secondary focus:ring-exa-secondary/20"
-                                        : "bg-white border-gray-300 text-black focus:border-blue-500 focus:ring-blue-500/20"
-                                    )}
-                                  />
-                                </div>
-
-                                <div className="text-center">
-                                  <label className={cn(
-                                    "block text-xs mb-1",
-                                    theme === 'dark' ? "text-gray-400" : "text-gray-500"
-                                  )}>
-                                    Margen
-                                  </label>
-                                  <div className={cn(
-                                    "px-3 py-2 rounded-lg text-sm font-medium",
-                                    (currentPrice.sellPrice - currentPrice.buyPrice) >= 0
-                                      ? theme === 'dark' ? "bg-green-900/30 text-green-400" : "bg-green-100 text-green-700"
-                                      : theme === 'dark' ? "bg-red-900/30 text-red-400" : "bg-red-100 text-red-700"
-                                  )}>
-                                    ${(currentPrice.sellPrice - currentPrice.buyPrice).toFixed(2)}
-                                  </div>
-                                </div>
-                              </div>
-                            </div>
-
-                            {currentPrice.sellPrice > 0 && currentPrice.sellPrice < currentPrice.buyPrice && (
-                              <p className="text-xs text-red-500 mt-2">
-                                El precio de venta no puede ser menor al precio de compra
-                              </p>
-                            )}
-                          </div>
-                        )
-                      })}
-
-                      <div className={cn(
-                        "mt-6 p-4 rounded-xl border-2 border-dashed",
-                        theme === 'dark' ? "border-gray-700 bg-gray-800/20" : "border-gray-200 bg-gray-50"
-                      )}>
-                        <p className={cn(
-                          "text-xs text-center",
-                          theme === 'dark' ? "text-gray-500" : "text-gray-500"
-                        )}>
-                          Los precios de compra se actualizan automáticamente desde la configuración global de la plataforma.
-                          Los precios de venta que configures aquí serán los que esta empresa cobrará a sus clientes.
-                        </p>
-                      </div>
                     </div>
                   )}
-
-                  {/* Product Catalog Pricing */}
-                  {loadingCatalog ? (
-                    <div className="mt-8 pt-8 border-t border-gray-200 dark:border-gray-700">
-                      <div className="flex items-center justify-center py-8">
-                        <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
-                        <span className="ml-2 text-gray-500">Cargando catálogo de productos...</span>
-                      </div>
-                    </div>
-                  ) : productCatalog && productCatalog.products && productCatalog.products.length > 0 ? (
-                    <div className="mt-8 pt-8 border-t border-gray-200 dark:border-gray-700">
-                      <h3 className={cn(
-                        "text-lg font-bold mb-2",
-                        theme === 'dark' ? "text-white" : "text-black"
-                      )}>
-                        Precios de Productos del Catálogo
-                      </h3>
-                      <p className={cn(
-                        "text-sm mb-6",
-                        theme === 'dark' ? "text-gray-400" : "text-gray-600"
-                      )}>
-                        Configura los precios de venta de los productos físicos (cajas, empaques, etc.) que esta empresa ofrecerá a sus clientes.
-                      </p>
-
-                      <ProductPricingStep
-                        products={productCatalog.products.map(p => ({
-                          id: p.id,
-                          code: p.code,
-                          name: p.name,
-                          serviceCategory: p.serviceCategory,
-                          productType: p.productType,
-                          unitType: p.unitType,
-                          pricingModel: p.pricingModel,
-                          costPrice: p.platformPrice,
-                          minPrice: p.minPrice
-                        }))}
-                        prices={formData.productPrices}
-                        onChange={(prices) => {
-                          setFormData({ ...formData, productPrices: prices })
-                        }}
-                      />
-                    </div>
-                  ) : null}
                 </div>
               )}
 
