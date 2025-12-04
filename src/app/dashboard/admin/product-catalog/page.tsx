@@ -20,7 +20,10 @@ import {
   Plus,
   Edit2,
   Trash2,
-  History
+  History,
+  TrendingUp,
+  Layers,
+  Truck
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useTheme } from '@/contexts/theme-context'
@@ -127,6 +130,36 @@ export default function ProductCatalogPage() {
     return acc
   }, {} as Record<string, typeof filteredProducts>)
 
+  // Calculate statistics
+  const stats = {
+    totalProducts: catalogData?.products.length || 0,
+    totalCategories: Object.keys(catalogData?.byCategory || {}).length,
+    totalValue: catalogData?.products.reduce((sum, p) => sum + (p.precioPublico || 0), 0) || 0,
+    avgMargin: catalogData?.products.length
+      ? (catalogData.products.reduce((sum, p) => {
+          const margin = p.miCosto > 0 ? ((p.precioMayorista - p.miCosto) / p.miCosto) * 100 : 0
+          return sum + margin
+        }, 0) / catalogData.products.length)
+      : 0
+  }
+
+  // Get unique provider companies
+  const providerCompanies = catalogData?.products
+    .filter(p => p.providerCompanyName)
+    .reduce((acc, p) => {
+      if (p.providerCompanyName && !acc.some(c => c.name === p.providerCompanyName)) {
+        acc.push({
+          name: p.providerCompanyName,
+          id: p.providerCompanyId,
+          productCount: catalogData.products.filter(prod => prod.providerCompanyId === p.providerCompanyId).length,
+          categories: [...new Set(catalogData.products
+            .filter(prod => prod.providerCompanyId === p.providerCompanyId)
+            .map(prod => prod.serviceCategory))]
+        })
+      }
+      return acc
+    }, [] as Array<{name: string, id: number | null, productCount: number, categories: string[]}>) || []
+
   return (
     <DashboardLayout>
       <div className="p-6 space-y-6">
@@ -164,6 +197,167 @@ export default function ProductCatalogPage() {
             </button>
           )}
         </div>
+
+        {/* Summary Cards */}
+        {!loading && !error && (
+          <motion.div
+            className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.3 }}
+          >
+            {/* Total Products Card */}
+            <div className={cn(
+              "rounded-2xl border p-5",
+              theme === 'dark' ? "bg-white/5 border-white/10" : "bg-white border-gray-200"
+            )}>
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className={cn(
+                    "text-sm font-medium",
+                    theme === 'dark' ? "text-gray-400" : "text-gray-600"
+                  )}>
+                    Total Productos
+                  </p>
+                  <p className={cn(
+                    "text-2xl font-bold mt-1",
+                    theme === 'dark' ? "text-white" : "text-gray-900"
+                  )}>
+                    {stats.totalProducts}
+                  </p>
+                </div>
+                <div className={cn(
+                  "w-12 h-12 rounded-full flex items-center justify-center",
+                  "bg-blue-500/20"
+                )}>
+                  <Package className="w-6 h-6 text-blue-500" />
+                </div>
+              </div>
+            </div>
+
+            {/* Categories Card */}
+            <div className={cn(
+              "rounded-2xl border p-5",
+              theme === 'dark' ? "bg-white/5 border-white/10" : "bg-white border-gray-200"
+            )}>
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className={cn(
+                    "text-sm font-medium",
+                    theme === 'dark' ? "text-gray-400" : "text-gray-600"
+                  )}>
+                    Categorias
+                  </p>
+                  <p className={cn(
+                    "text-2xl font-bold mt-1",
+                    theme === 'dark' ? "text-white" : "text-gray-900"
+                  )}>
+                    {stats.totalCategories}
+                  </p>
+                </div>
+                <div className={cn(
+                  "w-12 h-12 rounded-full flex items-center justify-center",
+                  "bg-purple-500/20"
+                )}>
+                  <Layers className="w-6 h-6 text-purple-500" />
+                </div>
+              </div>
+            </div>
+
+            {/* Avg Margin Card */}
+            <div className={cn(
+              "rounded-2xl border p-5",
+              theme === 'dark' ? "bg-white/5 border-white/10" : "bg-white border-gray-200"
+            )}>
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className={cn(
+                    "text-sm font-medium",
+                    theme === 'dark' ? "text-gray-400" : "text-gray-600"
+                  )}>
+                    Margen Promedio
+                  </p>
+                  <p className={cn(
+                    "text-2xl font-bold mt-1",
+                    stats.avgMargin > 0 ? "text-green-500" : theme === 'dark' ? "text-white" : "text-gray-900"
+                  )}>
+                    {stats.avgMargin.toFixed(1)}%
+                  </p>
+                </div>
+                <div className={cn(
+                  "w-12 h-12 rounded-full flex items-center justify-center",
+                  "bg-green-500/20"
+                )}>
+                  <TrendingUp className="w-6 h-6 text-green-500" />
+                </div>
+              </div>
+            </div>
+
+            {/* Provider Card */}
+            <div className={cn(
+              "rounded-2xl border p-5",
+              theme === 'dark' ? "bg-white/5 border-white/10" : "bg-white border-gray-200"
+            )}>
+              <div className="flex items-center justify-between">
+                <div className="flex-1 min-w-0">
+                  <p className={cn(
+                    "text-sm font-medium",
+                    theme === 'dark' ? "text-gray-400" : "text-gray-600"
+                  )}>
+                    Proveedor
+                  </p>
+                  {providerCompanies.length > 0 ? (
+                    <div className="mt-1">
+                      <p className={cn(
+                        "text-lg font-bold truncate",
+                        theme === 'dark' ? "text-white" : "text-gray-900"
+                      )}>
+                        {providerCompanies[0].name}
+                      </p>
+                      <div className="flex flex-wrap gap-1 mt-1">
+                        {providerCompanies[0].categories.slice(0, 2).map(cat => (
+                          <span
+                            key={cat}
+                            className={cn(
+                              "text-xs px-2 py-0.5 rounded-full",
+                              theme === 'dark' ? "bg-amber-500/20 text-amber-400" : "bg-amber-100 text-amber-700"
+                            )}
+                          >
+                            {categoryLabels[cat] || cat}
+                          </span>
+                        ))}
+                        {providerCompanies[0].categories.length > 2 && (
+                          <span className={cn(
+                            "text-xs",
+                            theme === 'dark' ? "text-gray-500" : "text-gray-400"
+                          )}>
+                            +{providerCompanies[0].categories.length - 2}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  ) : (
+                    <p className={cn(
+                      "text-lg font-bold mt-1",
+                      theme === 'dark' ? "text-gray-500" : "text-gray-400"
+                    )}>
+                      Sin asignar
+                    </p>
+                  )}
+                </div>
+                <div className={cn(
+                  "w-12 h-12 rounded-full flex items-center justify-center flex-shrink-0 ml-3",
+                  providerCompanies.length > 0 ? "bg-amber-500/20" : "bg-gray-500/20"
+                )}>
+                  <Truck className={cn(
+                    "w-6 h-6",
+                    providerCompanies.length > 0 ? "text-amber-500" : "text-gray-500"
+                  )} />
+                </div>
+              </div>
+            </div>
+          </motion.div>
+        )}
 
         {/* Search */}
         <div className="relative max-w-md">
