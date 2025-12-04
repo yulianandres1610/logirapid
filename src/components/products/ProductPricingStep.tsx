@@ -136,25 +136,27 @@ export default function ProductPricingStep({
     const miCosto = getEffectiveCost(product, localPrices[productId])
     const current = localPrices[productId] || { precioClientes: miCosto }
 
-    // Validate
+    // Validate - only show error if value > 0 and less than minimum
     const newErrors: { sucursales?: string; clientes?: string } = {}
 
     if (field === 'precioSucursales') {
-      // Precio Sucursales cannot be lower than Mi Costo
-      if (numValue < miCosto) {
+      // Precio Sucursales cannot be lower than Mi Costo (only validate if value > 0)
+      if (numValue > 0 && numValue < miCosto) {
         newErrors.sucursales = `Min: $${miCosto.toFixed(2)}`
       }
+      // No error if value >= miCosto or value is 0/empty
     }
 
     if (field === 'precioClientes') {
-      if (numValue < miCosto) {
+      if (numValue > 0 && numValue < miCosto) {
         newErrors.clientes = `Min: $${miCosto.toFixed(2)}`
       }
     }
 
+    // Replace errors completely for this product (don't merge with old errors)
     setErrors(prev => ({
       ...prev,
-      [productId]: { ...prev[productId], ...newErrors }
+      [productId]: newErrors
     }))
 
     const newLocal = {
@@ -357,8 +359,17 @@ export default function ProductPricingStep({
                     {showPrecioSucursalesColumn && (
                       <th className="text-right px-4 py-2 text-gray-600 dark:text-gray-300 font-medium">
                         <div className="flex items-center justify-end gap-1">
-                          <Building2 className="w-3 h-3" />
-                          Precio Sucursales
+                          {canEditCost ? (
+                            <>
+                              <DollarSign className="w-3 h-3" />
+                              Precio LogiRapid
+                            </>
+                          ) : (
+                            <>
+                              <Building2 className="w-3 h-3" />
+                              Precio Sucursales
+                            </>
+                          )}
                         </div>
                       </th>
                     )}
