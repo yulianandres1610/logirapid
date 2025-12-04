@@ -163,44 +163,9 @@ export default function ProductCatalogPage() {
   return (
     <DashboardLayout>
       <div className="p-6 space-y-6">
-        {/* Actions */}
-        <div className="flex items-center justify-end gap-3">
-          <button
-            onClick={refresh}
-            className={cn(
-              "p-2 rounded-lg border transition-colors",
-              theme === 'dark'
-                ? "border-gray-700 hover:bg-gray-800"
-                : "border-gray-200 hover:bg-gray-100"
-            )}
-          >
-            <RefreshCw className="w-4 h-4" />
-          </button>
-
-          {hasChanges && (
-            <button
-              onClick={handleSaveAll}
-              disabled={saving}
-              className={cn(
-                "flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors",
-                saving
-                  ? "bg-gray-400 cursor-not-allowed"
-                  : "bg-green-600 hover:bg-green-700 text-white"
-              )}
-            >
-              {saving ? (
-                <Loader2 className="w-4 h-4 animate-spin" />
-              ) : (
-                <Save className="w-4 h-4" />
-              )}
-              Guardar Cambios ({Object.keys(editingPrices).length})
-            </button>
-          )}
-        </div>
-
         {/* Summary Cards */}
         {!loading && !error && (
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
             {/* Total Products Card */}
             <motion.div
               initial={{ opacity: 0, y: 20 }}
@@ -339,8 +304,8 @@ export default function ProductCatalogPage() {
           </div>
         )}
 
-        {/* Search */}
-        <div className="flex items-center gap-4">
+        {/* Search and Actions Bar */}
+        <div className="flex items-center justify-between gap-4">
           <div className="relative flex-1 max-w-md">
             <Search className={cn(
               "absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5",
@@ -359,6 +324,39 @@ export default function ProductCatalogPage() {
                   : "bg-white border-gray-200 text-gray-900 placeholder:text-gray-400"
               )}
             />
+          </div>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={refresh}
+              className={cn(
+                "p-2.5 rounded-xl border transition-colors",
+                theme === 'dark'
+                  ? "border-white/10 hover:bg-white/5"
+                  : "border-gray-200 hover:bg-gray-100"
+              )}
+            >
+              <RefreshCw className="w-5 h-5" />
+            </button>
+
+            {hasChanges && (
+              <button
+                onClick={handleSaveAll}
+                disabled={saving}
+                className={cn(
+                  "flex items-center gap-2 px-4 py-2.5 rounded-xl font-medium transition-colors",
+                  saving
+                    ? "bg-gray-400 cursor-not-allowed"
+                    : "bg-green-600 hover:bg-green-700 text-white"
+                )}
+              >
+                {saving ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <Save className="w-4 h-4" />
+                )}
+                Guardar ({Object.keys(editingPrices).length})
+              </button>
+            )}
           </div>
         </div>
 
@@ -633,41 +631,6 @@ export default function ProductCatalogPage() {
           </div>
         )}
 
-        {/* Info Box */}
-        {!loading && !error && catalogData && catalogData.products.length > 0 && (
-          <div className={cn(
-            "p-4 rounded-lg border",
-            theme === 'dark'
-              ? "bg-blue-900/20 border-blue-800"
-              : "bg-blue-50 border-blue-200"
-          )}>
-            <div className="flex items-start gap-3">
-              <AlertCircle className="w-5 h-5 text-blue-500 mt-0.5" />
-              <div>
-                <h4 className={cn(
-                  "font-medium mb-1",
-                  theme === 'dark' ? "text-blue-300" : "text-blue-800"
-                )}>
-                  Piramide de Precios (Nivel Proveedor)
-                </h4>
-                <ul className={cn(
-                  "text-sm space-y-1",
-                  theme === 'dark' ? "text-blue-200/80" : "text-blue-700"
-                )}>
-                  <li><strong>Mi Costo:</strong> Lo que le cuesta al proveedor producir/adquirir el producto</li>
-                  <li><strong>Precio Mayorista:</strong> Lo que el proveedor cobra a LogiRapid (su margen)</li>
-                  <li><strong>Precio al Publico:</strong> Precio sugerido de venta al cliente final</li>
-                </ul>
-                <p className={cn(
-                  "text-xs mt-2",
-                  theme === 'dark' ? "text-blue-200/60" : "text-blue-600"
-                )}>
-                  Nota: El Precio Mayorista se convierte en &quot;Mi Costo&quot; para las empresas clientes.
-                </p>
-              </div>
-            </div>
-          </div>
-        )}
       </div>
     </DashboardLayout>
   )
