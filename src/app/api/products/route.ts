@@ -37,6 +37,27 @@ export async function GET(request: NextRequest) {
       }, { status: 401 })
     }
 
+    // Check if product_catalog table exists
+    const tableCheck = await db.query(`
+      SELECT EXISTS (
+        SELECT FROM information_schema.tables
+        WHERE table_schema = 'public'
+        AND table_name = 'product_catalog'
+      ) as exists
+    `)
+
+    if (!tableCheck.rows[0]?.exists) {
+      // Table doesn't exist yet, return empty catalog
+      return NextResponse.json({
+        success: true,
+        data: {
+          products: [],
+          byCategory: {},
+          total: 0
+        }
+      })
+    }
+
     const { searchParams } = new URL(request.url)
     const category = searchParams.get('category')
     const activeOnly = searchParams.get('active') !== 'false'
