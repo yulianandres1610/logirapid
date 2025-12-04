@@ -181,9 +181,11 @@ export default function ProductPricingStep({
   }
 
   const calculateMargin = (costPrice: number, sellPrice: number) => {
-    const margin = sellPrice - costPrice
-    const percentage = costPrice > 0 ? ((sellPrice - costPrice) / costPrice * 100) : 0
-    return { margin, percentage }
+    const cost = Number(costPrice) || 0
+    const sell = Number(sellPrice) || 0
+    const margin = sell - cost
+    const percentage = cost > 0 ? ((sell - cost) / cost * 100) : 0
+    return { margin: isNaN(margin) ? 0 : margin, percentage: isNaN(percentage) ? 0 : percentage }
   }
 
   const getUnitLabel = (unitType: string, pricingModel: string) => {
@@ -365,12 +367,12 @@ export default function ProductPricingStep({
                 <tbody className="divide-y dark:divide-gray-700">
                   {categoryProducts.map(product => {
                     const localPrice = localPrices[product.id]
-                    const effectiveCost = localPrice?.costPrice ?? product.costPrice ?? 0
+                    const effectiveCost = Number(localPrice?.costPrice ?? product.costPrice ?? 0) || 0
                     const b2bPrice = localPrice?.b2bPrice
-                    const b2cPrice = localPrice?.b2cPrice ?? product.costPrice ?? 0
+                    const b2cPrice = Number(localPrice?.b2cPrice ?? product.costPrice ?? 0) || 0
                     const { margin, percentage } = calculateMargin(effectiveCost, b2cPrice)
                     const productErrors = errors[product.id]
-                    const unitLabel = getUnitLabel(product.unitType, product.pricingModel)
+                    const unitLabel = getUnitLabel(product.unitType || 'unit', product.pricingModel || 'fixed')
 
                     return (
                       <tr
