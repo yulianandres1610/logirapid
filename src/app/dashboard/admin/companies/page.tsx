@@ -641,6 +641,10 @@ export default function CompaniesPage() {
         subdomain: company.subdomain || '',
         primaryColor: company.primaryColor || '#CC0A46',
         secondaryColor: company.secondaryColor || '#0A46CC',
+        isProvider: company.isProvider || false,
+        providerCategories: Array.isArray(company.providerCategories) ? company.providerCategories : [],
+        providerServices: Array.isArray(company.providerServices) ? company.providerServices : [],
+        productPrices: [],
         editMode: true,
         editId: companyId
       })

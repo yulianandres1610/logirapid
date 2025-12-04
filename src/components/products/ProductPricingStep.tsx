@@ -70,20 +70,24 @@ export default function ProductPricingStep({
   const [localPrices, setLocalPrices] = useState<Record<number, { b2bPrice?: number; b2cPrice?: number; costPrice?: number }>>({})
   const [errors, setErrors] = useState<Record<number, { b2b?: string; b2c?: string }>>({})
 
+  // Ensure products is always an array
+  const safeProducts = Array.isArray(products) ? products : []
+
   // Filter products by enabled categories
   const filteredProducts = enabledCategories && enabledCategories.length > 0
-    ? products.filter(p => {
+    ? safeProducts.filter(p => {
         return enabledCategories.some(cat => {
           const mainCategory = cat.includes(':') ? cat.split(':')[0] : cat
           return p.serviceCategory === mainCategory
         })
       })
-    : products
+    : safeProducts
 
   // Initialize local prices from props
   useEffect(() => {
     const priceMap: Record<number, { b2bPrice?: number; b2cPrice?: number; costPrice?: number }> = {}
-    for (const price of prices) {
+    const pricesArray = Array.isArray(prices) ? prices : []
+    for (const price of pricesArray) {
       priceMap[price.productId] = {
         b2bPrice: price.b2bPrice,
         b2cPrice: price.b2cPrice ?? price.sellPrice,
