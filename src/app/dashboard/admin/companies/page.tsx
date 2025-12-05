@@ -1260,9 +1260,9 @@ export default function CompaniesPage() {
                         setFormData({
                           ...formData,
                           isProvider,
-                          providerType: isProvider ? 'both' : null,
-                          providerCategories: [],
-                          providerServices: isProvider ? formData.enabledServices : []
+                          providerType: isProvider ? (formData.providerType || 'both') : null,
+                          providerCategories: isProvider ? formData.providerCategories : [],
+                          providerServices: isProvider ? formData.providerServices : []
                         })
                       }}
                       onProviderTypeChange={(type) => {
