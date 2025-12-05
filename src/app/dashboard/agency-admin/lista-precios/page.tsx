@@ -18,8 +18,7 @@ import {
   Search,
   TrendingUp,
   Layers,
-  Truck,
-  AlertTriangle
+  Truck
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useTheme } from '@/contexts/theme-context'
@@ -495,30 +494,6 @@ export default function ListaPreciosEmpresaPage() {
             })}
           </div>
 
-          {/* Info message */}
-          <div className={cn(
-            "mt-4 p-3 rounded-lg text-sm",
-            theme === 'dark' ? "bg-blue-900/20 text-blue-400" : "bg-blue-50 text-blue-700"
-          )}>
-            <div className="flex items-start gap-2">
-              <AlertTriangle className="w-4 h-4 mt-0.5 flex-shrink-0" />
-              <div>
-                <p className="font-medium">Configuracion de precios para tu empresa</p>
-                <p className="text-xs opacity-80 mt-1">
-                  {company?.isProvider && providerCategories.length > 0 ? (
-                    <>
-                      <strong>Proveedor de:</strong> {providerCategories.map(c => categoryLabels[c] || c).join(', ')} - Puedes configurar tu precio base.{' '}
-                      <strong>Cliente de:</strong> otras categorias - Los precios no pueden ser menores al costo de LogiRapid.
-                    </>
-                  ) : isBranch ? (
-                    <>Como sucursal, configuras el precio de venta a tus clientes. El precio base es el que te da tu empresa matriz.</>
-                  ) : (
-                    <>Como empresa matriz, puedes configurar precios para tus sucursales y clientes finales.</>
-                  )}
-                </p>
-              </div>
-            </div>
-          </div>
         </div>
 
         {/* Search and Actions Bar */}
@@ -631,13 +606,9 @@ export default function ListaPreciosEmpresaPage() {
                   key={category}
                   className={cn(
                     "rounded-xl border overflow-hidden",
-                    isProviderCat
-                      ? theme === 'dark'
-                        ? "bg-amber-900/20 border-amber-700"
-                        : "bg-amber-50 border-amber-200"
-                      : theme === 'dark'
-                        ? "bg-gray-800/50 border-gray-700"
-                        : "bg-white border-gray-200"
+                    theme === 'dark'
+                      ? "bg-gray-800/50 border-gray-700"
+                      : "bg-white border-gray-200"
                   )}
                 >
                   {/* Category Header */}
@@ -651,14 +622,9 @@ export default function ListaPreciosEmpresaPage() {
                     <div className="flex items-center gap-3">
                       <div className={cn(
                         "p-2 rounded-lg",
-                        isProviderCat
-                          ? theme === 'dark' ? "bg-amber-800" : "bg-amber-200"
-                          : theme === 'dark' ? "bg-gray-700" : "bg-gray-100"
+                        theme === 'dark' ? "bg-gray-700" : "bg-gray-100"
                       )}>
-                        <Icon className={cn(
-                          "w-5 h-5",
-                          isProviderCat ? "text-amber-500" : "text-blue-500"
-                        )} />
+                        <Icon className="w-5 h-5 text-blue-500" />
                       </div>
                       <div className="text-left">
                         <div className="flex items-center gap-2">
@@ -708,9 +674,7 @@ export default function ListaPreciosEmpresaPage() {
                             <thead>
                               <tr className={cn(
                                 "text-left text-xs uppercase tracking-wider",
-                                isProviderCat
-                                  ? theme === 'dark' ? "bg-amber-900/30 text-amber-300" : "bg-amber-100 text-amber-800"
-                                  : theme === 'dark' ? "bg-gray-900/50 text-gray-400" : "bg-gray-50 text-gray-500"
+                                theme === 'dark' ? "bg-gray-900/50 text-gray-400" : "bg-gray-50 text-gray-500"
                               )}>
                                 <th className="pl-4 pr-16 py-3 w-36">Codigo</th>
                                 <th className="pl-10 pr-4 py-3 w-auto">Producto</th>
@@ -804,8 +768,8 @@ export default function ListaPreciosEmpresaPage() {
                                       className={cn(
                                         "transition-colors",
                                         hasEdits
-                                          ? theme === 'dark' ? "bg-amber-900/20" : "bg-amber-50"
-                                          : theme === 'dark' ? "hover:bg-amber-900/10" : "hover:bg-amber-50/50"
+                                          ? theme === 'dark' ? "bg-blue-900/20" : "bg-blue-50"
+                                          : theme === 'dark' ? "hover:bg-gray-800/50" : "hover:bg-gray-50"
                                       )}
                                     >
                                       <td className="pl-4 pr-16 py-3">
@@ -849,8 +813,8 @@ export default function ListaPreciosEmpresaPage() {
                                           className={cn(
                                             "w-full max-w-[100px] px-2 py-1 text-center rounded border text-sm mx-auto",
                                             theme === 'dark'
-                                              ? "bg-amber-900/30 border-amber-600 text-amber-300"
-                                              : "bg-amber-50 border-amber-300 text-amber-700"
+                                              ? "bg-gray-900 border-gray-700 text-blue-400"
+                                              : "bg-white border-gray-200 text-blue-600"
                                           )}
                                         />
                                       </td>
