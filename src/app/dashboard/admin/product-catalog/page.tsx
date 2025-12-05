@@ -64,7 +64,18 @@ interface Company {
   isBranch: boolean
   parentCompanyId: number | null
   status: string
+  isProvider?: boolean
+  providerCategories?: string[]
 }
+
+// Service categories for tabs
+const SERVICE_CATEGORIES = [
+  { id: 'all', name: 'Todos', icon: Layers },
+  { id: 'paqueteria', name: 'Paqueteria', icon: Package },
+  { id: 'remesa', name: 'Remesas', icon: DollarSign },
+  { id: 'recarga', name: 'Recargas', icon: Smartphone },
+  { id: 'mercado', name: 'Mercado', icon: Store }
+]
 
 export default function ProductCatalogPage() {
   const { theme } = useTheme()
@@ -92,6 +103,7 @@ export default function ProductCatalogPage() {
     recarga: false,
     mercado: false
   })
+  const [activeCategory, setActiveCategory] = useState<string>('all')
   const [searchTerm, setSearchTerm] = useState('')
   const [editingPrices, setEditingPrices] = useState<Record<number, EditingPrice>>({})
   const [editingCompanyPrices, setEditingCompanyPrices] = useState<Record<number, EditingCompanyPrice>>({})
@@ -276,6 +288,38 @@ export default function ProductCatalogPage() {
   const isViewingCompanyPrices = selectedCompanyId !== null
   const currentLoading = isViewingCompanyPrices ? loadingCompanyPricing : loading
   const currentError = isViewingCompanyPrices ? companyPricingError : error
+
+  // Check if selected company is provider for a category
+  const isProviderForCategory = (category: string): boolean => {
+    if (!selectedCompany) return false
+    return selectedCompany.isProvider === true &&
+      Array.isArray(selectedCompany.providerCategories) &&
+      selectedCompany.providerCategories.includes(category)
+  }
+
+  // Separate products into provider products and client products
+  const providerCategories = selectedCompany?.providerCategories || []
+  const providerProducts = filteredProducts.filter((p: any) =>
+    selectedCompany?.isProvider && providerCategories.includes(p.serviceCategory)
+  )
+  const clientProducts = filteredProducts.filter((p: any) =>
+    !selectedCompany?.isProvider || !providerCategories.includes(p.serviceCategory)
+  )
+
+  // Filter by active category tab
+  const getFilteredByCategory = (products: any[]) => {
+    if (activeCategory === 'all') return products
+    return products.filter((p: any) => p.serviceCategory === activeCategory)
+  }
+
+  const displayProviderProducts = getFilteredByCategory(providerProducts)
+  const displayClientProducts = getFilteredByCategory(clientProducts)
+
+  // Get product counts by category for tabs
+  const getProductCountByCategory = (category: string) => {
+    if (category === 'all') return filteredProducts.length
+    return filteredProducts.filter((p: any) => p.serviceCategory === category).length
+  }
 
   return (
     <DashboardLayout>
@@ -571,6 +615,77 @@ export default function ProductCatalogPage() {
               </div>
             </div>
           )}
+
+          {/* Provider indicator */}
+          {selectedCompany?.isProvider && providerCategories.length > 0 && (
+            <div className={cn(
+              "mt-4 p-3 rounded-lg text-sm",
+              theme === 'dark' ? "bg-amber-900/30 text-amber-300 border border-amber-700" : "bg-amber-50 text-amber-800 border border-amber-200"
+            )}>
+              <div className="flex items-start gap-2">
+                <Truck className="w-4 h-4 mt-0.5 flex-shrink-0" />
+                <div>
+                  <p className="font-medium">Esta empresa es PROVEEDOR de: {providerCategories.map(c => categoryLabels[c] || c).join(', ')}</p>
+                  <p className="text-xs opacity-80 mt-1">
+                    Para estas categorias, puede configurar su precio base (lo que cobra a LogiRapid).
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Category Tabs */}
+        <div className={cn(
+          "flex flex-wrap gap-2 p-2 rounded-xl border",
+          theme === 'dark' ? "bg-gray-800/50 border-gray-700" : "bg-gray-50 border-gray-200"
+        )}>
+          {SERVICE_CATEGORIES.map((cat) => {
+            const Icon = cat.icon
+            const count = getProductCountByCategory(cat.id)
+            const isActive = activeCategory === cat.id
+            const isProviderCat = isProviderForCategory(cat.id)
+
+            return (
+              <button
+                key={cat.id}
+                onClick={() => setActiveCategory(cat.id)}
+                className={cn(
+                  "flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all",
+                  isActive
+                    ? theme === 'dark'
+                      ? "bg-blue-600 text-white shadow-md"
+                      : "bg-blue-600 text-white shadow-md"
+                    : theme === 'dark'
+                      ? "bg-gray-700 text-gray-300 hover:bg-gray-600"
+                      : "bg-white text-gray-600 hover:bg-gray-100"
+                )}
+              >
+                <Icon className="w-4 h-4" />
+                {cat.name}
+                {count > 0 && (
+                  <span className={cn(
+                    "px-1.5 py-0.5 rounded-full text-xs",
+                    isActive
+                      ? "bg-white/20 text-white"
+                      : theme === 'dark' ? "bg-gray-600 text-gray-300" : "bg-gray-200 text-gray-600"
+                  )}>
+                    {count}
+                  </span>
+                )}
+                {isProviderCat && isViewingCompanyPrices && (
+                  <span className={cn(
+                    "px-1.5 py-0.5 rounded text-[10px] font-bold uppercase",
+                    isActive
+                      ? "bg-amber-400 text-amber-900"
+                      : "bg-amber-500/20 text-amber-500"
+                  )}>
+                    Proveedor
+                  </span>
+                )}
+              </button>
+            )
+          })}
         </div>
 
         {/* Search and Actions Bar */}
@@ -677,13 +792,23 @@ export default function ProductCatalogPage() {
             {Object.entries(productsByCategory).map(([category, products]: [string, any[]]) => {
               const Icon = categoryIcons[category] || Package
               const isExpanded = expandedCategories[category]
+              const isProviderCat = isProviderForCategory(category)
+
+              // Skip if filtering by category and this doesn't match
+              if (activeCategory !== 'all' && category !== activeCategory) return null
 
               return (
                 <div
                   key={category}
                   className={cn(
                     "rounded-xl border overflow-hidden",
-                    theme === 'dark' ? "bg-gray-800/50 border-gray-700" : "bg-white border-gray-200"
+                    isProviderCat && isViewingCompanyPrices
+                      ? theme === 'dark'
+                        ? "bg-amber-900/20 border-amber-700"
+                        : "bg-amber-50 border-amber-200"
+                      : theme === 'dark'
+                        ? "bg-gray-800/50 border-gray-700"
+                        : "bg-white border-gray-200"
                   )}
                 >
                   {/* Category Header */}
@@ -697,22 +822,38 @@ export default function ProductCatalogPage() {
                     <div className="flex items-center gap-3">
                       <div className={cn(
                         "p-2 rounded-lg",
-                        theme === 'dark' ? "bg-gray-700" : "bg-gray-100"
+                        isProviderCat && isViewingCompanyPrices
+                          ? theme === 'dark' ? "bg-amber-800" : "bg-amber-200"
+                          : theme === 'dark' ? "bg-gray-700" : "bg-gray-100"
                       )}>
-                        <Icon className="w-5 h-5 text-blue-500" />
+                        <Icon className={cn(
+                          "w-5 h-5",
+                          isProviderCat && isViewingCompanyPrices ? "text-amber-500" : "text-blue-500"
+                        )} />
                       </div>
                       <div className="text-left">
-                        <h3 className={cn(
-                          "font-semibold",
-                          theme === 'dark' ? "text-white" : "text-gray-900"
-                        )}>
-                          {categoryLabels[category] || category}
-                        </h3>
+                        <div className="flex items-center gap-2">
+                          <h3 className={cn(
+                            "font-semibold",
+                            theme === 'dark' ? "text-white" : "text-gray-900"
+                          )}>
+                            {categoryLabels[category] || category}
+                          </h3>
+                          {isProviderCat && isViewingCompanyPrices && (
+                            <span className={cn(
+                              "px-2 py-0.5 rounded text-[10px] font-bold uppercase",
+                              theme === 'dark' ? "bg-amber-600 text-white" : "bg-amber-500 text-white"
+                            )}>
+                              Eres Proveedor
+                            </span>
+                          )}
+                        </div>
                         <p className={cn(
                           "text-sm",
                           theme === 'dark' ? "text-gray-400" : "text-gray-500"
                         )}>
                           {products.length} producto{products.length !== 1 ? 's' : ''}
+                          {isProviderCat && isViewingCompanyPrices && ' - Configura tu precio base'}
                         </p>
                       </div>
                     </div>
@@ -738,25 +879,52 @@ export default function ProductCatalogPage() {
                             <thead>
                               <tr className={cn(
                                 "text-left text-xs uppercase tracking-wider",
-                                theme === 'dark'
-                                  ? "bg-gray-900/50 text-gray-400"
-                                  : "bg-gray-50 text-gray-500"
+                                isProviderCat && isViewingCompanyPrices
+                                  ? theme === 'dark' ? "bg-amber-900/30 text-amber-300" : "bg-amber-100 text-amber-800"
+                                  : theme === 'dark' ? "bg-gray-900/50 text-gray-400" : "bg-gray-50 text-gray-500"
                               )}>
                                 <th className="pl-4 pr-16 py-3 w-36">Codigo</th>
                                 <th className="pl-10 pr-4 py-3 w-auto">Producto</th>
-                                <th className="px-4 py-3 w-32 text-center">
-                                  <div className="flex flex-col items-center">
-                                    <div className="flex items-center gap-1">
-                                      <DollarSign className="w-3 h-3 text-amber-500" />
-                                      Costo
-                                    </div>
-                                    <span className="text-[10px] font-normal opacity-60">
-                                      {isViewingCompanyPrices ? '(LogiRapid)' : '(Proveedor)'}
-                                    </span>
-                                  </div>
-                                </th>
-                                {isViewingCompanyPrices ? (
+                                {isProviderCat && isViewingCompanyPrices ? (
+                                  /* Provider view - can edit their base cost */
                                   <>
+                                    <th className="px-4 py-3 w-36 text-center">
+                                      <div className="flex flex-col items-center">
+                                        <div className="flex items-center gap-1">
+                                          <DollarSign className="w-3 h-3 text-amber-500" />
+                                          Tu Precio Base
+                                        </div>
+                                        <span className="text-[10px] font-normal opacity-60">(Editable)</span>
+                                      </div>
+                                    </th>
+                                    <th className="px-4 py-3 w-36 text-center">
+                                      <div className="flex flex-col items-center">
+                                        <div className="flex items-center gap-1">
+                                          <Building2 className="w-3 h-3 text-blue-500" />
+                                          Precio LogiRapid
+                                        </div>
+                                        <span className="text-[10px] font-normal opacity-60">(Referencia)</span>
+                                      </div>
+                                    </th>
+                                    <th className="px-4 py-3 w-32 text-center">
+                                      <div className="flex flex-col items-center">
+                                        <span>Tu Margen</span>
+                                        <span className="text-[10px] font-normal opacity-60">(LogiRapid - Tu Precio)</span>
+                                      </div>
+                                    </th>
+                                  </>
+                                ) : isViewingCompanyPrices ? (
+                                  /* Client view - edits prices for branches/clients */
+                                  <>
+                                    <th className="px-4 py-3 w-32 text-center">
+                                      <div className="flex flex-col items-center">
+                                        <div className="flex items-center gap-1">
+                                          <DollarSign className="w-3 h-3 text-amber-500" />
+                                          Costo
+                                        </div>
+                                        <span className="text-[10px] font-normal opacity-60">(LogiRapid)</span>
+                                      </div>
+                                    </th>
                                     <th className="px-4 py-3 w-36 text-center">
                                       <div className="flex flex-col items-center">
                                         <div className="flex items-center gap-1">
@@ -780,7 +948,17 @@ export default function ProductCatalogPage() {
                                     </th>
                                   </>
                                 ) : (
+                                  /* Catalog view (no company selected) */
                                   <>
+                                    <th className="px-4 py-3 w-32 text-center">
+                                      <div className="flex flex-col items-center">
+                                        <div className="flex items-center gap-1">
+                                          <DollarSign className="w-3 h-3 text-amber-500" />
+                                          Costo
+                                        </div>
+                                        <span className="text-[10px] font-normal opacity-60">(Proveedor)</span>
+                                      </div>
+                                    </th>
                                     <th className="px-4 py-3 w-36 text-center">
                                       <div className="flex items-center justify-center gap-1">
                                         <Building2 className="w-3 h-3 text-blue-500" />
@@ -811,8 +989,105 @@ export default function ProductCatalogPage() {
                             </thead>
                             <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
                               {products.map((product: any) => {
-                                if (isViewingCompanyPrices) {
-                                  // Company-specific pricing view
+                                // Check if this is a provider category for the selected company
+                                const isProductProviderCat = isProviderForCategory(product.serviceCategory)
+
+                                if (isProductProviderCat && isViewingCompanyPrices) {
+                                  // PROVIDER VIEW - can edit their base cost
+                                  const editing = editingPrices[product.productId || product.id]
+                                  const tuPrecioBase = editing?.miCosto ?? (product.catalogMiCosto || product.miCosto || 0)
+                                  const precioLogiRapid = product.precioMayorista || 0
+
+                                  // Calculate margin (what LogiRapid pays - provider's cost)
+                                  const tuMargen = precioLogiRapid - tuPrecioBase
+                                  const tuMargenPct = tuPrecioBase > 0
+                                    ? ((tuMargen / tuPrecioBase) * 100).toFixed(1)
+                                    : '0'
+
+                                  const hasEdits = editing !== undefined
+
+                                  return (
+                                    <tr
+                                      key={product.productId || product.id}
+                                      className={cn(
+                                        "transition-colors",
+                                        hasEdits
+                                          ? theme === 'dark' ? "bg-amber-900/20" : "bg-amber-50"
+                                          : theme === 'dark' ? "hover:bg-amber-900/10" : "hover:bg-amber-50/50"
+                                      )}
+                                    >
+                                      <td className="pl-4 pr-16 py-3">
+                                        <span className={cn(
+                                          "font-mono text-sm",
+                                          theme === 'dark' ? "text-gray-400" : "text-gray-600"
+                                        )}>
+                                          {product.code}
+                                        </span>
+                                      </td>
+                                      <td className="pl-10 pr-4 py-3">
+                                        <div>
+                                          <div className={cn(
+                                            "font-medium truncate",
+                                            theme === 'dark' ? "text-white" : "text-gray-900"
+                                          )}>
+                                            {product.name}
+                                          </div>
+                                          {product.description && (
+                                            <div className={cn(
+                                              "text-xs truncate",
+                                              theme === 'dark' ? "text-gray-500" : "text-gray-400"
+                                            )}>
+                                              {product.description}
+                                            </div>
+                                          )}
+                                        </div>
+                                      </td>
+                                      {/* Tu Precio Base - EDITABLE */}
+                                      <td className="px-4 py-3 text-center">
+                                        <input
+                                          type="number"
+                                          step="0.01"
+                                          value={tuPrecioBase}
+                                          onChange={(e) => handlePriceChange(
+                                            product.productId || product.id,
+                                            'miCosto',
+                                            parseFloat(e.target.value) || 0,
+                                            { ...product, miCosto: product.catalogMiCosto || product.miCosto || 0 }
+                                          )}
+                                          className={cn(
+                                            "w-full max-w-[100px] px-2 py-1 text-center rounded border text-sm mx-auto",
+                                            theme === 'dark'
+                                              ? "bg-amber-900/30 border-amber-600 text-amber-300"
+                                              : "bg-amber-50 border-amber-300 text-amber-700"
+                                          )}
+                                        />
+                                      </td>
+                                      {/* Precio LogiRapid - READ ONLY reference */}
+                                      <td className="px-4 py-3 text-center">
+                                        <span className={cn(
+                                          "text-sm font-medium",
+                                          theme === 'dark' ? "text-blue-400" : "text-blue-600"
+                                        )}>
+                                          ${precioLogiRapid.toFixed(2)}
+                                        </span>
+                                      </td>
+                                      {/* Tu Margen */}
+                                      <td className="px-4 py-3 text-center">
+                                        <span className={cn(
+                                          "text-sm font-medium whitespace-nowrap",
+                                          tuMargen > 0
+                                            ? "text-green-500"
+                                            : tuMargen < 0
+                                              ? "text-red-500"
+                                              : theme === 'dark' ? "text-gray-400" : "text-gray-500"
+                                        )}>
+                                          ${tuMargen.toFixed(2)} ({tuMargenPct}%)
+                                        </span>
+                                      </td>
+                                    </tr>
+                                  )
+                                } else if (isViewingCompanyPrices) {
+                                  // CLIENT VIEW - Company-specific pricing view
                                   const editing = editingCompanyPrices[product.productId]
                                   const miCosto = product.miCosto || product.catalogMiCosto || 0
                                   const precioSucursales = editing?.precioSucursales ?? product.precioSucursales

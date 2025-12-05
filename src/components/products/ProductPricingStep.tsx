@@ -324,6 +324,134 @@ export default function ProductPricingStep({
         const label = categoryLabels[category] || category
         const canEditCost = isProviderForCategory(category)
 
+        // PROVIDER VIEW - Completely different UI for categories where company is provider
+        if (canEditCost) {
+          return (
+            <div key={category} className="bg-amber-50 dark:bg-amber-900/20 rounded-lg border border-amber-200 dark:border-amber-700 overflow-hidden">
+              {/* Provider Category header */}
+              <div className="bg-amber-100 dark:bg-amber-800/50 px-4 py-3 border-b border-amber-200 dark:border-amber-700 flex items-center gap-2">
+                <Icon className="w-5 h-5 text-amber-600 dark:text-amber-400" />
+                <h3 className="font-medium text-amber-900 dark:text-amber-100">
+                  {label} - Eres PROVEEDOR
+                </h3>
+                <span className="ml-2 px-2 py-0.5 text-xs rounded-full bg-amber-200 dark:bg-amber-900/50 text-amber-800 dark:text-amber-300 flex items-center gap-1">
+                  <Edit3 className="w-3 h-3" />
+                  Configura tu precio base
+                </span>
+                <span className="ml-auto text-xs text-amber-700 dark:text-amber-400">
+                  {categoryProducts.length} productos
+                </span>
+              </div>
+
+              {/* Provider info banner */}
+              <div className="px-4 py-2 bg-amber-50 dark:bg-amber-900/10 border-b border-amber-100 dark:border-amber-800 text-xs text-amber-700 dark:text-amber-400">
+                LogiRapid te comprara estos productos a tu precio base. No configuras precios de sucursales ni clientes para esta categoria.
+              </div>
+
+              {/* Provider Products table - ONLY Tu Precio Base + Precio LogiRapid + Margen */}
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm table-fixed">
+                  <thead className="bg-amber-100/50 dark:bg-amber-800/30">
+                    <tr>
+                      <th className="text-left px-4 py-2 text-amber-800 dark:text-amber-200 font-medium w-auto">
+                        Producto
+                      </th>
+                      <th className="text-right px-4 py-2 text-amber-800 dark:text-amber-200 font-medium w-36">
+                        <div className="flex items-center justify-end gap-1">
+                          <Edit3 className="w-3 h-3" />
+                          Tu Precio Base
+                        </div>
+                      </th>
+                      <th className="text-right px-4 py-2 text-amber-800 dark:text-amber-200 font-medium w-36">
+                        <div className="flex items-center justify-end gap-1">
+                          <DollarSign className="w-3 h-3" />
+                          Precio LogiRapid
+                        </div>
+                      </th>
+                      <th className="text-right px-4 py-2 text-amber-800 dark:text-amber-200 font-medium w-28">
+                        Tu Margen
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-amber-100 dark:divide-amber-800">
+                    {categoryProducts.map(product => {
+                      const localPrice = localPrices[product.id]
+                      const tuPrecioBase = localPrice?.costPrice ?? getEffectiveCost(product, localPrice)
+                      // Use precioMayorista as the LogiRapid reference price
+                      const precioLogiRapid = Number(product.minB2BPrice ?? product.minPrice ?? 0) || 0
+                      const tuMargen = precioLogiRapid - tuPrecioBase
+                      const tuMargenPct = tuPrecioBase > 0 ? ((tuMargen / tuPrecioBase) * 100) : 0
+                      const unitLabel = getUnitLabel(product.unitType || 'unit', product.pricingModel || 'fixed')
+
+                      return (
+                        <tr
+                          key={product.id}
+                          className="hover:bg-amber-100/50 dark:hover:bg-amber-800/20"
+                        >
+                          <td className="px-4 py-3">
+                            <div className="font-medium text-gray-900 dark:text-white">
+                              {product.name}
+                            </div>
+                            <div className="text-xs text-gray-500 dark:text-gray-400">
+                              {product.code}
+                            </div>
+                          </td>
+
+                          {/* Tu Precio Base - EDITABLE */}
+                          <td className="px-4 py-3 text-right">
+                            <div className="flex items-center justify-end gap-1">
+                              <span className="text-gray-500">$</span>
+                              <input
+                                type="number"
+                                value={tuPrecioBase}
+                                onChange={(e) => handlePriceChange(
+                                  product.id,
+                                  'costPrice',
+                                  e.target.value,
+                                  product
+                                )}
+                                min={0}
+                                step="0.01"
+                                className="w-24 px-2 py-1 text-right border-2 rounded dark:bg-amber-900/30 dark:border-amber-600 border-amber-400 bg-white"
+                              />
+                              <span className="text-gray-500 text-xs w-6 text-left">{unitLabel}</span>
+                            </div>
+                          </td>
+
+                          {/* Precio LogiRapid - READ ONLY reference */}
+                          <td className="px-4 py-3 text-right">
+                            <div className="flex items-center justify-end gap-1">
+                              <Lock className="w-3 h-3 text-gray-400" />
+                              <span className="text-blue-600 dark:text-blue-400 font-medium">
+                                ${precioLogiRapid.toFixed(2)}
+                              </span>
+                              <span className="text-gray-500 text-xs w-6 text-left">{unitLabel}</span>
+                            </div>
+                          </td>
+
+                          {/* Tu Margen */}
+                          <td className="px-4 py-3 text-right">
+                            <div className={cn(
+                              "font-medium",
+                              tuMargen >= 0 ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400"
+                            )}>
+                              {tuMargen >= 0 ? '+' : ''}${tuMargen.toFixed(2)}
+                            </div>
+                            <div className="text-xs text-gray-500 dark:text-gray-400">
+                              ({tuMargenPct >= 0 ? '+' : ''}{tuMargenPct.toFixed(1)}%)
+                            </div>
+                          </td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )
+        }
+
+        // CLIENT VIEW - Standard UI for categories where company is NOT provider
         return (
           <div key={category} className="bg-white dark:bg-gray-800 rounded-lg border dark:border-gray-700 overflow-hidden">
             {/* Category header */}
@@ -332,12 +460,6 @@ export default function ProductPricingStep({
               <h3 className="font-medium text-gray-900 dark:text-white">
                 Productos de {label}
               </h3>
-              {canEditCost && (
-                <span className="ml-2 px-2 py-0.5 text-xs rounded-full bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 flex items-center gap-1">
-                  <Edit3 className="w-3 h-3" />
-                  Proveedor
-                </span>
-              )}
               <span className="ml-auto text-xs text-gray-500 dark:text-gray-400">
                 {categoryProducts.length} productos
               </span>
@@ -360,17 +482,8 @@ export default function ProductPricingStep({
                     {showPrecioSucursalesColumn && (
                       <th className="text-right px-4 py-2 text-gray-600 dark:text-gray-300 font-medium w-40">
                         <div className="flex items-center justify-end gap-1">
-                          {canEditCost ? (
-                            <>
-                              <DollarSign className="w-3 h-3" />
-                              Precio LogiRapid
-                            </>
-                          ) : (
-                            <>
-                              <Building2 className="w-3 h-3" />
-                              Precio Sucursales
-                            </>
-                          )}
+                          <Building2 className="w-3 h-3" />
+                          Precio Sucursales
                         </div>
                       </th>
                     )}
@@ -413,35 +526,14 @@ export default function ProductPricingStep({
                         </td>
 
                         <td className="px-4 py-3 text-right">
-                          {canEditCost ? (
-                            /* Provider can edit cost */
-                            <div className="flex items-center justify-end gap-1">
-                              <span className="text-gray-500">$</span>
-                              <input
-                                type="number"
-                                value={localPrice?.costPrice ?? miCosto}
-                                onChange={(e) => handlePriceChange(
-                                  product.id,
-                                  'costPrice',
-                                  e.target.value,
-                                  product
-                                )}
-                                min={0}
-                                step="0.01"
-                                className="w-24 px-2 py-1 text-right border rounded dark:bg-gray-700 dark:border-gray-600 border-amber-300 dark:border-amber-600"
-                              />
-                              <span className="text-gray-500 text-xs w-6 text-left">{unitLabel}</span>
-                            </div>
-                          ) : (
-                            /* Non-providers see read-only cost */
-                            <div className="flex items-center justify-end gap-1">
-                              <Lock className="w-3 h-3 text-gray-400" />
-                              <span className="text-gray-700 dark:text-gray-300">
-                                ${miCosto.toFixed(2)}
-                              </span>
-                              <span className="text-gray-500 text-xs w-6 text-left">{unitLabel}</span>
-                            </div>
-                          )}
+                          {/* Non-providers see read-only cost */}
+                          <div className="flex items-center justify-end gap-1">
+                            <Lock className="w-3 h-3 text-gray-400" />
+                            <span className="text-gray-700 dark:text-gray-300">
+                              ${miCosto.toFixed(2)}
+                            </span>
+                            <span className="text-gray-500 text-xs w-6 text-left">{unitLabel}</span>
+                          </div>
                         </td>
 
                         {showPrecioSucursalesColumn && (
