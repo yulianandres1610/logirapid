@@ -29,7 +29,7 @@ import { cn } from '@/lib/utils'
 import { useTheme } from '@/contexts/theme-context'
 import { useNotifications } from '@/contexts/NotificationContext'
 import { DashboardLayout } from '@/components/layout/dashboard-layout'
-import { useProductCatalog } from '@/hooks/useProductCatalog'
+import { useProductCatalog, useProviders } from '@/hooks/useProductCatalog'
 
 const categoryIcons: Record<string, typeof Package> = {
   paqueteria: Package,
@@ -55,6 +55,7 @@ export default function ProductCatalogPage() {
   const { theme } = useTheme()
   const { showNotification } = useNotifications()
   const { data: catalogData, loading, error, refresh, updatePlatformPrices } = useProductCatalog()
+  const { providers } = useProviders()
 
   const [expandedCategories, setExpandedCategories] = useState<Record<string, boolean>>({
     paqueteria: true,
@@ -142,23 +143,6 @@ export default function ProductCatalogPage() {
         }, 0) / catalogData.products.length)
       : 0
   }
-
-  // Get unique provider companies
-  const providerCompanies = catalogData?.products
-    .filter(p => p.providerCompanyName)
-    .reduce((acc, p) => {
-      if (p.providerCompanyName && !acc.some(c => c.name === p.providerCompanyName)) {
-        acc.push({
-          name: p.providerCompanyName,
-          id: p.providerCompanyId,
-          productCount: catalogData.products.filter(prod => prod.providerCompanyId === p.providerCompanyId).length,
-          categories: [...new Set(catalogData.products
-            .filter(prod => prod.providerCompanyId === p.providerCompanyId)
-            .map(prod => prod.serviceCategory))]
-        })
-      }
-      return acc
-    }, [] as Array<{name: string, id: number | null, productCount: number, categories: string[]}>) || []
 
   return (
     <DashboardLayout>
@@ -348,7 +332,7 @@ export default function ProductCatalogPage() {
                         "text-3xl font-bold mt-1",
                         theme === 'dark' ? "text-white" : "text-gray-900"
                       )}>
-                        {providerCompanies.length}
+                        {providers.length}
                       </p>
                     </div>
                   </div>
