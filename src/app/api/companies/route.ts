@@ -57,6 +57,10 @@ export async function GET(request: NextRequest) {
         c.createdat as "createdAt",
         c.parent_company_id as "parentCompanyId",
         c.is_branch as "isBranch",
+        c.is_provider as "isProvider",
+        c.provider_type as "providerType",
+        c.provider_categories as "providerCategories",
+        c.provider_services as "providerServices",
         parent.legalname as "parentCompanyName"
       FROM companies c
       LEFT JOIN companies parent ON c.parent_company_id = parent.id
@@ -123,7 +127,11 @@ export async function POST(request: NextRequest) {
       primaryColor,
       secondaryColor,
       parentCompanyId,
-      isBranch
+      isBranch,
+      isProvider,
+      providerType,
+      providerCategories,
+      providerServices
     } = body
 
     // Validaciones básicas
@@ -215,6 +223,7 @@ export async function POST(request: NextRequest) {
         haslimits, dailylimit, monthlylimit, companytype, enabledservices,
         service_fees, logo_url, label_logo_url, subdomain, primary_color, secondary_color,
         parent_company_id, is_branch,
+        is_provider, provider_type, provider_categories, provider_services,
         status, createdat, walletbalance, transactionscount, userscount
       ) VALUES (
         $1, $2, $3, $4, $5, $6, $7, $8, $9, $10,
@@ -222,6 +231,7 @@ export async function POST(request: NextRequest) {
         $16, $17, $18, $19, $20,
         $21, $22, $23, $24, $25, $26,
         $27, $28,
+        $29, $30, $31, $32,
         'active', NOW(), 0, 0, 0
       ) RETURNING
         id,
@@ -261,7 +271,11 @@ export async function POST(request: NextRequest) {
       primaryColor || '#CC0A46',
       secondaryColor || '#0A46CC',
       parentCompanyId || null,
-      isBranch || false
+      isBranch || false,
+      isProvider || false,
+      providerType || null,
+      JSON.stringify(providerCategories || []),
+      JSON.stringify(providerServices || [])
     ]
 
     const result = await db.query(query, values)

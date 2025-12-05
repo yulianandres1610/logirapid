@@ -642,6 +642,7 @@ export default function CompaniesPage() {
         primaryColor: company.primaryColor || '#CC0A46',
         secondaryColor: company.secondaryColor || '#0A46CC',
         isProvider: company.isProvider || false,
+        providerType: company.providerType || null,
         providerCategories: Array.isArray(company.providerCategories) ? company.providerCategories : [],
         providerServices: Array.isArray(company.providerServices) ? company.providerServices : [],
         productPrices: [],
