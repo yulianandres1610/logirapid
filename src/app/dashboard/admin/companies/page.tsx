@@ -2945,6 +2945,35 @@ export default function CompaniesPage() {
                           </span>
                         </div>
 
+                        {/* Provider Indicator */}
+                        {company.isProvider && (
+                          <div className="flex flex-wrap items-center gap-1.5">
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400 border border-amber-200 dark:border-amber-800">
+                              <Package className="w-3 h-3" />
+                              Proveedor
+                            </span>
+                            {company.providerCategories && company.providerCategories.length > 0 && (
+                              company.providerCategories.map((cat: string) => (
+                                <span
+                                  key={cat}
+                                  className={cn(
+                                    "inline-flex px-1.5 py-0.5 rounded text-[10px] font-medium",
+                                    cat === 'paqueteria' && "bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400",
+                                    cat === 'remesa' && "bg-green-50 dark:bg-green-900/20 text-green-600 dark:text-green-400",
+                                    cat === 'recarga' && "bg-purple-50 dark:bg-purple-900/20 text-purple-600 dark:text-purple-400",
+                                    cat === 'mercado' && "bg-orange-50 dark:bg-orange-900/20 text-orange-600 dark:text-orange-400"
+                                  )}
+                                >
+                                  {cat === 'paqueteria' ? 'Paqueteria' :
+                                   cat === 'remesa' ? 'Remesa' :
+                                   cat === 'recarga' ? 'Recarga' :
+                                   cat === 'mercado' ? 'Mercado' : cat}
+                                </span>
+                              ))
+                            )}
+                          </div>
+                        )}
+
                         {/* Stats Grid */}
                         <div className="grid grid-cols-2 gap-2">
                           {/* Balance */}
