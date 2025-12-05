@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   Package,
@@ -23,13 +23,14 @@ import {
   History,
   TrendingUp,
   Layers,
-  Truck
+  Truck,
+  AlertTriangle
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useTheme } from '@/contexts/theme-context'
 import { useNotifications } from '@/contexts/NotificationContext'
 import { DashboardLayout } from '@/components/layout/dashboard-layout'
-import { useProductCatalog, useProviders } from '@/hooks/useProductCatalog'
+import { useProductCatalog, useCompanyProductPricing, useProviders } from '@/hooks/useProductCatalog'
 
 const categoryIcons: Record<string, typeof Package> = {
   paqueteria: Package,
@@ -51,11 +52,39 @@ interface EditingPrice {
   precioPublico: number     // Precio sugerido al cliente final
 }
 
+interface EditingCompanyPrice {
+  precioSucursales: number | null
+  precioClientes: number | null
+  miCosto: number  // Read-only, for validation
+}
+
+interface Company {
+  id: number
+  legalName: string
+  isBranch: boolean
+  parentCompanyId: number | null
+  status: string
+}
+
 export default function ProductCatalogPage() {
   const { theme } = useTheme()
   const { showNotification } = useNotifications()
   const { data: catalogData, loading, error, refresh, updatePlatformPrices } = useProductCatalog()
   const { providers } = useProviders()
+
+  // Company selector state
+  const [companies, setCompanies] = useState<Company[]>([])
+  const [selectedCompanyId, setSelectedCompanyId] = useState<number | null>(null)
+  const [loadingCompanies, setLoadingCompanies] = useState(true)
+
+  // Company-specific pricing hook
+  const {
+    data: companyPricingData,
+    loading: loadingCompanyPricing,
+    error: companyPricingError,
+    refresh: refreshCompanyPricing,
+    updatePrices: updateCompanyPrices
+  } = useCompanyProductPricing(selectedCompanyId)
 
   const [expandedCategories, setExpandedCategories] = useState<Record<string, boolean>>({
     paqueteria: true,
@@ -65,7 +94,34 @@ export default function ProductCatalogPage() {
   })
   const [searchTerm, setSearchTerm] = useState('')
   const [editingPrices, setEditingPrices] = useState<Record<number, EditingPrice>>({})
+  const [editingCompanyPrices, setEditingCompanyPrices] = useState<Record<number, EditingCompanyPrice>>({})
   const [saving, setSaving] = useState(false)
+
+  // Fetch companies on mount
+  useEffect(() => {
+    const fetchCompanies = async () => {
+      try {
+        setLoadingCompanies(true)
+        const response = await fetch('/api/companies?includeBranches=true')
+        const result = await response.json()
+        if (result.success) {
+          // Filter active companies only
+          const activeCompanies = result.data.filter((c: Company) => c.status === 'active')
+          setCompanies(activeCompanies)
+        }
+      } catch (err) {
+        console.error('Error fetching companies:', err)
+      } finally {
+        setLoadingCompanies(false)
+      }
+    }
+    fetchCompanies()
+  }, [])
+
+  // Clear editing state when company changes
+  useEffect(() => {
+    setEditingCompanyPrices({})
+  }, [selectedCompanyId])
 
   const toggleCategory = (category: string) => {
     setExpandedCategories(prev => ({
@@ -74,6 +130,7 @@ export default function ProductCatalogPage() {
     }))
   }
 
+  // Handle catalog price change (when no company selected)
   const handlePriceChange = (
     productId: number,
     field: keyof EditingPrice,
@@ -91,25 +148,91 @@ export default function ProductCatalogPage() {
     }))
   }
 
-  const hasChanges = Object.keys(editingPrices).length > 0
+  // Handle company-specific price change
+  const handleCompanyPriceChange = (
+    productId: number,
+    field: 'precioSucursales' | 'precioClientes',
+    value: number,
+    originalProduct: any
+  ) => {
+    const miCosto = originalProduct.miCosto || originalProduct.catalogMiCosto || 0
+
+    setEditingCompanyPrices(prev => ({
+      ...prev,
+      [productId]: {
+        precioSucursales: prev[productId]?.precioSucursales ?? originalProduct.precioSucursales,
+        precioClientes: prev[productId]?.precioClientes ?? originalProduct.precioClientes,
+        miCosto: miCosto,
+        [field]: value
+      }
+    }))
+  }
+
+  const hasChanges = selectedCompanyId
+    ? Object.keys(editingCompanyPrices).length > 0
+    : Object.keys(editingPrices).length > 0
+
+  // Validate company prices - must be >= miCosto
+  const validateCompanyPrices = (): { valid: boolean; errors: string[] } => {
+    const errors: string[] = []
+
+    for (const [productId, prices] of Object.entries(editingCompanyPrices)) {
+      const product = companyPricingData?.products.find(p => p.productId === parseInt(productId))
+      if (!product) continue
+
+      const miCosto = prices.miCosto || product.catalogMiCosto || 0
+
+      if (prices.precioSucursales !== null && prices.precioSucursales < miCosto) {
+        errors.push(`${product.name}: Precio Sucursales ($${prices.precioSucursales}) no puede ser menor al costo ($${miCosto})`)
+      }
+
+      if (prices.precioClientes !== null && prices.precioClientes < miCosto) {
+        errors.push(`${product.name}: Precio Clientes ($${prices.precioClientes}) no puede ser menor al costo ($${miCosto})`)
+      }
+    }
+
+    return { valid: errors.length === 0, errors }
+  }
 
   const handleSaveAll = async () => {
     if (!hasChanges) return
 
     setSaving(true)
     try {
-      const products = Object.entries(editingPrices).map(([id, prices]) => ({
-        id: parseInt(id),
-        miCosto: prices.miCosto,
-        precioMayorista: prices.precioMayorista,
-        precioPublico: prices.precioPublico
-      }))
+      if (selectedCompanyId) {
+        // Validate prices first
+        const validation = validateCompanyPrices()
+        if (!validation.valid) {
+          showNotification('error', 'Error de validacion', validation.errors.join('\n'))
+          setSaving(false)
+          return
+        }
 
-      await updatePlatformPrices(products, 'Actualizacion de precios desde catalogo')
+        // Save company-specific prices
+        const products = Object.entries(editingCompanyPrices).map(([id, prices]) => ({
+          productId: parseInt(id),
+          precioSucursales: prices.precioSucursales,
+          precioClientes: prices.precioClientes
+        }))
 
-      showNotification('success', 'Precios actualizados', `${products.length} producto(s) actualizado(s) correctamente`)
+        await updateCompanyPrices(products, 'Actualizacion de precios desde catalogo')
 
-      setEditingPrices({})
+        showNotification('success', 'Precios actualizados', `${products.length} precio(s) de empresa actualizado(s) correctamente`)
+        setEditingCompanyPrices({})
+      } else {
+        // Save catalog prices
+        const products = Object.entries(editingPrices).map(([id, prices]) => ({
+          id: parseInt(id),
+          miCosto: prices.miCosto,
+          precioMayorista: prices.precioMayorista,
+          precioPublico: prices.precioPublico
+        }))
+
+        await updatePlatformPrices(products, 'Actualizacion de precios desde catalogo')
+
+        showNotification('success', 'Precios actualizados', `${products.length} producto(s) actualizado(s) correctamente`)
+        setEditingPrices({})
+      }
     } catch (err: any) {
       showNotification('error', 'Error', err.message || 'Error al guardar precios')
     } finally {
@@ -117,12 +240,17 @@ export default function ProductCatalogPage() {
     }
   }
 
-  const filteredProducts = catalogData?.products.filter(p =>
+  // Get products to display based on selection
+  const productsToDisplay = selectedCompanyId && companyPricingData
+    ? companyPricingData.products
+    : catalogData?.products || []
+
+  const filteredProducts = productsToDisplay.filter((p: any) =>
     p.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
     p.code.toLowerCase().includes(searchTerm.toLowerCase())
-  ) || []
+  )
 
-  const productsByCategory = filteredProducts.reduce((acc, product) => {
+  const productsByCategory = filteredProducts.reduce((acc: any, product: any) => {
     const cat = product.serviceCategory
     if (!acc[cat]) {
       acc[cat] = []
@@ -143,6 +271,11 @@ export default function ProductCatalogPage() {
         }, 0) / catalogData.products.length)
       : 0
   }
+
+  const selectedCompany = companies.find(c => c.id === selectedCompanyId)
+  const isViewingCompanyPrices = selectedCompanyId !== null
+  const currentLoading = isViewingCompanyPrices ? loadingCompanyPricing : loading
+  const currentError = isViewingCompanyPrices ? companyPricingError : error
 
   return (
     <DashboardLayout>
@@ -348,9 +481,101 @@ export default function ProductCatalogPage() {
           </div>
         )}
 
+        {/* Company Selector */}
+        <div className={cn(
+          "p-4 rounded-xl border",
+          theme === 'dark'
+            ? "bg-gray-800/50 border-gray-700"
+            : "bg-white border-gray-200"
+        )}>
+          <div className="flex flex-col lg:flex-row gap-4 items-start lg:items-center">
+            <div className="flex items-center gap-2">
+              <Building2 className={cn(
+                "w-5 h-5",
+                theme === 'dark' ? "text-gray-400" : "text-gray-500"
+              )} />
+              <label className={cn(
+                "text-sm font-medium",
+                theme === 'dark' ? "text-gray-300" : "text-gray-700"
+              )}>
+                Ver precios de:
+              </label>
+            </div>
+
+            <select
+              value={selectedCompanyId || ''}
+              onChange={(e) => setSelectedCompanyId(e.target.value ? parseInt(e.target.value) : null)}
+              disabled={loadingCompanies}
+              className={cn(
+                "flex-1 lg:flex-none lg:min-w-[300px] px-4 py-2.5 rounded-lg border transition-colors",
+                "focus:outline-none focus:ring-2 focus:ring-blue-500",
+                theme === 'dark'
+                  ? "bg-gray-900 border-gray-700 text-white"
+                  : "bg-white border-gray-200 text-gray-900"
+              )}
+            >
+              <option value="">LogiRapid (Catalogo Base)</option>
+              <optgroup label="Empresas Matrices">
+                {companies.filter(c => !c.isBranch).map(company => (
+                  <option key={company.id} value={company.id}>
+                    {company.legalName}
+                  </option>
+                ))}
+              </optgroup>
+              <optgroup label="Sucursales">
+                {companies.filter(c => c.isBranch).map(company => (
+                  <option key={company.id} value={company.id}>
+                    {company.legalName}
+                  </option>
+                ))}
+              </optgroup>
+            </select>
+
+            {selectedCompany && (
+              <div className={cn(
+                "flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm",
+                selectedCompany.isBranch
+                  ? theme === 'dark' ? "bg-purple-900/30 text-purple-400" : "bg-purple-50 text-purple-600"
+                  : theme === 'dark' ? "bg-blue-900/30 text-blue-400" : "bg-blue-50 text-blue-600"
+              )}>
+                {selectedCompany.isBranch ? (
+                  <>
+                    <Users className="w-4 h-4" />
+                    Sucursal
+                  </>
+                ) : (
+                  <>
+                    <Building2 className="w-4 h-4" />
+                    Empresa Matriz
+                  </>
+                )}
+              </div>
+            )}
+          </div>
+
+          {isViewingCompanyPrices && (
+            <div className={cn(
+              "mt-4 p-3 rounded-lg text-sm",
+              theme === 'dark' ? "bg-amber-900/20 text-amber-400" : "bg-amber-50 text-amber-700"
+            )}>
+              <div className="flex items-start gap-2">
+                <AlertTriangle className="w-4 h-4 mt-0.5 flex-shrink-0" />
+                <div>
+                  <p className="font-medium">Editando precios de empresa</p>
+                  <p className="text-xs opacity-80 mt-1">
+                    Los precios configurados aqui seran especificos para esta empresa.
+                    El costo base no puede ser modificado.
+                    Los precios no pueden ser menores al costo de LogiRapid.
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+
         {/* Search and Actions Bar */}
         <div className={cn(
-          "flex flex-col lg:flex-row gap-6 items-center justify-between py-6 px-4 mt-8 mb-6 rounded-xl border",
+          "flex flex-col lg:flex-row gap-6 items-center justify-between py-6 px-4 mt-4 mb-6 rounded-xl border",
           theme === 'dark'
             ? "bg-gray-800/50 border-gray-700"
             : "bg-white border-gray-200"
@@ -378,7 +603,7 @@ export default function ProductCatalogPage() {
             <div className="flex gap-3 w-full sm:w-auto">
               {/* Refresh Button */}
               <button
-                onClick={refresh}
+                onClick={() => selectedCompanyId ? refreshCompanyPricing() : refresh()}
                 className={cn(
                   "inline-flex whitespace-nowrap text-sm",
                   "px-6 py-3 flex-1 sm:flex-none items-center justify-center gap-2 h-12",
@@ -412,7 +637,9 @@ export default function ProductCatalogPage() {
                   ) : (
                     <Save className="w-4 h-4" />
                   )}
-                  Guardar ({Object.keys(editingPrices).length})
+                  Guardar ({selectedCompanyId
+                    ? Object.keys(editingCompanyPrices).length
+                    : Object.keys(editingPrices).length})
                 </button>
               )}
             </div>
@@ -420,15 +647,17 @@ export default function ProductCatalogPage() {
         </div>
 
         {/* Loading State */}
-        {loading && (
+        {currentLoading && (
           <div className="flex items-center justify-center py-12">
             <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
-            <span className="ml-2 text-gray-500">Cargando catalogo...</span>
+            <span className="ml-2 text-gray-500">
+              {isViewingCompanyPrices ? 'Cargando precios de empresa...' : 'Cargando catalogo...'}
+            </span>
           </div>
         )}
 
         {/* Error State */}
-        {error && (
+        {currentError && (
           <div className={cn(
             "p-4 rounded-lg border",
             theme === 'dark'
@@ -437,15 +666,15 @@ export default function ProductCatalogPage() {
           )}>
             <div className="flex items-center gap-2">
               <AlertCircle className="w-5 h-5" />
-              <span>{error}</span>
+              <span>{currentError}</span>
             </div>
           </div>
         )}
 
         {/* Categories */}
-        {!loading && !error && (
+        {!currentLoading && !currentError && (
           <div className="space-y-4">
-            {Object.entries(productsByCategory).map(([category, products]) => {
+            {Object.entries(productsByCategory).map(([category, products]: [string, any[]]) => {
               const Icon = categoryIcons[category] || Package
               const isExpanded = expandedCategories[category]
 
@@ -521,166 +750,343 @@ export default function ProductCatalogPage() {
                                       <DollarSign className="w-3 h-3 text-amber-500" />
                                       Costo
                                     </div>
-                                    <span className="text-[10px] font-normal opacity-60">(Proveedor)</span>
+                                    <span className="text-[10px] font-normal opacity-60">
+                                      {isViewingCompanyPrices ? '(LogiRapid)' : '(Proveedor)'}
+                                    </span>
                                   </div>
                                 </th>
-                                <th className="px-4 py-3 w-36 text-center">
-                                  <div className="flex items-center justify-center gap-1">
-                                    <Building2 className="w-3 h-3 text-blue-500" />
-                                    P. Mayorista
-                                  </div>
-                                </th>
-                                <th className="px-4 py-3 w-36 text-center">
-                                  <div className="flex items-center justify-center gap-1">
-                                    <Users className="w-3 h-3 text-green-500" />
-                                    P. Publico
-                                  </div>
-                                </th>
-                                <th className="px-4 py-3 w-32 text-center">
-                                  <div className="flex flex-col items-center">
-                                    <span>Margen Mayorista</span>
-                                    <span className="text-[10px] font-normal opacity-60">(P.May - Costo)</span>
-                                  </div>
-                                </th>
-                                <th className="px-4 py-3 w-32 text-center">
-                                  <div className="flex flex-col items-center">
-                                    <span>Margen Cliente</span>
-                                    <span className="text-[10px] font-normal opacity-60">(P.Pub - P.May)</span>
-                                  </div>
-                                </th>
+                                {isViewingCompanyPrices ? (
+                                  <>
+                                    <th className="px-4 py-3 w-36 text-center">
+                                      <div className="flex flex-col items-center">
+                                        <div className="flex items-center gap-1">
+                                          <Building2 className="w-3 h-3 text-blue-500" />
+                                          P. Sucursales
+                                        </div>
+                                        <span className="text-[10px] font-normal opacity-60">(Solo Matrices)</span>
+                                      </div>
+                                    </th>
+                                    <th className="px-4 py-3 w-36 text-center">
+                                      <div className="flex items-center justify-center gap-1">
+                                        <Users className="w-3 h-3 text-green-500" />
+                                        P. Clientes
+                                      </div>
+                                    </th>
+                                    <th className="px-4 py-3 w-32 text-center">
+                                      <div className="flex flex-col items-center">
+                                        <span>Margen</span>
+                                        <span className="text-[10px] font-normal opacity-60">(P.Cli - Costo)</span>
+                                      </div>
+                                    </th>
+                                  </>
+                                ) : (
+                                  <>
+                                    <th className="px-4 py-3 w-36 text-center">
+                                      <div className="flex items-center justify-center gap-1">
+                                        <Building2 className="w-3 h-3 text-blue-500" />
+                                        P. Mayorista
+                                      </div>
+                                    </th>
+                                    <th className="px-4 py-3 w-36 text-center">
+                                      <div className="flex items-center justify-center gap-1">
+                                        <Users className="w-3 h-3 text-green-500" />
+                                        P. Publico
+                                      </div>
+                                    </th>
+                                    <th className="px-4 py-3 w-32 text-center">
+                                      <div className="flex flex-col items-center">
+                                        <span>Margen Mayorista</span>
+                                        <span className="text-[10px] font-normal opacity-60">(P.May - Costo)</span>
+                                      </div>
+                                    </th>
+                                    <th className="px-4 py-3 w-32 text-center">
+                                      <div className="flex flex-col items-center">
+                                        <span>Margen Cliente</span>
+                                        <span className="text-[10px] font-normal opacity-60">(P.Pub - P.May)</span>
+                                      </div>
+                                    </th>
+                                  </>
+                                )}
                               </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
-                              {products.map((product) => {
-                                const editing = editingPrices[product.id]
-                                const miCosto = editing?.miCosto ?? product.miCosto
-                                const precioMayorista = editing?.precioMayorista ?? product.precioMayorista
-                                const precioPublico = editing?.precioPublico ?? product.precioPublico
+                              {products.map((product: any) => {
+                                if (isViewingCompanyPrices) {
+                                  // Company-specific pricing view
+                                  const editing = editingCompanyPrices[product.productId]
+                                  const miCosto = product.miCosto || product.catalogMiCosto || 0
+                                  const precioSucursales = editing?.precioSucursales ?? product.precioSucursales
+                                  const precioClientes = editing?.precioClientes ?? product.precioClientes
 
-                                // Calculate Margen Mayorista (precioMayorista - miCosto)
-                                const margenMayorista = precioMayorista - miCosto
-                                const margenMayoristaPct = miCosto > 0
-                                  ? ((margenMayorista / miCosto) * 100).toFixed(1)
-                                  : '0'
+                                  // Calculate margin
+                                  const margen = precioClientes !== null ? precioClientes - miCosto : 0
+                                  const margenPct = miCosto > 0 && precioClientes !== null
+                                    ? ((margen / miCosto) * 100).toFixed(1)
+                                    : '0'
 
-                                // Calculate Margen Cliente (precioPublico - precioMayorista)
-                                const margenCliente = precioPublico - precioMayorista
-                                const margenClientePct = precioMayorista > 0
-                                  ? ((margenCliente / precioMayorista) * 100).toFixed(1)
-                                  : '0'
+                                  const hasEdits = editing !== undefined
+                                  const isBranchCompany = companyPricingData?.isBranch || false
 
-                                const hasEdits = editing !== undefined
+                                  // Validation - price below cost
+                                  const precioSucursalesBelowCost = precioSucursales !== null && precioSucursales < miCosto
+                                  const precioClientesBelowCost = precioClientes !== null && precioClientes < miCosto
 
-                                return (
-                                  <tr
-                                    key={product.id}
-                                    className={cn(
-                                      "transition-colors",
-                                      hasEdits
-                                        ? theme === 'dark' ? "bg-blue-900/20" : "bg-blue-50"
-                                        : theme === 'dark' ? "hover:bg-gray-800/50" : "hover:bg-gray-50"
-                                    )}
-                                  >
-                                    <td className="pl-4 pr-16 py-3">
-                                      <span className={cn(
-                                        "font-mono text-sm",
-                                        theme === 'dark' ? "text-gray-400" : "text-gray-600"
-                                      )}>
-                                        {product.code}
-                                      </span>
-                                    </td>
-                                    <td className="pl-10 pr-4 py-3">
-                                      <div>
-                                        <div className={cn(
-                                          "font-medium truncate",
-                                          theme === 'dark' ? "text-white" : "text-gray-900"
+                                  return (
+                                    <tr
+                                      key={product.productId}
+                                      className={cn(
+                                        "transition-colors",
+                                        hasEdits
+                                          ? theme === 'dark' ? "bg-blue-900/20" : "bg-blue-50"
+                                          : theme === 'dark' ? "hover:bg-gray-800/50" : "hover:bg-gray-50"
+                                      )}
+                                    >
+                                      <td className="pl-4 pr-16 py-3">
+                                        <span className={cn(
+                                          "font-mono text-sm",
+                                          theme === 'dark' ? "text-gray-400" : "text-gray-600"
                                         )}>
-                                          {product.name}
-                                        </div>
-                                        {product.description && (
+                                          {product.code}
+                                        </span>
+                                      </td>
+                                      <td className="pl-10 pr-4 py-3">
+                                        <div>
                                           <div className={cn(
-                                            "text-xs truncate",
-                                            theme === 'dark' ? "text-gray-500" : "text-gray-400"
+                                            "font-medium truncate",
+                                            theme === 'dark' ? "text-white" : "text-gray-900"
                                           )}>
-                                            {product.description}
+                                            {product.name}
+                                          </div>
+                                          {product.description && (
+                                            <div className={cn(
+                                              "text-xs truncate",
+                                              theme === 'dark' ? "text-gray-500" : "text-gray-400"
+                                            )}>
+                                              {product.description}
+                                            </div>
+                                          )}
+                                        </div>
+                                      </td>
+                                      <td className="px-4 py-3 text-center">
+                                        <span className={cn(
+                                          "text-sm font-medium",
+                                          theme === 'dark' ? "text-amber-400" : "text-amber-600"
+                                        )}>
+                                          ${miCosto.toFixed(2)}
+                                        </span>
+                                      </td>
+                                      <td className="px-4 py-3 text-center">
+                                        {isBranchCompany ? (
+                                          <span className={cn(
+                                            "text-sm text-gray-400 italic"
+                                          )}>
+                                            N/A
+                                          </span>
+                                        ) : (
+                                          <div className="relative">
+                                            <input
+                                              type="number"
+                                              step="0.01"
+                                              value={precioSucursales ?? ''}
+                                              onChange={(e) => handleCompanyPriceChange(
+                                                product.productId,
+                                                'precioSucursales',
+                                                parseFloat(e.target.value) || 0,
+                                                product
+                                              )}
+                                              placeholder="Sin configurar"
+                                              className={cn(
+                                                "w-full max-w-[100px] px-2 py-1 text-center rounded border text-sm mx-auto",
+                                                precioSucursalesBelowCost
+                                                  ? "border-red-500 bg-red-50 dark:bg-red-900/20"
+                                                  : theme === 'dark'
+                                                    ? "bg-gray-900 border-gray-700 text-blue-400"
+                                                    : "bg-white border-gray-200 text-blue-600"
+                                              )}
+                                            />
+                                            {precioSucursalesBelowCost && (
+                                              <div className="absolute -bottom-4 left-0 right-0 text-[10px] text-red-500">
+                                                Menor al costo
+                                              </div>
+                                            )}
                                           </div>
                                         )}
-                                      </div>
-                                    </td>
-                                    <td className="px-4 py-3 text-center">
-                                      <span className={cn(
-                                        "text-sm font-medium",
-                                        theme === 'dark' ? "text-amber-400" : "text-amber-600"
-                                      )}>
-                                        ${miCosto.toFixed(2)}
-                                      </span>
-                                    </td>
-                                    <td className="px-4 py-3 text-center">
-                                      <input
-                                        type="number"
-                                        step="0.01"
-                                        value={precioMayorista}
-                                        onChange={(e) => handlePriceChange(
-                                          product.id,
-                                          'precioMayorista',
-                                          parseFloat(e.target.value) || 0,
-                                          product
-                                        )}
-                                        className={cn(
-                                          "w-full max-w-[100px] px-2 py-1 text-center rounded border text-sm mx-auto",
-                                          theme === 'dark'
-                                            ? "bg-gray-900 border-gray-700 text-blue-400"
-                                            : "bg-white border-gray-200 text-blue-600"
-                                        )}
-                                      />
-                                    </td>
-                                    <td className="px-4 py-3 text-center">
-                                      <input
-                                        type="number"
-                                        step="0.01"
-                                        value={precioPublico}
-                                        onChange={(e) => handlePriceChange(
-                                          product.id,
-                                          'precioPublico',
-                                          parseFloat(e.target.value) || 0,
-                                          product
-                                        )}
-                                        className={cn(
-                                          "w-full max-w-[100px] px-2 py-1 text-center rounded border text-sm mx-auto",
-                                          theme === 'dark'
-                                            ? "bg-gray-900 border-gray-700 text-green-400"
-                                            : "bg-white border-gray-200 text-green-600"
-                                        )}
-                                      />
-                                    </td>
-                                    {/* Margen Mayorista */}
-                                    <td className="px-4 py-3 text-center">
-                                      <span className={cn(
-                                        "text-sm font-medium whitespace-nowrap",
-                                        margenMayorista > 0
-                                          ? "text-blue-500"
-                                          : margenMayorista < 0
-                                            ? "text-red-500"
-                                            : theme === 'dark' ? "text-gray-400" : "text-gray-500"
-                                      )}>
-                                        ${margenMayorista.toFixed(2)} ({margenMayoristaPct}%)
-                                      </span>
-                                    </td>
-                                    {/* Margen Cliente */}
-                                    <td className="px-4 py-3 text-center">
-                                      <span className={cn(
-                                        "text-sm font-medium whitespace-nowrap",
-                                        margenCliente > 0
-                                          ? "text-green-500"
-                                          : margenCliente < 0
-                                            ? "text-red-500"
-                                            : theme === 'dark' ? "text-gray-400" : "text-gray-500"
-                                      )}>
-                                        ${margenCliente.toFixed(2)} ({margenClientePct}%)
-                                      </span>
-                                    </td>
-                                  </tr>
-                                )
+                                      </td>
+                                      <td className="px-4 py-3 text-center">
+                                        <div className="relative">
+                                          <input
+                                            type="number"
+                                            step="0.01"
+                                            value={precioClientes ?? ''}
+                                            onChange={(e) => handleCompanyPriceChange(
+                                              product.productId,
+                                              'precioClientes',
+                                              parseFloat(e.target.value) || 0,
+                                              product
+                                            )}
+                                            placeholder="Sin configurar"
+                                            className={cn(
+                                              "w-full max-w-[100px] px-2 py-1 text-center rounded border text-sm mx-auto",
+                                              precioClientesBelowCost
+                                                ? "border-red-500 bg-red-50 dark:bg-red-900/20"
+                                                : theme === 'dark'
+                                                  ? "bg-gray-900 border-gray-700 text-green-400"
+                                                  : "bg-white border-gray-200 text-green-600"
+                                            )}
+                                          />
+                                          {precioClientesBelowCost && (
+                                            <div className="absolute -bottom-4 left-0 right-0 text-[10px] text-red-500">
+                                              Menor al costo
+                                            </div>
+                                          )}
+                                        </div>
+                                      </td>
+                                      <td className="px-4 py-3 text-center">
+                                        <span className={cn(
+                                          "text-sm font-medium whitespace-nowrap",
+                                          margen > 0
+                                            ? "text-green-500"
+                                            : margen < 0
+                                              ? "text-red-500"
+                                              : theme === 'dark' ? "text-gray-400" : "text-gray-500"
+                                        )}>
+                                          ${margen.toFixed(2)} ({margenPct}%)
+                                        </span>
+                                      </td>
+                                    </tr>
+                                  )
+                                } else {
+                                  // Catalog pricing view (original)
+                                  const editing = editingPrices[product.id]
+                                  const miCosto = editing?.miCosto ?? product.miCosto
+                                  const precioMayorista = editing?.precioMayorista ?? product.precioMayorista
+                                  const precioPublico = editing?.precioPublico ?? product.precioPublico
+
+                                  // Calculate Margen Mayorista (precioMayorista - miCosto)
+                                  const margenMayorista = precioMayorista - miCosto
+                                  const margenMayoristaPct = miCosto > 0
+                                    ? ((margenMayorista / miCosto) * 100).toFixed(1)
+                                    : '0'
+
+                                  // Calculate Margen Cliente (precioPublico - precioMayorista)
+                                  const margenCliente = precioPublico - precioMayorista
+                                  const margenClientePct = precioMayorista > 0
+                                    ? ((margenCliente / precioMayorista) * 100).toFixed(1)
+                                    : '0'
+
+                                  const hasEdits = editing !== undefined
+
+                                  return (
+                                    <tr
+                                      key={product.id}
+                                      className={cn(
+                                        "transition-colors",
+                                        hasEdits
+                                          ? theme === 'dark' ? "bg-blue-900/20" : "bg-blue-50"
+                                          : theme === 'dark' ? "hover:bg-gray-800/50" : "hover:bg-gray-50"
+                                      )}
+                                    >
+                                      <td className="pl-4 pr-16 py-3">
+                                        <span className={cn(
+                                          "font-mono text-sm",
+                                          theme === 'dark' ? "text-gray-400" : "text-gray-600"
+                                        )}>
+                                          {product.code}
+                                        </span>
+                                      </td>
+                                      <td className="pl-10 pr-4 py-3">
+                                        <div>
+                                          <div className={cn(
+                                            "font-medium truncate",
+                                            theme === 'dark' ? "text-white" : "text-gray-900"
+                                          )}>
+                                            {product.name}
+                                          </div>
+                                          {product.description && (
+                                            <div className={cn(
+                                              "text-xs truncate",
+                                              theme === 'dark' ? "text-gray-500" : "text-gray-400"
+                                            )}>
+                                              {product.description}
+                                            </div>
+                                          )}
+                                        </div>
+                                      </td>
+                                      <td className="px-4 py-3 text-center">
+                                        <span className={cn(
+                                          "text-sm font-medium",
+                                          theme === 'dark' ? "text-amber-400" : "text-amber-600"
+                                        )}>
+                                          ${miCosto.toFixed(2)}
+                                        </span>
+                                      </td>
+                                      <td className="px-4 py-3 text-center">
+                                        <input
+                                          type="number"
+                                          step="0.01"
+                                          value={precioMayorista}
+                                          onChange={(e) => handlePriceChange(
+                                            product.id,
+                                            'precioMayorista',
+                                            parseFloat(e.target.value) || 0,
+                                            product
+                                          )}
+                                          className={cn(
+                                            "w-full max-w-[100px] px-2 py-1 text-center rounded border text-sm mx-auto",
+                                            theme === 'dark'
+                                              ? "bg-gray-900 border-gray-700 text-blue-400"
+                                              : "bg-white border-gray-200 text-blue-600"
+                                          )}
+                                        />
+                                      </td>
+                                      <td className="px-4 py-3 text-center">
+                                        <input
+                                          type="number"
+                                          step="0.01"
+                                          value={precioPublico}
+                                          onChange={(e) => handlePriceChange(
+                                            product.id,
+                                            'precioPublico',
+                                            parseFloat(e.target.value) || 0,
+                                            product
+                                          )}
+                                          className={cn(
+                                            "w-full max-w-[100px] px-2 py-1 text-center rounded border text-sm mx-auto",
+                                            theme === 'dark'
+                                              ? "bg-gray-900 border-gray-700 text-green-400"
+                                              : "bg-white border-gray-200 text-green-600"
+                                          )}
+                                        />
+                                      </td>
+                                      {/* Margen Mayorista */}
+                                      <td className="px-4 py-3 text-center">
+                                        <span className={cn(
+                                          "text-sm font-medium whitespace-nowrap",
+                                          margenMayorista > 0
+                                            ? "text-blue-500"
+                                            : margenMayorista < 0
+                                              ? "text-red-500"
+                                              : theme === 'dark' ? "text-gray-400" : "text-gray-500"
+                                        )}>
+                                          ${margenMayorista.toFixed(2)} ({margenMayoristaPct}%)
+                                        </span>
+                                      </td>
+                                      {/* Margen Cliente */}
+                                      <td className="px-4 py-3 text-center">
+                                        <span className={cn(
+                                          "text-sm font-medium whitespace-nowrap",
+                                          margenCliente > 0
+                                            ? "text-green-500"
+                                            : margenCliente < 0
+                                              ? "text-red-500"
+                                              : theme === 'dark' ? "text-gray-400" : "text-gray-500"
+                                        )}>
+                                          ${margenCliente.toFixed(2)} ({margenClientePct}%)
+                                        </span>
+                                      </td>
+                                    </tr>
+                                  )
+                                }
                               })}
                             </tbody>
                           </table>
@@ -695,7 +1101,7 @@ export default function ProductCatalogPage() {
         )}
 
         {/* Empty State */}
-        {!loading && !error && filteredProducts.length === 0 && (
+        {!currentLoading && !currentError && filteredProducts.length === 0 && (
           <div className={cn(
             "p-12 text-center rounded-xl border-2 border-dashed",
             theme === 'dark' ? "border-gray-700" : "border-gray-200"
@@ -716,7 +1122,9 @@ export default function ProductCatalogPage() {
             )}>
               {searchTerm
                 ? 'No se encontraron productos con ese termino de busqueda'
-                : 'El catalogo de productos esta vacio'}
+                : isViewingCompanyPrices
+                  ? 'No hay productos configurados para esta empresa'
+                  : 'El catalogo de productos esta vacio'}
             </p>
           </div>
         )}
