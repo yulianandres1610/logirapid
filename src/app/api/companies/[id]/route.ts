@@ -56,6 +56,10 @@ export async function GET(
         c.createdat as "createdAt",
         c.parent_company_id as "parentCompanyId",
         c.is_branch as "isBranch",
+        c.is_provider as "isProvider",
+        c.provider_type as "providerType",
+        c.provider_categories as "providerCategories",
+        c.provider_services as "providerServices",
         parent.legalname as "parentCompanyName"
       FROM companies c
       LEFT JOIN companies parent ON c.parent_company_id = parent.id
@@ -174,6 +178,10 @@ export async function PUT(
       secondaryColor: 'secondary_color',
       parentCompanyId: 'parent_company_id',
       isBranch: 'is_branch',
+      isProvider: 'is_provider',
+      providerType: 'provider_type',
+      providerCategories: 'provider_categories',
+      providerServices: 'provider_services',
       status: 'status'
     }
 
@@ -186,7 +194,7 @@ export async function PUT(
         let value = body[frontendKey]
 
         // Convertir arrays y objetos a JSON para PostgreSQL
-        if (['secondaryCurrencies', 'enabledServices', 'serviceFees', 'prices'].includes(frontendKey)) {
+        if (['secondaryCurrencies', 'enabledServices', 'serviceFees', 'prices', 'providerCategories', 'providerServices'].includes(frontendKey)) {
           value = JSON.stringify(value)
         }
 
