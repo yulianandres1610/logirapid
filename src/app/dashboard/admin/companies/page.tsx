@@ -446,6 +446,37 @@ export default function CompaniesPage() {
         }
       }
 
+      // Save product prices if any were configured
+      if (formData.productPrices && formData.productPrices.length > 0) {
+        const pricesToSave = formData.productPrices.filter((p: any) =>
+          p.precioSucursales !== undefined || p.precioClientes !== undefined
+        )
+
+        if (pricesToSave.length > 0) {
+          try {
+            const pricingResponse = await fetch(`/api/companies/${companyId}/products/pricing`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                products: pricesToSave,
+                notes: 'Configurado al crear empresa'
+              })
+            })
+
+            const pricingData = await pricingResponse.json()
+
+            if (!pricingData.success) {
+              console.warn('Error saving product prices:', pricingData.error)
+              // Don't fail the whole operation, just warn
+            }
+          } catch (error) {
+            console.error('Error saving product prices:', error)
+          }
+        }
+      }
+
       // Reload companies from API
       const companiesResponse = await fetch('/api/companies?includeBranches=true')
       const companiesData = await companiesResponse.json()
@@ -597,9 +628,14 @@ export default function CompaniesPage() {
     try {
       setLoading(true)
 
-      // Obtener datos de la empresa
-      const response = await fetch(`/api/companies/${companyId}`)
-      const data = await response.json()
+      // Obtener datos de la empresa y precios de productos en paralelo
+      const [companyResponse, pricingResponse] = await Promise.all([
+        fetch(`/api/companies/${companyId}`),
+        fetch(`/api/companies/${companyId}/products/pricing`)
+      ])
+
+      const data = await companyResponse.json()
+      const pricingData = await pricingResponse.json()
 
       if (!data.success) {
         showNotification('error', 'Error', data.error || 'Error al cargar empresa')
@@ -607,6 +643,20 @@ export default function CompaniesPage() {
       }
 
       const company = data.data
+
+      // Cargar precios de productos si existen
+      let productPrices: any[] = []
+      if (pricingData.success && pricingData.data?.products) {
+        productPrices = pricingData.data.products.map((p: any) => ({
+          productId: p.productId,
+          code: p.code,
+          name: p.name,
+          miCosto: p.miCosto,
+          precioSucursales: p.precioSucursales,
+          precioClientes: p.precioClientes,
+          hasPricing: p.hasPricing
+        }))
+      }
 
       // Cargar datos en el formulario
       setFormData({
@@ -645,7 +695,7 @@ export default function CompaniesPage() {
         providerType: company.providerType || null,
         providerCategories: Array.isArray(company.providerCategories) ? company.providerCategories : [],
         providerServices: Array.isArray(company.providerServices) ? company.providerServices : [],
-        productPrices: [],
+        productPrices: productPrices,
         editMode: true,
         editId: companyId
       })
@@ -679,6 +729,33 @@ export default function CompaniesPage() {
       if (!data.success) {
         showNotification('error', 'Error', data.error || 'Error al actualizar empresa')
         return
+      }
+
+      // Save product prices if any were modified
+      if (formData.productPrices && formData.productPrices.length > 0) {
+        const pricesToSave = formData.productPrices.filter((p: any) =>
+          p.precioSucursales !== undefined || p.precioClientes !== undefined
+        )
+
+        if (pricesToSave.length > 0) {
+          const pricingResponse = await fetch(`/api/companies/${formData.editId}/products/pricing`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              products: pricesToSave,
+              notes: 'Actualizado desde formulario de empresa'
+            })
+          })
+
+          const pricingData = await pricingResponse.json()
+
+          if (!pricingData.success) {
+            console.warn('Error saving product prices:', pricingData.error)
+            // Don't fail the whole operation, just warn
+          }
+        }
       }
 
       // Reload companies from API
