@@ -31,6 +31,7 @@ import { useTheme } from '@/contexts/theme-context'
 import { useNotifications } from '@/contexts/NotificationContext'
 import { DashboardLayout } from '@/components/layout/dashboard-layout'
 import { useProductCatalog, useCompanyProductPricing, useProviders } from '@/hooks/useProductCatalog'
+import { useAuth } from '@/hooks/useAuth'
 
 const categoryIcons: Record<string, typeof Package> = {
   paqueteria: Package,
@@ -80,6 +81,8 @@ const SERVICE_CATEGORIES = [
 export default function ProductCatalogPage() {
   const { theme } = useTheme()
   const { showNotification } = useNotifications()
+  const { user } = useAuth()
+  const isSuperAdmin = user?.role === 'SUPER_ADMIN'
   const { data: catalogData, loading, error, refresh, updatePlatformPrices } = useProductCatalog()
   const { providers } = useProviders()
 
@@ -184,8 +187,13 @@ export default function ProductCatalogPage() {
     ? Object.keys(editingCompanyPrices).length > 0
     : Object.keys(editingPrices).length > 0
 
-  // Validate company prices - must be >= miCosto
+  // Validate company prices - must be >= miCosto (except for SUPER_ADMIN who has absolute control)
   const validateCompanyPrices = (): { valid: boolean; errors: string[] } => {
+    // SUPER_ADMIN tiene control absoluto - sin restricciones de precio
+    if (isSuperAdmin) {
+      return { valid: true, errors: [] }
+    }
+
     const errors: string[] = []
 
     for (const [productId, prices] of Object.entries(editingCompanyPrices)) {
@@ -525,78 +533,152 @@ export default function ProductCatalogPage() {
           </div>
         )}
 
-        {/* Company Selector */}
+        {/* Company Selector + Category Tabs - Combined Bar */}
         <div className={cn(
           "p-4 rounded-xl border",
           theme === 'dark'
             ? "bg-gray-800/50 border-gray-700"
             : "bg-white border-gray-200"
         )}>
-          <div className="flex flex-col lg:flex-row gap-4 items-start lg:items-center">
-            <div className="flex items-center gap-2">
-              <Building2 className={cn(
-                "w-5 h-5",
-                theme === 'dark' ? "text-gray-400" : "text-gray-500"
-              )} />
-              <label className={cn(
-                "text-sm font-medium",
-                theme === 'dark' ? "text-gray-300" : "text-gray-700"
-              )}>
-                Ver precios de:
-              </label>
+          {/* Top row: Company selector + Category tabs */}
+          <div className="flex flex-col xl:flex-row gap-4 items-start xl:items-center">
+            {/* Company Selector */}
+            <div className="flex items-center gap-3 flex-shrink-0">
+              <div className="flex items-center gap-2">
+                <Building2 className={cn(
+                  "w-5 h-5",
+                  theme === 'dark' ? "text-gray-400" : "text-gray-500"
+                )} />
+                <label className={cn(
+                  "text-sm font-medium whitespace-nowrap",
+                  theme === 'dark' ? "text-gray-300" : "text-gray-700"
+                )}>
+                  Empresa:
+                </label>
+              </div>
+
+              <select
+                value={selectedCompanyId || ''}
+                onChange={(e) => setSelectedCompanyId(e.target.value ? parseInt(e.target.value) : null)}
+                disabled={loadingCompanies}
+                className={cn(
+                  "min-w-[200px] max-w-[280px] px-3 py-2 rounded-lg border transition-colors text-sm",
+                  "focus:outline-none focus:ring-2 focus:ring-blue-500",
+                  theme === 'dark'
+                    ? "bg-gray-900 border-gray-700 text-white"
+                    : "bg-white border-gray-200 text-gray-900"
+                )}
+              >
+                <option value="">LogiRapid (Catalogo Base)</option>
+                <optgroup label="Empresas Matrices">
+                  {companies.filter(c => !c.isBranch).map(company => (
+                    <option key={company.id} value={company.id}>
+                      {company.legalName}
+                    </option>
+                  ))}
+                </optgroup>
+                <optgroup label="Sucursales">
+                  {companies.filter(c => c.isBranch).map(company => (
+                    <option key={company.id} value={company.id}>
+                      {company.legalName}
+                    </option>
+                  ))}
+                </optgroup>
+              </select>
+
+              {selectedCompany && (
+                <div className={cn(
+                  "flex items-center gap-1.5 px-2 py-1 rounded text-xs font-medium",
+                  selectedCompany.isBranch
+                    ? theme === 'dark' ? "bg-purple-900/30 text-purple-400" : "bg-purple-50 text-purple-600"
+                    : theme === 'dark' ? "bg-blue-900/30 text-blue-400" : "bg-blue-50 text-blue-600"
+                )}>
+                  {selectedCompany.isBranch ? (
+                    <>
+                      <Users className="w-3.5 h-3.5" />
+                      Sucursal
+                    </>
+                  ) : (
+                    <>
+                      <Building2 className="w-3.5 h-3.5" />
+                      Matriz
+                    </>
+                  )}
+                </div>
+              )}
+
+              {selectedCompany?.isProvider && providerCategories.length > 0 && (
+                <div className={cn(
+                  "flex items-center gap-1.5 px-2 py-1 rounded text-xs font-medium",
+                  theme === 'dark' ? "bg-amber-900/30 text-amber-400" : "bg-amber-100 text-amber-700"
+                )}>
+                  <Truck className="w-3.5 h-3.5" />
+                  Proveedor
+                </div>
+              )}
             </div>
 
-            <select
-              value={selectedCompanyId || ''}
-              onChange={(e) => setSelectedCompanyId(e.target.value ? parseInt(e.target.value) : null)}
-              disabled={loadingCompanies}
-              className={cn(
-                "flex-1 lg:flex-none lg:min-w-[300px] px-4 py-2.5 rounded-lg border transition-colors",
-                "focus:outline-none focus:ring-2 focus:ring-blue-500",
-                theme === 'dark'
-                  ? "bg-gray-900 border-gray-700 text-white"
-                  : "bg-white border-gray-200 text-gray-900"
-              )}
-            >
-              <option value="">LogiRapid (Catalogo Base)</option>
-              <optgroup label="Empresas Matrices">
-                {companies.filter(c => !c.isBranch).map(company => (
-                  <option key={company.id} value={company.id}>
-                    {company.legalName}
-                  </option>
-                ))}
-              </optgroup>
-              <optgroup label="Sucursales">
-                {companies.filter(c => c.isBranch).map(company => (
-                  <option key={company.id} value={company.id}>
-                    {company.legalName}
-                  </option>
-                ))}
-              </optgroup>
-            </select>
+            {/* Divider */}
+            <div className={cn(
+              "hidden xl:block w-px h-8",
+              theme === 'dark' ? "bg-gray-700" : "bg-gray-200"
+            )} />
 
-            {selectedCompany && (
-              <div className={cn(
-                "flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm",
-                selectedCompany.isBranch
-                  ? theme === 'dark' ? "bg-purple-900/30 text-purple-400" : "bg-purple-50 text-purple-600"
-                  : theme === 'dark' ? "bg-blue-900/30 text-blue-400" : "bg-blue-50 text-blue-600"
-              )}>
-                {selectedCompany.isBranch ? (
-                  <>
-                    <Users className="w-4 h-4" />
-                    Sucursal
-                  </>
-                ) : (
-                  <>
-                    <Building2 className="w-4 h-4" />
-                    Empresa Matriz
-                  </>
-                )}
-              </div>
-            )}
+            {/* Category Tabs */}
+            <div className={cn(
+              "flex flex-wrap gap-2 p-1.5 rounded-lg flex-1",
+              theme === 'dark' ? "bg-gray-900/50" : "bg-gray-100"
+            )}>
+              {SERVICE_CATEGORIES.map((cat) => {
+                const Icon = cat.icon
+                const count = getProductCountByCategory(cat.id)
+                const isActive = activeCategory === cat.id
+                const isProviderCat = isProviderForCategory(cat.id)
+
+                return (
+                  <button
+                    key={cat.id}
+                    onClick={() => setActiveCategory(cat.id)}
+                    className={cn(
+                      "flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium transition-all",
+                      isActive
+                        ? theme === 'dark'
+                          ? "bg-blue-600 text-white shadow-md"
+                          : "bg-blue-600 text-white shadow-md"
+                        : theme === 'dark'
+                          ? "bg-gray-800 text-gray-300 hover:bg-gray-700"
+                          : "bg-white text-gray-600 hover:bg-gray-50"
+                    )}
+                  >
+                    <Icon className="w-4 h-4" />
+                    {cat.name}
+                    {count > 0 && (
+                      <span className={cn(
+                        "px-1.5 py-0.5 rounded-full text-xs",
+                        isActive
+                          ? "bg-white/20 text-white"
+                          : theme === 'dark' ? "bg-gray-700 text-gray-300" : "bg-gray-200 text-gray-600"
+                      )}>
+                        {count}
+                      </span>
+                    )}
+                    {isProviderCat && isViewingCompanyPrices && (
+                      <span className={cn(
+                        "px-1.5 py-0.5 rounded text-[10px] font-bold uppercase",
+                        isActive
+                          ? "bg-amber-400 text-amber-900"
+                          : "bg-amber-500/20 text-amber-500"
+                      )}>
+                        Proveedor
+                      </span>
+                    )}
+                  </button>
+                )
+              })}
+            </div>
           </div>
 
+          {/* Info messages (conditionally shown below) */}
           {isViewingCompanyPrices && (
             <div className={cn(
               "mt-4 p-3 rounded-lg text-sm",
@@ -607,85 +689,19 @@ export default function ProductCatalogPage() {
                 <div>
                   <p className="font-medium">Editando precios de empresa</p>
                   <p className="text-xs opacity-80 mt-1">
-                    Los precios configurados aqui seran especificos para esta empresa.
-                    El costo base no puede ser modificado.
-                    Los precios no pueden ser menores al costo de LogiRapid.
+                    {selectedCompany?.isProvider && providerCategories.length > 0 ? (
+                      <>
+                        <strong>Proveedor de:</strong> {providerCategories.map(c => categoryLabels[c] || c).join(', ')} - Puede configurar su precio base.{' '}
+                        <strong>Cliente de:</strong> otras categorias - Los precios no pueden ser menores al costo de LogiRapid.
+                      </>
+                    ) : (
+                      <>Los precios configurados aqui seran especificos para esta empresa. El costo base no puede ser modificado.</>
+                    )}
                   </p>
                 </div>
               </div>
             </div>
           )}
-
-          {/* Provider indicator */}
-          {selectedCompany?.isProvider && providerCategories.length > 0 && (
-            <div className={cn(
-              "mt-4 p-3 rounded-lg text-sm",
-              theme === 'dark' ? "bg-amber-900/30 text-amber-300 border border-amber-700" : "bg-amber-50 text-amber-800 border border-amber-200"
-            )}>
-              <div className="flex items-start gap-2">
-                <Truck className="w-4 h-4 mt-0.5 flex-shrink-0" />
-                <div>
-                  <p className="font-medium">Esta empresa es PROVEEDOR de: {providerCategories.map(c => categoryLabels[c] || c).join(', ')}</p>
-                  <p className="text-xs opacity-80 mt-1">
-                    Para estas categorias, puede configurar su precio base (lo que cobra a LogiRapid).
-                  </p>
-                </div>
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* Category Tabs */}
-        <div className={cn(
-          "flex flex-wrap gap-2 p-2 rounded-xl border",
-          theme === 'dark' ? "bg-gray-800/50 border-gray-700" : "bg-gray-50 border-gray-200"
-        )}>
-          {SERVICE_CATEGORIES.map((cat) => {
-            const Icon = cat.icon
-            const count = getProductCountByCategory(cat.id)
-            const isActive = activeCategory === cat.id
-            const isProviderCat = isProviderForCategory(cat.id)
-
-            return (
-              <button
-                key={cat.id}
-                onClick={() => setActiveCategory(cat.id)}
-                className={cn(
-                  "flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all",
-                  isActive
-                    ? theme === 'dark'
-                      ? "bg-blue-600 text-white shadow-md"
-                      : "bg-blue-600 text-white shadow-md"
-                    : theme === 'dark'
-                      ? "bg-gray-700 text-gray-300 hover:bg-gray-600"
-                      : "bg-white text-gray-600 hover:bg-gray-100"
-                )}
-              >
-                <Icon className="w-4 h-4" />
-                {cat.name}
-                {count > 0 && (
-                  <span className={cn(
-                    "px-1.5 py-0.5 rounded-full text-xs",
-                    isActive
-                      ? "bg-white/20 text-white"
-                      : theme === 'dark' ? "bg-gray-600 text-gray-300" : "bg-gray-200 text-gray-600"
-                  )}>
-                    {count}
-                  </span>
-                )}
-                {isProviderCat && isViewingCompanyPrices && (
-                  <span className={cn(
-                    "px-1.5 py-0.5 rounded text-[10px] font-bold uppercase",
-                    isActive
-                      ? "bg-amber-400 text-amber-900"
-                      : "bg-amber-500/20 text-amber-500"
-                  )}>
-                    Proveedor
-                  </span>
-                )}
-              </button>
-            )
-          })}
         </div>
 
         {/* Search and Actions Bar */}
@@ -1102,9 +1118,9 @@ export default function ProductCatalogPage() {
                                   const hasEdits = editing !== undefined
                                   const isBranchCompany = companyPricingData?.isBranch || false
 
-                                  // Validation - price below cost
-                                  const precioSucursalesBelowCost = precioSucursales !== null && precioSucursales < miCosto
-                                  const precioClientesBelowCost = precioClientes !== null && precioClientes < miCosto
+                                  // Validation - price below cost (not shown for SUPER_ADMIN)
+                                  const precioSucursalesBelowCost = !isSuperAdmin && precioSucursales !== null && precioSucursales < miCosto
+                                  const precioClientesBelowCost = !isSuperAdmin && precioClientes !== null && precioClientes < miCosto
 
                                   return (
                                     <tr

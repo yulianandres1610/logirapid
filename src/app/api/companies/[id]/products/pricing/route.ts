@@ -443,7 +443,8 @@ export async function POST(
         }
 
         // Validation: precio_sucursales >= mi_costo (for matrices)
-        if (!isBranch && finalPrecioSucursales !== undefined && finalPrecioSucursales !== null && finalPrecioSucursales < miCosto) {
+        // SUPER_ADMIN tiene control absoluto - sin restricciones de precio
+        if (user.role !== 'SUPER_ADMIN' && !isBranch && finalPrecioSucursales !== undefined && finalPrecioSucursales !== null && finalPrecioSucursales < miCosto) {
           results.push({
             productId,
             success: false,
@@ -453,7 +454,8 @@ export async function POST(
         }
 
         // Validation: precio_clientes >= mi_costo
-        if (finalPrecioClientes !== undefined && finalPrecioClientes !== null && finalPrecioClientes < miCosto) {
+        // SUPER_ADMIN tiene control absoluto - sin restricciones de precio
+        if (user.role !== 'SUPER_ADMIN' && finalPrecioClientes !== undefined && finalPrecioClientes !== null && finalPrecioClientes < miCosto) {
           results.push({
             productId,
             success: false,

@@ -306,19 +306,19 @@ export default function DevelopersDocsPage() {
                   <table className="w-full text-sm">
                     <thead>
                       <tr className="bg-white/5 border-b border-white/10">
-                        <th className="text-left px-4 py-3 text-gray-400 font-medium">Rol</th>
-                        <th className="text-left px-4 py-3 text-gray-400 font-medium">Descripcion</th>
+                        <th className="text-left px-6 py-3 text-gray-400 font-medium w-1/4">Rol</th>
+                        <th className="text-left px-6 py-3 text-gray-400 font-medium w-3/4">Descripcion</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-white/5">
                       {userRoles.map((item) => (
                         <tr key={item.role} className="hover:bg-white/5 transition-colors">
-                          <td className="px-4 py-3">
+                          <td className="px-6 py-3">
                             <code className="text-[#cc0a46] font-mono text-xs bg-[#cc0a46]/10 px-2 py-1 rounded">
                               {item.role}
                             </code>
                           </td>
-                          <td className="px-4 py-3 text-gray-400">{item.description}</td>
+                          <td className="px-6 py-3 text-gray-300 leading-relaxed">{item.description}</td>
                         </tr>
                       ))}
                     </tbody>
