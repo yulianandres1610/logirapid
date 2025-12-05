@@ -180,28 +180,36 @@ export default function ProductCatalogPage() {
             >
               <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-400 to-blue-600" />
               <div className="p-6">
-                <div className="flex items-center gap-3">
-                  <div className={cn(
-                    "p-3 rounded-xl shadow-sm border",
-                    theme === 'dark'
-                      ? "bg-blue-900/30 border-blue-800/50"
-                      : "bg-blue-50 border-blue-200"
-                  )}>
-                    <Package className="w-6 h-6 text-blue-500" />
+                <div className="flex items-start justify-between mb-4">
+                  <div className="flex items-center gap-3">
+                    <div className={cn(
+                      "p-3 rounded-xl shadow-sm border",
+                      theme === 'dark'
+                        ? "bg-blue-900/30 border-blue-800/50"
+                        : "bg-blue-50 border-blue-200"
+                    )}>
+                      <Package className="w-6 h-6 text-blue-500" />
+                    </div>
+                    <div>
+                      <p className={cn(
+                        "text-sm font-medium",
+                        theme === 'dark' ? "text-gray-400" : "text-gray-600"
+                      )}>
+                        Total Productos
+                      </p>
+                      <p className={cn(
+                        "text-3xl font-bold mt-1",
+                        theme === 'dark' ? "text-white" : "text-gray-900"
+                      )}>
+                        {stats.totalProducts}
+                      </p>
+                    </div>
                   </div>
-                  <div>
-                    <p className={cn(
-                      "text-sm font-medium",
-                      theme === 'dark' ? "text-gray-400" : "text-gray-600"
-                    )}>
-                      Total Productos
-                    </p>
-                    <p className={cn(
-                      "text-3xl font-bold mt-1",
-                      theme === 'dark' ? "text-white" : "text-gray-900"
-                    )}>
-                      {stats.totalProducts}
-                    </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-1">
+                    <div className="w-2 h-2 bg-blue-400 rounded-full animate-pulse" />
+                    <span className="text-xs font-medium text-gray-500">En catalogo</span>
                   </div>
                 </div>
               </div>
@@ -221,28 +229,36 @@ export default function ProductCatalogPage() {
             >
               <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-purple-400 to-purple-600" />
               <div className="p-6">
-                <div className="flex items-center gap-3">
-                  <div className={cn(
-                    "p-3 rounded-xl shadow-sm border",
-                    theme === 'dark'
-                      ? "bg-purple-900/30 border-purple-800/50"
-                      : "bg-purple-50 border-purple-200"
-                  )}>
-                    <Layers className="w-6 h-6 text-purple-500" />
+                <div className="flex items-start justify-between mb-4">
+                  <div className="flex items-center gap-3">
+                    <div className={cn(
+                      "p-3 rounded-xl shadow-sm border",
+                      theme === 'dark'
+                        ? "bg-purple-900/30 border-purple-800/50"
+                        : "bg-purple-50 border-purple-200"
+                    )}>
+                      <Layers className="w-6 h-6 text-purple-500" />
+                    </div>
+                    <div>
+                      <p className={cn(
+                        "text-sm font-medium",
+                        theme === 'dark' ? "text-gray-400" : "text-gray-600"
+                      )}>
+                        Categorias
+                      </p>
+                      <p className={cn(
+                        "text-3xl font-bold mt-1",
+                        theme === 'dark' ? "text-white" : "text-gray-900"
+                      )}>
+                        {stats.totalCategories}
+                      </p>
+                    </div>
                   </div>
-                  <div>
-                    <p className={cn(
-                      "text-sm font-medium",
-                      theme === 'dark' ? "text-gray-400" : "text-gray-600"
-                    )}>
-                      Categorias
-                    </p>
-                    <p className={cn(
-                      "text-3xl font-bold mt-1",
-                      theme === 'dark' ? "text-white" : "text-gray-900"
-                    )}>
-                      {stats.totalCategories}
-                    </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-1">
+                    <div className="w-2 h-2 bg-purple-400 rounded-full animate-pulse" />
+                    <span className="text-xs font-medium text-gray-500">Activas</span>
                   </div>
                 </div>
               </div>
@@ -262,28 +278,36 @@ export default function ProductCatalogPage() {
             >
               <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-green-400 to-green-600" />
               <div className="p-6">
-                <div className="flex items-center gap-3">
-                  <div className={cn(
-                    "p-3 rounded-xl shadow-sm border",
-                    theme === 'dark'
-                      ? "bg-green-900/30 border-green-800/50"
-                      : "bg-green-50 border-green-200"
-                  )}>
-                    <TrendingUp className="w-6 h-6 text-green-500" />
+                <div className="flex items-start justify-between mb-4">
+                  <div className="flex items-center gap-3">
+                    <div className={cn(
+                      "p-3 rounded-xl shadow-sm border",
+                      theme === 'dark'
+                        ? "bg-green-900/30 border-green-800/50"
+                        : "bg-green-50 border-green-200"
+                    )}>
+                      <TrendingUp className="w-6 h-6 text-green-500" />
+                    </div>
+                    <div>
+                      <p className={cn(
+                        "text-sm font-medium",
+                        theme === 'dark' ? "text-gray-400" : "text-gray-600"
+                      )}>
+                        Margen Promedio
+                      </p>
+                      <p className={cn(
+                        "text-3xl font-bold mt-1",
+                        stats.avgMargin > 0 ? "text-green-500" : theme === 'dark' ? "text-white" : "text-gray-900"
+                      )}>
+                        {stats.avgMargin.toFixed(1)}%
+                      </p>
+                    </div>
                   </div>
-                  <div>
-                    <p className={cn(
-                      "text-sm font-medium",
-                      theme === 'dark' ? "text-gray-400" : "text-gray-600"
-                    )}>
-                      Margen Promedio
-                    </p>
-                    <p className={cn(
-                      "text-3xl font-bold mt-1",
-                      stats.avgMargin > 0 ? "text-green-500" : theme === 'dark' ? "text-white" : "text-gray-900"
-                    )}>
-                      {stats.avgMargin.toFixed(1)}%
-                    </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-1">
+                    <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse" />
+                    <span className="text-xs font-medium text-gray-500">Calculado</span>
                   </div>
                 </div>
               </div>
@@ -303,28 +327,36 @@ export default function ProductCatalogPage() {
             >
               <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-amber-400 to-amber-600" />
               <div className="p-6">
-                <div className="flex items-center gap-3">
-                  <div className={cn(
-                    "p-3 rounded-xl shadow-sm border",
-                    theme === 'dark'
-                      ? "bg-amber-900/30 border-amber-800/50"
-                      : "bg-amber-50 border-amber-200"
-                  )}>
-                    <Truck className="w-6 h-6 text-amber-500" />
+                <div className="flex items-start justify-between mb-4">
+                  <div className="flex items-center gap-3">
+                    <div className={cn(
+                      "p-3 rounded-xl shadow-sm border",
+                      theme === 'dark'
+                        ? "bg-amber-900/30 border-amber-800/50"
+                        : "bg-amber-50 border-amber-200"
+                    )}>
+                      <Truck className="w-6 h-6 text-amber-500" />
+                    </div>
+                    <div>
+                      <p className={cn(
+                        "text-sm font-medium",
+                        theme === 'dark' ? "text-gray-400" : "text-gray-600"
+                      )}>
+                        Proveedores
+                      </p>
+                      <p className={cn(
+                        "text-3xl font-bold mt-1",
+                        theme === 'dark' ? "text-white" : "text-gray-900"
+                      )}>
+                        {providerCompanies.length}
+                      </p>
+                    </div>
                   </div>
-                  <div>
-                    <p className={cn(
-                      "text-sm font-medium",
-                      theme === 'dark' ? "text-gray-400" : "text-gray-600"
-                    )}>
-                      Proveedores
-                    </p>
-                    <p className={cn(
-                      "text-3xl font-bold mt-1",
-                      theme === 'dark' ? "text-white" : "text-gray-900"
-                    )}>
-                      {providerCompanies.length}
-                    </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-1">
+                    <div className="w-2 h-2 bg-amber-400 rounded-full animate-pulse" />
+                    <span className="text-xs font-medium text-gray-500">Registrados</span>
                   </div>
                 </div>
               </div>
@@ -333,58 +365,73 @@ export default function ProductCatalogPage() {
         )}
 
         {/* Search and Actions Bar */}
-        <div className="flex items-center justify-between gap-4">
-          <div className="relative flex-1 max-w-md">
-            <Search className={cn(
-              "absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5",
-              theme === 'dark' ? "text-gray-500" : "text-gray-400"
-            )} />
+        <div className={cn(
+          "flex flex-col lg:flex-row gap-6 items-center justify-between py-6 px-4 mt-8 mb-6 rounded-xl border",
+          theme === 'dark'
+            ? "bg-gray-800/50 border-gray-700"
+            : "bg-white border-gray-200"
+        )}>
+          {/* Search Input */}
+          <div className="flex-1 relative w-full lg:w-auto">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
             <input
               type="text"
               placeholder="Buscar por nombre o codigo..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className={cn(
-                "w-full pl-11 pr-4 py-2.5 rounded-xl border transition-all duration-200",
-                "focus:outline-none focus:ring-2 focus:ring-blue-500/20",
+                "w-full h-12 pl-10 pr-4 rounded-lg border transition-colors",
+                "focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm",
                 theme === 'dark'
-                  ? "bg-white/5 border-white/10 text-white placeholder:text-gray-500"
-                  : "bg-white border-gray-200 text-gray-900 placeholder:text-gray-400"
+                  ? "bg-gray-800 border-gray-600 text-white placeholder-gray-400"
+                  : "bg-white border-gray-200 text-gray-900 placeholder-gray-400"
               )}
             />
           </div>
-          <div className="flex items-center gap-3">
-            <button
-              onClick={refresh}
-              className={cn(
-                "p-2.5 rounded-xl border transition-colors",
-                theme === 'dark'
-                  ? "border-white/10 hover:bg-white/5"
-                  : "border-gray-200 hover:bg-gray-100"
-              )}
-            >
-              <RefreshCw className="w-5 h-5" />
-            </button>
 
-            {hasChanges && (
+          {/* Action Buttons */}
+          <div className="flex flex-col sm:flex-row gap-3 w-full lg:w-auto">
+            <div className="flex gap-3 w-full sm:w-auto">
+              {/* Refresh Button */}
               <button
-                onClick={handleSaveAll}
-                disabled={saving}
+                onClick={refresh}
                 className={cn(
-                  "flex items-center gap-2 px-4 py-2.5 rounded-xl font-medium transition-colors",
-                  saving
-                    ? "bg-gray-400 cursor-not-allowed"
-                    : "bg-green-600 hover:bg-green-700 text-white"
+                  "inline-flex whitespace-nowrap text-sm",
+                  "px-6 py-3 flex-1 sm:flex-none items-center justify-center gap-2 h-12",
+                  "bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg",
+                  "transition-all duration-200 shadow-sm hover:shadow-md",
+                  "focus:outline-none focus:ring-2 focus:ring-blue-500/20",
+                  theme === 'dark' && "bg-blue-700 hover:bg-blue-800"
                 )}
               >
-                {saving ? (
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                ) : (
-                  <Save className="w-4 h-4" />
-                )}
-                Guardar ({Object.keys(editingPrices).length})
+                <RefreshCw className="w-4 h-4" />
+                Actualizar
               </button>
-            )}
+
+              {/* Save Button (conditional) */}
+              {hasChanges && (
+                <button
+                  onClick={handleSaveAll}
+                  disabled={saving}
+                  className={cn(
+                    "flex-1 sm:flex-none justify-center whitespace-nowrap rounded-lg",
+                    "text-sm font-medium transition-all duration-200 h-12",
+                    "shadow-sm hover:shadow-md focus:outline-none focus:ring-2 focus:ring-green-500/20",
+                    "flex items-center gap-2 px-6",
+                    saving
+                      ? "bg-gray-400 cursor-not-allowed text-white"
+                      : "bg-green-600 hover:bg-green-700 text-white"
+                  )}
+                >
+                  {saving ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <Save className="w-4 h-4" />
+                  )}
+                  Guardar ({Object.keys(editingPrices).length})
+                </button>
+              )}
+            </div>
           </div>
         </div>
 
