@@ -103,8 +103,9 @@ export async function createSquareOrder(
           }
         }
       ],
-      // Optional: Add service charge for the fee display (not for platform terminals)
-      service_charges: (options.appFee > 0 && !options.isPlatformTerminal) ? [
+      // Always add service charge for the fee display - this shows the breakdown to customer
+      // For platform terminals, we don't use app_fee_money but still charge the fee
+      service_charges: options.appFee > 0 ? [
         {
           name: 'Processing Fee (3%)',
           amount_money: {
@@ -162,10 +163,10 @@ export async function createTerminalCheckout(
   const baseUrl = getSquareBaseUrl(credentials.environment)
   const idempotencyKey = crypto.randomUUID()
 
-  // For platform terminals, don't add fee to total (no app_fee allowed)
-  const totalAmount = options.isPlatformTerminal
-    ? options.amount
-    : options.amount + options.appFee
+  // Total amount always includes the fee - the customer pays amount + fee
+  // For platform terminals, we don't use app_fee_money (which would transfer fee to us separately)
+  // but the customer still pays the total with fee included
+  const totalAmount = options.amount + options.appFee
 
   const checkoutRequest = {
     idempotency_key: idempotencyKey,

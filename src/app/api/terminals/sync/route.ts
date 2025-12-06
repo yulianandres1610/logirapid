@@ -168,19 +168,23 @@ export async function POST(request: NextRequest) {
 
       if (!terminalApp) continue
 
-      const deviceId = device.id
+      // Normalize device_id - Square returns "device:XXXXX" but we store just "XXXXX"
+      // This is important because terminal checkout requires the ID without prefix
+      const rawDeviceId = device.id
+      const deviceId = rawDeviceId.startsWith('device:') ? rawDeviceId.substring(7) : rawDeviceId
+
       const deviceCodeId = terminalApp.application_details?.device_code_id
       const locationId = terminalApp.application_details?.session_location
       const name = device.attributes?.name || 'Square Terminal'
       const status = device.status?.category === 'AVAILABLE' ? 'paired' : 'offline'
 
-      // Check if terminal already exists
+      // Check if terminal already exists (check both with and without prefix for backwards compatibility)
       const existingResult = await db.query(`
-        SELECT id FROM payment_terminals WHERE device_id = $1
-      `, [deviceId])
+        SELECT id FROM payment_terminals WHERE device_id = $1 OR device_id = $2
+      `, [deviceId, rawDeviceId])
 
       if (existingResult.rows.length > 0) {
-        // Update existing terminal
+        // Update existing terminal - also normalize device_id if it has prefix
         await db.query(`
           UPDATE payment_terminals
           SET
@@ -188,10 +192,11 @@ export async function POST(request: NextRequest) {
             status = $2,
             device_code_id = $3,
             location_name = $4,
+            device_id = $5,
             last_seen_at = NOW(),
             updated_at = NOW()
-          WHERE device_id = $5
-        `, [name, status, deviceCodeId, locationId, deviceId])
+          WHERE id = $6
+        `, [name, status, deviceCodeId, locationId, deviceId, existingResult.rows[0].id])
         updated++
       } else {
         // Create new terminal
