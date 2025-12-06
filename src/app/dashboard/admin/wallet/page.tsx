@@ -949,7 +949,7 @@ export default function WalletManagementPage() {
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -20 }}
-                className="max-w-3xl mx-auto pt-8"
+                className="max-w-3xl mx-auto pt-16"
               >
                 {/* Step Progress */}
                 <div className="mb-8">
@@ -1273,7 +1273,7 @@ export default function WalletManagementPage() {
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -20 }}
-                className="max-w-3xl mx-auto pt-8"
+                className="max-w-3xl mx-auto pt-16"
               >
                 {/* Step Progress */}
                 <div className="mb-8">
