@@ -330,12 +330,16 @@ export async function POST(request: NextRequest) {
 
     console.log('[Terminal Checkout] Created transaction:', transactionNumber)
 
+    // Determine if this is a platform terminal (no app_fee allowed)
+    const isPlatformTerminal = terminal.companyId === null
+
     // Create Square Order
     const orderResult = await createSquareOrder(credentials, {
       transactionNumber,
       amount: dollarsToCents(amount),
       appFee: dollarsToCents(feeCalc.fee),
-      description: `Wallet Recharge - ${transactionNumber}`
+      description: `Wallet Recharge - ${transactionNumber}`,
+      isPlatformTerminal
     })
 
     if (!orderResult.success || !orderResult.orderId) {
@@ -362,7 +366,8 @@ export async function POST(request: NextRequest) {
       appFee: dollarsToCents(feeCalc.fee),
       collectSignature: true,
       skipReceipt: false,
-      note: `Recarga Wallet - ${transactionNumber}`
+      note: `Recarga Wallet - ${transactionNumber}`,
+      isPlatformTerminal
     })
 
     if (!checkoutResult.success || !checkoutResult.checkoutId) {

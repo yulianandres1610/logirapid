@@ -14,6 +14,7 @@ export interface CreateOrderOptions {
   amount: number // in cents
   appFee: number // in cents (3% fee)
   description?: string
+  isPlatformTerminal?: boolean // true if terminal belongs to platform (no app_fee)
 }
 
 export interface CreateCheckoutOptions {
@@ -24,6 +25,7 @@ export interface CreateCheckoutOptions {
   collectSignature: boolean
   skipReceipt: boolean
   note?: string
+  isPlatformTerminal?: boolean // true if terminal belongs to platform (no app_fee)
 }
 
 export interface TerminalCheckoutStatus {
@@ -101,8 +103,8 @@ export async function createSquareOrder(
           }
         }
       ],
-      // Optional: Add service charge for the fee display
-      service_charges: options.appFee > 0 ? [
+      // Optional: Add service charge for the fee display (not for platform terminals)
+      service_charges: (options.appFee > 0 && !options.isPlatformTerminal) ? [
         {
           name: 'Processing Fee (3%)',
           amount_money: {
@@ -180,8 +182,8 @@ export async function createTerminalCheckout(
         autocomplete: true,
         accept_partial_authorization: false
       },
-      // App fee - this is the 3% that goes to the platform
-      app_fee_money: options.appFee > 0 ? {
+      // App fee - this is the 3% that goes to the platform (not for platform terminals)
+      app_fee_money: (options.appFee > 0 && !options.isPlatformTerminal) ? {
         amount: options.appFee,
         currency: 'USD'
       } : undefined,
