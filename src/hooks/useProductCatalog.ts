@@ -81,6 +81,14 @@ export interface CompanyProductPricing {
   // Company type flags
   isBranch?: boolean
   canEditPrecioSucursales?: boolean
+  // Branch-specific pricing (NEW)
+  hasCustomBranchPrice?: boolean
+  customBranchPrice?: number | null
+  // Provider info
+  isProviderCategory?: boolean
+  providerCost?: number | null
+  precioALogiRapid?: number | null
+  isProviderPricing?: boolean
 }
 
 export interface CompanyPricingData {
@@ -258,6 +266,9 @@ export function useCompanyProductPricing(companyId: number | null) {
     // New field names
     precioSucursales?: number
     precioClientes?: number
+    // Provider fields
+    providerCost?: number
+    precioALogiRapid?: number
     // Legacy support
     sellPrice?: number
     b2bPrice?: number
@@ -275,6 +286,8 @@ export function useCompanyProductPricing(companyId: number | null) {
         productId: p.productId,
         precioSucursales: p.precioSucursales ?? p.b2bPrice,
         precioClientes: p.precioClientes ?? p.b2cPrice ?? p.sellPrice,
+        providerCost: p.providerCost,
+        precioALogiRapid: p.precioALogiRapid,
         markupType: p.markupType,
         markupValue: p.markupValue
       }))

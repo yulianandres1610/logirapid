@@ -17,13 +17,15 @@ import {
   CheckCircle,
   AlertCircle,
   AlertTriangle,
-  Info
+  Info,
+  Wallet
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { useAuth } from '@/hooks/useAuth'
 import { useTheme } from '@/contexts/theme-context'
 import { useNotifications } from '@/contexts/NotificationContext'
+import { useWalletBalance } from '@/hooks/useWalletBalance'
 
 interface HeaderProps {
   onToggleSidebar: () => void
@@ -34,6 +36,7 @@ export function Header({ onToggleSidebar, sidebarCollapsed }: HeaderProps) {
   const { user } = useAuth()
   const { theme, toggleTheme } = useTheme()
   const { notifications, markAsRead, getUnreadCount } = useNotifications()
+  const { companyBalance, userBalance, loading: walletLoading } = useWalletBalance()
   const [searchFocused, setSearchFocused] = useState(false)
   const [showNotifications, setShowNotifications] = useState(false)
   const [showUserMenu, setShowUserMenu] = useState(false)
@@ -200,6 +203,29 @@ export function Header({ onToggleSidebar, sidebarCollapsed }: HeaderProps) {
 
           {/* Right section */}
           <div className="flex items-center gap-3">
+
+            {/* Company Wallet Balance */}
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              className={cn(
+                "flex items-center gap-2 px-3 py-2 rounded-xl border transition-all duration-300",
+                theme === 'dark'
+                  ? "bg-green-500/10 border-green-500/20 hover:bg-green-500/15"
+                  : "bg-green-50 border-green-200 hover:bg-green-100"
+              )}
+            >
+              <Wallet className={cn(
+                "w-4 h-4",
+                theme === 'dark' ? "text-green-400" : "text-green-600"
+              )} />
+              <span className={cn(
+                "text-sm font-semibold",
+                theme === 'dark' ? "text-green-400" : "text-green-600"
+              )}>
+                ${walletLoading ? '...' : companyBalance.toFixed(2)}
+              </span>
+            </motion.div>
 
             {/* Theme toggle */}
             <Button
@@ -457,6 +483,33 @@ export function Header({ onToggleSidebar, sidebarCollapsed }: HeaderProps) {
                             "text-sm",
                             theme === 'dark' ? "text-gray-400" : "text-gray-600"
                           )}>{user?.email || 'admin@cubarapid.com'}</p>
+                        </div>
+                      </div>
+                      {/* User Wallet Balance */}
+                      <div className={cn(
+                        "flex items-center gap-3 mt-3 pt-3 border-t",
+                        theme === 'dark' ? "border-gray-700" : "border-gray-200"
+                      )}>
+                        <div className={cn(
+                          "w-8 h-8 rounded-full flex items-center justify-center",
+                          theme === 'dark' ? "bg-green-500/20" : "bg-green-100"
+                        )}>
+                          <Wallet className={cn(
+                            "w-4 h-4",
+                            theme === 'dark' ? "text-green-400" : "text-green-600"
+                          )} />
+                        </div>
+                        <div>
+                          <p className={cn(
+                            "text-xs",
+                            theme === 'dark' ? "text-gray-400" : "text-gray-500"
+                          )}>Mi Saldo</p>
+                          <p className={cn(
+                            "text-sm font-bold",
+                            theme === 'dark' ? "text-green-400" : "text-green-600"
+                          )}>
+                            ${walletLoading ? '...' : userBalance.toFixed(2)}
+                          </p>
                         </div>
                       </div>
                     </div>

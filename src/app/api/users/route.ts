@@ -8,6 +8,11 @@ export const dynamic = 'force-dynamic'
 export const dynamicParams = true
 export const runtime = 'nodejs'
 
+// Generate a unique 16-digit wallet number starting with 2026
+function generateWalletNumber(): string {
+  const timestamp = Date.now().toString().slice(-12)
+  return `2026${timestamp}`
+}
 
 // GET: Obtener todos los usuarios
 export async function GET(request: NextRequest) {
@@ -172,14 +177,18 @@ export async function POST(request: NextRequest) {
     const password = user.password || generateRandomPassword()
     const hashedPassword = await hashPassword(password)
 
+    // Generate wallet number for new user
+    const walletNumber = generateWalletNumber()
+
     // Insert user into PostgreSQL
     const insertUserQuery = `
       INSERT INTO users (
         firstname, lastname, email, phone, address, city, country,
         role, password, status, isactive, transactionscount,
+        wallet_number, wallet_balance,
         createdat, lastlogin
       ) VALUES (
-        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, NOW(), NOW()
+        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, NOW(), NOW()
       )
       RETURNING
         id,
@@ -193,7 +202,9 @@ export async function POST(request: NextRequest) {
         role,
         status,
         isactive as "isActive",
-        transactionscount as "transactionsCount"
+        transactionscount as "transactionsCount",
+        wallet_number as "walletNumber",
+        wallet_balance as "walletBalance"
     `
 
     const values = [
@@ -208,7 +219,9 @@ export async function POST(request: NextRequest) {
       hashedPassword,
       user.isActive ? 'active' : 'inactive',
       user.isActive !== false,
-      0
+      0,
+      walletNumber,
+      0.00
     ]
 
     const newUserResult = await db.query(insertUserQuery, values)

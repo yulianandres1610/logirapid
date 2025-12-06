@@ -185,7 +185,9 @@ export default function ListaPreciosEmpresaPage() {
       const products = Object.entries(editingCompanyPrices).map(([id, prices]) => ({
         productId: parseInt(id),
         precioSucursales: prices.precioSucursales,
-        precioClientes: prices.precioClientes
+        precioClientes: prices.precioClientes,
+        providerCost: prices.providerCost,
+        precioALogiRapid: prices.precioALogiRapid
       }))
 
       await updateCompanyPrices(products, 'Actualizacion de precios desde Lista de Precios')

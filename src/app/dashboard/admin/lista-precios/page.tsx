@@ -24,7 +24,7 @@ import {
   TrendingUp,
   Layers,
   Truck,
-  AlertTriangle
+  GitBranch
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useTheme } from '@/contexts/theme-context'
@@ -32,6 +32,7 @@ import { useNotifications } from '@/contexts/NotificationContext'
 import { DashboardLayout } from '@/components/layout/dashboard-layout'
 import { useProductCatalog, useCompanyProductPricing, useProviders } from '@/hooks/useProductCatalog'
 import { useAuth } from '@/hooks/useAuth'
+import { BranchPricingModal } from '@/components/pricing/BranchPricingModal'
 
 const categoryIcons: Record<string, typeof Package> = {
   paqueteria: Package,
@@ -111,6 +112,7 @@ export default function ProductCatalogPage() {
   const [editingPrices, setEditingPrices] = useState<Record<number, EditingPrice>>({})
   const [editingCompanyPrices, setEditingCompanyPrices] = useState<Record<number, EditingCompanyPrice>>({})
   const [saving, setSaving] = useState(false)
+  const [branchPricingModalOpen, setBranchPricingModalOpen] = useState(false)
 
   // Fetch companies on mount
   useEffect(() => {
@@ -616,6 +618,22 @@ export default function ProductCatalogPage() {
                   Proveedor
                 </div>
               )}
+
+              {/* Branch Pricing Button - Only for Matrix Companies */}
+              {selectedCompany && !selectedCompany.isBranch && (
+                <button
+                  onClick={() => setBranchPricingModalOpen(true)}
+                  className={cn(
+                    "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors",
+                    theme === 'dark'
+                      ? "bg-purple-900/30 text-purple-400 hover:bg-purple-900/50 border border-purple-700/50"
+                      : "bg-purple-50 text-purple-700 hover:bg-purple-100 border border-purple-200"
+                  )}
+                >
+                  <GitBranch className="w-3.5 h-3.5" />
+                  Precios por Sucursal
+                </button>
+              )}
             </div>
 
             {/* Divider */}
@@ -678,30 +696,6 @@ export default function ProductCatalogPage() {
             </div>
           </div>
 
-          {/* Info messages (conditionally shown below) */}
-          {isViewingCompanyPrices && (
-            <div className={cn(
-              "mt-4 p-3 rounded-lg text-sm",
-              theme === 'dark' ? "bg-amber-900/20 text-amber-400" : "bg-amber-50 text-amber-700"
-            )}>
-              <div className="flex items-start gap-2">
-                <AlertTriangle className="w-4 h-4 mt-0.5 flex-shrink-0" />
-                <div>
-                  <p className="font-medium">Editando precios de empresa</p>
-                  <p className="text-xs opacity-80 mt-1">
-                    {selectedCompany?.isProvider && providerCategories.length > 0 ? (
-                      <>
-                        <strong>Proveedor de:</strong> {providerCategories.map(c => categoryLabels[c] || c).join(', ')} - Puede configurar su precio base.{' '}
-                        <strong>Cliente de:</strong> otras categorias - Los precios no pueden ser menores al costo de LogiRapid.
-                      </>
-                    ) : (
-                      <>Los precios configurados aqui seran especificos para esta empresa. El costo base no puede ser modificado.</>
-                    )}
-                  </p>
-                </div>
-              </div>
-            </div>
-          )}
         </div>
 
         {/* Search and Actions Bar */}
@@ -818,13 +812,9 @@ export default function ProductCatalogPage() {
                   key={category}
                   className={cn(
                     "rounded-xl border overflow-hidden",
-                    isProviderCat && isViewingCompanyPrices
-                      ? theme === 'dark'
-                        ? "bg-amber-900/20 border-amber-700"
-                        : "bg-amber-50 border-amber-200"
-                      : theme === 'dark'
-                        ? "bg-gray-800/50 border-gray-700"
-                        : "bg-white border-gray-200"
+                    theme === 'dark'
+                      ? "bg-gray-800/50 border-gray-700"
+                      : "bg-white border-gray-200"
                   )}
                 >
                   {/* Category Header */}
@@ -838,14 +828,9 @@ export default function ProductCatalogPage() {
                     <div className="flex items-center gap-3">
                       <div className={cn(
                         "p-2 rounded-lg",
-                        isProviderCat && isViewingCompanyPrices
-                          ? theme === 'dark' ? "bg-amber-800" : "bg-amber-200"
-                          : theme === 'dark' ? "bg-gray-700" : "bg-gray-100"
+                        theme === 'dark' ? "bg-gray-700" : "bg-gray-100"
                       )}>
-                        <Icon className={cn(
-                          "w-5 h-5",
-                          isProviderCat && isViewingCompanyPrices ? "text-amber-500" : "text-blue-500"
-                        )} />
+                        <Icon className="w-5 h-5 text-blue-500" />
                       </div>
                       <div className="text-left">
                         <div className="flex items-center gap-2">
@@ -895,9 +880,7 @@ export default function ProductCatalogPage() {
                             <thead>
                               <tr className={cn(
                                 "text-left text-xs uppercase tracking-wider",
-                                isProviderCat && isViewingCompanyPrices
-                                  ? theme === 'dark' ? "bg-amber-900/30 text-amber-300" : "bg-amber-100 text-amber-800"
-                                  : theme === 'dark' ? "bg-gray-900/50 text-gray-400" : "bg-gray-50 text-gray-500"
+                                theme === 'dark' ? "bg-gray-900/50 text-gray-400" : "bg-gray-50 text-gray-500"
                               )}>
                                 <th className="pl-4 pr-16 py-3 w-36">Codigo</th>
                                 <th className="pl-10 pr-4 py-3 w-auto">Producto</th>
@@ -1028,8 +1011,8 @@ export default function ProductCatalogPage() {
                                       className={cn(
                                         "transition-colors",
                                         hasEdits
-                                          ? theme === 'dark' ? "bg-amber-900/20" : "bg-amber-50"
-                                          : theme === 'dark' ? "hover:bg-amber-900/10" : "hover:bg-amber-50/50"
+                                          ? theme === 'dark' ? "bg-blue-900/20" : "bg-blue-50"
+                                          : theme === 'dark' ? "hover:bg-gray-800/50" : "hover:bg-gray-50"
                                       )}
                                     >
                                       <td className="pl-4 pr-16 py-3">
@@ -1073,8 +1056,8 @@ export default function ProductCatalogPage() {
                                           className={cn(
                                             "w-full max-w-[100px] px-2 py-1 text-center rounded border text-sm mx-auto",
                                             theme === 'dark'
-                                              ? "bg-amber-900/30 border-amber-600 text-amber-300"
-                                              : "bg-amber-50 border-amber-300 text-amber-700"
+                                              ? "bg-blue-900/30 border-blue-600 text-blue-300"
+                                              : "bg-blue-50 border-blue-300 text-blue-700"
                                           )}
                                         />
                                       </td>
@@ -1421,6 +1404,16 @@ export default function ProductCatalogPage() {
         )}
 
       </div>
+
+        {/* Branch Pricing Modal */}
+        {selectedCompany && !selectedCompany.isBranch && (
+          <BranchPricingModal
+            isOpen={branchPricingModalOpen}
+            onClose={() => setBranchPricingModalOpen(false)}
+            matrixCompanyId={selectedCompany.id}
+            matrixCompanyName={selectedCompany.legalName}
+          />
+        )}
     </DashboardLayout>
   )
 }

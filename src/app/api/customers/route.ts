@@ -1,6 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/database'
 import { getCompanyFilter } from '@/lib/query-helpers'
+import { sendSMS, formatPhoneNumber } from '@/lib/sms-service'
+
+// Generate 16-digit wallet number starting with 2026
+function generateWalletNumber(): string {
+  const timestamp = Date.now().toString().slice(-12)
+  return `2026${timestamp}`
+}
 
 // Force dynamic rendering - don't execute during build
 export const dynamic = 'force-dynamic'
@@ -378,6 +385,9 @@ export async function POST(request: NextRequest) {
       }, { status: 400 })
     }
 
+    // Generate wallet number for new customer
+    const walletNumber = generateWalletNumber()
+
     // Insertar nuevo cliente
     const insertQuery = `
       INSERT INTO customers (
@@ -385,9 +395,9 @@ export async function POST(request: NextRequest) {
         address, city, state, country, notes, createdby,
         createdat, zipcode, apartment,
         has_alternate_contact, alternate_contact_name, alternate_contact_phone,
-        company_id
+        company_id, wallet_number, wallet_balance
       ) VALUES (
-        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, NOW(), $13, $14, $15, $16, $17, $18
+        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, NOW(), $13, $14, $15, $16, $17, $18, $19, 0.00
       )
       RETURNING
         id,
@@ -409,7 +419,9 @@ export async function POST(request: NextRequest) {
         has_alternate_contact as "hasAlternateContact",
         alternate_contact_name as "alternateContactName",
         alternate_contact_phone as "alternateContactPhone",
-        company_id as "companyId"
+        company_id as "companyId",
+        wallet_number as "walletNumber",
+        wallet_balance as "walletBalance"
     `
 
     const values = [
@@ -430,14 +442,43 @@ export async function POST(request: NextRequest) {
       body.hasAlternateContact || false,
       body.alternateContactName || null,
       body.alternateContactPhone || null,
-      companyIdToUse
+      companyIdToUse,
+      walletNumber
     ]
 
     const result = await db.query(insertQuery, values)
+    const newCustomer = result.rows[0]
+
+    // Get company name for SMS
+    let companyName = 'LogiRapid'
+    if (companyIdToUse) {
+      try {
+        const companyResult = await db.query(
+          'SELECT legalname FROM companies WHERE id = $1',
+          [companyIdToUse]
+        )
+        if (companyResult.rows.length > 0) {
+          companyName = companyResult.rows[0].legalname
+        }
+      } catch (err) {
+        console.error('Error getting company name for SMS:', err)
+      }
+    }
+
+    // Send welcome SMS with wallet number
+    try {
+      const formattedPhone = formatPhoneNumber(body.phone)
+      const smsMessage = `Gracias por Formar parte de la Familia ${companyName}. Su numero de Wallet o Cliente es: ${walletNumber}`
+      await sendSMS(formattedPhone, smsMessage)
+      console.log(`SMS enviado a ${formattedPhone}: ${smsMessage}`)
+    } catch (smsError) {
+      console.error('Error sending welcome SMS:', smsError)
+      // Don't fail the customer creation if SMS fails
+    }
 
     return NextResponse.json({
       success: true,
-      data: result.rows[0],
+      data: newCustomer,
       message: 'Cliente creado exitosamente'
     })
 

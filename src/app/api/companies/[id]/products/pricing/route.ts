@@ -98,7 +98,7 @@ export async function GET(
     let costParams: any[]
 
     if (isBranch) {
-      // For branches: mi_costo is parent's precio_sucursales
+      // For branches: mi_costo is branch-specific price OR parent's precio_sucursales
       costSourceQuery = `
         SELECT
           pc.id,
@@ -117,13 +117,18 @@ export async function GET(
           pc.precio_publico as catalog_precio_publico,
           pc.is_active,
           pc.display_order,
-          -- For branches: mi_costo is parent's precio_sucursales or precio_clientes
+          -- For branches: mi_costo is branch-specific price, or parent's precio_sucursales
+          -- NEW: First check branch_product_pricing for branch-specific price
           COALESCE(
-            parent_pricing.precio_sucursales,
+            bpp.precio_sucursal,           -- Branch-specific price (from branch_product_pricing)
+            parent_pricing.precio_sucursales,  -- Default for all branches
             parent_pricing.precio_clientes,
             parent_pricing.mi_costo,
             pc.precio_mayorista
           ) as mi_costo,
+          -- Flag to indicate if price is custom for this branch
+          CASE WHEN bpp.precio_sucursal IS NOT NULL THEN true ELSE false END as has_custom_branch_price,
+          bpp.precio_sucursal as custom_branch_price,
           -- Current company pricing
           cpp.id as pricing_id,
           cpp.mi_costo as current_mi_costo,
@@ -134,8 +139,17 @@ export async function GET(
           cpp.margen_clientes,
           cpp.margen_clientes_pct,
           cpp.price_source,
-          cpp.is_active as pricing_active
+          cpp.is_active as pricing_active,
+          -- Provider fields
+          cpp.provider_cost,
+          cpp.precio_a_logirapid,
+          cpp.is_provider_pricing
         FROM product_catalog pc
+        -- NEW: Join to branch_product_pricing for branch-specific prices
+        LEFT JOIN branch_product_pricing bpp
+          ON bpp.product_id = pc.id
+          AND bpp.branch_company_id = $1      -- This branch
+          AND bpp.matrix_company_id = $2      -- The parent matrix company
         LEFT JOIN company_product_pricing parent_pricing
           ON parent_pricing.product_id = pc.id
           AND parent_pricing.company_id = $2
@@ -178,7 +192,11 @@ export async function GET(
           cpp.margen_clientes,
           cpp.margen_clientes_pct,
           cpp.price_source,
-          cpp.is_active as pricing_active
+          cpp.is_active as pricing_active,
+          -- Provider fields
+          cpp.provider_cost,
+          cpp.precio_a_logirapid,
+          cpp.is_provider_pricing
         FROM product_catalog pc
         LEFT JOIN company_product_pricing cpp
           ON cpp.product_id = pc.id
@@ -236,8 +254,17 @@ export async function GET(
       isBranch,
       canEditPrecioSucursales: !isBranch, // Only matrices can set precio_sucursales
 
+      // Branch-specific pricing info (NEW - for branches only)
+      hasCustomBranchPrice: row.has_custom_branch_price || false,
+      customBranchPrice: row.custom_branch_price ? parseFloat(row.custom_branch_price) : null,
+
       // Provider info
-      isProviderCategory: isProvider && providerCategories.includes(row.service_category)
+      isProviderCategory: isProvider && providerCategories.includes(row.service_category),
+
+      // Provider pricing (only for provider companies)
+      providerCost: row.provider_cost ? parseFloat(row.provider_cost) : null,
+      precioALogiRapid: row.precio_a_logirapid ? parseFloat(row.precio_a_logirapid) : null,
+      isProviderPricing: row.is_provider_pricing || false
     }))
 
     // Group by category
@@ -337,9 +364,9 @@ export async function POST(
       }, { status: 400 })
     }
 
-    // Get company info
+    // Get company info including provider status
     const companyResult = await db.query(`
-      SELECT id, legalname, parent_company_id
+      SELECT id, legalname, parent_company_id, is_provider, provider_categories
       FROM companies
       WHERE id = $1
     `, [companyId])
@@ -353,6 +380,8 @@ export async function POST(
 
     const company = companyResult.rows[0]
     const isBranch = company.parent_company_id !== null
+    const isProvider = company.is_provider === true
+    const providerCategories: string[] = company.provider_categories || []
 
     const results: { productId: number; success: boolean; error?: string }[] = []
 
@@ -363,6 +392,9 @@ export async function POST(
           // New field names
           precioSucursales,
           precioClientes,
+          // Provider fields
+          providerCost,
+          precioALogiRapid,
           // Legacy support
           b2bPrice,
           b2cPrice,
@@ -380,32 +412,39 @@ export async function POST(
         let costParams: any[]
 
         if (isBranch) {
-          // For branches: mi_costo is parent's precio_sucursales
+          // For branches: mi_costo is branch-specific price OR parent's precio_sucursales
           costPriceQuery = `
             SELECT
               pc.id,
               pc.precio_mayorista as catalog_cost,
               pc.precio_publico as catalog_publico,
+              pc.service_category,
               COALESCE(
-                parent.precio_sucursales,
+                bpp.precio_sucursal,           -- Branch-specific price (NEW)
+                parent.precio_sucursales,      -- Default for all branches
                 parent.precio_clientes,
                 parent.mi_costo,
                 pc.precio_mayorista
               ) as mi_costo
             FROM product_catalog pc
+            LEFT JOIN branch_product_pricing bpp
+              ON bpp.product_id = pc.id
+              AND bpp.branch_company_id = $3   -- This branch
+              AND bpp.matrix_company_id = $2   -- The parent matrix
             LEFT JOIN company_product_pricing parent
               ON parent.product_id = pc.id
               AND parent.company_id = $2
             WHERE pc.id = $1
           `
-          costParams = [productId, company.parent_company_id]
+          costParams = [productId, company.parent_company_id, companyId]
         } else {
           // For matrix: mi_costo is catalog's precio_mayorista
           costPriceQuery = `
             SELECT
               id,
               precio_mayorista as mi_costo,
-              precio_publico as catalog_publico
+              precio_publico as catalog_publico,
+              service_category
             FROM product_catalog
             WHERE id = $1
           `
@@ -422,10 +461,18 @@ export async function POST(
         const productInfo = productResult.rows[0]
         const miCosto = parseFloat(productInfo.mi_costo || 0)
         const catalogPrecioPublico = parseFloat(productInfo.catalog_publico || 0)
+        const productCategory = productInfo.service_category || ''
+
+        // Check if this company is a provider for this product's category
+        const isProviderForProduct = isProvider && providerCategories.includes(productCategory)
 
         // Use new names, fallback to legacy
         let finalPrecioSucursales = precioSucursales ?? b2bPrice
         let finalPrecioClientes = precioClientes ?? b2cPrice
+
+        // Provider-specific fields
+        let finalProviderCost = providerCost
+        let finalPrecioALogiRapid = precioALogiRapid
 
         // If markup is provided for branches, calculate prices from markup
         if (isBranch && markupType && markupValue !== undefined) {
@@ -482,8 +529,9 @@ export async function POST(
             precio_sucursales, precio_clientes,
             margen_clientes, margen_clientes_pct,
             price_source, parent_company_id,
-            markup_type, markup_value
-          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+            markup_type, markup_value,
+            provider_cost, precio_a_logirapid, is_provider_pricing
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
           ON CONFLICT (company_id, product_id)
           DO UPDATE SET
             mi_costo = $3,
@@ -495,6 +543,9 @@ export async function POST(
             parent_company_id = $9,
             markup_type = COALESCE($10, company_product_pricing.markup_type),
             markup_value = COALESCE($11, company_product_pricing.markup_value),
+            provider_cost = COALESCE($12, company_product_pricing.provider_cost),
+            precio_a_logirapid = COALESCE($13, company_product_pricing.precio_a_logirapid),
+            is_provider_pricing = $14,
             updated_at = NOW()
         `, [
           companyId,
@@ -507,8 +558,21 @@ export async function POST(
           priceSource,
           isBranch ? company.parent_company_id : null,
           markupType || null,
-          markupValue || 0
+          markupValue || 0,
+          isProviderForProduct ? (finalProviderCost || null) : null,
+          isProviderForProduct ? (finalPrecioALogiRapid || null) : null,
+          isProviderForProduct
         ])
+
+        // If provider updates precio_a_logirapid, update the product_catalog.mi_costo
+        if (isProviderForProduct && finalPrecioALogiRapid !== undefined && finalPrecioALogiRapid !== null) {
+          await db.query(`
+            UPDATE product_catalog
+            SET mi_costo = $1,
+                updated_at = NOW()
+            WHERE id = $2
+          `, [finalPrecioALogiRapid, productId])
+        }
 
         results.push({ productId, success: true })
 
