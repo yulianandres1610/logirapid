@@ -156,12 +156,13 @@ export async function GET(request: NextRequest) {
       ORDER BY total DESC
     `, [firstDayOfMonth])
 
-    // 8. Monthly trends (last 6 months)
+    // 8. Monthly trends (last 6 months) - including fees/commissions
     const monthlyTrends = await db.query(`
       SELECT
         DATE_TRUNC('month', created_at) as month,
         type,
-        COALESCE(SUM(net_amount), 0) as total
+        COALESCE(SUM(net_amount), 0) as total,
+        COALESCE(SUM(fee), 0) as total_fees
       FROM wallet_transactions
       WHERE status = 'completed'
         AND created_at >= DATE_TRUNC('month', NOW()) - INTERVAL '5 months'
@@ -170,23 +171,26 @@ export async function GET(request: NextRequest) {
     `)
 
     // Process monthly trends for chart
-    const months: { [key: string]: { recharges: number, transfers: number } } = {}
+    const months: { [key: string]: { recharges: number, transfers: number, commissions: number } } = {}
     monthlyTrends.rows.forEach((row: any) => {
       const monthKey = new Date(row.month).toISOString().slice(0, 7)
       if (!months[monthKey]) {
-        months[monthKey] = { recharges: 0, transfers: 0 }
+        months[monthKey] = { recharges: 0, transfers: 0, commissions: 0 }
       }
       if (row.type === 'recharge') {
         months[monthKey].recharges += parseFloat(row.total)
+        months[monthKey].commissions += parseFloat(row.total_fees || '0')
       } else if (row.type === 'transfer_out' || row.type === 'transfer_in') {
         months[monthKey].transfers += parseFloat(row.total) / 2 // Divide by 2 to avoid double counting
+        months[monthKey].commissions += parseFloat(row.total_fees || '0') / 2
       }
     })
 
     const trendData = Object.entries(months).map(([month, data]) => ({
       month,
       recharges: data.recharges,
-      transfers: data.transfers
+      transfers: data.transfers,
+      commissions: data.commissions
     }))
 
     // 9. Top 10 wallets by balance (companies)

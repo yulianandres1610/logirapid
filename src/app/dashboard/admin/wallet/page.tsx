@@ -29,6 +29,7 @@ import {
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useTheme } from '@/contexts/theme-context'
+import { useNotifications } from '@/contexts/NotificationContext'
 import { DashboardLayout } from '@/components/layout/dashboard-layout'
 import { VirtualCard } from '@/components/wallet/VirtualCard'
 import {
@@ -108,6 +109,7 @@ interface MonthlyTrend {
   month: string
   recharges: number
   transfers: number
+  commissions: number
 }
 
 interface RechargeByMethod {
@@ -131,6 +133,7 @@ const monthNames = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep
 
 export default function WalletManagementPage() {
   const { theme } = useTheme()
+  const { showNotification } = useNotifications()
   const router = useRouter()
   const searchParams = useSearchParams()
   const tabParam = searchParams.get('tab') as Tab | null
@@ -229,7 +232,7 @@ export default function WalletManagementPage() {
   // Process recharge
   const processRecharge = async () => {
     if (!selectedWallet || !rechargeAmount || parseFloat(rechargeAmount) <= 0) {
-      alert('Seleccione un wallet y monto valido')
+      showNotification('warning', 'Datos incompletos', 'Seleccione un wallet y monto valido')
       return
     }
 
@@ -248,7 +251,7 @@ export default function WalletManagementPage() {
       })
       const data = await response.json()
       if (data.success) {
-        alert(data.message)
+        showNotification('success', 'Recarga Exitosa', data.message)
         // Reset form
         setRechargeAmount('')
         setPaymentReference('')
@@ -257,10 +260,10 @@ export default function WalletManagementPage() {
         setRechargeStep(1)
         fetchDashboard()
       } else {
-        alert(data.error)
+        showNotification('error', 'Error', data.error)
       }
     } catch (err) {
-      alert('Error al procesar la recarga')
+      showNotification('error', 'Error', 'Error al procesar la recarga')
     } finally {
       setProcessing(false)
     }
@@ -269,7 +272,7 @@ export default function WalletManagementPage() {
   // Process transfer
   const processTransfer = async () => {
     if (!transferSourceWallet || !transferTargetWallet || !transferAmount) {
-      alert('Complete todos los campos')
+      showNotification('warning', 'Datos incompletos', 'Complete todos los campos')
       return
     }
 
@@ -289,7 +292,7 @@ export default function WalletManagementPage() {
       })
       const data = await response.json()
       if (data.success) {
-        alert(data.message)
+        showNotification('success', 'Transferencia Exitosa', data.message)
         // Reset form
         setTransferSourceWallet(null)
         setTransferTargetWallet(null)
@@ -300,10 +303,10 @@ export default function WalletManagementPage() {
         setTransferStep(1)
         fetchDashboard()
       } else {
-        alert(data.error)
+        showNotification('error', 'Error', data.error)
       }
     } catch (err) {
-      alert('Error al procesar la transferencia')
+      showNotification('error', 'Error', 'Error al procesar la transferencia')
     } finally {
       setProcessing(false)
     }
@@ -351,14 +354,14 @@ export default function WalletManagementPage() {
       })
       const data = await response.json()
       if (data.success) {
-        alert(data.message)
+        showNotification('success', action === 'approve' ? 'Aprobada' : 'Rechazada', data.message)
         fetchPendingRequests()
         fetchDashboard()
       } else {
-        alert(data.error)
+        showNotification('error', 'Error', data.error)
       }
     } catch (err) {
-      alert('Error al procesar la solicitud')
+      showNotification('error', 'Error', 'Error al procesar la solicitud')
     }
   }
 
@@ -646,7 +649,8 @@ export default function WalletManagementPage() {
                         <AreaChart data={monthlyTrends.map(t => ({
                           name: monthNames[parseInt(t.month.split('-')[1]) - 1] || t.month,
                           recargas: t.recharges,
-                          transferencias: t.transfers
+                          transferencias: t.transfers,
+                          comisiones: t.commissions || 0
                         }))}>
                           <defs>
                             <linearGradient id="colorRecargas" x1="0" y1="0" x2="0" y2="1">
@@ -656,6 +660,10 @@ export default function WalletManagementPage() {
                             <linearGradient id="colorTransferencias" x1="0" y1="0" x2="0" y2="1">
                               <stop offset="5%" stopColor={theme === 'dark' ? '#3b82f6' : '#ef4444'} stopOpacity={0.3}/>
                               <stop offset="95%" stopColor={theme === 'dark' ? '#3b82f6' : '#ef4444'} stopOpacity={0}/>
+                            </linearGradient>
+                            <linearGradient id="colorComisiones" x1="0" y1="0" x2="0" y2="1">
+                              <stop offset="5%" stopColor="#f59e0b" stopOpacity={0.3}/>
+                              <stop offset="95%" stopColor="#f59e0b" stopOpacity={0}/>
                             </linearGradient>
                           </defs>
                           <CartesianGrid strokeDasharray="3 3" stroke={theme === 'dark' ? '#374151' : '#e5e7eb'} />
@@ -696,10 +704,19 @@ export default function WalletManagementPage() {
                             fill="url(#colorTransferencias)"
                             strokeWidth={2}
                           />
+                          <Area
+                            type="monotone"
+                            dataKey="comisiones"
+                            name="Comisiones"
+                            stroke="#f59e0b"
+                            fillOpacity={1}
+                            fill="url(#colorComisiones)"
+                            strokeWidth={2}
+                          />
                         </AreaChart>
                       </ResponsiveContainer>
                     </div>
-                    <div className="flex justify-center gap-6 mt-4">
+                    <div className="flex justify-center gap-4 mt-4 flex-wrap">
                       <div className="flex items-center gap-2">
                         <span className="w-3 h-3 rounded-full bg-green-500" />
                         <span className={cn("text-sm", theme === 'dark' ? 'text-gray-400' : 'text-gray-600')}>Recargas</span>
@@ -707,6 +724,10 @@ export default function WalletManagementPage() {
                       <div className="flex items-center gap-2">
                         <span className={cn("w-3 h-3 rounded-full", theme === 'dark' ? 'bg-blue-500' : 'bg-red-500')} />
                         <span className={cn("text-sm", theme === 'dark' ? 'text-gray-400' : 'text-gray-600')}>Transferencias</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="w-3 h-3 rounded-full bg-amber-500" />
+                        <span className={cn("text-sm", theme === 'dark' ? 'text-gray-400' : 'text-gray-600')}>Comisiones</span>
                       </div>
                     </div>
                   </motion.div>

@@ -138,10 +138,35 @@ export async function POST(request: NextRequest) {
       targetId = userResult.rows[0].id
       targetName = userResult.rows[0].name
       currentBalance = parseFloat(userResult.rows[0].balance || '0')
+    } else if (targetType === 'customer') {
+      const customerResult = await db.query(`
+        SELECT id, CONCAT(firstname, ' ', lastname) as name, wallet_balance as balance, company_id
+        FROM customers
+        WHERE wallet_number = $1
+      `, [targetWalletNumber])
+
+      if (customerResult.rows.length === 0) {
+        return NextResponse.json({
+          success: false,
+          error: 'Cliente no encontrado con ese numero de wallet'
+        }, { status: 404 })
+      }
+
+      targetId = customerResult.rows[0].id
+      targetName = customerResult.rows[0].name
+      currentBalance = parseFloat(customerResult.rows[0].balance || '0')
+
+      // Check access for non-SUPER_ADMIN
+      if (payload.role !== 'SUPER_ADMIN' && customerResult.rows[0].company_id !== payload.companyId) {
+        return NextResponse.json({
+          success: false,
+          error: 'No tiene acceso a este cliente'
+        }, { status: 403 })
+      }
     } else {
       return NextResponse.json({
         success: false,
-        error: 'targetType debe ser "company" o "user"'
+        error: 'targetType debe ser "company", "user" o "customer"'
       }, { status: 400 })
     }
 
@@ -157,9 +182,15 @@ export async function POST(request: NextRequest) {
             SET walletbalance = walletbalance + $1
             WHERE id = $2
           `, [netAmount, targetId])
-        } else {
+        } else if (targetType === 'user') {
           await client.query(`
             UPDATE users
+            SET wallet_balance = wallet_balance + $1
+            WHERE id = $2
+          `, [netAmount, targetId])
+        } else if (targetType === 'customer') {
+          await client.query(`
+            UPDATE customers
             SET wallet_balance = wallet_balance + $1
             WHERE id = $2
           `, [netAmount, targetId])
@@ -173,6 +204,7 @@ export async function POST(request: NextRequest) {
             target_type,
             target_company_id,
             target_user_id,
+            target_customer_id,
             target_wallet_number,
             amount,
             fee,
@@ -195,23 +227,25 @@ export async function POST(request: NextRequest) {
             $3,
             $4,
             $5,
-            0,
-            $5,
-            'USD',
             $6,
+            0,
+            $6,
+            'USD',
             $7,
             $8,
+            $9,
             'completed',
             false,
-            $9,
             $10,
             $11,
+            $12,
             NOW()
           ) RETURNING id
         `, [
           targetType,
           targetType === 'company' ? targetId : null,
           targetType === 'user' ? targetId : null,
+          targetType === 'customer' ? targetId : null,
           targetWalletNumber,
           amount,
           paymentMethod,
@@ -251,6 +285,7 @@ export async function POST(request: NextRequest) {
         INSERT INTO wallet_recharge_requests (
           company_id,
           user_id,
+          customer_id,
           wallet_number,
           wallet_type,
           amount,
@@ -267,17 +302,19 @@ export async function POST(request: NextRequest) {
           $3,
           $4,
           $5,
-          'USD',
           $6,
+          'USD',
           $7,
-          'pending',
           $8,
+          'pending',
           $9,
-          $10
+          $10,
+          $11
         ) RETURNING id
       `, [
         targetType === 'company' ? targetId : null,
         targetType === 'user' ? targetId : null,
+        targetType === 'customer' ? targetId : null,
         targetWalletNumber,
         targetType,
         amount,
