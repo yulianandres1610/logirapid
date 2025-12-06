@@ -56,7 +56,7 @@ export async function GET(request: NextRequest) {
 
     const results: any[] = []
 
-    // Search companies
+    // Search companies - only those with wallet number
     if (type === 'all' || type === 'company') {
       let companyQuery = `
         SELECT
@@ -73,7 +73,7 @@ export async function GET(request: NextRequest) {
           currency,
           'company' as type
         FROM companies
-        WHERE 1=1
+        WHERE walletnumber IS NOT NULL
       `
       const params: any[] = []
       let paramIndex = 1
@@ -96,6 +96,7 @@ export async function GET(request: NextRequest) {
       const companyResults = await db.query(companyQuery, params)
       results.push(...companyResults.rows.map(row => ({
         id: row.id,
+        uniqueId: `company_${row.id}`,
         name: row.name,
         walletNumber: row.wallet_number,
         balance: parseFloat(row.balance || '0'),
@@ -107,14 +108,15 @@ export async function GET(request: NextRequest) {
         monthlyLimit: parseFloat(row.monthly_limit || '0'),
         logo: row.logo,
         currency: row.currency || 'USD',
-        type: 'company'
+        type: 'company',
+        typeLabel: 'Empresa'
       })))
     }
 
-    // Search users
+    // Search users - use DISTINCT to avoid duplicates from multiple companies
     if (type === 'all' || type === 'user') {
       let userQuery = `
-        SELECT
+        SELECT DISTINCT ON (u.id)
           u.id,
           CONCAT(u.firstname, ' ', u.lastname) as name,
           u.wallet_number,
@@ -126,8 +128,8 @@ export async function GET(request: NextRequest) {
           c.legalname as company_name,
           'user' as type
         FROM users u
-        LEFT JOIN user_companies uc ON u.id = uc.user_id
-        LEFT JOIN companies c ON uc.company_id = c.id
+        LEFT JOIN user_companies uc ON u.id = uc.userid
+        LEFT JOIN companies c ON uc.companyid = c.id
         WHERE u.wallet_number IS NOT NULL
       `
       const params: any[] = []
@@ -148,9 +150,12 @@ export async function GET(request: NextRequest) {
       )`
       params.push(`%${query}%`)
 
+      userQuery += ` ORDER BY u.id, c.id`
+
       const userResults = await db.query(userQuery, params)
       results.push(...userResults.rows.map(row => ({
         id: row.id,
+        uniqueId: `user_${row.id}`,
         name: row.name,
         walletNumber: row.wallet_number,
         balance: parseFloat(row.balance || '0'),
@@ -160,14 +165,15 @@ export async function GET(request: NextRequest) {
         status: row.status,
         companyId: row.company_id,
         companyName: row.company_name,
-        type: 'user'
+        type: 'user',
+        typeLabel: 'Usuario'
       })))
     }
 
-    // Search customers
+    // Search customers - filter duplicates by selecting only one per phone+name combo
     if (type === 'all' || type === 'customer') {
       let customerQuery = `
-        SELECT
+        SELECT DISTINCT ON (cust.phone, CONCAT(cust.firstname, ' ', cust.lastname))
           cust.id,
           CONCAT(cust.firstname, ' ', cust.lastname) as name,
           cust.wallet_number,
@@ -199,9 +205,12 @@ export async function GET(request: NextRequest) {
       )`
       params.push(`%${query}%`)
 
+      customerQuery += ` ORDER BY cust.phone, CONCAT(cust.firstname, ' ', cust.lastname), cust.id`
+
       const customerResults = await db.query(customerQuery, params)
       results.push(...customerResults.rows.map(row => ({
         id: row.id,
+        uniqueId: `customer_${row.id}`,
         name: row.name,
         walletNumber: row.wallet_number,
         balance: parseFloat(row.balance || '0'),
@@ -211,20 +220,26 @@ export async function GET(request: NextRequest) {
         status: 'active',
         companyId: row.company_id,
         companyName: row.company_name,
-        type: 'customer'
+        type: 'customer',
+        typeLabel: 'Cliente'
       })))
     }
 
     // Sort by balance descending
     results.sort((a, b) => b.balance - a.balance)
 
+    // Remove any remaining duplicates by uniqueId
+    const uniqueResults = results.filter((item, index, self) =>
+      index === self.findIndex(t => t.uniqueId === item.uniqueId)
+    )
+
     return NextResponse.json({
       success: true,
       data: {
         query,
         type,
-        count: results.length,
-        results
+        count: uniqueResults.length,
+        results: uniqueResults
       }
     })
 
