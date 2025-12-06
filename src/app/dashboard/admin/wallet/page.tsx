@@ -58,10 +58,11 @@ interface DashboardStats {
   transfersThisMonth: { value: number; formatted: string; change: number; count: number }
   activeCompanies: { value: number }
   pendingRequests: { value: number }
-  totalWallets: { value: number; companies: number; users: number }
-  totalCompanies: { value: number }
-  totalUsers: { value: number }
-  totalCustomers: { value: number }
+  pendingTransactions: { value: number }
+  totalWallets: { value: number; companies: number; users: number; customers?: number }
+  totalCompanies: { value: number; balance?: number; balanceFormatted?: string }
+  totalUsers: { value: number; balance?: number; balanceFormatted?: string }
+  totalCustomers: { value: number; balance?: number; balanceFormatted?: string }
 }
 
 interface WalletResult {
@@ -599,7 +600,7 @@ export default function WalletManagementPage() {
                         </p>
                       </motion.div>
 
-                      {/* Total Empresas */}
+                      {/* Saldo Empresas */}
                       <motion.div
                         initial={{ opacity: 0, y: 20 }}
                         animate={{ opacity: 1, y: 0 }}
@@ -613,11 +614,11 @@ export default function WalletManagementPage() {
                           <Building2 className="w-5 h-5 text-purple-500" />
                           <p className={cn("text-sm", theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}>Empresas</p>
                         </div>
-                        <p className={cn("text-2xl font-bold", theme === 'dark' ? 'text-white' : 'text-gray-900')}>{stats.totalCompanies?.value || 0}</p>
-                        <p className={cn("text-xs mt-1", theme === 'dark' ? 'text-gray-500' : 'text-gray-400')}>{stats.activeCompanies?.value || 0} activas</p>
+                        <p className={cn("text-2xl font-bold", theme === 'dark' ? 'text-white' : 'text-gray-900')}>{stats.totalCompanies?.balanceFormatted || '$0.00'}</p>
+                        <p className={cn("text-xs mt-1", theme === 'dark' ? 'text-gray-500' : 'text-gray-400')}>{stats.totalCompanies?.value || 0} empresas ({stats.activeCompanies?.value || 0} activas)</p>
                       </motion.div>
 
-                      {/* Total Usuarios */}
+                      {/* Saldo Usuarios */}
                       <motion.div
                         initial={{ opacity: 0, y: 20 }}
                         animate={{ opacity: 1, y: 0 }}
@@ -631,11 +632,11 @@ export default function WalletManagementPage() {
                           <Users className="w-5 h-5 text-cyan-500" />
                           <p className={cn("text-sm", theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}>Usuarios</p>
                         </div>
-                        <p className={cn("text-2xl font-bold", theme === 'dark' ? 'text-white' : 'text-gray-900')}>{stats.totalUsers?.value || 0}</p>
-                        <p className={cn("text-xs mt-1", theme === 'dark' ? 'text-gray-500' : 'text-gray-400')}>registrados</p>
+                        <p className={cn("text-2xl font-bold", theme === 'dark' ? 'text-white' : 'text-gray-900')}>{stats.totalUsers?.balanceFormatted || '$0.00'}</p>
+                        <p className={cn("text-xs mt-1", theme === 'dark' ? 'text-gray-500' : 'text-gray-400')}>{stats.totalUsers?.value || 0} usuarios registrados</p>
                       </motion.div>
 
-                      {/* Total Clientes */}
+                      {/* Saldo Clientes */}
                       <motion.div
                         initial={{ opacity: 0, y: 20 }}
                         animate={{ opacity: 1, y: 0 }}
@@ -649,11 +650,11 @@ export default function WalletManagementPage() {
                           <Users className="w-5 h-5 text-amber-500" />
                           <p className={cn("text-sm", theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}>Clientes</p>
                         </div>
-                        <p className={cn("text-2xl font-bold", theme === 'dark' ? 'text-white' : 'text-gray-900')}>{stats.totalCustomers?.value || 0}</p>
-                        <p className={cn("text-xs mt-1", theme === 'dark' ? 'text-gray-500' : 'text-gray-400')}>en el sistema</p>
+                        <p className={cn("text-2xl font-bold", theme === 'dark' ? 'text-white' : 'text-gray-900')}>{stats.totalCustomers?.balanceFormatted || '$0.00'}</p>
+                        <p className={cn("text-xs mt-1", theme === 'dark' ? 'text-gray-500' : 'text-gray-400')}>{stats.totalCustomers?.value || 0} clientes en el sistema</p>
                       </motion.div>
 
-                      {/* Solicitudes Pendientes */}
+                      {/* Transacciones Pendientes */}
                       <motion.div
                         initial={{ opacity: 0, y: 20 }}
                         animate={{ opacity: 1, y: 0 }}
@@ -667,8 +668,8 @@ export default function WalletManagementPage() {
                           <Clock className="w-5 h-5 text-yellow-500" />
                           <p className={cn("text-sm", theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}>Pendientes</p>
                         </div>
-                        <p className={cn("text-2xl font-bold", theme === 'dark' ? 'text-white' : 'text-gray-900')}>{stats.pendingRequests?.value || 0}</p>
-                        <p className={cn("text-xs mt-1", theme === 'dark' ? 'text-gray-500' : 'text-gray-400')}>solicitudes</p>
+                        <p className={cn("text-2xl font-bold", theme === 'dark' ? 'text-white' : 'text-gray-900')}>{stats.pendingTransactions?.value || 0}</p>
+                        <p className={cn("text-xs mt-1", theme === 'dark' ? 'text-gray-500' : 'text-gray-400')}>transacciones ({stats.pendingRequests?.value || 0} solicitudes)</p>
                       </motion.div>
                     </>
                   )}

@@ -82,21 +82,29 @@ export async function GET(request: NextRequest) {
       FROM users
     `)
 
-    // 3. Total customers count
-    const customersCount = await db.query(`
-      SELECT COUNT(*) as total_count
+    // 3. Total balance and count from customers
+    const customersBalance = await db.query(`
+      SELECT
+        COALESCE(SUM(wallet_balance), 0) as total,
+        COUNT(*) as total_count,
+        COUNT(CASE WHEN wallet_number IS NOT NULL THEN 1 END) as with_wallet
       FROM customers
     `)
 
-    const totalBalance = parseFloat(companiesBalance.rows[0]?.total || '0') +
-                         parseFloat(usersBalance.rows[0]?.total || '0')
+    // Calculate totals
+    const companiesBalanceTotal = parseFloat(companiesBalance.rows[0]?.total || '0')
+    const usersBalanceTotal = parseFloat(usersBalance.rows[0]?.total || '0')
+    const customersBalanceTotal = parseFloat(customersBalance.rows[0]?.total || '0')
+    const totalBalance = companiesBalanceTotal + usersBalanceTotal + customersBalanceTotal
+
     const activeCompanies = parseInt(companiesBalance.rows[0]?.active_count || '0')
     const totalCompanies = parseInt(companiesBalance.rows[0]?.total_count || '0')
     const companiesWithWallet = parseInt(companiesBalance.rows[0]?.with_wallet || '0')
     const totalUsers = parseInt(usersBalance.rows[0]?.total_count || '0')
     const usersWithWallet = parseInt(usersBalance.rows[0]?.with_wallet || '0')
-    const totalCustomers = parseInt(customersCount.rows[0]?.total_count || '0')
-    const totalWallets = companiesWithWallet + usersWithWallet
+    const totalCustomers = parseInt(customersBalance.rows[0]?.total_count || '0')
+    const customersWithWallet = parseInt(customersBalance.rows[0]?.with_wallet || '0')
+    const totalWallets = companiesWithWallet + usersWithWallet + customersWithWallet
 
     // 3. Recharges this month
     const rechargesThisMonth = await db.query(`
@@ -306,6 +314,13 @@ export async function GET(request: NextRequest) {
       WHERE status = 'pending'
     `)
 
+    // 11. Pending transactions (not just requests)
+    const pendingTransactions = await db.query(`
+      SELECT COUNT(*) as count
+      FROM wallet_transactions
+      WHERE status = 'pending'
+    `)
+
     // Calculate percentage changes
     const rechargesCurrentTotal = parseFloat(rechargesThisMonth.rows[0]?.total || '0')
     const rechargesLastTotal = parseFloat(rechargesLastMonth.rows[0]?.total || '0')
@@ -360,19 +375,29 @@ export async function GET(request: NextRequest) {
           pendingRequests: {
             value: parseInt(pendingRequests.rows[0]?.count || '0')
           },
+          pendingTransactions: {
+            value: parseInt(pendingTransactions.rows[0]?.count || '0')
+          },
           totalWallets: {
             value: totalWallets,
             companies: companiesWithWallet,
-            users: usersWithWallet
+            users: usersWithWallet,
+            customers: customersWithWallet
           },
           totalCompanies: {
-            value: totalCompanies
+            value: totalCompanies,
+            balance: companiesBalanceTotal,
+            balanceFormatted: `$${companiesBalanceTotal.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
           },
           totalUsers: {
-            value: totalUsers
+            value: totalUsers,
+            balance: usersBalanceTotal,
+            balanceFormatted: `$${usersBalanceTotal.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
           },
           totalCustomers: {
-            value: totalCustomers
+            value: totalCustomers,
+            balance: customersBalanceTotal,
+            balanceFormatted: `$${customersBalanceTotal.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
           }
         },
         charts: {
