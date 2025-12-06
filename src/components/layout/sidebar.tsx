@@ -306,7 +306,7 @@ export function Sidebar({ isCollapsed, onToggle }: SidebarProps) {
     { icon: Building2, label: "Empresas", href: "/dashboard/admin/companies" },
     { icon: Box, label: "Lista de Precios", href: "/dashboard/admin/lista-precios" },
     { icon: UserCheck, label: "CRM", href: "/dashboard/admin/crm" },
-    { icon: Wallet, label: "Wallet", href: "/dashboard/admin/wallets" },
+    { icon: Wallet, label: "Wallet Manager", href: "/dashboard/admin/wallet" },
     { icon: Send, label: "Remesa", href: "/dashboard/admin/remittance" },
     { icon: Smartphone, label: "Recarga", href: "/dashboard/admin/recharge" },
     { icon: Package, label: "Rastreador", href: "/dashboard/admin/tracker" },
