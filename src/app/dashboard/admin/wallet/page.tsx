@@ -467,10 +467,8 @@ export default function WalletManagementPage() {
                         initial={{ opacity: 0, y: 20 }}
                         animate={{ opacity: 1, y: 0 }}
                         transition={{ delay: 0.1 }}
-                        className={cn(
-                          "rounded-xl p-5 text-white col-span-2 sm:col-span-1",
-                          brandBg
-                        )}
+                        className="rounded-xl p-5 text-white col-span-2 sm:col-span-1"
+                        style={{ backgroundColor: theme === 'dark' ? '#2563EB' : '#cc0a46' }}
                       >
                         <div className="flex items-center gap-2 mb-2">
                           <Wallet className="w-5 h-5 opacity-80" />
