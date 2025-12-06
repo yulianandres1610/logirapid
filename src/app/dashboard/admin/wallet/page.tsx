@@ -174,6 +174,14 @@ export default function WalletManagementPage() {
   const [paymentReference, setPaymentReference] = useState('')
   const [processing, setProcessing] = useState(false)
 
+  // Terminal checkout state
+  const [availableTerminals, setAvailableTerminals] = useState<Array<{ id: number; name: string; deviceId: string; locationName: string }>>([])
+  const [selectedTerminalId, setSelectedTerminalId] = useState<number | null>(null)
+  const [terminalCheckoutId, setTerminalCheckoutId] = useState<string | null>(null)
+  const [terminalPolling, setTerminalPolling] = useState(false)
+  const [terminalStatus, setTerminalStatus] = useState<string | null>(null)
+  const [loadingTerminals, setLoadingTerminals] = useState(false)
+
   // Transfer wizard
   const [transferStep, setTransferStep] = useState<1 | 2 | 3 | 4>(1)
   const [transferSourceWallet, setTransferSourceWallet] = useState<WalletResult | null>(null)
@@ -241,6 +249,89 @@ export default function WalletManagementPage() {
     }
   }
 
+  // Fetch available terminals for terminal payment
+  const fetchAvailableTerminals = async () => {
+    try {
+      setLoadingTerminals(true)
+      const response = await fetch('/api/terminals?provider=square&status=paired')
+      const data = await response.json()
+      if (data.success) {
+        setAvailableTerminals(data.data.terminals || [])
+        // Auto-select first terminal if available
+        if (data.data.terminals?.length > 0) {
+          setSelectedTerminalId(data.data.terminals[0].id)
+        }
+      }
+    } catch (err) {
+      console.error('Error fetching terminals:', err)
+    } finally {
+      setLoadingTerminals(false)
+    }
+  }
+
+  // Calculate 3% fee for terminal payments
+  const calculateTerminalFee = (amount: number) => {
+    const fee = amount * 0.03
+    return {
+      fee: Math.round(fee * 100) / 100,
+      total: Math.round((amount + fee) * 100) / 100
+    }
+  }
+
+  // Poll terminal checkout status
+  const pollTerminalStatus = useCallback(async (checkoutId: string) => {
+    try {
+      const response = await fetch(`/api/wallet/recharge/terminal/${checkoutId}/status`)
+      const data = await response.json()
+
+      if (data.success) {
+        const status = data.data.status
+        setTerminalStatus(status)
+
+        if (status === 'completed') {
+          setTerminalPolling(false)
+          setTerminalCheckoutId(null)
+          showNotification('success', 'Recarga Exitosa', `Se han agregado $${rechargeAmount} al wallet`)
+          // Reset form
+          setRechargeAmount('')
+          setPaymentReference('')
+          setSelectedWallet(null)
+          setSearchQuery('')
+          setRechargeStep(1)
+          setSelectedTerminalId(null)
+          setTerminalStatus(null)
+          fetchDashboard()
+        } else if (status === 'cancelled' || status === 'failed') {
+          setTerminalPolling(false)
+          setTerminalCheckoutId(null)
+          setTerminalStatus(null)
+          showNotification('error', 'Pago Cancelado', 'El pago fue cancelado o falló')
+        }
+        // Continue polling for pending/in_progress states
+      }
+    } catch (err) {
+      console.error('Error polling terminal status:', err)
+    }
+  }, [rechargeAmount, showNotification])
+
+  // Effect to poll terminal status
+  useEffect(() => {
+    if (!terminalPolling || !terminalCheckoutId) return
+
+    const interval = setInterval(() => {
+      pollTerminalStatus(terminalCheckoutId)
+    }, 3000) // Poll every 3 seconds
+
+    return () => clearInterval(interval)
+  }, [terminalPolling, terminalCheckoutId, pollTerminalStatus])
+
+  // Effect to fetch terminals when terminal method is selected
+  useEffect(() => {
+    if (paymentMethod === 'card_terminal' && availableTerminals.length === 0) {
+      fetchAvailableTerminals()
+    }
+  }, [paymentMethod])
+
   // Process recharge
   const processRecharge = async () => {
     if (!selectedWallet || !rechargeAmount || parseFloat(rechargeAmount) <= 0) {
@@ -248,6 +339,44 @@ export default function WalletManagementPage() {
       return
     }
 
+    // Handle terminal payment differently
+    if (paymentMethod === 'card_terminal') {
+      if (!selectedTerminalId) {
+        showNotification('warning', 'Terminal no seleccionado', 'Por favor seleccione un terminal de pago')
+        return
+      }
+
+      try {
+        setProcessing(true)
+        const response = await fetch('/api/wallet/recharge/terminal', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            targetWalletNumber: selectedWallet.walletNumber,
+            targetType: selectedWallet.type,
+            amount: parseFloat(rechargeAmount),
+            terminalId: selectedTerminalId,
+            description: paymentReference || undefined
+          })
+        })
+        const data = await response.json()
+        if (data.success) {
+          showNotification('info', 'Esperando Pago', 'Proceso de pago enviado al terminal. Por favor complete el pago en el terminal.')
+          setTerminalCheckoutId(data.data.checkoutId)
+          setTerminalPolling(true)
+          setTerminalStatus('pending')
+        } else {
+          showNotification('error', 'Error', data.error)
+          setProcessing(false)
+        }
+      } catch (err) {
+        showNotification('error', 'Error', 'Error al enviar pago al terminal')
+        setProcessing(false)
+      }
+      return
+    }
+
+    // Regular recharge flow for non-terminal methods
     try {
       setProcessing(true)
       const response = await fetch('/api/wallet/recharge', {
@@ -278,6 +407,21 @@ export default function WalletManagementPage() {
       showNotification('error', 'Error', 'Error al procesar la recarga')
     } finally {
       setProcessing(false)
+    }
+  }
+
+  // Cancel terminal checkout
+  const cancelTerminalCheckout = async () => {
+    if (!terminalCheckoutId) return
+
+    try {
+      setTerminalPolling(false)
+      setProcessing(false)
+      setTerminalCheckoutId(null)
+      setTerminalStatus(null)
+      showNotification('info', 'Cancelado', 'Proceso de pago cancelado')
+    } catch (err) {
+      console.error('Error canceling checkout:', err)
     }
   }
 
@@ -1250,16 +1394,91 @@ export default function WalletManagementPage() {
                           </div>
                         </div>
 
+                        {/* Terminal Selector - shown when card_terminal is selected */}
+                        {paymentMethod === 'card_terminal' && (
+                          <div className="mb-6">
+                            <label className={cn("text-sm font-medium block mb-2", theme === 'dark' ? 'text-gray-300' : 'text-gray-700')}>
+                              Terminal de Pago
+                            </label>
+                            {loadingTerminals ? (
+                              <div className="flex items-center gap-2 text-gray-500">
+                                <RefreshCw className="w-4 h-4 animate-spin" />
+                                <span>Cargando terminales...</span>
+                              </div>
+                            ) : availableTerminals.length === 0 ? (
+                              <div className={cn(
+                                "p-4 rounded-lg border",
+                                theme === 'dark' ? 'bg-yellow-900/20 border-yellow-500/30' : 'bg-yellow-50 border-yellow-200'
+                              )}>
+                                <p className="text-sm text-yellow-600">
+                                  No hay terminales disponibles. Por favor configure un terminal Square primero.
+                                </p>
+                              </div>
+                            ) : (
+                              <div className="space-y-2">
+                                {availableTerminals.map(terminal => (
+                                  <button
+                                    key={terminal.id}
+                                    onClick={() => setSelectedTerminalId(terminal.id)}
+                                    className={cn(
+                                      "w-full p-3 rounded-lg border-2 text-left transition-all",
+                                      selectedTerminalId === terminal.id
+                                        ? 'border-green-500 bg-green-500/10'
+                                        : theme === 'dark' ? 'bg-gray-700 border-gray-600 hover:border-gray-500' : 'bg-gray-50 border-gray-200 hover:border-gray-300'
+                                    )}
+                                  >
+                                    <div className="flex items-center justify-between">
+                                      <div>
+                                        <p className={cn("font-medium", theme === 'dark' ? 'text-white' : 'text-gray-900')}>
+                                          {terminal.name}
+                                        </p>
+                                        <p className={cn("text-sm", theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}>
+                                          {terminal.locationName}
+                                        </p>
+                                      </div>
+                                      {selectedTerminalId === terminal.id && (
+                                        <Check className="w-5 h-5 text-green-500" />
+                                      )}
+                                    </div>
+                                  </button>
+                                ))}
+                              </div>
+                            )}
+
+                            {/* 3% Fee Notice */}
+                            {rechargeAmount && parseFloat(rechargeAmount) > 0 && (
+                              <div className={cn(
+                                "mt-3 p-3 rounded-lg border",
+                                theme === 'dark' ? 'bg-blue-900/20 border-blue-500/30' : 'bg-blue-50 border-blue-200'
+                              )}>
+                                <p className="text-sm text-blue-600 font-medium mb-1">Cargo por procesamiento (3%)</p>
+                                <div className="flex justify-between text-sm">
+                                  <span className={theme === 'dark' ? 'text-gray-300' : 'text-gray-600'}>Monto base:</span>
+                                  <span className={theme === 'dark' ? 'text-white' : 'text-gray-900'}>${parseFloat(rechargeAmount).toFixed(2)}</span>
+                                </div>
+                                <div className="flex justify-between text-sm">
+                                  <span className={theme === 'dark' ? 'text-gray-300' : 'text-gray-600'}>Cargo (3%):</span>
+                                  <span className={theme === 'dark' ? 'text-white' : 'text-gray-900'}>${calculateTerminalFee(parseFloat(rechargeAmount)).fee.toFixed(2)}</span>
+                                </div>
+                                <div className="flex justify-between text-sm font-bold mt-1 pt-1 border-t border-blue-300/30">
+                                  <span className={theme === 'dark' ? 'text-white' : 'text-gray-900'}>Total a cobrar:</span>
+                                  <span className="text-blue-600">${calculateTerminalFee(parseFloat(rechargeAmount)).total.toFixed(2)}</span>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        )}
+
                         {/* Reference */}
                         <div>
                           <label className={cn("text-sm font-medium block mb-2", theme === 'dark' ? 'text-gray-300' : 'text-gray-700')}>
-                            Referencia <span className="text-gray-500">(opcional)</span>
+                            {paymentMethod === 'card_terminal' ? 'Nota' : 'Referencia'} <span className="text-gray-500">(opcional)</span>
                           </label>
                           <input
                             type="text"
                             value={paymentReference}
                             onChange={(e) => setPaymentReference(e.target.value)}
-                            placeholder="Numero de confirmacion..."
+                            placeholder={paymentMethod === 'card_terminal' ? 'Nota para el recibo...' : 'Numero de confirmacion...'}
                             className={cn(
                               "w-full px-4 py-3 rounded-lg border",
                               theme === 'dark' ? 'bg-gray-700 border-gray-600 text-white' : 'bg-gray-50 border-gray-200 text-gray-900'
@@ -1277,94 +1496,171 @@ export default function WalletManagementPage() {
                         animate={{ opacity: 1, x: 0 }}
                         exit={{ opacity: 0, x: -20 }}
                       >
-                        <h3 className={cn("text-xl font-bold mb-4", theme === 'dark' ? 'text-white' : 'text-gray-900')}>
-                          Confirmar Recarga
-                        </h3>
-                        <div className={cn("p-4 rounded-lg mb-4", theme === 'dark' ? 'bg-gray-700' : 'bg-gray-50')}>
-                          <div className="grid grid-cols-2 gap-4">
-                            <div>
-                              <p className={cn("text-xs uppercase mb-1", theme === 'dark' ? 'text-gray-500' : 'text-gray-400')}>Wallet</p>
-                              <p className={cn("font-medium", theme === 'dark' ? 'text-white' : 'text-gray-900')}>{selectedWallet?.name}</p>
+                        {/* Terminal Waiting State */}
+                        {terminalPolling ? (
+                          <div className="text-center py-8">
+                            <div className={cn(
+                              "mx-auto w-20 h-20 rounded-full flex items-center justify-center mb-6",
+                              theme === 'dark' ? 'bg-blue-900/30' : 'bg-blue-100'
+                            )}>
+                              <Smartphone className="w-10 h-10 text-blue-500 animate-pulse" />
                             </div>
-                            <div>
-                              <p className={cn("text-xs uppercase mb-1", theme === 'dark' ? 'text-gray-500' : 'text-gray-400')}>Balance Actual</p>
-                              <p className={cn("font-medium", theme === 'dark' ? 'text-white' : 'text-gray-900')}>{selectedWallet?.balanceFormatted}</p>
+                            <h3 className={cn("text-xl font-bold mb-2", theme === 'dark' ? 'text-white' : 'text-gray-900')}>
+                              Esperando Pago en Terminal
+                            </h3>
+                            <p className={cn("text-sm mb-4", theme === 'dark' ? 'text-gray-400' : 'text-gray-600')}>
+                              Por favor complete el pago en el terminal de pago.
+                            </p>
+                            <div className="flex items-center justify-center gap-2 text-sm text-blue-500">
+                              <RefreshCw className="w-4 h-4 animate-spin" />
+                              <span>
+                                {terminalStatus === 'pending' && 'Iniciando...'}
+                                {terminalStatus === 'in_progress' && 'Procesando pago...'}
+                                {terminalStatus === 'cancelling' && 'Cancelando...'}
+                                {!terminalStatus && 'Conectando con terminal...'}
+                              </span>
                             </div>
-                            <div>
-                              <p className={cn("text-xs uppercase mb-1", theme === 'dark' ? 'text-gray-500' : 'text-gray-400')}>Monto</p>
-                              <p className={cn("text-xl font-bold", brandText)}>${parseFloat(rechargeAmount || '0').toFixed(2)}</p>
+                            <button
+                              onClick={cancelTerminalCheckout}
+                              className={cn(
+                                "mt-6 px-4 py-2 rounded-lg text-sm font-medium",
+                                theme === 'dark' ? 'bg-gray-700 text-gray-300 hover:bg-gray-600' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                              )}
+                            >
+                              Cancelar
+                            </button>
+                          </div>
+                        ) : (
+                          <>
+                            <h3 className={cn("text-xl font-bold mb-4", theme === 'dark' ? 'text-white' : 'text-gray-900')}>
+                              Confirmar Recarga
+                            </h3>
+                            <div className={cn("p-4 rounded-lg mb-4", theme === 'dark' ? 'bg-gray-700' : 'bg-gray-50')}>
+                              <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                  <p className={cn("text-xs uppercase mb-1", theme === 'dark' ? 'text-gray-500' : 'text-gray-400')}>Wallet</p>
+                                  <p className={cn("font-medium", theme === 'dark' ? 'text-white' : 'text-gray-900')}>{selectedWallet?.name}</p>
+                                </div>
+                                <div>
+                                  <p className={cn("text-xs uppercase mb-1", theme === 'dark' ? 'text-gray-500' : 'text-gray-400')}>Balance Actual</p>
+                                  <p className={cn("font-medium", theme === 'dark' ? 'text-white' : 'text-gray-900')}>{selectedWallet?.balanceFormatted}</p>
+                                </div>
+                                <div>
+                                  <p className={cn("text-xs uppercase mb-1", theme === 'dark' ? 'text-gray-500' : 'text-gray-400')}>Monto a Recargar</p>
+                                  <p className={cn("text-xl font-bold", brandText)}>${parseFloat(rechargeAmount || '0').toFixed(2)}</p>
+                                </div>
+                                <div>
+                                  <p className={cn("text-xs uppercase mb-1", theme === 'dark' ? 'text-gray-500' : 'text-gray-400')}>Metodo</p>
+                                  <p className={cn("font-medium", theme === 'dark' ? 'text-white' : 'text-gray-900')}>
+                                    {paymentMethods.find(m => m.id === paymentMethod)?.label}
+                                  </p>
+                                </div>
+                              </div>
+
+                              {/* Terminal Fee Breakdown */}
+                              {paymentMethod === 'card_terminal' && rechargeAmount && parseFloat(rechargeAmount) > 0 && (
+                                <div className="mt-4 pt-4 border-t border-gray-600">
+                                  <p className={cn("text-xs uppercase mb-2", theme === 'dark' ? 'text-gray-500' : 'text-gray-400')}>Desglose de Pago</p>
+                                  <div className="space-y-1 text-sm">
+                                    <div className="flex justify-between">
+                                      <span className={theme === 'dark' ? 'text-gray-300' : 'text-gray-600'}>Monto base:</span>
+                                      <span className={theme === 'dark' ? 'text-white' : 'text-gray-900'}>${parseFloat(rechargeAmount).toFixed(2)}</span>
+                                    </div>
+                                    <div className="flex justify-between">
+                                      <span className={theme === 'dark' ? 'text-gray-300' : 'text-gray-600'}>Cargo procesamiento (3%):</span>
+                                      <span className={theme === 'dark' ? 'text-white' : 'text-gray-900'}>${calculateTerminalFee(parseFloat(rechargeAmount)).fee.toFixed(2)}</span>
+                                    </div>
+                                    <div className="flex justify-between font-bold pt-1 border-t border-gray-500">
+                                      <span className={theme === 'dark' ? 'text-white' : 'text-gray-900'}>Total a cobrar:</span>
+                                      <span className="text-blue-500">${calculateTerminalFee(parseFloat(rechargeAmount)).total.toFixed(2)}</span>
+                                    </div>
+                                  </div>
+                                </div>
+                              )}
+
+                              {paymentReference && (
+                                <div className="mt-4 pt-4 border-t border-gray-600">
+                                  <p className={cn("text-xs uppercase mb-1", theme === 'dark' ? 'text-gray-500' : 'text-gray-400')}>
+                                    {paymentMethod === 'card_terminal' ? 'Nota' : 'Referencia'}
+                                  </p>
+                                  <p className={cn("font-mono text-sm", theme === 'dark' ? 'text-gray-300' : 'text-gray-600')}>{paymentReference}</p>
+                                </div>
+                              )}
                             </div>
-                            <div>
-                              <p className={cn("text-xs uppercase mb-1", theme === 'dark' ? 'text-gray-500' : 'text-gray-400')}>Metodo</p>
-                              <p className={cn("font-medium", theme === 'dark' ? 'text-white' : 'text-gray-900')}>
-                                {paymentMethods.find(m => m.id === paymentMethod)?.label}
+                            <div className={cn(
+                              "p-4 rounded-lg flex items-center gap-3",
+                              theme === 'dark' ? 'bg-green-900/20 border border-green-500/30' : 'bg-green-50 border border-green-200'
+                            )}>
+                              <Check className="w-5 h-5 text-green-500" />
+                              <p className="text-sm text-green-600">
+                                Nuevo balance: ${((selectedWallet?.balance || 0) + parseFloat(rechargeAmount || '0')).toFixed(2)}
                               </p>
                             </div>
-                          </div>
-                          {paymentReference && (
-                            <div className="mt-4 pt-4 border-t border-gray-600">
-                              <p className={cn("text-xs uppercase mb-1", theme === 'dark' ? 'text-gray-500' : 'text-gray-400')}>Referencia</p>
-                              <p className={cn("font-mono text-sm", theme === 'dark' ? 'text-gray-300' : 'text-gray-600')}>{paymentReference}</p>
-                            </div>
-                          )}
-                        </div>
-                        <div className={cn(
-                          "p-4 rounded-lg flex items-center gap-3",
-                          theme === 'dark' ? 'bg-green-900/20 border border-green-500/30' : 'bg-green-50 border border-green-200'
-                        )}>
-                          <Check className="w-5 h-5 text-green-500" />
-                          <p className="text-sm text-green-600">
-                            Nuevo balance: ${((selectedWallet?.balance || 0) + parseFloat(rechargeAmount || '0')).toFixed(2)}
-                          </p>
-                        </div>
+
+                            {/* Terminal Note */}
+                            {paymentMethod === 'card_terminal' && (
+                              <div className={cn(
+                                "mt-4 p-3 rounded-lg border",
+                                theme === 'dark' ? 'bg-blue-900/20 border-blue-500/30' : 'bg-blue-50 border-blue-200'
+                              )}>
+                                <p className="text-sm text-blue-600">
+                                  <Smartphone className="w-4 h-4 inline mr-1" />
+                                  Al confirmar, el pago se enviara al terminal. El cliente debera completar el pago con tarjeta y firmar.
+                                </p>
+                              </div>
+                            )}
+                          </>
+                        )}
                       </motion.div>
                     )}
                   </AnimatePresence>
                 </motion.div>
 
-                {/* Navigation Buttons */}
-                <div className="flex justify-between mt-6">
-                  <button
-                    onClick={() => rechargeStep > 1 ? setRechargeStep((rechargeStep - 1) as RechargeStep) : null}
-                    disabled={rechargeStep === 1}
-                    className={cn(
-                      "flex items-center gap-2 px-5 py-2.5 rounded-lg font-medium transition-all",
-                      rechargeStep === 1 ? 'opacity-50 cursor-not-allowed' : '',
-                      theme === 'dark' ? 'bg-gray-700 text-white hover:bg-gray-600' : 'bg-gray-200 text-gray-900 hover:bg-gray-300'
-                    )}
-                  >
-                    <ArrowLeft className="w-4 h-4" />
-                    Anterior
-                  </button>
+                {/* Navigation Buttons - Hidden during terminal polling */}
+                {!terminalPolling && (
+                  <div className="flex justify-between mt-6">
+                    <button
+                      onClick={() => rechargeStep > 1 ? setRechargeStep((rechargeStep - 1) as RechargeStep) : null}
+                      disabled={rechargeStep === 1 || processing}
+                      className={cn(
+                        "flex items-center gap-2 px-5 py-2.5 rounded-lg font-medium transition-all",
+                        (rechargeStep === 1 || processing) ? 'opacity-50 cursor-not-allowed' : '',
+                        theme === 'dark' ? 'bg-gray-700 text-white hover:bg-gray-600' : 'bg-gray-200 text-gray-900 hover:bg-gray-300'
+                      )}
+                    >
+                      <ArrowLeft className="w-4 h-4" />
+                      Anterior
+                    </button>
 
-                  {rechargeStep < 3 ? (
-                    <button
-                      onClick={() => setRechargeStep((rechargeStep + 1) as RechargeStep)}
-                      disabled={rechargeStep === 1 && !selectedWallet || rechargeStep === 2 && !rechargeAmount}
-                      className={cn(
-                        "flex items-center gap-2 px-5 py-2.5 rounded-lg font-medium text-white transition-all",
-                        (rechargeStep === 1 && !selectedWallet || rechargeStep === 2 && !rechargeAmount) && 'opacity-50 cursor-not-allowed'
-                      )}
-                      style={{ backgroundColor: exaBrandBg }}
-                    >
-                      Siguiente
-                      <ArrowRight className="w-4 h-4" />
-                    </button>
-                  ) : (
-                    <button
-                      onClick={processRecharge}
-                      disabled={processing}
-                      className={cn(
-                        "flex items-center gap-2 px-5 py-2.5 rounded-lg font-medium text-white transition-all",
-                        "bg-green-600 hover:bg-green-700",
-                        processing && 'opacity-50 cursor-not-allowed'
-                      )}
-                    >
-                      {processing ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
-                      {processing ? 'Procesando...' : 'Confirmar Recarga'}
-                    </button>
-                  )}
-                </div>
+                    {rechargeStep < 3 ? (
+                      <button
+                        onClick={() => setRechargeStep((rechargeStep + 1) as RechargeStep)}
+                        disabled={rechargeStep === 1 && !selectedWallet || rechargeStep === 2 && (!rechargeAmount || (paymentMethod === 'card_terminal' && !selectedTerminalId))}
+                        className={cn(
+                          "flex items-center gap-2 px-5 py-2.5 rounded-lg font-medium text-white transition-all",
+                          (rechargeStep === 1 && !selectedWallet || rechargeStep === 2 && (!rechargeAmount || (paymentMethod === 'card_terminal' && !selectedTerminalId))) && 'opacity-50 cursor-not-allowed'
+                        )}
+                        style={{ backgroundColor: exaBrandBg }}
+                      >
+                        Siguiente
+                        <ArrowRight className="w-4 h-4" />
+                      </button>
+                    ) : (
+                      <button
+                        onClick={processRecharge}
+                        disabled={processing || (paymentMethod === 'card_terminal' && !selectedTerminalId)}
+                        className={cn(
+                          "flex items-center gap-2 px-5 py-2.5 rounded-lg font-medium text-white transition-all",
+                          paymentMethod === 'card_terminal' ? "bg-blue-600 hover:bg-blue-700" : "bg-green-600 hover:bg-green-700",
+                          (processing || (paymentMethod === 'card_terminal' && !selectedTerminalId)) && 'opacity-50 cursor-not-allowed'
+                        )}
+                      >
+                        {processing ? <RefreshCw className="w-4 h-4 animate-spin" /> : paymentMethod === 'card_terminal' ? <Smartphone className="w-4 h-4" /> : <Check className="w-4 h-4" />}
+                        {processing ? 'Enviando...' : paymentMethod === 'card_terminal' ? 'Enviar a Terminal' : 'Confirmar Recarga'}
+                      </button>
+                    )}
+                  </div>
+                )}
               </motion.div>
             )}
 
