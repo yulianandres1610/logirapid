@@ -31,6 +31,18 @@ import { cn } from '@/lib/utils'
 import { useTheme } from '@/contexts/theme-context'
 import { DashboardLayout } from '@/components/layout/dashboard-layout'
 import { VirtualCard } from '@/components/wallet/VirtualCard'
+import {
+  AreaChart,
+  Area,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+  PieChart,
+  Pie,
+  Cell
+} from 'recharts'
 
 type Tab = 'dashboard' | 'recharge' | 'transfer' | 'history' | 'pending'
 type PaymentMethod = 'card_manual' | 'card_terminal' | 'cash' | 'wire' | 'zelle'
@@ -97,6 +109,23 @@ const paymentMethods = [
 ]
 
 const quickAmounts = [50, 100, 250, 500, 1000]
+
+// Chart data for wallet trends
+const transactionTrends = [
+  { name: 'Ene', recargas: 12500, transferencias: 8400 },
+  { name: 'Feb', recargas: 15200, transferencias: 9800 },
+  { name: 'Mar', recargas: 18300, transferencias: 11200 },
+  { name: 'Abr', recargas: 14100, transferencias: 10500 },
+  { name: 'May', recargas: 21500, transferencias: 13200 },
+  { name: 'Jun', recargas: 19800, transferencias: 12100 },
+  { name: 'Jul', recargas: 24200, transferencias: 15800 }
+]
+
+const transactionTypes = [
+  { name: 'Recargas', value: 45, color: '#22c55e' },
+  { name: 'Transferencias', value: 30, color: '#3b82f6' },
+  { name: 'Debitos', value: 25, color: '#ef4444' }
+]
 
 export default function WalletManagementPage() {
   const { theme } = useTheme()
@@ -509,12 +538,148 @@ export default function WalletManagementPage() {
                   )}
                 </div>
 
+                {/* Charts Section */}
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                  {/* Area Chart - Transaction Trends */}
+                  <motion.div
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.45 }}
+                    className={cn(
+                      "rounded-xl p-6 border lg:col-span-2",
+                      theme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'
+                    )}
+                  >
+                    <h3 className={cn("text-lg font-semibold mb-4", theme === 'dark' ? 'text-white' : 'text-gray-900')}>
+                      Tendencias de Transacciones
+                    </h3>
+                    <div className="h-64">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <AreaChart data={transactionTrends}>
+                          <defs>
+                            <linearGradient id="colorRecargas" x1="0" y1="0" x2="0" y2="1">
+                              <stop offset="5%" stopColor="#22c55e" stopOpacity={0.3}/>
+                              <stop offset="95%" stopColor="#22c55e" stopOpacity={0}/>
+                            </linearGradient>
+                            <linearGradient id="colorTransferencias" x1="0" y1="0" x2="0" y2="1">
+                              <stop offset="5%" stopColor={theme === 'dark' ? '#3b82f6' : '#ef4444'} stopOpacity={0.3}/>
+                              <stop offset="95%" stopColor={theme === 'dark' ? '#3b82f6' : '#ef4444'} stopOpacity={0}/>
+                            </linearGradient>
+                          </defs>
+                          <CartesianGrid strokeDasharray="3 3" stroke={theme === 'dark' ? '#374151' : '#e5e7eb'} />
+                          <XAxis
+                            dataKey="name"
+                            stroke={theme === 'dark' ? '#9ca3af' : '#6b7280'}
+                            fontSize={12}
+                          />
+                          <YAxis
+                            stroke={theme === 'dark' ? '#9ca3af' : '#6b7280'}
+                            fontSize={12}
+                            tickFormatter={(value) => `$${(value / 1000).toFixed(0)}k`}
+                          />
+                          <Tooltip
+                            contentStyle={{
+                              backgroundColor: theme === 'dark' ? '#1f2937' : '#ffffff',
+                              border: `1px solid ${theme === 'dark' ? '#374151' : '#e5e7eb'}`,
+                              borderRadius: '8px',
+                              color: theme === 'dark' ? '#ffffff' : '#000000'
+                            }}
+                            formatter={(value: number) => [`$${value.toLocaleString()}`, '']}
+                          />
+                          <Area
+                            type="monotone"
+                            dataKey="recargas"
+                            name="Recargas"
+                            stroke="#22c55e"
+                            fillOpacity={1}
+                            fill="url(#colorRecargas)"
+                            strokeWidth={2}
+                          />
+                          <Area
+                            type="monotone"
+                            dataKey="transferencias"
+                            name="Transferencias"
+                            stroke={theme === 'dark' ? '#3b82f6' : '#ef4444'}
+                            fillOpacity={1}
+                            fill="url(#colorTransferencias)"
+                            strokeWidth={2}
+                          />
+                        </AreaChart>
+                      </ResponsiveContainer>
+                    </div>
+                    <div className="flex justify-center gap-6 mt-4">
+                      <div className="flex items-center gap-2">
+                        <span className="w-3 h-3 rounded-full bg-green-500" />
+                        <span className={cn("text-sm", theme === 'dark' ? 'text-gray-400' : 'text-gray-600')}>Recargas</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className={cn("w-3 h-3 rounded-full", theme === 'dark' ? 'bg-blue-500' : 'bg-red-500')} />
+                        <span className={cn("text-sm", theme === 'dark' ? 'text-gray-400' : 'text-gray-600')}>Transferencias</span>
+                      </div>
+                    </div>
+                  </motion.div>
+
+                  {/* Pie Chart - Transaction Types */}
+                  <motion.div
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.5 }}
+                    className={cn(
+                      "rounded-xl p-6 border",
+                      theme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'
+                    )}
+                  >
+                    <h3 className={cn("text-lg font-semibold mb-4", theme === 'dark' ? 'text-white' : 'text-gray-900')}>
+                      Tipos de Transaccion
+                    </h3>
+                    <div className="h-48">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <PieChart>
+                          <Pie
+                            data={transactionTypes}
+                            cx="50%"
+                            cy="50%"
+                            innerRadius={50}
+                            outerRadius={70}
+                            paddingAngle={5}
+                            dataKey="value"
+                          >
+                            {transactionTypes.map((entry, index) => (
+                              <Cell key={`cell-${index}`} fill={entry.color} />
+                            ))}
+                          </Pie>
+                          <Tooltip
+                            contentStyle={{
+                              backgroundColor: theme === 'dark' ? '#1f2937' : '#ffffff',
+                              border: `1px solid ${theme === 'dark' ? '#374151' : '#e5e7eb'}`,
+                              borderRadius: '8px',
+                              color: theme === 'dark' ? '#ffffff' : '#000000'
+                            }}
+                            formatter={(value: number) => [`${value}%`, '']}
+                          />
+                        </PieChart>
+                      </ResponsiveContainer>
+                    </div>
+                    <div className="space-y-2 mt-2">
+                      {transactionTypes.map((type) => (
+                        <div key={type.name} className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <span className="w-3 h-3 rounded-full" style={{ backgroundColor: type.color }} />
+                            <span className={cn("text-sm", theme === 'dark' ? 'text-gray-400' : 'text-gray-600')}>{type.name}</span>
+                          </div>
+                          <span className={cn("text-sm font-medium", theme === 'dark' ? 'text-white' : 'text-gray-900')}>{type.value}%</span>
+                        </div>
+                      ))}
+                    </div>
+                  </motion.div>
+                </div>
+
                 {/* Search and Card */}
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                   <motion.div
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.5 }}
+                    transition={{ delay: 0.55 }}
                     className={cn(
                       "rounded-xl p-6 border",
                       theme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'
