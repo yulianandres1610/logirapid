@@ -162,7 +162,10 @@ export async function createTerminalCheckout(
   const baseUrl = getSquareBaseUrl(credentials.environment)
   const idempotencyKey = crypto.randomUUID()
 
-  const totalAmount = options.amount + options.appFee
+  // For platform terminals, don't add fee to total (no app_fee allowed)
+  const totalAmount = options.isPlatformTerminal
+    ? options.amount
+    : options.amount + options.appFee
 
   const checkoutRequest = {
     idempotency_key: idempotencyKey,
