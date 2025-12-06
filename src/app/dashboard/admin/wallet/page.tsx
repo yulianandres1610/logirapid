@@ -907,8 +907,11 @@ export default function WalletManagementPage() {
                           >
                             <div>
                               <p className={cn("font-medium", theme === 'dark' ? 'text-white' : 'text-gray-900')}>{wallet.name}</p>
-                              <p className={cn("text-sm", theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}>
-                                {wallet.walletNumber} - {wallet.balanceFormatted}
+                              <p className={cn("text-xs font-mono", theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}>
+                                No. Cuenta: {wallet.walletNumber}
+                              </p>
+                              <p className={cn("text-xs", theme === 'dark' ? 'text-green-400' : 'text-green-600')}>
+                                Balance: {wallet.balanceFormatted}
                               </p>
                             </div>
                             <ChevronRight className={cn("w-5 h-5", theme === 'dark' ? 'text-gray-500' : 'text-gray-400')} />
@@ -1058,7 +1061,7 @@ export default function WalletManagementPage() {
                             animate={{
                               scale: rechargeStep === step.id ? 1.1 : 1,
                               backgroundColor: rechargeStep === step.id
-                                ? theme === 'dark' ? '#2563EB' : '#DC2626'
+                                ? theme === 'dark' ? '#0374e5' : '#cc0a46'
                                 : rechargeStep > step.id
                                 ? '#10B981'
                                 : theme === 'dark' ? '#374151' : '#E5E7EB'
@@ -1384,7 +1387,7 @@ export default function WalletManagementPage() {
                             animate={{
                               scale: transferStep === step.id ? 1.1 : 1,
                               backgroundColor: transferStep === step.id
-                                ? theme === 'dark' ? '#2563EB' : '#DC2626'
+                                ? theme === 'dark' ? '#0374e5' : '#cc0a46'
                                 : transferStep > step.id
                                 ? '#10B981'
                                 : theme === 'dark' ? '#374151' : '#E5E7EB'
