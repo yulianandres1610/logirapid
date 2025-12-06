@@ -9,6 +9,8 @@ import { useNotifications } from '@/contexts/NotificationContext'
 import ServicesManagement from '@/components/settings/ServicesManagement'
 import ContentTypesManagement from '@/components/settings/ContentTypesManagement'
 import CompanySelector from '@/components/settings/CompanySelector'
+import { PaymentSettings } from '@/components/settings/PaymentSettings'
+import { useAuth } from '@/hooks/useAuth'
 import {
   Palette,
   Package,
@@ -26,7 +28,8 @@ import {
   Image,
   Maximize2,
   Tag,
-  Ruler
+  Ruler,
+  CreditCard
 } from 'lucide-react'
 
 interface Zone {
@@ -63,6 +66,7 @@ const tabs = [
   { id: 'recharge', label: 'Recargas', icon: Package },
   { id: 'marketplace', label: 'Mercado', icon: ShoppingCart },
   { id: 'package', label: 'Paquetería', icon: Truck },
+  { id: 'payments', label: 'Pagos', icon: CreditCard },
 ]
 
 // Force dynamic rendering to avoid static generation issues with useSearchParams
@@ -83,10 +87,12 @@ export default function SettingsPage() {
     ? '/dashboard/agency-admin/settings'
     : '/dashboard/admin/settings'
 
+  const { user } = useAuth()
+
   // Initialize activeTab from URL query parameter if present
   const [activeTab, setActiveTab] = useState(() => {
     const tabFromUrl = searchParams.get('tab')
-    const validTabs = ['brand', 'remittance', 'recharge', 'marketplace', 'package']
+    const validTabs = ['brand', 'remittance', 'recharge', 'marketplace', 'package', 'payments']
     return tabFromUrl && validTabs.includes(tabFromUrl) ? tabFromUrl : 'brand'
   })
   const [packageSubTab, setPackageSubTab] = useState<'zones' | 'sizes' | 'services' | 'content-types'>('zones')
@@ -1242,6 +1248,14 @@ export default function SettingsPage() {
             )}
 
           </div>
+        )
+
+      case 'payments':
+        return (
+          <PaymentSettings
+            role={user?.role || 'USER'}
+            companyId={user?.companyId}
+          />
         )
 
       default:
