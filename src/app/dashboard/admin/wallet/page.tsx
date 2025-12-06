@@ -1725,8 +1725,8 @@ export default function WalletManagementPage() {
                           <tr className={cn("text-left text-xs uppercase", theme === 'dark' ? 'text-gray-500' : 'text-gray-400')}>
                             <th className="pb-3 whitespace-nowrap">No. Trans.</th>
                             <th className="pb-3">Tipo</th>
+                            <th className="pb-3">Nombre Wallet</th>
                             <th className="pb-3 text-right">Monto</th>
-                            <th className="pb-3">Wallet</th>
                             <th className="pb-3 whitespace-nowrap">No. Cuenta</th>
                             <th className="pb-3 whitespace-nowrap">Metodo Pago</th>
                             <th className="pb-3 whitespace-nowrap">Fecha / Hora</th>
@@ -1753,13 +1753,13 @@ export default function WalletManagementPage() {
                                   {tx.typeLabel}
                                 </span>
                               </td>
+                              <td className={cn("py-3 text-sm", theme === 'dark' ? 'text-white' : 'text-gray-900')}>
+                                {tx.type === 'transfer_out' ? tx.sourceName : tx.targetName}
+                              </td>
                               <td className="py-3 text-right font-semibold whitespace-nowrap">
                                 <span className={tx.type === 'transfer_out' ? 'text-red-500' : 'text-green-500'}>
                                   {tx.type === 'transfer_out' ? '-' : '+'}{tx.amountFormatted}
                                 </span>
-                              </td>
-                              <td className={cn("py-3 text-sm", theme === 'dark' ? 'text-white' : 'text-gray-900')}>
-                                {tx.type === 'transfer_out' ? tx.sourceName : tx.targetName}
                               </td>
                               <td className={cn("py-3 text-sm font-mono", theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}>
                                 {tx.type === 'transfer_out' ? (tx.sourceWalletNumber || '-') : (tx.targetWalletNumber || '-')}
