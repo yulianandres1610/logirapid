@@ -101,12 +101,19 @@ export async function POST(request: NextRequest) {
 
       accessToken = process.env.SQUARE_PLATFORM_ACCESS_TOKEN
       locationId = process.env.SQUARE_PLATFORM_LOCATION_ID
-      environment = process.env.SQUARE_PLATFORM_ENVIRONMENT || 'sandbox'
+      environment = process.env.SQUARE_PLATFORM_ENVIRONMENT || 'production'
+
+      console.log('[Square Device Code] Using platform credentials:', {
+        hasAccessToken: !!accessToken,
+        accessTokenLength: accessToken?.length || 0,
+        locationId: locationId || 'NOT SET',
+        environment
+      })
 
       if (!accessToken || !locationId) {
         return NextResponse.json({
           success: false,
-          error: 'Square de plataforma no está configurado'
+          error: `Square de plataforma no está configurado. Token: ${accessToken ? 'SET' : 'NOT SET'}, Location: ${locationId || 'NOT SET'}, Env: ${environment}`
         }, { status: 400 })
       }
     } else {
@@ -153,6 +160,23 @@ export async function POST(request: NextRequest) {
 
     const idempotencyKey = crypto.randomUUID()
 
+    console.log('[Square Device Code] Making API call:', {
+      url: `${baseUrl}/v2/devices/codes`,
+      environment,
+      locationId,
+      terminalName: terminal.name,
+      idempotencyKey
+    })
+
+    const requestBody = {
+      idempotency_key: idempotencyKey,
+      device_code: {
+        product_type: 'TERMINAL_API',
+        location_id: locationId,
+        name: terminal.name
+      }
+    }
+
     const squareResponse = await fetch(`${baseUrl}/v2/devices/codes`, {
       method: 'POST',
       headers: {
@@ -160,24 +184,29 @@ export async function POST(request: NextRequest) {
         'Authorization': `Bearer ${accessToken}`,
         'Content-Type': 'application/json'
       },
-      body: JSON.stringify({
-        idempotency_key: idempotencyKey,
-        device_code: {
-          product_type: 'TERMINAL_API',
-          location_id: locationId,
-          name: terminal.name
-        }
-      })
+      body: JSON.stringify(requestBody)
     })
 
     const squareData = await squareResponse.json()
 
+    console.log('[Square Device Code] API response:', {
+      status: squareResponse.status,
+      ok: squareResponse.ok,
+      hasDeviceCode: !!squareData.device_code,
+      errors: squareData.errors
+    })
+
     if (!squareResponse.ok) {
-      console.error('Square API error:', squareData)
+      console.error('[Square Device Code] API error details:', JSON.stringify(squareData, null, 2))
       return NextResponse.json({
         success: false,
         error: `Error de Square: ${squareData.errors?.[0]?.detail || 'Error al crear device code'}`,
-        squareErrors: squareData.errors
+        squareErrors: squareData.errors,
+        debug: {
+          environment,
+          baseUrl,
+          locationId
+        }
       }, { status: 400 })
     }
 
