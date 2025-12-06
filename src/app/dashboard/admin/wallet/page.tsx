@@ -47,7 +47,7 @@ import {
 } from 'recharts'
 
 type Tab = 'dashboard' | 'recharge' | 'transfer' | 'history' | 'pending'
-type PaymentMethod = 'card_manual' | 'card_terminal' | 'cash' | 'wire' | 'zelle'
+type PaymentMethod = 'card_manual' | 'card_terminal' | 'cash' | 'wire' | 'zelle' | 'credit'
 
 // Wizard steps for recharge
 type RechargeStep = 1 | 2 | 3
@@ -83,6 +83,7 @@ interface WalletResult {
 
 interface Transaction {
   id: number
+  transactionNumber?: number
   type: string
   typeLabel: string
   sourceName: string
@@ -129,7 +130,8 @@ const paymentMethods = [
   { id: 'card_terminal', label: 'Terminal', icon: Smartphone },
   { id: 'cash', label: 'Efectivo', icon: Banknote },
   { id: 'wire', label: 'Wire', icon: Building },
-  { id: 'zelle', label: 'Zelle', icon: DollarSign }
+  { id: 'zelle', label: 'Zelle', icon: DollarSign },
+  { id: 'credit', label: 'Crédito LogiRapid', icon: Wallet, superAdminOnly: true }
 ]
 
 const quickAmounts = [50, 100, 250, 500, 1000]
@@ -1735,7 +1737,7 @@ export default function WalletManagementPage() {
                           {transactions.map(tx => (
                             <tr key={tx.id} className={cn(theme === 'dark' ? 'hover:bg-gray-700/50' : 'hover:bg-gray-50')}>
                               <td className={cn("py-3 text-sm font-mono", theme === 'dark' ? 'text-gray-300' : 'text-gray-700')}>
-                                TXN-{tx.id.toString().padStart(6, '0')}
+                                {tx.transactionNumber || tx.id}
                               </td>
                               <td className="py-3">
                                 <span className={cn(

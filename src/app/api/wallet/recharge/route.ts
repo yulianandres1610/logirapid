@@ -76,7 +76,7 @@ export async function POST(request: NextRequest) {
       }, { status: 400 })
     }
 
-    const validMethods = ['card_manual', 'card_terminal', 'cash', 'wire', 'zelle']
+    const validMethods = ['card_manual', 'card_terminal', 'cash', 'wire', 'zelle', 'credit']
     if (!validMethods.includes(paymentMethod)) {
       return NextResponse.json({
         success: false,
@@ -84,8 +84,16 @@ export async function POST(request: NextRequest) {
       }, { status: 400 })
     }
 
-    // Check if method requires approval
+    // Check if method requires approval (credit does not require approval - only SUPER_ADMIN can use it)
     const requiresApproval = ['cash', 'wire', 'zelle'].includes(paymentMethod)
+
+    // Only SUPER_ADMIN can give credit
+    if (paymentMethod === 'credit' && payload.role !== 'SUPER_ADMIN') {
+      return NextResponse.json({
+        success: false,
+        error: 'Solo SUPER_ADMIN puede otorgar crédito'
+      }, { status: 403 })
+    }
 
     // Only SUPER_ADMIN can approve immediately for cash/wire/zelle
     // Others must create a request that SUPER_ADMIN will approve
@@ -240,7 +248,7 @@ export async function POST(request: NextRequest) {
             $11,
             $12,
             NOW()
-          ) RETURNING id
+          ) RETURNING id, transaction_number
         `, [
           targetType,
           targetType === 'company' ? targetId : null,
@@ -251,12 +259,12 @@ export async function POST(request: NextRequest) {
           paymentMethod,
           paymentReference || null,
           terminalId || null,
-          description || `Recarga via ${paymentMethod}`,
+          description || (paymentMethod === 'credit' ? 'Crédito LogiRapid' : `Recarga via ${paymentMethod}`),
           payload.userId,
           payload.email
         ])
 
-        return txResult.rows[0].id
+        return { id: txResult.rows[0].id, transactionNumber: txResult.rows[0].transaction_number }
       })
 
       const newBalance = currentBalance + netAmount
@@ -265,7 +273,7 @@ export async function POST(request: NextRequest) {
         success: true,
         message: 'Recarga procesada exitosamente',
         data: {
-          transactionId: result,
+          transactionNumber: result.transactionNumber,
           targetWalletNumber,
           targetName,
           amount,

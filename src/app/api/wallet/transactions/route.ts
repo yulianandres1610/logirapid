@@ -62,6 +62,7 @@ export async function GET(request: NextRequest) {
     let query = `
       SELECT
         wt.id,
+        wt.transaction_number,
         wt.type,
         wt.source_type,
         wt.source_company_id,
@@ -192,7 +193,8 @@ export async function GET(request: NextRequest) {
       'card_terminal': 'Terminal',
       'cash': 'Efectivo',
       'wire': 'Transferencia Bancaria',
-      'zelle': 'Zelle'
+      'zelle': 'Zelle',
+      'credit': 'Crédito LogiRapid'
     }
 
     const transactions = result.rows.map((row: any) => {
@@ -218,6 +220,7 @@ export async function GET(request: NextRequest) {
 
       return {
         id: row.id,
+        transactionNumber: row.transaction_number,
         type: row.type,
         typeLabel: typeLabels[row.type] || row.type,
         sourceType: row.source_type,

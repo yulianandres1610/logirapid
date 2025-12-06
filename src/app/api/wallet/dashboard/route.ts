@@ -340,7 +340,8 @@ export async function GET(request: NextRequest) {
       'card_terminal': 'Terminal',
       'cash': 'Efectivo',
       'wire': 'Transferencia',
-      'zelle': 'Zelle'
+      'zelle': 'Zelle',
+      'credit': 'Crédito LogiRapid'
     }
 
     const chartByMethod = rechargesByMethod.rows.map((row: any) => ({
