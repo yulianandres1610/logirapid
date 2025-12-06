@@ -123,7 +123,7 @@ export async function GET(request: NextRequest) {
           u.email,
           u.status,
           c.id as company_id,
-          c."legalName" as company_name,
+          c.legalname as company_name,
           'user' as type
         FROM users u
         LEFT JOIN user_companies uc ON u.id = uc.user_id
