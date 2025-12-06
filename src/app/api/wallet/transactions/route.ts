@@ -82,8 +82,8 @@ export async function GET(request: NextRequest) {
         wt.created_by_name,
         wt.created_at,
         wt.completed_at,
-        sc."legalName" as source_company_name,
-        tc."legalName" as target_company_name,
+        sc.legalname as source_company_name,
+        tc.legalname as target_company_name,
         CONCAT(su.firstname, ' ', su.lastname) as source_user_name,
         CONCAT(tu.firstname, ' ', tu.lastname) as target_user_name
       FROM wallet_transactions wt

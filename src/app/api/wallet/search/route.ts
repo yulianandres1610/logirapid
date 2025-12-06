@@ -61,14 +61,14 @@ export async function GET(request: NextRequest) {
       let companyQuery = `
         SELECT
           id,
-          "legalName" as name,
-          "walletNumber" as wallet_number,
-          "walletBalance"::numeric as balance,
+          legalname as name,
+          walletnumber as wallet_number,
+          walletbalance as balance,
           phone,
           email,
           status,
-          "dailyLimit"::numeric as daily_limit,
-          "monthlyLimit"::numeric as monthly_limit,
+          dailylimit as daily_limit,
+          monthlylimit as monthly_limit,
           logo,
           currency,
           'company' as type
@@ -87,9 +87,9 @@ export async function GET(request: NextRequest) {
 
       // Search by wallet number or phone
       companyQuery += ` AND (
-        "walletNumber" ILIKE $${paramIndex}
+        walletnumber ILIKE $${paramIndex}
         OR phone ILIKE $${paramIndex}
-        OR "legalName" ILIKE $${paramIndex}
+        OR legalname ILIKE $${paramIndex}
       )`
       params.push(`%${query}%`)
 

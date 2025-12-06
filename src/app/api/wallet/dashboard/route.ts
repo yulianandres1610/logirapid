@@ -66,10 +66,10 @@ export async function GET(request: NextRequest) {
     // 1. Total balance and count from companies
     const companiesBalance = await db.query(`
       SELECT
-        COALESCE(SUM("walletBalance"::numeric), 0) as total,
+        COALESCE(SUM(walletbalance), 0) as total,
         COUNT(CASE WHEN status = 'active' THEN 1 END) as active_count,
         COUNT(*) as total_count,
-        COUNT(CASE WHEN "walletNumber" IS NOT NULL THEN 1 END) as with_wallet
+        COUNT(CASE WHEN walletnumber IS NOT NULL THEN 1 END) as with_wallet
       FROM companies
     `)
 
@@ -193,15 +193,15 @@ export async function GET(request: NextRequest) {
     const topWallets = await db.query(`
       SELECT
         id,
-        "legalName" as name,
-        "walletNumber" as wallet_number,
-        "walletBalance"::numeric as balance,
+        legalname as name,
+        walletnumber as wallet_number,
+        walletbalance as balance,
         status,
         'company' as type
       FROM companies
-      WHERE "walletBalance" IS NOT NULL
-        AND "walletBalance"::numeric > 0
-      ORDER BY "walletBalance"::numeric DESC
+      WHERE walletbalance IS NOT NULL
+        AND walletbalance > 0
+      ORDER BY walletbalance DESC
       LIMIT 10
     `)
 

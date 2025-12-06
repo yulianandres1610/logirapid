@@ -78,7 +78,7 @@ export async function GET(request: NextRequest) {
         wrr.requested_by_name,
         wrr.requested_by_email,
         wrr.created_at,
-        c."legalName" as company_name,
+        c.legalname as company_name,
         CONCAT(u.firstname, ' ', u.lastname) as user_name
       FROM wallet_recharge_requests wrr
       LEFT JOIN companies c ON wrr.company_id = c.id
@@ -211,7 +211,7 @@ export async function POST(request: NextRequest) {
 
     // Get company wallet info
     const companyResult = await db.query(`
-      SELECT id, "legalName", "walletNumber"
+      SELECT id, legalname, walletnumber
       FROM companies
       WHERE id = $1
     `, [payload.companyId])

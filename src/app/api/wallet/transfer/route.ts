@@ -96,9 +96,9 @@ export async function POST(request: NextRequest) {
 
     if (sourceType === 'company') {
       const result = await db.query(`
-        SELECT id, "legalName", "walletBalance"::numeric as balance
+        SELECT id, legalname, walletbalance as balance
         FROM companies
-        WHERE "walletNumber" = $1
+        WHERE walletnumber = $1
       `, [sourceWalletNumber])
 
       if (result.rows.length === 0) {
@@ -145,9 +145,9 @@ export async function POST(request: NextRequest) {
 
     if (targetType === 'company') {
       const result = await db.query(`
-        SELECT id, "legalName", "walletBalance"::numeric as balance
+        SELECT id, legalname, walletbalance as balance
         FROM companies
-        WHERE "walletNumber" = $1
+        WHERE walletnumber = $1
       `, [targetWalletNumber])
 
       if (result.rows.length === 0) {
@@ -185,7 +185,7 @@ export async function POST(request: NextRequest) {
       if (sourceType === 'company') {
         await client.query(`
           UPDATE companies
-          SET "walletBalance" = ("walletBalance"::numeric - $1)::text
+          SET walletbalance = walletbalance - $1
           WHERE id = $2
         `, [amount, sourceId])
       } else {
@@ -200,7 +200,7 @@ export async function POST(request: NextRequest) {
       if (targetType === 'company') {
         await client.query(`
           UPDATE companies
-          SET "walletBalance" = ("walletBalance"::numeric + $1)::text
+          SET walletbalance = walletbalance + $1
           WHERE id = $2
         `, [amount, targetId])
       } else {
