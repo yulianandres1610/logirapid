@@ -48,6 +48,8 @@ export function TerminalsList({ companyId, isPlatform = false }: Props) {
     locationName: ''
   })
   const [saving, setSaving] = useState(false)
+  const [syncing, setSyncing] = useState(false)
+  const [syncMessage, setSyncMessage] = useState<string | null>(null)
 
   const fetchTerminals = useCallback(async () => {
     try {
@@ -163,6 +165,39 @@ export function TerminalsList({ companyId, isPlatform = false }: Props) {
     }
   }
 
+  async function syncTerminals() {
+    setSyncing(true)
+    setError(null)
+    setSyncMessage(null)
+
+    try {
+      const response = await fetch('/api/terminals/sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          isPlatform: isPlatform,
+          companyId: companyId
+        })
+      })
+
+      const data = await response.json()
+
+      if (!data.success) {
+        throw new Error(data.error || 'Error al sincronizar')
+      }
+
+      setSyncMessage(data.message)
+      await fetchTerminals()
+
+      // Clear message after 5 seconds
+      setTimeout(() => setSyncMessage(null), 5000)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Error al sincronizar')
+    } finally {
+      setSyncing(false)
+    }
+  }
+
   function getStatusBadge(status: string) {
     const badges: { [key: string]: string } = {
       pending: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400',
@@ -214,17 +249,44 @@ export function TerminalsList({ companyId, isPlatform = false }: Props) {
         </div>
       )}
 
+      {syncMessage && (
+        <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-4">
+          <p className="text-green-700 dark:text-green-400">{syncMessage}</p>
+        </div>
+      )}
+
       <div className="flex justify-between items-center">
         <h3 className="font-semibold text-gray-900 dark:text-white">
           {isPlatform ? 'Terminales de Plataforma' : 'Mis Terminales'}
         </h3>
-        <button
-          onClick={() => setShowAddModal(true)}
-          className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2"
-        >
-          <span>+</span>
-          Registrar Terminal
-        </button>
+        <div className="flex gap-2">
+          <button
+            onClick={syncTerminals}
+            disabled={syncing}
+            className="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
+          >
+            {syncing ? (
+              <>
+                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                Sincronizando...
+              </>
+            ) : (
+              <>
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                  <path fillRule="evenodd" d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z" clipRule="evenodd" />
+                </svg>
+                Sincronizar
+              </>
+            )}
+          </button>
+          <button
+            onClick={() => setShowAddModal(true)}
+            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2"
+          >
+            <span>+</span>
+            Registrar Terminal
+          </button>
+        </div>
       </div>
 
       {terminals.length === 0 ? (
