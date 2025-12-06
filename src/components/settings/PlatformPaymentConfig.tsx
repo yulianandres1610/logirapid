@@ -97,13 +97,6 @@ export function PlatformPaymentConfig() {
 
   return (
     <div className="space-y-6">
-      <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-lg p-4">
-        <p className="text-amber-800 dark:text-amber-300 text-sm">
-          Las credenciales de plataforma se configuran en variables de entorno (.env).
-          Esta pantalla es solo de lectura.
-        </p>
-      </div>
-
       {/* Square Configuration */}
       <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6">
         <div className="flex items-center justify-between mb-4">
