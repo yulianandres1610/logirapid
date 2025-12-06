@@ -1254,7 +1254,7 @@ export default function SettingsPage() {
         return (
           <PaymentSettings
             role={user?.role || 'USER'}
-            companyId={user?.companyId}
+            companyId={user?.companyId ? Number(user.companyId) : undefined}
           />
         )
 
