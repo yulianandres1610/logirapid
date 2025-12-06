@@ -365,7 +365,7 @@ export async function POST(
         const response = await fetch(`${baseUrl}/v2/locations`, {
           method: 'GET',
           headers: {
-            'Square-Version': '2024-01-18',
+            'Square-Version': '2025-01-16',
             'Authorization': `Bearer ${settings.square_access_token}`,
             'Content-Type': 'application/json'
           }

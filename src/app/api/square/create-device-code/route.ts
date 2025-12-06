@@ -156,7 +156,7 @@ export async function POST(request: NextRequest) {
     const squareResponse = await fetch(`${baseUrl}/v2/devices/codes`, {
       method: 'POST',
       headers: {
-        'Square-Version': '2024-01-18',
+        'Square-Version': '2025-01-16',
         'Authorization': `Bearer ${accessToken}`,
         'Content-Type': 'application/json'
       },
@@ -329,7 +329,7 @@ export async function GET(request: NextRequest) {
     const squareResponse = await fetch(`${baseUrl}/v2/devices/codes/${deviceCodeId}`, {
       method: 'GET',
       headers: {
-        'Square-Version': '2024-01-18',
+        'Square-Version': '2025-01-16',
         'Authorization': `Bearer ${accessToken}`,
         'Content-Type': 'application/json'
       }
