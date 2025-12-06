@@ -47,10 +47,10 @@ export async function GET(request: NextRequest) {
     const query = searchParams.get('q')?.trim()
     const type = searchParams.get('type') || 'all'
 
-    if (!query || query.length < 3) {
+    if (!query || query.length < 2) {
       return NextResponse.json({
         success: false,
-        error: 'La busqueda debe tener al menos 3 caracteres'
+        error: 'La busqueda debe tener al menos 2 caracteres'
       }, { status: 400 })
     }
 

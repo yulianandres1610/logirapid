@@ -56,6 +56,10 @@ interface DashboardStats {
   transfersThisMonth: { value: number; formatted: string; change: number; count: number }
   activeCompanies: { value: number }
   pendingRequests: { value: number }
+  totalWallets: { value: number; companies: number; users: number }
+  totalCompanies: { value: number }
+  totalUsers: { value: number }
+  totalCustomers: { value: number }
 }
 
 interface WalletResult {
@@ -445,9 +449,9 @@ export default function WalletManagementPage() {
                 className="space-y-6"
               >
                 {/* Stats Cards */}
-                <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
                   {loading ? (
-                    [...Array(4)].map((_, i) => (
+                    [...Array(8)].map((_, i) => (
                       <div key={i} className={cn(
                         "rounded-xl p-5 animate-pulse",
                         theme === 'dark' ? 'bg-gray-800' : 'bg-white'
@@ -458,12 +462,13 @@ export default function WalletManagementPage() {
                     ))
                   ) : stats && (
                     <>
+                      {/* Balance Total - Destacado */}
                       <motion.div
                         initial={{ opacity: 0, y: 20 }}
                         animate={{ opacity: 1, y: 0 }}
                         transition={{ delay: 0.1 }}
                         className={cn(
-                          "rounded-xl p-5 text-white",
+                          "rounded-xl p-5 text-white col-span-2 sm:col-span-1",
                           brandBg
                         )}
                       >
@@ -474,6 +479,27 @@ export default function WalletManagementPage() {
                         <p className="text-2xl font-bold">{stats.totalBalance.formatted}</p>
                       </motion.div>
 
+                      {/* Total Wallets */}
+                      <motion.div
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: 0.15 }}
+                        className={cn(
+                          "rounded-xl p-5 border",
+                          theme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'
+                        )}
+                      >
+                        <div className="flex items-center gap-2 mb-2">
+                          <CreditCard className="w-5 h-5 text-indigo-500" />
+                          <p className={cn("text-sm", theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}>Total Wallets</p>
+                        </div>
+                        <p className={cn("text-2xl font-bold", theme === 'dark' ? 'text-white' : 'text-gray-900')}>{stats.totalWallets?.value || 0}</p>
+                        <p className={cn("text-xs mt-1", theme === 'dark' ? 'text-gray-500' : 'text-gray-400')}>
+                          {stats.totalWallets?.companies || 0} empresas, {stats.totalWallets?.users || 0} usuarios
+                        </p>
+                      </motion.div>
+
+                      {/* Recargas Mes */}
                       <motion.div
                         initial={{ opacity: 0, y: 20 }}
                         animate={{ opacity: 1, y: 0 }}
@@ -496,10 +522,11 @@ export default function WalletManagementPage() {
                         </p>
                       </motion.div>
 
+                      {/* Transferencias Mes */}
                       <motion.div
                         initial={{ opacity: 0, y: 20 }}
                         animate={{ opacity: 1, y: 0 }}
-                        transition={{ delay: 0.3 }}
+                        transition={{ delay: 0.25 }}
                         className={cn(
                           "rounded-xl p-5 border",
                           theme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'
@@ -518,6 +545,43 @@ export default function WalletManagementPage() {
                         </p>
                       </motion.div>
 
+                      {/* Total Empresas */}
+                      <motion.div
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: 0.3 }}
+                        className={cn(
+                          "rounded-xl p-5 border",
+                          theme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'
+                        )}
+                      >
+                        <div className="flex items-center gap-2 mb-2">
+                          <Building2 className="w-5 h-5 text-purple-500" />
+                          <p className={cn("text-sm", theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}>Empresas</p>
+                        </div>
+                        <p className={cn("text-2xl font-bold", theme === 'dark' ? 'text-white' : 'text-gray-900')}>{stats.totalCompanies?.value || 0}</p>
+                        <p className={cn("text-xs mt-1", theme === 'dark' ? 'text-gray-500' : 'text-gray-400')}>{stats.activeCompanies?.value || 0} activas</p>
+                      </motion.div>
+
+                      {/* Total Usuarios */}
+                      <motion.div
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: 0.35 }}
+                        className={cn(
+                          "rounded-xl p-5 border",
+                          theme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'
+                        )}
+                      >
+                        <div className="flex items-center gap-2 mb-2">
+                          <Users className="w-5 h-5 text-cyan-500" />
+                          <p className={cn("text-sm", theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}>Usuarios</p>
+                        </div>
+                        <p className={cn("text-2xl font-bold", theme === 'dark' ? 'text-white' : 'text-gray-900')}>{stats.totalUsers?.value || 0}</p>
+                        <p className={cn("text-xs mt-1", theme === 'dark' ? 'text-gray-500' : 'text-gray-400')}>registrados</p>
+                      </motion.div>
+
+                      {/* Total Clientes */}
                       <motion.div
                         initial={{ opacity: 0, y: 20 }}
                         animate={{ opacity: 1, y: 0 }}
@@ -528,11 +592,29 @@ export default function WalletManagementPage() {
                         )}
                       >
                         <div className="flex items-center gap-2 mb-2">
-                          <Building2 className="w-5 h-5 text-purple-500" />
-                          <p className={cn("text-sm", theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}>Empresas</p>
+                          <Users className="w-5 h-5 text-amber-500" />
+                          <p className={cn("text-sm", theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}>Clientes</p>
                         </div>
-                        <p className={cn("text-2xl font-bold", theme === 'dark' ? 'text-white' : 'text-gray-900')}>{stats.activeCompanies.value}</p>
-                        <p className={cn("text-xs mt-1", theme === 'dark' ? 'text-gray-500' : 'text-gray-400')}>con wallet activo</p>
+                        <p className={cn("text-2xl font-bold", theme === 'dark' ? 'text-white' : 'text-gray-900')}>{stats.totalCustomers?.value || 0}</p>
+                        <p className={cn("text-xs mt-1", theme === 'dark' ? 'text-gray-500' : 'text-gray-400')}>en el sistema</p>
+                      </motion.div>
+
+                      {/* Solicitudes Pendientes */}
+                      <motion.div
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: 0.45 }}
+                        className={cn(
+                          "rounded-xl p-5 border",
+                          theme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'
+                        )}
+                      >
+                        <div className="flex items-center gap-2 mb-2">
+                          <Clock className="w-5 h-5 text-yellow-500" />
+                          <p className={cn("text-sm", theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}>Pendientes</p>
+                        </div>
+                        <p className={cn("text-2xl font-bold", theme === 'dark' ? 'text-white' : 'text-gray-900')}>{stats.pendingRequests?.value || 0}</p>
+                        <p className={cn("text-xs mt-1", theme === 'dark' ? 'text-gray-500' : 'text-gray-400')}>solicitudes</p>
                       </motion.div>
                     </>
                   )}
@@ -867,7 +949,7 @@ export default function WalletManagementPage() {
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -20 }}
-                className="max-w-2xl mx-auto"
+                className="max-w-3xl mx-auto pt-8"
               >
                 {/* Step Progress */}
                 <div className="mb-8">
@@ -919,7 +1001,7 @@ export default function WalletManagementPage() {
                 {/* Step Content */}
                 <motion.div
                   className={cn(
-                    "rounded-xl border p-6",
+                    "rounded-2xl border p-8 shadow-lg",
                     theme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'
                   )}
                 >
@@ -1191,7 +1273,7 @@ export default function WalletManagementPage() {
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -20 }}
-                className="max-w-2xl mx-auto"
+                className="max-w-3xl mx-auto pt-8"
               >
                 {/* Step Progress */}
                 <div className="mb-8">
@@ -1243,7 +1325,7 @@ export default function WalletManagementPage() {
                 {/* Step Content */}
                 <motion.div
                   className={cn(
-                    "rounded-xl border p-6",
+                    "rounded-2xl border p-8 shadow-lg",
                     theme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'
                   )}
                 >

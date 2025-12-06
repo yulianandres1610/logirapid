@@ -63,25 +63,40 @@ export async function GET(request: NextRequest) {
     const firstDayLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1)
     const lastDayLastMonth = new Date(now.getFullYear(), now.getMonth(), 0)
 
-    // 1. Total balance from companies
+    // 1. Total balance and count from companies
     const companiesBalance = await db.query(`
       SELECT
         COALESCE(SUM("walletBalance"::numeric), 0) as total,
-        COUNT(CASE WHEN status = 'active' THEN 1 END) as active_count
+        COUNT(CASE WHEN status = 'active' THEN 1 END) as active_count,
+        COUNT(*) as total_count,
+        COUNT(CASE WHEN "walletNumber" IS NOT NULL THEN 1 END) as with_wallet
       FROM companies
-      WHERE "walletBalance" IS NOT NULL
     `)
 
-    // 2. Total balance from users
+    // 2. Total balance and count from users
     const usersBalance = await db.query(`
-      SELECT COALESCE(SUM(wallet_balance), 0) as total
+      SELECT
+        COALESCE(SUM(wallet_balance), 0) as total,
+        COUNT(*) as total_count,
+        COUNT(CASE WHEN wallet_number IS NOT NULL THEN 1 END) as with_wallet
       FROM users
-      WHERE wallet_balance IS NOT NULL
+    `)
+
+    // 3. Total customers count
+    const customersCount = await db.query(`
+      SELECT COUNT(*) as total_count
+      FROM customers
     `)
 
     const totalBalance = parseFloat(companiesBalance.rows[0]?.total || '0') +
                          parseFloat(usersBalance.rows[0]?.total || '0')
     const activeCompanies = parseInt(companiesBalance.rows[0]?.active_count || '0')
+    const totalCompanies = parseInt(companiesBalance.rows[0]?.total_count || '0')
+    const companiesWithWallet = parseInt(companiesBalance.rows[0]?.with_wallet || '0')
+    const totalUsers = parseInt(usersBalance.rows[0]?.total_count || '0')
+    const usersWithWallet = parseInt(usersBalance.rows[0]?.with_wallet || '0')
+    const totalCustomers = parseInt(customersCount.rows[0]?.total_count || '0')
+    const totalWallets = companiesWithWallet + usersWithWallet
 
     // 3. Recharges this month
     const rechargesThisMonth = await db.query(`
@@ -250,6 +265,20 @@ export async function GET(request: NextRequest) {
           },
           pendingRequests: {
             value: parseInt(pendingRequests.rows[0]?.count || '0')
+          },
+          totalWallets: {
+            value: totalWallets,
+            companies: companiesWithWallet,
+            users: usersWithWallet
+          },
+          totalCompanies: {
+            value: totalCompanies
+          },
+          totalUsers: {
+            value: totalUsers
+          },
+          totalCustomers: {
+            value: totalCustomers
           }
         },
         charts: {
