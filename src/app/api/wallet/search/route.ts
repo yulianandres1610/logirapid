@@ -17,7 +17,7 @@ interface JWTPayload {
  *
  * Query params:
  * - q: search query (wallet number or phone)
- * - type: 'company' | 'user' | 'all' (default: 'all')
+ * - type: 'company' | 'user' | 'customer' | 'all' (default: 'all')
  */
 export async function GET(request: NextRequest) {
   try {
@@ -161,6 +161,57 @@ export async function GET(request: NextRequest) {
         companyId: row.company_id,
         companyName: row.company_name,
         type: 'user'
+      })))
+    }
+
+    // Search customers
+    if (type === 'all' || type === 'customer') {
+      let customerQuery = `
+        SELECT
+          cust.id,
+          CONCAT(cust.firstname, ' ', cust.lastname) as name,
+          cust.wallet_number,
+          cust.wallet_balance as balance,
+          cust.phone,
+          cust.email,
+          cust.company_id,
+          comp.legalname as company_name,
+          'customer' as type
+        FROM customers cust
+        LEFT JOIN companies comp ON cust.company_id = comp.id
+        WHERE cust.wallet_number IS NOT NULL
+      `
+      const params: any[] = []
+      let paramIndex = 1
+
+      // SUPER_ADMIN can search all customers, others only their company's customers
+      if (payload.role !== 'SUPER_ADMIN') {
+        customerQuery += ` AND cust.company_id = $${paramIndex}`
+        params.push(payload.companyId)
+        paramIndex++
+      }
+
+      // Search by wallet number, phone or name
+      customerQuery += ` AND (
+        cust.wallet_number ILIKE $${paramIndex}
+        OR cust.phone ILIKE $${paramIndex}
+        OR CONCAT(cust.firstname, ' ', cust.lastname) ILIKE $${paramIndex}
+      )`
+      params.push(`%${query}%`)
+
+      const customerResults = await db.query(customerQuery, params)
+      results.push(...customerResults.rows.map(row => ({
+        id: row.id,
+        name: row.name,
+        walletNumber: row.wallet_number,
+        balance: parseFloat(row.balance || '0'),
+        balanceFormatted: `$${parseFloat(row.balance || '0').toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+        phone: row.phone,
+        email: row.email,
+        status: 'active',
+        companyId: row.company_id,
+        companyName: row.company_name,
+        type: 'customer'
       })))
     }
 
