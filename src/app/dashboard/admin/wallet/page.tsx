@@ -23,6 +23,7 @@ import {
   ArrowDown,
   History,
   ChevronRight,
+  ChevronLeft,
   AlertCircle,
   ArrowLeft,
   Users
@@ -72,9 +73,11 @@ interface WalletResult {
   phone?: string
   email?: string
   status: string
-  type: 'company' | 'user'
+  type: 'company' | 'user' | 'customer'
   dailyLimit?: number
   monthlyLimit?: number
+  dailyUsed?: number
+  monthlyUsed?: number
 }
 
 interface Transaction {
@@ -82,7 +85,9 @@ interface Transaction {
   type: string
   typeLabel: string
   sourceName: string
+  sourceWalletNumber?: string
   targetName: string
+  targetWalletNumber?: string
   amount: number
   amountFormatted: string
   paymentMethod?: string
@@ -180,6 +185,10 @@ export default function WalletManagementPage() {
   // History
   const [transactions, setTransactions] = useState<Transaction[]>([])
   const [historyLoading, setHistoryLoading] = useState(false)
+  const [historySearchQuery, setHistorySearchQuery] = useState('')
+  const [historyPage, setHistoryPage] = useState(1)
+  const [historyTotal, setHistoryTotal] = useState(0)
+  const [historyTotalPages, setHistoryTotalPages] = useState(0)
 
   // Pending requests
   const [pendingRequests, setPendingRequests] = useState<PendingRequest[]>([])
@@ -276,6 +285,20 @@ export default function WalletManagementPage() {
       return
     }
 
+    const amount = parseFloat(transferAmount)
+
+    // Validate amount is positive
+    if (amount <= 0) {
+      showNotification('error', 'Monto Invalido', 'El monto debe ser mayor a 0')
+      return
+    }
+
+    // Validate amount doesn't exceed source wallet balance
+    if (amount > transferSourceWallet.balance) {
+      showNotification('error', 'Balance Insuficiente', `El monto ($${amount.toFixed(2)}) excede el saldo disponible ($${transferSourceWallet.balance.toFixed(2)})`)
+      return
+    }
+
     try {
       setProcessing(true)
       const response = await fetch('/api/wallet/transfer', {
@@ -286,7 +309,7 @@ export default function WalletManagementPage() {
           sourceType: transferSourceWallet.type,
           targetWalletNumber: transferTargetWallet.walletNumber,
           targetType: transferTargetWallet.type,
-          amount: parseFloat(transferAmount),
+          amount,
           description: transferDescription || undefined
         })
       })
@@ -313,13 +336,23 @@ export default function WalletManagementPage() {
   }
 
   // Fetch transactions
-  const fetchTransactions = async () => {
+  const fetchTransactions = async (page: number = 1, search?: string) => {
     try {
       setHistoryLoading(true)
-      const response = await fetch('/api/wallet/transactions?limit=50')
+      const params = new URLSearchParams({
+        limit: '25',
+        page: page.toString()
+      })
+      if (search && search.trim()) {
+        params.append('search', search.trim())
+      }
+      const response = await fetch(`/api/wallet/transactions?${params.toString()}`)
       const data = await response.json()
       if (data.success) {
         setTransactions(data.data.transactions || [])
+        setHistoryTotal(data.data.pagination?.total || 0)
+        setHistoryTotalPages(data.data.pagination?.totalPages || 0)
+        setHistoryPage(page)
       }
     } catch (err) {
       console.error('Error fetching transactions:', err)
@@ -372,9 +405,21 @@ export default function WalletManagementPage() {
 
   useEffect(() => {
     if (activeTab === 'history') {
-      fetchTransactions()
+      fetchTransactions(1, historySearchQuery)
     }
   }, [activeTab])
+
+  // Handle history search
+  const handleHistorySearch = (e: React.FormEvent) => {
+    e.preventDefault()
+    setHistoryPage(1)
+    fetchTransactions(1, historySearchQuery)
+  }
+
+  // Handle history page change
+  const handleHistoryPageChange = (newPage: number) => {
+    fetchTransactions(newPage, historySearchQuery)
+  }
 
   // Update URL when tab changes
   const handleTabChange = (tab: Tab) => {
@@ -886,6 +931,8 @@ export default function WalletManagementPage() {
                         type={selectedWallet.type}
                         dailyLimit={selectedWallet.dailyLimit || 5000}
                         monthlyLimit={selectedWallet.monthlyLimit || 50000}
+                        dailyUsed={selectedWallet.dailyUsed || 0}
+                        monthlyUsed={selectedWallet.monthlyUsed || 0}
                         onRecharge={() => handleTabChange('recharge')}
                         onTransfer={() => {
                           setTransferSourceWallet(selectedWallet)
@@ -1621,9 +1668,40 @@ export default function WalletManagementPage() {
                   theme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'
                 )}
               >
-                <h3 className={cn("text-lg font-semibold mb-4", theme === 'dark' ? 'text-white' : 'text-gray-900')}>
-                  Historial de Transacciones
-                </h3>
+                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
+                  <h3 className={cn("text-lg font-semibold", theme === 'dark' ? 'text-white' : 'text-gray-900')}>
+                    Historial de Transacciones
+                  </h3>
+
+                  {/* Search Box */}
+                  <form onSubmit={handleHistorySearch} className="flex gap-2 w-full sm:w-auto">
+                    <div className="relative flex-1 sm:flex-initial">
+                      <Search className={cn("absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4", theme === 'dark' ? 'text-gray-500' : 'text-gray-400')} />
+                      <input
+                        type="text"
+                        value={historySearchQuery}
+                        onChange={(e) => setHistorySearchQuery(e.target.value)}
+                        placeholder="Buscar transacciones..."
+                        className={cn(
+                          "w-full sm:w-64 pl-10 pr-4 py-2 rounded-lg border text-sm",
+                          theme === 'dark'
+                            ? 'bg-gray-700 border-gray-600 text-white placeholder:text-gray-500'
+                            : 'bg-white border-gray-300 text-gray-900 placeholder:text-gray-400'
+                        )}
+                      />
+                    </div>
+                    <button
+                      type="submit"
+                      className={cn(
+                        "px-4 py-2 rounded-lg text-sm font-medium text-white",
+                        "transition-colors"
+                      )}
+                      style={{ backgroundColor: exaBrandBg }}
+                    >
+                      Buscar
+                    </button>
+                  </form>
+                </div>
 
                 {historyLoading ? (
                   <div className="text-center py-12">
@@ -1632,64 +1710,124 @@ export default function WalletManagementPage() {
                 ) : transactions.length === 0 ? (
                   <div className="text-center py-12">
                     <History className={cn("w-12 h-12 mx-auto mb-3", theme === 'dark' ? 'text-gray-600' : 'text-gray-300')} />
-                    <p className={cn(theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}>No hay transacciones</p>
+                    <p className={cn(theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}>
+                      {historySearchQuery ? 'No se encontraron transacciones' : 'No hay transacciones'}
+                    </p>
                   </div>
                 ) : (
-                  <div className="overflow-x-auto">
-                    <table className="w-full">
-                      <thead>
-                        <tr className={cn("text-left text-xs uppercase", theme === 'dark' ? 'text-gray-500' : 'text-gray-400')}>
-                          <th className="pb-3">ID</th>
-                          <th className="pb-3">Fecha</th>
-                          <th className="pb-3">Tipo</th>
-                          <th className="pb-3">Detalle</th>
-                          <th className="pb-3 text-right">Monto</th>
-                          <th className="pb-3 text-center">Estado</th>
-                        </tr>
-                      </thead>
-                      <tbody className={cn("divide-y", theme === 'dark' ? 'divide-gray-700' : 'divide-gray-100')}>
-                        {transactions.map(tx => (
-                          <tr key={tx.id} className={cn(theme === 'dark' ? 'hover:bg-gray-700/50' : 'hover:bg-gray-50')}>
-                            <td className={cn("py-3 text-sm", theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}>#{tx.id}</td>
-                            <td className={cn("py-3 text-sm", theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}>
-                              {new Date(tx.createdAt).toLocaleDateString('es-ES')}
-                            </td>
-                            <td className="py-3">
-                              <span className={cn(
-                                "px-2 py-1 rounded text-xs font-medium",
-                                tx.type === 'recharge'
-                                  ? 'bg-green-100 text-green-700'
-                                  : tx.type.includes('transfer')
-                                    ? 'bg-blue-100 text-blue-700'
-                                    : 'bg-gray-100 text-gray-600'
-                              )}>
-                                {tx.typeLabel}
-                              </span>
-                            </td>
-                            <td className="py-3 text-sm">
-                              <span className={cn(theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}>{tx.sourceName}</span>
-                              <ArrowRight className="inline w-3 h-3 mx-1" />
-                              <span className={cn(theme === 'dark' ? 'text-white' : 'text-gray-900')}>{tx.targetName}</span>
-                            </td>
-                            <td className="py-3 text-right font-semibold">
-                              <span className={tx.type === 'transfer_out' ? 'text-red-500' : 'text-green-500'}>
-                                {tx.type === 'transfer_out' ? '-' : '+'}{tx.amountFormatted}
-                              </span>
-                            </td>
-                            <td className="py-3 text-center">
-                              <span className={cn(
-                                "inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs",
-                                tx.status === 'completed' ? 'bg-green-100 text-green-700' : tx.status === 'pending' ? 'bg-yellow-100 text-yellow-700' : 'bg-red-100 text-red-700'
-                              )}>
-                                {tx.status === 'completed' ? <Check className="w-3 h-3" /> : tx.status === 'pending' ? <Clock className="w-3 h-3" /> : <X className="w-3 h-3" />}
-                                {tx.status}
-                              </span>
-                            </td>
+                  <>
+                    <div className="overflow-x-auto">
+                      <table className="w-full">
+                        <thead>
+                          <tr className={cn("text-left text-xs uppercase", theme === 'dark' ? 'text-gray-500' : 'text-gray-400')}>
+                            <th className="pb-3 whitespace-nowrap">No. Trans.</th>
+                            <th className="pb-3">Tipo</th>
+                            <th className="pb-3 text-right">Monto</th>
+                            <th className="pb-3">Wallet</th>
+                            <th className="pb-3 whitespace-nowrap">No. Cuenta</th>
+                            <th className="pb-3 whitespace-nowrap">Metodo Pago</th>
+                            <th className="pb-3 whitespace-nowrap">Fecha / Hora</th>
+                            <th className="pb-3 text-center">Estado</th>
                           </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
+                        </thead>
+                        <tbody className={cn("divide-y", theme === 'dark' ? 'divide-gray-700' : 'divide-gray-100')}>
+                          {transactions.map(tx => (
+                            <tr key={tx.id} className={cn(theme === 'dark' ? 'hover:bg-gray-700/50' : 'hover:bg-gray-50')}>
+                              <td className={cn("py-3 text-sm font-mono", theme === 'dark' ? 'text-gray-300' : 'text-gray-700')}>
+                                TXN-{tx.id.toString().padStart(6, '0')}
+                              </td>
+                              <td className="py-3">
+                                <span className={cn(
+                                  "px-2 py-1 rounded text-xs font-medium whitespace-nowrap",
+                                  tx.type === 'recharge'
+                                    ? 'bg-green-100 text-green-700'
+                                    : tx.type === 'transfer_in'
+                                      ? 'bg-blue-100 text-blue-700'
+                                      : tx.type === 'transfer_out'
+                                        ? 'bg-orange-100 text-orange-700'
+                                        : 'bg-gray-100 text-gray-600'
+                                )}>
+                                  {tx.typeLabel}
+                                </span>
+                              </td>
+                              <td className="py-3 text-right font-semibold whitespace-nowrap">
+                                <span className={tx.type === 'transfer_out' ? 'text-red-500' : 'text-green-500'}>
+                                  {tx.type === 'transfer_out' ? '-' : '+'}{tx.amountFormatted}
+                                </span>
+                              </td>
+                              <td className={cn("py-3 text-sm", theme === 'dark' ? 'text-white' : 'text-gray-900')}>
+                                {tx.type === 'transfer_out' ? tx.sourceName : tx.targetName}
+                              </td>
+                              <td className={cn("py-3 text-sm font-mono", theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}>
+                                {tx.type === 'transfer_out' ? (tx.sourceWalletNumber || '-') : (tx.targetWalletNumber || '-')}
+                              </td>
+                              <td className={cn("py-3 text-sm whitespace-nowrap", theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}>
+                                {tx.paymentMethodLabel || '-'}
+                              </td>
+                              <td className={cn("py-3 text-sm whitespace-nowrap", theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}>
+                                <div>{new Date(tx.createdAt).toLocaleDateString('es-ES')}</div>
+                                <div className="text-xs">{new Date(tx.createdAt).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}</div>
+                              </td>
+                              <td className="py-3 text-center">
+                                <span className={cn(
+                                  "inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs whitespace-nowrap",
+                                  tx.status === 'completed' ? 'bg-green-100 text-green-700' : tx.status === 'pending' ? 'bg-yellow-100 text-yellow-700' : 'bg-red-100 text-red-700'
+                                )}>
+                                  {tx.status === 'completed' ? <Check className="w-3 h-3" /> : tx.status === 'pending' ? <Clock className="w-3 h-3" /> : <X className="w-3 h-3" />}
+                                  {tx.status === 'completed' ? 'Completada' : tx.status === 'pending' ? 'Pendiente' : 'Rechazada'}
+                                </span>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+
+                    {/* Pagination */}
+                    <div className={cn(
+                      "flex flex-col sm:flex-row justify-between items-center gap-4 mt-6 pt-4 border-t",
+                      theme === 'dark' ? 'border-gray-700' : 'border-gray-200'
+                    )}>
+                      <p className={cn("text-sm", theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}>
+                        Mostrando {transactions.length} de {historyTotal} transacciones
+                      </p>
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => handleHistoryPageChange(historyPage - 1)}
+                          disabled={historyPage <= 1}
+                          className={cn(
+                            "px-3 py-1.5 rounded-lg text-sm font-medium transition-colors",
+                            historyPage <= 1
+                              ? 'opacity-50 cursor-not-allowed'
+                              : '',
+                            theme === 'dark'
+                              ? 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                              : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                          )}
+                        >
+                          <ChevronLeft className="w-4 h-4" />
+                        </button>
+                        <span className={cn("text-sm px-3", theme === 'dark' ? 'text-gray-300' : 'text-gray-700')}>
+                          Pagina {historyPage} de {historyTotalPages || 1}
+                        </span>
+                        <button
+                          onClick={() => handleHistoryPageChange(historyPage + 1)}
+                          disabled={historyPage >= historyTotalPages}
+                          className={cn(
+                            "px-3 py-1.5 rounded-lg text-sm font-medium transition-colors",
+                            historyPage >= historyTotalPages
+                              ? 'opacity-50 cursor-not-allowed'
+                              : '',
+                            theme === 'dark'
+                              ? 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                              : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                          )}
+                        >
+                          <ChevronRight className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </div>
+                  </>
                 )}
               </motion.div>
             )}

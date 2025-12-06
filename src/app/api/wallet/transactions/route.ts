@@ -52,6 +52,7 @@ export async function GET(request: NextRequest) {
     const type = searchParams.get('type') || 'all'
     const status = searchParams.get('status') || 'all'
     const walletNumber = searchParams.get('walletNumber')
+    const search = searchParams.get('search')?.trim()
     const dateFrom = searchParams.get('dateFrom')
     const dateTo = searchParams.get('dateTo')
     const page = parseInt(searchParams.get('page') || '1')
@@ -143,11 +144,31 @@ export async function GET(request: NextRequest) {
       paramIndex++
     }
 
-    // Get total count
-    const countQuery = query.replace(
+    // Search filter - searches across multiple fields
+    if (search && search.length >= 2) {
+      query += ` AND (
+        wt.source_wallet_number ILIKE $${paramIndex}
+        OR wt.target_wallet_number ILIKE $${paramIndex}
+        OR wt.description ILIKE $${paramIndex}
+        OR wt.payment_reference ILIKE $${paramIndex}
+        OR sc.legalname ILIKE $${paramIndex}
+        OR tc.legalname ILIKE $${paramIndex}
+        OR CONCAT(su.firstname, ' ', su.lastname) ILIKE $${paramIndex}
+        OR CONCAT(tu.firstname, ' ', tu.lastname) ILIKE $${paramIndex}
+        OR CAST(wt.id AS TEXT) ILIKE $${paramIndex}
+      )`
+      params.push(`%${search}%`)
+      paramIndex++
+    }
+
+    // Get total count - keep JOINs if search is used since it searches across joined tables
+    let countQuery = query.replace(
       /SELECT[\s\S]+FROM wallet_transactions wt/,
       'SELECT COUNT(*) as total FROM wallet_transactions wt'
-    ).replace(/LEFT JOIN[\s\S]+WHERE/, 'WHERE')
+    )
+    if (!search) {
+      countQuery = countQuery.replace(/LEFT JOIN[\s\S]+WHERE/, 'WHERE')
+    }
 
     const countResult = await db.query(countQuery, params)
     const total = parseInt(countResult.rows[0]?.total || '0')

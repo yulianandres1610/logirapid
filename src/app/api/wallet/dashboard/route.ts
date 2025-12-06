@@ -193,21 +193,111 @@ export async function GET(request: NextRequest) {
       commissions: data.commissions
     }))
 
-    // 9. Top 10 wallets by balance (companies)
+    // 9. Top 10 wallets by balance (all types: companies, users, customers)
     const topWallets = await db.query(`
-      SELECT
-        id,
-        legalname as name,
-        walletnumber as wallet_number,
-        walletbalance as balance,
-        status,
-        'company' as type
-      FROM companies
-      WHERE walletbalance IS NOT NULL
-        AND walletbalance > 0
-      ORDER BY walletbalance DESC
+      (
+        SELECT
+          id,
+          legalname as name,
+          walletnumber as wallet_number,
+          walletbalance as balance,
+          status,
+          dailylimit as daily_limit,
+          monthlylimit as monthly_limit,
+          'company' as type
+        FROM companies
+        WHERE walletbalance IS NOT NULL
+          AND walletbalance > 0
+          AND walletnumber IS NOT NULL
+      )
+      UNION ALL
+      (
+        SELECT
+          id,
+          CONCAT(firstname, ' ', lastname) as name,
+          wallet_number,
+          wallet_balance as balance,
+          status,
+          NULL as daily_limit,
+          NULL as monthly_limit,
+          'user' as type
+        FROM users
+        WHERE wallet_balance IS NOT NULL
+          AND wallet_balance > 0
+          AND wallet_number IS NOT NULL
+      )
+      UNION ALL
+      (
+        SELECT
+          id,
+          CONCAT(firstname, ' ', lastname) as name,
+          wallet_number,
+          wallet_balance as balance,
+          'active' as status,
+          NULL as daily_limit,
+          NULL as monthly_limit,
+          'customer' as type
+        FROM customers
+        WHERE wallet_balance IS NOT NULL
+          AND wallet_balance > 0
+          AND wallet_number IS NOT NULL
+      )
+      ORDER BY balance DESC
       LIMIT 10
     `)
+
+    // 9b. Calculate daily and monthly usage for top wallets (money coming IN)
+    const walletNumbers = topWallets.rows.map((r: any) => r.wallet_number).filter(Boolean)
+
+    let walletUsageMap: { [key: string]: { dailyUsed: number, monthlyUsed: number } } = {}
+
+    if (walletNumbers.length > 0) {
+      // Get today's start
+      const todayStart = new Date()
+      todayStart.setHours(0, 0, 0, 0)
+
+      // Calculate daily usage (recharges + transfer_in for today)
+      const dailyUsage = await db.query(`
+        SELECT
+          target_wallet_number,
+          COALESCE(SUM(net_amount), 0) as daily_total
+        FROM wallet_transactions
+        WHERE target_wallet_number = ANY($1)
+          AND type IN ('recharge', 'transfer_in')
+          AND status = 'completed'
+          AND created_at >= $2
+        GROUP BY target_wallet_number
+      `, [walletNumbers, todayStart])
+
+      // Calculate monthly usage (recharges + transfer_in for this month)
+      const monthlyUsage = await db.query(`
+        SELECT
+          target_wallet_number,
+          COALESCE(SUM(net_amount), 0) as monthly_total
+        FROM wallet_transactions
+        WHERE target_wallet_number = ANY($1)
+          AND type IN ('recharge', 'transfer_in')
+          AND status = 'completed'
+          AND created_at >= $2
+          AND created_at <= $3
+        GROUP BY target_wallet_number
+      `, [walletNumbers, firstDayOfMonth, lastDayOfMonth])
+
+      // Build usage map
+      dailyUsage.rows.forEach((row: any) => {
+        if (!walletUsageMap[row.target_wallet_number]) {
+          walletUsageMap[row.target_wallet_number] = { dailyUsed: 0, monthlyUsed: 0 }
+        }
+        walletUsageMap[row.target_wallet_number].dailyUsed = parseFloat(row.daily_total)
+      })
+
+      monthlyUsage.rows.forEach((row: any) => {
+        if (!walletUsageMap[row.target_wallet_number]) {
+          walletUsageMap[row.target_wallet_number] = { dailyUsed: 0, monthlyUsed: 0 }
+        }
+        walletUsageMap[row.target_wallet_number].monthlyUsed = parseFloat(row.monthly_total)
+      })
+    }
 
     // 10. Pending recharge requests
     const pendingRequests = await db.query(`
@@ -289,15 +379,22 @@ export async function GET(request: NextRequest) {
           rechargesByMethod: chartByMethod,
           monthlyTrends: trendData
         },
-        topWallets: topWallets.rows.map((row: any) => ({
-          id: row.id,
-          name: row.name,
-          walletNumber: row.wallet_number,
-          balance: parseFloat(row.balance),
-          balanceFormatted: `$${parseFloat(row.balance).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
-          status: row.status,
-          type: row.type
-        }))
+        topWallets: topWallets.rows.map((row: any) => {
+          const usage = walletUsageMap[row.wallet_number] || { dailyUsed: 0, monthlyUsed: 0 }
+          return {
+            id: row.id,
+            name: row.name,
+            walletNumber: row.wallet_number,
+            balance: parseFloat(row.balance),
+            balanceFormatted: `$${parseFloat(row.balance).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+            status: row.status,
+            type: row.type,
+            dailyLimit: parseFloat(row.daily_limit || '5000'),
+            monthlyLimit: parseFloat(row.monthly_limit || '50000'),
+            dailyUsed: usage.dailyUsed,
+            monthlyUsed: usage.monthlyUsed
+          }
+        })
       }
     })
 
