@@ -104,6 +104,18 @@ interface PendingRequest {
   status: string
 }
 
+interface MonthlyTrend {
+  month: string
+  recharges: number
+  transfers: number
+}
+
+interface RechargeByMethod {
+  method: string
+  total: number
+  count: number
+}
+
 const paymentMethods = [
   { id: 'card_manual', label: 'Tarjeta', icon: CreditCard },
   { id: 'card_terminal', label: 'Terminal', icon: Smartphone },
@@ -114,22 +126,8 @@ const paymentMethods = [
 
 const quickAmounts = [50, 100, 250, 500, 1000]
 
-// Chart data for wallet trends
-const transactionTrends = [
-  { name: 'Ene', recargas: 12500, transferencias: 8400 },
-  { name: 'Feb', recargas: 15200, transferencias: 9800 },
-  { name: 'Mar', recargas: 18300, transferencias: 11200 },
-  { name: 'Abr', recargas: 14100, transferencias: 10500 },
-  { name: 'May', recargas: 21500, transferencias: 13200 },
-  { name: 'Jun', recargas: 19800, transferencias: 12100 },
-  { name: 'Jul', recargas: 24200, transferencias: 15800 }
-]
-
-const transactionTypes = [
-  { name: 'Recargas', value: 45, color: '#22c55e' },
-  { name: 'Transferencias', value: 30, color: '#3b82f6' },
-  { name: 'Debitos', value: 25, color: '#ef4444' }
-]
+// Month names for chart labels
+const monthNames = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic']
 
 export default function WalletManagementPage() {
   const { theme } = useTheme()
@@ -137,10 +135,10 @@ export default function WalletManagementPage() {
   const searchParams = useSearchParams()
   const tabParam = searchParams.get('tab') as Tab | null
 
-  // Brand colors
+  // Brand colors - Exa colors
   const brandColor = theme === 'dark' ? 'blue' : 'red'
-  const brandBg = theme === 'dark' ? 'bg-blue-600' : 'bg-red-600'
-  const brandBgHover = theme === 'dark' ? 'hover:bg-blue-700' : 'hover:bg-red-700'
+  const exaBrandBg = theme === 'dark' ? '#0374e5' : '#cc0a46'
+  const exaBrandBgHover = theme === 'dark' ? '#0263c7' : '#b00940'
   const brandText = theme === 'dark' ? 'text-blue-500' : 'text-red-500'
   const brandBorder = theme === 'dark' ? 'border-blue-500' : 'border-red-500'
 
@@ -151,6 +149,8 @@ export default function WalletManagementPage() {
   // Dashboard data
   const [stats, setStats] = useState<DashboardStats | null>(null)
   const [topWallets, setTopWallets] = useState<WalletResult[]>([])
+  const [monthlyTrends, setMonthlyTrends] = useState<MonthlyTrend[]>([])
+  const [rechargesByMethod, setRechargesByMethod] = useState<RechargeByMethod[]>([])
 
   // Recharge wizard
   const [rechargeStep, setRechargeStep] = useState<RechargeStep>(1)
@@ -191,6 +191,11 @@ export default function WalletManagementPage() {
       if (data.success) {
         setStats(data.data.stats)
         setTopWallets(data.data.topWallets || [])
+        // Set chart data
+        if (data.data.charts) {
+          setMonthlyTrends(data.data.charts.monthlyTrends || [])
+          setRechargesByMethod(data.data.charts.rechargesByMethod || [])
+        }
       } else {
         setError(data.error)
       }
@@ -420,11 +425,12 @@ export default function WalletManagementPage() {
                 className={cn(
                   "flex-1 min-w-[100px] flex items-center justify-center gap-2 px-4 py-3 rounded-lg font-medium transition-all duration-200 relative whitespace-nowrap",
                   activeTab === tab.id
-                    ? cn(brandBg, 'text-white')
+                    ? 'text-white'
                     : theme === 'dark'
                       ? 'text-gray-400 hover:text-white hover:bg-gray-700'
                       : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
                 )}
+                style={activeTab === tab.id ? { backgroundColor: exaBrandBg } : undefined}
               >
                 <tab.icon className="w-5 h-5" />
                 <span className="hidden sm:inline">{tab.label}</span>
@@ -462,19 +468,21 @@ export default function WalletManagementPage() {
                     ))
                   ) : stats && (
                     <>
-                      {/* Balance Total - Destacado */}
+                      {/* Balance Total */}
                       <motion.div
                         initial={{ opacity: 0, y: 20 }}
                         animate={{ opacity: 1, y: 0 }}
                         transition={{ delay: 0.1 }}
-                        className="rounded-xl p-5 text-white col-span-2 sm:col-span-1"
-                        style={{ backgroundColor: theme === 'dark' ? '#2563EB' : '#cc0a46' }}
+                        className={cn(
+                          "rounded-xl p-5 border col-span-2 sm:col-span-1",
+                          theme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'
+                        )}
                       >
                         <div className="flex items-center gap-2 mb-2">
-                          <Wallet className="w-5 h-5 opacity-80" />
-                          <p className="text-sm opacity-80">Balance Total</p>
+                          <Wallet className="w-5 h-5 text-green-500" />
+                          <p className={cn("text-sm", theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}>Balance Total</p>
                         </div>
-                        <p className="text-2xl font-bold">{stats.totalBalance.formatted}</p>
+                        <p className={cn("text-2xl font-bold", theme === 'dark' ? 'text-white' : 'text-gray-900')}>{stats.totalBalance.formatted}</p>
                       </motion.div>
 
                       {/* Total Wallets */}
@@ -635,7 +643,11 @@ export default function WalletManagementPage() {
                     </h3>
                     <div className="h-64">
                       <ResponsiveContainer width="100%" height="100%">
-                        <AreaChart data={transactionTrends}>
+                        <AreaChart data={monthlyTrends.map(t => ({
+                          name: monthNames[parseInt(t.month.split('-')[1]) - 1] || t.month,
+                          recargas: t.recharges,
+                          transferencias: t.transfers
+                        }))}>
                           <defs>
                             <linearGradient id="colorRecargas" x1="0" y1="0" x2="0" y2="1">
                               <stop offset="5%" stopColor="#22c55e" stopOpacity={0.3}/>
@@ -699,7 +711,7 @@ export default function WalletManagementPage() {
                     </div>
                   </motion.div>
 
-                  {/* Pie Chart - Transaction Types */}
+                  {/* Pie Chart - Recharges by Method */}
                   <motion.div
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
@@ -710,13 +722,17 @@ export default function WalletManagementPage() {
                     )}
                   >
                     <h3 className={cn("text-lg font-semibold mb-4", theme === 'dark' ? 'text-white' : 'text-gray-900')}>
-                      Tipos de Transaccion
+                      Recargas por Metodo
                     </h3>
                     <div className="h-48">
                       <ResponsiveContainer width="100%" height="100%">
                         <PieChart>
                           <Pie
-                            data={transactionTypes}
+                            data={rechargesByMethod.length > 0 ? rechargesByMethod.map((item, index) => ({
+                              name: item.method,
+                              value: item.total,
+                              color: ['#22c55e', '#3b82f6', '#f59e0b', '#ef4444', '#8b5cf6'][index % 5]
+                            })) : [{ name: 'Sin datos', value: 1, color: theme === 'dark' ? '#374151' : '#e5e7eb' }]}
                             cx="50%"
                             cy="50%"
                             innerRadius={50}
@@ -724,8 +740,8 @@ export default function WalletManagementPage() {
                             paddingAngle={5}
                             dataKey="value"
                           >
-                            {transactionTypes.map((entry, index) => (
-                              <Cell key={`cell-${index}`} fill={entry.color} />
+                            {(rechargesByMethod.length > 0 ? rechargesByMethod : [{ method: 'Sin datos', total: 1 }]).map((_, index) => (
+                              <Cell key={`cell-${index}`} fill={['#22c55e', '#3b82f6', '#f59e0b', '#ef4444', '#8b5cf6', '#374151'][index % 6]} />
                             ))}
                           </Pie>
                           <Tooltip
@@ -735,21 +751,30 @@ export default function WalletManagementPage() {
                               borderRadius: '8px',
                               color: theme === 'dark' ? '#ffffff' : '#000000'
                             }}
-                            formatter={(value: number) => [`${value}%`, '']}
+                            formatter={(value: number) => [`$${value.toLocaleString()}`, '']}
                           />
                         </PieChart>
                       </ResponsiveContainer>
                     </div>
                     <div className="space-y-2 mt-2">
-                      {transactionTypes.map((type) => (
-                        <div key={type.name} className="flex items-center justify-between">
-                          <div className="flex items-center gap-2">
-                            <span className="w-3 h-3 rounded-full" style={{ backgroundColor: type.color }} />
-                            <span className={cn("text-sm", theme === 'dark' ? 'text-gray-400' : 'text-gray-600')}>{type.name}</span>
+                      {rechargesByMethod.length > 0 ? rechargesByMethod.map((item, index) => {
+                        const totalSum = rechargesByMethod.reduce((acc, curr) => acc + curr.total, 0)
+                        const percentage = totalSum > 0 ? ((item.total / totalSum) * 100).toFixed(1) : '0'
+                        const colors = ['#22c55e', '#3b82f6', '#f59e0b', '#ef4444', '#8b5cf6']
+                        return (
+                          <div key={item.method} className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              <span className="w-3 h-3 rounded-full" style={{ backgroundColor: colors[index % 5] }} />
+                              <span className={cn("text-sm", theme === 'dark' ? 'text-gray-400' : 'text-gray-600')}>{item.method}</span>
+                            </div>
+                            <span className={cn("text-sm font-medium", theme === 'dark' ? 'text-white' : 'text-gray-900')}>{percentage}%</span>
                           </div>
-                          <span className={cn("text-sm font-medium", theme === 'dark' ? 'text-white' : 'text-gray-900')}>{type.value}%</span>
+                        )
+                      }) : (
+                        <div className="text-center py-4">
+                          <p className={cn("text-sm", theme === 'dark' ? 'text-gray-500' : 'text-gray-400')}>Sin datos de recargas</p>
                         </div>
-                      ))}
+                      )}
                     </div>
                   </motion.div>
                 </div>
@@ -898,12 +923,15 @@ export default function WalletManagementPage() {
                               )}
                             >
                               <td className="py-3 pl-3">
-                                <span className={cn(
-                                  "w-6 h-6 rounded-full flex items-center justify-center text-xs font-medium",
-                                  index < 3
-                                    ? cn(brandBg, 'text-white')
-                                    : theme === 'dark' ? 'bg-gray-700 text-gray-400' : 'bg-gray-100 text-gray-500'
-                                )}>
+                                <span
+                                  className={cn(
+                                    "w-6 h-6 rounded-full flex items-center justify-center text-xs font-medium",
+                                    index < 3
+                                      ? 'text-white'
+                                      : theme === 'dark' ? 'bg-gray-700 text-gray-400' : 'bg-gray-100 text-gray-500'
+                                  )}
+                                  style={index < 3 ? { backgroundColor: exaBrandBg } : undefined}
+                                >
                                   {index + 1}
                                 </span>
                               </td>
@@ -1108,9 +1136,10 @@ export default function WalletManagementPage() {
                                 className={cn(
                                   "px-4 py-2 rounded-lg text-sm font-medium border transition-all",
                                   rechargeAmount === amt.toString()
-                                    ? cn(brandBg, 'text-white border-transparent')
+                                    ? 'text-white border-transparent'
                                     : theme === 'dark' ? 'bg-gray-700 border-gray-600 text-gray-300' : 'bg-gray-100 border-gray-200 text-gray-700'
                                 )}
+                                style={rechargeAmount === amt.toString() ? { backgroundColor: exaBrandBg } : undefined}
                               >
                                 ${amt}
                               </button>
@@ -1129,9 +1158,10 @@ export default function WalletManagementPage() {
                                 className={cn(
                                   "p-3 rounded-lg border-2 text-center transition-all",
                                   paymentMethod === method.id
-                                    ? cn(brandBg, 'border-transparent text-white')
+                                    ? 'border-transparent text-white'
                                     : theme === 'dark' ? 'bg-gray-700 border-gray-600' : 'bg-gray-50 border-gray-200'
                                 )}
+                                style={paymentMethod === method.id ? { backgroundColor: exaBrandBg } : undefined}
                               >
                                 <method.icon className={cn(
                                   "w-5 h-5 mx-auto mb-1",
@@ -1239,9 +1269,9 @@ export default function WalletManagementPage() {
                       disabled={rechargeStep === 1 && !selectedWallet || rechargeStep === 2 && !rechargeAmount}
                       className={cn(
                         "flex items-center gap-2 px-5 py-2.5 rounded-lg font-medium text-white transition-all",
-                        brandBg, brandBgHover,
                         (rechargeStep === 1 && !selectedWallet || rechargeStep === 2 && !rechargeAmount) && 'opacity-50 cursor-not-allowed'
                       )}
+                      style={{ backgroundColor: exaBrandBg }}
                     >
                       Siguiente
                       <ArrowRight className="w-4 h-4" />
@@ -1533,9 +1563,9 @@ export default function WalletManagementPage() {
                       }
                       className={cn(
                         "flex items-center gap-2 px-5 py-2.5 rounded-lg font-medium text-white transition-all",
-                        brandBg, brandBgHover,
                         ((transferStep === 1 && !transferSourceWallet) || (transferStep === 2 && !transferAmount) || (transferStep === 3 && !transferTargetWallet)) && 'opacity-50 cursor-not-allowed'
                       )}
+                      style={{ backgroundColor: exaBrandBg }}
                     >
                       Siguiente
                       <ArrowRight className="w-4 h-4" />
