@@ -99,7 +99,8 @@ export async function GET(
     const tx = txResult.rows[0]
 
     // If already completed or failed, just return DB status
-    if (tx.status === 'completed' || tx.status === 'failed') {
+    if (tx.status === 'completed' || tx.status === 'failed' || tx.status === 'cancelled') {
+      const canRetry = tx.status === 'failed' || tx.status === 'cancelled'
       return NextResponse.json({
         success: true,
         data: {
@@ -108,7 +109,9 @@ export async function GET(
           transactionId: tx.id,
           transactionNumber: tx.transaction_number,
           paymentId: tx.payment_reference,
-          newBalance: tx.status === 'completed' ? tx.metadata?.newBalance : undefined
+          newBalance: tx.status === 'completed' ? tx.metadata?.newBalance : undefined,
+          canRetry,
+          canCancel: false
         }
       })
     }
@@ -260,7 +263,9 @@ export async function GET(
           receiptUrl: paymentDetails.payment?.receiptUrl,
           newBalance: updatedTx.rows[0]?.metadata?.newBalance,
           cardBrand: paymentDetails.payment?.cardDetails?.card.cardBrand,
-          cardLast4: paymentDetails.payment?.cardDetails?.card.last4
+          cardLast4: paymentDetails.payment?.cardDetails?.card.last4,
+          canRetry: false,
+          canCancel: false
         }
       })
     }
@@ -279,6 +284,10 @@ export async function GET(
       }), tx.id])
     }
 
+    // Determine if can cancel (pending, in_progress) or retry (cancelled)
+    const canCancel = ['pending', 'in_progress', 'processing'].includes(ourStatus)
+    const canRetry = ourStatus === 'cancelled'
+
     return NextResponse.json({
       success: true,
       data: {
@@ -286,7 +295,9 @@ export async function GET(
         status: ourStatus,
         transactionId: tx.id,
         transactionNumber: tx.transaction_number,
-        squareStatus
+        squareStatus,
+        canRetry,
+        canCancel
       }
     })
 
