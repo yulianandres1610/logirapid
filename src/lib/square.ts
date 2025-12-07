@@ -200,8 +200,11 @@ export async function createTerminalCheckout(
       deviceId: options.deviceId,
       amount: totalAmount,
       appFee: options.appFee,
-      orderId: options.orderId
+      orderId: options.orderId,
+      collectSignature: options.collectSignature,
+      skipReceipt: options.skipReceipt
     })
+    console.log('[Square] Full checkout request:', JSON.stringify(checkoutRequest, null, 2))
 
     const response = await fetch(`${baseUrl}/v2/terminals/checkouts`, {
       method: 'POST',

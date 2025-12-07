@@ -71,6 +71,7 @@ export async function GET(request: NextRequest) {
         wt.target_type,
         wt.target_company_id,
         wt.target_user_id,
+        wt.target_customer_id,
         wt.target_wallet_number,
         wt.amount,
         wt.fee,
@@ -87,12 +88,14 @@ export async function GET(request: NextRequest) {
         sc.legalname as source_company_name,
         tc.legalname as target_company_name,
         CONCAT(su.firstname, ' ', su.lastname) as source_user_name,
-        CONCAT(tu.firstname, ' ', tu.lastname) as target_user_name
+        CONCAT(tu.firstname, ' ', tu.lastname) as target_user_name,
+        CONCAT(tcust.firstname, ' ', tcust.lastname) as target_customer_name
       FROM wallet_transactions wt
       LEFT JOIN companies sc ON wt.source_company_id = sc.id
       LEFT JOIN companies tc ON wt.target_company_id = tc.id
       LEFT JOIN users su ON wt.source_user_id = su.id
       LEFT JOIN users tu ON wt.target_user_id = tu.id
+      LEFT JOIN customers tcust ON wt.target_customer_id = tcust.id
       WHERE 1=1
     `
     const params: any[] = []
@@ -216,6 +219,8 @@ export async function GET(request: NextRequest) {
         targetName = row.target_company_name || 'Empresa'
       } else if (row.target_type === 'user') {
         targetName = row.target_user_name || 'Usuario'
+      } else if (row.target_type === 'customer') {
+        targetName = row.target_customer_name || 'Cliente'
       }
 
       return {
