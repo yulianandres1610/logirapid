@@ -178,9 +178,12 @@ export async function createTerminalCheckout(
       order_id: options.orderId,
       device_options: {
         device_id: options.deviceId,
-        collect_signature: options.collectSignature,
-        skip_receipt_screen: options.skipReceipt,
-        show_itemized_cart: true
+        collect_signature: true, // Always request signature
+        skip_receipt_screen: false, // Always show receipt after signature
+        show_itemized_cart: true,
+        tip_settings: {
+          allow_tipping: false // Disable tips to ensure signature flow
+        }
       },
       payment_options: {
         autocomplete: true,
