@@ -7,19 +7,20 @@
 
 import twilio from 'twilio'
 
-// Configuracion de Twilio desde variables de entorno
-const accountSid = process.env.TWILIO_ACCOUNT_SID
-const authToken = process.env.TWILIO_AUTH_TOKEN
-const twilioPhoneNumber = process.env.TWILIO_PHONE_NUMBER
-
-// Inicializar cliente de Twilio
+// Inicializar cliente de Twilio (lazy)
 let twilioClient: twilio.Twilio | null = null
 
 function getClient(): twilio.Twilio {
+  // Always read env vars fresh in case they were loaded after module init
+  const accountSid = process.env.TWILIO_ACCOUNT_SID
+  const authToken = process.env.TWILIO_AUTH_TOKEN
+
+  if (!accountSid || !authToken) {
+    throw new Error('Twilio credentials not configured. Please set TWILIO_ACCOUNT_SID and TWILIO_AUTH_TOKEN')
+  }
+
+  // Create new client if not exists or if credentials changed
   if (!twilioClient) {
-    if (!accountSid || !authToken) {
-      throw new Error('Twilio credentials not configured. Please set TWILIO_ACCOUNT_SID and TWILIO_AUTH_TOKEN')
-    }
     twilioClient = twilio(accountSid, authToken)
   }
   return twilioClient
@@ -76,8 +77,17 @@ export interface SMSResult {
  */
 export async function sendSMS(to: string, message: string): Promise<SMSResult> {
   try {
+    // Debug: log current env vars status
+    console.log('[SMS Service] Environment check:', {
+      hasSid: !!process.env.TWILIO_ACCOUNT_SID,
+      hasToken: !!process.env.TWILIO_AUTH_TOKEN,
+      hasPhone: !!process.env.TWILIO_PHONE_NUMBER,
+      phoneValue: process.env.TWILIO_PHONE_NUMBER ? process.env.TWILIO_PHONE_NUMBER.substring(0, 5) + '...' : 'NOT SET',
+      to: to
+    })
+
     // Validar configuracion
-    if (!twilioPhoneNumber) {
+    if (!process.env.TWILIO_PHONE_NUMBER) {
       console.error('[SMS Service] TWILIO_PHONE_NUMBER not configured')
       return {
         success: false,
@@ -105,7 +115,7 @@ export async function sendSMS(to: string, message: string): Promise<SMSResult> {
 
     const result = await client.messages.create({
       body: message,
-      from: twilioPhoneNumber,
+      from: process.env.TWILIO_PHONE_NUMBER,
       to: formattedTo
     })
 
@@ -416,8 +426,9 @@ export async function sendWhatsAppOrderConfirmation(
 ): Promise<SMSResult> {
   try {
     const contentSid = process.env.TWILIO_CONTENT_SID_ORDER_CREATED
+    const twilioPhone = process.env.TWILIO_PHONE_NUMBER
     const whatsappNumber = process.env.TWILIO_WHATSAPP_NUMBER ||
-      (twilioPhoneNumber ? `whatsapp:${twilioPhoneNumber}` : null)
+      (twilioPhone ? `whatsapp:${twilioPhone}` : null)
 
     if (!contentSid) {
       console.error('[WhatsApp Service] TWILIO_CONTENT_SID_ORDER_CREATED not configured')
