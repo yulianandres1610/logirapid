@@ -298,9 +298,9 @@ export default function WalletManagementPage() {
     }
   }
 
-  // Calculate 3% fee for terminal payments
+  // Calculate 3.5% fee for terminal payments
   const calculateTerminalFee = (amount: number) => {
-    const fee = amount * 0.03
+    const fee = amount * 0.035
     return {
       fee: Math.round(fee * 100) / 100,
       total: Math.round((amount + fee) * 100) / 100
@@ -1474,19 +1474,19 @@ export default function WalletManagementPage() {
                               </div>
                             )}
 
-                            {/* 3% Fee Notice */}
+                            {/* 3.5% Fee Notice */}
                             {rechargeAmount && parseFloat(rechargeAmount) > 0 && (
                               <div className={cn(
                                 "mt-3 p-3 rounded-lg border",
                                 theme === 'dark' ? 'bg-blue-900/20 border-blue-500/30' : 'bg-blue-50 border-blue-200'
                               )}>
-                                <p className="text-sm text-blue-600 font-medium mb-1">Cargo por procesamiento (3%)</p>
+                                <p className="text-sm text-blue-600 font-medium mb-1">Cargo por procesamiento (3.5%)</p>
                                 <div className="flex justify-between text-sm">
                                   <span className={theme === 'dark' ? 'text-gray-300' : 'text-gray-600'}>Monto base:</span>
                                   <span className={theme === 'dark' ? 'text-white' : 'text-gray-900'}>${parseFloat(rechargeAmount).toFixed(2)}</span>
                                 </div>
                                 <div className="flex justify-between text-sm">
-                                  <span className={theme === 'dark' ? 'text-gray-300' : 'text-gray-600'}>Cargo (3%):</span>
+                                  <span className={theme === 'dark' ? 'text-gray-300' : 'text-gray-600'}>Cargo (3.5%):</span>
                                   <span className={theme === 'dark' ? 'text-white' : 'text-gray-900'}>${calculateTerminalFee(parseFloat(rechargeAmount)).fee.toFixed(2)}</span>
                                 </div>
                                 <div className="flex justify-between text-sm font-bold mt-1 pt-1 border-t border-blue-300/30">
@@ -1628,7 +1628,7 @@ export default function WalletManagementPage() {
                                       <span className={theme === 'dark' ? 'text-white' : 'text-gray-900'}>${parseFloat(rechargeAmount).toFixed(2)}</span>
                                     </div>
                                     <div className="flex justify-between">
-                                      <span className={theme === 'dark' ? 'text-gray-300' : 'text-gray-600'}>Cargo procesamiento (3%):</span>
+                                      <span className={theme === 'dark' ? 'text-gray-300' : 'text-gray-600'}>Cargo procesamiento (3.5%):</span>
                                       <span className={theme === 'dark' ? 'text-white' : 'text-gray-900'}>${calculateTerminalFee(parseFloat(rechargeAmount)).fee.toFixed(2)}</span>
                                     </div>
                                     <div className="flex justify-between font-bold pt-1 border-t border-gray-500">

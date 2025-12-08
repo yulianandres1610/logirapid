@@ -97,7 +97,7 @@ export async function POST(request: NextRequest) {
       targetPhone = result.rows[0].phone
     }
 
-    console.log('[Card Payment] Target:', { targetId, targetName, currentBalance })
+    console.log('[Card Payment] Target:', { targetId, targetName, currentBalance, targetPhone })
 
     // 4. Get Square credentials
     const credentials = getPlatformCredentials()
