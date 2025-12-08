@@ -107,7 +107,7 @@ export async function createSquareOrder(
       // For platform terminals, we don't use app_fee_money but still charge the fee
       service_charges: options.appFee > 0 ? [
         {
-          name: 'Processing Fee (3%)',
+          name: 'Processing Fee (3.5%)',
           amount_money: {
             amount: options.appFee,
             currency: 'USD'
@@ -433,12 +433,12 @@ export function verifyWebhookSignature(
 }
 
 /**
- * Calculate the 3% terminal fee
+ * Calculate the 3.5% terminal fee
  * @param amount - Amount in dollars
  * @returns Object with fee in dollars and cents
  */
 export function calculateTerminalFee(amount: number): { fee: number; feeCents: number; total: number; totalCents: number } {
-  const fee = amount * 0.03 // 3%
+  const fee = amount * 0.035 // 3.5%
   const total = amount + fee
 
   return {

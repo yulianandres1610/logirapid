@@ -161,7 +161,7 @@ export function SquareCardForm({
       const payments = await window.Square.payments(applicationId, locationId)
       paymentsRef.current = payments
 
-      // Create Card element with custom styling
+      // Create Card element with custom styling (Square only accepts specific CSS properties)
       const card = await payments.card({
         style: {
           '.input-container': {
@@ -177,7 +177,6 @@ export function SquareCardForm({
           'input': {
             backgroundColor: theme === 'dark' ? '#1F2937' : '#FFFFFF',
             color: theme === 'dark' ? '#F9FAFB' : '#111827',
-            fontFamily: 'Inter, system-ui, sans-serif',
           },
           'input::placeholder': {
             color: theme === 'dark' ? '#6B7280' : '#9CA3AF',
@@ -316,20 +315,44 @@ export function SquareCardForm({
           )}
         />
 
-        {/* Amount Summary */}
+        {/* Amount Summary with Processing Fee */}
         <div className={cn(
           "mt-4 p-4 rounded-lg",
           theme === 'dark' ? 'bg-gray-700' : 'bg-gray-50'
         )}>
+          {/* Base Amount */}
+          <div className="flex justify-between items-center mb-2">
+            <span className={cn("text-sm", theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}>
+              Monto de recarga:
+            </span>
+            <span className={cn("text-sm", theme === 'dark' ? 'text-gray-300' : 'text-gray-700')}>
+              ${amount.toFixed(2)}
+            </span>
+          </div>
+
+          {/* Processing Fee */}
+          <div className="flex justify-between items-center mb-2">
+            <span className={cn("text-sm", theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}>
+              Processing Fee (3.5%):
+            </span>
+            <span className={cn("text-sm", theme === 'dark' ? 'text-gray-300' : 'text-gray-700')}>
+              ${(amount * 0.035).toFixed(2)}
+            </span>
+          </div>
+
+          {/* Divider */}
+          <div className={cn("border-t my-2", theme === 'dark' ? 'border-gray-600' : 'border-gray-200')} />
+
+          {/* Total */}
           <div className="flex justify-between items-center">
-            <span className={theme === 'dark' ? 'text-gray-300' : 'text-gray-600'}>
+            <span className={cn("font-medium", theme === 'dark' ? 'text-gray-300' : 'text-gray-600')}>
               Total a cobrar:
             </span>
             <span className={cn(
               "text-xl font-bold",
               theme === 'dark' ? 'text-white' : 'text-gray-900'
             )}>
-              ${amount.toFixed(2)} USD
+              ${(amount * 1.035).toFixed(2)} USD
             </span>
           </div>
         </div>
@@ -354,7 +377,7 @@ export function SquareCardForm({
           ) : (
             <>
               <CreditCard className="w-5 h-5" />
-              Pagar ${amount.toFixed(2)}
+              Pagar ${(amount * 1.035).toFixed(2)}
             </>
           )}
         </button>
