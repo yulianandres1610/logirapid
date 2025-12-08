@@ -69,6 +69,7 @@ export function VirtualCard({
   const [showCreditSettings, setShowCreditSettings] = useState(false)
   const [tempCreditLimit, setTempCreditLimit] = useState(Math.abs(creditLimit))
   const [tempDailyLimit, setTempDailyLimit] = useState(dailyLimit)
+  const [tempMonthlyLimit, setTempMonthlyLimit] = useState(monthlyLimit)
 
   // Format wallet number with spaces
   const formatWalletNumber = (num: string, show: boolean) => {
@@ -119,38 +120,56 @@ export function VirtualCard({
 
           <div className="relative z-10 h-full p-6 flex flex-col justify-between text-white">
             {/* Header */}
-            <div className="flex justify-between items-start">
-              <div>
+            <div className="flex justify-between items-start gap-3">
+              <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 mb-1">
                   {type === 'company' && (
-                    <svg className="w-4 h-4 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <svg className="w-4 h-4 text-blue-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
                     </svg>
                   )}
                   {type === 'user' && (
-                    <svg className="w-4 h-4 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <svg className="w-4 h-4 text-green-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
                     </svg>
                   )}
                   {type === 'customer' && (
-                    <svg className="w-4 h-4 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <svg className="w-4 h-4 text-purple-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
                     </svg>
                   )}
                   <span className="text-xs text-gray-300 uppercase tracking-wider">
                     {type === 'company' ? 'Empresa' : type === 'user' ? 'Usuario' : 'Cliente'}
                   </span>
+                  {/* SUPER_ADMIN badge and settings button on front */}
+                  {isSuperAdmin && type === 'company' && onCreditSettingsChange && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        setShowCreditSettings(!showCreditSettings)
+                      }}
+                      className="ml-auto p-1 rounded hover:bg-white/10 transition-colors"
+                      title="Configurar limites"
+                    >
+                      <svg className="w-4 h-4 text-orange-400 hover:text-orange-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                      </svg>
+                    </button>
+                  )}
                 </div>
-                <h3 className="text-lg font-bold truncate max-w-[200px]">{name}</h3>
+                <h3 className="text-base font-bold leading-tight line-clamp-2" title={name}>{name}</h3>
               </div>
-              {logo && (
-                <img src={logo} alt={name} className="w-10 h-10 rounded-lg object-cover bg-white/10" />
-              )}
-              {!logo && (
-                <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-purple-500 to-blue-500 flex items-center justify-center">
-                  <span className="text-lg font-bold">{name.charAt(0)}</span>
-                </div>
-              )}
+              <div className="flex-shrink-0">
+                {logo && (
+                  <img src={logo} alt={name} className="w-10 h-10 rounded-lg object-cover bg-white/10" />
+                )}
+                {!logo && (
+                  <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-purple-500 to-blue-500 flex items-center justify-center">
+                    <span className="text-lg font-bold">{name.charAt(0)}</span>
+                  </div>
+                )}
+              </div>
             </div>
 
             {/* Card Number */}
@@ -337,16 +356,27 @@ export function VirtualCard({
       {/* SUPER_ADMIN Credit Settings Panel */}
       {isSuperAdmin && type === 'company' && showCreditSettings && onCreditSettingsChange && (
         <motion.div
-          initial={{ opacity: 0, height: 0 }}
-          animate={{ opacity: 1, height: 'auto' }}
-          exit={{ opacity: 0, height: 0 }}
-          className="mt-4 bg-gray-800/90 backdrop-blur rounded-xl p-4 border border-gray-700"
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -10 }}
+          className="mt-4 bg-gradient-to-br from-gray-800/95 to-gray-900/95 backdrop-blur rounded-xl p-5 border border-orange-500/30 shadow-lg shadow-orange-500/10"
         >
-          <div className="flex justify-between items-center mb-4">
-            <h4 className="text-sm font-semibold text-white">Configuracion de Limites</h4>
+          <div className="flex justify-between items-center mb-5">
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 rounded-lg bg-orange-500/20 flex items-center justify-center">
+                <svg className="w-4 h-4 text-orange-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                </svg>
+              </div>
+              <div>
+                <h4 className="text-sm font-semibold text-white">Configuracion de Limites</h4>
+                <p className="text-[10px] text-gray-400">Solo visible para SUPER_ADMIN</p>
+              </div>
+            </div>
             <button
               onClick={() => setShowCreditSettings(false)}
-              className="p-1 hover:bg-gray-700 rounded transition-colors"
+              className="p-1.5 hover:bg-gray-700 rounded-lg transition-colors"
             >
               <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -354,12 +384,15 @@ export function VirtualCard({
             </button>
           </div>
 
-          <div className="space-y-4">
+          <div className="space-y-5">
             {/* Credit Limit Slider */}
-            <div>
-              <div className="flex justify-between text-xs mb-2">
-                <span className="text-gray-400">Limite de Credito</span>
-                <span className="text-orange-400 font-medium">${tempCreditLimit.toLocaleString()}</span>
+            <div className="bg-gray-700/30 rounded-lg p-3">
+              <div className="flex justify-between items-center mb-3">
+                <div className="flex items-center gap-2">
+                  <div className="w-2 h-2 rounded-full bg-orange-500"></div>
+                  <span className="text-xs text-gray-300">Limite de Credito</span>
+                </div>
+                <span className="text-sm text-orange-400 font-bold">${tempCreditLimit.toLocaleString()}</span>
               </div>
               <input
                 type="range"
@@ -368,9 +401,9 @@ export function VirtualCard({
                 step="50"
                 value={tempCreditLimit}
                 onChange={(e) => setTempCreditLimit(Number(e.target.value))}
-                className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-orange-500"
+                className="w-full h-2 bg-gray-600 rounded-lg appearance-none cursor-pointer accent-orange-500"
               />
-              <div className="flex justify-between text-[10px] text-gray-500 mt-1">
+              <div className="flex justify-between text-[10px] text-gray-500 mt-2">
                 <span>$0</span>
                 <span>$500</span>
                 <span>$1,000</span>
@@ -380,10 +413,13 @@ export function VirtualCard({
             </div>
 
             {/* Daily Limit Slider */}
-            <div>
-              <div className="flex justify-between text-xs mb-2">
-                <span className="text-gray-400">Limite Diario de Transacciones</span>
-                <span className="text-blue-400 font-medium">${tempDailyLimit.toLocaleString()}</span>
+            <div className="bg-gray-700/30 rounded-lg p-3">
+              <div className="flex justify-between items-center mb-3">
+                <div className="flex items-center gap-2">
+                  <div className="w-2 h-2 rounded-full bg-blue-500"></div>
+                  <span className="text-xs text-gray-300">Limite Diario</span>
+                </div>
+                <span className="text-sm text-blue-400 font-bold">${tempDailyLimit.toLocaleString()}</span>
               </div>
               <input
                 type="range"
@@ -392,9 +428,9 @@ export function VirtualCard({
                 step="500"
                 value={tempDailyLimit}
                 onChange={(e) => setTempDailyLimit(Number(e.target.value))}
-                className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-blue-500"
+                className="w-full h-2 bg-gray-600 rounded-lg appearance-none cursor-pointer accent-blue-500"
               />
-              <div className="flex justify-between text-[10px] text-gray-500 mt-1">
+              <div className="flex justify-between text-[10px] text-gray-500 mt-2">
                 <span>$500</span>
                 <span>$5K</span>
                 <span>$10K</span>
@@ -402,31 +438,60 @@ export function VirtualCard({
                 <span>$25K</span>
               </div>
             </div>
+
+            {/* Monthly Limit Slider */}
+            <div className="bg-gray-700/30 rounded-lg p-3">
+              <div className="flex justify-between items-center mb-3">
+                <div className="flex items-center gap-2">
+                  <div className="w-2 h-2 rounded-full bg-green-500"></div>
+                  <span className="text-xs text-gray-300">Limite Mensual</span>
+                </div>
+                <span className="text-sm text-green-400 font-bold">${tempMonthlyLimit.toLocaleString()}</span>
+              </div>
+              <input
+                type="range"
+                min="5000"
+                max="100000"
+                step="5000"
+                value={tempMonthlyLimit}
+                onChange={(e) => setTempMonthlyLimit(Number(e.target.value))}
+                className="w-full h-2 bg-gray-600 rounded-lg appearance-none cursor-pointer accent-green-500"
+              />
+              <div className="flex justify-between text-[10px] text-gray-500 mt-2">
+                <span>$5K</span>
+                <span>$25K</span>
+                <span>$50K</span>
+                <span>$75K</span>
+                <span>$100K</span>
+              </div>
+            </div>
           </div>
 
           {/* Save Button */}
-          <div className="mt-4 flex justify-end gap-2">
+          <div className="mt-5 flex justify-end gap-3">
             <button
               onClick={() => {
                 setTempCreditLimit(creditLimitAbs)
                 setTempDailyLimit(dailyLimit)
+                setTempMonthlyLimit(monthlyLimit)
                 setShowCreditSettings(false)
               }}
-              className="px-3 py-1.5 text-xs text-gray-300 hover:text-white transition-colors"
+              className="px-4 py-2 text-xs text-gray-300 hover:text-white hover:bg-gray-700 rounded-lg transition-colors"
             >
               Cancelar
             </button>
             <button
               onClick={() => {
                 onCreditSettingsChange({
-                  creditLimit: -tempCreditLimit, // Convert to negative
-                  dailyLimit: tempDailyLimit
+                  creditLimit: -tempCreditLimit,
+                  dailyLimit: tempDailyLimit,
+                  monthlyLimit: tempMonthlyLimit
                 })
                 setShowCreditSettings(false)
               }}
-              className="px-4 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs rounded-lg transition-colors"
+              className="px-5 py-2 bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white text-xs font-medium rounded-lg transition-all shadow-lg shadow-orange-500/30"
             >
-              Guardar
+              Guardar Cambios
             </button>
           </div>
         </motion.div>
