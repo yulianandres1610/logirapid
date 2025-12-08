@@ -8,6 +8,10 @@
     {
       "path": "/api/cron/update-exchange-rates",
       "schedule": "*/6 * * * *"
+    },
+    {
+      "path": "/api/cron/credit-charges",
+      "schedule": "0 6 * * *"
     }
   ]
 }

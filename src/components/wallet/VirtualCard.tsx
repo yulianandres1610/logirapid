@@ -19,6 +19,15 @@ interface VirtualCardProps {
   monthlyUsed?: number
   currency?: string
   createdAt?: string
+  // Credit system props (only for companies)
+  creditLimit?: number // Negative value (e.g., -200)
+  creditEnabled?: boolean
+  availableCredit?: number
+  daysInNegative?: number
+  // SUPER_ADMIN controls
+  isSuperAdmin?: boolean
+  companyId?: number
+  onCreditSettingsChange?: (settings: { creditLimit?: number, dailyLimit?: number, monthlyLimit?: number, creditEnabled?: boolean }) => void
   onRecharge?: () => void
   onTransfer?: () => void
   onHistory?: () => void
@@ -41,6 +50,15 @@ export function VirtualCard({
   monthlyUsed = 0,
   currency = 'USD',
   createdAt,
+  // Credit system props
+  creditLimit = -200,
+  creditEnabled = true,
+  availableCredit,
+  daysInNegative = 0,
+  // SUPER_ADMIN controls
+  isSuperAdmin = false,
+  companyId,
+  onCreditSettingsChange,
   onRecharge,
   onTransfer,
   onHistory,
@@ -48,6 +66,9 @@ export function VirtualCard({
 }: VirtualCardProps) {
   const [isFlipped, setIsFlipped] = useState(false)
   const [showFullNumber, setShowFullNumber] = useState(false)
+  const [showCreditSettings, setShowCreditSettings] = useState(false)
+  const [tempCreditLimit, setTempCreditLimit] = useState(Math.abs(creditLimit))
+  const [tempDailyLimit, setTempDailyLimit] = useState(dailyLimit)
 
   // Format wallet number with spaces
   const formatWalletNumber = (num: string, show: boolean) => {
@@ -62,6 +83,13 @@ export function VirtualCard({
   // Calculate limit percentages
   const dailyPercent = dailyLimit > 0 ? Math.min((dailyUsed / dailyLimit) * 100, 100) : 0
   const monthlyPercent = monthlyLimit > 0 ? Math.min((monthlyUsed / monthlyLimit) * 100, 100) : 0
+
+  // Calculate credit usage (only for companies)
+  const isNegative = balance < 0
+  const creditLimitAbs = Math.abs(creditLimit)
+  const creditUsed = isNegative ? Math.abs(balance) : 0
+  const creditPercent = creditLimitAbs > 0 ? Math.min((creditUsed / creditLimitAbs) * 100, 100) : 0
+  const calculatedAvailableCredit = availableCredit ?? (creditLimitAbs - creditUsed)
 
   // Status badge color
   const statusColor = status === 'active' ? 'bg-green-500' : status === 'inactive' ? 'bg-red-500' : 'bg-yellow-500'
@@ -233,6 +261,36 @@ export function VirtualCard({
                   />
                 </div>
               </div>
+
+              {/* Credit limit (only for companies) */}
+              {type === 'company' && creditEnabled && (
+                <div>
+                  <div className="flex justify-between text-xs mb-1">
+                    <span className="text-gray-400 flex items-center gap-1">
+                      Credito
+                      {isNegative && daysInNegative > 0 && (
+                        <span className={`px-1 py-0.5 rounded text-[10px] ${daysInNegative >= 35 ? 'bg-red-500/30 text-red-300' : 'bg-yellow-500/30 text-yellow-300'}`}>
+                          {daysInNegative}d
+                        </span>
+                      )}
+                    </span>
+                    <span className={isNegative ? 'text-red-400' : ''}>
+                      ${creditUsed.toLocaleString()} / ${creditLimitAbs.toLocaleString()}
+                    </span>
+                  </div>
+                  <div className="h-1.5 bg-gray-700 rounded-full overflow-hidden">
+                    <div
+                      className={`h-full rounded-full transition-all ${creditPercent >= 80 ? 'bg-gradient-to-r from-red-500 to-red-600' : 'bg-gradient-to-r from-orange-500 to-amber-500'}`}
+                      style={{ width: `${creditPercent}%` }}
+                    />
+                  </div>
+                  {calculatedAvailableCredit > 0 && (
+                    <p className="text-[10px] text-gray-400 mt-0.5">
+                      Disponible: ${calculatedAvailableCredit.toLocaleString()}
+                    </p>
+                  )}
+                </div>
+              )}
             </div>
 
             {/* Footer */}
@@ -241,11 +299,29 @@ export function VirtualCard({
                 <span className={`w-2 h-2 rounded-full ${statusColor}`} />
                 <span className="text-xs">{statusText}</span>
               </div>
-              {createdAt && (
-                <span className="text-xs text-gray-400">
-                  Desde {new Date(createdAt).toLocaleDateString('es-ES', { month: 'short', year: 'numeric' })}
-                </span>
-              )}
+              <div className="flex items-center gap-2">
+                {/* SUPER_ADMIN settings button */}
+                {isSuperAdmin && type === 'company' && onCreditSettingsChange && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      setShowCreditSettings(!showCreditSettings)
+                    }}
+                    className="p-1 rounded hover:bg-white/10 transition-colors"
+                    title="Configurar limites"
+                  >
+                    <svg className="w-4 h-4 text-gray-400 hover:text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                    </svg>
+                  </button>
+                )}
+                {createdAt && (
+                  <span className="text-xs text-gray-400">
+                    Desde {new Date(createdAt).toLocaleDateString('es-ES', { month: 'short', year: 'numeric' })}
+                  </span>
+                )}
+              </div>
             </div>
           </div>
 
@@ -257,6 +333,104 @@ export function VirtualCard({
           </div>
         </div>
       </motion.div>
+
+      {/* SUPER_ADMIN Credit Settings Panel */}
+      {isSuperAdmin && type === 'company' && showCreditSettings && onCreditSettingsChange && (
+        <motion.div
+          initial={{ opacity: 0, height: 0 }}
+          animate={{ opacity: 1, height: 'auto' }}
+          exit={{ opacity: 0, height: 0 }}
+          className="mt-4 bg-gray-800/90 backdrop-blur rounded-xl p-4 border border-gray-700"
+        >
+          <div className="flex justify-between items-center mb-4">
+            <h4 className="text-sm font-semibold text-white">Configuracion de Limites</h4>
+            <button
+              onClick={() => setShowCreditSettings(false)}
+              className="p-1 hover:bg-gray-700 rounded transition-colors"
+            >
+              <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+
+          <div className="space-y-4">
+            {/* Credit Limit Slider */}
+            <div>
+              <div className="flex justify-between text-xs mb-2">
+                <span className="text-gray-400">Limite de Credito</span>
+                <span className="text-orange-400 font-medium">${tempCreditLimit.toLocaleString()}</span>
+              </div>
+              <input
+                type="range"
+                min="0"
+                max="2000"
+                step="50"
+                value={tempCreditLimit}
+                onChange={(e) => setTempCreditLimit(Number(e.target.value))}
+                className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-orange-500"
+              />
+              <div className="flex justify-between text-[10px] text-gray-500 mt-1">
+                <span>$0</span>
+                <span>$500</span>
+                <span>$1,000</span>
+                <span>$1,500</span>
+                <span>$2,000</span>
+              </div>
+            </div>
+
+            {/* Daily Limit Slider */}
+            <div>
+              <div className="flex justify-between text-xs mb-2">
+                <span className="text-gray-400">Limite Diario de Transacciones</span>
+                <span className="text-blue-400 font-medium">${tempDailyLimit.toLocaleString()}</span>
+              </div>
+              <input
+                type="range"
+                min="500"
+                max="25000"
+                step="500"
+                value={tempDailyLimit}
+                onChange={(e) => setTempDailyLimit(Number(e.target.value))}
+                className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-blue-500"
+              />
+              <div className="flex justify-between text-[10px] text-gray-500 mt-1">
+                <span>$500</span>
+                <span>$5K</span>
+                <span>$10K</span>
+                <span>$15K</span>
+                <span>$25K</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Save Button */}
+          <div className="mt-4 flex justify-end gap-2">
+            <button
+              onClick={() => {
+                setTempCreditLimit(creditLimitAbs)
+                setTempDailyLimit(dailyLimit)
+                setShowCreditSettings(false)
+              }}
+              className="px-3 py-1.5 text-xs text-gray-300 hover:text-white transition-colors"
+            >
+              Cancelar
+            </button>
+            <button
+              onClick={() => {
+                onCreditSettingsChange({
+                  creditLimit: -tempCreditLimit, // Convert to negative
+                  dailyLimit: tempDailyLimit
+                })
+                setShowCreditSettings(false)
+              }}
+              className="px-4 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs rounded-lg transition-colors"
+            >
+              Guardar
+            </button>
+          </div>
+        </motion.div>
+      )}
 
       {/* Action Buttons */}
       {(onRecharge || onTransfer || onHistory) && (

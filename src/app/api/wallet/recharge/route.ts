@@ -77,7 +77,7 @@ export async function POST(request: NextRequest) {
       }, { status: 400 })
     }
 
-    const validMethods = ['card_manual', 'card_terminal', 'cash', 'wire', 'zelle', 'credit']
+    const validMethods = ['card_manual', 'card_terminal', 'cash', 'wire', 'zelle']
     if (!validMethods.includes(paymentMethod)) {
       return NextResponse.json({
         success: false,
@@ -85,16 +85,8 @@ export async function POST(request: NextRequest) {
       }, { status: 400 })
     }
 
-    // Check if method requires approval (credit does not require approval - only SUPER_ADMIN can use it)
+    // Check if method requires approval
     const requiresApproval = ['cash', 'wire', 'zelle'].includes(paymentMethod)
-
-    // Only SUPER_ADMIN can give credit
-    if (paymentMethod === 'credit' && payload.role !== 'SUPER_ADMIN') {
-      return NextResponse.json({
-        success: false,
-        error: 'Solo SUPER_ADMIN puede otorgar crédito'
-      }, { status: 403 })
-    }
 
     // Only SUPER_ADMIN can approve immediately for cash/wire/zelle
     // Others must create a request that SUPER_ADMIN will approve

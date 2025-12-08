@@ -341,7 +341,7 @@ export async function GET(request: NextRequest) {
       'cash': 'Efectivo',
       'wire': 'Transferencia',
       'zelle': 'Zelle',
-      'credit': 'Crédito LogiRapid'
+      'credit_charge': 'Cargo de Crédito'
     }
 
     const chartByMethod = rechargesByMethod.rows.map((row: any) => ({

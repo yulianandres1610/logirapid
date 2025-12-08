@@ -71,6 +71,9 @@ export async function GET(request: NextRequest) {
           monthlylimit as monthly_limit,
           logo,
           currency,
+          credit_limit,
+          credit_enabled,
+          negative_since,
           'company' as type
         FROM companies
         WHERE walletnumber IS NOT NULL
@@ -94,23 +97,50 @@ export async function GET(request: NextRequest) {
       params.push(`%${query}%`)
 
       const companyResults = await db.query(companyQuery, params)
-      results.push(...companyResults.rows.map(row => ({
-        id: row.id,
-        uniqueId: `company_${row.id}`,
-        name: row.name,
-        walletNumber: row.wallet_number,
-        balance: parseFloat(row.balance || '0'),
-        balanceFormatted: `$${parseFloat(row.balance || '0').toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
-        phone: row.phone,
-        email: row.email,
-        status: row.status,
-        dailyLimit: parseFloat(row.daily_limit || '0'),
-        monthlyLimit: parseFloat(row.monthly_limit || '0'),
-        logo: row.logo,
-        currency: row.currency || 'USD',
-        type: 'company',
-        typeLabel: 'Empresa'
-      })))
+      results.push(...companyResults.rows.map(row => {
+        const balance = parseFloat(row.balance || '0')
+        const creditLimit = parseFloat(row.credit_limit || '-200')
+        const creditEnabled = row.credit_enabled !== false
+        const creditLimitAbs = Math.abs(creditLimit)
+        const isNegative = balance < 0
+        const creditUsed = isNegative ? Math.abs(balance) : 0
+        const availableCredit = creditLimitAbs - creditUsed
+
+        // Calculate days in negative
+        let daysInNegative = 0
+        if (row.negative_since) {
+          const negativeSince = new Date(row.negative_since)
+          const now = new Date()
+          daysInNegative = Math.floor((now.getTime() - negativeSince.getTime()) / (1000 * 60 * 60 * 24))
+        }
+
+        return {
+          id: row.id,
+          uniqueId: `company_${row.id}`,
+          name: row.name,
+          walletNumber: row.wallet_number,
+          balance,
+          balanceFormatted: `$${balance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+          phone: row.phone,
+          email: row.email,
+          status: row.status,
+          dailyLimit: parseFloat(row.daily_limit || '5000'),
+          monthlyLimit: parseFloat(row.monthly_limit || '50000'),
+          logo: row.logo,
+          currency: row.currency || 'USD',
+          type: 'company',
+          typeLabel: 'Empresa',
+          // Credit fields (only for companies)
+          creditLimit,
+          creditLimitFormatted: `$${creditLimitAbs.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+          creditEnabled,
+          availableCredit,
+          availableCreditFormatted: `$${availableCredit.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+          isNegative,
+          daysInNegative,
+          negativeSince: row.negative_since
+        }
+      }))
     }
 
     // Search users - use DISTINCT to avoid duplicates from multiple companies

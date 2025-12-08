@@ -95,10 +95,12 @@ export async function POST(request: NextRequest) {
     let sourceName: string = ''
     let sourceBalance: number = 0
     let sourcePhone: string | null = null
+    let sourceCreditLimit: number = -200 // Default credit limit for companies
+    let sourceCreditEnabled: boolean = true // Default credit enabled
 
     if (sourceType === 'company') {
       const result = await db.query(`
-        SELECT id, legalname, walletbalance as balance, phone
+        SELECT id, legalname, walletbalance as balance, phone, credit_limit, credit_enabled, negative_since
         FROM companies
         WHERE walletnumber = $1
       `, [sourceWalletNumber])
@@ -114,6 +116,8 @@ export async function POST(request: NextRequest) {
       sourceName = result.rows[0].legalname
       sourceBalance = parseFloat(result.rows[0].balance || '0')
       sourcePhone = result.rows[0].phone
+      sourceCreditLimit = parseFloat(result.rows[0].credit_limit || '-200')
+      sourceCreditEnabled = result.rows[0].credit_enabled !== false // Default to true if null
     } else if (sourceType === 'user') {
       const result = await db.query(`
         SELECT id, CONCAT(firstname, ' ', lastname) as name, wallet_balance as balance, phone
@@ -134,12 +138,27 @@ export async function POST(request: NextRequest) {
       sourcePhone = result.rows[0].phone
     }
 
-    // Check sufficient balance
-    if (sourceBalance < amount) {
-      return NextResponse.json({
-        success: false,
-        error: `Balance insuficiente. Disponible: $${sourceBalance.toFixed(2)}`
-      }, { status: 400 })
+    // Check sufficient balance (with credit for companies)
+    if (sourceType === 'company' && sourceCreditEnabled) {
+      // Companies with credit enabled can go negative up to their credit limit
+      // creditLimit is negative (e.g., -200), so available = balance - creditLimit
+      const availableBalance = sourceBalance - sourceCreditLimit
+      const newBalanceAfterTransfer = sourceBalance - amount
+
+      if (newBalanceAfterTransfer < sourceCreditLimit) {
+        return NextResponse.json({
+          success: false,
+          error: `Balance insuficiente. Balance actual: $${sourceBalance.toFixed(2)}, Límite de crédito: $${Math.abs(sourceCreditLimit).toFixed(2)}, Disponible total: $${availableBalance.toFixed(2)}`
+        }, { status: 400 })
+      }
+    } else {
+      // Users and companies without credit enabled need positive balance
+      if (sourceBalance < amount) {
+        return NextResponse.json({
+          success: false,
+          error: `Balance insuficiente. Disponible: $${sourceBalance.toFixed(2)}`
+        }, { status: 400 })
+      }
     }
 
     // Find target wallet
@@ -186,15 +205,29 @@ export async function POST(request: NextRequest) {
       targetPhone = result.rows[0].phone
     }
 
+    // Calculate new balance after transfer to track negative_since
+    const sourceNewBalanceCalc = sourceBalance - amount
+
     // Process transfer atomically
     const transactionResult = await db.transaction(async (client) => {
       // Deduct from source
       if (sourceType === 'company') {
-        await client.query(`
-          UPDATE companies
-          SET walletbalance = walletbalance - $1
-          WHERE id = $2
-        `, [amount, sourceId])
+        // Update balance and track negative_since for credit tracking
+        if (sourceNewBalanceCalc < 0 && sourceBalance >= 0) {
+          // Going negative for the first time - set negative_since
+          await client.query(`
+            UPDATE companies
+            SET walletbalance = walletbalance - $1,
+                negative_since = COALESCE(negative_since, NOW())
+            WHERE id = $2
+          `, [amount, sourceId])
+        } else {
+          await client.query(`
+            UPDATE companies
+            SET walletbalance = walletbalance - $1
+            WHERE id = $2
+          `, [amount, sourceId])
+        }
       } else {
         await client.query(`
           UPDATE users
@@ -205,11 +238,25 @@ export async function POST(request: NextRequest) {
 
       // Add to target
       if (targetType === 'company') {
-        await client.query(`
-          UPDATE companies
-          SET walletbalance = walletbalance + $1
-          WHERE id = $2
-        `, [amount, targetId])
+        // If target company was negative and is now positive, reset negative_since
+        const targetNewBalanceCalc = targetBalance + amount
+        if (targetBalance < 0 && targetNewBalanceCalc >= 0) {
+          // Reset negative_since and credit charges tracking
+          await client.query(`
+            UPDATE companies
+            SET walletbalance = walletbalance + $1,
+                negative_since = NULL,
+                late_fee_charged_at = NULL,
+                last_interest_charge_at = NULL
+            WHERE id = $2
+          `, [amount, targetId])
+        } else {
+          await client.query(`
+            UPDATE companies
+            SET walletbalance = walletbalance + $1
+            WHERE id = $2
+          `, [amount, targetId])
+        }
       } else {
         await client.query(`
           UPDATE users

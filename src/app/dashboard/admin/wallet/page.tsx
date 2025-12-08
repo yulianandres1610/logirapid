@@ -156,7 +156,6 @@ const paymentMethods = [
   { id: 'cash', label: 'Efectivo', icon: Banknote },
   { id: 'wire', label: 'Wire', icon: Building },
   { id: 'zelle', label: 'Zelle', icon: DollarSign },
-  { id: 'credit', label: 'Crédito LogiRapid', icon: Wallet, superAdminOnly: true }
 ]
 
 const quickAmounts = [50, 100, 250, 500, 1000]
