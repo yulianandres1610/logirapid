@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
 import jwt from 'jsonwebtoken'
 import { db } from '@/lib/database'
+import { sendWalletNotificationSMS } from '@/lib/sms-service'
 
 interface JWTPayload {
   userId: number
@@ -103,10 +104,11 @@ export async function POST(request: NextRequest) {
     let targetId: number | null = null
     let targetName: string = ''
     let currentBalance: number = 0
+    let targetPhone: string | null = null
 
     if (targetType === 'company') {
       const companyResult = await db.query(`
-        SELECT id, legalname, walletbalance as balance
+        SELECT id, legalname, walletbalance as balance, phone
         FROM companies
         WHERE walletnumber = $1
       `, [targetWalletNumber])
@@ -121,6 +123,7 @@ export async function POST(request: NextRequest) {
       targetId = companyResult.rows[0].id
       targetName = companyResult.rows[0].legalname
       currentBalance = parseFloat(companyResult.rows[0].balance || '0')
+      targetPhone = companyResult.rows[0].phone
 
       // Check access
       if (payload.role !== 'SUPER_ADMIN' && payload.companyId !== targetId) {
@@ -131,7 +134,7 @@ export async function POST(request: NextRequest) {
       }
     } else if (targetType === 'user') {
       const userResult = await db.query(`
-        SELECT u.id, CONCAT(u.firstname, ' ', u.lastname) as name, u.wallet_balance as balance
+        SELECT u.id, CONCAT(u.firstname, ' ', u.lastname) as name, u.wallet_balance as balance, u.phone
         FROM users u
         WHERE u.wallet_number = $1
       `, [targetWalletNumber])
@@ -146,9 +149,10 @@ export async function POST(request: NextRequest) {
       targetId = userResult.rows[0].id
       targetName = userResult.rows[0].name
       currentBalance = parseFloat(userResult.rows[0].balance || '0')
+      targetPhone = userResult.rows[0].phone
     } else if (targetType === 'customer') {
       const customerResult = await db.query(`
-        SELECT id, CONCAT(firstname, ' ', lastname) as name, wallet_balance as balance, company_id
+        SELECT id, CONCAT(firstname, ' ', lastname) as name, wallet_balance as balance, company_id, phone
         FROM customers
         WHERE wallet_number = $1
       `, [targetWalletNumber])
@@ -163,6 +167,7 @@ export async function POST(request: NextRequest) {
       targetId = customerResult.rows[0].id
       targetName = customerResult.rows[0].name
       currentBalance = parseFloat(customerResult.rows[0].balance || '0')
+      targetPhone = customerResult.rows[0].phone
 
       // Check access for non-SUPER_ADMIN
       if (payload.role !== 'SUPER_ADMIN' && customerResult.rows[0].company_id !== payload.companyId) {
@@ -268,6 +273,26 @@ export async function POST(request: NextRequest) {
       })
 
       const newBalance = currentBalance + netAmount
+
+      // Send SMS notification (async, don't block response)
+      if (targetPhone) {
+        sendWalletNotificationSMS(
+          targetPhone,
+          'recharge',
+          targetName,
+          amount,
+          newBalance,
+          { paymentMethod, transactionNumber: result.transactionNumber }
+        ).then(smsResult => {
+          if (smsResult.success) {
+            console.log('[Wallet Recharge] SMS notification sent:', smsResult.messageId)
+          } else {
+            console.log('[Wallet Recharge] SMS notification failed:', smsResult.error)
+          }
+        }).catch(err => {
+          console.error('[Wallet Recharge] SMS notification error:', err)
+        })
+      }
 
       return NextResponse.json({
         success: true,
