@@ -84,6 +84,11 @@ interface WalletResult {
   monthlyLimit?: number
   dailyUsed?: number
   monthlyUsed?: number
+  // Credit fields (only for companies)
+  creditLimit?: number
+  creditEnabled?: boolean
+  availableCredit?: number
+  daysInNegative?: number
 }
 
 interface TransactionMetadata {
@@ -232,6 +237,55 @@ export default function WalletManagementPage() {
   // Pending requests
   const [pendingRequests, setPendingRequests] = useState<PendingRequest[]>([])
   const [pendingLoading, setPendingLoading] = useState(false)
+
+  // User role state
+  const [userRole, setUserRole] = useState<string>('')
+
+  // Get user role from cookie on mount
+  useEffect(() => {
+    const getCookie = (name: string) => {
+      const value = `; ${document.cookie}`
+      const parts = value.split(`; ${name}=`)
+      if (parts.length === 2) return parts.pop()?.split(';').shift()
+      return ''
+    }
+    const role = getCookie('user-role') || ''
+    setUserRole(role)
+  }, [])
+
+  // Handle credit settings change
+  const handleCreditSettingsChange = async (settings: { creditLimit?: number, dailyLimit?: number, monthlyLimit?: number, creditEnabled?: boolean }) => {
+    if (!selectedWallet || selectedWallet.type !== 'company') return
+
+    try {
+      const response = await fetch('/api/wallet/credit-settings', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          companyId: selectedWallet.id,
+          ...settings
+        })
+      })
+      const data = await response.json()
+      if (data.success) {
+        showNotification('success', 'Configuracion Actualizada', 'Los limites han sido actualizados correctamente')
+        // Update the selected wallet with new values
+        setSelectedWallet(prev => prev ? {
+          ...prev,
+          creditLimit: settings.creditLimit ?? prev.creditLimit,
+          dailyLimit: settings.dailyLimit ?? prev.dailyLimit,
+          monthlyLimit: settings.monthlyLimit ?? prev.monthlyLimit,
+          creditEnabled: settings.creditEnabled ?? prev.creditEnabled
+        } : null)
+        // Refresh dashboard
+        fetchDashboard()
+      } else {
+        showNotification('error', 'Error', data.error)
+      }
+    } catch (err) {
+      showNotification('error', 'Error', 'Error al actualizar configuracion')
+    }
+  }
 
   // Fetch dashboard data
   const fetchDashboard = useCallback(async () => {
@@ -1111,6 +1165,15 @@ export default function WalletManagementPage() {
                         monthlyLimit={selectedWallet.monthlyLimit || 50000}
                         dailyUsed={selectedWallet.dailyUsed || 0}
                         monthlyUsed={selectedWallet.monthlyUsed || 0}
+                        // Credit props (only for companies)
+                        creditLimit={selectedWallet.creditLimit}
+                        creditEnabled={selectedWallet.creditEnabled}
+                        availableCredit={selectedWallet.availableCredit}
+                        daysInNegative={selectedWallet.daysInNegative}
+                        // SUPER_ADMIN props
+                        isSuperAdmin={userRole === 'SUPER_ADMIN'}
+                        companyId={selectedWallet.id}
+                        onCreditSettingsChange={userRole === 'SUPER_ADMIN' ? handleCreditSettingsChange : undefined}
                         onRecharge={() => handleTabChange('recharge')}
                         onTransfer={() => {
                           setTransferSourceWallet(selectedWallet)
