@@ -312,7 +312,7 @@ export function generateWalletRechargeMessage(
     paymentMethod === 'cash' ? 'efectivo' : paymentMethod
 
   const txnInfo = transactionNumber ? ` Ref: ${transactionNumber}.` : ''
-  return `LogiRapid: Su billetera ha sido recargada con $${amount.toFixed(2)} mediante ${methodText}.${txnInfo} Nuevo balance: $${newBalance.toFixed(2)}. Para ayuda: HELP | Cancelar SMS: STOP`
+  return `${ownerName}: Su billetera ha sido recargada con $${amount.toFixed(2)} mediante ${methodText}.${txnInfo} Nuevo balance: $${newBalance.toFixed(2)}. Para ayuda: HELP | Cancelar SMS: STOP`
 }
 
 /**
