@@ -54,6 +54,12 @@ interface PaymentResult {
   amount: number
 }
 
+interface SquareConfig {
+  applicationId: string
+  locationId: string
+  environment: 'sandbox' | 'production'
+}
+
 export function SquareCardForm({
   amount,
   targetWalletNumber,
@@ -69,21 +75,50 @@ export function SquareCardForm({
   const [error, setError] = useState<string | null>(null)
   const [cardReady, setCardReady] = useState(false)
   const [sdkLoaded, setSdkLoaded] = useState(false)
+  const [squareConfig, setSquareConfig] = useState<SquareConfig | null>(null)
 
   const paymentsRef = useRef<SquarePayments | null>(null)
   const cardRef = useRef<SquareCard | null>(null)
   const initializingRef = useRef(false)
 
-  // Load Square SDK
+  // Fetch Square configuration from API
   useEffect(() => {
+    async function fetchConfig() {
+      try {
+        const response = await fetch('/api/square/config')
+        const data = await response.json()
+
+        if (!data.success) {
+          throw new Error(data.error || 'Error al obtener configuracion de Square')
+        }
+
+        setSquareConfig(data.data)
+        console.log('[SquareCardForm] Config loaded:', {
+          applicationId: data.data.applicationId.substring(0, 10) + '...',
+          locationId: data.data.locationId,
+          environment: data.data.environment
+        })
+      } catch (err) {
+        console.error('[SquareCardForm] Config fetch error:', err)
+        setError(err instanceof Error ? err.message : 'Error al cargar configuracion')
+        setLoading(false)
+      }
+    }
+
+    fetchConfig()
+  }, [])
+
+  // Load Square SDK after config is fetched
+  useEffect(() => {
+    if (!squareConfig) return
+
     if (window.Square) {
       setSdkLoaded(true)
       return
     }
 
-    const environment = process.env.NEXT_PUBLIC_SQUARE_ENVIRONMENT || 'sandbox'
     const script = document.createElement('script')
-    script.src = environment === 'production'
+    script.src = squareConfig.environment === 'production'
       ? 'https://web.squarecdn.com/v1/square.js'
       : 'https://sandbox.web.squarecdn.com/v1/square.js'
     script.async = true
@@ -104,11 +139,11 @@ export function SquareCardForm({
     return () => {
       // Don't remove script on cleanup to allow reuse
     }
-  }, [])
+  }, [squareConfig])
 
   // Initialize Square Card
   const initializeSquare = useCallback(async () => {
-    if (initializingRef.current || !sdkLoaded || !window.Square) {
+    if (initializingRef.current || !sdkLoaded || !window.Square || !squareConfig) {
       return
     }
 
@@ -118,12 +153,7 @@ export function SquareCardForm({
       setLoading(true)
       setError(null)
 
-      const applicationId = process.env.NEXT_PUBLIC_SQUARE_APPLICATION_ID
-      const locationId = process.env.NEXT_PUBLIC_SQUARE_LOCATION_ID
-
-      if (!applicationId || !locationId) {
-        throw new Error('Configuracion de Square incompleta. Contacte al administrador.')
-      }
+      const { applicationId, locationId } = squareConfig
 
       console.log('[SquareCardForm] Initializing with:', { applicationId: applicationId.substring(0, 10) + '...', locationId })
 
@@ -172,14 +202,14 @@ export function SquareCardForm({
     } finally {
       initializingRef.current = false
     }
-  }, [sdkLoaded, theme])
+  }, [sdkLoaded, theme, squareConfig])
 
-  // Initialize when SDK is loaded
+  // Initialize when SDK is loaded and config is available
   useEffect(() => {
-    if (sdkLoaded && !cardRef.current) {
+    if (sdkLoaded && squareConfig && !cardRef.current) {
       initializeSquare()
     }
-  }, [sdkLoaded, initializeSquare])
+  }, [sdkLoaded, squareConfig, initializeSquare])
 
   // Cleanup on unmount
   useEffect(() => {
