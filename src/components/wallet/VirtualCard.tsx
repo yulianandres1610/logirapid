@@ -229,33 +229,25 @@ export function VirtualCard({
             background: 'linear-gradient(135deg, #0f3460 0%, #16213e 50%, #1a1a2e 100%)'
           }}
         >
-          <div className="relative z-10 h-full p-5 text-white">
-            <div className="text-xs text-gray-400 uppercase tracking-wider mb-3">Wallet Details</div>
-
-            {/* Full wallet number */}
-            <div className="mb-4">
-              <p className="text-xs text-gray-400 mb-1">Numero Completo</p>
-              <p className="font-mono text-sm">{formatWalletNumber(walletNumber, true)}</p>
+          <div className="relative z-10 h-full p-4 text-white flex flex-col">
+            {/* Header with wallet number and contact info */}
+            <div className="flex justify-between items-start mb-3">
+              <div className="flex-1">
+                <div className="text-[10px] text-gray-400 uppercase tracking-wider mb-1">Wallet</div>
+                <p className="font-mono text-xs">{formatWalletNumber(walletNumber, true)}</p>
+              </div>
+              <div className="text-right">
+                {phone && (
+                  <div className="mb-1">
+                    <p className="text-[10px] text-gray-400">Tel</p>
+                    <p className="text-xs font-medium">{phone}</p>
+                  </div>
+                )}
+              </div>
             </div>
 
-            {/* Contact info */}
-            <div className="grid grid-cols-2 gap-3 mb-4">
-              {phone && (
-                <div>
-                  <p className="text-xs text-gray-400 mb-1">Telefono</p>
-                  <p className="text-xs font-medium">{phone}</p>
-                </div>
-              )}
-              {email && (
-                <div>
-                  <p className="text-xs text-gray-400 mb-1">Email</p>
-                  <p className="text-xs font-medium truncate">{email}</p>
-                </div>
-              )}
-            </div>
-
-            {/* Limits */}
-            <div className="space-y-2 mb-3">
+            {/* Limits - Main content */}
+            <div className="flex-1 space-y-2">
               <div>
                 <div className="flex justify-between text-xs mb-1">
                   <span className="text-gray-400">Limite Diario</span>
