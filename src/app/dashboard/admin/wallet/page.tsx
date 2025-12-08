@@ -37,6 +37,7 @@ import { useTheme } from '@/contexts/theme-context'
 import { useNotifications } from '@/contexts/NotificationContext'
 import { DashboardLayout } from '@/components/layout/dashboard-layout'
 import { VirtualCard } from '@/components/wallet/VirtualCard'
+import { SquareCardForm } from '@/components/payments/SquareCardForm'
 import {
   AreaChart,
   Area,
@@ -1497,22 +1498,54 @@ export default function WalletManagementPage() {
                           </div>
                         )}
 
-                        {/* Reference */}
-                        <div>
-                          <label className={cn("text-sm font-medium block mb-2", theme === 'dark' ? 'text-gray-300' : 'text-gray-700')}>
-                            {paymentMethod === 'card_terminal' ? 'Nota' : 'Referencia'} <span className="text-gray-500">(opcional)</span>
-                          </label>
-                          <input
-                            type="text"
-                            value={paymentReference}
-                            onChange={(e) => setPaymentReference(e.target.value)}
-                            placeholder={paymentMethod === 'card_terminal' ? 'Nota para el recibo...' : 'Numero de confirmacion...'}
-                            className={cn(
-                              "w-full px-4 py-3 rounded-lg border",
-                              theme === 'dark' ? 'bg-gray-700 border-gray-600 text-white' : 'bg-gray-50 border-gray-200 text-gray-900'
-                            )}
-                          />
-                        </div>
+                        {/* Card Payment Form - shown when card_manual is selected */}
+                        {paymentMethod === 'card_manual' && selectedWallet && rechargeAmount && parseFloat(rechargeAmount) > 0 && (
+                          <div className="mb-6">
+                            <label className={cn("text-sm font-medium block mb-3", theme === 'dark' ? 'text-gray-300' : 'text-gray-700')}>
+                              Datos de la Tarjeta
+                            </label>
+                            <SquareCardForm
+                              amount={parseFloat(rechargeAmount)}
+                              targetWalletNumber={selectedWallet.walletNumber}
+                              targetType={selectedWallet.type}
+                              onSuccess={(data) => {
+                                // Show success notification and reset form
+                                showNotification('success', 'Pago Exitoso', `Pago de $${data.amount.toFixed(2)} procesado. Nuevo balance: $${data.newBalance.toFixed(2)}`)
+                                setRechargeStep(1)
+                                setRechargeAmount('')
+                                setSelectedWallet(null)
+                                setPaymentMethod('cash')
+                                setPaymentReference('')
+                                // Navigate to dashboard and refresh data
+                                setActiveTab('dashboard')
+                                fetchDashboard()
+                                fetchTransactions()
+                              }}
+                              onError={(error) => {
+                                showNotification('error', 'Error de Pago', error)
+                              }}
+                            />
+                          </div>
+                        )}
+
+                        {/* Reference - not shown for card_manual since Square handles everything */}
+                        {paymentMethod !== 'card_manual' && (
+                          <div>
+                            <label className={cn("text-sm font-medium block mb-2", theme === 'dark' ? 'text-gray-300' : 'text-gray-700')}>
+                              {paymentMethod === 'card_terminal' ? 'Nota' : 'Referencia'} <span className="text-gray-500">(opcional)</span>
+                            </label>
+                            <input
+                              type="text"
+                              value={paymentReference}
+                              onChange={(e) => setPaymentReference(e.target.value)}
+                              placeholder={paymentMethod === 'card_terminal' ? 'Nota para el recibo...' : 'Numero de confirmacion...'}
+                              className={cn(
+                                "w-full px-4 py-3 rounded-lg border",
+                                theme === 'dark' ? 'bg-gray-700 border-gray-600 text-white' : 'bg-gray-50 border-gray-200 text-gray-900'
+                              )}
+                            />
+                          </div>
+                        )}
                       </motion.div>
                     )}
 
@@ -1660,7 +1693,7 @@ export default function WalletManagementPage() {
                       Anterior
                     </button>
 
-                    {rechargeStep < 3 ? (
+                    {rechargeStep < 3 && (rechargeStep === 1 || paymentMethod !== 'card_manual') ? (
                       <button
                         onClick={() => setRechargeStep((rechargeStep + 1) as RechargeStep)}
                         disabled={rechargeStep === 1 && !selectedWallet || rechargeStep === 2 && (!rechargeAmount || (paymentMethod === 'card_terminal' && !selectedTerminalId))}
@@ -1673,7 +1706,7 @@ export default function WalletManagementPage() {
                         Siguiente
                         <ArrowRight className="w-4 h-4" />
                       </button>
-                    ) : (
+                    ) : rechargeStep === 3 ? (
                       <button
                         onClick={processRecharge}
                         disabled={processing || (paymentMethod === 'card_terminal' && !selectedTerminalId)}
@@ -1686,7 +1719,7 @@ export default function WalletManagementPage() {
                         {processing ? <RefreshCw className="w-4 h-4 animate-spin" /> : paymentMethod === 'card_terminal' ? <Smartphone className="w-4 h-4" /> : <Check className="w-4 h-4" />}
                         {processing ? 'Enviando...' : paymentMethod === 'card_terminal' ? 'Enviar a Terminal' : 'Confirmar Recarga'}
                       </button>
-                    )}
+                    ) : null}
                   </div>
                 )}
               </motion.div>

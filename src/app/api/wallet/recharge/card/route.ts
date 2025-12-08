@@ -1,0 +1,257 @@
+import { NextRequest, NextResponse } from 'next/server'
+import { cookies } from 'next/headers'
+import jwt from 'jsonwebtoken'
+import crypto from 'crypto'
+import { db } from '@/lib/database'
+import { getSquareBaseUrl, getPlatformCredentials } from '@/lib/square'
+
+export const dynamic = 'force-dynamic'
+export const runtime = 'nodejs'
+
+interface JWTPayload {
+  userId: number
+  email: string
+  role: string
+  companyId: number
+  companyName: string
+}
+
+/**
+ * POST /api/wallet/recharge/card
+ * Process wallet recharge with tokenized card from Square Web Payments SDK
+ */
+export async function POST(request: NextRequest) {
+  try {
+    // 1. Verify authentication
+    const cookieStore = await cookies()
+    const authToken = cookieStore.get('auth-token')?.value
+
+    if (!authToken) {
+      return NextResponse.json({ success: false, error: 'No autorizado' }, { status: 401 })
+    }
+
+    let payload: JWTPayload
+    try {
+      const secret = process.env.JWT_SECRET || 'your-secret-key'
+      payload = jwt.verify(authToken, secret) as JWTPayload
+    } catch {
+      return NextResponse.json({ success: false, error: 'Token invalido' }, { status: 401 })
+    }
+
+    // 2. Validate body
+    const body = await request.json()
+    const { sourceId, amount, targetWalletNumber, targetType } = body
+
+    console.log('[Card Payment] Request:', { sourceId: sourceId?.substring(0, 20), amount, targetWalletNumber, targetType })
+
+    if (!sourceId || !amount || !targetWalletNumber || !targetType) {
+      return NextResponse.json({ success: false, error: 'Faltan campos requeridos' }, { status: 400 })
+    }
+
+    if (amount <= 0) {
+      return NextResponse.json({ success: false, error: 'Monto debe ser mayor a 0' }, { status: 400 })
+    }
+
+    // 3. Find target wallet and get current balance
+    let targetId: number | null = null
+    let currentBalance = 0
+    let targetName = ''
+
+    if (targetType === 'company') {
+      const result = await db.query(
+        `SELECT id, legalname, walletbalance FROM companies WHERE walletnumber = $1`,
+        [targetWalletNumber]
+      )
+      if (result.rows.length === 0) {
+        return NextResponse.json({ success: false, error: 'Wallet no encontrado' }, { status: 404 })
+      }
+      targetId = result.rows[0].id
+      currentBalance = parseFloat(result.rows[0].walletbalance || '0')
+      targetName = result.rows[0].legalname
+    } else if (targetType === 'user') {
+      const result = await db.query(
+        `SELECT id, firstname, lastname, wallet_balance FROM users WHERE wallet_number = $1`,
+        [targetWalletNumber]
+      )
+      if (result.rows.length === 0) {
+        return NextResponse.json({ success: false, error: 'Wallet no encontrado' }, { status: 404 })
+      }
+      targetId = result.rows[0].id
+      currentBalance = parseFloat(result.rows[0].wallet_balance || '0')
+      targetName = `${result.rows[0].firstname} ${result.rows[0].lastname}`
+    } else if (targetType === 'customer') {
+      const result = await db.query(
+        `SELECT id, firstname, lastname, wallet_balance FROM customers WHERE wallet_number = $1`,
+        [targetWalletNumber]
+      )
+      if (result.rows.length === 0) {
+        return NextResponse.json({ success: false, error: 'Wallet no encontrado' }, { status: 404 })
+      }
+      targetId = result.rows[0].id
+      currentBalance = parseFloat(result.rows[0].wallet_balance || '0')
+      targetName = `${result.rows[0].firstname} ${result.rows[0].lastname}`
+    }
+
+    console.log('[Card Payment] Target:', { targetId, targetName, currentBalance })
+
+    // 4. Get Square credentials
+    const credentials = getPlatformCredentials()
+    if (!credentials) {
+      console.error('[Card Payment] Square credentials not configured')
+      return NextResponse.json({ success: false, error: 'Square no configurado' }, { status: 500 })
+    }
+
+    // 5. Generate transaction number
+    const transactionNumber = `WTX-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).substring(2, 6).toUpperCase()}`
+
+    // 6. Create transaction with 'processing' status
+    const txResult = await db.query(`
+      INSERT INTO wallet_transactions (
+        transaction_number, type, source_type,
+        target_type, target_company_id, target_user_id, target_customer_id, target_wallet_number,
+        amount, fee, net_amount, currency,
+        payment_method, status, requires_approval,
+        description, created_by, created_by_name, created_at,
+        metadata
+      ) VALUES (
+        $1, 'recharge', 'external',
+        $2, $3, $4, $5, $6,
+        $7, 0, $7, 'USD',
+        'card_manual', 'processing', false,
+        $8, $9, $10, NOW(),
+        $11
+      ) RETURNING id
+    `, [
+      transactionNumber,
+      targetType,
+      targetType === 'company' ? targetId : null,
+      targetType === 'user' ? targetId : null,
+      targetType === 'customer' ? targetId : null,
+      targetWalletNumber,
+      amount,
+      `Recarga con tarjeta para ${targetName}`,
+      payload.userId,
+      payload.email,
+      JSON.stringify({ previousBalance: currentBalance, targetName })
+    ])
+
+    const transactionId = txResult.rows[0].id
+    console.log('[Card Payment] Transaction created:', { transactionId, transactionNumber })
+
+    // 7. Call Square CreatePayment API
+    const baseUrl = getSquareBaseUrl(credentials.environment)
+    const idempotencyKey = crypto.randomUUID()
+
+    const paymentRequest = {
+      source_id: sourceId,
+      amount_money: {
+        amount: Math.round(amount * 100), // Convert to cents
+        currency: 'USD'
+      },
+      location_id: credentials.locationId,
+      idempotency_key: idempotencyKey,
+      autocomplete: true,
+      reference_id: transactionNumber,
+      note: `Wallet Recharge - ${transactionNumber}`
+    }
+
+    console.log('[Card Payment] Calling Square API:', {
+      url: `${baseUrl}/v2/payments`,
+      amount: paymentRequest.amount_money,
+      locationId: credentials.locationId
+    })
+
+    const paymentResponse = await fetch(`${baseUrl}/v2/payments`, {
+      method: 'POST',
+      headers: {
+        'Square-Version': '2025-01-16',
+        'Authorization': `Bearer ${credentials.accessToken}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(paymentRequest)
+    })
+
+    const paymentData = await paymentResponse.json()
+
+    if (!paymentResponse.ok) {
+      // Payment failed - update transaction
+      await db.query(`
+        UPDATE wallet_transactions
+        SET status = 'failed', metadata = metadata || $1, updated_at = NOW()
+        WHERE id = $2
+      `, [JSON.stringify({ squareError: paymentData.errors }), transactionId])
+
+      console.error('[Card Payment] Square error:', paymentData.errors)
+      return NextResponse.json({
+        success: false,
+        error: paymentData.errors?.[0]?.detail || 'Error al procesar pago'
+      }, { status: 400 })
+    }
+
+    const payment = paymentData.payment
+    console.log('[Card Payment] Square payment successful:', {
+      paymentId: payment.id,
+      status: payment.status,
+      cardBrand: payment.card_details?.card?.card_brand,
+      last4: payment.card_details?.card?.last_4
+    })
+
+    // 8. Update wallet balance
+    const newBalance = currentBalance + amount
+
+    if (targetType === 'company') {
+      await db.query(`UPDATE companies SET walletbalance = walletbalance + $1 WHERE id = $2`, [amount, targetId])
+    } else if (targetType === 'user') {
+      await db.query(`UPDATE users SET wallet_balance = wallet_balance + $1 WHERE id = $2`, [amount, targetId])
+    } else if (targetType === 'customer') {
+      await db.query(`UPDATE customers SET wallet_balance = wallet_balance + $1 WHERE id = $2`, [amount, targetId])
+    }
+
+    // 9. Update transaction as completed
+    await db.query(`
+      UPDATE wallet_transactions
+      SET
+        status = 'completed',
+        payment_reference = $1,
+        completed_at = NOW(),
+        updated_at = NOW(),
+        metadata = metadata || $2
+      WHERE id = $3
+    `, [
+      payment.id,
+      JSON.stringify({
+        newBalance,
+        squarePaymentId: payment.id,
+        cardBrand: payment.card_details?.card?.card_brand,
+        cardLast4: payment.card_details?.card?.last_4,
+        receiptUrl: payment.receipt_url
+      }),
+      transactionId
+    ])
+
+    console.log('[Card Payment] Success:', { transactionId, newBalance })
+
+    // 10. Return success
+    return NextResponse.json({
+      success: true,
+      message: 'Pago procesado exitosamente',
+      data: {
+        paymentId: payment.id,
+        transactionId,
+        transactionNumber,
+        amount,
+        cardBrand: payment.card_details?.card?.card_brand || 'CARD',
+        cardLast4: payment.card_details?.card?.last_4 || '****',
+        receiptUrl: payment.receipt_url,
+        newBalance
+      }
+    })
+
+  } catch (error) {
+    console.error('[Card Payment] Error:', error)
+    return NextResponse.json({
+      success: false,
+      error: error instanceof Error ? error.message : 'Error al procesar pago'
+    }, { status: 500 })
+  }
+}
