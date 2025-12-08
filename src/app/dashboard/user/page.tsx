@@ -291,7 +291,7 @@ export default function UserDashboard() {
 
               <div className="space-y-6">
                 {[
-                  { name: "Remesas", percentage: 45, color: theme === 'dark' ? "bg-exa-secondary" : "bg-exa-primary" },
+                  { name: "Cupones Familiares", percentage: 45, color: theme === 'dark' ? "bg-exa-secondary" : "bg-exa-primary" },
                   { name: "Recargas Móviles", percentage: 68, color: theme === 'dark' ? "bg-exa-primary" : "bg-exa-secondary" },
                   { name: "Paquetes", percentage: 35, color: "bg-green-500" },
                   { name: "Otros Servicios", percentage: 28, color: "bg-purple-500" }

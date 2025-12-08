@@ -85,6 +85,8 @@ export async function GET(request: NextRequest) {
         wt.created_by_name,
         wt.created_at,
         wt.completed_at,
+        wt.metadata,
+        wt.terminal_id,
         sc.legalname as source_company_name,
         tc.legalname as target_company_name,
         CONCAT(su.firstname, ' ', su.lastname) as source_user_name,
@@ -247,7 +249,9 @@ export async function GET(request: NextRequest) {
         description: row.description,
         createdBy: row.created_by_name,
         createdAt: row.created_at,
-        completedAt: row.completed_at
+        completedAt: row.completed_at,
+        terminalId: row.terminal_id,
+        metadata: row.metadata
       }
     })
 

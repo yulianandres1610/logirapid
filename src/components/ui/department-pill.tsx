@@ -12,7 +12,7 @@ interface DepartmentPillProps {
 }
 
 const AVAILABLE_DEPARTMENTS = [
-  'Remesas Familiares',
+  'Cupones Familiares',
   'Recargas Telefónicas',
   'Paquetería',
   'Mercado'

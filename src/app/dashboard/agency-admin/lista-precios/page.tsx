@@ -64,7 +64,7 @@ interface Company {
 const SERVICE_CATEGORIES = [
   { id: 'all', name: 'Todos', icon: Layers },
   { id: 'paqueteria', name: 'Paqueteria', icon: Package },
-  { id: 'remesa', name: 'Remesas', icon: DollarSign },
+  { id: 'remesa', name: 'Cupones Familiares', icon: DollarSign },
   { id: 'recarga', name: 'Recargas', icon: Smartphone },
   { id: 'mercado', name: 'Mercado', icon: Store }
 ]

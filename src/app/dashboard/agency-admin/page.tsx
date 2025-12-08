@@ -289,7 +289,7 @@ export default function AgencyAdminDashboard() {
 
               <div className="space-y-6">
                 {[
-                  { name: "Remesas", percentage: 65, color: theme === 'dark' ? "bg-exa-secondary" : "bg-exa-primary" },
+                  { name: "Cupones Familiares", percentage: 65, color: theme === 'dark' ? "bg-exa-secondary" : "bg-exa-primary" },
                   { name: "Recargas Móviles", percentage: 82, color: theme === 'dark' ? "bg-exa-primary" : "bg-exa-secondary" },
                   { name: "Transfers", percentage: 48, color: "bg-green-500" },
                   { name: "Pagos", percentage: 35, color: "bg-purple-500" }

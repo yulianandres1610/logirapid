@@ -62,7 +62,7 @@ interface PackageSize {
 
 const tabs = [
   { id: 'brand', label: 'Diseño de Compañía', icon: Palette },
-  { id: 'remittance', label: 'Remesas', icon: DollarSign },
+  { id: 'remittance', label: 'Cupones Familiares', icon: DollarSign },
   { id: 'recharge', label: 'Recargas', icon: Package },
   { id: 'marketplace', label: 'Mercado', icon: ShoppingCart },
   { id: 'package', label: 'Paquetería', icon: Truck },
@@ -525,7 +525,7 @@ export default function SettingsPage() {
           <div className="flex items-center justify-center h-64">
             <div className="text-center">
               <DollarSign className="w-16 h-16 mx-auto text-gray-400 mb-4" />
-              <h3 className="text-xl font-semibold mb-2">Configuración de Remesas</h3>
+              <h3 className="text-xl font-semibold mb-2">Configuración de Cupones Familiares</h3>
               <p className="text-gray-500">En desarrollo</p>
             </div>
           </div>

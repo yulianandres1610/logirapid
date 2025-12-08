@@ -338,7 +338,7 @@ export function Sidebar({ isCollapsed, onToggle }: SidebarProps) {
     { icon: Box, label: "Lista de Precios", href: "/dashboard/agency-admin/lista-precios", requiredService: null },
     { icon: Package, label: "Rastreador", href: "/dashboard/agency-admin/tracker", requiredService: 'tracker' },
     { icon: Wallet, label: "Wallet", href: "/dashboard/agency-admin/wallet", requiredService: 'wallet' },
-    { icon: Send, label: "Remesas", href: "/dashboard/agency-admin/remittance", requiredService: 'remittance' },
+    { icon: Send, label: "Cupones Familiares", href: "/dashboard/agency-admin/remittance", requiredService: 'remittance' },
     { icon: Smartphone, label: "Recargas", href: "/dashboard/agency-admin/recargas", requiredService: 'recharge' },
     { icon: BarChart3, label: "Tasa de Cambio", href: "/dashboard/agency-admin/exchange-rate", requiredService: 'exchange' },
     { icon: ShoppingCart, label: "Mercado", href: "/dashboard/agency-admin/marketplace", requiredService: 'marketplace' },

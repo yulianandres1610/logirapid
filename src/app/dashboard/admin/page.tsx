@@ -291,7 +291,7 @@ export default function AdminDashboard() {
 
               <div className="space-y-6">
                 {[
-                  { name: "Remesas", percentage: 85, color: theme === 'dark' ? "bg-exa-secondary" : "bg-exa-primary" },
+                  { name: "Cupones Familiares", percentage: 85, color: theme === 'dark' ? "bg-exa-secondary" : "bg-exa-primary" },
                   { name: "Recargas Móviles", percentage: 72, color: theme === 'dark' ? "bg-exa-primary" : "bg-exa-secondary" },
                   { name: "Rentas de Auto", percentage: 58, color: "bg-green-500" },
                   { name: "Marketplace", percentage: 45, color: "bg-purple-500" }

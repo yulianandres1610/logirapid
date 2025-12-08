@@ -9,7 +9,7 @@ export const runtime = 'nodejs'
 const SERVICE_DEFINITIONS: Record<string, { label: string; category: string }> = {
   'wallet': { label: 'Billetera Digital', category: 'main' },
   'recharge': { label: 'Recargas Moviles', category: 'main' },
-  'remittance': { label: 'Remesas', category: 'main' },
+  'remittance': { label: 'Cupones Familiares', category: 'main' },
   'tracker': { label: 'Seguimiento', category: 'main' },
   'exchange': { label: 'Cambio de Divisas', category: 'main' },
   'marketplace': { label: 'Marketplace', category: 'main' },
