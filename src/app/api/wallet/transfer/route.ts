@@ -50,11 +50,12 @@ export async function POST(request: NextRequest) {
       }, { status: 401 })
     }
 
-    // Only SUPER_ADMIN can make transfers
-    if (payload.role !== 'SUPER_ADMIN') {
+    // SUPER_ADMIN, ADMIN, and MANAGER can make transfers
+    const allowedRoles = ['SUPER_ADMIN', 'ADMIN', 'MANAGER']
+    if (!allowedRoles.includes(payload.role)) {
       return NextResponse.json({
         success: false,
-        error: 'Solo SUPER_ADMIN puede realizar transferencias'
+        error: 'No autorizado para realizar transferencias'
       }, { status: 403 })
     }
 
@@ -154,6 +155,23 @@ export async function POST(request: NextRequest) {
       sourceName = result.rows[0].name
       sourceBalance = parseFloat(result.rows[0].balance || '0')
       sourcePhone = result.rows[0].phone
+    }
+
+    // For ADMIN/MANAGER: validate they can only transfer from their own company's wallet
+    if (payload.role !== 'SUPER_ADMIN') {
+      if (sourceType === 'company' && sourceId !== payload.companyId) {
+        return NextResponse.json({
+          success: false,
+          error: 'Solo puede transferir desde el wallet de su propia empresa'
+        }, { status: 403 })
+      }
+      // ADMIN/MANAGER cannot transfer from user or customer wallets (only from company)
+      if (sourceType !== 'company') {
+        return NextResponse.json({
+          success: false,
+          error: 'Solo puede transferir desde el wallet de su empresa'
+        }, { status: 403 })
+      }
     }
 
     // Check sufficient balance (with credit for companies)

@@ -44,11 +44,12 @@ export async function GET(request: NextRequest) {
       }, { status: 401 })
     }
 
-    // Only SUPER_ADMIN can view all requests
-    if (payload.role !== 'SUPER_ADMIN') {
+    // SUPER_ADMIN can view all requests, ADMIN/MANAGER can view their own company's requests
+    const allowedRoles = ['SUPER_ADMIN', 'ADMIN', 'MANAGER']
+    if (!allowedRoles.includes(payload.role)) {
       return NextResponse.json({
         success: false,
-        error: 'Solo SUPER_ADMIN puede ver solicitudes de recarga'
+        error: 'No autorizado para ver solicitudes de recarga'
       }, { status: 403 })
     }
 
@@ -87,6 +88,13 @@ export async function GET(request: NextRequest) {
     `
     const params: any[] = []
     let paramIndex = 1
+
+    // ADMIN/MANAGER can only see their own company's requests
+    if (payload.role !== 'SUPER_ADMIN') {
+      query += ` AND wrr.company_id = $${paramIndex}`
+      params.push(payload.companyId)
+      paramIndex++
+    }
 
     // Filter by status
     if (status !== 'all') {
