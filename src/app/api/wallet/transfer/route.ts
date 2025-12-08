@@ -19,9 +19,9 @@ interface JWTPayload {
  * Body:
  * {
  *   sourceWalletNumber: string,
- *   sourceType: 'company' | 'user',
+ *   sourceType: 'company' | 'user' | 'customer',
  *   targetWalletNumber: string,
- *   targetType: 'company' | 'user',
+ *   targetType: 'company' | 'user' | 'customer',
  *   amount: number,
  *   description?: string
  * }
@@ -136,6 +136,24 @@ export async function POST(request: NextRequest) {
       sourceName = result.rows[0].name
       sourceBalance = parseFloat(result.rows[0].balance || '0')
       sourcePhone = result.rows[0].phone
+    } else if (sourceType === 'customer') {
+      const result = await db.query(`
+        SELECT id, CONCAT(firstname, ' ', lastname) as name, wallet_balance as balance, phone
+        FROM customers
+        WHERE wallet_number = $1
+      `, [sourceWalletNumber])
+
+      if (result.rows.length === 0) {
+        return NextResponse.json({
+          success: false,
+          error: 'Wallet origen no encontrado'
+        }, { status: 404 })
+      }
+
+      sourceId = result.rows[0].id
+      sourceName = result.rows[0].name
+      sourceBalance = parseFloat(result.rows[0].balance || '0')
+      sourcePhone = result.rows[0].phone
     }
 
     // Check sufficient balance (with credit for companies)
@@ -203,6 +221,24 @@ export async function POST(request: NextRequest) {
       targetName = result.rows[0].name
       targetBalance = parseFloat(result.rows[0].balance || '0')
       targetPhone = result.rows[0].phone
+    } else if (targetType === 'customer') {
+      const result = await db.query(`
+        SELECT id, CONCAT(firstname, ' ', lastname) as name, wallet_balance as balance, phone
+        FROM customers
+        WHERE wallet_number = $1
+      `, [targetWalletNumber])
+
+      if (result.rows.length === 0) {
+        return NextResponse.json({
+          success: false,
+          error: 'Wallet destino no encontrado'
+        }, { status: 404 })
+      }
+
+      targetId = result.rows[0].id
+      targetName = result.rows[0].name
+      targetBalance = parseFloat(result.rows[0].balance || '0')
+      targetPhone = result.rows[0].phone
     }
 
     // Calculate new balance after transfer to track negative_since
@@ -228,9 +264,15 @@ export async function POST(request: NextRequest) {
             WHERE id = $2
           `, [amount, sourceId])
         }
-      } else {
+      } else if (sourceType === 'user') {
         await client.query(`
           UPDATE users
+          SET wallet_balance = wallet_balance - $1
+          WHERE id = $2
+        `, [amount, sourceId])
+      } else if (sourceType === 'customer') {
+        await client.query(`
+          UPDATE customers
           SET wallet_balance = wallet_balance - $1
           WHERE id = $2
         `, [amount, sourceId])
@@ -257,9 +299,15 @@ export async function POST(request: NextRequest) {
             WHERE id = $2
           `, [amount, targetId])
         }
-      } else {
+      } else if (targetType === 'user') {
         await client.query(`
           UPDATE users
+          SET wallet_balance = wallet_balance + $1
+          WHERE id = $2
+        `, [amount, targetId])
+      } else if (targetType === 'customer') {
+        await client.query(`
+          UPDATE customers
           SET wallet_balance = wallet_balance + $1
           WHERE id = $2
         `, [amount, targetId])
@@ -276,6 +324,7 @@ export async function POST(request: NextRequest) {
           target_type,
           target_company_id,
           target_user_id,
+          target_customer_id,
           target_wallet_number,
           amount,
           fee,
@@ -297,13 +346,14 @@ export async function POST(request: NextRequest) {
           $7,
           $8,
           $9,
+          $10,
           0,
-          $9,
+          $10,
           'USD',
           'completed',
-          $10,
           $11,
           $12,
+          $13,
           NOW()
         ) RETURNING id
       `, [
@@ -314,6 +364,7 @@ export async function POST(request: NextRequest) {
         targetType,
         targetType === 'company' ? targetId : null,
         targetType === 'user' ? targetId : null,
+        targetType === 'customer' ? targetId : null,
         targetWalletNumber,
         amount,
         description || `Transferencia de ${sourceName} a ${targetName}`,
@@ -332,6 +383,7 @@ export async function POST(request: NextRequest) {
           target_type,
           target_company_id,
           target_user_id,
+          target_customer_id,
           target_wallet_number,
           amount,
           fee,
@@ -353,13 +405,14 @@ export async function POST(request: NextRequest) {
           $7,
           $8,
           $9,
+          $10,
           0,
-          $9,
+          $10,
           'USD',
           'completed',
-          $10,
           $11,
           $12,
+          $13,
           NOW()
         ) RETURNING id
       `, [
@@ -370,6 +423,7 @@ export async function POST(request: NextRequest) {
         targetType,
         targetType === 'company' ? targetId : null,
         targetType === 'user' ? targetId : null,
+        targetType === 'customer' ? targetId : null,
         targetWalletNumber,
         amount,
         description || `Transferencia de ${sourceName} a ${targetName}`,
