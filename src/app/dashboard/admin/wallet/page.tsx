@@ -2019,26 +2019,26 @@ export default function WalletManagementPage() {
                 ) : (
                   <>
                     <div className="overflow-x-auto">
-                      <table className="w-full">
+                      <table className="w-full table-fixed">
                         <thead>
                           <tr className={cn("text-left text-xs uppercase", theme === 'dark' ? 'text-gray-500' : 'text-gray-400')}>
-                            <th className="pb-3 whitespace-nowrap">No. Trans.</th>
-                            <th className="pb-3">Tipo</th>
-                            <th className="pb-3">Nombre Wallet</th>
-                            <th className="pb-3 text-right">Monto</th>
-                            <th className="pb-3 whitespace-nowrap">No. Cuenta</th>
-                            <th className="pb-3 whitespace-nowrap">Metodo Pago</th>
-                            <th className="pb-3 whitespace-nowrap">Fecha / Hora</th>
-                            <th className="pb-3 text-center">Estado</th>
+                            <th className="pb-3 pr-4 w-28 whitespace-nowrap">No. Trans.</th>
+                            <th className="pb-3 pr-4 w-24">Tipo</th>
+                            <th className="pb-3 pr-6 w-44 text-left">Nombre Wallet</th>
+                            <th className="pb-3 pr-6 w-28 text-left">Monto</th>
+                            <th className="pb-3 pr-4 w-32 text-left whitespace-nowrap">No. Cuenta</th>
+                            <th className="pb-3 pr-4 w-28 whitespace-nowrap">Metodo Pago</th>
+                            <th className="pb-3 pr-4 w-28 whitespace-nowrap">Fecha / Hora</th>
+                            <th className="pb-3 w-28 text-center">Estado</th>
                           </tr>
                         </thead>
                         <tbody className={cn("divide-y", theme === 'dark' ? 'divide-gray-700' : 'divide-gray-100')}>
                           {transactions.map(tx => (
                             <tr key={tx.id} className={cn(theme === 'dark' ? 'hover:bg-gray-700/50' : 'hover:bg-gray-50')}>
-                              <td className={cn("py-3 text-sm font-mono", theme === 'dark' ? 'text-gray-300' : 'text-gray-700')}>
+                              <td className={cn("py-3 pr-4 text-sm font-mono truncate", theme === 'dark' ? 'text-gray-300' : 'text-gray-700')}>
                                 {tx.transactionNumber || tx.id}
                               </td>
-                              <td className="py-3">
+                              <td className="py-3 pr-4">
                                 <span className={cn(
                                   "px-2 py-1 rounded text-xs font-medium whitespace-nowrap",
                                   tx.type === 'recharge'
@@ -2052,21 +2052,21 @@ export default function WalletManagementPage() {
                                   {tx.typeLabel}
                                 </span>
                               </td>
-                              <td className={cn("py-3 text-sm", theme === 'dark' ? 'text-white' : 'text-gray-900')}>
+                              <td className={cn("py-3 pr-6 text-sm text-left font-medium truncate", theme === 'dark' ? 'text-white' : 'text-gray-900')}>
                                 {tx.type === 'transfer_out' ? tx.sourceName : tx.targetName}
                               </td>
-                              <td className="py-3 text-right font-semibold whitespace-nowrap">
+                              <td className="py-3 pr-6 text-left font-semibold whitespace-nowrap">
                                 <span className={tx.type === 'transfer_out' ? 'text-red-500' : 'text-green-500'}>
                                   {tx.type === 'transfer_out' ? '-' : '+'}{tx.amountFormatted}
                                 </span>
                               </td>
-                              <td className={cn("py-3 text-sm font-mono", theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}>
+                              <td className={cn("py-3 pr-4 text-sm font-mono text-left", theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}>
                                 {tx.type === 'transfer_out' ? (tx.sourceWalletNumber || '-') : (tx.targetWalletNumber || '-')}
                               </td>
-                              <td className={cn("py-3 text-sm whitespace-nowrap", theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}>
+                              <td className={cn("py-3 pr-4 text-sm whitespace-nowrap", theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}>
                                 {tx.paymentMethodLabel || '-'}
                               </td>
-                              <td className={cn("py-3 text-sm whitespace-nowrap", theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}>
+                              <td className={cn("py-3 pr-4 text-sm whitespace-nowrap", theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}>
                                 <div>{new Date(tx.createdAt).toLocaleDateString('es-ES')}</div>
                                 <div className="text-xs">{new Date(tx.createdAt).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}</div>
                               </td>
