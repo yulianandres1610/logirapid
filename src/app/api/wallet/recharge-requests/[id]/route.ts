@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
 import jwt from 'jsonwebtoken'
 import { db } from '@/lib/database'
+import { sendWalletNotificationSMS } from '@/lib/sms-service'
 
 interface JWTPayload {
   userId: number
@@ -88,7 +89,11 @@ export async function PUT(
       SELECT
         wrr.*,
         c."walletBalance"::numeric as company_balance,
-        u.wallet_balance as user_balance
+        c.phone as company_phone,
+        c.legalname as company_name,
+        u.wallet_balance as user_balance,
+        u.phone as user_phone,
+        CONCAT(u.firstname, ' ', u.lastname) as user_name
       FROM wallet_recharge_requests wrr
       LEFT JOIN companies c ON wrr.company_id = c.id
       LEFT JOIN users u ON wrr.user_id = u.id
@@ -244,6 +249,34 @@ export async function PUT(
 
       return txResult.rows[0].id
     })
+
+    // Send SMS notification after successful approval
+    const targetPhone = rechargeRequest.wallet_type === 'company'
+      ? rechargeRequest.company_phone
+      : rechargeRequest.user_phone
+    const targetName = rechargeRequest.wallet_type === 'company'
+      ? rechargeRequest.company_name
+      : rechargeRequest.user_name
+    const txnRef = `RCH-${transactionResult}`
+
+    if (targetPhone) {
+      sendWalletNotificationSMS(
+        targetPhone,
+        'recharge',
+        targetName || 'Cliente',
+        amount,
+        newBalance!,
+        { paymentMethod: rechargeRequest.payment_method || 'aprobacion', transactionNumber: txnRef }
+      ).then(result => {
+        if (result.success) {
+          console.log('[Recharge Approval] SMS notification sent:', result.messageId)
+        } else {
+          console.log('[Recharge Approval] SMS notification failed:', result.error)
+        }
+      }).catch(err => {
+        console.error('[Recharge Approval] SMS notification error:', err)
+      })
+    }
 
     return NextResponse.json({
       success: true,

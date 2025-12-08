@@ -278,6 +278,132 @@ function formatDateSpanish(dateString: string): string {
  * Envía mensaje WhatsApp de confirmación de orden usando Content Template
  * Usa el template aprobado por Meta/WhatsApp con ContentSid
  */
+// ==========================================
+// WALLET SMS NOTIFICATIONS
+// ==========================================
+
+/**
+ * SMS notification types for wallet transactions
+ */
+export type WalletSMSType = 'recharge' | 'commission' | 'transfer_in' | 'transfer_out' | 'debit'
+
+/**
+ * Generates wallet recharge notification message
+ */
+export function generateWalletRechargeMessage(
+  ownerName: string,
+  amount: number,
+  newBalance: number,
+  paymentMethod: string,
+  transactionNumber?: string
+): string {
+  const methodText = paymentMethod === 'card_manual' ? 'tarjeta' :
+    paymentMethod === 'terminal' ? 'terminal' :
+    paymentMethod === 'cash' ? 'efectivo' : paymentMethod
+
+  const txnInfo = transactionNumber ? ` Ref: ${transactionNumber}.` : ''
+  return `LogiRapid: Su billetera ha sido recargada con $${amount.toFixed(2)} mediante ${methodText}.${txnInfo} Nuevo balance: $${newBalance.toFixed(2)}. Para ayuda: HELP | Cancelar SMS: STOP`
+}
+
+/**
+ * Generates commission notification message
+ */
+export function generateCommissionMessage(
+  ownerName: string,
+  amount: number,
+  newBalance: number,
+  description?: string,
+  transactionNumber?: string
+): string {
+  const txnInfo = transactionNumber ? ` Ref: ${transactionNumber}.` : ''
+  return `LogiRapid: Se ha agregado una comision de $${amount.toFixed(2)} a su billetera. ${description ? `Concepto: ${description}. ` : ''}${txnInfo} Nuevo balance: $${newBalance.toFixed(2)}. Para ayuda: HELP | Cancelar SMS: STOP`
+}
+
+/**
+ * Generates transfer received notification message
+ */
+export function generateTransferInMessage(
+  ownerName: string,
+  amount: number,
+  newBalance: number,
+  senderName: string,
+  transactionNumber?: string
+): string {
+  const txnInfo = transactionNumber ? ` Ref: ${transactionNumber}.` : ''
+  return `LogiRapid: Ha recibido una transferencia de $${amount.toFixed(2)} de ${senderName}.${txnInfo} Nuevo balance: $${newBalance.toFixed(2)}. Para ayuda: HELP | Cancelar SMS: STOP`
+}
+
+/**
+ * Generates transfer sent notification message
+ */
+export function generateTransferOutMessage(
+  ownerName: string,
+  amount: number,
+  newBalance: number,
+  recipientName: string,
+  transactionNumber?: string
+): string {
+  const txnInfo = transactionNumber ? ` Ref: ${transactionNumber}.` : ''
+  return `LogiRapid: Se ha transferido $${amount.toFixed(2)} a ${recipientName} desde su billetera.${txnInfo} Nuevo balance: $${newBalance.toFixed(2)}. Para ayuda: HELP | Cancelar SMS: STOP`
+}
+
+/**
+ * Generates wallet debit notification message
+ */
+export function generateWalletDebitMessage(
+  ownerName: string,
+  amount: number,
+  newBalance: number,
+  description?: string,
+  transactionNumber?: string
+): string {
+  const txnInfo = transactionNumber ? ` Ref: ${transactionNumber}.` : ''
+  return `LogiRapid: Se ha debitado $${amount.toFixed(2)} de su billetera. ${description ? `Concepto: ${description}. ` : ''}${txnInfo} Nuevo balance: $${newBalance.toFixed(2)}. Para ayuda: HELP | Cancelar SMS: STOP`
+}
+
+/**
+ * Send wallet notification SMS
+ * Generic function to send any wallet-related SMS
+ */
+export async function sendWalletNotificationSMS(
+  phone: string,
+  type: WalletSMSType,
+  ownerName: string,
+  amount: number,
+  newBalance: number,
+  options?: {
+    paymentMethod?: string
+    description?: string
+    otherPartyName?: string
+    transactionNumber?: string
+  }
+): Promise<SMSResult> {
+  let message: string
+  const txn = options?.transactionNumber
+
+  switch (type) {
+    case 'recharge':
+      message = generateWalletRechargeMessage(ownerName, amount, newBalance, options?.paymentMethod || 'recarga', txn)
+      break
+    case 'commission':
+      message = generateCommissionMessage(ownerName, amount, newBalance, options?.description, txn)
+      break
+    case 'transfer_in':
+      message = generateTransferInMessage(ownerName, amount, newBalance, options?.otherPartyName || 'otra cuenta', txn)
+      break
+    case 'transfer_out':
+      message = generateTransferOutMessage(ownerName, amount, newBalance, options?.otherPartyName || 'otra cuenta', txn)
+      break
+    case 'debit':
+      message = generateWalletDebitMessage(ownerName, amount, newBalance, options?.description, txn)
+      break
+    default:
+      message = `LogiRapid: Su billetera ha sido actualizada.${txn ? ` Ref: ${txn}.` : ''} Nuevo balance: $${newBalance.toFixed(2)}. Para ayuda: HELP | Cancelar SMS: STOP`
+  }
+
+  return sendSMS(phone, message)
+}
+
 export async function sendWhatsAppOrderConfirmation(
   customerPhone: string,
   customerName: string,

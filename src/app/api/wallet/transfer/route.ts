@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
 import jwt from 'jsonwebtoken'
 import { db } from '@/lib/database'
+import { sendWalletNotificationSMS } from '@/lib/sms-service'
 
 interface JWTPayload {
   userId: number
@@ -93,10 +94,11 @@ export async function POST(request: NextRequest) {
     let sourceId: number | null = null
     let sourceName: string = ''
     let sourceBalance: number = 0
+    let sourcePhone: string | null = null
 
     if (sourceType === 'company') {
       const result = await db.query(`
-        SELECT id, legalname, walletbalance as balance
+        SELECT id, legalname, walletbalance as balance, phone
         FROM companies
         WHERE walletnumber = $1
       `, [sourceWalletNumber])
@@ -111,9 +113,10 @@ export async function POST(request: NextRequest) {
       sourceId = result.rows[0].id
       sourceName = result.rows[0].legalname
       sourceBalance = parseFloat(result.rows[0].balance || '0')
+      sourcePhone = result.rows[0].phone
     } else if (sourceType === 'user') {
       const result = await db.query(`
-        SELECT id, CONCAT(firstname, ' ', lastname) as name, wallet_balance as balance
+        SELECT id, CONCAT(firstname, ' ', lastname) as name, wallet_balance as balance, phone
         FROM users
         WHERE wallet_number = $1
       `, [sourceWalletNumber])
@@ -128,6 +131,7 @@ export async function POST(request: NextRequest) {
       sourceId = result.rows[0].id
       sourceName = result.rows[0].name
       sourceBalance = parseFloat(result.rows[0].balance || '0')
+      sourcePhone = result.rows[0].phone
     }
 
     // Check sufficient balance
@@ -142,10 +146,11 @@ export async function POST(request: NextRequest) {
     let targetId: number | null = null
     let targetName: string = ''
     let targetBalance: number = 0
+    let targetPhone: string | null = null
 
     if (targetType === 'company') {
       const result = await db.query(`
-        SELECT id, legalname, walletbalance as balance
+        SELECT id, legalname, walletbalance as balance, phone
         FROM companies
         WHERE walletnumber = $1
       `, [targetWalletNumber])
@@ -160,9 +165,10 @@ export async function POST(request: NextRequest) {
       targetId = result.rows[0].id
       targetName = result.rows[0].legalname
       targetBalance = parseFloat(result.rows[0].balance || '0')
+      targetPhone = result.rows[0].phone
     } else if (targetType === 'user') {
       const result = await db.query(`
-        SELECT id, CONCAT(firstname, ' ', lastname) as name, wallet_balance as balance
+        SELECT id, CONCAT(firstname, ' ', lastname) as name, wallet_balance as balance, phone
         FROM users
         WHERE wallet_number = $1
       `, [targetWalletNumber])
@@ -177,6 +183,7 @@ export async function POST(request: NextRequest) {
       targetId = result.rows[0].id
       targetName = result.rows[0].name
       targetBalance = parseFloat(result.rows[0].balance || '0')
+      targetPhone = result.rows[0].phone
     }
 
     // Process transfer atomically
@@ -331,6 +338,45 @@ export async function POST(request: NextRequest) {
 
     const sourceNewBalance = sourceBalance - amount
     const targetNewBalance = targetBalance + amount
+
+    // Send SMS notifications (async, don't block response)
+    const transferRef = `TRF-${transactionResult.outId}`
+
+    // Notify source about transfer out
+    if (sourcePhone) {
+      sendWalletNotificationSMS(
+        sourcePhone,
+        'transfer_out',
+        sourceName,
+        amount,
+        sourceNewBalance,
+        { otherPartyName: targetName, transactionNumber: transferRef }
+      ).then(result => {
+        if (result.success) {
+          console.log('[Transfer] SMS sent to source:', result.messageId)
+        } else {
+          console.log('[Transfer] SMS to source failed:', result.error)
+        }
+      }).catch(err => console.error('[Transfer] SMS to source error:', err))
+    }
+
+    // Notify target about transfer in
+    if (targetPhone) {
+      sendWalletNotificationSMS(
+        targetPhone,
+        'transfer_in',
+        targetName,
+        amount,
+        targetNewBalance,
+        { otherPartyName: sourceName, transactionNumber: transferRef }
+      ).then(result => {
+        if (result.success) {
+          console.log('[Transfer] SMS sent to target:', result.messageId)
+        } else {
+          console.log('[Transfer] SMS to target failed:', result.error)
+        }
+      }).catch(err => console.error('[Transfer] SMS to target error:', err))
+    }
 
     return NextResponse.json({
       success: true,

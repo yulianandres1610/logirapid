@@ -9,6 +9,7 @@ import {
   centsToDollars,
   SquareCredentials
 } from '@/lib/square'
+import { sendWalletNotificationSMS } from '@/lib/sms-service'
 
 interface JWTPayload {
   userId: number
@@ -252,6 +253,50 @@ export async function GET(
         SELECT metadata FROM wallet_transactions WHERE id = $1
       `, [tx.id])
 
+      const finalNewBalance = updatedTx.rows[0]?.metadata?.newBalance
+
+      // Send SMS notification (async, don't block response)
+      // Get target phone for notification
+      let targetPhone: string | null = null
+      let targetName: string = ''
+
+      if (tx.target_type === 'company') {
+        const phoneResult = await db.query('SELECT phone, legalname FROM companies WHERE id = $1', [tx.target_company_id])
+        if (phoneResult.rows[0]) {
+          targetPhone = phoneResult.rows[0].phone
+          targetName = phoneResult.rows[0].legalname
+        }
+      } else if (tx.target_type === 'user') {
+        const phoneResult = await db.query("SELECT phone, CONCAT(firstname, ' ', lastname) as name FROM users WHERE id = $1", [tx.target_user_id])
+        if (phoneResult.rows[0]) {
+          targetPhone = phoneResult.rows[0].phone
+          targetName = phoneResult.rows[0].name
+        }
+      } else if (tx.target_type === 'customer') {
+        const phoneResult = await db.query("SELECT phone, CONCAT(firstname, ' ', lastname) as name FROM customers WHERE id = $1", [tx.target_customer_id])
+        if (phoneResult.rows[0]) {
+          targetPhone = phoneResult.rows[0].phone
+          targetName = phoneResult.rows[0].name
+        }
+      }
+
+      if (targetPhone) {
+        sendWalletNotificationSMS(
+          targetPhone,
+          'recharge',
+          targetName,
+          amount,
+          finalNewBalance,
+          { paymentMethod: 'terminal', transactionNumber: tx.transaction_number }
+        ).then(result => {
+          if (result.success) {
+            console.log('[Terminal Status] SMS notification sent:', result.messageId)
+          } else {
+            console.log('[Terminal Status] SMS notification failed:', result.error)
+          }
+        }).catch(err => console.error('[Terminal Status] SMS notification error:', err))
+      }
+
       return NextResponse.json({
         success: true,
         data: {
@@ -261,7 +306,7 @@ export async function GET(
           transactionNumber: tx.transaction_number,
           paymentId,
           receiptUrl: paymentDetails.payment?.receiptUrl,
-          newBalance: updatedTx.rows[0]?.metadata?.newBalance,
+          newBalance: finalNewBalance,
           cardBrand: paymentDetails.payment?.cardDetails?.card.cardBrand,
           cardLast4: paymentDetails.payment?.cardDetails?.card.last4,
           canRetry: false,

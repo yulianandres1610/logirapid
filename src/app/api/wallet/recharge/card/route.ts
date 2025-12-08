@@ -4,6 +4,7 @@ import jwt from 'jsonwebtoken'
 import crypto from 'crypto'
 import { db } from '@/lib/database'
 import { getSquareBaseUrl, getPlatformCredentials } from '@/lib/square'
+import { sendWalletNotificationSMS } from '@/lib/sms-service'
 
 export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
@@ -56,10 +57,11 @@ export async function POST(request: NextRequest) {
     let targetId: number | null = null
     let currentBalance = 0
     let targetName = ''
+    let targetPhone: string | null = null
 
     if (targetType === 'company') {
       const result = await db.query(
-        `SELECT id, legalname, walletbalance FROM companies WHERE walletnumber = $1`,
+        `SELECT id, legalname, walletbalance, phone FROM companies WHERE walletnumber = $1`,
         [targetWalletNumber]
       )
       if (result.rows.length === 0) {
@@ -68,9 +70,10 @@ export async function POST(request: NextRequest) {
       targetId = result.rows[0].id
       currentBalance = parseFloat(result.rows[0].walletbalance || '0')
       targetName = result.rows[0].legalname
+      targetPhone = result.rows[0].phone
     } else if (targetType === 'user') {
       const result = await db.query(
-        `SELECT id, firstname, lastname, wallet_balance FROM users WHERE wallet_number = $1`,
+        `SELECT id, firstname, lastname, wallet_balance, phone FROM users WHERE wallet_number = $1`,
         [targetWalletNumber]
       )
       if (result.rows.length === 0) {
@@ -79,9 +82,10 @@ export async function POST(request: NextRequest) {
       targetId = result.rows[0].id
       currentBalance = parseFloat(result.rows[0].wallet_balance || '0')
       targetName = `${result.rows[0].firstname} ${result.rows[0].lastname}`
+      targetPhone = result.rows[0].phone
     } else if (targetType === 'customer') {
       const result = await db.query(
-        `SELECT id, firstname, lastname, wallet_balance FROM customers WHERE wallet_number = $1`,
+        `SELECT id, firstname, lastname, wallet_balance, phone FROM customers WHERE wallet_number = $1`,
         [targetWalletNumber]
       )
       if (result.rows.length === 0) {
@@ -90,6 +94,7 @@ export async function POST(request: NextRequest) {
       targetId = result.rows[0].id
       currentBalance = parseFloat(result.rows[0].wallet_balance || '0')
       targetName = `${result.rows[0].firstname} ${result.rows[0].lastname}`
+      targetPhone = result.rows[0].phone
     }
 
     console.log('[Card Payment] Target:', { targetId, targetName, currentBalance })
@@ -231,7 +236,27 @@ export async function POST(request: NextRequest) {
 
     console.log('[Card Payment] Success:', { transactionId, newBalance })
 
-    // 10. Return success
+    // 10. Send SMS notification (async, don't block response)
+    if (targetPhone) {
+      sendWalletNotificationSMS(
+        targetPhone,
+        'recharge',
+        targetName,
+        amount,
+        newBalance,
+        { paymentMethod: 'card_manual', transactionNumber }
+      ).then(result => {
+        if (result.success) {
+          console.log('[Card Payment] SMS notification sent:', result.messageId)
+        } else {
+          console.log('[Card Payment] SMS notification failed:', result.error)
+        }
+      }).catch(err => {
+        console.error('[Card Payment] SMS notification error:', err)
+      })
+    }
+
+    // 11. Return success
     return NextResponse.json({
       success: true,
       message: 'Pago procesado exitosamente',
