@@ -29,7 +29,7 @@ import {
   Filter,
   Download
 } from 'lucide-react'
-import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip } from 'recharts'
+import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, Tooltip, Cell } from 'recharts'
 import { cn } from '@/lib/utils'
 import { AnimatedNumber } from '@/components/ui/animated-counter'
 import { useTheme } from '@/contexts/theme-context'
@@ -713,27 +713,26 @@ export default function CompanyWalletPage() {
                       </h3>
 
                       {rechargesByMethod.length > 0 ? (
-                        <div className="flex-1 min-h-[220px]">
+                        <div className="flex-1" style={{ height: rechargesByMethod.length * 40 + 20 }}>
                           <ResponsiveContainer width="100%" height="100%">
-                            <PieChart>
-                              <Pie
-                                data={rechargesByMethod}
-                                cx="50%"
-                                cy="50%"
-                                innerRadius={50}
-                                outerRadius={75}
-                                paddingAngle={3}
-                                dataKey="value"
-                                labelLine={false}
-                              >
-                                {rechargesByMethod.map((entry, index) => (
-                                  <Cell key={`cell-${index}`} fill={entry.color} />
-                                ))}
-                              </Pie>
+                            <BarChart
+                              data={rechargesByMethod}
+                              layout="vertical"
+                              margin={{ top: 5, right: 30, left: 60, bottom: 5 }}
+                            >
+                              <XAxis type="number" hide />
+                              <YAxis
+                                type="category"
+                                dataKey="name"
+                                axisLine={false}
+                                tickLine={false}
+                                tick={{ fill: theme === 'dark' ? '#9CA3AF' : '#4B5563', fontSize: 12 }}
+                                width={55}
+                              />
                               <Tooltip
-                                formatter={(value: number, name: string, props: { payload: { amount: number } }) => [
+                                formatter={(value: number, _name: string, props: { payload: { amount: number } }) => [
                                   `${value} recargas ($${props.payload.amount.toLocaleString('en-US', { minimumFractionDigits: 2 })})`,
-                                  name
+                                  'Cantidad'
                                 ]}
                                 contentStyle={{
                                   backgroundColor: theme === 'dark' ? '#1F2937' : '#FFFFFF',
@@ -741,18 +740,14 @@ export default function CompanyWalletPage() {
                                   borderRadius: '8px',
                                   color: theme === 'dark' ? '#FFFFFF' : '#111827'
                                 }}
+                                cursor={{ fill: theme === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)' }}
                               />
-                              <Legend
-                                verticalAlign="bottom"
-                                height={36}
-                                formatter={(value) => (
-                                  <span className={cn(
-                                    "text-sm",
-                                    theme === 'dark' ? 'text-gray-300' : 'text-gray-600'
-                                  )}>{value}</span>
-                                )}
-                              />
-                            </PieChart>
+                              <Bar dataKey="value" radius={[0, 4, 4, 0]} barSize={20}>
+                                {rechargesByMethod.map((entry, index) => (
+                                  <Cell key={`cell-${index}`} fill={entry.color} />
+                                ))}
+                              </Bar>
+                            </BarChart>
                           </ResponsiveContainer>
                         </div>
                       ) : (
