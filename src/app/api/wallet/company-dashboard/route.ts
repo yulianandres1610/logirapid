@@ -60,14 +60,15 @@ export async function GET(request: NextRequest) {
 
     // 1. Get company wallet information
     // Note: Using COALESCE to handle both camelCase and lowercase column names
+    // walletBalance/dailyLimit/monthlyLimit are varchar in camelCase, numeric in lowercase
     const companyResult = await db.query(`
       SELECT
         id,
         legalname,
         COALESCE("walletNumber", walletnumber) as walletnumber,
-        COALESCE("walletBalance", walletbalance)::numeric as walletbalance,
-        COALESCE("dailyLimit", dailylimit)::numeric as dailylimit,
-        COALESCE("monthlyLimit", monthlylimit)::numeric as monthlylimit,
+        COALESCE("walletBalance"::numeric, walletbalance, 0) as walletbalance,
+        COALESCE("dailyLimit"::numeric, dailylimit, 5000) as dailylimit,
+        COALESCE("monthlyLimit"::numeric, monthlylimit, 50000) as monthlylimit,
         credit_limit,
         credit_enabled,
         negative_since,

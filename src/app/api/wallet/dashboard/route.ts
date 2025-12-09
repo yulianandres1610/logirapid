@@ -64,12 +64,13 @@ export async function GET(request: NextRequest) {
     const lastDayLastMonth = new Date(now.getFullYear(), now.getMonth(), 0)
 
     // 1. Total balance and count from companies
+    // Note: Use COALESCE to handle both camelCase (varchar) and lowercase (numeric) columns
     const companiesBalance = await db.query(`
       SELECT
-        COALESCE(SUM(walletbalance), 0) as total,
+        COALESCE(SUM(COALESCE("walletBalance"::numeric, walletbalance, 0)), 0) as total,
         COUNT(CASE WHEN status = 'active' THEN 1 END) as active_count,
         COUNT(*) as total_count,
-        COUNT(CASE WHEN walletnumber IS NOT NULL THEN 1 END) as with_wallet
+        COUNT(CASE WHEN COALESCE("walletNumber", walletnumber) IS NOT NULL THEN 1 END) as with_wallet
       FROM companies
     `)
 
@@ -202,21 +203,21 @@ export async function GET(request: NextRequest) {
     }))
 
     // 9. Top 10 wallets by balance (all types: companies, users, customers)
+    // Note: Companies use COALESCE to handle both camelCase (varchar) and lowercase (numeric) columns
     const topWallets = await db.query(`
       (
         SELECT
           id,
           legalname as name,
-          walletnumber as wallet_number,
-          walletbalance as balance,
+          COALESCE("walletNumber", walletnumber) as wallet_number,
+          COALESCE("walletBalance"::numeric, walletbalance, 0) as balance,
           status,
-          dailylimit as daily_limit,
-          monthlylimit as monthly_limit,
+          COALESCE("dailyLimit"::numeric, dailylimit, 5000) as daily_limit,
+          COALESCE("monthlyLimit"::numeric, monthlylimit, 50000) as monthly_limit,
           'company' as type
         FROM companies
-        WHERE walletbalance IS NOT NULL
-          AND walletbalance > 0
-          AND walletnumber IS NOT NULL
+        WHERE COALESCE("walletBalance"::numeric, walletbalance, 0) > 0
+          AND COALESCE("walletNumber", walletnumber) IS NOT NULL
       )
       UNION ALL
       (

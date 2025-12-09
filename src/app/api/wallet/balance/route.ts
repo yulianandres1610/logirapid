@@ -48,12 +48,14 @@ export async function GET(request: NextRequest) {
     // Get company wallet info
     let companyWallet = null
     if (companyId) {
+      // Note: Use COALESCE to handle both camelCase and lowercase column names
+      // walletBalance is varchar in camelCase, numeric in lowercase
       const companyResult = await db.query(`
         SELECT
           id,
           legalname as "legalName",
-          walletnumber as "walletNumber",
-          walletbalance as "walletBalance"
+          COALESCE("walletNumber", walletnumber) as "walletNumber",
+          COALESCE("walletBalance"::numeric, walletbalance, 0) as "walletBalance"
         FROM companies
         WHERE id = $1
       `, [companyId])
