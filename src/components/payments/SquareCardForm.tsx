@@ -52,6 +52,8 @@ interface PaymentResult {
   receiptUrl?: string
   newBalance: number
   amount: number
+  fee: number
+  totalCharged: number
 }
 
 interface SquareConfig {

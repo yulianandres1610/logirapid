@@ -38,6 +38,7 @@ import { useNotifications } from '@/contexts/NotificationContext'
 import { DashboardLayout } from '@/components/layout/dashboard-layout'
 import { VirtualCard } from '@/components/wallet/VirtualCard'
 import { SquareCardForm } from '@/components/payments/SquareCardForm'
+import { PaymentReceiptStep, PaymentReceiptData } from '@/components/wallet/PaymentReceiptStep'
 import {
   AreaChart,
   Area,
@@ -203,6 +204,10 @@ export default function WalletManagementPage() {
   const [paymentReference, setPaymentReference] = useState('')
   const [processing, setProcessing] = useState(false)
 
+  // Receipt step state
+  const [showReceiptStep, setShowReceiptStep] = useState(false)
+  const [receiptData, setReceiptData] = useState<PaymentReceiptData | null>(null)
+
   // Terminal checkout state
   const [availableTerminals, setAvailableTerminals] = useState<Array<{ id: number; name: string; deviceId: string; locationName: string }>>([])
   const [selectedTerminalId, setSelectedTerminalId] = useState<number | null>(null)
@@ -285,6 +290,18 @@ export default function WalletManagementPage() {
     } catch (err) {
       showNotification('error', 'Error', 'Error al actualizar configuracion')
     }
+  }
+
+  // Close receipt step and reset form
+  const handleCloseReceipt = () => {
+    setShowReceiptStep(false)
+    setReceiptData(null)
+    setRechargeStep(1)
+    setRechargeAmount('')
+    setSelectedWallet(null)
+    setPaymentMethod('cash')
+    setPaymentReference('')
+    setActiveTab('dashboard')
   }
 
   // Fetch dashboard data
@@ -1571,15 +1588,22 @@ export default function WalletManagementPage() {
                               targetWalletNumber={selectedWallet.walletNumber}
                               targetType={selectedWallet.type}
                               onSuccess={(data) => {
-                                // Show success notification and reset form
-                                showNotification('success', 'Pago Exitoso', `Pago de $${data.amount.toFixed(2)} procesado. Nuevo balance: $${data.newBalance.toFixed(2)}`)
-                                setRechargeStep(1)
-                                setRechargeAmount('')
-                                setSelectedWallet(null)
-                                setPaymentMethod('cash')
-                                setPaymentReference('')
-                                // Navigate to dashboard and refresh data
-                                setActiveTab('dashboard')
+                                // Set receipt data and show receipt step
+                                setReceiptData({
+                                  transactionNumber: data.transactionNumber,
+                                  amount: data.amount,
+                                  fee: data.fee,
+                                  totalCharged: data.totalCharged,
+                                  newBalance: data.newBalance,
+                                  cardBrand: data.cardBrand,
+                                  cardLast4: data.cardLast4,
+                                  recipientName: selectedWallet.name,
+                                  recipientPhone: selectedWallet.phone || null,
+                                  walletNumber: selectedWallet.walletNumber,
+                                  paymentDate: new Date()
+                                })
+                                setShowReceiptStep(true)
+                                // Refresh dashboard data
                                 fetchDashboard()
                                 fetchTransactions()
                               }}
@@ -2650,6 +2674,35 @@ export default function WalletManagementPage() {
                   Cerrar
                 </button>
               </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Payment Receipt Modal */}
+      <AnimatePresence>
+        {showReceiptStep && receiptData && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+            onClick={handleCloseReceipt}
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.9 }}
+              onClick={(e) => e.stopPropagation()}
+              className={cn(
+                "w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden",
+                theme === 'dark' ? 'bg-gray-800' : 'bg-white'
+              )}
+            >
+              <PaymentReceiptStep
+                data={receiptData}
+                onClose={handleCloseReceipt}
+              />
             </motion.div>
           </motion.div>
         )}

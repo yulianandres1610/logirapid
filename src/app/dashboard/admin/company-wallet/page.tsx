@@ -34,6 +34,7 @@ import { useNotifications } from '@/contexts/NotificationContext'
 import { DashboardLayout } from '@/components/layout/dashboard-layout'
 import { VirtualCard } from '@/components/wallet/VirtualCard'
 import { SquareCardForm } from '@/components/payments/SquareCardForm'
+import { PaymentReceiptStep, PaymentReceiptData } from '@/components/wallet/PaymentReceiptStep'
 
 type Tab = 'dashboard' | 'recharge' | 'transfer' | 'pending'
 type PaymentMethod = 'card_manual' | 'card_terminal' | 'cash' | 'wire' | 'zelle'
@@ -163,6 +164,10 @@ export default function CompanyWalletPage() {
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('card_manual')
   const [paymentReference, setPaymentReference] = useState('')
   const [processing, setProcessing] = useState(false)
+
+  // Receipt step state
+  const [showReceiptStep, setShowReceiptStep] = useState(false)
+  const [receiptData, setReceiptData] = useState<PaymentReceiptData | null>(null)
 
   // Terminal checkout state
   const [availableTerminals, setAvailableTerminals] = useState<Array<{ id: number; name: string; deviceId: string; locationName: string }>>([])
@@ -428,10 +433,40 @@ export default function CompanyWalletPage() {
   }
 
   // Handle Square card payment success
-  const handleCardPaymentSuccess = (result: { checkoutId?: string; transactionId?: number }) => {
-    showNotification('success', 'Recarga Exitosa', `Se han agregado $${rechargeAmount} al wallet`)
-    resetRechargeForm()
+  const handleCardPaymentSuccess = (result: {
+    transactionNumber: string
+    amount: number
+    fee: number
+    totalCharged: number
+    newBalance: number
+    cardBrand: string
+    cardLast4: string
+  }) => {
+    // Prepare receipt data
+    setReceiptData({
+      transactionNumber: result.transactionNumber,
+      amount: result.amount,
+      fee: result.fee,
+      totalCharged: result.totalCharged,
+      newBalance: result.newBalance,
+      cardBrand: result.cardBrand,
+      cardLast4: result.cardLast4,
+      recipientName: selectedWallet?.name || '',
+      recipientPhone: selectedWallet?.phone || null,
+      walletNumber: selectedWallet?.walletNumber || '',
+      paymentDate: new Date()
+    })
+
+    // Show receipt step instead of closing
+    setShowReceiptStep(true)
     fetchDashboard()
+  }
+
+  // Handle closing receipt step
+  const handleCloseReceipt = () => {
+    setShowReceiptStep(false)
+    setReceiptData(null)
+    resetRechargeForm()
   }
 
   // Process transfer
@@ -1413,6 +1448,36 @@ export default function CompanyWalletPage() {
           </div>
         </div>
       </div>
+
+      {/* Receipt Modal */}
+      <AnimatePresence>
+        {showReceiptStep && receiptData && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+            onClick={(e) => {
+              if (e.target === e.currentTarget) handleCloseReceipt()
+            }}
+          >
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              transition={{ type: 'spring', duration: 0.3 }}
+            >
+              <PaymentReceiptStep
+                data={receiptData}
+                onClose={handleCloseReceipt}
+                onSent={() => {
+                  showNotification('success', 'Recibo Enviado', 'El recibo ha sido enviado exitosamente')
+                }}
+              />
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </DashboardLayout>
   )
 }
