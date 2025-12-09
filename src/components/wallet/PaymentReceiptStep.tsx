@@ -114,7 +114,7 @@ export function PaymentReceiptStep({ data, onClose, onSent }: PaymentReceiptStep
   }
 
   return (
-    <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg max-w-md mx-auto overflow-hidden">
+    <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg max-w-md mx-auto overflow-hidden min-h-[680px] flex flex-col">
       {/* Header - Success */}
       <div className="bg-gradient-to-r from-green-500 to-emerald-600 text-white p-6 text-center">
         <CheckCircle className="w-16 h-16 mx-auto mb-3" />
@@ -123,7 +123,7 @@ export function PaymentReceiptStep({ data, onClose, onSent }: PaymentReceiptStep
       </div>
 
       {/* Receipt Content */}
-      <div className="p-6">
+      <div className="p-6 flex-grow flex flex-col">
         <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-4 mb-6">
           <h3 className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-4">
             Recibo de Recarga
@@ -262,7 +262,7 @@ export function PaymentReceiptStep({ data, onClose, onSent }: PaymentReceiptStep
         {/* Close button */}
         <button
           onClick={onClose}
-          className="w-full flex items-center justify-center gap-2 py-3 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors"
+          className="w-full flex items-center justify-center gap-2 py-3 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors mt-auto"
         >
           <X className="w-4 h-4" />
           <span>Cerrar sin enviar</span>
