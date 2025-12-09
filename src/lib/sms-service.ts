@@ -5,12 +5,12 @@
  * Usado para notificaciones de ordenes a clientes
  */
 
-import twilio from 'twilio'
+// Dynamic import to avoid build-time initialization
+// Twilio SDK requires credentials at import time in some cases
+let twilioClient: any = null
+let twilioModule: any = null
 
-// Inicializar cliente de Twilio (lazy)
-let twilioClient: twilio.Twilio | null = null
-
-function getClient(): twilio.Twilio {
+async function getClient(): Promise<any> {
   // Always read env vars fresh in case they were loaded after module init
   const accountSid = process.env.TWILIO_ACCOUNT_SID
   const authToken = process.env.TWILIO_AUTH_TOKEN
@@ -19,9 +19,14 @@ function getClient(): twilio.Twilio {
     throw new Error('Twilio credentials not configured. Please set TWILIO_ACCOUNT_SID and TWILIO_AUTH_TOKEN')
   }
 
-  // Create new client if not exists or if credentials changed
+  // Dynamically import twilio only when needed (not at build time)
+  if (!twilioModule) {
+    twilioModule = (await import('twilio')).default
+  }
+
+  // Create new client if not exists
   if (!twilioClient) {
-    twilioClient = twilio(accountSid, authToken)
+    twilioClient = twilioModule(accountSid, authToken)
   }
   return twilioClient
 }
@@ -108,7 +113,7 @@ export async function sendSMS(to: string, message: string): Promise<SMSResult> {
     }
 
     // Obtener cliente de Twilio
-    const client = getClient()
+    const client = await getClient()
 
     // Enviar mensaje
     console.log(`[SMS Service] Sending SMS to ${formattedTo}`)
@@ -459,7 +464,7 @@ export async function sendWhatsAppOrderConfirmation(
     }
 
     // Obtener cliente de Twilio
-    const client = getClient()
+    const client = await getClient()
 
     // Formatear datos para el template
     const formattedDate = formatDateSpanish(scheduledDate)
