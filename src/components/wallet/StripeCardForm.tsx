@@ -201,6 +201,16 @@ function CheckoutForm({
 export default function StripeCardForm(props: StripeCardFormProps) {
   const { clientSecret, ...checkoutProps } = props
 
+  // Validate clientSecret before rendering Elements
+  if (!clientSecret || typeof clientSecret !== 'string' || !clientSecret.includes('_secret_')) {
+    return (
+      <div className="flex items-center gap-2 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-red-700 dark:text-red-400">
+        <AlertCircle className="w-5 h-5 flex-shrink-0" />
+        <span className="text-sm">Error: No se pudo inicializar el formulario de pago. Por favor, intente de nuevo.</span>
+      </div>
+    )
+  }
+
   const appearance = {
     theme: 'stripe' as const,
     variables: {

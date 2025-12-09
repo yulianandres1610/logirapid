@@ -57,6 +57,14 @@ export async function POST(request: NextRequest) {
       }, { status: 403 })
     }
 
+    // Validate that userId exists in payload
+    if (!payload.userId) {
+      return NextResponse.json({
+        success: false,
+        error: 'Token inválido: falta userId'
+      }, { status: 401 })
+    }
+
     // Parse request body
     const body = await request.json()
     const { targetType, targetId, amount } = body
@@ -166,10 +174,10 @@ export async function POST(request: NextRequest) {
       targetName,
       description: `Recarga de wallet ${walletNumber} - ${targetName}`,
       metadata: {
-        operatorId: payload.userId.toString(),
-        operatorEmail: payload.email,
-        operatorRole: payload.role,
-        companyId: payload.companyId.toString()
+        operatorId: String(payload.userId),
+        operatorEmail: payload.email || '',
+        operatorRole: payload.role || '',
+        companyId: payload.companyId ? String(payload.companyId) : '0'
       }
     })
 
