@@ -684,15 +684,15 @@ export default function CompanyWalletPage() {
                   )}
                 </div>
 
-                {/* Virtual Card (Left) + Limits Cards (Right) */}
+                {/* Virtual Card (Left) + Limits Cards (Right) - All in one row */}
                 {companyWallet && (
-                  <div className="grid grid-cols-1 lg:grid-cols-5 gap-4 mb-6">
-                    {/* Virtual Card - Left Side (3 columns) */}
+                  <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 mb-6">
+                    {/* Virtual Card - Left Side (2 columns - rectangular) */}
                     <motion.div
                       initial={{ opacity: 0, scale: 0.95 }}
                       animate={{ opacity: 1, scale: 1 }}
                       transition={{ delay: 0.3, type: 'spring', stiffness: 100 }}
-                      className="lg:col-span-3"
+                      className="lg:col-span-2"
                     >
                       <VirtualCard
                         key={`card-${companyWallet.balance}`}
@@ -716,138 +716,129 @@ export default function CompanyWalletPage() {
                       />
                     </motion.div>
 
-                    {/* Right Side - Two Cards Stacked (2 columns) */}
-                    <div className="lg:col-span-2 flex flex-col gap-4">
-                      {/* Daily Limit Card */}
-                      <motion.div
-                        initial={{ opacity: 0, x: 20 }}
-                        animate={{ opacity: 1, x: 0 }}
-                        transition={{ delay: 0.35 }}
-                        className={cn(
-                          "rounded-xl p-6 border",
-                          theme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'
+                    {/* Daily Limit Card - 1 column */}
+                    <motion.div
+                      initial={{ opacity: 0, x: 20 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ delay: 0.35 }}
+                      className={cn(
+                        "rounded-xl p-4 border h-full",
+                        theme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'
+                      )}
+                    >
+                      <div className="flex items-center gap-2 mb-3">
+                        <div className="w-8 h-8 rounded-full flex items-center justify-center bg-blue-100 dark:bg-blue-900/30">
+                          <Calendar className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+                        </div>
+                        <div>
+                          <h3 className={cn("text-sm font-semibold", theme === 'dark' ? 'text-white' : 'text-gray-900')}>
+                            Limite Diario
+                          </h3>
+                        </div>
+                      </div>
+
+                      <div className="space-y-2">
+                        <div className="flex justify-between items-baseline">
+                          <span className={cn("text-xs", theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}>Usado</span>
+                          <span className={cn("text-sm font-bold", theme === 'dark' ? 'text-white' : 'text-gray-900')}>
+                            ${(companyWallet.dailyUsed || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                          </span>
+                        </div>
+                        <div className="flex justify-between items-baseline">
+                          <span className={cn("text-xs", theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}>Limite</span>
+                          <span className={cn("text-sm font-medium", theme === 'dark' ? 'text-gray-300' : 'text-gray-700')}>
+                            {companyWallet.dailyLimit > 0
+                              ? `$${companyWallet.dailyLimit.toLocaleString('en-US', { minimumFractionDigits: 2 })}`
+                              : 'Sin limite'}
+                          </span>
+                        </div>
+                        {companyWallet.dailyLimit > 0 && (
+                          <>
+                            <div className="w-full h-1.5 rounded-full bg-gray-200 dark:bg-gray-700 overflow-hidden">
+                              <div
+                                className={cn(
+                                  "h-full rounded-full transition-all",
+                                  ((companyWallet.dailyUsed || 0) / companyWallet.dailyLimit) >= 0.9
+                                    ? 'bg-red-500'
+                                    : ((companyWallet.dailyUsed || 0) / companyWallet.dailyLimit) >= 0.7
+                                      ? 'bg-yellow-500'
+                                      : 'bg-green-500'
+                                )}
+                                style={{ width: `${Math.min(100, ((companyWallet.dailyUsed || 0) / companyWallet.dailyLimit) * 100)}%` }}
+                              />
+                            </div>
+                            <div className="flex justify-between items-baseline">
+                              <span className={cn("text-xs", theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}>Disponible</span>
+                              <span className="text-sm font-bold text-green-600 dark:text-green-400">
+                                ${Math.max(0, companyWallet.dailyLimit - (companyWallet.dailyUsed || 0)).toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                              </span>
+                            </div>
+                          </>
                         )}
-                      >
-                        <div className="flex items-center gap-3 mb-4">
-                          <div className="w-10 h-10 rounded-full flex items-center justify-center bg-blue-100 dark:bg-blue-900/30">
-                            <Calendar className="w-5 h-5 text-blue-600 dark:text-blue-400" />
-                          </div>
-                          <div>
-                            <h3 className={cn("font-semibold", theme === 'dark' ? 'text-white' : 'text-gray-900')}>
-                              Limite Diario
-                            </h3>
-                            <p className={cn("text-xs", theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}>
-                              Transferencias hoy
-                            </p>
-                          </div>
-                        </div>
+                      </div>
+                    </motion.div>
 
-                        <div className="space-y-3">
-                          <div className="flex justify-between items-baseline">
-                            <span className={cn("text-sm", theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}>Usado</span>
-                            <span className={cn("text-lg font-bold", theme === 'dark' ? 'text-white' : 'text-gray-900')}>
-                              ${(companyWallet.dailyUsed || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}
-                            </span>
-                          </div>
-                          <div className="flex justify-between items-baseline">
-                            <span className={cn("text-sm", theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}>Limite</span>
-                            <span className={cn("text-lg font-medium", theme === 'dark' ? 'text-gray-300' : 'text-gray-700')}>
-                              {companyWallet.dailyLimit > 0
-                                ? `$${companyWallet.dailyLimit.toLocaleString('en-US', { minimumFractionDigits: 2 })}`
-                                : 'Sin limite'}
-                            </span>
-                          </div>
-                          {companyWallet.dailyLimit > 0 && (
-                            <>
-                              <div className="w-full h-2 rounded-full bg-gray-200 dark:bg-gray-700 overflow-hidden">
-                                <div
-                                  className={cn(
-                                    "h-full rounded-full transition-all",
-                                    ((companyWallet.dailyUsed || 0) / companyWallet.dailyLimit) >= 0.9
-                                      ? 'bg-red-500'
-                                      : ((companyWallet.dailyUsed || 0) / companyWallet.dailyLimit) >= 0.7
-                                        ? 'bg-yellow-500'
-                                        : 'bg-green-500'
-                                  )}
-                                  style={{ width: `${Math.min(100, ((companyWallet.dailyUsed || 0) / companyWallet.dailyLimit) * 100)}%` }}
-                                />
-                              </div>
-                              <div className="flex justify-between items-baseline">
-                                <span className={cn("text-sm", theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}>Disponible</span>
-                                <span className="text-lg font-bold text-green-600 dark:text-green-400">
-                                  ${Math.max(0, companyWallet.dailyLimit - (companyWallet.dailyUsed || 0)).toLocaleString('en-US', { minimumFractionDigits: 2 })}
-                                </span>
-                              </div>
-                            </>
-                          )}
+                    {/* Monthly Limit Card - 1 column */}
+                    <motion.div
+                      initial={{ opacity: 0, x: 20 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ delay: 0.4 }}
+                      className={cn(
+                        "rounded-xl p-4 border h-full",
+                        theme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'
+                      )}
+                    >
+                      <div className="flex items-center gap-2 mb-3">
+                        <div className="w-8 h-8 rounded-full flex items-center justify-center bg-purple-100 dark:bg-purple-900/30">
+                          <Calendar className="w-4 h-4 text-purple-600 dark:text-purple-400" />
                         </div>
-                      </motion.div>
+                        <div>
+                          <h3 className={cn("text-sm font-semibold", theme === 'dark' ? 'text-white' : 'text-gray-900')}>
+                            Limite Mensual
+                          </h3>
+                        </div>
+                      </div>
 
-                      {/* Monthly Limit Card */}
-                      <motion.div
-                        initial={{ opacity: 0, x: 20 }}
-                        animate={{ opacity: 1, x: 0 }}
-                        transition={{ delay: 0.4 }}
-                        className={cn(
-                          "rounded-xl p-6 border",
-                          theme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'
+                      <div className="space-y-2">
+                        <div className="flex justify-between items-baseline">
+                          <span className={cn("text-xs", theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}>Usado</span>
+                          <span className={cn("text-sm font-bold", theme === 'dark' ? 'text-white' : 'text-gray-900')}>
+                            ${(companyWallet.monthlyUsed || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                          </span>
+                        </div>
+                        <div className="flex justify-between items-baseline">
+                          <span className={cn("text-xs", theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}>Limite</span>
+                          <span className={cn("text-sm font-medium", theme === 'dark' ? 'text-gray-300' : 'text-gray-700')}>
+                            {companyWallet.monthlyLimit > 0
+                              ? `$${companyWallet.monthlyLimit.toLocaleString('en-US', { minimumFractionDigits: 2 })}`
+                              : 'Sin limite'}
+                          </span>
+                        </div>
+                        {companyWallet.monthlyLimit > 0 && (
+                          <>
+                            <div className="w-full h-1.5 rounded-full bg-gray-200 dark:bg-gray-700 overflow-hidden">
+                              <div
+                                className={cn(
+                                  "h-full rounded-full transition-all",
+                                  ((companyWallet.monthlyUsed || 0) / companyWallet.monthlyLimit) >= 0.9
+                                    ? 'bg-red-500'
+                                    : ((companyWallet.monthlyUsed || 0) / companyWallet.monthlyLimit) >= 0.7
+                                      ? 'bg-yellow-500'
+                                      : 'bg-green-500'
+                                )}
+                                style={{ width: `${Math.min(100, ((companyWallet.monthlyUsed || 0) / companyWallet.monthlyLimit) * 100)}%` }}
+                              />
+                            </div>
+                            <div className="flex justify-between items-baseline">
+                              <span className={cn("text-xs", theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}>Disponible</span>
+                              <span className="text-sm font-bold text-green-600 dark:text-green-400">
+                                ${Math.max(0, companyWallet.monthlyLimit - (companyWallet.monthlyUsed || 0)).toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                              </span>
+                            </div>
+                          </>
                         )}
-                      >
-                        <div className="flex items-center gap-3 mb-4">
-                          <div className="w-10 h-10 rounded-full flex items-center justify-center bg-purple-100 dark:bg-purple-900/30">
-                            <Calendar className="w-5 h-5 text-purple-600 dark:text-purple-400" />
-                          </div>
-                          <div>
-                            <h3 className={cn("font-semibold", theme === 'dark' ? 'text-white' : 'text-gray-900')}>
-                              Limite Mensual
-                            </h3>
-                            <p className={cn("text-xs", theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}>
-                              Transferencias este mes
-                            </p>
-                          </div>
-                        </div>
-
-                        <div className="space-y-3">
-                          <div className="flex justify-between items-baseline">
-                            <span className={cn("text-sm", theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}>Usado</span>
-                            <span className={cn("text-lg font-bold", theme === 'dark' ? 'text-white' : 'text-gray-900')}>
-                              ${(companyWallet.monthlyUsed || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}
-                            </span>
-                          </div>
-                          <div className="flex justify-between items-baseline">
-                            <span className={cn("text-sm", theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}>Limite</span>
-                            <span className={cn("text-lg font-medium", theme === 'dark' ? 'text-gray-300' : 'text-gray-700')}>
-                              {companyWallet.monthlyLimit > 0
-                                ? `$${companyWallet.monthlyLimit.toLocaleString('en-US', { minimumFractionDigits: 2 })}`
-                                : 'Sin limite'}
-                            </span>
-                          </div>
-                          {companyWallet.monthlyLimit > 0 && (
-                            <>
-                              <div className="w-full h-2 rounded-full bg-gray-200 dark:bg-gray-700 overflow-hidden">
-                                <div
-                                  className={cn(
-                                    "h-full rounded-full transition-all",
-                                    ((companyWallet.monthlyUsed || 0) / companyWallet.monthlyLimit) >= 0.9
-                                      ? 'bg-red-500'
-                                      : ((companyWallet.monthlyUsed || 0) / companyWallet.monthlyLimit) >= 0.7
-                                        ? 'bg-yellow-500'
-                                        : 'bg-green-500'
-                                  )}
-                                  style={{ width: `${Math.min(100, ((companyWallet.monthlyUsed || 0) / companyWallet.monthlyLimit) * 100)}%` }}
-                                />
-                              </div>
-                              <div className="flex justify-between items-baseline">
-                                <span className={cn("text-sm", theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}>Disponible</span>
-                                <span className="text-lg font-bold text-green-600 dark:text-green-400">
-                                  ${Math.max(0, companyWallet.monthlyLimit - (companyWallet.monthlyUsed || 0)).toLocaleString('en-US', { minimumFractionDigits: 2 })}
-                                </span>
-                              </div>
-                            </>
-                          )}
-                        </div>
-                      </motion.div>
-                    </div>
+                      </div>
+                    </motion.div>
                   </div>
                 )}
 
