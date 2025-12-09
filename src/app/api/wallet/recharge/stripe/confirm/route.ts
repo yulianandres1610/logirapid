@@ -211,6 +211,7 @@ export async function POST(request: NextRequest) {
           target_customer_id,
           target_wallet_number,
           amount,
+          net_amount,
           fee,
           fee_percentage,
           total_charged,
@@ -226,10 +227,10 @@ export async function POST(request: NextRequest) {
           $1, 'recharge', 'platform', $2, $3,
           $4,
           $5, $6, $7,
-          $8, $9, $10, $11, $12,
+          $8, $9, $10, $11, $12, $13,
           'card_stripe', 'completed',
-          $13, $14, $15,
-          $16,
+          $14, $15, $16,
+          $17,
           CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
         )
       `, [
@@ -242,6 +243,7 @@ export async function POST(request: NextRequest) {
         targetType === 'customer' ? targetId : null,
         walletNumber,
         baseAmount,
+        baseAmount, // net_amount = same as amount (what goes to wallet)
         fee,
         STRIPE_FEE_PERCENTAGE,
         totalCharged,
