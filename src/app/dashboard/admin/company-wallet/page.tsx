@@ -222,8 +222,8 @@ export default function CompanyWalletPage() {
     }
   }, [])
 
-  // Fetch pending requests
-  const fetchPendingRequests = async () => {
+  // Fetch pending requests with useCallback to avoid stale closures
+  const fetchPendingRequests = useCallback(async () => {
     try {
       setPendingLoading(true)
       const response = await fetch('/api/wallet/recharge-requests?status=all')
@@ -236,7 +236,7 @@ export default function CompanyWalletPage() {
     } finally {
       setPendingLoading(false)
     }
-  }
+  }, [])
 
   // Search wallets (for transfers - any wallet in the system)
   const searchWallets = async (query: string) => {
@@ -268,7 +268,7 @@ export default function CompanyWalletPage() {
     if (activeTab === 'pending') {
       fetchPendingRequests()
     }
-  }, [activeTab])
+  }, [activeTab, fetchPendingRequests])
 
   // Auto-update pending requests every 10 seconds when on pending tab
   useEffect(() => {
@@ -279,7 +279,7 @@ export default function CompanyWalletPage() {
     }, 10000) // 10 seconds
 
     return () => clearInterval(interval)
-  }, [activeTab])
+  }, [activeTab, fetchPendingRequests])
 
   // Reset recharge form
   const resetRechargeForm = () => {
