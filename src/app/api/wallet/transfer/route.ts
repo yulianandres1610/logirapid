@@ -101,9 +101,11 @@ export async function POST(request: NextRequest) {
 
     if (sourceType === 'company') {
       const result = await db.query(`
-        SELECT id, legalname, walletbalance as balance, phone, credit_limit, credit_enabled, negative_since
+        SELECT id, legalname,
+          COALESCE("walletBalance"::numeric, walletbalance, 0) as balance,
+          phone, credit_limit, credit_enabled, negative_since
         FROM companies
-        WHERE walletnumber = $1
+        WHERE COALESCE("walletNumber", walletnumber) = $1
       `, [sourceWalletNumber])
 
       if (result.rows.length === 0) {
@@ -205,9 +207,11 @@ export async function POST(request: NextRequest) {
 
     if (targetType === 'company') {
       const result = await db.query(`
-        SELECT id, legalname, walletbalance as balance, phone
+        SELECT id, legalname,
+          COALESCE("walletBalance"::numeric, walletbalance, 0) as balance,
+          phone
         FROM companies
-        WHERE walletnumber = $1
+        WHERE COALESCE("walletNumber", walletnumber) = $1
       `, [targetWalletNumber])
 
       if (result.rows.length === 0) {

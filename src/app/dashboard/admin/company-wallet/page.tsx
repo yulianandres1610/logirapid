@@ -270,6 +270,17 @@ export default function CompanyWalletPage() {
     }
   }, [activeTab])
 
+  // Auto-update pending requests every 10 seconds when on pending tab
+  useEffect(() => {
+    if (activeTab !== 'pending') return
+
+    const interval = setInterval(() => {
+      fetchPendingRequests()
+    }, 10000) // 10 seconds
+
+    return () => clearInterval(interval)
+  }, [activeTab])
+
   // Reset recharge form
   const resetRechargeForm = () => {
     setRechargeAmount('')
@@ -603,16 +614,15 @@ export default function CompanyWalletPage() {
                   )}
                 </div>
 
-                {/* Virtual Card and Transaction History */}
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                  {/* Virtual Card */}
-                  {companyWallet && (
-                    <motion.div
-                      initial={{ opacity: 0, scale: 0.95 }}
-                      animate={{ opacity: 1, scale: 1 }}
-                      transition={{ delay: 0.3, type: 'spring', stiffness: 100 }}
-                      className="lg:col-span-1"
-                    >
+                {/* Virtual Card (Centered) */}
+                {companyWallet && (
+                  <motion.div
+                    initial={{ opacity: 0, scale: 0.95 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    transition={{ delay: 0.3, type: 'spring', stiffness: 100 }}
+                    className="flex justify-center mb-6"
+                  >
+                    <div className="w-full max-w-md">
                       <VirtualCard
                         walletNumber={companyWallet.walletNumber}
                         balance={companyWallet.balance}
@@ -632,19 +642,20 @@ export default function CompanyWalletPage() {
                         phone={companyWallet.phone}
                         email={companyWallet.email}
                       />
-                    </motion.div>
-                  )}
+                    </div>
+                  </motion.div>
+                )}
 
-                  {/* Transaction History (Statement) */}
-                  <motion.div
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.35 }}
-                    className={cn(
-                      "rounded-xl p-6 border lg:col-span-2",
-                      theme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'
-                    )}
-                  >
+                {/* Transaction History (Statement) - Full Width Below */}
+                <motion.div
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.35 }}
+                  className={cn(
+                    "rounded-xl p-6 border",
+                    theme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'
+                  )}
+                >
                     <div className="flex items-center justify-between mb-4">
                       <h3 className={cn("text-lg font-semibold", theme === 'dark' ? 'text-white' : 'text-gray-900')}>
                         Estado de Cuenta
@@ -725,7 +736,6 @@ export default function CompanyWalletPage() {
                       </div>
                     )}
                   </motion.div>
-                </div>
               </motion.div>
             )}
 
