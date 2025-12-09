@@ -46,36 +46,42 @@ const getCardTier = (balance: number): CardTier => {
 const tierConfig = {
   platinum: {
     name: 'PLATINUM',
-    gradient: 'linear-gradient(135deg, #667eea 0%, #764ba2 25%, #8e9eab 50%, #667eea 75%, #eef2f3 100%)',
-    gradientBack: 'linear-gradient(135deg, #8e9eab 0%, #667eea 50%, #764ba2 100%)',
-    accentColor: '#a8b5c4',
-    textColor: 'text-gray-100',
-    badgeGradient: 'from-gray-300 via-gray-100 to-gray-300',
-    badgeBorder: 'border-gray-300/50',
-    glowColor: 'rgba(102, 126, 234, 0.3)',
-    chipColor: 'from-gray-400 to-gray-600',
+    // Real platinum/silver metallic colors
+    gradient: 'linear-gradient(135deg, #c0c0c0 0%, #e8e8e8 15%, #a8a8a8 30%, #d0d0d0 50%, #b8b8b8 70%, #e0e0e0 85%, #c8c8c8 100%)',
+    gradientBack: 'linear-gradient(135deg, #a0a0a0 0%, #d8d8d8 50%, #b0b0b0 100%)',
+    accentColor: '#c0c0c0',
+    textColor: 'text-gray-800',
+    badgeGradient: 'from-gray-400 via-gray-200 to-gray-400',
+    badgeBorder: 'border-gray-400/60',
+    glowColor: 'rgba(192, 192, 192, 0.4)',
+    chipColor: 'from-gray-500 to-gray-700',
+    textShadow: '0 1px 2px rgba(255,255,255,0.5)',
   },
   gold: {
     name: 'GOLD',
-    gradient: 'linear-gradient(135deg, #f5af19 0%, #f12711 20%, #d4a574 50%, #f5af19 75%, #fceabb 100%)',
-    gradientBack: 'linear-gradient(135deg, #d4a574 0%, #f5af19 50%, #f12711 100%)',
-    accentColor: '#f5af19',
-    textColor: 'text-amber-50',
-    badgeGradient: 'from-yellow-400 via-amber-200 to-yellow-400',
-    badgeBorder: 'border-yellow-400/50',
-    glowColor: 'rgba(245, 175, 25, 0.4)',
-    chipColor: 'from-yellow-500 to-amber-700',
+    // Real gold metallic colors
+    gradient: 'linear-gradient(135deg, #b8860b 0%, #ffd700 15%, #daa520 30%, #ffec8b 50%, #cd853f 70%, #ffd700 85%, #b8860b 100%)',
+    gradientBack: 'linear-gradient(135deg, #cd853f 0%, #ffd700 50%, #b8860b 100%)',
+    accentColor: '#ffd700',
+    textColor: 'text-amber-900',
+    badgeGradient: 'from-yellow-600 via-yellow-300 to-yellow-600',
+    badgeBorder: 'border-yellow-500/60',
+    glowColor: 'rgba(255, 215, 0, 0.5)',
+    chipColor: 'from-yellow-600 to-amber-800',
+    textShadow: '0 1px 2px rgba(255,255,255,0.3)',
   },
   diamond: {
     name: 'DIAMOND',
-    gradient: 'linear-gradient(135deg, #0c0c0c 0%, #1a1a2e 20%, #434343 40%, #000000 60%, #1a1a2e 80%, #0c0c0c 100%)',
-    gradientBack: 'linear-gradient(135deg, #1a1a2e 0%, #434343 50%, #0c0c0c 100%)',
-    accentColor: '#00d4ff',
-    textColor: 'text-cyan-50',
-    badgeGradient: 'from-cyan-400 via-blue-200 to-cyan-400',
-    badgeBorder: 'border-cyan-400/50',
-    glowColor: 'rgba(0, 212, 255, 0.3)',
-    chipColor: 'from-cyan-400 to-blue-600',
+    // Premium black with diamond sparkle accents
+    gradient: 'linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 20%, #0d0d0d 40%, #3a3a3a 55%, #1a1a1a 70%, #2d2d2d 85%, #0d0d0d 100%)',
+    gradientBack: 'linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 50%, #0d0d0d 100%)',
+    accentColor: '#e0e0e0',
+    textColor: 'text-gray-100',
+    badgeGradient: 'from-gray-300 via-white to-gray-300',
+    badgeBorder: 'border-white/40',
+    glowColor: 'rgba(255, 255, 255, 0.2)',
+    chipColor: 'from-gray-300 to-gray-500',
+    textShadow: '0 1px 3px rgba(0,0,0,0.5)',
   },
 }
 
@@ -148,8 +154,8 @@ export function VirtualCard({
   return (
     <div className={`perspective-1000 ${className}`} style={{ perspective: '1000px' }}>
       <motion.div
-        className="relative w-full h-56 cursor-pointer"
-        style={{ transformStyle: 'preserve-3d' }}
+        className="relative w-full h-60 cursor-pointer"
+        style={{ transformStyle: 'preserve-3d', maxWidth: '420px' }}
         animate={{ rotateY: isFlipped ? 180 : 0 }}
         transition={{ duration: 0.6, type: 'spring', stiffness: 100 }}
         onClick={() => setIsFlipped(!isFlipped)}
@@ -185,14 +191,16 @@ export function VirtualCard({
           {/* Diamond sparkles for diamond tier */}
           {tier === 'diamond' && (
             <>
-              <div className="absolute top-4 right-16 w-1 h-1 bg-cyan-400 rounded-full animate-pulse" />
-              <div className="absolute top-12 right-8 w-1.5 h-1.5 bg-blue-300 rounded-full animate-pulse delay-300" />
-              <div className="absolute bottom-16 right-24 w-1 h-1 bg-cyan-300 rounded-full animate-pulse delay-500" />
-              <div className="absolute top-20 left-12 w-1 h-1 bg-white rounded-full animate-pulse delay-700" />
+              <div className="absolute top-4 right-16 w-1 h-1 bg-white rounded-full animate-pulse" />
+              <div className="absolute top-12 right-8 w-1.5 h-1.5 bg-gray-300 rounded-full animate-pulse delay-300" />
+              <div className="absolute bottom-16 right-24 w-1 h-1 bg-white rounded-full animate-pulse delay-500" />
+              <div className="absolute top-20 left-12 w-1 h-1 bg-gray-200 rounded-full animate-pulse delay-700" />
+              <div className="absolute bottom-8 left-20 w-1 h-1 bg-white rounded-full animate-pulse delay-150" />
+              <div className="absolute top-16 right-32 w-0.5 h-0.5 bg-white rounded-full animate-pulse delay-500" />
             </>
           )}
 
-          <div className="relative z-10 h-full p-5 flex flex-col justify-between text-white">
+          <div className={`relative z-10 h-full p-5 flex flex-col justify-between ${tier === 'diamond' ? 'text-white' : 'text-gray-800'}`}>
             {/* Header with Tier Badge */}
             <div className="flex justify-between items-start gap-2">
               <div className="flex-1 min-w-0">
@@ -301,7 +309,7 @@ export function VirtualCard({
           </div>
 
           {/* Centurion-style emblem watermark */}
-          <div className="absolute -bottom-6 -right-6 w-32 h-32 opacity-10">
+          <div className={`absolute -bottom-6 -right-6 w-32 h-32 ${tier === 'diamond' ? 'opacity-15 text-white' : 'opacity-20 text-gray-600'}`}>
             <svg viewBox="0 0 100 100" className="w-full h-full">
               <circle cx="50" cy="50" r="45" stroke="currentColor" strokeWidth="2" fill="none" />
               <circle cx="50" cy="50" r="35" stroke="currentColor" strokeWidth="1" fill="none" />
@@ -310,7 +318,7 @@ export function VirtualCard({
           </div>
 
           {/* Flip indicator */}
-          <div className="absolute bottom-2 right-2 text-white/30">
+          <div className={`absolute bottom-2 right-2 ${tier === 'diamond' ? 'text-white/30' : 'text-gray-600/40'}`}>
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
             </svg>
