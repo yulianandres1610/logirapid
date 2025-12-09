@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { loadStripe } from '@stripe/stripe-js'
+import { loadStripe, Appearance } from '@stripe/stripe-js'
 import {
   Elements,
   PaymentElement,
@@ -9,6 +9,7 @@ import {
   useElements
 } from '@stripe/react-stripe-js'
 import { CreditCard, Loader2, AlertCircle, CheckCircle } from 'lucide-react'
+import { useTheme } from '@/contexts/theme-context'
 
 // Initialize Stripe with publishable key
 const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY || '')
@@ -259,6 +260,8 @@ function CheckoutForm({
 
 export default function StripeCardForm(props: StripeCardFormProps) {
   const { clientSecret, ...checkoutProps } = props
+  const { theme } = useTheme()
+  const isDark = theme === 'dark'
 
   // Validate clientSecret before rendering Elements
   if (!clientSecret || typeof clientSecret !== 'string' || !clientSecret.includes('_secret_')) {
@@ -270,16 +273,57 @@ export default function StripeCardForm(props: StripeCardFormProps) {
     )
   }
 
-  const appearance = {
-    theme: 'stripe' as const,
+  // Dynamic appearance based on theme
+  const appearance: Appearance = {
+    theme: isDark ? 'night' : 'stripe',
     variables: {
       colorPrimary: '#2563eb',
-      colorBackground: '#ffffff',
-      colorText: '#1f2937',
+      colorBackground: isDark ? '#1f2937' : '#ffffff',
+      colorText: isDark ? '#f9fafb' : '#1f2937',
       colorDanger: '#dc2626',
       fontFamily: 'system-ui, sans-serif',
       spacingUnit: '4px',
-      borderRadius: '8px'
+      borderRadius: '8px',
+      colorTextSecondary: isDark ? '#9ca3af' : '#6b7280',
+      colorTextPlaceholder: isDark ? '#6b7280' : '#9ca3af',
+    },
+    rules: {
+      '.Input': {
+        backgroundColor: isDark ? '#374151' : '#ffffff',
+        border: isDark ? '1px solid #4b5563' : '1px solid #d1d5db',
+        color: isDark ? '#f9fafb' : '#1f2937',
+      },
+      '.Input:focus': {
+        border: '1px solid #2563eb',
+        boxShadow: '0 0 0 1px #2563eb',
+      },
+      '.Label': {
+        color: isDark ? '#d1d5db' : '#374151',
+      },
+      '.Tab': {
+        backgroundColor: isDark ? '#374151' : '#f9fafb',
+        border: isDark ? '1px solid #4b5563' : '1px solid #e5e7eb',
+        color: isDark ? '#d1d5db' : '#6b7280',
+      },
+      '.Tab:hover': {
+        backgroundColor: isDark ? '#4b5563' : '#f3f4f6',
+        color: isDark ? '#f9fafb' : '#1f2937',
+      },
+      '.Tab--selected': {
+        backgroundColor: isDark ? '#1f2937' : '#ffffff',
+        border: '1px solid #2563eb',
+        color: isDark ? '#f9fafb' : '#1f2937',
+      },
+      '.TabIcon': {
+        fill: isDark ? '#9ca3af' : '#6b7280',
+      },
+      '.TabIcon--selected': {
+        fill: '#2563eb',
+      },
+      '.Block': {
+        backgroundColor: isDark ? '#374151' : '#f9fafb',
+        border: isDark ? '1px solid #4b5563' : '1px solid #e5e7eb',
+      },
     }
   }
 
