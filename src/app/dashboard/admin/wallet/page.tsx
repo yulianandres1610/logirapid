@@ -2784,7 +2784,7 @@ export default function WalletManagementPage() {
                     )}
                   >
                     <Receipt className="w-4 h-4" />
-                    Ver Recibo de Square
+                    Ver Recibo de {selectedTransaction.paymentMethod === 'card_stripe' ? 'Stripe' : 'Square'}
                     <ExternalLink className="w-4 h-4" />
                   </a>
                 )}
