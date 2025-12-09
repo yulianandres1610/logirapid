@@ -188,6 +188,13 @@ export async function middleware(request: NextRequest) {
     return response
   }
 
+  // Excepción: Permitir que ADMIN y MANAGER accedan a /dashboard/admin/company-wallet
+  // Esta es la página de wallet de la empresa que usan todos los roles de empresa
+  if ((userRole === 'ADMIN' || userRole === 'MANAGER') && pathname === '/dashboard/admin/company-wallet') {
+    console.log('✅ ' + userRole + ' accessing company-wallet page, companyId:', companyId)
+    return response
+  }
+
   // Redirección basada en rol si intenta acceder a rutas no permitidas
   if (userRole === 'ADMIN' && pathname.startsWith('/dashboard/admin')) {
     console.log('🔄 Redirecting ADMIN from admin to agency dashboard')

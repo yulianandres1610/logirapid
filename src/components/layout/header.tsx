@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   Search,
@@ -33,6 +34,7 @@ interface HeaderProps {
 }
 
 export function Header({ onToggleSidebar, sidebarCollapsed }: HeaderProps) {
+  const router = useRouter()
   const { user } = useAuth()
   const { theme, toggleTheme } = useTheme()
   const { notifications, markAsRead, getUnreadCount } = useNotifications()
@@ -68,6 +70,16 @@ export function Header({ onToggleSidebar, sidebarCollapsed }: HeaderProps) {
         return <Info className="w-4 h-4 text-blue-500" />
       default:
         return <Info className="w-4 h-4 text-gray-500" />
+    }
+  }
+
+  // Navigate to wallet page based on user role
+  const handleWalletClick = () => {
+    if (user?.role === 'SUPER_ADMIN') {
+      router.push('/dashboard/admin/wallet')
+    } else {
+      // ADMIN, MANAGER, USER - go to company wallet
+      router.push('/dashboard/admin/company-wallet')
     }
   }
 
@@ -204,12 +216,15 @@ export function Header({ onToggleSidebar, sidebarCollapsed }: HeaderProps) {
           {/* Right section */}
           <div className="flex items-center gap-3">
 
-            {/* Company Wallet Balance */}
+            {/* Company Wallet Balance - Clickable to navigate to wallet */}
             <motion.div
+              onClick={handleWalletClick}
               initial={{ opacity: 0, scale: 0.9 }}
               animate={{ opacity: 1, scale: 1 }}
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
               className={cn(
-                "flex items-center gap-2 px-3 py-2 rounded-xl border transition-all duration-300",
+                "flex items-center gap-2 px-3 py-2 rounded-xl border transition-all duration-300 cursor-pointer",
                 theme === 'dark'
                   ? "bg-green-500/10 border-green-500/20 hover:bg-green-500/15"
                   : "bg-green-50 border-green-200 hover:bg-green-100"
