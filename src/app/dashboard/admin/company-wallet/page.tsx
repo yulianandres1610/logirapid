@@ -686,13 +686,13 @@ export default function CompanyWalletPage() {
 
                 {/* Virtual Card (Left) + Limits Cards (Right) */}
                 {companyWallet && (
-                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
-                    {/* Virtual Card - Left Side */}
+                  <div className="grid grid-cols-1 lg:grid-cols-5 gap-4 mb-6">
+                    {/* Virtual Card - Left Side (3 columns) */}
                     <motion.div
                       initial={{ opacity: 0, scale: 0.95 }}
                       animate={{ opacity: 1, scale: 1 }}
                       transition={{ delay: 0.3, type: 'spring', stiffness: 100 }}
-                      className="lg:col-span-1"
+                      className="lg:col-span-3"
                     >
                       <VirtualCard
                         key={`card-${companyWallet.balance}`}
@@ -716,8 +716,8 @@ export default function CompanyWalletPage() {
                       />
                     </motion.div>
 
-                    {/* Right Side - Two Cards Stacked */}
-                    <div className="lg:col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    {/* Right Side - Two Cards Stacked (2 columns) */}
+                    <div className="lg:col-span-2 flex flex-col gap-4">
                       {/* Daily Limit Card */}
                       <motion.div
                         initial={{ opacity: 0, x: 20 }}
