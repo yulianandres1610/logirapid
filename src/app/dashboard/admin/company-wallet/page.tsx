@@ -300,16 +300,17 @@ export default function CompanyWalletPage() {
     setTransferStep(1)
   }
 
-  // Filter users and customers based on search
-  const filteredEntities = [...users, ...customers].filter(entity => {
-    if (!searchQuery) return true
-    const query = searchQuery.toLowerCase()
-    return (
-      entity.name.toLowerCase().includes(query) ||
-      entity.walletNumber?.toLowerCase().includes(query) ||
-      entity.phone?.toLowerCase().includes(query)
-    )
-  })
+  // Filter users and customers based on search (only show when searching)
+  const filteredEntities = searchQuery.length >= 2
+    ? [...users, ...customers].filter(entity => {
+        const query = searchQuery.toLowerCase()
+        return (
+          entity.name.toLowerCase().includes(query) ||
+          entity.walletNumber?.toLowerCase().includes(query) ||
+          entity.phone?.toLowerCase().includes(query)
+        )
+      })
+    : []
 
   // Process recharge (for cash, wire, zelle methods)
   const processRecharge = async () => {
@@ -826,7 +827,7 @@ export default function CompanyWalletPage() {
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
                         <input
                           type="text"
-                          placeholder="Buscar usuario o cliente..."
+                          placeholder="Buscar usuario..."
                           value={searchQuery}
                           onChange={(e) => setSearchQuery(e.target.value)}
                           className={cn(
@@ -838,6 +839,14 @@ export default function CompanyWalletPage() {
 
                       {/* Entity List */}
                       <div className="max-h-64 overflow-y-auto space-y-2">
+                        {filteredEntities.length === 0 && (
+                          <div className="text-center py-8">
+                            <Search className="w-8 h-8 mx-auto text-gray-400 mb-2" />
+                            <p className={cn("text-sm", theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}>
+                              {searchQuery.length < 2 ? 'Escribe al menos 2 caracteres para buscar usuarios' : 'No se encontraron usuarios'}
+                            </p>
+                          </div>
+                        )}
                         {filteredEntities.map((entity) => (
                           <div
                             key={`${entity.type}_${entity.id}`}
