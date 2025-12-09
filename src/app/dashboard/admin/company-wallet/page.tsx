@@ -36,7 +36,7 @@ import { useTheme } from '@/contexts/theme-context'
 import { useNotifications } from '@/contexts/NotificationContext'
 import { DashboardLayout } from '@/components/layout/dashboard-layout'
 import { VirtualCard } from '@/components/wallet/VirtualCard'
-import { SquareCardForm } from '@/components/payments/SquareCardForm'
+import StripeCardForm from '@/components/wallet/StripeCardForm'
 import { PaymentReceiptStep, PaymentReceiptData } from '@/components/wallet/PaymentReceiptStep'
 
 type Tab = 'statement' | 'recharge' | 'transfer' | 'pending'
@@ -172,6 +172,16 @@ export default function CompanyWalletPage() {
   // Receipt step state
   const [showReceiptStep, setShowReceiptStep] = useState(false)
   const [receiptData, setReceiptData] = useState<PaymentReceiptData | null>(null)
+
+  // Stripe payment state
+  const [stripeClientSecret, setStripeClientSecret] = useState<string | null>(null)
+  const [stripePaymentData, setStripePaymentData] = useState<{
+    paymentIntentId: string
+    amount: number
+    fee: number
+    totalCharged: number
+  } | null>(null)
+  const [creatingPaymentIntent, setCreatingPaymentIntent] = useState(false)
 
   // Transfer wizard
   const [transferStep, setTransferStep] = useState<1 | 2 | 3>(1)
@@ -340,6 +350,44 @@ export default function CompanyWalletPage() {
     setSelectedWallet(null)
     setSearchQuery('')
     setRechargeStep(1)
+    // Reset Stripe state
+    setStripeClientSecret(null)
+    setStripePaymentData(null)
+  }
+
+  // Create Stripe PaymentIntent for card recharge
+  const createStripePaymentIntent = async () => {
+    if (!selectedWallet || !rechargeAmount || parseFloat(rechargeAmount) <= 0) return
+
+    setCreatingPaymentIntent(true)
+    try {
+      const response = await fetch('/api/wallet/recharge/stripe', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          targetType: selectedWallet.type,
+          targetId: selectedWallet.id,
+          amount: parseFloat(rechargeAmount)
+        })
+      })
+
+      const data = await response.json()
+      if (data.success) {
+        setStripeClientSecret(data.data.clientSecret)
+        setStripePaymentData({
+          paymentIntentId: data.data.paymentIntentId,
+          amount: data.data.amount,
+          fee: data.data.fee,
+          totalCharged: data.data.totalCharged
+        })
+      } else {
+        showNotification('error', 'Error', data.error || 'Error al crear el intento de pago')
+      }
+    } catch (err) {
+      showNotification('error', 'Error', 'Error al conectar con el servidor')
+    } finally {
+      setCreatingPaymentIntent(false)
+    }
   }
 
   // Reset transfer form
@@ -399,41 +447,58 @@ export default function CompanyWalletPage() {
     }
   }
 
-  // Handle Square card payment success
-  const handleCardPaymentSuccess = (result: {
-    transactionNumber: string
-    amount: number
-    fee: number
-    totalCharged: number
-    newBalance: number
-    cardBrand: string
-    cardLast4: string
-  }) => {
-    // Update companyWallet balance immediately
-    if (companyWallet) {
-      setCompanyWallet({
-        ...companyWallet,
-        balance: result.newBalance,
-        balanceFormatted: `$${result.newBalance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+  // Handle Stripe card payment success - calls confirm API to credit wallet
+  const handleCardPaymentSuccess = async (paymentResult: { id: string; status: string }) => {
+    if (!selectedWallet || !stripePaymentData) return
+
+    setProcessing(true)
+    try {
+      // Call confirm API to credit the wallet
+      const response = await fetch('/api/wallet/recharge/stripe/confirm', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          paymentIntentId: paymentResult.id,
+          targetType: selectedWallet.type,
+          targetId: selectedWallet.id
+        })
       })
+
+      const data = await response.json()
+      if (data.success) {
+        // Update companyWallet balance immediately
+        if (companyWallet) {
+          setCompanyWallet({
+            ...companyWallet,
+            balance: data.data.newBalance,
+            balanceFormatted: `$${data.data.newBalance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+          })
+        }
+
+        setReceiptData({
+          transactionNumber: data.data.transactionNumber,
+          amount: data.data.amount,
+          fee: data.data.fee,
+          totalCharged: data.data.totalCharged,
+          newBalance: data.data.newBalance,
+          cardBrand: data.data.cardBrand,
+          cardLast4: data.data.cardLast4,
+          recipientName: selectedWallet?.name || '',
+          recipientPhone: selectedWallet?.phone || null,
+          walletNumber: selectedWallet?.walletNumber || '',
+          paymentDate: new Date()
+        })
+
+        setShowReceiptStep(true)
+        fetchDashboard() // Also refresh to get updated transactions
+      } else {
+        showNotification('error', 'Error', data.error || 'Error al confirmar el pago')
+      }
+    } catch (err) {
+      showNotification('error', 'Error', 'Error al confirmar el pago')
+    } finally {
+      setProcessing(false)
     }
-
-    setReceiptData({
-      transactionNumber: result.transactionNumber,
-      amount: result.amount,
-      fee: result.fee,
-      totalCharged: result.totalCharged,
-      newBalance: result.newBalance,
-      cardBrand: result.cardBrand,
-      cardLast4: result.cardLast4,
-      recipientName: selectedWallet?.name || '',
-      recipientPhone: selectedWallet?.phone || null,
-      walletNumber: selectedWallet?.walletNumber || '',
-      paymentDate: new Date()
-    })
-
-    setShowReceiptStep(true)
-    fetchDashboard() // Also refresh to get updated transactions
   }
 
   // Handle closing receipt step
@@ -1179,16 +1244,43 @@ export default function CompanyWalletPage() {
                       {/* Card Payment Form - shown when card_manual is selected */}
                       {paymentMethod === 'card_manual' && selectedWallet && rechargeAmount && parseFloat(rechargeAmount) > 0 && (
                         <div className="mb-6">
-                          <label className={cn("text-sm font-medium block mb-3", theme === 'dark' ? 'text-gray-300' : 'text-gray-700')}>
-                            Datos de la Tarjeta
-                          </label>
-                          <SquareCardForm
-                            amount={parseFloat(rechargeAmount)}
-                            targetWalletNumber={selectedWallet.walletNumber}
-                            targetType={selectedWallet.type}
-                            onSuccess={handleCardPaymentSuccess}
-                            onError={(err) => showNotification('error', 'Error de Pago', err)}
-                          />
+                          {/* If no client secret yet, show button to initialize payment */}
+                          {!stripeClientSecret ? (
+                            <button
+                              onClick={createStripePaymentIntent}
+                              disabled={creatingPaymentIntent}
+                              className="w-full py-3 rounded-lg text-white font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                              style={{ backgroundColor: exaBrandBg }}
+                            >
+                              {creatingPaymentIntent ? (
+                                <>
+                                  <RefreshCw className="w-4 h-4 animate-spin" />
+                                  Preparando pago...
+                                </>
+                              ) : (
+                                <>
+                                  <CreditCard className="w-4 h-4" />
+                                  Pagar ${parseFloat(rechargeAmount).toFixed(2)} con Tarjeta
+                                </>
+                              )}
+                            </button>
+                          ) : stripePaymentData && (
+                            /* Show Stripe payment form once we have the client secret */
+                            <StripeCardForm
+                              clientSecret={stripeClientSecret}
+                              amount={stripePaymentData.amount}
+                              fee={stripePaymentData.fee}
+                              totalCharged={stripePaymentData.totalCharged}
+                              targetName={selectedWallet.name}
+                              walletNumber={selectedWallet.walletNumber}
+                              onSuccess={handleCardPaymentSuccess}
+                              onError={(err) => showNotification('error', 'Error de Pago', err)}
+                              onCancel={() => {
+                                setStripeClientSecret(null)
+                                setStripePaymentData(null)
+                              }}
+                            />
+                          )}
                         </div>
                       )}
 
