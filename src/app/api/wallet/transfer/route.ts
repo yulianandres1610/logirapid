@@ -106,8 +106,8 @@ export async function POST(request: NextRequest) {
         SELECT id, legalname,
           COALESCE("walletBalance"::numeric, walletbalance, 0) as balance,
           phone, credit_limit, credit_enabled, negative_since,
-          COALESCE("dailyLimit", 0) as daily_limit,
-          COALESCE("monthlyLimit", 0) as monthly_limit
+          COALESCE("dailyLimit"::numeric, dailylimit, 0) as daily_limit,
+          COALESCE("monthlyLimit"::numeric, monthlylimit, 0) as monthly_limit
         FROM companies
         WHERE COALESCE("walletNumber", walletnumber) = $1
       `, [sourceWalletNumber])
