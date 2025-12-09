@@ -87,6 +87,11 @@ export async function GET(request: NextRequest) {
         wt.completed_at,
         wt.metadata,
         wt.terminal_id,
+        wt.card_brand,
+        wt.card_last4,
+        wt.stripe_payment_intent_id,
+        wt.fee_percentage,
+        wt.total_charged,
         sc.legalname as source_company_name,
         tc.legalname as target_company_name,
         CONCAT(su.firstname, ' ', su.lastname) as source_user_name,
@@ -195,6 +200,7 @@ export async function GET(request: NextRequest) {
 
     const methodLabels: { [key: string]: string } = {
       'card_manual': 'Tarjeta Manual',
+      'card_stripe': 'Tarjeta',
       'card_terminal': 'Terminal',
       'cash': 'Efectivo',
       'wire': 'Transferencia Bancaria',
@@ -251,7 +257,15 @@ export async function GET(request: NextRequest) {
         createdAt: row.created_at,
         completedAt: row.completed_at,
         terminalId: row.terminal_id,
-        metadata: row.metadata
+        stripePaymentIntentId: row.stripe_payment_intent_id,
+        feePercentage: row.fee_percentage ? parseFloat(row.fee_percentage) : null,
+        totalCharged: row.total_charged ? parseFloat(row.total_charged) : null,
+        metadata: {
+          ...row.metadata,
+          // Include card data from direct columns if available (for Stripe payments)
+          cardBrand: row.card_brand || row.metadata?.cardBrand,
+          cardLast4: row.card_last4 || row.metadata?.cardLast4
+        }
       }
     })
 

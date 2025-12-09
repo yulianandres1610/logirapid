@@ -120,6 +120,7 @@ export async function GET(request: NextRequest) {
 
     const methodLabels: { [key: string]: string } = {
       'card_manual': 'Tarjeta Manual',
+      'card_stripe': 'Tarjeta',
       'card_terminal': 'Terminal',
       'cash': 'Efectivo',
       'wire': 'Transferencia Bancaria',

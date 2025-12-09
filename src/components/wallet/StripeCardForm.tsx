@@ -162,7 +162,7 @@ function CheckoutForm({
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-6">
+    <form onSubmit={handleSubmit} className="space-y-6 min-h-[520px]">
       {/* Payment Summary */}
       <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-4 space-y-3">
         <div className="flex items-center gap-2 text-gray-700 dark:text-gray-300">

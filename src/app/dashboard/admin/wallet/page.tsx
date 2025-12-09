@@ -2314,10 +2314,10 @@ export default function WalletManagementPage() {
                               key={tx.id}
                               className={cn(
                                 theme === 'dark' ? 'hover:bg-gray-700/50' : 'hover:bg-gray-50',
-                                (tx.paymentMethod === 'card_terminal' || tx.paymentMethod === 'card_manual') && 'cursor-pointer'
+                                (tx.paymentMethod === 'card_terminal' || tx.paymentMethod === 'card_manual' || tx.paymentMethod === 'card_stripe') && 'cursor-pointer'
                               )}
                               onClick={() => {
-                                if (tx.paymentMethod === 'card_terminal' || tx.paymentMethod === 'card_manual') {
+                                if (tx.paymentMethod === 'card_terminal' || tx.paymentMethod === 'card_manual' || tx.paymentMethod === 'card_stripe') {
                                   setSelectedTransaction(tx)
                                   setShowTransactionDetail(true)
                                 }
@@ -2577,7 +2577,11 @@ export default function WalletManagementPage() {
                       Detalles de Transaccion
                     </h3>
                     <p className={cn("text-sm", theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}>
-                      {selectedTransaction.paymentMethod === 'card_terminal' ? 'Pago con Terminal' : 'Pago con Tarjeta'}
+                      {selectedTransaction.paymentMethod === 'card_terminal'
+                        ? 'Pago con Terminal'
+                        : selectedTransaction.paymentMethod === 'card_stripe'
+                          ? 'Pago con Tarjeta (Stripe)'
+                          : 'Pago con Tarjeta'}
                     </p>
                   </div>
                 </div>
