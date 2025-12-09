@@ -59,14 +59,15 @@ export async function GET(request: NextRequest) {
     const companyId = payload.companyId
 
     // 1. Get company wallet information
+    // Note: Using COALESCE to handle both camelCase and lowercase column names
     const companyResult = await db.query(`
       SELECT
         id,
         legalname,
-        walletnumber,
-        walletbalance,
-        dailylimit,
-        monthlylimit,
+        COALESCE("walletNumber", walletnumber) as walletnumber,
+        COALESCE("walletBalance", walletbalance)::numeric as walletbalance,
+        COALESCE("dailyLimit", dailylimit)::numeric as dailylimit,
+        COALESCE("monthlyLimit", monthlylimit)::numeric as monthlylimit,
         credit_limit,
         credit_enabled,
         negative_since,

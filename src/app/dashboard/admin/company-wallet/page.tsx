@@ -39,7 +39,7 @@ import { SquareCardForm } from '@/components/payments/SquareCardForm'
 import { PaymentReceiptStep, PaymentReceiptData } from '@/components/wallet/PaymentReceiptStep'
 
 type Tab = 'statement' | 'recharge' | 'transfer' | 'pending'
-type PaymentMethod = 'card_manual' | 'card_terminal' | 'cash' | 'wire' | 'zelle'
+type PaymentMethod = 'card_manual' | 'cash' | 'wire' | 'zelle'
 
 interface CompanyWallet {
   id: number
@@ -129,7 +129,6 @@ interface Stats {
 
 const paymentMethods = [
   { id: 'card_manual', label: 'Tarjeta', icon: CreditCard, instant: true },
-  { id: 'card_terminal', label: 'Terminal', icon: Smartphone, instant: true },
   { id: 'cash', label: 'Efectivo', icon: Banknote, instant: false, requiresApproval: true },
   { id: 'wire', label: 'Wire', icon: Building, instant: false, requiresApproval: true },
   { id: 'zelle', label: 'Zelle', icon: DollarSign, instant: false, requiresApproval: true },
@@ -172,14 +171,6 @@ export default function CompanyWalletPage() {
   // Receipt step state
   const [showReceiptStep, setShowReceiptStep] = useState(false)
   const [receiptData, setReceiptData] = useState<PaymentReceiptData | null>(null)
-
-  // Terminal checkout state
-  const [availableTerminals, setAvailableTerminals] = useState<Array<{ id: number; name: string; deviceId: string; locationName: string }>>([])
-  const [selectedTerminalId, setSelectedTerminalId] = useState<number | null>(null)
-  const [terminalCheckoutId, setTerminalCheckoutId] = useState<string | null>(null)
-  const [terminalPolling, setTerminalPolling] = useState(false)
-  const [terminalStatus, setTerminalStatus] = useState<string | null>(null)
-  const [loadingTerminals, setLoadingTerminals] = useState(false)
 
   // Transfer wizard
   const [transferStep, setTransferStep] = useState<1 | 2 | 3>(1)
@@ -267,73 +258,6 @@ export default function CompanyWalletPage() {
     }
   }
 
-  // Fetch available terminals
-  const fetchAvailableTerminals = async () => {
-    try {
-      setLoadingTerminals(true)
-      const response = await fetch('/api/terminals?provider=square&status=paired')
-      const data = await response.json()
-      if (data.success) {
-        setAvailableTerminals(data.data.terminals || [])
-        if (data.data.terminals?.length > 0) {
-          setSelectedTerminalId(data.data.terminals[0].id)
-        }
-      }
-    } catch (err) {
-      console.error('Error fetching terminals:', err)
-    } finally {
-      setLoadingTerminals(false)
-    }
-  }
-
-  // Calculate terminal fee (3.5%)
-  const calculateTerminalFee = (amount: number) => {
-    const fee = amount * 0.035
-    return {
-      fee: Math.round(fee * 100) / 100,
-      total: Math.round((amount + fee) * 100) / 100
-    }
-  }
-
-  // Poll terminal checkout status
-  const pollTerminalStatus = useCallback(async (checkoutId: string) => {
-    try {
-      const response = await fetch(`/api/wallet/recharge/terminal/${checkoutId}/status`)
-      const data = await response.json()
-
-      if (data.success) {
-        const status = data.data.status
-        setTerminalStatus(status)
-
-        if (status === 'completed') {
-          setTerminalPolling(false)
-          setTerminalCheckoutId(null)
-          showNotification('success', 'Recarga Exitosa', `Se han agregado $${rechargeAmount} al wallet`)
-          resetRechargeForm()
-          fetchDashboard()
-        } else if (status === 'cancelled' || status === 'failed') {
-          setTerminalPolling(false)
-          setTerminalCheckoutId(null)
-          setTerminalStatus(null)
-          showNotification('error', 'Pago Cancelado', 'El pago fue cancelado o fallo')
-        }
-      }
-    } catch (err) {
-      console.error('Error polling terminal status:', err)
-    }
-  }, [rechargeAmount, showNotification])
-
-  // Effect to poll terminal status
-  useEffect(() => {
-    let interval: NodeJS.Timeout
-    if (terminalPolling && terminalCheckoutId) {
-      interval = setInterval(() => {
-        pollTerminalStatus(terminalCheckoutId)
-      }, 3000)
-    }
-    return () => clearInterval(interval)
-  }, [terminalPolling, terminalCheckoutId, pollTerminalStatus])
-
   // Load data on mount
   useEffect(() => {
     fetchDashboard()
@@ -346,13 +270,6 @@ export default function CompanyWalletPage() {
     }
   }, [activeTab])
 
-  // Load terminals when payment method is terminal
-  useEffect(() => {
-    if (paymentMethod === 'card_terminal' && availableTerminals.length === 0) {
-      fetchAvailableTerminals()
-    }
-  }, [paymentMethod])
-
   // Reset recharge form
   const resetRechargeForm = () => {
     setRechargeAmount('')
@@ -360,8 +277,6 @@ export default function CompanyWalletPage() {
     setSelectedWallet(null)
     setSearchQuery('')
     setRechargeStep(1)
-    setSelectedTerminalId(null)
-    setTerminalStatus(null)
   }
 
   // Reset transfer form
@@ -385,40 +300,13 @@ export default function CompanyWalletPage() {
     )
   })
 
-  // Process recharge
+  // Process recharge (for cash, wire, zelle methods)
   const processRecharge = async () => {
     if (!selectedWallet || !rechargeAmount) return
 
     setProcessing(true)
     try {
-      if (paymentMethod === 'card_terminal') {
-        if (!selectedTerminalId) {
-          showNotification('error', 'Error', 'Seleccione un terminal')
-          setProcessing(false)
-          return
-        }
-
-        const response = await fetch('/api/wallet/recharge/terminal', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            terminalId: selectedTerminalId,
-            targetWalletNumber: selectedWallet.walletNumber,
-            targetType: selectedWallet.type,
-            amount: parseFloat(rechargeAmount)
-          })
-        })
-
-        const data = await response.json()
-        if (data.success) {
-          setTerminalCheckoutId(data.data.checkoutId)
-          setTerminalPolling(true)
-          setTerminalStatus('pending')
-          showNotification('info', 'Esperando Pago', 'Complete el pago en el terminal')
-        } else {
-          showNotification('error', 'Error', data.error)
-        }
-      } else if (['cash', 'wire', 'zelle'].includes(paymentMethod)) {
+      if (['cash', 'wire', 'zelle'].includes(paymentMethod)) {
         const response = await fetch('/api/wallet/recharge-requests', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -1055,45 +943,6 @@ export default function CompanyWalletPage() {
                         </div>
                       </div>
 
-                      {/* Terminal Selection */}
-                      {paymentMethod === 'card_terminal' && (
-                        <div>
-                          <label className={cn("block text-sm font-medium mb-2", theme === 'dark' ? 'text-gray-300' : 'text-gray-700')}>
-                            Terminal
-                          </label>
-                          {loadingTerminals ? (
-                            <div className="flex items-center justify-center p-4">
-                              <RefreshCw className="w-5 h-5 animate-spin text-gray-400" />
-                            </div>
-                          ) : availableTerminals.length === 0 ? (
-                            <p className="text-sm text-yellow-600 dark:text-yellow-400">
-                              No hay terminales disponibles
-                            </p>
-                          ) : (
-                            <select
-                              value={selectedTerminalId || ''}
-                              onChange={(e) => setSelectedTerminalId(parseInt(e.target.value))}
-                              className={cn(
-                                "w-full px-4 py-3 rounded-lg border",
-                                theme === 'dark' ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-200 text-gray-900'
-                              )}
-                            >
-                              {availableTerminals.map((terminal) => (
-                                <option key={terminal.id} value={terminal.id}>
-                                  {terminal.name} - {terminal.locationName}
-                                </option>
-                              ))}
-                            </select>
-                          )}
-                          {rechargeAmount && (
-                            <div className={cn("mt-2 text-sm", theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}>
-                              <p>Fee (3.5%): ${calculateTerminalFee(parseFloat(rechargeAmount) || 0).fee.toFixed(2)}</p>
-                              <p className="font-semibold">Total: ${calculateTerminalFee(parseFloat(rechargeAmount) || 0).total.toFixed(2)}</p>
-                            </div>
-                          )}
-                        </div>
-                      )}
-
                       {/* Payment Reference for manual methods */}
                       {['cash', 'wire', 'zelle'].includes(paymentMethod) && (
                         <div>
@@ -1113,19 +962,37 @@ export default function CompanyWalletPage() {
                         </div>
                       )}
 
-                      {/* Continue Button */}
-                      <button
-                        onClick={() => {
-                          if (parseFloat(rechargeAmount) > 0) {
-                            setRechargeStep(3)
-                          }
-                        }}
-                        disabled={!rechargeAmount || parseFloat(rechargeAmount) <= 0}
-                        className="w-full py-3 rounded-lg text-white font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                        style={{ backgroundColor: exaBrandBg }}
-                      >
-                        Continuar
-                      </button>
+                      {/* Card Payment Form - shown when card_manual is selected */}
+                      {paymentMethod === 'card_manual' && selectedWallet && rechargeAmount && parseFloat(rechargeAmount) > 0 && (
+                        <div className="mb-6">
+                          <label className={cn("text-sm font-medium block mb-3", theme === 'dark' ? 'text-gray-300' : 'text-gray-700')}>
+                            Datos de la Tarjeta
+                          </label>
+                          <SquareCardForm
+                            amount={parseFloat(rechargeAmount)}
+                            targetWalletNumber={selectedWallet.walletNumber}
+                            targetType={selectedWallet.type}
+                            onSuccess={handleCardPaymentSuccess}
+                            onError={(err) => showNotification('error', 'Error de Pago', err)}
+                          />
+                        </div>
+                      )}
+
+                      {/* Continue Button - only for non-card methods */}
+                      {paymentMethod !== 'card_manual' && (
+                        <button
+                          onClick={() => {
+                            if (parseFloat(rechargeAmount) > 0) {
+                              setRechargeStep(3)
+                            }
+                          }}
+                          disabled={!rechargeAmount || parseFloat(rechargeAmount) <= 0}
+                          className="w-full py-3 rounded-lg text-white font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                          style={{ backgroundColor: exaBrandBg }}
+                        >
+                          Continuar
+                        </button>
+                      )}
                     </div>
                   )}
 
@@ -1182,28 +1049,8 @@ export default function CompanyWalletPage() {
                         </div>
                       )}
 
-                      {/* Terminal Status */}
-                      {paymentMethod === 'card_terminal' && terminalPolling && (
-                        <div className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg text-center">
-                          <RefreshCw className="w-8 h-8 mx-auto animate-spin text-blue-500 mb-2" />
-                          <p className="font-medium text-blue-800 dark:text-blue-200">Esperando pago en terminal...</p>
-                          <p className="text-sm text-blue-600 dark:text-blue-300">{terminalStatus}</p>
-                        </div>
-                      )}
-
-                      {/* Card Payment Form */}
-                      {paymentMethod === 'card_manual' && selectedWallet && (
-                        <SquareCardForm
-                          amount={parseFloat(rechargeAmount) || 0}
-                          targetWalletNumber={selectedWallet.walletNumber}
-                          targetType={selectedWallet.type}
-                          onSuccess={handleCardPaymentSuccess}
-                          onError={(err) => showNotification('error', 'Error', err)}
-                        />
-                      )}
-
                       {/* Process Button (for non-card methods) */}
-                      {paymentMethod !== 'card_manual' && !terminalPolling && (
+                      {paymentMethod !== 'card_manual' && (
                         <button
                           onClick={processRecharge}
                           disabled={processing}
