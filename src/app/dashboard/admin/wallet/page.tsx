@@ -39,6 +39,7 @@ import { DashboardLayout } from '@/components/layout/dashboard-layout'
 import { VirtualCard } from '@/components/wallet/VirtualCard'
 import { SquareCardForm } from '@/components/payments/SquareCardForm'
 import { PaymentReceiptStep, PaymentReceiptData } from '@/components/wallet/PaymentReceiptStep'
+import { AnimatedNumber } from '@/components/ui/animated-counter'
 import {
   AreaChart,
   Area,
@@ -776,7 +777,9 @@ export default function WalletManagementPage() {
                           <Wallet className="w-5 h-5 text-green-500" />
                           <p className={cn("text-sm", theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}>Balance Total</p>
                         </div>
-                        <p className={cn("text-2xl font-bold", theme === 'dark' ? 'text-white' : 'text-gray-900')}>{stats.totalBalance.formatted}</p>
+                        <p className={cn("text-2xl font-bold", theme === 'dark' ? 'text-white' : 'text-gray-900')}>
+                          $<AnimatedNumber value={stats.totalBalance.value} decimals={2} />
+                        </p>
                       </motion.div>
 
                       {/* Total Wallets */}
@@ -793,7 +796,9 @@ export default function WalletManagementPage() {
                           <CreditCard className="w-5 h-5 text-indigo-500" />
                           <p className={cn("text-sm", theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}>Total Wallets</p>
                         </div>
-                        <p className={cn("text-2xl font-bold", theme === 'dark' ? 'text-white' : 'text-gray-900')}>{stats.totalWallets?.value || 0}</p>
+                        <p className={cn("text-2xl font-bold", theme === 'dark' ? 'text-white' : 'text-gray-900')}>
+                          <AnimatedNumber value={stats.totalWallets?.value || 0} decimals={0} />
+                        </p>
                         <p className={cn("text-xs mt-1", theme === 'dark' ? 'text-gray-500' : 'text-gray-400')}>
                           {stats.totalWallets?.companies || 0} empresas, {stats.totalWallets?.users || 0} usuarios
                         </p>
@@ -813,7 +818,9 @@ export default function WalletManagementPage() {
                           <ArrowDownRight className="w-5 h-5 text-green-500" />
                           <p className={cn("text-sm", theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}>Recargas Mes</p>
                         </div>
-                        <p className={cn("text-2xl font-bold", theme === 'dark' ? 'text-white' : 'text-gray-900')}>{stats.rechargesThisMonth.formatted}</p>
+                        <p className={cn("text-2xl font-bold", theme === 'dark' ? 'text-white' : 'text-gray-900')}>
+                          $<AnimatedNumber value={stats.rechargesThisMonth.value} decimals={2} />
+                        </p>
                         <p className={cn(
                           "text-xs mt-1",
                           stats.rechargesThisMonth.change >= 0 ? 'text-green-500' : 'text-red-500'
@@ -836,7 +843,9 @@ export default function WalletManagementPage() {
                           <ArrowUpRight className={cn("w-5 h-5", brandText)} />
                           <p className={cn("text-sm", theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}>Transferencias Mes</p>
                         </div>
-                        <p className={cn("text-2xl font-bold", theme === 'dark' ? 'text-white' : 'text-gray-900')}>{stats.transfersThisMonth.formatted}</p>
+                        <p className={cn("text-2xl font-bold", theme === 'dark' ? 'text-white' : 'text-gray-900')}>
+                          $<AnimatedNumber value={stats.transfersThisMonth.value} decimals={2} />
+                        </p>
                         <p className={cn(
                           "text-xs mt-1",
                           stats.transfersThisMonth.change >= 0 ? 'text-green-500' : 'text-red-500'
@@ -859,7 +868,9 @@ export default function WalletManagementPage() {
                           <Building2 className="w-5 h-5 text-purple-500" />
                           <p className={cn("text-sm", theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}>Empresas</p>
                         </div>
-                        <p className={cn("text-2xl font-bold", theme === 'dark' ? 'text-white' : 'text-gray-900')}>{stats.totalCompanies?.balanceFormatted || '$0.00'}</p>
+                        <p className={cn("text-2xl font-bold", theme === 'dark' ? 'text-white' : 'text-gray-900')}>
+                          $<AnimatedNumber value={stats.totalCompanies?.balance || 0} decimals={2} />
+                        </p>
                         <p className={cn("text-xs mt-1", theme === 'dark' ? 'text-gray-500' : 'text-gray-400')}>{stats.totalCompanies?.value || 0} empresas ({stats.activeCompanies?.value || 0} activas)</p>
                       </motion.div>
 
@@ -877,7 +888,9 @@ export default function WalletManagementPage() {
                           <Users className="w-5 h-5 text-cyan-500" />
                           <p className={cn("text-sm", theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}>Usuarios</p>
                         </div>
-                        <p className={cn("text-2xl font-bold", theme === 'dark' ? 'text-white' : 'text-gray-900')}>{stats.totalUsers?.balanceFormatted || '$0.00'}</p>
+                        <p className={cn("text-2xl font-bold", theme === 'dark' ? 'text-white' : 'text-gray-900')}>
+                          $<AnimatedNumber value={stats.totalUsers?.balance || 0} decimals={2} />
+                        </p>
                         <p className={cn("text-xs mt-1", theme === 'dark' ? 'text-gray-500' : 'text-gray-400')}>{stats.totalUsers?.value || 0} usuarios registrados</p>
                       </motion.div>
 
@@ -895,7 +908,9 @@ export default function WalletManagementPage() {
                           <Users className="w-5 h-5 text-amber-500" />
                           <p className={cn("text-sm", theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}>Clientes</p>
                         </div>
-                        <p className={cn("text-2xl font-bold", theme === 'dark' ? 'text-white' : 'text-gray-900')}>{stats.totalCustomers?.balanceFormatted || '$0.00'}</p>
+                        <p className={cn("text-2xl font-bold", theme === 'dark' ? 'text-white' : 'text-gray-900')}>
+                          $<AnimatedNumber value={stats.totalCustomers?.balance || 0} decimals={2} />
+                        </p>
                         <p className={cn("text-xs mt-1", theme === 'dark' ? 'text-gray-500' : 'text-gray-400')}>{stats.totalCustomers?.value || 0} clientes en el sistema</p>
                       </motion.div>
 
@@ -913,7 +928,9 @@ export default function WalletManagementPage() {
                           <Clock className="w-5 h-5 text-yellow-500" />
                           <p className={cn("text-sm", theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}>Pendientes</p>
                         </div>
-                        <p className={cn("text-2xl font-bold", theme === 'dark' ? 'text-white' : 'text-gray-900')}>{stats.pendingTransactions?.value || 0}</p>
+                        <p className={cn("text-2xl font-bold", theme === 'dark' ? 'text-white' : 'text-gray-900')}>
+                          <AnimatedNumber value={stats.pendingTransactions?.value || 0} decimals={0} />
+                        </p>
                         <p className={cn("text-xs mt-1", theme === 'dark' ? 'text-gray-500' : 'text-gray-400')}>transacciones ({stats.pendingRequests?.value || 0} solicitudes)</p>
                       </motion.div>
                     </>
