@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useEffect, useCallback } from 'react'
+import React, { useState, useEffect, useCallback, useMemo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useRouter, useSearchParams } from 'next/navigation'
 import {
@@ -29,6 +29,7 @@ import {
   Filter,
   Download
 } from 'lucide-react'
+import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip } from 'recharts'
 import { cn } from '@/lib/utils'
 import { AnimatedNumber } from '@/components/ui/animated-counter'
 import { useTheme } from '@/contexts/theme-context'
@@ -193,6 +194,45 @@ export default function CompanyWalletPage() {
     { id: 'pending', label: 'Solicitudes', icon: Clock, badge: pendingRequestsCount },
   ]
 
+  // Chart colors for payment methods
+  const CHART_COLORS = {
+    card_manual: '#3B82F6',  // blue
+    terminal: '#8B5CF6',     // purple
+    cash: '#10B981',         // green
+    wire: '#F59E0B',         // amber
+    zelle: '#EC4899',        // pink
+  }
+
+  // Calculate recharges by payment method from transactions
+  const rechargesByMethod = useMemo(() => {
+    const methodCounts: Record<string, { count: number; amount: number; label: string }> = {
+      card_manual: { count: 0, amount: 0, label: 'Tarjeta' },
+      terminal: { count: 0, amount: 0, label: 'Terminal' },
+      cash: { count: 0, amount: 0, label: 'Efectivo' },
+      wire: { count: 0, amount: 0, label: 'Wire' },
+      zelle: { count: 0, amount: 0, label: 'Zelle' },
+    }
+
+    transactions.forEach(tx => {
+      if (tx.type === 'recharge' && tx.paymentMethod) {
+        const method = tx.paymentMethod
+        if (methodCounts[method]) {
+          methodCounts[method].count += 1
+          methodCounts[method].amount += tx.amount
+        }
+      }
+    })
+
+    return Object.entries(methodCounts)
+      .filter(([_, data]) => data.count > 0)
+      .map(([method, data]) => ({
+        name: data.label,
+        value: data.count,
+        amount: data.amount,
+        color: CHART_COLORS[method as keyof typeof CHART_COLORS] || '#6B7280'
+      }))
+  }, [transactions])
+
   // Handle tab change
   const handleTabChange = (tabId: Tab) => {
     setActiveTab(tabId)
@@ -280,6 +320,18 @@ export default function CompanyWalletPage() {
 
     return () => clearInterval(interval)
   }, [activeTab, fetchPendingRequests])
+
+  // Auto-update company wallet data every 30 seconds when on statement tab
+  // This ensures limits and balance are updated if changed by SUPER_ADMIN
+  useEffect(() => {
+    if (activeTab !== 'statement') return
+
+    const interval = setInterval(() => {
+      fetchDashboard()
+    }, 30000) // 30 seconds
+
+    return () => clearInterval(interval)
+  }, [activeTab, fetchDashboard])
 
   // Reset recharge form
   const resetRechargeForm = () => {
@@ -615,36 +667,108 @@ export default function CompanyWalletPage() {
                   )}
                 </div>
 
-                {/* Virtual Card (Centered) */}
+                {/* Virtual Card (Left) + Chart (Right) */}
                 {companyWallet && (
-                  <motion.div
-                    initial={{ opacity: 0, scale: 0.95 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    transition={{ delay: 0.3, type: 'spring', stiffness: 100 }}
-                    className="flex justify-center mb-6"
-                  >
-                    <div className="w-full max-w-md">
-                      <VirtualCard
-                        walletNumber={companyWallet.walletNumber}
-                        balance={companyWallet.balance}
-                        balanceFormatted={companyWallet.balanceFormatted}
-                        name={companyWallet.name}
-                        type="company"
-                        status={companyWallet.status}
-                        logo={companyWallet.logo}
-                        creditLimit={companyWallet.creditLimit}
-                        creditEnabled={companyWallet.creditEnabled}
-                        availableCredit={companyWallet.availableCredit}
-                        dailyLimit={companyWallet.dailyLimit}
-                        monthlyLimit={companyWallet.monthlyLimit}
-                        dailyUsed={companyWallet.dailyUsed}
-                        monthlyUsed={companyWallet.monthlyUsed}
-                        daysInNegative={companyWallet.daysInNegative}
-                        phone={companyWallet.phone}
-                        email={companyWallet.email}
-                      />
-                    </div>
-                  </motion.div>
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+                    {/* Virtual Card - Left Side */}
+                    <motion.div
+                      initial={{ opacity: 0, scale: 0.95 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      transition={{ delay: 0.3, type: 'spring', stiffness: 100 }}
+                      className="flex justify-center lg:justify-start"
+                    >
+                      <div className="w-full max-w-md">
+                        <VirtualCard
+                          walletNumber={companyWallet.walletNumber}
+                          balance={companyWallet.balance}
+                          balanceFormatted={companyWallet.balanceFormatted}
+                          name={companyWallet.name}
+                          type="company"
+                          status={companyWallet.status}
+                          logo={companyWallet.logo}
+                          creditLimit={companyWallet.creditLimit}
+                          creditEnabled={companyWallet.creditEnabled}
+                          availableCredit={companyWallet.availableCredit}
+                          dailyLimit={companyWallet.dailyLimit}
+                          monthlyLimit={companyWallet.monthlyLimit}
+                          dailyUsed={companyWallet.dailyUsed}
+                          monthlyUsed={companyWallet.monthlyUsed}
+                          daysInNegative={companyWallet.daysInNegative}
+                          phone={companyWallet.phone}
+                          email={companyWallet.email}
+                        />
+                      </div>
+                    </motion.div>
+
+                    {/* Payment Methods Chart - Right Side */}
+                    <motion.div
+                      initial={{ opacity: 0, x: 20 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ delay: 0.35 }}
+                      className={cn(
+                        "rounded-xl p-6 border flex flex-col",
+                        theme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'
+                      )}
+                    >
+                      <h3 className={cn("text-lg font-semibold mb-4", theme === 'dark' ? 'text-white' : 'text-gray-900')}>
+                        Recargas por Metodo de Pago
+                      </h3>
+
+                      {rechargesByMethod.length > 0 ? (
+                        <div className="flex-1 min-h-[250px]">
+                          <ResponsiveContainer width="100%" height="100%">
+                            <PieChart>
+                              <Pie
+                                data={rechargesByMethod}
+                                cx="50%"
+                                cy="50%"
+                                innerRadius={60}
+                                outerRadius={90}
+                                paddingAngle={3}
+                                dataKey="value"
+                                labelLine={false}
+                              >
+                                {rechargesByMethod.map((entry, index) => (
+                                  <Cell key={`cell-${index}`} fill={entry.color} />
+                                ))}
+                              </Pie>
+                              <Tooltip
+                                formatter={(value: number, name: string, props: { payload: { amount: number } }) => [
+                                  `${value} recargas ($${props.payload.amount.toLocaleString('en-US', { minimumFractionDigits: 2 })})`,
+                                  name
+                                ]}
+                                contentStyle={{
+                                  backgroundColor: theme === 'dark' ? '#1F2937' : '#FFFFFF',
+                                  border: `1px solid ${theme === 'dark' ? '#374151' : '#E5E7EB'}`,
+                                  borderRadius: '8px',
+                                  color: theme === 'dark' ? '#FFFFFF' : '#111827'
+                                }}
+                              />
+                              <Legend
+                                verticalAlign="bottom"
+                                height={36}
+                                formatter={(value) => (
+                                  <span className={cn(
+                                    "text-sm",
+                                    theme === 'dark' ? 'text-gray-300' : 'text-gray-600'
+                                  )}>{value}</span>
+                                )}
+                              />
+                            </PieChart>
+                          </ResponsiveContainer>
+                        </div>
+                      ) : (
+                        <div className="flex-1 flex items-center justify-center">
+                          <div className="text-center">
+                            <CreditCard className="w-12 h-12 mx-auto text-gray-300 dark:text-gray-600 mb-3" />
+                            <p className={cn("text-sm", theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}>
+                              No hay recargas registradas
+                            </p>
+                          </div>
+                        </div>
+                      )}
+                    </motion.div>
+                  </div>
                 )}
 
                 {/* Transaction History (Statement) - Full Width Below */}

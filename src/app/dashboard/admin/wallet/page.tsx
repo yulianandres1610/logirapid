@@ -609,7 +609,7 @@ export default function WalletManagementPage() {
   }
 
   // Fetch pending requests
-  const fetchPendingRequests = async () => {
+  const fetchPendingRequests = useCallback(async () => {
     try {
       setPendingLoading(true)
       const response = await fetch('/api/wallet/recharge-requests?status=pending')
@@ -622,7 +622,7 @@ export default function WalletManagementPage() {
     } finally {
       setPendingLoading(false)
     }
-  }
+  }, [])
 
   // Approve/reject request
   const processRequest = async (id: number, action: 'approve' | 'reject', reason?: string) => {
@@ -648,13 +648,25 @@ export default function WalletManagementPage() {
   useEffect(() => {
     fetchDashboard()
     fetchPendingRequests()
-  }, [fetchDashboard])
+  }, [fetchDashboard, fetchPendingRequests])
 
   useEffect(() => {
     if (activeTab === 'history') {
       fetchTransactions(1, historySearchQuery)
     }
   }, [activeTab])
+
+  // Auto-refresh pending requests every 10 seconds when on pending tab
+  useEffect(() => {
+    if (activeTab !== 'pending') return
+
+    const interval = setInterval(() => {
+      fetchPendingRequests()
+      fetchDashboard() // Also refresh dashboard stats to update the badge count
+    }, 10000) // 10 seconds
+
+    return () => clearInterval(interval)
+  }, [activeTab, fetchPendingRequests, fetchDashboard])
 
   // Handle history search
   const handleHistorySearch = (e: React.FormEvent) => {
