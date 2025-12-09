@@ -27,6 +27,7 @@ import { useAuth } from '@/hooks/useAuth'
 import { useTheme } from '@/contexts/theme-context'
 import { useNotifications } from '@/contexts/NotificationContext'
 import { useWalletBalance } from '@/hooks/useWalletBalance'
+import { AnimatedCounter } from '@/components/ui/animated-counter'
 
 interface HeaderProps {
   onToggleSidebar: () => void
@@ -38,7 +39,15 @@ export function Header({ onToggleSidebar, sidebarCollapsed }: HeaderProps) {
   const { user } = useAuth()
   const { theme, toggleTheme } = useTheme()
   const { notifications, markAsRead, getUnreadCount } = useNotifications()
-  const { companyBalance, userBalance, loading: walletLoading } = useWalletBalance()
+  const {
+    companyBalance,
+    userBalance,
+    prevCompanyBalance,
+    prevUserBalance,
+    companyBalanceChange,
+    userBalanceChange,
+    loading: walletLoading
+  } = useWalletBalance()
   const [searchFocused, setSearchFocused] = useState(false)
   const [showNotifications, setShowNotifications] = useState(false)
   const [showUserMenu, setShowUserMenu] = useState(false)
@@ -234,12 +243,27 @@ export function Header({ onToggleSidebar, sidebarCollapsed }: HeaderProps) {
                 "w-4 h-4",
                 theme === 'dark' ? "text-green-400" : "text-green-600"
               )} />
-              <span className={cn(
-                "text-sm font-semibold",
-                theme === 'dark' ? "text-green-400" : "text-green-600"
-              )}>
-                ${walletLoading ? '...' : companyBalance.toFixed(2)}
-              </span>
+              {walletLoading ? (
+                <span className={cn(
+                  "text-sm font-semibold",
+                  theme === 'dark' ? "text-green-400" : "text-green-600"
+                )}>
+                  $...
+                </span>
+              ) : (
+                <AnimatedCounter
+                  value={companyBalance}
+                  previousValue={prevCompanyBalance}
+                  changeDirection={companyBalanceChange}
+                  prefix="$"
+                  decimals={2}
+                  className={cn(
+                    "text-sm font-semibold",
+                    theme === 'dark' ? "text-green-400" : "text-green-600"
+                  )}
+                  showChangeIndicator={true}
+                />
+              )}
             </motion.div>
 
             {/* Theme toggle */}
@@ -519,12 +543,27 @@ export function Header({ onToggleSidebar, sidebarCollapsed }: HeaderProps) {
                             "text-xs",
                             theme === 'dark' ? "text-gray-400" : "text-gray-500"
                           )}>Mi Saldo</p>
-                          <p className={cn(
-                            "text-sm font-bold",
-                            theme === 'dark' ? "text-green-400" : "text-green-600"
-                          )}>
-                            ${walletLoading ? '...' : userBalance.toFixed(2)}
-                          </p>
+                          {walletLoading ? (
+                            <p className={cn(
+                              "text-sm font-bold",
+                              theme === 'dark' ? "text-green-400" : "text-green-600"
+                            )}>
+                              $...
+                            </p>
+                          ) : (
+                            <AnimatedCounter
+                              value={userBalance}
+                              previousValue={prevUserBalance}
+                              changeDirection={userBalanceChange}
+                              prefix="$"
+                              decimals={2}
+                              className={cn(
+                                "text-sm font-bold",
+                                theme === 'dark' ? "text-green-400" : "text-green-600"
+                              )}
+                              showChangeIndicator={true}
+                            />
+                          )}
                         </div>
                       </div>
                     </div>

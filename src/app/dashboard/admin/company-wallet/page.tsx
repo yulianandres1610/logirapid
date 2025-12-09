@@ -542,143 +542,254 @@ export default function CompanyWalletPage() {
   return (
     <DashboardLayout>
       <div className="space-y-6">
-        {/* Header */}
-        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Mi Wallet</h1>
-            <p className="text-gray-500 dark:text-gray-400">Gestiona el wallet de tu empresa</p>
+        {/* Hero Section with Animated Background */}
+        <motion.div
+          initial={{ opacity: 0, y: -20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5 }}
+          className="relative overflow-hidden rounded-2xl"
+          style={{
+            background: theme === 'dark'
+              ? 'linear-gradient(135deg, #0f172a 0%, #1e1b4b 50%, #312e81 100%)'
+              : 'linear-gradient(135deg, #fef2f2 0%, #fce7f3 50%, #ede9fe 100%)'
+          }}
+        >
+          {/* Floating Orbs */}
+          <div className="absolute inset-0 overflow-hidden pointer-events-none">
+            <motion.div
+              animate={{
+                x: [0, 30, 0],
+                y: [0, -20, 0],
+              }}
+              transition={{ duration: 8, repeat: Infinity, ease: 'easeInOut' }}
+              className="absolute top-10 right-20 w-40 h-40 rounded-full blur-3xl"
+              style={{ backgroundColor: theme === 'dark' ? 'rgba(79, 70, 229, 0.3)' : 'rgba(219, 39, 119, 0.2)' }}
+            />
+            <motion.div
+              animate={{
+                x: [0, -20, 0],
+                y: [0, 30, 0],
+              }}
+              transition={{ duration: 10, repeat: Infinity, ease: 'easeInOut' }}
+              className="absolute bottom-10 left-10 w-32 h-32 rounded-full blur-3xl"
+              style={{ backgroundColor: theme === 'dark' ? 'rgba(59, 130, 246, 0.3)' : 'rgba(99, 102, 241, 0.2)' }}
+            />
+            <motion.div
+              animate={{
+                x: [0, 15, 0],
+                y: [0, 15, 0],
+              }}
+              transition={{ duration: 6, repeat: Infinity, ease: 'easeInOut' }}
+              className="absolute top-1/2 left-1/3 w-24 h-24 rounded-full blur-2xl"
+              style={{ backgroundColor: theme === 'dark' ? 'rgba(168, 85, 247, 0.2)' : 'rgba(236, 72, 153, 0.15)' }}
+            />
           </div>
-          <button
-            onClick={() => fetchDashboard()}
-            className="flex items-center gap-2 px-4 py-2 rounded-lg text-white transition-colors"
-            style={{ backgroundColor: exaBrandBg }}
-          >
-            <RefreshCw className="w-4 h-4" />
-            Actualizar
-          </button>
-        </div>
 
-        {/* Company Card and Summary */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* VirtualCard */}
-          {companyWallet && (
-            <div className="flex justify-center lg:justify-start">
-              <VirtualCard
-                walletNumber={companyWallet.walletNumber}
-                balance={companyWallet.balance}
-                balanceFormatted={companyWallet.balanceFormatted}
-                name={companyWallet.name}
-                type="company"
-                status={companyWallet.status}
-                logo={companyWallet.logo}
-                creditLimit={companyWallet.creditLimit}
-                creditEnabled={companyWallet.creditEnabled}
-                availableCredit={companyWallet.availableCredit}
-                dailyLimit={companyWallet.dailyLimit}
-                monthlyLimit={companyWallet.monthlyLimit}
-                dailyUsed={companyWallet.dailyUsed}
-                monthlyUsed={companyWallet.monthlyUsed}
-                daysInNegative={companyWallet.daysInNegative}
-                phone={companyWallet.phone}
-                email={companyWallet.email}
-              />
+          <div className="relative z-10 p-6 md:p-8">
+            {/* Header */}
+            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-8">
+              <motion.div
+                initial={{ opacity: 0, x: -20 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ delay: 0.2 }}
+              >
+                <div className="flex items-center gap-3 mb-2">
+                  <div className="p-2 rounded-xl" style={{ backgroundColor: exaBrandBg + '20' }}>
+                    <Wallet className="w-6 h-6" style={{ color: exaBrandBg }} />
+                  </div>
+                  <h1 className="text-2xl md:text-3xl font-bold text-gray-900 dark:text-white">Mi Wallet</h1>
+                </div>
+                <p className="text-gray-600 dark:text-gray-300 ml-14">Gestiona el wallet de tu empresa</p>
+              </motion.div>
+              <motion.button
+                initial={{ opacity: 0, scale: 0.9 }}
+                animate={{ opacity: 1, scale: 1 }}
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                onClick={() => fetchDashboard()}
+                className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-white font-medium shadow-lg transition-all"
+                style={{
+                  backgroundColor: exaBrandBg,
+                  boxShadow: `0 10px 30px -10px ${exaBrandBg}80`
+                }}
+              >
+                <RefreshCw className="w-4 h-4" />
+                Actualizar
+              </motion.button>
             </div>
-          )}
 
-          {/* Account Summary */}
-          <div className="bg-white dark:bg-gray-800 rounded-xl p-6 shadow-sm">
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Resumen del Mes</h3>
-
-            {stats && (
-              <div className="space-y-4">
-                <div className="flex justify-between items-center py-2 border-b border-gray-100 dark:border-gray-700">
-                  <div className="flex items-center gap-2">
-                    <ArrowDownRight className="w-4 h-4 text-green-500" />
-                    <span className="text-gray-600 dark:text-gray-400">Recargas Recibidas</span>
+            {/* Card and Stats Grid */}
+            <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
+              {/* VirtualCard - Takes 3 columns */}
+              {companyWallet && (
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.95 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  transition={{ delay: 0.3, type: 'spring', stiffness: 100 }}
+                  className="lg:col-span-3"
+                >
+                  <div className="max-w-md mx-auto lg:mx-0">
+                    <VirtualCard
+                      walletNumber={companyWallet.walletNumber}
+                      balance={companyWallet.balance}
+                      balanceFormatted={companyWallet.balanceFormatted}
+                      name={companyWallet.name}
+                      type="company"
+                      status={companyWallet.status}
+                      logo={companyWallet.logo}
+                      creditLimit={companyWallet.creditLimit}
+                      creditEnabled={companyWallet.creditEnabled}
+                      availableCredit={companyWallet.availableCredit}
+                      dailyLimit={companyWallet.dailyLimit}
+                      monthlyLimit={companyWallet.monthlyLimit}
+                      dailyUsed={companyWallet.dailyUsed}
+                      monthlyUsed={companyWallet.monthlyUsed}
+                      daysInNegative={companyWallet.daysInNegative}
+                      phone={companyWallet.phone}
+                      email={companyWallet.email}
+                    />
                   </div>
-                  <div className="text-right">
-                    <span className="font-semibold text-green-600">{stats.rechargesReceived.formatted}</span>
-                    <span className="text-xs text-gray-400 ml-2">({stats.rechargesReceived.count})</span>
+                </motion.div>
+              )}
+
+              {/* Quick Stats - Takes 2 columns */}
+              <motion.div
+                initial={{ opacity: 0, x: 20 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ delay: 0.4 }}
+                className="lg:col-span-2 space-y-4"
+              >
+                {/* Quick Stats Cards */}
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="relative overflow-hidden rounded-xl p-4 backdrop-blur-sm"
+                    style={{
+                      backgroundColor: theme === 'dark' ? 'rgba(34, 197, 94, 0.1)' : 'rgba(34, 197, 94, 0.1)',
+                      border: '1px solid rgba(34, 197, 94, 0.2)'
+                    }}
+                  >
+                    <ArrowDownRight className="w-5 h-5 text-green-500 mb-2" />
+                    <p className="text-xs text-gray-500 dark:text-gray-400">Recibido</p>
+                    <p className="text-lg font-bold text-green-600 dark:text-green-400">
+                      {stats?.rechargesReceived.formatted || '$0.00'}
+                    </p>
+                    <span className="text-[10px] text-gray-400">
+                      {stats?.rechargesReceived.count || 0} transacciones
+                    </span>
+                  </div>
+
+                  <div className="relative overflow-hidden rounded-xl p-4 backdrop-blur-sm"
+                    style={{
+                      backgroundColor: theme === 'dark' ? 'rgba(239, 68, 68, 0.1)' : 'rgba(239, 68, 68, 0.1)',
+                      border: '1px solid rgba(239, 68, 68, 0.2)'
+                    }}
+                  >
+                    <ArrowUpRight className="w-5 h-5 text-red-500 mb-2" />
+                    <p className="text-xs text-gray-500 dark:text-gray-400">Enviado</p>
+                    <p className="text-lg font-bold text-red-600 dark:text-red-400">
+                      {stats?.rechargesMade.formatted || '$0.00'}
+                    </p>
+                    <span className="text-[10px] text-gray-400">
+                      {stats?.rechargesMade.count || 0} transacciones
+                    </span>
                   </div>
                 </div>
 
-                <div className="flex justify-between items-center py-2 border-b border-gray-100 dark:border-gray-700">
-                  <div className="flex items-center gap-2">
-                    <ArrowUpRight className="w-4 h-4 text-red-500" />
-                    <span className="text-gray-600 dark:text-gray-400">Recargas Realizadas</span>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="relative overflow-hidden rounded-xl p-4 backdrop-blur-sm"
+                    style={{
+                      backgroundColor: theme === 'dark' ? 'rgba(59, 130, 246, 0.1)' : 'rgba(59, 130, 246, 0.1)',
+                      border: '1px solid rgba(59, 130, 246, 0.2)'
+                    }}
+                  >
+                    <Users className="w-5 h-5 text-blue-500 mb-2" />
+                    <p className="text-xs text-gray-500 dark:text-gray-400">Usuarios</p>
+                    <p className="text-2xl font-bold text-blue-600 dark:text-blue-400">{users.length}</p>
                   </div>
-                  <div className="text-right">
-                    <span className="font-semibold text-red-600">{stats.rechargesMade.formatted}</span>
-                    <span className="text-xs text-gray-400 ml-2">({stats.rechargesMade.count})</span>
+
+                  <div className="relative overflow-hidden rounded-xl p-4 backdrop-blur-sm"
+                    style={{
+                      backgroundColor: theme === 'dark' ? 'rgba(168, 85, 247, 0.1)' : 'rgba(168, 85, 247, 0.1)',
+                      border: '1px solid rgba(168, 85, 247, 0.2)'
+                    }}
+                  >
+                    <User className="w-5 h-5 text-purple-500 mb-2" />
+                    <p className="text-xs text-gray-500 dark:text-gray-400">Clientes</p>
+                    <p className="text-2xl font-bold text-purple-600 dark:text-purple-400">{customers.length}</p>
                   </div>
                 </div>
 
-                <div className="flex justify-between items-center py-2 border-b border-gray-100 dark:border-gray-700">
-                  <div className="flex items-center gap-2">
-                    <ArrowUpRight className="w-4 h-4 text-orange-500" />
-                    <span className="text-gray-600 dark:text-gray-400">Transferencias Enviadas</span>
+                {/* Transfers Summary */}
+                <div className="rounded-xl p-4 backdrop-blur-sm"
+                  style={{
+                    backgroundColor: theme === 'dark' ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.03)',
+                    border: theme === 'dark' ? '1px solid rgba(255, 255, 255, 0.1)' : '1px solid rgba(0, 0, 0, 0.05)'
+                  }}
+                >
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mb-3 font-medium">Transferencias del Mes</p>
+                  <div className="flex justify-between items-center">
+                    <div className="flex items-center gap-2">
+                      <ArrowUpRight className="w-4 h-4 text-orange-500" />
+                      <span className="text-sm text-gray-600 dark:text-gray-300">Enviadas</span>
+                    </div>
+                    <span className="font-semibold text-orange-600 dark:text-orange-400">
+                      {stats?.transfersOut.formatted || '$0.00'}
+                    </span>
                   </div>
-                  <div className="text-right">
-                    <span className="font-semibold text-orange-600">{stats.transfersOut.formatted}</span>
-                    <span className="text-xs text-gray-400 ml-2">({stats.transfersOut.count})</span>
+                  <div className="flex justify-between items-center mt-2">
+                    <div className="flex items-center gap-2">
+                      <ArrowDownRight className="w-4 h-4 text-blue-500" />
+                      <span className="text-sm text-gray-600 dark:text-gray-300">Recibidas</span>
+                    </div>
+                    <span className="font-semibold text-blue-600 dark:text-blue-400">
+                      {stats?.transfersIn.formatted || '$0.00'}
+                    </span>
                   </div>
                 </div>
-
-                <div className="flex justify-between items-center py-2">
-                  <div className="flex items-center gap-2">
-                    <ArrowDownRight className="w-4 h-4 text-blue-500" />
-                    <span className="text-gray-600 dark:text-gray-400">Transferencias Recibidas</span>
-                  </div>
-                  <div className="text-right">
-                    <span className="font-semibold text-blue-600">{stats.transfersIn.formatted}</span>
-                    <span className="text-xs text-gray-400 ml-2">({stats.transfersIn.count})</span>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* Quick Info */}
-            <div className="mt-6 pt-4 border-t border-gray-100 dark:border-gray-700">
-              <div className="grid grid-cols-2 gap-4">
-                <div className="text-center p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
-                  <Users className="w-5 h-5 mx-auto text-gray-400 mb-1" />
-                  <p className="text-lg font-semibold text-gray-900 dark:text-white">{users.length}</p>
-                  <p className="text-xs text-gray-500">Usuarios</p>
-                </div>
-                <div className="text-center p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
-                  <User className="w-5 h-5 mx-auto text-gray-400 mb-1" />
-                  <p className="text-lg font-semibold text-gray-900 dark:text-white">{customers.length}</p>
-                  <p className="text-xs text-gray-500">Clientes</p>
-                </div>
-              </div>
+              </motion.div>
             </div>
           </div>
-        </div>
+        </motion.div>
 
         {/* Tabs */}
-        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm">
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.5 }}
+          className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg border border-gray-100 dark:border-gray-700/50"
+        >
           {/* Tab Headers */}
-          <div className="flex border-b border-gray-200 dark:border-gray-700 overflow-x-auto">
-            {tabs.map((tab) => (
-              <button
+          <div className="flex border-b border-gray-200 dark:border-gray-700 overflow-x-auto p-1">
+            {tabs.map((tab, index) => (
+              <motion.button
                 key={tab.id}
+                initial={{ opacity: 0, y: -10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.6 + index * 0.1 }}
                 onClick={() => setActiveTab(tab.id as Tab)}
                 className={cn(
-                  'flex items-center gap-2 px-6 py-4 text-sm font-medium transition-colors whitespace-nowrap',
+                  'relative flex items-center gap-2 px-6 py-3 text-sm font-medium transition-all whitespace-nowrap rounded-xl mx-1',
                   activeTab === tab.id
-                    ? 'border-b-2 text-gray-900 dark:text-white'
-                    : 'text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200'
+                    ? 'text-white shadow-lg'
+                    : 'text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700/50'
                 )}
-                style={activeTab === tab.id ? { borderColor: exaBrandBg, color: exaBrandBg } : {}}
+                style={activeTab === tab.id ? {
+                  backgroundColor: exaBrandBg,
+                  boxShadow: `0 4px 15px -5px ${exaBrandBg}60`
+                } : {}}
               >
                 <tab.icon className="w-4 h-4" />
                 {tab.label}
                 {tab.badge ? (
-                  <span className="ml-1 px-2 py-0.5 text-xs rounded-full bg-red-100 text-red-600 dark:bg-red-900 dark:text-red-300">
+                  <span className={cn(
+                    "ml-1 px-2 py-0.5 text-xs rounded-full",
+                    activeTab === tab.id
+                      ? 'bg-white/20 text-white'
+                      : 'bg-red-100 text-red-600 dark:bg-red-900 dark:text-red-300'
+                  )}>
                     {tab.badge}
                   </span>
                 ) : null}
-              </button>
+              </motion.button>
             ))}
           </div>
 
@@ -1446,7 +1557,7 @@ export default function CompanyWalletPage() {
               </div>
             )}
           </div>
-        </div>
+        </motion.div>
       </div>
 
       {/* Receipt Modal */}
