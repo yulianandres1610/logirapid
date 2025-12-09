@@ -116,7 +116,6 @@ export function VirtualCard({
   className = ''
 }: VirtualCardProps) {
   const [isFlipped, setIsFlipped] = useState(false)
-  const [showFullNumber, setShowFullNumber] = useState(false)
   const [showCreditSettings, setShowCreditSettings] = useState(false)
   const [tempCreditLimit, setTempCreditLimit] = useState(Math.abs(creditLimit))
   const [tempDailyLimit, setTempDailyLimit] = useState(dailyLimit)
@@ -126,14 +125,11 @@ export function VirtualCard({
   const tier = getCardTier(balance)
   const tierStyle = tierConfig[tier]
 
-  // Format wallet number with spaces
-  const formatWalletNumber = (num: string, show: boolean) => {
+  // Format wallet number with spaces (always show full number)
+  const formatWalletNumber = (num: string) => {
     if (!num) return '---- ---- ---- ----'
     const clean = num.replace(/\s/g, '')
-    const formatted = clean.match(/.{1,4}/g)?.join(' ') || clean
-    if (show) return formatted
-    const parts = formatted.split(' ')
-    return parts.map((p, i) => i < parts.length - 1 ? '****' : p).join(' ')
+    return clean.match(/.{1,4}/g)?.join(' ') || clean
   }
 
   // Calculate limit percentages
@@ -264,29 +260,9 @@ export function VirtualCard({
 
             {/* Card Number with enhanced styling */}
             <div className="flex-1 flex items-center">
-              <div className="flex items-center gap-3 w-full">
-                <span className="text-lg font-mono tracking-[0.15em] font-medium drop-shadow-md">
-                  {formatWalletNumber(walletNumber, showFullNumber)}
-                </span>
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    setShowFullNumber(!showFullNumber)
-                  }}
-                  className="p-1.5 hover:bg-white/20 rounded-full transition-colors"
-                >
-                  {showFullNumber ? (
-                    <svg className="w-4 h-4 opacity-80" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" />
-                    </svg>
-                  ) : (
-                    <svg className="w-4 h-4 opacity-80" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                    </svg>
-                  )}
-                </button>
-              </div>
+              <span className="text-lg font-mono tracking-[0.15em] font-medium drop-shadow-md">
+                {formatWalletNumber(walletNumber)}
+              </span>
             </div>
 
             {/* Footer with Balance */}
@@ -339,14 +315,14 @@ export function VirtualCard({
             {/* Header with wallet number and contact info */}
             <div className="flex justify-between items-start mb-3">
               <div className="flex-1">
-                <div className="text-[10px] text-gray-400 uppercase tracking-wider mb-1">Wallet</div>
-                <p className="font-mono text-xs">{formatWalletNumber(walletNumber, true)}</p>
+                <div className="text-[10px] text-white/70 uppercase tracking-wider mb-1">Wallet</div>
+                <p className="font-mono text-xs text-white">{formatWalletNumber(walletNumber)}</p>
               </div>
               <div className="text-right">
                 {phone && (
                   <div className="mb-1">
-                    <p className="text-[10px] text-gray-400">Tel</p>
-                    <p className="text-xs font-medium">{phone}</p>
+                    <p className="text-[10px] text-white/70">Tel</p>
+                    <p className="text-xs font-medium text-white">{phone}</p>
                   </div>
                 )}
               </div>
@@ -356,24 +332,24 @@ export function VirtualCard({
             <div className="flex-1 space-y-2">
               <div>
                 <div className="flex justify-between text-xs mb-1">
-                  <span className="text-gray-400">Limite Diario</span>
-                  <span>${dailyUsed.toLocaleString()} / ${dailyLimit.toLocaleString()}</span>
+                  <span className="text-white/70">Limite Diario</span>
+                  <span className="text-white">${dailyUsed.toLocaleString()} / ${dailyLimit.toLocaleString()}</span>
                 </div>
-                <div className="h-1.5 bg-gray-700 rounded-full overflow-hidden">
+                <div className="h-1.5 bg-white/20 rounded-full overflow-hidden">
                   <div
-                    className="h-full bg-gradient-to-r from-blue-500 to-purple-500 rounded-full transition-all"
+                    className="h-full bg-gradient-to-r from-blue-400 to-purple-400 rounded-full transition-all"
                     style={{ width: `${dailyPercent}%` }}
                   />
                 </div>
               </div>
               <div>
                 <div className="flex justify-between text-xs mb-1">
-                  <span className="text-gray-400">Limite Mensual</span>
-                  <span>${monthlyUsed.toLocaleString()} / ${monthlyLimit.toLocaleString()}</span>
+                  <span className="text-white/70">Limite Mensual</span>
+                  <span className="text-white">${monthlyUsed.toLocaleString()} / ${monthlyLimit.toLocaleString()}</span>
                 </div>
-                <div className="h-1.5 bg-gray-700 rounded-full overflow-hidden">
+                <div className="h-1.5 bg-white/20 rounded-full overflow-hidden">
                   <div
-                    className="h-full bg-gradient-to-r from-green-500 to-emerald-500 rounded-full transition-all"
+                    className="h-full bg-gradient-to-r from-green-400 to-emerald-400 rounded-full transition-all"
                     style={{ width: `${monthlyPercent}%` }}
                   />
                 </div>
@@ -383,26 +359,26 @@ export function VirtualCard({
               {type === 'company' && creditEnabled && (
                 <div>
                   <div className="flex justify-between text-xs mb-1">
-                    <span className="text-gray-400 flex items-center gap-1">
+                    <span className="text-white/70 flex items-center gap-1">
                       Credito
                       {isNegative && daysInNegative > 0 && (
-                        <span className={`px-1 py-0.5 rounded text-[10px] ${daysInNegative >= 35 ? 'bg-red-500/30 text-red-300' : 'bg-yellow-500/30 text-yellow-300'}`}>
+                        <span className={`px-1 py-0.5 rounded text-[10px] ${daysInNegative >= 35 ? 'bg-red-500/30 text-red-200' : 'bg-yellow-500/30 text-yellow-200'}`}>
                           {daysInNegative}d
                         </span>
                       )}
                     </span>
-                    <span className={isNegative ? 'text-red-400' : ''}>
+                    <span className={isNegative ? 'text-red-300' : 'text-white'}>
                       ${creditUsed.toLocaleString()} / ${creditLimitAbs.toLocaleString()}
                     </span>
                   </div>
-                  <div className="h-1.5 bg-gray-700 rounded-full overflow-hidden">
+                  <div className="h-1.5 bg-white/20 rounded-full overflow-hidden">
                     <div
-                      className={`h-full rounded-full transition-all ${creditPercent >= 80 ? 'bg-gradient-to-r from-red-500 to-red-600' : 'bg-gradient-to-r from-orange-500 to-amber-500'}`}
+                      className={`h-full rounded-full transition-all ${creditPercent >= 80 ? 'bg-gradient-to-r from-red-400 to-red-500' : 'bg-gradient-to-r from-orange-400 to-amber-400'}`}
                       style={{ width: `${creditPercent}%` }}
                     />
                   </div>
                   {calculatedAvailableCredit > 0 && (
-                    <p className="text-[10px] text-gray-400 mt-0.5">
+                    <p className="text-[10px] text-white/70 mt-0.5">
                       Disponible: ${calculatedAvailableCredit.toLocaleString()}
                     </p>
                   )}
@@ -411,10 +387,10 @@ export function VirtualCard({
             </div>
 
             {/* Footer */}
-            <div className="flex justify-between items-center pt-2 border-t border-white/10">
+            <div className="flex justify-between items-center pt-2 border-t border-white/20">
               <div className="flex items-center gap-1">
                 <span className={`w-2 h-2 rounded-full ${statusColor}`} />
-                <span className="text-xs">{statusText}</span>
+                <span className="text-xs text-white">{statusText}</span>
               </div>
               <div className="flex items-center gap-2">
                 {/* SUPER_ADMIN settings button */}
@@ -427,14 +403,14 @@ export function VirtualCard({
                     className="p-1 rounded hover:bg-white/10 transition-colors"
                     title="Configurar limites"
                   >
-                    <svg className="w-4 h-4 text-gray-400 hover:text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <svg className="w-4 h-4 text-white/70 hover:text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
                     </svg>
                   </button>
                 )}
                 {createdAt && (
-                  <span className="text-xs text-gray-400">
+                  <span className="text-xs text-white/70">
                     Desde {new Date(createdAt).toLocaleDateString('es-ES', { month: 'short', year: 'numeric' })}
                   </span>
                 )}
