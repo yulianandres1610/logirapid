@@ -231,6 +231,21 @@ export async function GET(request: NextRequest) {
         targetName = row.target_customer_name || 'Cliente'
       }
 
+      // Extract extended Stripe payment info from metadata
+      const meta = row.metadata || {}
+      const stripePaymentInfo = row.payment_method === 'card_stripe' ? {
+        paymentMethodType: meta.paymentMethodType || 'card',
+        cardCountry: meta.cardCountry || null,
+        cardFunding: meta.cardFunding || null,
+        cardNetwork: meta.cardNetwork || null,
+        cardExpMonth: meta.cardExpMonth || null,
+        cardExpYear: meta.cardExpYear || null,
+        wallet: meta.wallet || null,
+        fingerprint: meta.fingerprint || null,
+        receiptUrl: meta.receiptUrl || null,
+        receiptEmail: meta.receiptEmail || null
+      } : null
+
       return {
         id: row.id,
         transactionNumber: row.transaction_number,
@@ -260,11 +275,16 @@ export async function GET(request: NextRequest) {
         stripePaymentIntentId: row.stripe_payment_intent_id,
         feePercentage: row.fee_percentage ? parseFloat(row.fee_percentage) : null,
         totalCharged: row.total_charged ? parseFloat(row.total_charged) : null,
+        // Card info (available for Stripe and terminal payments)
+        cardBrand: row.card_brand || meta.cardBrand || null,
+        cardLast4: row.card_last4 || meta.cardLast4 || null,
+        // Extended Stripe payment details
+        stripePaymentInfo,
         metadata: {
-          ...row.metadata,
+          ...meta,
           // Include card data from direct columns if available (for Stripe payments)
-          cardBrand: row.card_brand || row.metadata?.cardBrand,
-          cardLast4: row.card_last4 || row.metadata?.cardLast4
+          cardBrand: row.card_brand || meta.cardBrand,
+          cardLast4: row.card_last4 || meta.cardLast4
         }
       }
     })

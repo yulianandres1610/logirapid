@@ -68,11 +68,11 @@ export async function createRechargePaymentIntent(
 }
 
 /**
- * Retrieve a PaymentIntent by ID
+ * Retrieve a PaymentIntent by ID with full payment details
  */
 export async function getPaymentIntent(paymentIntentId: string): Promise<Stripe.PaymentIntent> {
   return stripe.paymentIntents.retrieve(paymentIntentId, {
-    expand: ['payment_method']
+    expand: ['payment_method', 'latest_charge']
   })
 }
 
@@ -85,25 +85,143 @@ export async function confirmPaymentSucceeded(paymentIntentId: string): Promise<
 }
 
 /**
+ * Extended payment details from a PaymentIntent
+ */
+export interface PaymentDetails {
+  brand: string
+  last4: string
+  paymentMethodType: string
+  fingerprint?: string
+  country?: string
+  expMonth?: number
+  expYear?: number
+  funding?: string
+  network?: string
+  wallet?: string
+  receiptEmail?: string
+  receiptUrl?: string
+}
+
+/**
  * Get card details from a PaymentIntent
+ * Handles various payment method types: card, link, wallets (Apple Pay, Google Pay), etc.
  */
 export function getCardDetails(paymentIntent: Stripe.PaymentIntent): {
   brand: string
   last4: string
 } {
-  const paymentMethod = paymentIntent.payment_method as Stripe.PaymentMethod | null
+  const details = getFullPaymentDetails(paymentIntent)
+  return {
+    brand: details.brand,
+    last4: details.last4
+  }
+}
 
-  if (paymentMethod && paymentMethod.card) {
-    return {
-      brand: paymentMethod.card.brand.toUpperCase(),
-      last4: paymentMethod.card.last4
+/**
+ * Get full payment details from a PaymentIntent
+ * Extracts comprehensive information from payment_method and latest_charge
+ */
+export function getFullPaymentDetails(paymentIntent: Stripe.PaymentIntent): PaymentDetails {
+  const paymentMethod = paymentIntent.payment_method as Stripe.PaymentMethod | null
+  const latestCharge = paymentIntent.latest_charge as Stripe.Charge | null
+
+  // Default values
+  let details: PaymentDetails = {
+    brand: 'CARD',
+    last4: '****',
+    paymentMethodType: 'unknown'
+  }
+
+  // Try to get details from payment_method first
+  if (paymentMethod) {
+    details.paymentMethodType = paymentMethod.type
+
+    // Standard card payment
+    if (paymentMethod.card) {
+      const card = paymentMethod.card
+      details = {
+        ...details,
+        brand: card.brand.toUpperCase(),
+        last4: card.last4,
+        fingerprint: card.fingerprint || undefined,
+        country: card.country || undefined,
+        expMonth: card.exp_month,
+        expYear: card.exp_year,
+        funding: card.funding || undefined,
+        network: card.networks?.preferred || undefined,
+        wallet: card.wallet?.type || undefined
+      }
+    }
+
+    // Link payment method (Stripe's accelerated checkout)
+    if (paymentMethod.link) {
+      details.brand = 'LINK'
+      details.paymentMethodType = 'link'
+    }
+
+    // US Bank Account
+    if (paymentMethod.us_bank_account) {
+      const bank = paymentMethod.us_bank_account
+      details.brand = (bank.bank_name || 'BANK').toUpperCase()
+      details.last4 = bank.last4 || '****'
+      details.paymentMethodType = 'us_bank_account'
     }
   }
 
-  return {
-    brand: 'CARD',
-    last4: '****'
+  // Try to get additional details from latest_charge (has card details even for wallets)
+  if (latestCharge) {
+    details.receiptEmail = latestCharge.receipt_email || undefined
+    details.receiptUrl = latestCharge.receipt_url || undefined
+
+    // payment_method_details on charge has more info for wallet payments
+    const chargeDetails = latestCharge.payment_method_details
+    if (chargeDetails) {
+      // Card details from charge (works for Apple Pay, Google Pay, etc.)
+      if (chargeDetails.card) {
+        const card = chargeDetails.card
+        // Only override if we don't have card details yet
+        if (details.last4 === '****') {
+          details.brand = (card.brand || 'CARD').toUpperCase()
+          details.last4 = card.last4 || '****'
+        }
+        // Get wallet info from charge
+        if (card.wallet?.type) {
+          details.wallet = card.wallet.type
+          // For wallet payments, show the wallet type as brand
+          if (card.wallet.type === 'apple_pay') {
+            details.brand = 'APPLE PAY'
+          } else if (card.wallet.type === 'google_pay') {
+            details.brand = 'GOOGLE PAY'
+          } else if (card.wallet.type === 'link') {
+            details.brand = 'LINK'
+          }
+        }
+        // Additional card info from charge
+        details.fingerprint = card.fingerprint || details.fingerprint
+        details.country = card.country || details.country
+        details.expMonth = card.exp_month || details.expMonth
+        details.expYear = card.exp_year || details.expYear
+        details.funding = card.funding || details.funding
+        details.network = card.network || details.network
+      }
+
+      // Card present (for terminal payments)
+      if (chargeDetails.card_present) {
+        const card = chargeDetails.card_present
+        details.brand = (card.brand || 'CARD').toUpperCase()
+        details.last4 = card.last4 || '****'
+        details.paymentMethodType = 'card_present'
+      }
+
+      // Link payment details from charge
+      if (chargeDetails.link) {
+        details.brand = 'LINK'
+        details.paymentMethodType = 'link'
+      }
+    }
   }
+
+  return details
 }
 
 /**

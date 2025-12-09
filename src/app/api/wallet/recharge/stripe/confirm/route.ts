@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
 import jwt from 'jsonwebtoken'
 import { db } from '@/lib/database'
-import { getPaymentIntent, getCardDetails, STRIPE_FEE_PERCENTAGE } from '@/lib/stripe'
+import { getPaymentIntent, getFullPaymentDetails, STRIPE_FEE_PERCENTAGE } from '@/lib/stripe'
 
 interface JWTPayload {
   userId: number
@@ -116,8 +116,8 @@ export async function POST(request: NextRequest) {
       }, { status: 400 })
     }
 
-    // Get card details
-    const cardDetails = getCardDetails(paymentIntent)
+    // Get full payment details
+    const paymentDetails = getFullPaymentDetails(paymentIntent)
 
     // Generate transaction number
     const transactionNumber = generateTransactionNumber()
@@ -197,6 +197,22 @@ export async function POST(request: NextRequest) {
         targetPhone = updateResult.rows[0].phone || ''
       }
 
+      // Prepare metadata with full payment details
+      const transactionMetadata = {
+        paymentMethodType: paymentDetails.paymentMethodType,
+        cardBrand: paymentDetails.brand,
+        cardLast4: paymentDetails.last4,
+        cardCountry: paymentDetails.country || null,
+        cardFunding: paymentDetails.funding || null,
+        cardNetwork: paymentDetails.network || null,
+        cardExpMonth: paymentDetails.expMonth || null,
+        cardExpYear: paymentDetails.expYear || null,
+        wallet: paymentDetails.wallet || null,
+        fingerprint: paymentDetails.fingerprint || null,
+        receiptUrl: paymentDetails.receiptUrl || null,
+        receiptEmail: paymentDetails.receiptEmail || null
+      }
+
       // Insert transaction record
       await db.query(`
         INSERT INTO wallet_transactions (
@@ -221,6 +237,7 @@ export async function POST(request: NextRequest) {
           card_last4,
           stripe_payment_intent_id,
           notes,
+          metadata,
           created_at,
           updated_at
         ) VALUES (
@@ -230,7 +247,7 @@ export async function POST(request: NextRequest) {
           $8, $9, $10, $11, $12, $13,
           'card_stripe', 'completed',
           $14, $15, $16,
-          $17,
+          $17, $18,
           CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
         )
       `, [
@@ -247,10 +264,11 @@ export async function POST(request: NextRequest) {
         fee,
         STRIPE_FEE_PERCENTAGE,
         totalCharged,
-        cardDetails.brand,
-        cardDetails.last4,
+        paymentDetails.brand,
+        paymentDetails.last4,
         paymentIntentId,
-        `Recarga via Stripe - ${cardDetails.brand} ****${cardDetails.last4}`
+        `Recarga via Stripe - ${paymentDetails.brand} ****${paymentDetails.last4}`,
+        JSON.stringify(transactionMetadata)
       ])
 
       await db.query('COMMIT')
@@ -264,12 +282,19 @@ export async function POST(request: NextRequest) {
           feePercentage: STRIPE_FEE_PERCENTAGE,
           totalCharged,
           newBalance,
-          cardBrand: cardDetails.brand,
-          cardLast4: cardDetails.last4,
+          cardBrand: paymentDetails.brand,
+          cardLast4: paymentDetails.last4,
           targetName,
           targetPhone,
           walletNumber,
-          paymentIntentId
+          paymentIntentId,
+          // Extended payment details
+          paymentMethodType: paymentDetails.paymentMethodType,
+          cardCountry: paymentDetails.country || null,
+          cardNetwork: paymentDetails.network || null,
+          cardFunding: paymentDetails.funding || null,
+          wallet: paymentDetails.wallet || null,
+          receiptUrl: paymentDetails.receiptUrl || null
         }
       })
 
