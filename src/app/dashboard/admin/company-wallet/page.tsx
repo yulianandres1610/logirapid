@@ -29,6 +29,7 @@ import {
   User
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { AnimatedNumber } from '@/components/ui/animated-counter'
 import { useTheme } from '@/contexts/theme-context'
 import { useNotifications } from '@/contexts/NotificationContext'
 import { DashboardLayout } from '@/components/layout/dashboard-layout'
@@ -670,7 +671,7 @@ export default function CompanyWalletPage() {
                     <ArrowDownRight className="w-5 h-5 text-green-500 mb-2" />
                     <p className="text-xs text-gray-500 dark:text-gray-400">Recibido</p>
                     <p className="text-lg font-bold text-green-600 dark:text-green-400">
-                      {stats?.rechargesReceived.formatted || '$0.00'}
+                      $<AnimatedNumber value={stats?.rechargesReceived.value || 0} decimals={2} />
                     </p>
                     <span className="text-[10px] text-gray-400">
                       {stats?.rechargesReceived.count || 0} transacciones
@@ -686,7 +687,7 @@ export default function CompanyWalletPage() {
                     <ArrowUpRight className="w-5 h-5 text-red-500 mb-2" />
                     <p className="text-xs text-gray-500 dark:text-gray-400">Enviado</p>
                     <p className="text-lg font-bold text-red-600 dark:text-red-400">
-                      {stats?.rechargesMade.formatted || '$0.00'}
+                      $<AnimatedNumber value={stats?.rechargesMade.value || 0} decimals={2} />
                     </p>
                     <span className="text-[10px] text-gray-400">
                       {stats?.rechargesMade.count || 0} transacciones
@@ -703,7 +704,9 @@ export default function CompanyWalletPage() {
                   >
                     <Users className="w-5 h-5 text-blue-500 mb-2" />
                     <p className="text-xs text-gray-500 dark:text-gray-400">Usuarios</p>
-                    <p className="text-2xl font-bold text-blue-600 dark:text-blue-400">{users.length}</p>
+                    <p className="text-2xl font-bold text-blue-600 dark:text-blue-400">
+                      <AnimatedNumber value={users.length} decimals={0} />
+                    </p>
                   </div>
 
                   <div className="relative overflow-hidden rounded-xl p-4 backdrop-blur-sm"
@@ -714,7 +717,9 @@ export default function CompanyWalletPage() {
                   >
                     <User className="w-5 h-5 text-purple-500 mb-2" />
                     <p className="text-xs text-gray-500 dark:text-gray-400">Clientes</p>
-                    <p className="text-2xl font-bold text-purple-600 dark:text-purple-400">{customers.length}</p>
+                    <p className="text-2xl font-bold text-purple-600 dark:text-purple-400">
+                      <AnimatedNumber value={customers.length} decimals={0} />
+                    </p>
                   </div>
                 </div>
 
@@ -732,7 +737,7 @@ export default function CompanyWalletPage() {
                       <span className="text-sm text-gray-600 dark:text-gray-300">Enviadas</span>
                     </div>
                     <span className="font-semibold text-orange-600 dark:text-orange-400">
-                      {stats?.transfersOut.formatted || '$0.00'}
+                      $<AnimatedNumber value={stats?.transfersOut.value || 0} decimals={2} />
                     </span>
                   </div>
                   <div className="flex justify-between items-center mt-2">
@@ -741,7 +746,7 @@ export default function CompanyWalletPage() {
                       <span className="text-sm text-gray-600 dark:text-gray-300">Recibidas</span>
                     </div>
                     <span className="font-semibold text-blue-600 dark:text-blue-400">
-                      {stats?.transfersIn.formatted || '$0.00'}
+                      $<AnimatedNumber value={stats?.transfersIn.value || 0} decimals={2} />
                     </span>
                   </div>
                 </div>
