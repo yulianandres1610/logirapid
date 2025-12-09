@@ -98,12 +98,16 @@ export async function POST(request: NextRequest) {
     let sourcePhone: string | null = null
     let sourceCreditLimit: number = -200 // Default credit limit for companies
     let sourceCreditEnabled: boolean = true // Default credit enabled
+    let sourceDailyLimit: number = 0 // 0 = unlimited
+    let sourceMonthlyLimit: number = 0 // 0 = unlimited
 
     if (sourceType === 'company') {
       const result = await db.query(`
         SELECT id, legalname,
           COALESCE("walletBalance"::numeric, walletbalance, 0) as balance,
-          phone, credit_limit, credit_enabled, negative_since
+          phone, credit_limit, credit_enabled, negative_since,
+          COALESCE("dailyLimit", 0) as daily_limit,
+          COALESCE("monthlyLimit", 0) as monthly_limit
         FROM companies
         WHERE COALESCE("walletNumber", walletnumber) = $1
       `, [sourceWalletNumber])
@@ -121,6 +125,8 @@ export async function POST(request: NextRequest) {
       sourcePhone = result.rows[0].phone
       sourceCreditLimit = parseFloat(result.rows[0].credit_limit || '-200')
       sourceCreditEnabled = result.rows[0].credit_enabled !== false // Default to true if null
+      sourceDailyLimit = parseFloat(result.rows[0].daily_limit || '0')
+      sourceMonthlyLimit = parseFloat(result.rows[0].monthly_limit || '0')
     } else if (sourceType === 'user') {
       const result = await db.query(`
         SELECT id, CONCAT(firstname, ' ', lastname) as name, wallet_balance as balance, phone
@@ -196,6 +202,61 @@ export async function POST(request: NextRequest) {
           success: false,
           error: `Balance insuficiente. Disponible: $${sourceBalance.toFixed(2)}`
         }, { status: 400 })
+      }
+    }
+
+    // Check daily and monthly limits for companies (skip for SUPER_ADMIN)
+    if (sourceType === 'company' && sourceId && payload.role !== 'SUPER_ADMIN') {
+      // Get today's transfers (transfer_out from this company)
+      const todayStart = new Date()
+      todayStart.setHours(0, 0, 0, 0)
+
+      const monthStart = new Date()
+      monthStart.setDate(1)
+      monthStart.setHours(0, 0, 0, 0)
+
+      // Calculate daily usage
+      if (sourceDailyLimit > 0) {
+        const dailyUsageResult = await db.query(`
+          SELECT COALESCE(SUM(amount), 0) as total
+          FROM wallet_transactions
+          WHERE source_company_id = $1
+            AND type = 'transfer_out'
+            AND status = 'completed'
+            AND created_at >= $2
+        `, [sourceId, todayStart.toISOString()])
+
+        const dailyUsed = parseFloat(dailyUsageResult.rows[0].total || '0')
+        const dailyRemaining = sourceDailyLimit - dailyUsed
+
+        if (amount > dailyRemaining) {
+          return NextResponse.json({
+            success: false,
+            error: `Límite diario excedido. Límite: $${sourceDailyLimit.toFixed(2)}, Usado hoy: $${dailyUsed.toFixed(2)}, Disponible: $${dailyRemaining.toFixed(2)}`
+          }, { status: 400 })
+        }
+      }
+
+      // Calculate monthly usage
+      if (sourceMonthlyLimit > 0) {
+        const monthlyUsageResult = await db.query(`
+          SELECT COALESCE(SUM(amount), 0) as total
+          FROM wallet_transactions
+          WHERE source_company_id = $1
+            AND type = 'transfer_out'
+            AND status = 'completed'
+            AND created_at >= $2
+        `, [sourceId, monthStart.toISOString()])
+
+        const monthlyUsed = parseFloat(monthlyUsageResult.rows[0].total || '0')
+        const monthlyRemaining = sourceMonthlyLimit - monthlyUsed
+
+        if (amount > monthlyRemaining) {
+          return NextResponse.json({
+            success: false,
+            error: `Límite mensual excedido. Límite: $${sourceMonthlyLimit.toFixed(2)}, Usado este mes: $${monthlyUsed.toFixed(2)}, Disponible: $${monthlyRemaining.toFixed(2)}`
+          }, { status: 400 })
+        }
       }
     }
 

@@ -409,6 +409,15 @@ export default function CompanyWalletPage() {
     cardBrand: string
     cardLast4: string
   }) => {
+    // Update companyWallet balance immediately
+    if (companyWallet) {
+      setCompanyWallet({
+        ...companyWallet,
+        balance: result.newBalance,
+        balanceFormatted: `$${result.newBalance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+      })
+    }
+
     setReceiptData({
       transactionNumber: result.transactionNumber,
       amount: result.amount,
@@ -424,7 +433,7 @@ export default function CompanyWalletPage() {
     })
 
     setShowReceiptStep(true)
-    fetchDashboard()
+    fetchDashboard() // Also refresh to get updated transactions
   }
 
   // Handle closing receipt step
@@ -455,9 +464,17 @@ export default function CompanyWalletPage() {
 
       const data = await response.json()
       if (data.success) {
+        // Update companyWallet balance immediately from API response
+        if (data.data?.source && companyWallet) {
+          setCompanyWallet({
+            ...companyWallet,
+            balance: data.data.source.newBalance,
+            balanceFormatted: data.data.source.newBalanceFormatted
+          })
+        }
         showNotification('success', 'Transferencia Exitosa', `Se han transferido $${transferAmount}`)
         resetTransferForm()
-        fetchDashboard()
+        fetchDashboard() // Also refresh to get updated transactions
       } else {
         showNotification('error', 'Error', data.error)
       }
@@ -667,17 +684,18 @@ export default function CompanyWalletPage() {
                   )}
                 </div>
 
-                {/* Virtual Card (Left) + Chart (Right) */}
+                {/* Virtual Card (Left) + Limits Cards (Right) */}
                 {companyWallet && (
-                  <div className="flex flex-col lg:flex-row gap-6 mb-6 justify-center">
+                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
                     {/* Virtual Card - Left Side */}
                     <motion.div
                       initial={{ opacity: 0, scale: 0.95 }}
                       animate={{ opacity: 1, scale: 1 }}
                       transition={{ delay: 0.3, type: 'spring', stiffness: 100 }}
-                      className="w-full max-w-md"
+                      className="lg:col-span-1"
                     >
                       <VirtualCard
+                        key={`card-${companyWallet.balance}`}
                         walletNumber={companyWallet.walletNumber}
                         balance={companyWallet.balance}
                         balanceFormatted={companyWallet.balanceFormatted}
@@ -698,69 +716,138 @@ export default function CompanyWalletPage() {
                       />
                     </motion.div>
 
-                    {/* Payment Methods Chart - Right Side (Same width as card) */}
-                    <motion.div
-                      initial={{ opacity: 0, x: 20 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      transition={{ delay: 0.35 }}
-                      className={cn(
-                        "w-full max-w-md rounded-xl p-6 border flex flex-col",
-                        theme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'
-                      )}
-                    >
-                      <h3 className={cn("text-lg font-semibold mb-4", theme === 'dark' ? 'text-white' : 'text-gray-900')}>
-                        Recargas por Metodo de Pago
-                      </h3>
-
-                      {rechargesByMethod.length > 0 ? (
-                        <div className="flex-1" style={{ height: rechargesByMethod.length * 40 + 20 }}>
-                          <ResponsiveContainer width="100%" height="100%">
-                            <BarChart
-                              data={rechargesByMethod}
-                              layout="vertical"
-                              margin={{ top: 5, right: 30, left: 60, bottom: 5 }}
-                            >
-                              <XAxis type="number" hide />
-                              <YAxis
-                                type="category"
-                                dataKey="name"
-                                axisLine={false}
-                                tickLine={false}
-                                tick={{ fill: theme === 'dark' ? '#9CA3AF' : '#4B5563', fontSize: 12 }}
-                                width={55}
-                              />
-                              <Tooltip
-                                formatter={(value: number, _name: string, props: { payload: { amount: number } }) => [
-                                  `${value} recargas ($${props.payload.amount.toLocaleString('en-US', { minimumFractionDigits: 2 })})`,
-                                  'Cantidad'
-                                ]}
-                                contentStyle={{
-                                  backgroundColor: theme === 'dark' ? '#1F2937' : '#FFFFFF',
-                                  border: `1px solid ${theme === 'dark' ? '#374151' : '#E5E7EB'}`,
-                                  borderRadius: '8px',
-                                  color: theme === 'dark' ? '#FFFFFF' : '#111827'
-                                }}
-                                cursor={{ fill: theme === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)' }}
-                              />
-                              <Bar dataKey="value" radius={[0, 4, 4, 0]} barSize={20}>
-                                {rechargesByMethod.map((entry, index) => (
-                                  <Cell key={`cell-${index}`} fill={entry.color} />
-                                ))}
-                              </Bar>
-                            </BarChart>
-                          </ResponsiveContainer>
-                        </div>
-                      ) : (
-                        <div className="flex-1 flex items-center justify-center min-h-[220px]">
-                          <div className="text-center">
-                            <CreditCard className="w-12 h-12 mx-auto text-gray-300 dark:text-gray-600 mb-3" />
-                            <p className={cn("text-sm", theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}>
-                              No hay recargas registradas
+                    {/* Right Side - Two Cards Stacked */}
+                    <div className="lg:col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      {/* Daily Limit Card */}
+                      <motion.div
+                        initial={{ opacity: 0, x: 20 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        transition={{ delay: 0.35 }}
+                        className={cn(
+                          "rounded-xl p-6 border",
+                          theme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'
+                        )}
+                      >
+                        <div className="flex items-center gap-3 mb-4">
+                          <div className="w-10 h-10 rounded-full flex items-center justify-center bg-blue-100 dark:bg-blue-900/30">
+                            <Calendar className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+                          </div>
+                          <div>
+                            <h3 className={cn("font-semibold", theme === 'dark' ? 'text-white' : 'text-gray-900')}>
+                              Limite Diario
+                            </h3>
+                            <p className={cn("text-xs", theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}>
+                              Transferencias hoy
                             </p>
                           </div>
                         </div>
-                      )}
-                    </motion.div>
+
+                        <div className="space-y-3">
+                          <div className="flex justify-between items-baseline">
+                            <span className={cn("text-sm", theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}>Usado</span>
+                            <span className={cn("text-lg font-bold", theme === 'dark' ? 'text-white' : 'text-gray-900')}>
+                              ${(companyWallet.dailyUsed || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                            </span>
+                          </div>
+                          <div className="flex justify-between items-baseline">
+                            <span className={cn("text-sm", theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}>Limite</span>
+                            <span className={cn("text-lg font-medium", theme === 'dark' ? 'text-gray-300' : 'text-gray-700')}>
+                              {companyWallet.dailyLimit > 0
+                                ? `$${companyWallet.dailyLimit.toLocaleString('en-US', { minimumFractionDigits: 2 })}`
+                                : 'Sin limite'}
+                            </span>
+                          </div>
+                          {companyWallet.dailyLimit > 0 && (
+                            <>
+                              <div className="w-full h-2 rounded-full bg-gray-200 dark:bg-gray-700 overflow-hidden">
+                                <div
+                                  className={cn(
+                                    "h-full rounded-full transition-all",
+                                    ((companyWallet.dailyUsed || 0) / companyWallet.dailyLimit) >= 0.9
+                                      ? 'bg-red-500'
+                                      : ((companyWallet.dailyUsed || 0) / companyWallet.dailyLimit) >= 0.7
+                                        ? 'bg-yellow-500'
+                                        : 'bg-green-500'
+                                  )}
+                                  style={{ width: `${Math.min(100, ((companyWallet.dailyUsed || 0) / companyWallet.dailyLimit) * 100)}%` }}
+                                />
+                              </div>
+                              <div className="flex justify-between items-baseline">
+                                <span className={cn("text-sm", theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}>Disponible</span>
+                                <span className="text-lg font-bold text-green-600 dark:text-green-400">
+                                  ${Math.max(0, companyWallet.dailyLimit - (companyWallet.dailyUsed || 0)).toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                                </span>
+                              </div>
+                            </>
+                          )}
+                        </div>
+                      </motion.div>
+
+                      {/* Monthly Limit Card */}
+                      <motion.div
+                        initial={{ opacity: 0, x: 20 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        transition={{ delay: 0.4 }}
+                        className={cn(
+                          "rounded-xl p-6 border",
+                          theme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'
+                        )}
+                      >
+                        <div className="flex items-center gap-3 mb-4">
+                          <div className="w-10 h-10 rounded-full flex items-center justify-center bg-purple-100 dark:bg-purple-900/30">
+                            <Calendar className="w-5 h-5 text-purple-600 dark:text-purple-400" />
+                          </div>
+                          <div>
+                            <h3 className={cn("font-semibold", theme === 'dark' ? 'text-white' : 'text-gray-900')}>
+                              Limite Mensual
+                            </h3>
+                            <p className={cn("text-xs", theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}>
+                              Transferencias este mes
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="space-y-3">
+                          <div className="flex justify-between items-baseline">
+                            <span className={cn("text-sm", theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}>Usado</span>
+                            <span className={cn("text-lg font-bold", theme === 'dark' ? 'text-white' : 'text-gray-900')}>
+                              ${(companyWallet.monthlyUsed || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                            </span>
+                          </div>
+                          <div className="flex justify-between items-baseline">
+                            <span className={cn("text-sm", theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}>Limite</span>
+                            <span className={cn("text-lg font-medium", theme === 'dark' ? 'text-gray-300' : 'text-gray-700')}>
+                              {companyWallet.monthlyLimit > 0
+                                ? `$${companyWallet.monthlyLimit.toLocaleString('en-US', { minimumFractionDigits: 2 })}`
+                                : 'Sin limite'}
+                            </span>
+                          </div>
+                          {companyWallet.monthlyLimit > 0 && (
+                            <>
+                              <div className="w-full h-2 rounded-full bg-gray-200 dark:bg-gray-700 overflow-hidden">
+                                <div
+                                  className={cn(
+                                    "h-full rounded-full transition-all",
+                                    ((companyWallet.monthlyUsed || 0) / companyWallet.monthlyLimit) >= 0.9
+                                      ? 'bg-red-500'
+                                      : ((companyWallet.monthlyUsed || 0) / companyWallet.monthlyLimit) >= 0.7
+                                        ? 'bg-yellow-500'
+                                        : 'bg-green-500'
+                                  )}
+                                  style={{ width: `${Math.min(100, ((companyWallet.monthlyUsed || 0) / companyWallet.monthlyLimit) * 100)}%` }}
+                                />
+                              </div>
+                              <div className="flex justify-between items-baseline">
+                                <span className={cn("text-sm", theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}>Disponible</span>
+                                <span className="text-lg font-bold text-green-600 dark:text-green-400">
+                                  ${Math.max(0, companyWallet.monthlyLimit - (companyWallet.monthlyUsed || 0)).toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                                </span>
+                              </div>
+                            </>
+                          )}
+                        </div>
+                      </motion.div>
+                    </div>
                   </div>
                 )}
 
@@ -1302,13 +1389,23 @@ export default function CompanyWalletPage() {
                         </div>
                       </div>
 
+                      {/* Validation message */}
+                      {transferAmount && parseFloat(transferAmount) > (companyWallet?.balance || 0) && (
+                        <p className="text-sm text-red-500 flex items-center gap-1">
+                          <AlertCircle className="w-4 h-4" />
+                          El monto excede el balance disponible (${companyWallet?.balance.toFixed(2)})
+                        </p>
+                      )}
+
                       <button
                         onClick={() => {
-                          if (parseFloat(transferAmount) > 0) {
+                          const amount = parseFloat(transferAmount)
+                          const availableBalance = companyWallet?.balance || 0
+                          if (amount > 0 && amount <= availableBalance) {
                             setTransferStep(2)
                           }
                         }}
-                        disabled={!transferAmount || parseFloat(transferAmount) <= 0}
+                        disabled={!transferAmount || parseFloat(transferAmount) <= 0 || parseFloat(transferAmount) > (companyWallet?.balance || 0)}
                         className="w-full py-3 rounded-lg text-white font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                         style={{ backgroundColor: exaBrandBg }}
                       >
@@ -1474,9 +1571,19 @@ export default function CompanyWalletPage() {
                         />
                       </div>
 
+                      {/* Validation: check if balance is still sufficient */}
+                      {parseFloat(transferAmount) > (companyWallet?.balance || 0) && (
+                        <div className="p-3 bg-red-50 dark:bg-red-900/20 rounded-lg flex items-start gap-3">
+                          <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
+                          <p className="text-sm text-red-800 dark:text-red-200">
+                            Balance insuficiente. Su balance actual es ${companyWallet?.balance.toFixed(2)}
+                          </p>
+                        </div>
+                      )}
+
                       <button
                         onClick={processTransfer}
-                        disabled={processing}
+                        disabled={processing || parseFloat(transferAmount) > (companyWallet?.balance || 0)}
                         className="w-full py-3 rounded-lg text-white font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                         style={{ backgroundColor: exaBrandBg }}
                       >
