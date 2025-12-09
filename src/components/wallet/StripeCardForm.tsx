@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { loadStripe } from '@stripe/stripe-js'
 import {
   Elements,
@@ -55,6 +55,55 @@ function CheckoutForm({
   const elements = useElements()
   const [processing, setProcessing] = useState(false)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
+  const [checkingRedirect, setCheckingRedirect] = useState(true)
+
+  // Check if returning from redirect (e.g., crypto, affirm, etc.)
+  useEffect(() => {
+    if (!stripe) {
+      return
+    }
+
+    // Check URL params for payment_intent (Stripe adds this after redirect)
+    const urlParams = new URLSearchParams(window.location.search)
+    const paymentIntentId = urlParams.get('payment_intent')
+    const redirectStatus = urlParams.get('redirect_status')
+
+    if (paymentIntentId && redirectStatus) {
+      // User is returning from a redirect-based payment method
+      setProcessing(true)
+
+      stripe.retrievePaymentIntent(urlParams.get('payment_intent_client_secret') || '').then(({ paymentIntent, error }) => {
+        if (error) {
+          setErrorMessage(error.message || 'Error al verificar el pago')
+          onError(error.message || 'Error al verificar el pago')
+          setProcessing(false)
+        } else if (paymentIntent) {
+          if (paymentIntent.status === 'succeeded') {
+            // Payment succeeded, call success callback
+            onSuccess({
+              id: paymentIntent.id,
+              status: paymentIntent.status
+            })
+          } else if (paymentIntent.status === 'processing') {
+            setErrorMessage('El pago está siendo procesado. Por favor espere.')
+            setProcessing(false)
+          } else if (paymentIntent.status === 'requires_payment_method') {
+            setErrorMessage('El pago no se completó. Por favor intente con otro método de pago.')
+            setProcessing(false)
+          } else {
+            setErrorMessage(`Estado del pago: ${paymentIntent.status}`)
+            setProcessing(false)
+          }
+        }
+
+        // Clean URL params after checking
+        const cleanUrl = window.location.pathname
+        window.history.replaceState({}, '', cleanUrl)
+      })
+    }
+
+    setCheckingRedirect(false)
+  }, [stripe, onSuccess, onError])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -100,6 +149,16 @@ function CheckoutForm({
       onError(message)
       setProcessing(false)
     }
+  }
+
+  // Show loading while checking redirect status
+  if (checkingRedirect && !stripe) {
+    return (
+      <div className="flex items-center justify-center p-8">
+        <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
+        <span className="ml-3 text-gray-600 dark:text-gray-400">Cargando formulario de pago...</span>
+      </div>
+    )
   }
 
   return (
