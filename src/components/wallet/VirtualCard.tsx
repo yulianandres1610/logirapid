@@ -271,6 +271,22 @@ export function VirtualCard({
               <div>
                 <p className="text-[10px] opacity-60 mb-0.5 uppercase tracking-wider">Balance Disponible</p>
                 <p className="text-2xl font-bold tracking-tight drop-shadow-lg">{balanceFormatted}</p>
+                {/* Limits shown for SUPER_ADMIN */}
+                {isSuperAdmin && type === 'company' && (
+                  <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-1">
+                    <span className="text-[9px] opacity-70">
+                      Diario: ${dailyLimit.toLocaleString()}
+                    </span>
+                    <span className="text-[9px] opacity-70">
+                      Mensual: ${monthlyLimit.toLocaleString()}
+                    </span>
+                    {creditEnabled && (
+                      <span className="text-[9px] opacity-70 text-orange-300">
+                        Credito: ${creditLimitAbs.toLocaleString()}
+                      </span>
+                    )}
+                  </div>
+                )}
               </div>
               <div className="flex flex-col items-end gap-1">
                 <div className="flex items-center gap-1.5">
