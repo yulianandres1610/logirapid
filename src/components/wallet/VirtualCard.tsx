@@ -125,11 +125,12 @@ export function VirtualCard({
   const tier = getCardTier(balance)
   const tierStyle = tierConfig[tier]
 
-  // Format wallet number with spaces (always show full number)
+  // Format wallet number with spaces like credit card (16 digits in groups of 4)
   const formatWalletNumber = (num: string) => {
-    if (!num) return '---- ---- ---- ----'
-    const clean = num.replace(/\s/g, '')
-    return clean.match(/.{1,4}/g)?.join(' ') || clean
+    if (!num) return '0000 0000 0000 0000'
+    const clean = num.replace(/\D/g, '') // Remove non-digits
+    const padded = clean.padStart(16, '0').slice(-16) // Ensure exactly 16 digits
+    return padded.match(/.{1,4}/g)?.join(' ') || padded
   }
 
   // Calculate limit percentages
@@ -301,28 +302,28 @@ export function VirtualCard({
           </div>
         </div>
 
-        {/* Back Side */}
+        {/* Back Side - Same gradient as front */}
         <div
           className="absolute inset-0 w-full h-full rounded-2xl shadow-2xl overflow-hidden"
           style={{
             backfaceVisibility: 'hidden',
             transform: 'rotateY(180deg)',
-            background: tierStyle.gradientBack,
+            background: tierStyle.gradient,
             boxShadow: `0 25px 50px -12px ${tierStyle.glowColor}`
           }}
         >
-          <div className="relative z-10 h-full p-4 text-white flex flex-col">
+          <div className={`relative z-10 h-full p-4 flex flex-col ${tier === 'diamond' ? 'text-white' : 'text-gray-800'}`}>
             {/* Header with wallet number and contact info */}
             <div className="flex justify-between items-start mb-3">
               <div className="flex-1">
-                <div className="text-[10px] text-white/70 uppercase tracking-wider mb-1">Wallet</div>
-                <p className="font-mono text-xs text-white">{formatWalletNumber(walletNumber)}</p>
+                <div className={`text-[10px] uppercase tracking-wider mb-1 ${tier === 'diamond' ? 'text-white/70' : 'text-gray-600'}`}>Wallet</div>
+                <p className="font-mono text-xs">{formatWalletNumber(walletNumber)}</p>
               </div>
               <div className="text-right">
                 {phone && (
                   <div className="mb-1">
-                    <p className="text-[10px] text-white/70">Tel</p>
-                    <p className="text-xs font-medium text-white">{phone}</p>
+                    <p className={`text-[10px] ${tier === 'diamond' ? 'text-white/70' : 'text-gray-600'}`}>Tel</p>
+                    <p className="text-xs font-medium">{phone}</p>
                   </div>
                 )}
               </div>
@@ -332,24 +333,24 @@ export function VirtualCard({
             <div className="flex-1 space-y-2">
               <div>
                 <div className="flex justify-between text-xs mb-1">
-                  <span className="text-white/70">Limite Diario</span>
-                  <span className="text-white">${dailyUsed.toLocaleString()} / ${dailyLimit.toLocaleString()}</span>
+                  <span className={tier === 'diamond' ? 'text-white/70' : 'text-gray-600'}>Limite Diario</span>
+                  <span>${dailyUsed.toLocaleString()} / ${dailyLimit.toLocaleString()}</span>
                 </div>
-                <div className="h-1.5 bg-white/20 rounded-full overflow-hidden">
+                <div className={`h-1.5 rounded-full overflow-hidden ${tier === 'diamond' ? 'bg-white/20' : 'bg-gray-400/30'}`}>
                   <div
-                    className="h-full bg-gradient-to-r from-blue-400 to-purple-400 rounded-full transition-all"
+                    className="h-full bg-gradient-to-r from-blue-500 to-purple-500 rounded-full transition-all"
                     style={{ width: `${dailyPercent}%` }}
                   />
                 </div>
               </div>
               <div>
                 <div className="flex justify-between text-xs mb-1">
-                  <span className="text-white/70">Limite Mensual</span>
-                  <span className="text-white">${monthlyUsed.toLocaleString()} / ${monthlyLimit.toLocaleString()}</span>
+                  <span className={tier === 'diamond' ? 'text-white/70' : 'text-gray-600'}>Limite Mensual</span>
+                  <span>${monthlyUsed.toLocaleString()} / ${monthlyLimit.toLocaleString()}</span>
                 </div>
-                <div className="h-1.5 bg-white/20 rounded-full overflow-hidden">
+                <div className={`h-1.5 rounded-full overflow-hidden ${tier === 'diamond' ? 'bg-white/20' : 'bg-gray-400/30'}`}>
                   <div
-                    className="h-full bg-gradient-to-r from-green-400 to-emerald-400 rounded-full transition-all"
+                    className="h-full bg-gradient-to-r from-green-500 to-emerald-500 rounded-full transition-all"
                     style={{ width: `${monthlyPercent}%` }}
                   />
                 </div>
@@ -359,7 +360,7 @@ export function VirtualCard({
               {type === 'company' && creditEnabled && (
                 <div>
                   <div className="flex justify-between text-xs mb-1">
-                    <span className="text-white/70 flex items-center gap-1">
+                    <span className={`flex items-center gap-1 ${tier === 'diamond' ? 'text-white/70' : 'text-gray-600'}`}>
                       Credito
                       {isNegative && daysInNegative > 0 && (
                         <span className={`px-1 py-0.5 rounded text-[10px] ${daysInNegative >= 35 ? 'bg-red-500/30 text-red-200' : 'bg-yellow-500/30 text-yellow-200'}`}>
@@ -367,18 +368,18 @@ export function VirtualCard({
                         </span>
                       )}
                     </span>
-                    <span className={isNegative ? 'text-red-300' : 'text-white'}>
+                    <span className={isNegative ? 'text-red-500' : ''}>
                       ${creditUsed.toLocaleString()} / ${creditLimitAbs.toLocaleString()}
                     </span>
                   </div>
-                  <div className="h-1.5 bg-white/20 rounded-full overflow-hidden">
+                  <div className={`h-1.5 rounded-full overflow-hidden ${tier === 'diamond' ? 'bg-white/20' : 'bg-gray-400/30'}`}>
                     <div
                       className={`h-full rounded-full transition-all ${creditPercent >= 80 ? 'bg-gradient-to-r from-red-400 to-red-500' : 'bg-gradient-to-r from-orange-400 to-amber-400'}`}
                       style={{ width: `${creditPercent}%` }}
                     />
                   </div>
                   {calculatedAvailableCredit > 0 && (
-                    <p className="text-[10px] text-white/70 mt-0.5">
+                    <p className={`text-[10px] mt-0.5 ${tier === 'diamond' ? 'text-white/70' : 'text-gray-600'}`}>
                       Disponible: ${calculatedAvailableCredit.toLocaleString()}
                     </p>
                   )}
@@ -387,10 +388,10 @@ export function VirtualCard({
             </div>
 
             {/* Footer */}
-            <div className="flex justify-between items-center pt-2 border-t border-white/20">
+            <div className={`flex justify-between items-center pt-2 border-t ${tier === 'diamond' ? 'border-white/20' : 'border-gray-400/30'}`}>
               <div className="flex items-center gap-1">
                 <span className={`w-2 h-2 rounded-full ${statusColor}`} />
-                <span className="text-xs text-white">{statusText}</span>
+                <span className="text-xs">{statusText}</span>
               </div>
               <div className="flex items-center gap-2">
                 {/* SUPER_ADMIN settings button */}
@@ -400,17 +401,17 @@ export function VirtualCard({
                       e.stopPropagation()
                       setShowCreditSettings(!showCreditSettings)
                     }}
-                    className="p-1 rounded hover:bg-white/10 transition-colors"
+                    className={`p-1 rounded transition-colors ${tier === 'diamond' ? 'hover:bg-white/10' : 'hover:bg-gray-400/20'}`}
                     title="Configurar limites"
                   >
-                    <svg className="w-4 h-4 text-white/70 hover:text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <svg className={`w-4 h-4 ${tier === 'diamond' ? 'text-white/70 hover:text-white' : 'text-gray-600 hover:text-gray-800'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
                     </svg>
                   </button>
                 )}
                 {createdAt && (
-                  <span className="text-xs text-white/70">
+                  <span className={`text-xs ${tier === 'diamond' ? 'text-white/70' : 'text-gray-600'}`}>
                     Desde {new Date(createdAt).toLocaleDateString('es-ES', { month: 'short', year: 'numeric' })}
                   </span>
                 )}
@@ -419,7 +420,7 @@ export function VirtualCard({
           </div>
 
           {/* Flip indicator */}
-          <div className="absolute bottom-3 right-3 text-white/40">
+          <div className={`absolute bottom-3 right-3 ${tier === 'diamond' ? 'text-white/40' : 'text-gray-500/50'}`}>
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
             </svg>
