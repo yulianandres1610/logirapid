@@ -3,7 +3,7 @@ import { cookies } from 'next/headers'
 import jwt from 'jsonwebtoken'
 import crypto from 'crypto'
 import { db } from '@/lib/database'
-import { getSquareBaseUrl, getPlatformCredentials } from '@/lib/square'
+import { getSquareBaseUrl, getPlatformCredentials, calculateTerminalFee } from '@/lib/square'
 import { sendWalletNotificationSMS } from '@/lib/sms-service'
 
 export const dynamic = 'force-dynamic'
@@ -99,17 +99,21 @@ export async function POST(request: NextRequest) {
 
     console.log('[Card Payment] Target:', { targetId, targetName, currentBalance, targetPhone })
 
-    // 4. Get Square credentials
+    // 4. Calculate fee (3.5%)
+    const feeCalc = calculateTerminalFee(amount)
+    console.log('[Card Payment] Fee calculation:', { amount, fee: feeCalc.fee, total: feeCalc.total })
+
+    // 5. Get Square credentials
     const credentials = getPlatformCredentials()
     if (!credentials) {
       console.error('[Card Payment] Square credentials not configured')
       return NextResponse.json({ success: false, error: 'Square no configurado' }, { status: 500 })
     }
 
-    // 5. Generate transaction number
+    // 6. Generate transaction number
     const transactionNumber = `WTX-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).substring(2, 6).toUpperCase()}`
 
-    // 6. Create transaction with 'processing' status
+    // 7. Create transaction with 'processing' status
     const txResult = await db.query(`
       INSERT INTO wallet_transactions (
         transaction_number, type, source_type,
@@ -121,10 +125,10 @@ export async function POST(request: NextRequest) {
       ) VALUES (
         $1, 'recharge', 'external',
         $2, $3, $4, $5, $6,
-        $7, 0, $7, 'USD',
+        $7, $8, $7, 'USD',
         'card_manual', 'processing', false,
-        $8, $9, $10, NOW(),
-        $11
+        $9, $10, $11, NOW(),
+        $12
       ) RETURNING id
     `, [
       transactionNumber,
@@ -134,35 +138,40 @@ export async function POST(request: NextRequest) {
       targetType === 'customer' ? targetId : null,
       targetWalletNumber,
       amount,
-      `Recarga con tarjeta para ${targetName}`,
+      feeCalc.fee,
+      `Recarga con tarjeta para ${targetName} (Fee: $${feeCalc.fee.toFixed(2)})`,
       payload.userId,
       payload.email,
-      JSON.stringify({ previousBalance: currentBalance, targetName })
+      JSON.stringify({ previousBalance: currentBalance, targetName, fee: feeCalc.fee, totalCharged: feeCalc.total })
     ])
 
     const transactionId = txResult.rows[0].id
     console.log('[Card Payment] Transaction created:', { transactionId, transactionNumber })
 
-    // 7. Call Square CreatePayment API
+    // 8. Call Square CreatePayment API
     const baseUrl = getSquareBaseUrl(credentials.environment)
     const idempotencyKey = crypto.randomUUID()
 
+    // Charge the TOTAL amount (base amount + 3.5% fee)
     const paymentRequest = {
       source_id: sourceId,
       amount_money: {
-        amount: Math.round(amount * 100), // Convert to cents
+        amount: feeCalc.totalCents, // Total amount in cents (includes 3.5% fee)
         currency: 'USD'
       },
       location_id: credentials.locationId,
       idempotency_key: idempotencyKey,
       autocomplete: true,
       reference_id: transactionNumber,
-      note: `Wallet Recharge - ${transactionNumber}`
+      note: `Wallet Recharge - ${transactionNumber} (Amount: $${amount.toFixed(2)} + Fee: $${feeCalc.fee.toFixed(2)})`
     }
 
     console.log('[Card Payment] Calling Square API:', {
       url: `${baseUrl}/v2/payments`,
-      amount: paymentRequest.amount_money,
+      baseAmount: amount,
+      fee: feeCalc.fee,
+      totalAmount: feeCalc.total,
+      totalCents: feeCalc.totalCents,
       locationId: credentials.locationId
     })
 
@@ -201,7 +210,7 @@ export async function POST(request: NextRequest) {
       last4: payment.card_details?.card?.last_4
     })
 
-    // 8. Update wallet balance
+    // 9. Update wallet balance (credit only the base amount, not the fee)
     const newBalance = currentBalance + amount
 
     if (targetType === 'company') {
@@ -212,7 +221,7 @@ export async function POST(request: NextRequest) {
       await db.query(`UPDATE customers SET wallet_balance = wallet_balance + $1 WHERE id = $2`, [amount, targetId])
     }
 
-    // 9. Update transaction as completed
+    // 10. Update transaction as completed
     await db.query(`
       UPDATE wallet_transactions
       SET
@@ -236,7 +245,7 @@ export async function POST(request: NextRequest) {
 
     console.log('[Card Payment] Success:', { transactionId, newBalance })
 
-    // 10. Send SMS notification (async, don't block response)
+    // 11. Send SMS notification (async, don't block response)
     if (targetPhone) {
       sendWalletNotificationSMS(
         targetPhone,
@@ -256,7 +265,7 @@ export async function POST(request: NextRequest) {
       })
     }
 
-    // 11. Return success
+    // 12. Return success
     return NextResponse.json({
       success: true,
       message: 'Pago procesado exitosamente',
@@ -265,6 +274,8 @@ export async function POST(request: NextRequest) {
         transactionId,
         transactionNumber,
         amount,
+        fee: feeCalc.fee,
+        totalCharged: feeCalc.total,
         cardBrand: payment.card_details?.card?.card_brand || 'CARD',
         cardLast4: payment.card_details?.card?.last_4 || '****',
         receiptUrl: payment.receipt_url,
