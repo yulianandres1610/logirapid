@@ -669,44 +669,42 @@ export default function CompanyWalletPage() {
 
                 {/* Virtual Card (Left) + Chart (Right) */}
                 {companyWallet && (
-                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+                  <div className="flex flex-col lg:flex-row gap-6 mb-6 justify-center">
                     {/* Virtual Card - Left Side */}
                     <motion.div
                       initial={{ opacity: 0, scale: 0.95 }}
                       animate={{ opacity: 1, scale: 1 }}
                       transition={{ delay: 0.3, type: 'spring', stiffness: 100 }}
-                      className="flex justify-center lg:justify-start"
+                      className="w-full max-w-md"
                     >
-                      <div className="w-full max-w-md">
-                        <VirtualCard
-                          walletNumber={companyWallet.walletNumber}
-                          balance={companyWallet.balance}
-                          balanceFormatted={companyWallet.balanceFormatted}
-                          name={companyWallet.name}
-                          type="company"
-                          status={companyWallet.status}
-                          logo={companyWallet.logo}
-                          creditLimit={companyWallet.creditLimit}
-                          creditEnabled={companyWallet.creditEnabled}
-                          availableCredit={companyWallet.availableCredit}
-                          dailyLimit={companyWallet.dailyLimit}
-                          monthlyLimit={companyWallet.monthlyLimit}
-                          dailyUsed={companyWallet.dailyUsed}
-                          monthlyUsed={companyWallet.monthlyUsed}
-                          daysInNegative={companyWallet.daysInNegative}
-                          phone={companyWallet.phone}
-                          email={companyWallet.email}
-                        />
-                      </div>
+                      <VirtualCard
+                        walletNumber={companyWallet.walletNumber}
+                        balance={companyWallet.balance}
+                        balanceFormatted={companyWallet.balanceFormatted}
+                        name={companyWallet.name}
+                        type="company"
+                        status={companyWallet.status}
+                        logo={companyWallet.logo}
+                        creditLimit={companyWallet.creditLimit}
+                        creditEnabled={companyWallet.creditEnabled}
+                        availableCredit={companyWallet.availableCredit}
+                        dailyLimit={companyWallet.dailyLimit}
+                        monthlyLimit={companyWallet.monthlyLimit}
+                        dailyUsed={companyWallet.dailyUsed}
+                        monthlyUsed={companyWallet.monthlyUsed}
+                        daysInNegative={companyWallet.daysInNegative}
+                        phone={companyWallet.phone}
+                        email={companyWallet.email}
+                      />
                     </motion.div>
 
-                    {/* Payment Methods Chart - Right Side */}
+                    {/* Payment Methods Chart - Right Side (Same width as card) */}
                     <motion.div
                       initial={{ opacity: 0, x: 20 }}
                       animate={{ opacity: 1, x: 0 }}
                       transition={{ delay: 0.35 }}
                       className={cn(
-                        "rounded-xl p-6 border flex flex-col",
+                        "w-full max-w-md rounded-xl p-6 border flex flex-col",
                         theme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'
                       )}
                     >
@@ -715,15 +713,15 @@ export default function CompanyWalletPage() {
                       </h3>
 
                       {rechargesByMethod.length > 0 ? (
-                        <div className="flex-1 min-h-[250px]">
+                        <div className="flex-1 min-h-[220px]">
                           <ResponsiveContainer width="100%" height="100%">
                             <PieChart>
                               <Pie
                                 data={rechargesByMethod}
                                 cx="50%"
                                 cy="50%"
-                                innerRadius={60}
-                                outerRadius={90}
+                                innerRadius={50}
+                                outerRadius={75}
                                 paddingAngle={3}
                                 dataKey="value"
                                 labelLine={false}
@@ -758,7 +756,7 @@ export default function CompanyWalletPage() {
                           </ResponsiveContainer>
                         </div>
                       ) : (
-                        <div className="flex-1 flex items-center justify-center">
+                        <div className="flex-1 flex items-center justify-center min-h-[220px]">
                           <div className="text-center">
                             <CreditCard className="w-12 h-12 mx-auto text-gray-300 dark:text-gray-600 mb-3" />
                             <p className={cn("text-sm", theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}>
