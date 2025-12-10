@@ -790,7 +790,7 @@ export default function CompanyWalletPage() {
                 {/* Virtual Card (Left) + Limits Cards (Right) - All in one row */}
                 {companyWallet && (
                   <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 mb-6">
-                    {/* Virtual Card - Left Side (2 columns - rectangular) */}
+                    {/* Virtual Card - Left Side (2.5 columns visually - rectangular) */}
                     <motion.div
                       initial={{ opacity: 0, scale: 0.95 }}
                       animate={{ opacity: 1, scale: 1 }}
