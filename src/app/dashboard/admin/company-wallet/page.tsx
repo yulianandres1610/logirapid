@@ -38,6 +38,8 @@ import { DashboardLayout } from '@/components/layout/dashboard-layout'
 import { VirtualCard } from '@/components/wallet/VirtualCard'
 import StripeCardForm from '@/components/wallet/StripeCardForm'
 import { PaymentReceiptStep, PaymentReceiptData } from '@/components/wallet/PaymentReceiptStep'
+import CashoutModal from '@/components/wallet/CashoutModal'
+import StripeConnectStatus from '@/components/wallet/StripeConnectStatus'
 
 type Tab = 'statement' | 'recharge' | 'transfer' | 'pending'
 type PaymentMethod = 'card_manual' | 'cash' | 'wire' | 'zelle'
@@ -195,6 +197,10 @@ export default function CompanyWalletPage() {
   // Pending requests
   const [pendingRequests, setPendingRequests] = useState<PendingRequest[]>([])
   const [pendingLoading, setPendingLoading] = useState(false)
+
+  // Cashout modal state
+  const [showCashoutModal, setShowCashoutModal] = useState(false)
+  const [connectStatus, setConnectStatus] = useState<'not_connected' | 'pending' | 'active' | 'restricted'>('not_connected')
 
   // Tabs configuration
   const tabs = [
@@ -778,6 +784,7 @@ export default function CompanyWalletPage() {
                         daysInNegative={companyWallet.daysInNegative}
                         phone={companyWallet.phone}
                         email={companyWallet.email}
+                        onCashout={() => setShowCashoutModal(true)}
                       />
                     </motion.div>
 
@@ -1815,6 +1822,48 @@ export default function CompanyWalletPage() {
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* Cashout Modal */}
+      {companyWallet && (
+        <CashoutModal
+          isOpen={showCashoutModal}
+          onClose={() => setShowCashoutModal(false)}
+          entityType="company"
+          entityId={companyWallet.id}
+          entityName={companyWallet.name}
+          walletBalance={companyWallet.balance}
+          walletNumber={companyWallet.walletNumber}
+          connectStatus={connectStatus}
+          onSuccess={(result) => {
+            // Update balance after successful cashout
+            setCompanyWallet({
+              ...companyWallet,
+              balance: result.newBalance,
+              balanceFormatted: `$${result.newBalance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+            })
+            showNotification('success', 'Retiro Exitoso', `Se han retirado $${result.amount.toFixed(2)} a tu cuenta bancaria`)
+            fetchDashboard()
+          }}
+          onConnectRequired={() => {
+            // This callback will be triggered if user needs to connect Stripe
+            // The StripeConnectStatus component handles the onboarding flow
+          }}
+        />
+      )}
+
+      {/* Stripe Connect Status - Fetches and updates connect status */}
+      {companyWallet && (
+        <div className="hidden">
+          <StripeConnectStatus
+            entityType="company"
+            entityId={companyWallet.id}
+            onStatusChange={(status) => {
+              setConnectStatus(status.status)
+            }}
+            compact
+          />
+        </div>
+      )}
     </DashboardLayout>
   )
 }

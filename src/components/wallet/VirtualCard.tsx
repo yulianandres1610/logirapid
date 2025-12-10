@@ -30,6 +30,7 @@ interface VirtualCardProps {
   onCreditSettingsChange?: (settings: { creditLimit?: number, dailyLimit?: number, monthlyLimit?: number, creditEnabled?: boolean }) => void
   onRecharge?: () => void
   onTransfer?: () => void
+  onCashout?: () => void
   onHistory?: () => void
   className?: string
 }
@@ -112,6 +113,7 @@ export function VirtualCard({
   onCreditSettingsChange,
   onRecharge,
   onTransfer,
+  onCashout,
   onHistory,
   className = ''
 }: VirtualCardProps) {
@@ -589,7 +591,7 @@ export function VirtualCard({
       )}
 
       {/* Action Buttons */}
-      {(onRecharge || onTransfer || onHistory || (isSuperAdmin && type === 'company' && onCreditSettingsChange)) && (
+      {(onRecharge || onTransfer || onCashout || onHistory || (isSuperAdmin && type === 'company' && onCreditSettingsChange)) && (
         <div className="flex flex-wrap gap-2 mt-4 justify-center">
           {/* SUPER_ADMIN Settings Button - prominently displayed */}
           {isSuperAdmin && type === 'company' && onCreditSettingsChange && (
@@ -633,6 +635,20 @@ export function VirtualCard({
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
               </svg>
               Transferir
+            </button>
+          )}
+          {onCashout && (type === 'company' || type === 'user') && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation()
+                onCashout()
+              }}
+              className="px-4 py-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white text-sm rounded-lg flex items-center gap-2 transition-colors shadow-lg shadow-emerald-500/20"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19V5m0 0l-7 7m7-7l7 7" />
+              </svg>
+              Retirar
             </button>
           )}
           {onHistory && (

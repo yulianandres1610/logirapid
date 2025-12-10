@@ -37,6 +37,7 @@ import { useTheme } from '@/contexts/theme-context'
 import { useNotifications } from '@/contexts/NotificationContext'
 import { DashboardLayout } from '@/components/layout/dashboard-layout'
 import { VirtualCard } from '@/components/wallet/VirtualCard'
+import CashoutModal from '@/components/wallet/CashoutModal'
 import StripeCardForm from '@/components/wallet/StripeCardForm'
 import { PaymentReceiptStep, PaymentReceiptData } from '@/components/wallet/PaymentReceiptStep'
 import { AnimatedNumber } from '@/components/ui/animated-counter'
@@ -257,6 +258,10 @@ export default function WalletManagementPage() {
   // User role state
   const [userRole, setUserRole] = useState<string>('')
 
+  // Cashout modal state
+  const [showCashoutModal, setShowCashoutModal] = useState(false)
+  const [cashoutConnectStatus, setCashoutConnectStatus] = useState<'not_connected' | 'pending' | 'active' | 'restricted'>('not_connected')
+
   // Get user role from cookie on mount
   useEffect(() => {
     const getCookie = (name: string) => {
@@ -300,6 +305,71 @@ export default function WalletManagementPage() {
       }
     } catch (err) {
       showNotification('error', 'Error', 'Error al actualizar configuracion')
+    }
+  }
+
+  // Handle opening cashout modal
+  const handleOpenCashoutModal = async () => {
+    if (!selectedWallet) return
+
+    // Only allow cashout for companies and users (drivers)
+    if (selectedWallet.type === 'customer') {
+      showNotification('warning', 'No disponible', 'Los clientes no pueden realizar retiros')
+      return
+    }
+
+    // Fetch connect status
+    try {
+      const res = await fetch(`/api/stripe/connect/status?entityType=${selectedWallet.type}&entityId=${selectedWallet.id}`)
+      const data = await res.json()
+      if (data.success) {
+        setCashoutConnectStatus(data.data.status)
+      } else {
+        setCashoutConnectStatus('not_connected')
+      }
+    } catch {
+      setCashoutConnectStatus('not_connected')
+    }
+
+    setShowCashoutModal(true)
+  }
+
+  // Handle cashout success
+  const handleCashoutSuccess = (result: any) => {
+    showNotification('success', 'Retiro exitoso', `Se han retirado $${result.amount.toFixed(2)} a tu cuenta bancaria`)
+    // Update the selected wallet balance
+    if (selectedWallet) {
+      setSelectedWallet(prev => prev ? {
+        ...prev,
+        balance: result.newBalance,
+        balanceFormatted: `$${result.newBalance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+      } : null)
+    }
+    // Refresh dashboard data
+    fetchDashboard()
+  }
+
+  // Handle connect required (redirect to onboarding)
+  const handleConnectRequired = async () => {
+    if (!selectedWallet) return
+
+    try {
+      const res = await fetch('/api/stripe/connect/onboard', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          entityType: selectedWallet.type,
+          entityId: selectedWallet.id
+        })
+      })
+      const data = await res.json()
+      if (data.success) {
+        window.location.href = data.data.onboardingUrl
+      } else {
+        showNotification('error', 'Error', data.error || 'Error al iniciar conexion bancaria')
+      }
+    } catch {
+      showNotification('error', 'Error', 'Error de conexion')
     }
   }
 
@@ -1320,6 +1390,7 @@ export default function WalletManagementPage() {
                           setSourceSearchQuery(selectedWallet.name)
                           handleTabChange('transfer')
                         }}
+                        onCashout={selectedWallet.type !== 'customer' ? handleOpenCashoutModal : undefined}
                         onHistory={() => handleTabChange('history')}
                       />
                     </motion.div>
@@ -2841,6 +2912,22 @@ export default function WalletManagementPage() {
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* Cashout Modal */}
+      {selectedWallet && (
+        <CashoutModal
+          isOpen={showCashoutModal}
+          onClose={() => setShowCashoutModal(false)}
+          entityType={selectedWallet.type as 'company' | 'user'}
+          entityId={selectedWallet.id}
+          entityName={selectedWallet.name}
+          walletBalance={selectedWallet.balance}
+          walletNumber={selectedWallet.walletNumber}
+          connectStatus={cashoutConnectStatus}
+          onSuccess={handleCashoutSuccess}
+          onConnectRequired={handleConnectRequired}
+        />
+      )}
     </DashboardLayout>
   )
 }
