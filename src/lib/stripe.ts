@@ -282,6 +282,7 @@ export async function getConnectAccount(accountId: string): Promise<Stripe.Accou
 
 /**
  * Create a payout to a connected account
+ * In test mode, if insufficient funds, simulates the transfer
  */
 export async function createPayout(params: {
   accountId: string
@@ -289,13 +290,46 @@ export async function createPayout(params: {
   description?: string
 }): Promise<Stripe.Transfer> {
   const amountCents = Math.round(params.amount * 100)
+  const isTestMode = (process.env.STRIPE_SECRET_KEY || '').startsWith('sk_test_')
 
-  return stripe.transfers.create({
-    amount: amountCents,
-    currency: 'usd',
-    destination: params.accountId,
-    description: params.description || 'Payout from LogiRapid wallet'
-  })
+  try {
+    return await stripe.transfers.create({
+      amount: amountCents,
+      currency: 'usd',
+      destination: params.accountId,
+      description: params.description || 'Payout from LogiRapid wallet'
+    })
+  } catch (error: any) {
+    // In test mode, if insufficient funds error, simulate the transfer
+    if (isTestMode && error.code === 'balance_insufficient') {
+      console.log('[Stripe Test Mode] Insufficient platform balance - simulating transfer')
+
+      // Return a mock transfer object for testing
+      const mockTransferId = `tr_test_${Date.now()}_${Math.random().toString(36).substring(2, 10)}`
+
+      return {
+        id: mockTransferId,
+        object: 'transfer',
+        amount: amountCents,
+        amount_reversed: 0,
+        balance_transaction: null,
+        currency: 'usd',
+        destination: params.accountId,
+        description: params.description || 'Payout from LogiRapid wallet',
+        created: Math.floor(Date.now() / 1000),
+        livemode: false,
+        reversed: false,
+        reversals: { object: 'list', data: [], has_more: false, url: '' },
+        source_transaction: null,
+        source_type: 'card',
+        transfer_group: null,
+        metadata: { test_mode_simulated: 'true' }
+      } as unknown as Stripe.Transfer
+    }
+
+    // Re-throw the error if not test mode or different error
+    throw error
+  }
 }
 
 // Export the Stripe instance for advanced usage
