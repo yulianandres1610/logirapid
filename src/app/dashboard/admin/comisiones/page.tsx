@@ -345,52 +345,6 @@ export default function CommissionsConfigPage() {
   return (
     <DashboardLayout>
       <div className="p-6 space-y-6">
-        {/* Header */}
-        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-          <div>
-            <h1 className={cn(
-              "text-2xl font-bold",
-              theme === 'dark' ? "text-white" : "text-gray-900"
-            )}>
-              Configuracion de Comisiones
-            </h1>
-            <p className={cn(
-              "text-sm mt-1",
-              theme === 'dark' ? "text-gray-400" : "text-gray-600"
-            )}>
-              Configura las comisiones por producto y rol de empleado
-            </p>
-          </div>
-          <div className="flex gap-3">
-            <a
-              href={selectedCompanyId ? `/dashboard/admin/comisiones/historial?companyId=${selectedCompanyId}` : '#'}
-              className={cn(
-                "flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors",
-                selectedCompanyId
-                  ? theme === 'dark'
-                    ? "bg-gray-700 hover:bg-gray-600 text-gray-200"
-                    : "bg-gray-100 hover:bg-gray-200 text-gray-700"
-                  : "opacity-50 cursor-not-allowed bg-gray-200 text-gray-400"
-              )}
-            >
-              <History className="w-4 h-4" />
-              Ver Historial
-            </a>
-            <button
-              onClick={() => openNewConfigModal()}
-              disabled={!selectedCompanyId}
-              className={cn(
-                "flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors",
-                selectedCompanyId
-                  ? "bg-blue-600 hover:bg-blue-700 text-white"
-                  : "opacity-50 cursor-not-allowed bg-gray-400 text-gray-200"
-              )}
-            >
-              <Plus className="w-4 h-4" />
-              Nueva Comision
-            </button>
-          </div>
-        </div>
 
         {/* Stats Cards */}
         {selectedCompanyId && !loading && !error && (
@@ -516,7 +470,7 @@ export default function CommissionsConfigPage() {
           </div>
         )}
 
-        {/* Company Selector + Search */}
+        {/* Company Selector + Search + Actions */}
         <div className={cn(
           "p-4 rounded-xl border",
           theme === 'dark' ? "bg-gray-800/50 border-gray-700" : "bg-white border-gray-200"
@@ -598,6 +552,43 @@ export default function CommissionsConfigPage() {
                   </button>
                 )
               })}
+            </div>
+
+            {/* Divider */}
+            <div className={cn(
+              "hidden lg:block w-px h-8",
+              theme === 'dark' ? "bg-gray-700" : "bg-gray-200"
+            )} />
+
+            {/* Action Buttons */}
+            <div className="flex gap-2 flex-shrink-0">
+              <a
+                href={selectedCompanyId ? `/dashboard/admin/comisiones/historial?companyId=${selectedCompanyId}` : '#'}
+                className={cn(
+                  "flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors",
+                  selectedCompanyId
+                    ? theme === 'dark'
+                      ? "bg-gray-700 hover:bg-gray-600 text-gray-200"
+                      : "bg-gray-100 hover:bg-gray-200 text-gray-700"
+                    : "opacity-50 cursor-not-allowed bg-gray-200 text-gray-400"
+                )}
+              >
+                <History className="w-4 h-4" />
+                <span className="hidden sm:inline">Historial</span>
+              </a>
+              <button
+                onClick={() => openNewConfigModal()}
+                disabled={!selectedCompanyId}
+                className={cn(
+                  "flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors",
+                  selectedCompanyId
+                    ? "bg-blue-600 hover:bg-blue-700 text-white"
+                    : "opacity-50 cursor-not-allowed bg-gray-400 text-gray-200"
+                )}
+              >
+                <Plus className="w-4 h-4" />
+                <span className="hidden sm:inline">Nueva Comision</span>
+              </button>
             </div>
           </div>
 
