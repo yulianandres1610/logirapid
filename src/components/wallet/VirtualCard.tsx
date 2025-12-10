@@ -249,16 +249,27 @@ export function VirtualCard({
                   </span>
                 </div>
               </div>
-              {/* Card Chip - American Express style */}
-              <div className="flex-shrink-0">
-                <div className={`w-11 h-8 rounded-md bg-gradient-to-br ${tierStyle.chipColor} shadow-lg flex items-center justify-center overflow-hidden`}>
-                  <div className="grid grid-cols-3 gap-px w-8 h-5">
-                    {[...Array(6)].map((_, i) => (
-                      <div key={i} className="bg-black/30 rounded-sm" />
-                    ))}
-                  </div>
-                </div>
-              </div>
+              {/* Cashout button - top right */}
+              {onCashout && (type === 'company' || type === 'user') && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    onCashout()
+                  }}
+                  className={`flex-shrink-0 px-3 py-1.5 text-[11px] font-semibold rounded-lg flex items-center gap-1.5 transition-all backdrop-blur-sm border shadow-lg ${
+                    tier === 'diamond'
+                      ? 'bg-gradient-to-r from-gray-700/90 to-gray-800/90 hover:from-gray-600 hover:to-gray-700 text-white border-gray-500/40 shadow-gray-900/30'
+                      : tier === 'gold'
+                      ? 'bg-gradient-to-r from-amber-700/90 to-amber-800/90 hover:from-amber-600 hover:to-amber-700 text-amber-100 border-amber-500/40 shadow-amber-900/30'
+                      : 'bg-gradient-to-r from-gray-600/90 to-gray-700/90 hover:from-gray-500 hover:to-gray-600 text-white border-gray-400/40 shadow-gray-700/30'
+                  }`}
+                >
+                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19V5m0 0l-7 7m7-7l7 7" />
+                  </svg>
+                  Retirar
+                </button>
+              )}
             </div>
 
             {/* Card Number with enhanced styling */}
@@ -270,32 +281,9 @@ export function VirtualCard({
 
             {/* Footer with Balance */}
             <div className="flex justify-between items-end">
-              <div className="flex items-end gap-3">
-                <div>
-                  <p className="text-[10px] opacity-60 mb-0.5 uppercase tracking-wider">Balance Disponible</p>
-                  <p className="text-2xl font-bold tracking-tight drop-shadow-lg">{balanceFormatted}</p>
-                </div>
-                {/* Cashout button next to balance - color matches card tier */}
-                {onCashout && (type === 'company' || type === 'user') && (
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      onCashout()
-                    }}
-                    className={`px-3 py-1.5 text-[11px] font-semibold rounded-lg flex items-center gap-1.5 transition-all backdrop-blur-sm border mb-0.5 ${
-                      tier === 'diamond'
-                        ? 'bg-gradient-to-r from-gray-200/90 to-white/90 hover:from-white hover:to-gray-100 text-gray-900 border-white/40 shadow-lg shadow-white/20'
-                        : tier === 'gold'
-                        ? 'bg-gradient-to-r from-yellow-500/90 to-amber-500/90 hover:from-yellow-600 hover:to-amber-600 text-amber-950 border-yellow-300/40 shadow-lg shadow-yellow-500/30'
-                        : 'bg-gradient-to-r from-gray-300/90 to-gray-400/90 hover:from-gray-400 hover:to-gray-500 text-gray-800 border-gray-200/40 shadow-lg shadow-gray-400/30'
-                    }`}
-                  >
-                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19V5m0 0l-7 7m7-7l7 7" />
-                    </svg>
-                    Retirar
-                  </button>
-                )}
+              <div>
+                <p className="text-[10px] opacity-60 mb-0.5 uppercase tracking-wider">Balance Disponible</p>
+                <p className="text-2xl font-bold tracking-tight drop-shadow-lg">{balanceFormatted}</p>
               </div>
               <div className="flex flex-col items-end gap-1">
                 <div className="flex items-center gap-1.5">
