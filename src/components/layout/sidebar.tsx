@@ -34,7 +34,8 @@ import {
   Route,
   Box,
   Store,
-  Truck
+  Truck,
+  Percent
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
@@ -311,6 +312,7 @@ export function Sidebar({ isCollapsed, onToggle }: SidebarProps) {
     { icon: Smartphone, label: "Recarga", href: "/dashboard/admin/recharge" },
     { icon: Package, label: "Rastreador", href: "/dashboard/admin/tracker" },
     { icon: ShoppingCart, label: "Mercado", href: "/dashboard/admin/marketplace" },
+    { icon: Percent, label: "Comisiones", href: "/dashboard/admin/comisiones" },
     {
       icon: ShoppingBag,
       label: "Paquetería",
@@ -342,6 +344,7 @@ export function Sidebar({ isCollapsed, onToggle }: SidebarProps) {
     { icon: Smartphone, label: "Recargas", href: "/dashboard/agency-admin/recargas", requiredService: 'recharge' },
     { icon: BarChart3, label: "Tasa de Cambio", href: "/dashboard/agency-admin/exchange-rate", requiredService: 'exchange' },
     { icon: ShoppingCart, label: "Mercado", href: "/dashboard/agency-admin/marketplace", requiredService: 'marketplace' },
+    { icon: Percent, label: "Comisiones", href: "/dashboard/admin/comisiones", requiredService: null },
     {
       icon: ShoppingBag,
       label: "Paquetería",
