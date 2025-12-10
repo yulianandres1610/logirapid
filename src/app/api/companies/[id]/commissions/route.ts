@@ -111,7 +111,7 @@ export async function GET(
         pc.code as product_code,
         pc.name as product_name,
         pc.service_category,
-        pc.base_price as product_base_price,
+        pc.platform_price as product_base_price,
         u.firstname || ' ' || u.lastname as created_by_name
       FROM company_commission_config ccc
       JOIN product_catalog pc ON ccc.product_id = pc.id
@@ -150,7 +150,7 @@ export async function GET(
         pc.code,
         pc.name,
         pc.service_category,
-        pc.base_price
+        pc.platform_price
       FROM product_catalog pc
       WHERE pc.is_active = true
       ORDER BY pc.service_category, pc.name
@@ -218,7 +218,7 @@ export async function GET(
           code: p.code,
           name: p.name,
           serviceCategory: p.service_category,
-          basePrice: parseFloat(p.base_price || 0)
+          basePrice: parseFloat(p.platform_price || 0)
         })),
         summary: {
           totalConfigurations: commissions.length,
