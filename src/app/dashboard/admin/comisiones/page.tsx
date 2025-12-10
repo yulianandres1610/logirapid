@@ -348,62 +348,45 @@ export default function CommissionsConfigPage() {
 
         {/* Stats Cards */}
         {selectedCompanyId && !loading && !error && (
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              className={cn(
-                "relative overflow-hidden rounded-xl border p-4",
-                theme === 'dark'
-                  ? "bg-gray-800 border-gray-700"
-                  : "bg-white border-gray-200"
-              )}
-            >
-              <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-400 to-blue-600" />
-              <div className="flex items-center gap-3">
-                <div className={cn(
-                  "p-2 rounded-lg",
-                  theme === 'dark' ? "bg-blue-900/30" : "bg-blue-50"
-                )}>
-                  <Layers className="w-5 h-5 text-blue-500" />
-                </div>
-                <div>
-                  <p className={cn("text-sm", theme === 'dark' ? "text-gray-400" : "text-gray-600")}>
-                    Total Configuraciones
-                  </p>
-                  <p className={cn("text-2xl font-bold", theme === 'dark' ? "text-white" : "text-gray-900")}>
-                    {stats.totalConfigs}
-                  </p>
-                </div>
-              </div>
-            </motion.div>
-
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-5">
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.1 }}
               className={cn(
-                "relative overflow-hidden rounded-xl border p-4",
+                "relative overflow-hidden rounded-2xl border shadow-xl",
                 theme === 'dark'
-                  ? "bg-gray-800 border-gray-700"
-                  : "bg-white border-gray-200"
+                  ? "bg-gradient-to-br from-gray-800 to-gray-900 border-gray-700"
+                  : "bg-gradient-to-br from-slate-50 to-white border-slate-200"
               )}
             >
-              <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-green-400 to-green-600" />
-              <div className="flex items-center gap-3">
-                <div className={cn(
-                  "p-2 rounded-lg",
-                  theme === 'dark' ? "bg-green-900/30" : "bg-green-50"
-                )}>
-                  <Check className="w-5 h-5 text-green-500" />
+              <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-400 to-blue-600" />
+              <div className="p-6">
+                <div className="flex items-start justify-between mb-4">
+                  <div className="flex items-center gap-3">
+                    <div className={cn(
+                      "p-3 rounded-xl shadow-sm",
+                      theme === 'dark'
+                        ? "bg-blue-900/30 border border-blue-800/50"
+                        : "bg-gradient-to-br from-blue-50 to-blue-100 border border-blue-200"
+                    )}>
+                      <Layers className="w-6 h-6 text-blue-600" />
+                    </div>
+                    <div>
+                      <p className={cn("text-sm font-medium", theme === 'dark' ? "text-gray-400" : "text-black")}>
+                        Total Configuraciones
+                      </p>
+                      <p className={cn("text-3xl font-bold mt-1", theme === 'dark' ? "text-white" : "text-slate-900")}>
+                        {stats.totalConfigs}
+                      </p>
+                    </div>
+                  </div>
                 </div>
-                <div>
-                  <p className={cn("text-sm", theme === 'dark' ? "text-gray-400" : "text-gray-600")}>
-                    Activas
-                  </p>
-                  <p className={cn("text-2xl font-bold", theme === 'dark' ? "text-white" : "text-gray-900")}>
-                    {stats.activeConfigs}
-                  </p>
+                <div className="flex items-center gap-1">
+                  <div className="w-2 h-2 bg-blue-400 rounded-full animate-pulse" />
+                  <span className={cn("text-xs font-medium", theme === 'dark' ? "text-gray-500" : "text-black")}>
+                    En sistema
+                  </span>
                 </div>
               </div>
             </motion.div>
@@ -413,27 +396,39 @@ export default function CommissionsConfigPage() {
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.2 }}
               className={cn(
-                "relative overflow-hidden rounded-xl border p-4",
+                "relative overflow-hidden rounded-2xl border shadow-xl",
                 theme === 'dark'
-                  ? "bg-gray-800 border-gray-700"
-                  : "bg-white border-gray-200"
+                  ? "bg-gradient-to-br from-gray-800 to-gray-900 border-gray-700"
+                  : "bg-gradient-to-br from-slate-50 to-white border-slate-200"
               )}
             >
-              <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-purple-400 to-purple-600" />
-              <div className="flex items-center gap-3">
-                <div className={cn(
-                  "p-2 rounded-lg",
-                  theme === 'dark' ? "bg-purple-900/30" : "bg-purple-50"
-                )}>
-                  <Package className="w-5 h-5 text-purple-500" />
+              <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-green-400 to-green-600" />
+              <div className="p-6">
+                <div className="flex items-start justify-between mb-4">
+                  <div className="flex items-center gap-3">
+                    <div className={cn(
+                      "p-3 rounded-xl shadow-sm",
+                      theme === 'dark'
+                        ? "bg-green-900/30 border border-green-800/50"
+                        : "bg-gradient-to-br from-green-50 to-green-100 border border-green-200"
+                    )}>
+                      <Check className="w-6 h-6 text-green-600" />
+                    </div>
+                    <div>
+                      <p className={cn("text-sm font-medium", theme === 'dark' ? "text-gray-400" : "text-black")}>
+                        Activas
+                      </p>
+                      <p className={cn("text-3xl font-bold mt-1", theme === 'dark' ? "text-white" : "text-slate-900")}>
+                        {stats.activeConfigs}
+                      </p>
+                    </div>
+                  </div>
                 </div>
-                <div>
-                  <p className={cn("text-sm", theme === 'dark' ? "text-gray-400" : "text-gray-600")}>
-                    Productos Configurados
-                  </p>
-                  <p className={cn("text-2xl font-bold", theme === 'dark' ? "text-white" : "text-gray-900")}>
-                    {stats.productsConfigured}
-                  </p>
+                <div className="flex items-center gap-1">
+                  <div className="w-2 h-2 bg-green-400 rounded-full" />
+                  <span className={cn("text-xs font-medium", theme === 'dark' ? "text-gray-500" : "text-black")}>
+                    Habilitadas
+                  </span>
                 </div>
               </div>
             </motion.div>
@@ -443,27 +438,81 @@ export default function CommissionsConfigPage() {
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.3 }}
               className={cn(
-                "relative overflow-hidden rounded-xl border p-4",
+                "relative overflow-hidden rounded-2xl border shadow-xl",
                 theme === 'dark'
-                  ? "bg-gray-800 border-gray-700"
-                  : "bg-white border-gray-200"
+                  ? "bg-gradient-to-br from-gray-800 to-gray-900 border-gray-700"
+                  : "bg-gradient-to-br from-slate-50 to-white border-slate-200"
+              )}
+            >
+              <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-purple-400 to-purple-600" />
+              <div className="p-6">
+                <div className="flex items-start justify-between mb-4">
+                  <div className="flex items-center gap-3">
+                    <div className={cn(
+                      "p-3 rounded-xl shadow-sm",
+                      theme === 'dark'
+                        ? "bg-purple-900/30 border border-purple-800/50"
+                        : "bg-gradient-to-br from-purple-50 to-purple-100 border border-purple-200"
+                    )}>
+                      <Package className="w-6 h-6 text-purple-600" />
+                    </div>
+                    <div>
+                      <p className={cn("text-sm font-medium", theme === 'dark' ? "text-gray-400" : "text-black")}>
+                        Productos Configurados
+                      </p>
+                      <p className={cn("text-3xl font-bold mt-1", theme === 'dark' ? "text-white" : "text-slate-900")}>
+                        {stats.productsConfigured}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+                <div className="flex items-center gap-1">
+                  <div className="w-2 h-2 bg-purple-400 rounded-full" />
+                  <span className={cn("text-xs font-medium", theme === 'dark' ? "text-gray-500" : "text-black")}>
+                    Con comision
+                  </span>
+                </div>
+              </div>
+            </motion.div>
+
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.4 }}
+              className={cn(
+                "relative overflow-hidden rounded-2xl border shadow-xl",
+                theme === 'dark'
+                  ? "bg-gradient-to-br from-gray-800 to-gray-900 border-gray-700"
+                  : "bg-gradient-to-br from-slate-50 to-white border-slate-200"
               )}
             >
               <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-amber-400 to-amber-600" />
-              <div className="flex items-center gap-3">
-                <div className={cn(
-                  "p-2 rounded-lg",
-                  theme === 'dark' ? "bg-amber-900/30" : "bg-amber-50"
-                )}>
-                  <AlertCircle className="w-5 h-5 text-amber-500" />
+              <div className="p-6">
+                <div className="flex items-start justify-between mb-4">
+                  <div className="flex items-center gap-3">
+                    <div className={cn(
+                      "p-3 rounded-xl shadow-sm",
+                      theme === 'dark'
+                        ? "bg-amber-900/30 border border-amber-800/50"
+                        : "bg-gradient-to-br from-amber-50 to-amber-100 border border-amber-200"
+                    )}>
+                      <AlertCircle className="w-6 h-6 text-amber-600" />
+                    </div>
+                    <div>
+                      <p className={cn("text-sm font-medium", theme === 'dark' ? "text-gray-400" : "text-black")}>
+                        Sin Configurar
+                      </p>
+                      <p className={cn("text-3xl font-bold mt-1", theme === 'dark' ? "text-white" : "text-slate-900")}>
+                        {stats.productsWithoutConfig}
+                      </p>
+                    </div>
+                  </div>
                 </div>
-                <div>
-                  <p className={cn("text-sm", theme === 'dark' ? "text-gray-400" : "text-gray-600")}>
-                    Sin Configurar
-                  </p>
-                  <p className={cn("text-2xl font-bold", theme === 'dark' ? "text-white" : "text-gray-900")}>
-                    {stats.productsWithoutConfig}
-                  </p>
+                <div className="flex items-center gap-1">
+                  <div className="w-2 h-2 bg-amber-400 rounded-full" />
+                  <span className={cn("text-xs font-medium", theme === 'dark' ? "text-gray-500" : "text-black")}>
+                    Pendientes
+                  </span>
                 </div>
               </div>
             </motion.div>
@@ -870,53 +919,6 @@ export default function CommissionsConfigPage() {
               )
             })}
 
-            {/* Products without commission */}
-            {productsWithoutCommission.length > 0 && (activeCategory === 'all' || productsWithoutCommission.some(p => p.serviceCategory === activeCategory)) && (
-              <div className={cn(
-                "rounded-xl border overflow-hidden",
-                theme === 'dark'
-                  ? "bg-amber-900/10 border-amber-800/50"
-                  : "bg-amber-50 border-amber-200"
-              )}>
-                <div className="p-4">
-                  <div className="flex items-center gap-3 mb-4">
-                    <AlertCircle className="w-5 h-5 text-amber-500" />
-                    <h3 className={cn(
-                      "font-semibold",
-                      theme === 'dark' ? "text-amber-400" : "text-amber-700"
-                    )}>
-                      Productos sin comision configurada
-                    </h3>
-                  </div>
-                  <div className="flex flex-wrap gap-2">
-                    {productsWithoutCommission
-                      .filter(p => activeCategory === 'all' || p.serviceCategory === activeCategory)
-                      .filter(p => p.name.toLowerCase().includes(searchTerm.toLowerCase()) || p.code.toLowerCase().includes(searchTerm.toLowerCase()))
-                      .map(product => (
-                        <button
-                          key={product.id}
-                          onClick={() => openNewConfigModal(product.id)}
-                          className={cn(
-                            "flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-colors",
-                            theme === 'dark'
-                              ? "bg-gray-800 hover:bg-gray-700 text-gray-300"
-                              : "bg-white hover:bg-gray-50 text-gray-700 border border-gray-200"
-                          )}
-                        >
-                          <Plus className="w-4 h-4 text-blue-500" />
-                          {product.name}
-                          <span className={cn(
-                            "text-xs font-mono",
-                            theme === 'dark' ? "text-gray-500" : "text-gray-400"
-                          )}>
-                            ({product.code})
-                          </span>
-                        </button>
-                      ))}
-                  </div>
-                </div>
-              </div>
-            )}
           </div>
         )}
 
