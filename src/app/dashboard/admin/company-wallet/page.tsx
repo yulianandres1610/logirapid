@@ -201,6 +201,7 @@ export default function CompanyWalletPage() {
   // Cashout modal state
   const [showCashoutModal, setShowCashoutModal] = useState(false)
   const [connectStatus, setConnectStatus] = useState<'not_connected' | 'pending' | 'active' | 'restricted'>('not_connected')
+  const [connectLoading, setConnectLoading] = useState(false)
 
   // Tabs configuration
   const tabs = [
@@ -553,6 +554,37 @@ export default function CompanyWalletPage() {
       showNotification('error', 'Error', 'Error al procesar la transferencia')
     } finally {
       setProcessing(false)
+    }
+  }
+
+  // Initiate Stripe Connect onboarding
+  const initiateStripeConnect = async () => {
+    if (!companyWallet) return
+
+    try {
+      setConnectLoading(true)
+
+      const response = await fetch('/api/stripe/connect/onboard', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          entityType: 'company',
+          entityId: companyWallet.id
+        })
+      })
+
+      const data = await response.json()
+
+      if (data.success && data.data.onboardingUrl) {
+        // Redirect to Stripe onboarding
+        window.location.href = data.data.onboardingUrl
+      } else {
+        showNotification('error', 'Error', data.error || 'Error al iniciar el proceso de conexion')
+        setConnectLoading(false)
+      }
+    } catch (err) {
+      showNotification('error', 'Error', 'Error de conexion al iniciar el proceso')
+      setConnectLoading(false)
     }
   }
 
@@ -1845,8 +1877,8 @@ export default function CompanyWalletPage() {
             fetchDashboard()
           }}
           onConnectRequired={() => {
-            // This callback will be triggered if user needs to connect Stripe
-            // The StripeConnectStatus component handles the onboarding flow
+            // Initiate Stripe Connect onboarding
+            initiateStripeConnect()
           }}
         />
       )}
