@@ -195,6 +195,13 @@ export async function middleware(request: NextRequest) {
     return response
   }
 
+  // Excepción: Permitir que ADMIN acceda a /dashboard/admin/comisiones
+  // Sistema de comisiones para empleados de la empresa
+  if (userRole === 'ADMIN' && pathname.startsWith('/dashboard/admin/comisiones')) {
+    console.log('✅ ADMIN accessing comisiones page, companyId:', companyId)
+    return response
+  }
+
   // Redirección basada en rol si intenta acceder a rutas no permitidas
   if (userRole === 'ADMIN' && pathname.startsWith('/dashboard/admin')) {
     console.log('🔄 Redirecting ADMIN from admin to agency dashboard')
