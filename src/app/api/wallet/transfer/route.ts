@@ -332,18 +332,21 @@ export async function POST(request: NextRequest) {
       // Deduct from source
       if (sourceType === 'company') {
         // Update balance and track negative_since for credit tracking
+        // IMPORTANT: Update both walletbalance and "walletBalance" to keep them in sync
         if (sourceNewBalanceCalc < 0 && sourceBalance >= 0) {
           // Going negative for the first time - set negative_since
           await client.query(`
             UPDATE companies
-            SET walletbalance = walletbalance - $1,
+            SET walletbalance = COALESCE(walletbalance, 0) - $1,
+                "walletBalance" = (COALESCE("walletBalance"::numeric, walletbalance, 0) - $1)::varchar,
                 negative_since = COALESCE(negative_since, NOW())
             WHERE id = $2
           `, [amount, sourceId])
         } else {
           await client.query(`
             UPDATE companies
-            SET walletbalance = walletbalance - $1
+            SET walletbalance = COALESCE(walletbalance, 0) - $1,
+                "walletBalance" = (COALESCE("walletBalance"::numeric, walletbalance, 0) - $1)::varchar
             WHERE id = $2
           `, [amount, sourceId])
         }
@@ -364,12 +367,14 @@ export async function POST(request: NextRequest) {
       // Add to target
       if (targetType === 'company') {
         // If target company was negative and is now positive, reset negative_since
+        // IMPORTANT: Update both walletbalance and "walletBalance" to keep them in sync
         const targetNewBalanceCalc = targetBalance + amount
         if (targetBalance < 0 && targetNewBalanceCalc >= 0) {
           // Reset negative_since and credit charges tracking
           await client.query(`
             UPDATE companies
-            SET walletbalance = walletbalance + $1,
+            SET walletbalance = COALESCE(walletbalance, 0) + $1,
+                "walletBalance" = (COALESCE("walletBalance"::numeric, walletbalance, 0) + $1)::varchar,
                 negative_since = NULL,
                 late_fee_charged_at = NULL,
                 last_interest_charge_at = NULL
@@ -378,7 +383,8 @@ export async function POST(request: NextRequest) {
         } else {
           await client.query(`
             UPDATE companies
-            SET walletbalance = walletbalance + $1
+            SET walletbalance = COALESCE(walletbalance, 0) + $1,
+                "walletBalance" = (COALESCE("walletBalance"::numeric, walletbalance, 0) + $1)::varchar
             WHERE id = $2
           `, [amount, targetId])
         }
