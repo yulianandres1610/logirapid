@@ -79,7 +79,7 @@ export async function POST(request: NextRequest) {
     }
 
     const config = configResult.rows[0]
-    const price = productPrice || parseFloat(config.base_price || 0)
+    const price = productPrice || parseFloat(config.platform_price || 0)
 
     // Calculate commission amount
     let commissionAmount = 0
@@ -278,7 +278,7 @@ export async function GET(request: NextRequest) {
         ccc.*,
         pc.code as product_code,
         pc.name as product_name,
-        pc.base_price
+        pc.platform_price
       FROM company_commission_config ccc
       JOIN product_catalog pc ON ccc.product_id = pc.id
       WHERE ccc.company_id = $1
@@ -300,7 +300,7 @@ export async function GET(request: NextRequest) {
     }
 
     const config = configResult.rows[0]
-    const productPrice = price ? parseFloat(price) : parseFloat(config.base_price || 0)
+    const productPrice = price ? parseFloat(price) : parseFloat(config.platform_price || 0)
 
     // Calculate commission
     let calculatedAmount = 0
