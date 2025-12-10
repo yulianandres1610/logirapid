@@ -115,10 +115,19 @@ export async function POST(request: NextRequest) {
       }
 
       const company = companyResult.rows[0]
-      email = company.email
+      // Use company email, fallback to logged-in user's email if company email is null
+      email = company.email || payload.email
       name = company.legalname
       existingAccountId = company.stripe_account_id
       walletNumber = company.wallet_number
+
+      // Validate email
+      if (!email || !email.includes('@')) {
+        return NextResponse.json({
+          success: false,
+          error: 'La empresa no tiene un email valido configurado. Por favor, configure un email en la configuracion de la empresa.'
+        }, { status: 400 })
+      }
 
     } else {
       // entityType === 'user' (for drivers)
