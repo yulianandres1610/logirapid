@@ -123,7 +123,7 @@ export default function CommissionsConfigPage() {
     productId: 0,
     role: 'ALL',
     commissionType: 'fixed' as 'fixed' | 'percentage',
-    commissionValue: 0,
+    commissionValue: '',
     minAmount: '',
     maxAmount: '',
     isActive: true
@@ -232,7 +232,7 @@ export default function CommissionsConfigPage() {
       productId: productId || 0,
       role: 'ALL',
       commissionType: 'fixed',
-      commissionValue: 0,
+      commissionValue: '',
       minAmount: '',
       maxAmount: '',
       isActive: true
@@ -247,7 +247,7 @@ export default function CommissionsConfigPage() {
       productId: config.productId,
       role: config.role,
       commissionType: config.commissionType,
-      commissionValue: config.commissionValue,
+      commissionValue: config.commissionValue?.toString() || '',
       minAmount: config.minAmount?.toString() || '',
       maxAmount: config.maxAmount?.toString() || '',
       isActive: config.isActive
@@ -262,6 +262,12 @@ export default function CommissionsConfigPage() {
       return
     }
 
+    const commissionValueNum = parseFloat(formData.commissionValue)
+    if (isNaN(commissionValueNum) || commissionValueNum < 0) {
+      showNotification('error', 'Error', 'Ingresa un valor de comision valido')
+      return
+    }
+
     setSaving(true)
     try {
       const response = await fetch(`/api/companies/${selectedCompanyId}/commissions`, {
@@ -271,7 +277,7 @@ export default function CommissionsConfigPage() {
           productId: formData.productId,
           role: formData.role,
           commissionType: formData.commissionType,
-          commissionValue: formData.commissionValue,
+          commissionValue: commissionValueNum,
           minAmount: formData.minAmount ? parseFloat(formData.minAmount) : null,
           maxAmount: formData.maxAmount ? parseFloat(formData.maxAmount) : null,
           isActive: formData.isActive
@@ -1114,7 +1120,7 @@ export default function CommissionsConfigPage() {
                       min="0"
                       max={formData.commissionType === 'percentage' ? '100' : undefined}
                       value={formData.commissionValue}
-                      onChange={(e) => setFormData({ ...formData, commissionValue: parseFloat(e.target.value) || 0 })}
+                      onChange={(e) => setFormData({ ...formData, commissionValue: e.target.value })}
                       className={cn(
                         "w-full pl-8 pr-3 py-2 rounded-lg border text-sm",
                         "focus:outline-none focus:ring-2 focus:ring-blue-500",
