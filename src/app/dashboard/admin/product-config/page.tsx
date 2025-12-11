@@ -321,154 +321,182 @@ export default function ProductConfigPage() {
             >
               <RefreshCw className="w-5 h-5" />
             </button>
-            <button
-              onClick={() => window.location.href = '/api/migrations/product-services'}
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                isDark
-                  ? 'bg-blue-600 hover:bg-blue-700 text-white'
-                  : 'bg-blue-500 hover:bg-blue-600 text-white'
-              }`}
-            >
-              Ejecutar Migración
-            </button>
           </div>
         </div>
 
         {/* Stats Cards */}
-        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-4">
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            className={`p-4 rounded-xl ${isDark ? 'bg-gray-800' : 'bg-white'} shadow-sm`}
-          >
-            <div className="flex items-center gap-2 mb-2">
-              <Package className={`w-4 h-4 ${isDark ? 'text-blue-400' : 'text-blue-500'}`} />
-              <span className={`text-xs ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
-                Total
-              </span>
-            </div>
-            <p className={`text-xl font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>
-              {stats.totalProducts}
-            </p>
-          </motion.div>
-
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.05 }}
-            className={`p-4 rounded-xl ${isDark ? 'bg-gray-800' : 'bg-white'} shadow-sm`}
-          >
-            <div className="flex items-center gap-2 mb-2">
-              <CheckCircle className="w-4 h-4 text-green-500" />
-              <span className={`text-xs ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
-                Activos
-              </span>
-            </div>
-            <p className={`text-xl font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>
-              {stats.activeProducts}
-            </p>
-          </motion.div>
-
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-5">
+          {/* Total Productos */}
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.1 }}
-            className={`p-4 rounded-xl ${isDark ? 'bg-gray-800' : 'bg-white'} shadow-sm`}
+            className={`relative overflow-hidden ${
+              isDark
+                ? 'bg-gradient-to-br from-gray-800 to-gray-900 border-gray-700'
+                : 'bg-gradient-to-br from-slate-50 to-white border-slate-200'
+            } rounded-2xl border shadow-xl`}
           >
-            <div className="flex items-center gap-2 mb-2">
-              <Layers className={`w-4 h-4 ${isDark ? 'text-purple-400' : 'text-purple-500'}`} />
-              <span className={`text-xs ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
-                Compuestos
-              </span>
+            <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-400 to-blue-600"></div>
+            <div className="p-6">
+              <div className="flex items-start justify-between mb-4">
+                <div className="flex items-center gap-3">
+                  <div className={`p-3 rounded-xl shadow-sm ${
+                    isDark
+                      ? 'bg-blue-900/30 border border-blue-800/50'
+                      : 'bg-gradient-to-br from-blue-50 to-blue-100 border border-blue-200'
+                  }`}>
+                    <Package className="w-6 h-6 text-blue-600" />
+                  </div>
+                  <div>
+                    <p className={`text-sm font-medium ${isDark ? 'text-gray-400' : 'text-black'}`}>
+                      Total Productos
+                    </p>
+                    <p className={`text-3xl font-bold mt-1 ${isDark ? 'text-white' : 'text-slate-900'}`}>
+                      {stats.totalProducts}
+                    </p>
+                  </div>
+                </div>
+              </div>
+              <div className="flex items-center gap-4 text-sm">
+                <span className={`flex items-center gap-1 ${isDark ? 'text-green-400' : 'text-green-600'}`}>
+                  <CheckCircle className="w-4 h-4" />
+                  {stats.activeProducts} activos
+                </span>
+                <span className={`flex items-center gap-1 ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
+                  <Layers className="w-4 h-4" />
+                  {stats.compositeProducts} compuestos
+                </span>
+              </div>
             </div>
-            <p className={`text-xl font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>
-              {stats.compositeProducts}
-            </p>
           </motion.div>
 
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.15 }}
-            className={`p-4 rounded-xl ${isDark ? 'bg-gray-800' : 'bg-white'} shadow-sm`}
-          >
-            <div className="flex items-center gap-2 mb-2">
-              <Box className={`w-4 h-4 ${isDark ? 'text-orange-400' : 'text-orange-500'}`} />
-              <span className={`text-xs ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
-                Con Tracking
-              </span>
-            </div>
-            <p className={`text-xl font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>
-              {stats.withTracking}
-            </p>
-          </motion.div>
-
+          {/* Servicios */}
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.2 }}
-            className={`p-4 rounded-xl ${isDark ? 'bg-gray-800' : 'bg-white'} shadow-sm`}
+            className={`relative overflow-hidden ${
+              isDark
+                ? 'bg-gradient-to-br from-gray-800 to-gray-900 border-gray-700'
+                : 'bg-gradient-to-br from-slate-50 to-white border-slate-200'
+            } rounded-2xl border shadow-xl`}
           >
-            <div className="flex items-center gap-2 mb-2">
-              <Settings className={`w-4 h-4 ${isDark ? 'text-cyan-400' : 'text-cyan-500'}`} />
-              <span className={`text-xs ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
-                Servicios
-              </span>
+            <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-cyan-400 to-cyan-600"></div>
+            <div className="p-6">
+              <div className="flex items-start justify-between mb-4">
+                <div className="flex items-center gap-3">
+                  <div className={`p-3 rounded-xl shadow-sm ${
+                    isDark
+                      ? 'bg-cyan-900/30 border border-cyan-800/50'
+                      : 'bg-gradient-to-br from-cyan-50 to-cyan-100 border border-cyan-200'
+                  }`}>
+                    <Settings className="w-6 h-6 text-cyan-600" />
+                  </div>
+                  <div>
+                    <p className={`text-sm font-medium ${isDark ? 'text-gray-400' : 'text-black'}`}>
+                      Servicios Internos
+                    </p>
+                    <p className={`text-3xl font-bold mt-1 ${isDark ? 'text-white' : 'text-slate-900'}`}>
+                      {stats.totalServices}
+                    </p>
+                  </div>
+                </div>
+              </div>
+              <div className="flex items-center gap-4 text-sm">
+                <span className={`flex items-center gap-1 ${isDark ? 'text-orange-400' : 'text-orange-600'}`}>
+                  <Box className="w-4 h-4" />
+                  {stats.withTracking} con tracking
+                </span>
+              </div>
             </div>
-            <p className={`text-xl font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>
-              {stats.totalServices}
-            </p>
           </motion.div>
 
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.25 }}
-            className={`p-4 rounded-xl ${isDark ? 'bg-green-900/30' : 'bg-green-50'} shadow-sm`}
-          >
-            <div className="flex items-center gap-2 mb-2">
-              <TrendingUp className="w-4 h-4 text-green-500" />
-              <span className={`text-xs ${isDark ? 'text-green-400' : 'text-green-600'}`}>
-                Saludable
-              </span>
-            </div>
-            <p className={`text-xl font-bold text-green-500`}>
-              {stats.healthyMargins}
-            </p>
-          </motion.div>
-
+          {/* Márgenes Saludables */}
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.3 }}
-            className={`p-4 rounded-xl ${isDark ? 'bg-yellow-900/30' : 'bg-yellow-50'} shadow-sm`}
+            className={`relative overflow-hidden ${
+              isDark
+                ? 'bg-gradient-to-br from-gray-800 to-gray-900 border-gray-700'
+                : 'bg-gradient-to-br from-slate-50 to-white border-slate-200'
+            } rounded-2xl border shadow-xl`}
           >
-            <div className="flex items-center gap-2 mb-2">
-              <AlertTriangle className="w-4 h-4 text-yellow-500" />
-              <span className={`text-xs ${isDark ? 'text-yellow-400' : 'text-yellow-600'}`}>
-                Advertencia
-              </span>
+            <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-green-400 to-green-600"></div>
+            <div className="p-6">
+              <div className="flex items-start justify-between mb-4">
+                <div className="flex items-center gap-3">
+                  <div className={`p-3 rounded-xl shadow-sm ${
+                    isDark
+                      ? 'bg-green-900/30 border border-green-800/50'
+                      : 'bg-gradient-to-br from-green-50 to-green-100 border border-green-200'
+                  }`}>
+                    <TrendingUp className="w-6 h-6 text-green-600" />
+                  </div>
+                  <div>
+                    <p className={`text-sm font-medium ${isDark ? 'text-gray-400' : 'text-black'}`}>
+                      Márgenes Saludables
+                    </p>
+                    <p className={`text-3xl font-bold mt-1 text-green-500`}>
+                      {stats.healthyMargins}
+                    </p>
+                  </div>
+                </div>
+              </div>
+              <div className="flex items-center gap-4 text-sm">
+                <span className={isDark ? 'text-gray-400' : 'text-gray-500'}>
+                  Productos con margen positivo
+                </span>
+              </div>
             </div>
-            <p className={`text-xl font-bold text-yellow-500`}>
-              {stats.warningMargins}
-            </p>
           </motion.div>
 
+          {/* Alertas de Margen */}
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.35 }}
-            className={`p-4 rounded-xl ${isDark ? 'bg-red-900/30' : 'bg-red-50'} shadow-sm`}
+            transition={{ delay: 0.4 }}
+            className={`relative overflow-hidden ${
+              isDark
+                ? 'bg-gradient-to-br from-gray-800 to-gray-900 border-gray-700'
+                : 'bg-gradient-to-br from-slate-50 to-white border-slate-200'
+            } rounded-2xl border shadow-xl`}
           >
-            <div className="flex items-center gap-2 mb-2">
-              <AlertCircle className="w-4 h-4 text-red-500" />
-              <span className={`text-xs ${isDark ? 'text-red-400' : 'text-red-600'}`}>
-                Crítico
-              </span>
+            <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-amber-400 to-red-500"></div>
+            <div className="p-6">
+              <div className="flex items-start justify-between mb-4">
+                <div className="flex items-center gap-3">
+                  <div className={`p-3 rounded-xl shadow-sm ${
+                    isDark
+                      ? 'bg-amber-900/30 border border-amber-800/50'
+                      : 'bg-gradient-to-br from-amber-50 to-amber-100 border border-amber-200'
+                  }`}>
+                    <AlertTriangle className="w-6 h-6 text-amber-600" />
+                  </div>
+                  <div>
+                    <p className={`text-sm font-medium ${isDark ? 'text-gray-400' : 'text-black'}`}>
+                      Alertas de Margen
+                    </p>
+                    <p className={`text-3xl font-bold mt-1 ${
+                      stats.criticalMargins > 0 ? 'text-red-500' : stats.warningMargins > 0 ? 'text-yellow-500' : isDark ? 'text-white' : 'text-slate-900'
+                    }`}>
+                      {stats.warningMargins + stats.criticalMargins}
+                    </p>
+                  </div>
+                </div>
+              </div>
+              <div className="flex items-center gap-4 text-sm">
+                <span className="flex items-center gap-1 text-yellow-500">
+                  <AlertTriangle className="w-4 h-4" />
+                  {stats.warningMargins} advertencia
+                </span>
+                <span className="flex items-center gap-1 text-red-500">
+                  <AlertCircle className="w-4 h-4" />
+                  {stats.criticalMargins} crítico
+                </span>
+              </div>
             </div>
-            <p className={`text-xl font-bold text-red-500`}>
-              {stats.criticalMargins}
-            </p>
           </motion.div>
         </div>
 
