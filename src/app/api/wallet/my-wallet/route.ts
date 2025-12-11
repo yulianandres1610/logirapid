@@ -127,7 +127,6 @@ export async function GET(request: NextRequest) {
           wt.source_type,
           wt.source_company_id,
           wt.source_user_id,
-          wt.source_customer_id,
           wt.target_type,
           wt.target_company_id,
           wt.target_user_id,
@@ -146,14 +145,12 @@ export async function GET(request: NextRequest) {
           CASE
             WHEN wt.source_type = 'company' THEN sc.legalname
             WHEN wt.source_type = 'user' THEN COALESCE(su.firstname || ' ' || su.lastname, su.email)
-            WHEN wt.source_type = 'customer' THEN scu.firstname || ' ' || scu.lastname
             WHEN wt.source_type = 'system' THEN 'Sistema'
             ELSE 'Desconocido'
           END as source_name,
           CASE
             WHEN wt.source_type = 'company' THEN sc.walletnumber
             WHEN wt.source_type = 'user' THEN su.wallet_number
-            WHEN wt.source_type = 'customer' THEN scu.wallet_number
             ELSE NULL
           END as source_wallet_number,
           -- Target names
@@ -167,7 +164,6 @@ export async function GET(request: NextRequest) {
         FROM wallet_transactions wt
         LEFT JOIN companies sc ON wt.source_company_id = sc.id
         LEFT JOIN users su ON wt.source_user_id = su.id
-        LEFT JOIN customers scu ON wt.source_customer_id = scu.id
         LEFT JOIN companies tc ON wt.target_company_id = tc.id
         LEFT JOIN users tu ON wt.target_user_id = tu.id
         LEFT JOIN customers tcu ON wt.target_customer_id = tcu.id

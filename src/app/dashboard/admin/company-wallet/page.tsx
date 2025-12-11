@@ -2151,14 +2151,15 @@ export default function CompanyWalletPage() {
         )}
       </AnimatePresence>
 
-      {/* Password verification dialog - shown as overlay */}
+      {/* Password verification dialog - shown as full screen gate */}
       <PasswordConfirmDialog
         isOpen={!isAuthenticated && showPasswordDialog}
-        onClose={() => router.back()}
+        onClose={() => {}} // No-op, preventClose handles this
         onSuccess={() => {
           setIsAuthenticated(true)
           setShowPasswordDialog(false)
         }}
+        preventClose={true}
       />
     </DashboardLayout>
   )

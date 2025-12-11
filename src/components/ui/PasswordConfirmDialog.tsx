@@ -11,6 +11,7 @@ interface PasswordConfirmDialogProps {
   onSuccess: () => void
   title?: string
   message?: string
+  preventClose?: boolean
 }
 
 export default function PasswordConfirmDialog({
@@ -18,7 +19,8 @@ export default function PasswordConfirmDialog({
   onClose,
   onSuccess,
   title = 'Verificacion de Seguridad',
-  message = 'Ingresa tu contrasena para continuar.'
+  message = 'Ingresa tu contrasena para continuar.',
+  preventClose = false
 }: PasswordConfirmDialogProps) {
   const { theme } = useTheme()
   const [password, setPassword] = useState('')
@@ -61,6 +63,10 @@ export default function PasswordConfirmDialog({
   }
 
   const handleClose = () => {
+    if (preventClose) {
+      setError('Debe ingresar la contrasena para acceder al wallet')
+      return
+    }
     setPassword('')
     setError(null)
     setShowPassword(false)
@@ -71,16 +77,19 @@ export default function PasswordConfirmDialog({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
-      {/* Backdrop */}
+      {/* Backdrop - solid color, no transparency */}
       <div
-        className="absolute inset-0 bg-black/50"
+        className={cn(
+          "absolute inset-0",
+          theme === 'dark' ? "bg-gray-900" : "bg-gray-100"
+        )}
         onClick={handleClose}
       />
 
-      {/* Dialog - Simple background */}
+      {/* Dialog */}
       <div className={cn(
         "relative w-full max-w-sm mx-4 p-6 rounded-xl shadow-lg",
-        theme === 'dark' ? "bg-gray-900" : "bg-white"
+        theme === 'dark' ? "bg-gray-800" : "bg-white"
       )}>
         <form onSubmit={handleSubmit}>
           {/* Password Input */}
@@ -102,7 +111,7 @@ export default function PasswordConfirmDialog({
               className={cn(
                 "w-full pl-10 pr-12 py-3 border rounded-lg focus:ring-2 focus:outline-none",
                 theme === 'dark'
-                  ? "bg-gray-800 border-gray-700 text-white placeholder:text-gray-500 focus:ring-gray-600 focus:border-gray-600"
+                  ? "bg-gray-700 border-gray-600 text-white placeholder:text-gray-400 focus:ring-gray-500 focus:border-gray-500"
                   : "bg-gray-50 border-gray-200 text-gray-900 placeholder:text-gray-400 focus:ring-gray-400 focus:border-gray-400"
               )}
               disabled={loading}
@@ -142,7 +151,7 @@ export default function PasswordConfirmDialog({
             className={cn(
               "w-full mt-4 py-3 rounded-lg font-medium transition-all disabled:opacity-50 flex items-center justify-center gap-2",
               theme === 'dark'
-                ? "bg-gray-700 text-white hover:bg-gray-600"
+                ? "bg-gray-600 text-white hover:bg-gray-500"
                 : "bg-gray-800 text-white hover:bg-gray-700"
             )}
           >
