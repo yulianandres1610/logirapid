@@ -612,28 +612,8 @@ export default function CompanyWalletPage() {
     }
   }
 
-  // Password verification gate
-  if (!isAuthenticated) {
-    return (
-      <DashboardLayout>
-        <div className={cn(
-          "min-h-screen flex items-center justify-center",
-          theme === 'dark' ? 'bg-gray-900' : 'bg-gray-50'
-        )}>
-          <PasswordConfirmDialog
-            isOpen={showPasswordDialog}
-            onClose={() => router.back()}
-            onSuccess={() => {
-              setIsAuthenticated(true)
-              setShowPasswordDialog(false)
-            }}
-            title="Acceso a Wallet de Empresa"
-            message="Por favor ingresa tu contrasena para acceder al wallet de la empresa."
-          />
-        </div>
-      </DashboardLayout>
-    )
-  }
+  // Password verification dialog (shown as overlay, not blocking layout)
+  // The dialog will be rendered at the end of the main return
 
   if (error && !companyWallet) {
     return (
@@ -2170,6 +2150,16 @@ export default function CompanyWalletPage() {
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* Password verification dialog - shown as overlay */}
+      <PasswordConfirmDialog
+        isOpen={!isAuthenticated && showPasswordDialog}
+        onClose={() => router.back()}
+        onSuccess={() => {
+          setIsAuthenticated(true)
+          setShowPasswordDialog(false)
+        }}
+      />
     </DashboardLayout>
   )
 }

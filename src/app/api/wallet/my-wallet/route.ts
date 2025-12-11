@@ -79,16 +79,16 @@ export async function GET(request: NextRequest) {
 
     const user = userResult.rows[0]
 
-    // Get user's company info
-    const companyResult = await db.query(`
-      SELECT c.id, c.legalname, c.walletnumber
-      FROM companies c
-      INNER JOIN user_companies uc ON c.id = uc.company_id
-      WHERE uc.user_id = $1
-      LIMIT 1
-    `, [userId])
-
-    const company = companyResult.rows[0] || null
+    // Get user's company info from JWT payload
+    let company = null
+    if (payload.companyId) {
+      const companyResult = await db.query(`
+        SELECT id, legalname, walletnumber
+        FROM companies
+        WHERE id = $1
+      `, [payload.companyId])
+      company = companyResult.rows[0] || null
+    }
 
     // Format wallet data
     const walletData = {
