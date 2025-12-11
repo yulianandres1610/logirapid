@@ -65,8 +65,7 @@ export async function GET(request: NextRequest) {
         stripe_payouts_enabled,
         stripe_charges_enabled,
         stripe_details_submitted,
-        stripe_connected_at,
-        created_at
+        stripe_connected_at
       FROM users
       WHERE id = $1
     `, [userId])
@@ -114,8 +113,7 @@ export async function GET(request: NextRequest) {
         id: company.id,
         name: company.legalname,
         walletNumber: company.walletnumber
-      } : null,
-      createdAt: user.created_at
+      } : null
     }
 
     // Get recent transactions if requested
