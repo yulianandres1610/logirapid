@@ -305,7 +305,6 @@ export function Sidebar({ isCollapsed, onToggle }: SidebarProps) {
     { icon: BarChart3, label: "Tasa de Cambio", href: "/dashboard/admin/exchange-rate" },
     { icon: Users, label: "Usuarios", href: "/dashboard/admin/users" },
     { icon: Building2, label: "Empresas", href: "/dashboard/admin/companies" },
-    { icon: Box, label: "Lista de Precios", href: "/dashboard/admin/lista-precios" },
     { icon: Settings, label: "Catálogo Productos", href: "/dashboard/admin/product-config" },
     { icon: UserCheck, label: "CRM", href: "/dashboard/admin/crm" },
     { icon: Wallet, label: "Wallet Manager", href: "/dashboard/admin/wallet" },
@@ -313,7 +312,6 @@ export function Sidebar({ isCollapsed, onToggle }: SidebarProps) {
     { icon: Smartphone, label: "Recarga", href: "/dashboard/admin/recharge" },
     { icon: Package, label: "Rastreador", href: "/dashboard/admin/tracker" },
     { icon: ShoppingCart, label: "Mercado", href: "/dashboard/admin/marketplace" },
-    { icon: Percent, label: "Comisiones", href: "/dashboard/admin/comisiones" },
     {
       icon: ShoppingBag,
       label: "Paquetería",
@@ -338,7 +336,6 @@ export function Sidebar({ isCollapsed, onToggle }: SidebarProps) {
     { icon: Users, label: "Usuarios", href: "/dashboard/agency-admin/users", requiredService: null },
     { icon: Building2, label: "Sucursales", href: "/dashboard/agency-admin/sucursales", requiredService: null },
     { icon: UserCheck, label: "CRM", href: "/dashboard/agency-admin/crm", requiredService: null },
-    { icon: Box, label: "Lista de Precios", href: "/dashboard/agency-admin/lista-precios", requiredService: null },
     { icon: Settings, label: "Catálogo Productos", href: "/dashboard/admin/product-config", requiredService: null },
     { icon: Package, label: "Rastreador", href: "/dashboard/agency-admin/tracker", requiredService: 'tracker' },
     { icon: Wallet, label: "Mi Wallet", href: "/dashboard/admin/company-wallet", requiredService: 'wallet' },
@@ -346,7 +343,6 @@ export function Sidebar({ isCollapsed, onToggle }: SidebarProps) {
     { icon: Smartphone, label: "Recargas", href: "/dashboard/agency-admin/recargas", requiredService: 'recharge' },
     { icon: BarChart3, label: "Tasa de Cambio", href: "/dashboard/agency-admin/exchange-rate", requiredService: 'exchange' },
     { icon: ShoppingCart, label: "Mercado", href: "/dashboard/agency-admin/marketplace", requiredService: 'marketplace' },
-    { icon: Percent, label: "Comisiones", href: "/dashboard/admin/comisiones", requiredService: null },
     {
       icon: ShoppingBag,
       label: "Paquetería",
