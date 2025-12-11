@@ -33,6 +33,8 @@ import { DashboardLayout } from '@/components/layout/dashboard-layout'
 import { useProductCatalog, useCompanyProductPricing, useProviders } from '@/hooks/useProductCatalog'
 import { useAuth } from '@/hooks/useAuth'
 import { BranchPricingModal } from '@/components/pricing/BranchPricingModal'
+import ProductModal, { ProductData } from '@/components/products/ProductModal'
+import ProductServicesModal from '@/components/products/ProductServicesModal'
 
 const categoryIcons: Record<string, typeof Package> = {
   paqueteria: Package,
@@ -113,6 +115,20 @@ export default function ProductCatalogPage() {
   const [editingCompanyPrices, setEditingCompanyPrices] = useState<Record<number, EditingCompanyPrice>>({})
   const [saving, setSaving] = useState(false)
   const [branchPricingModalOpen, setBranchPricingModalOpen] = useState(false)
+  const [productModalOpen, setProductModalOpen] = useState(false)
+  const [editingProduct, setEditingProduct] = useState<ProductData | null>(null)
+
+  // Services modal state (FASE 2)
+  const [servicesModalOpen, setServicesModalOpen] = useState(false)
+  const [servicesProductId, setServicesProductId] = useState<number | null>(null)
+  const [servicesProductName, setServicesProductName] = useState('')
+
+  // Handle opening services modal
+  const handleOpenServicesModal = (productId: number, productName: string) => {
+    setServicesProductId(productId)
+    setServicesProductName(productName)
+    setServicesModalOpen(true)
+  }
 
   // Fetch companies on mount
   useEffect(() => {
@@ -214,6 +230,59 @@ export default function ProductCatalogPage() {
     }
 
     return { valid: errors.length === 0, errors }
+  }
+
+  // Handle opening product modal for edit
+  const handleEditProduct = (product: any) => {
+    setEditingProduct({
+      id: product.id,
+      code: product.code,
+      name: product.name,
+      description: product.description || '',
+      service_category: product.serviceCategory,
+      product_type: product.productType,
+      mi_costo: product.miCosto || 0,
+      precio_mayorista: product.precioMayorista || 0,
+      precio_publico: product.precioPublico || 0,
+      dimensions: product.dimensions || '',
+      weight_capacity: product.weightCapacity || '',
+      unit_type: product.unitType || 'unit',
+      is_active: product.isActive !== false,
+      display_order: product.displayOrder || 0
+    })
+    setProductModalOpen(true)
+  }
+
+  // Handle saving product (create or update)
+  const handleSaveProduct = async (productData: ProductData) => {
+    const isCreating = !productData.id
+
+    const response = await fetch('/api/products', {
+      method: isCreating ? 'POST' : 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(isCreating ? productData : {
+        products: [{
+          id: productData.id,
+          mi_costo: productData.mi_costo,
+          precio_mayorista: productData.precio_mayorista,
+          precio_publico: productData.precio_publico
+        }],
+        notes: 'Actualizado desde modal de producto'
+      })
+    })
+
+    const result = await response.json()
+
+    if (!result.success) {
+      throw new Error(result.error || 'Error al guardar producto')
+    }
+
+    showNotification('success', isCreating ? 'Producto creado' : 'Producto actualizado',
+      isCreating ? `${productData.name} ha sido creado` : `${productData.name} ha sido actualizado`)
+
+    // Refresh the catalog
+    refresh()
+    setEditingProduct(null)
   }
 
   const handleSaveAll = async () => {
@@ -726,6 +795,26 @@ export default function ProductCatalogPage() {
           {/* Action Buttons */}
           <div className="flex flex-col sm:flex-row gap-3 w-full lg:w-auto">
             <div className="flex gap-3 w-full sm:w-auto">
+              {/* New Product Button - Only for SUPER_ADMIN in catalog view */}
+              {isSuperAdmin && !selectedCompanyId && (
+                <button
+                  onClick={() => {
+                    setEditingProduct(null)
+                    setProductModalOpen(true)
+                  }}
+                  className={cn(
+                    "inline-flex whitespace-nowrap text-sm",
+                    "px-6 py-3 flex-1 sm:flex-none items-center justify-center gap-2 h-12",
+                    "bg-green-600 hover:bg-green-700 text-white font-medium rounded-lg",
+                    "transition-all duration-200 shadow-sm hover:shadow-md",
+                    "focus:outline-none focus:ring-2 focus:ring-green-500/20"
+                  )}
+                >
+                  <Plus className="w-4 h-4" />
+                  Nuevo Producto
+                </button>
+              )}
+
               {/* Refresh Button */}
               <button
                 onClick={() => selectedCompanyId ? refreshCompanyPricing() : refresh()}
@@ -953,9 +1042,9 @@ export default function ProductCatalogPage() {
                                       <div className="flex flex-col items-center">
                                         <div className="flex items-center gap-1">
                                           <DollarSign className="w-3 h-3 text-amber-500" />
-                                          Costo
+                                          Mi Costo
                                         </div>
-                                        <span className="text-[10px] font-normal opacity-60">(Proveedor)</span>
+                                        <span className="text-[10px] font-normal opacity-60">(Editable)</span>
                                       </div>
                                     </th>
                                     <th className="px-4 py-3 w-36 text-center">
@@ -972,16 +1061,15 @@ export default function ProductCatalogPage() {
                                     </th>
                                     <th className="px-4 py-3 w-32 text-center">
                                       <div className="flex flex-col items-center">
-                                        <span>Margen Mayorista</span>
+                                        <span>Margen</span>
                                         <span className="text-[10px] font-normal opacity-60">(P.May - Costo)</span>
                                       </div>
                                     </th>
-                                    <th className="px-4 py-3 w-32 text-center">
-                                      <div className="flex flex-col items-center">
-                                        <span>Margen Cliente</span>
-                                        <span className="text-[10px] font-normal opacity-60">(P.Pub - P.May)</span>
-                                      </div>
-                                    </th>
+                                    {isSuperAdmin && (
+                                      <th className="px-4 py-3 w-24 text-center">
+                                        Acciones
+                                      </th>
+                                    )}
                                   </>
                                 )}
                               </tr>
@@ -1236,16 +1324,10 @@ export default function ProductCatalogPage() {
                                   const precioMayorista = editing?.precioMayorista ?? product.precioMayorista
                                   const precioPublico = editing?.precioPublico ?? product.precioPublico
 
-                                  // Calculate Margen Mayorista (precioMayorista - miCosto)
-                                  const margenMayorista = precioMayorista - miCosto
-                                  const margenMayoristaPct = miCosto > 0
-                                    ? ((margenMayorista / miCosto) * 100).toFixed(1)
-                                    : '0'
-
-                                  // Calculate Margen Cliente (precioPublico - precioMayorista)
-                                  const margenCliente = precioPublico - precioMayorista
-                                  const margenClientePct = precioMayorista > 0
-                                    ? ((margenCliente / precioMayorista) * 100).toFixed(1)
+                                  // Calculate Margen (precioMayorista - miCosto)
+                                  const margen = precioMayorista - miCosto
+                                  const margenPct = miCosto > 0
+                                    ? ((margen / miCosto) * 100).toFixed(1)
                                     : '0'
 
                                   const hasEdits = editing !== undefined
@@ -1286,14 +1368,27 @@ export default function ProductCatalogPage() {
                                           )}
                                         </div>
                                       </td>
+                                      {/* Mi Costo - EDITABLE */}
                                       <td className="px-4 py-3 text-center">
-                                        <span className={cn(
-                                          "text-sm font-medium",
-                                          theme === 'dark' ? "text-amber-400" : "text-amber-600"
-                                        )}>
-                                          ${miCosto.toFixed(2)}
-                                        </span>
+                                        <input
+                                          type="number"
+                                          step="0.01"
+                                          value={miCosto}
+                                          onChange={(e) => handlePriceChange(
+                                            product.id,
+                                            'miCosto',
+                                            parseFloat(e.target.value) || 0,
+                                            product
+                                          )}
+                                          className={cn(
+                                            "w-full max-w-[100px] px-2 py-1 text-center rounded border text-sm mx-auto",
+                                            theme === 'dark'
+                                              ? "bg-gray-900 border-gray-700 text-amber-400"
+                                              : "bg-white border-gray-200 text-amber-600"
+                                          )}
+                                        />
                                       </td>
+                                      {/* P. Mayorista */}
                                       <td className="px-4 py-3 text-center">
                                         <input
                                           type="number"
@@ -1313,6 +1408,7 @@ export default function ProductCatalogPage() {
                                           )}
                                         />
                                       </td>
+                                      {/* P. Publico */}
                                       <td className="px-4 py-3 text-center">
                                         <input
                                           type="number"
@@ -1332,32 +1428,60 @@ export default function ProductCatalogPage() {
                                           )}
                                         />
                                       </td>
-                                      {/* Margen Mayorista */}
+                                      {/* Margen */}
                                       <td className="px-4 py-3 text-center">
                                         <span className={cn(
                                           "text-sm font-medium whitespace-nowrap",
-                                          margenMayorista > 0
-                                            ? "text-blue-500"
-                                            : margenMayorista < 0
-                                              ? "text-red-500"
-                                              : theme === 'dark' ? "text-gray-400" : "text-gray-500"
-                                        )}>
-                                          ${margenMayorista.toFixed(2)} ({margenMayoristaPct}%)
-                                        </span>
-                                      </td>
-                                      {/* Margen Cliente */}
-                                      <td className="px-4 py-3 text-center">
-                                        <span className={cn(
-                                          "text-sm font-medium whitespace-nowrap",
-                                          margenCliente > 0
+                                          margen > 0
                                             ? "text-green-500"
-                                            : margenCliente < 0
+                                            : margen < 0
                                               ? "text-red-500"
                                               : theme === 'dark' ? "text-gray-400" : "text-gray-500"
                                         )}>
-                                          ${margenCliente.toFixed(2)} ({margenClientePct}%)
+                                          ${margen.toFixed(2)} ({margenPct}%)
                                         </span>
                                       </td>
+                                      {/* Acciones */}
+                                      {isSuperAdmin && (
+                                        <td className="px-4 py-3 text-center">
+                                          <div className="flex items-center justify-center gap-1">
+                                            {/* Editar Producto - solo cuando NO hay empresa seleccionada */}
+                                            {!isViewingCompanyPrices && (
+                                              <button
+                                                onClick={() => handleEditProduct(product)}
+                                                className={cn(
+                                                  "p-1.5 rounded-lg transition-colors",
+                                                  theme === 'dark'
+                                                    ? "hover:bg-gray-700 text-gray-400 hover:text-blue-400"
+                                                    : "hover:bg-gray-100 text-gray-500 hover:text-blue-600"
+                                                )}
+                                                title="Editar producto"
+                                              >
+                                                <Edit2 className="w-4 h-4" />
+                                              </button>
+                                            )}
+                                            {/* Servicios - solo cuando HAY empresa seleccionada */}
+                                            {isViewingCompanyPrices && selectedCompanyId && (
+                                              <button
+                                                onClick={() => handleOpenServicesModal(
+                                                  product.productId || product.id,
+                                                  product.name
+                                                )}
+                                                className={cn(
+                                                  "p-1.5 rounded-lg transition-colors flex items-center gap-1",
+                                                  theme === 'dark'
+                                                    ? "hover:bg-gray-700 text-gray-400 hover:text-purple-400"
+                                                    : "hover:bg-gray-100 text-gray-500 hover:text-purple-600"
+                                                )}
+                                                title="Gestionar servicios del producto"
+                                              >
+                                                <Layers className="w-4 h-4" />
+                                                <span className="text-xs">Servicios</span>
+                                              </button>
+                                            )}
+                                          </div>
+                                        </td>
+                                      )}
                                     </tr>
                                   )
                                 }
@@ -1412,6 +1536,32 @@ export default function ProductCatalogPage() {
             onClose={() => setBranchPricingModalOpen(false)}
             matrixCompanyId={selectedCompany.id}
             matrixCompanyName={selectedCompany.legalName}
+          />
+        )}
+
+        {/* Product Modal - Create/Edit */}
+        <ProductModal
+          isOpen={productModalOpen}
+          product={editingProduct}
+          onClose={() => {
+            setProductModalOpen(false)
+            setEditingProduct(null)
+          }}
+          onSave={handleSaveProduct}
+        />
+
+        {/* Product Services Modal - FASE 2 */}
+        {selectedCompanyId && servicesProductId && (
+          <ProductServicesModal
+            isOpen={servicesModalOpen}
+            onClose={() => {
+              setServicesModalOpen(false)
+              setServicesProductId(null)
+              setServicesProductName('')
+            }}
+            companyId={selectedCompanyId}
+            productId={servicesProductId}
+            productName={servicesProductName}
           />
         )}
     </DashboardLayout>
