@@ -7,49 +7,18 @@ import { useTheme } from '@/contexts/theme-context'
 import { useNotifications } from '@/contexts/NotificationContext'
 import {
   Package,
-  Settings,
-  ChevronDown,
-  ChevronRight,
   Plus,
   Edit2,
   Trash2,
   DollarSign,
-  AlertTriangle,
-  CheckCircle,
-  Info,
   RefreshCw,
   Search,
-  Filter,
-  Box,
-  Layers,
-  TrendingUp,
-  AlertCircle,
-  Percent
+  Building2,
+  X,
+  Save
 } from 'lucide-react'
 
-interface ProductService {
-  id: number
-  productId: number
-  serviceCode: string
-  serviceName: string
-  description: string | null
-  sequenceOrder: number
-  inclusionType: 'included' | 'optional' | 'addon'
-  basePrice: number
-  generatesBoxTracking: boolean
-  requiresPriorBox: boolean
-  isMandatory: boolean
-  isActive: boolean
-  companyPricing?: {
-    id: number
-    miCosto: number
-    precioVenta: number
-    margen: number
-    isActive: boolean
-  } | null
-  effectivePrice: number
-}
-
+// Interfaces simplificadas
 interface Product {
   id: number
   code: string
@@ -57,61 +26,46 @@ interface Product {
   description: string | null
   category: string
   miCosto: number
-  precioMayorista: number
-  precioPublico: number
-  isComposite: boolean
-  hasBoxTracking: boolean
+  providerName: string | null
   isActive: boolean
-  services: ProductService[]
-  companyPricing?: {
-    miCosto: number
-    precioVenta: number
-    margen: number
-  } | null
 }
 
-interface MarginHealth {
-  productId: number
-  productName: string
-  miCosto: number
-  precioVenta: number
-  margenBruto: number
-  totalComisiones: number
-  margenNeto: number
-  margenPorcentaje: number
-  status: 'healthy' | 'warning' | 'critical'
-  configuredCommissions: {
-    activityType: string
-    role: string
-    value: number
-    type: string
-  }[]
+interface Company {
+  id: number
+  legalName: string
+  status: string
 }
+
+const CATEGORIES = [
+  { id: 'paqueteria', name: 'Paqueteria' },
+  { id: 'remesa', name: 'Remesa' },
+  { id: 'recarga', name: 'Recarga' },
+  { id: 'mercado', name: 'Mercado' }
+]
 
 export default function ProductConfigPage() {
   const { theme } = useTheme()
   const { showNotification } = useNotifications()
   const isDark = theme === 'dark'
 
+  // States
   const [products, setProducts] = useState<Product[]>([])
-  const [marginHealth, setMarginHealth] = useState<MarginHealth[]>([])
+  const [companies, setCompanies] = useState<Company[]>([])
   const [loading, setLoading] = useState(true)
-  const [expandedProducts, setExpandedProducts] = useState<Set<number>>(new Set())
   const [searchTerm, setSearchTerm] = useState('')
   const [categoryFilter, setCategoryFilter] = useState<string>('all')
-  const [statusFilter, setStatusFilter] = useState<string>('all')
-  const [selectedProduct, setSelectedProduct] = useState<Product | null>(null)
-  const [showServiceModal, setShowServiceModal] = useState(false)
-  const [showPricingModal, setShowPricingModal] = useState(false)
-  const [editingService, setEditingService] = useState<ProductService | null>(null)
-  const [activeTab, setActiveTab] = useState<'productos' | 'precios' | 'comisiones'>('productos')
-  const [commissions, setCommissions] = useState<any[]>([])
-  const [loadingCommissions, setLoadingCommissions] = useState(false)
-  const [editingCommission, setEditingCommission] = useState<any | null>(null)
-  const [showCommissionModal, setShowCommissionModal] = useState(false)
-  const [showCreateProductModal, setShowCreateProductModal] = useState(false)
+  const [activeTab, setActiveTab] = useState<'productos' | 'precios'>('productos')
 
-  // Fetch products and their services
+  // Modals
+  const [showCreateModal, setShowCreateModal] = useState(false)
+  const [editingProduct, setEditingProduct] = useState<Product | null>(null)
+
+  // Precios por empresa
+  const [selectedCompany, setSelectedCompany] = useState<number | null>(null)
+  const [companyPrices, setCompanyPrices] = useState<Record<number, number | null>>({})
+  const [savingPrices, setSavingPrices] = useState(false)
+
+  // Fetch products
   const fetchProducts = useCallback(async () => {
     try {
       setLoading(true)
@@ -119,49 +73,17 @@ export default function ProductConfigPage() {
       const data = await response.json()
 
       if (data.success) {
-        // Fetch services for each product
-        const productsWithServices = await Promise.all(
-          data.data.products.map(async (product: any) => {
-            try {
-              const servicesRes = await fetch(`/api/products/${product.id}/services`)
-              const servicesData = await servicesRes.json()
-
-              // Map API fields to our interface
-              return {
-                id: product.id,
-                code: product.code,
-                name: product.name,
-                description: product.description,
-                category: product.service_category,
-                miCosto: parseFloat(product.mi_costo) || 0,
-                precioMayorista: parseFloat(product.precio_mayorista) || 0,
-                precioPublico: parseFloat(product.precio_publico) || 0,
-                isComposite: product.is_composite || false,
-                hasBoxTracking: product.has_box_tracking || false,
-                isActive: product.is_active !== false,
-                services: servicesData.success ? servicesData.data.services : [],
-                companyPricing: null
-              }
-            } catch {
-              return {
-                id: product.id,
-                code: product.code,
-                name: product.name,
-                description: product.description,
-                category: product.service_category,
-                miCosto: parseFloat(product.mi_costo) || 0,
-                precioMayorista: parseFloat(product.precio_mayorista) || 0,
-                precioPublico: parseFloat(product.precio_publico) || 0,
-                isComposite: product.is_composite || false,
-                hasBoxTracking: product.has_box_tracking || false,
-                isActive: product.is_active !== false,
-                services: [],
-                companyPricing: null
-              }
-            }
-          })
-        )
-        setProducts(productsWithServices)
+        const mappedProducts = data.data.products.map((p: any) => ({
+          id: p.id,
+          code: p.code,
+          name: p.name,
+          description: p.description,
+          category: p.service_category,
+          miCosto: parseFloat(p.mi_costo) || 0,
+          providerName: p.provider_company_name || null,
+          isActive: p.is_active !== false
+        }))
+        setProducts(mappedProducts)
       }
     } catch (error) {
       console.error('Error fetching products:', error)
@@ -171,1084 +93,460 @@ export default function ProductConfigPage() {
     }
   }, [showNotification])
 
-  // Fetch margin health data
-  const fetchMarginHealth = useCallback(async () => {
+  // Fetch companies
+  const fetchCompanies = useCallback(async () => {
     try {
-      const response = await fetch('/api/commissions/margin-health')
+      const response = await fetch('/api/companies')
       const data = await response.json()
-
       if (data.success) {
-        setMarginHealth(data.data)
+        // Filter only active companies (not LogiRapid itself)
+        const filtered = data.data.filter((c: any) => c.status === 'active' && c.id !== 1)
+        setCompanies(filtered.map((c: any) => ({
+          id: c.id,
+          legalName: c.legalname || c.legalName,
+          status: c.status
+        })))
       }
     } catch (error) {
-      console.error('Error fetching margin health:', error)
+      console.error('Error fetching companies:', error)
     }
   }, [])
 
-  // Fetch commissions
-  const fetchCommissions = useCallback(async () => {
+  // Fetch company prices for a product
+  const fetchCompanyPrices = useCallback(async () => {
+    if (!selectedCompany) return
+
     try {
-      setLoadingCommissions(true)
-      const response = await fetch('/api/commissions/config')
+      const response = await fetch(`/api/companies/${selectedCompany}/products/pricing`)
       const data = await response.json()
 
-      if (data.success) {
-        setCommissions(data.data || [])
+      if (data.success && data.data.products) {
+        const prices: Record<number, number | null> = {}
+        data.data.products.forEach((p: any) => {
+          if (p.hasPricing && p.precioClientes) {
+            prices[p.productId] = parseFloat(p.precioClientes)
+          }
+        })
+        setCompanyPrices(prices)
       }
     } catch (error) {
-      console.error('Error fetching commissions:', error)
-    } finally {
-      setLoadingCommissions(false)
+      console.error('Error fetching company prices:', error)
     }
-  }, [])
+  }, [selectedCompany])
 
   useEffect(() => {
     fetchProducts()
-    fetchMarginHealth()
-  }, [fetchProducts, fetchMarginHealth])
+    fetchCompanies()
+  }, [fetchProducts, fetchCompanies])
 
-  // Load commissions when switching to that tab
   useEffect(() => {
-    if (activeTab === 'comisiones' && commissions.length === 0) {
-      fetchCommissions()
+    if (selectedCompany) {
+      fetchCompanyPrices()
     }
-  }, [activeTab, commissions.length, fetchCommissions])
+  }, [selectedCompany, fetchCompanyPrices])
 
-  const toggleProductExpanded = (productId: number) => {
-    setExpandedProducts(prev => {
-      const newSet = new Set(prev)
-      if (newSet.has(productId)) {
-        newSet.delete(productId)
-      } else {
-        newSet.add(productId)
-      }
-      return newSet
-    })
-  }
-
-  const getMarginHealthForProduct = (productId: number): MarginHealth | undefined => {
-    return marginHealth.find(m => m.productId === productId)
-  }
-
-  const getStatusColor = (status: 'healthy' | 'warning' | 'critical') => {
-    switch (status) {
-      case 'healthy':
-        return 'text-green-500'
-      case 'warning':
-        return 'text-yellow-500'
-      case 'critical':
-        return 'text-red-500'
-      default:
-        return 'text-gray-500'
-    }
-  }
-
-  const getStatusBgColor = (status: 'healthy' | 'warning' | 'critical') => {
-    switch (status) {
-      case 'healthy':
-        return isDark ? 'bg-green-500/20' : 'bg-green-100'
-      case 'warning':
-        return isDark ? 'bg-yellow-500/20' : 'bg-yellow-100'
-      case 'critical':
-        return isDark ? 'bg-red-500/20' : 'bg-red-100'
-      default:
-        return isDark ? 'bg-gray-500/20' : 'bg-gray-100'
-    }
-  }
-
-  const getStatusIcon = (status: 'healthy' | 'warning' | 'critical') => {
-    switch (status) {
-      case 'healthy':
-        return <CheckCircle className="w-4 h-4" />
-      case 'warning':
-        return <AlertTriangle className="w-4 h-4" />
-      case 'critical':
-        return <AlertCircle className="w-4 h-4" />
-      default:
-        return <Info className="w-4 h-4" />
-    }
-  }
-
+  // Filter products
   const filteredProducts = products.filter(product => {
     const matchesSearch = product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      product.code.toLowerCase().includes(searchTerm.toLowerCase())
+                         product.code.toLowerCase().includes(searchTerm.toLowerCase())
     const matchesCategory = categoryFilter === 'all' || product.category === categoryFilter
-    const matchesStatus = statusFilter === 'all' ||
-      (statusFilter === 'active' && product.isActive) ||
-      (statusFilter === 'inactive' && !product.isActive) ||
-      (statusFilter === 'composite' && product.isComposite) ||
-      (statusFilter === 'tracking' && product.hasBoxTracking)
-    return matchesSearch && matchesCategory && matchesStatus
+    return matchesSearch && matchesCategory
   })
 
-  const categories = [...new Set(products.map(p => p.category))].filter(Boolean)
+  // Delete product
+  const handleDeleteProduct = async (productId: number) => {
+    if (!confirm('¿Seguro que deseas eliminar este producto?')) return
 
-  // Summary stats
-  const stats = {
-    totalProducts: products.length,
-    activeProducts: products.filter(p => p.isActive).length,
-    compositeProducts: products.filter(p => p.isComposite).length,
-    withTracking: products.filter(p => p.hasBoxTracking).length,
-    totalServices: products.reduce((sum, p) => sum + (p.services?.length || 0), 0),
-    healthyMargins: marginHealth.filter(m => m.status === 'healthy').length,
-    warningMargins: marginHealth.filter(m => m.status === 'warning').length,
-    criticalMargins: marginHealth.filter(m => m.status === 'critical').length
+    try {
+      const response = await fetch(`/api/products/${productId}`, { method: 'DELETE' })
+      const data = await response.json()
+
+      if (data.success) {
+        showNotification('success', 'Exito', 'Producto eliminado')
+        fetchProducts()
+      } else {
+        showNotification('error', 'Error', data.error || 'Error al eliminar')
+      }
+    } catch (error) {
+      showNotification('error', 'Error', 'Error de conexion')
+    }
+  }
+
+  // Save company prices
+  const handleSaveCompanyPrices = async () => {
+    if (!selectedCompany) return
+
+    setSavingPrices(true)
+    try {
+      const productsToUpdate = Object.entries(companyPrices)
+        .filter(([_, price]) => price !== null)
+        .map(([productId, price]) => ({
+          productId: parseInt(productId),
+          precioClientes: price
+        }))
+
+      if (productsToUpdate.length === 0) {
+        showNotification('warning', 'Aviso', 'No hay precios para guardar')
+        setSavingPrices(false)
+        return
+      }
+
+      const response = await fetch(`/api/companies/${selectedCompany}/products/pricing`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ products: productsToUpdate })
+      })
+
+      const data = await response.json()
+
+      if (data.success) {
+        showNotification('success', 'Exito', 'Precios guardados correctamente')
+      } else {
+        showNotification('error', 'Error', data.error || 'Error al guardar precios')
+      }
+    } catch (error) {
+      showNotification('error', 'Error', 'Error de conexion')
+    } finally {
+      setSavingPrices(false)
+    }
   }
 
   return (
     <DashboardLayout>
       <div className="p-6 space-y-6">
-        {/* Stats Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-5">
-          {/* Total Productos */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.1 }}
-            className={`relative overflow-hidden ${
-              isDark
-                ? 'bg-gradient-to-br from-gray-800 to-gray-900 border-gray-700'
-                : 'bg-gradient-to-br from-slate-50 to-white border-slate-200'
-            } rounded-2xl border shadow-xl`}
-          >
-            <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-400 to-blue-600"></div>
-            <div className="p-6">
-              <div className="flex items-start justify-between mb-4">
-                <div className="flex items-center gap-3">
-                  <div className={`p-3 rounded-xl shadow-sm ${
-                    isDark
-                      ? 'bg-blue-900/30 border border-blue-800/50'
-                      : 'bg-gradient-to-br from-blue-50 to-blue-100 border border-blue-200'
-                  }`}>
-                    <Package className="w-6 h-6 text-blue-600" />
-                  </div>
-                  <div>
-                    <p className={`text-sm font-medium ${isDark ? 'text-gray-400' : 'text-black'}`}>
-                      Total Productos
-                    </p>
-                    <p className={`text-3xl font-bold mt-1 ${isDark ? 'text-white' : 'text-slate-900'}`}>
-                      {stats.totalProducts}
-                    </p>
-                  </div>
-                </div>
-              </div>
-              <div className="flex items-center gap-4 text-sm">
-                <span className={`flex items-center gap-1 ${isDark ? 'text-green-400' : 'text-green-600'}`}>
-                  <CheckCircle className="w-4 h-4" />
-                  {stats.activeProducts} activos
-                </span>
-                <span className={`flex items-center gap-1 ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
-                  <Layers className="w-4 h-4" />
-                  {stats.compositeProducts} compuestos
-                </span>
-              </div>
-            </div>
-          </motion.div>
-
-          {/* Servicios */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.2 }}
-            className={`relative overflow-hidden ${
-              isDark
-                ? 'bg-gradient-to-br from-gray-800 to-gray-900 border-gray-700'
-                : 'bg-gradient-to-br from-slate-50 to-white border-slate-200'
-            } rounded-2xl border shadow-xl`}
-          >
-            <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-cyan-400 to-cyan-600"></div>
-            <div className="p-6">
-              <div className="flex items-start justify-between mb-4">
-                <div className="flex items-center gap-3">
-                  <div className={`p-3 rounded-xl shadow-sm ${
-                    isDark
-                      ? 'bg-cyan-900/30 border border-cyan-800/50'
-                      : 'bg-gradient-to-br from-cyan-50 to-cyan-100 border border-cyan-200'
-                  }`}>
-                    <Settings className="w-6 h-6 text-cyan-600" />
-                  </div>
-                  <div>
-                    <p className={`text-sm font-medium ${isDark ? 'text-gray-400' : 'text-black'}`}>
-                      Servicios Internos
-                    </p>
-                    <p className={`text-3xl font-bold mt-1 ${isDark ? 'text-white' : 'text-slate-900'}`}>
-                      {stats.totalServices}
-                    </p>
-                  </div>
-                </div>
-              </div>
-              <div className="flex items-center gap-4 text-sm">
-                <span className={`flex items-center gap-1 ${isDark ? 'text-orange-400' : 'text-orange-600'}`}>
-                  <Box className="w-4 h-4" />
-                  {stats.withTracking} con tracking
-                </span>
-              </div>
-            </div>
-          </motion.div>
-
-          {/* Márgenes Saludables */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.3 }}
-            className={`relative overflow-hidden ${
-              isDark
-                ? 'bg-gradient-to-br from-gray-800 to-gray-900 border-gray-700'
-                : 'bg-gradient-to-br from-slate-50 to-white border-slate-200'
-            } rounded-2xl border shadow-xl`}
-          >
-            <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-green-400 to-green-600"></div>
-            <div className="p-6">
-              <div className="flex items-start justify-between mb-4">
-                <div className="flex items-center gap-3">
-                  <div className={`p-3 rounded-xl shadow-sm ${
-                    isDark
-                      ? 'bg-green-900/30 border border-green-800/50'
-                      : 'bg-gradient-to-br from-green-50 to-green-100 border border-green-200'
-                  }`}>
-                    <TrendingUp className="w-6 h-6 text-green-600" />
-                  </div>
-                  <div>
-                    <p className={`text-sm font-medium ${isDark ? 'text-gray-400' : 'text-black'}`}>
-                      Márgenes Saludables
-                    </p>
-                    <p className={`text-3xl font-bold mt-1 text-green-500`}>
-                      {stats.healthyMargins}
-                    </p>
-                  </div>
-                </div>
-              </div>
-              <div className="flex items-center gap-4 text-sm">
-                <span className={isDark ? 'text-gray-400' : 'text-gray-500'}>
-                  Productos con margen positivo
-                </span>
-              </div>
-            </div>
-          </motion.div>
-
-          {/* Alertas de Margen */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.4 }}
-            className={`relative overflow-hidden ${
-              isDark
-                ? 'bg-gradient-to-br from-gray-800 to-gray-900 border-gray-700'
-                : 'bg-gradient-to-br from-slate-50 to-white border-slate-200'
-            } rounded-2xl border shadow-xl`}
-          >
-            <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-amber-400 to-red-500"></div>
-            <div className="p-6">
-              <div className="flex items-start justify-between mb-4">
-                <div className="flex items-center gap-3">
-                  <div className={`p-3 rounded-xl shadow-sm ${
-                    isDark
-                      ? 'bg-amber-900/30 border border-amber-800/50'
-                      : 'bg-gradient-to-br from-amber-50 to-amber-100 border border-amber-200'
-                  }`}>
-                    <AlertTriangle className="w-6 h-6 text-amber-600" />
-                  </div>
-                  <div>
-                    <p className={`text-sm font-medium ${isDark ? 'text-gray-400' : 'text-black'}`}>
-                      Alertas de Margen
-                    </p>
-                    <p className={`text-3xl font-bold mt-1 ${
-                      stats.criticalMargins > 0 ? 'text-red-500' : stats.warningMargins > 0 ? 'text-yellow-500' : isDark ? 'text-white' : 'text-slate-900'
-                    }`}>
-                      {stats.warningMargins + stats.criticalMargins}
-                    </p>
-                  </div>
-                </div>
-              </div>
-              <div className="flex items-center gap-4 text-sm">
-                <span className="flex items-center gap-1 text-yellow-500">
-                  <AlertTriangle className="w-4 h-4" />
-                  {stats.warningMargins} advertencia
-                </span>
-                <span className="flex items-center gap-1 text-red-500">
-                  <AlertCircle className="w-4 h-4" />
-                  {stats.criticalMargins} crítico
-                </span>
-              </div>
-            </div>
-          </motion.div>
+        {/* Header */}
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div>
+            <h1 className={`text-2xl font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>
+              Catalogo de Productos
+            </h1>
+            <p className={`text-sm ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
+              Gestiona los productos de LogiRapid y sus precios por empresa
+            </p>
+          </div>
         </div>
 
-        {/* Tabs Navigation */}
-        <div className={`p-1 rounded-xl ${isDark ? 'bg-gray-800' : 'bg-white'} shadow-sm flex gap-1`}>
+        {/* Tabs */}
+        <div className={`flex gap-2 p-1 rounded-lg ${isDark ? 'bg-gray-800' : 'bg-gray-100'}`}>
           <button
             onClick={() => setActiveTab('productos')}
-            className={`flex-1 px-6 py-3 rounded-lg font-medium text-sm transition-all flex items-center justify-center gap-2 ${
+            className={`flex-1 px-4 py-2 rounded-lg font-medium transition-all flex items-center justify-center gap-2 ${
               activeTab === 'productos'
-                ? isDark
-                  ? 'bg-blue-600 text-white'
-                  : 'bg-blue-500 text-white'
-                : isDark
-                  ? 'text-gray-400 hover:text-white hover:bg-gray-700'
-                  : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
+                ? isDark ? 'bg-blue-600 text-white' : 'bg-white text-blue-600 shadow'
+                : isDark ? 'text-gray-400 hover:text-white' : 'text-gray-600 hover:text-gray-900'
             }`}
           >
             <Package className="w-4 h-4" />
-            Productos y Servicios
+            Productos
           </button>
           <button
             onClick={() => setActiveTab('precios')}
-            className={`flex-1 px-6 py-3 rounded-lg font-medium text-sm transition-all flex items-center justify-center gap-2 ${
+            className={`flex-1 px-4 py-2 rounded-lg font-medium transition-all flex items-center justify-center gap-2 ${
               activeTab === 'precios'
-                ? isDark
-                  ? 'bg-green-600 text-white'
-                  : 'bg-green-500 text-white'
-                : isDark
-                  ? 'text-gray-400 hover:text-white hover:bg-gray-700'
-                  : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
+                ? isDark ? 'bg-blue-600 text-white' : 'bg-white text-blue-600 shadow'
+                : isDark ? 'text-gray-400 hover:text-white' : 'text-gray-600 hover:text-gray-900'
             }`}
           >
             <DollarSign className="w-4 h-4" />
-            Lista de Precios
-          </button>
-          <button
-            onClick={() => setActiveTab('comisiones')}
-            className={`flex-1 px-6 py-3 rounded-lg font-medium text-sm transition-all flex items-center justify-center gap-2 ${
-              activeTab === 'comisiones'
-                ? isDark
-                  ? 'bg-purple-600 text-white'
-                  : 'bg-purple-500 text-white'
-                : isDark
-                  ? 'text-gray-400 hover:text-white hover:bg-gray-700'
-                  : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
-            }`}
-          >
-            <Percent className="w-4 h-4" />
-            Comisiones
+            Precios por Empresa
           </button>
         </div>
 
-        {/* Tab Content: Productos */}
+        {/* Tab: Productos */}
         {activeTab === 'productos' && (
-          <>
-        {/* Filters */}
-        <div className={`p-4 rounded-xl ${isDark ? 'bg-gray-800' : 'bg-white'} shadow-sm`}>
-          <div className="flex flex-col md:flex-row gap-4">
-            <div className="flex-1 relative">
-              <Search className={`absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 ${
-                isDark ? 'text-gray-500' : 'text-gray-400'
-              }`} />
-              <input
-                type="text"
-                placeholder="Buscar por nombre o código..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className={`w-full pl-10 pr-4 py-2 rounded-lg border ${
-                  isDark
-                    ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-500'
-                    : 'bg-white border-gray-300 text-gray-900 placeholder-gray-400'
-                } focus:outline-none focus:ring-2 focus:ring-blue-500`}
-              />
-            </div>
-
-            <div className="flex gap-3">
+          <div className="space-y-4">
+            {/* Search and filters */}
+            <div className="flex flex-col md:flex-row gap-4">
+              <div className="flex-1 relative">
+                <Search className={`absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 ${isDark ? 'text-gray-400' : 'text-gray-500'}`} />
+                <input
+                  type="text"
+                  placeholder="Buscar productos..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className={`w-full pl-10 pr-4 py-2 rounded-lg border ${
+                    isDark
+                      ? 'bg-gray-800 border-gray-700 text-white placeholder-gray-500'
+                      : 'bg-white border-gray-300 text-gray-900 placeholder-gray-400'
+                  } focus:ring-2 focus:ring-blue-500`}
+                />
+              </div>
               <select
                 value={categoryFilter}
                 onChange={(e) => setCategoryFilter(e.target.value)}
                 className={`px-4 py-2 rounded-lg border ${
                   isDark
-                    ? 'bg-gray-700 border-gray-600 text-white'
+                    ? 'bg-gray-800 border-gray-700 text-white'
                     : 'bg-white border-gray-300 text-gray-900'
-                } focus:outline-none focus:ring-2 focus:ring-blue-500`}
+                }`}
               >
-                <option value="all">Todas las categorías</option>
-                {categories.map(cat => (
-                  <option key={cat} value={cat}>{cat}</option>
+                <option value="all">Todas las categorias</option>
+                {CATEGORIES.map(cat => (
+                  <option key={cat.id} value={cat.id}>{cat.name}</option>
                 ))}
               </select>
-
-              <select
-                value={statusFilter}
-                onChange={(e) => setStatusFilter(e.target.value)}
-                className={`px-4 py-2 rounded-lg border ${
-                  isDark
-                    ? 'bg-gray-700 border-gray-600 text-white'
-                    : 'bg-white border-gray-300 text-gray-900'
-                } focus:outline-none focus:ring-2 focus:ring-blue-500`}
-              >
-                <option value="all">Todos los estados</option>
-                <option value="active">Activos</option>
-                <option value="inactive">Inactivos</option>
-                <option value="composite">Compuestos</option>
-                <option value="tracking">Con Tracking</option>
-              </select>
-            </div>
-          </div>
-        </div>
-
-        {/* Products List */}
-        <div className="space-y-4">
-          {loading ? (
-            <div className={`p-8 rounded-xl ${isDark ? 'bg-gray-800' : 'bg-white'} shadow-sm text-center`}>
-              <RefreshCw className={`w-8 h-8 mx-auto mb-4 animate-spin ${isDark ? 'text-gray-500' : 'text-gray-400'}`} />
-              <p className={isDark ? 'text-gray-400' : 'text-gray-600'}>Cargando productos...</p>
-            </div>
-          ) : filteredProducts.length === 0 ? (
-            <div className={`p-12 rounded-xl ${isDark ? 'bg-gray-800' : 'bg-white'} shadow-sm text-center`}>
-              <div className={`w-20 h-20 mx-auto mb-6 rounded-full flex items-center justify-center ${
-                isDark ? 'bg-blue-900/30' : 'bg-blue-100'
-              }`}>
-                <Package className={`w-10 h-10 ${isDark ? 'text-blue-400' : 'text-blue-500'}`} />
-              </div>
-              <h3 className={`text-xl font-semibold mb-2 ${isDark ? 'text-white' : 'text-gray-900'}`}>
-                {products.length === 0 ? 'Catalogo Vacio' : 'Sin resultados'}
-              </h3>
-              <p className={`mb-6 max-w-md mx-auto ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
-                {products.length === 0
-                  ? 'No hay productos en el catalogo. Crea tu primer producto para comenzar a configurar precios y servicios.'
-                  : 'No se encontraron productos con los filtros seleccionados. Intenta cambiar los criterios de busqueda.'
-                }
-              </p>
-              {products.length === 0 && (
-                <button
-                  onClick={() => setShowCreateProductModal(true)}
-                  className={`px-6 py-3 rounded-lg font-medium transition-all ${
-                    isDark
-                      ? 'bg-blue-600 hover:bg-blue-700 text-white'
-                      : 'bg-blue-500 hover:bg-blue-600 text-white'
-                  } shadow-lg hover:shadow-xl`}
-                >
-                  <Plus className="w-5 h-5 inline-block mr-2" />
-                  Crear Primer Producto
-                </button>
-              )}
-            </div>
-          ) : (
-            <AnimatePresence>
-              {filteredProducts.map((product, index) => {
-                const health = getMarginHealthForProduct(product.id)
-                const isExpanded = expandedProducts.has(product.id)
-
-                return (
-                  <motion.div
-                    key={product.id}
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: -20 }}
-                    transition={{ delay: index * 0.05 }}
-                    className={`rounded-xl ${isDark ? 'bg-gray-800' : 'bg-white'} shadow-sm overflow-hidden`}
-                  >
-                    {/* Product Header */}
-                    <div
-                      onClick={() => toggleProductExpanded(product.id)}
-                      className={`p-4 cursor-pointer hover:${isDark ? 'bg-gray-750' : 'bg-gray-50'} transition-colors`}
-                    >
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-4">
-                          <button className={`p-1 rounded ${isDark ? 'hover:bg-gray-700' : 'hover:bg-gray-100'}`}>
-                            {isExpanded ? (
-                              <ChevronDown className={`w-5 h-5 ${isDark ? 'text-gray-400' : 'text-gray-500'}`} />
-                            ) : (
-                              <ChevronRight className={`w-5 h-5 ${isDark ? 'text-gray-400' : 'text-gray-500'}`} />
-                            )}
-                          </button>
-
-                          <div className={`p-2 rounded-lg ${isDark ? 'bg-gray-700' : 'bg-gray-100'}`}>
-                            <Package className={`w-5 h-5 ${isDark ? 'text-blue-400' : 'text-blue-500'}`} />
-                          </div>
-
-                          <div>
-                            <div className="flex items-center gap-2">
-                              <h3 className={`font-semibold ${isDark ? 'text-white' : 'text-gray-900'}`}>
-                                {product.name}
-                              </h3>
-                              <span className={`text-xs px-2 py-0.5 rounded ${
-                                isDark ? 'bg-gray-700 text-gray-400' : 'bg-gray-100 text-gray-500'
-                              }`}>
-                                {product.code}
-                              </span>
-                              {product.isComposite && (
-                                <span className={`text-xs px-2 py-0.5 rounded ${
-                                  isDark ? 'bg-purple-900/50 text-purple-400' : 'bg-purple-100 text-purple-600'
-                                }`}>
-                                  Compuesto
-                                </span>
-                              )}
-                              {product.hasBoxTracking && (
-                                <span className={`text-xs px-2 py-0.5 rounded ${
-                                  isDark ? 'bg-orange-900/50 text-orange-400' : 'bg-orange-100 text-orange-600'
-                                }`}>
-                                  Tracking
-                                </span>
-                              )}
-                            </div>
-                            <p className={`text-sm ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
-                              {product.category} • {product.services?.length || 0} servicios
-                            </p>
-                          </div>
-                        </div>
-
-                        <div className="flex items-center gap-4">
-                          {/* Margin Health Indicator */}
-                          {health && (
-                            <div className={`flex items-center gap-2 px-3 py-1.5 rounded-lg ${getStatusBgColor(health.status)}`}>
-                              <span className={getStatusColor(health.status)}>
-                                {getStatusIcon(health.status)}
-                              </span>
-                              <div className="text-right">
-                                <p className={`text-xs ${getStatusColor(health.status)} font-medium`}>
-                                  Margen: ${health.margenNeto.toFixed(2)}
-                                </p>
-                                <p className={`text-xs ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
-                                  {health.margenPorcentaje.toFixed(1)}%
-                                </p>
-                              </div>
-                            </div>
-                          )}
-
-                          {/* Price */}
-                          <div className="text-right">
-                            <p className={`text-lg font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>
-                              ${product.precioPublico?.toFixed(2) || '0.00'}
-                            </p>
-                            <p className={`text-xs ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
-                              Precio venta
-                            </p>
-                          </div>
-
-                          {/* Status */}
-                          <div className={`px-3 py-1 rounded-full text-xs font-medium ${
-                            product.isActive
-                              ? isDark ? 'bg-green-900/50 text-green-400' : 'bg-green-100 text-green-600'
-                              : isDark ? 'bg-gray-700 text-gray-400' : 'bg-gray-100 text-gray-500'
-                          }`}>
-                            {product.isActive ? 'Activo' : 'Inactivo'}
-                          </div>
-
-                          {/* Actions */}
-                          <div className="flex items-center gap-2">
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation()
-                                setSelectedProduct(product)
-                                setShowPricingModal(true)
-                              }}
-                              className={`p-2 rounded-lg transition-colors ${
-                                isDark
-                                  ? 'hover:bg-gray-700 text-gray-400 hover:text-white'
-                                  : 'hover:bg-gray-100 text-gray-500 hover:text-gray-700'
-                              }`}
-                              title="Configurar precios"
-                            >
-                              <DollarSign className="w-4 h-4" />
-                            </button>
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation()
-                                setSelectedProduct(product)
-                                setEditingService(null)
-                                setShowServiceModal(true)
-                              }}
-                              className={`p-2 rounded-lg transition-colors ${
-                                isDark
-                                  ? 'hover:bg-gray-700 text-gray-400 hover:text-white'
-                                  : 'hover:bg-gray-100 text-gray-500 hover:text-gray-700'
-                              }`}
-                              title="Agregar servicio"
-                            >
-                              <Plus className="w-4 h-4" />
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Expanded Services */}
-                    <AnimatePresence>
-                      {isExpanded && (
-                        <motion.div
-                          initial={{ height: 0, opacity: 0 }}
-                          animate={{ height: 'auto', opacity: 1 }}
-                          exit={{ height: 0, opacity: 0 }}
-                          transition={{ duration: 0.2 }}
-                          className="overflow-hidden"
-                        >
-                          <div className={`border-t ${isDark ? 'border-gray-700' : 'border-gray-100'}`}>
-                            {/* Services Table */}
-                            {product.services && product.services.length > 0 ? (
-                              <div className="overflow-x-auto">
-                                <table className="w-full">
-                                  <thead>
-                                    <tr className={isDark ? 'bg-gray-750' : 'bg-gray-50'}>
-                                      <th className={`px-4 py-3 text-left text-xs font-medium uppercase tracking-wider ${
-                                        isDark ? 'text-gray-400' : 'text-gray-500'
-                                      }`}>
-                                        Servicio
-                                      </th>
-                                      <th className={`px-4 py-3 text-left text-xs font-medium uppercase tracking-wider ${
-                                        isDark ? 'text-gray-400' : 'text-gray-500'
-                                      }`}>
-                                        Código
-                                      </th>
-                                      <th className={`px-4 py-3 text-left text-xs font-medium uppercase tracking-wider ${
-                                        isDark ? 'text-gray-400' : 'text-gray-500'
-                                      }`}>
-                                        Tipo
-                                      </th>
-                                      <th className={`px-4 py-3 text-right text-xs font-medium uppercase tracking-wider ${
-                                        isDark ? 'text-gray-400' : 'text-gray-500'
-                                      }`}>
-                                        Precio Base
-                                      </th>
-                                      <th className={`px-4 py-3 text-right text-xs font-medium uppercase tracking-wider ${
-                                        isDark ? 'text-gray-400' : 'text-gray-500'
-                                      }`}>
-                                        Precio Empresa
-                                      </th>
-                                      <th className={`px-4 py-3 text-center text-xs font-medium uppercase tracking-wider ${
-                                        isDark ? 'text-gray-400' : 'text-gray-500'
-                                      }`}>
-                                        Opciones
-                                      </th>
-                                      <th className={`px-4 py-3 text-center text-xs font-medium uppercase tracking-wider ${
-                                        isDark ? 'text-gray-400' : 'text-gray-500'
-                                      }`}>
-                                        Acciones
-                                      </th>
-                                    </tr>
-                                  </thead>
-                                  <tbody className={`divide-y ${isDark ? 'divide-gray-700' : 'divide-gray-100'}`}>
-                                    {product.services.map((service) => (
-                                      <tr
-                                        key={service.id}
-                                        className={`${isDark ? 'hover:bg-gray-750' : 'hover:bg-gray-50'} transition-colors`}
-                                      >
-                                        <td className="px-4 py-3">
-                                          <div className="flex items-center gap-2">
-                                            <span className={`w-6 h-6 flex items-center justify-center rounded-full text-xs font-medium ${
-                                              isDark ? 'bg-gray-700 text-gray-300' : 'bg-gray-200 text-gray-600'
-                                            }`}>
-                                              {service.sequenceOrder}
-                                            </span>
-                                            <div>
-                                              <p className={`font-medium ${isDark ? 'text-white' : 'text-gray-900'}`}>
-                                                {service.serviceName}
-                                              </p>
-                                              {service.description && (
-                                                <p className={`text-xs ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
-                                                  {service.description}
-                                                </p>
-                                              )}
-                                            </div>
-                                          </div>
-                                        </td>
-                                        <td className={`px-4 py-3 ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
-                                          <code className={`text-xs px-2 py-1 rounded ${
-                                            isDark ? 'bg-gray-700' : 'bg-gray-100'
-                                          }`}>
-                                            {service.serviceCode}
-                                          </code>
-                                        </td>
-                                        <td className="px-4 py-3">
-                                          <span className={`text-xs px-2 py-1 rounded ${
-                                            service.inclusionType === 'included'
-                                              ? isDark ? 'bg-green-900/50 text-green-400' : 'bg-green-100 text-green-600'
-                                              : service.inclusionType === 'optional'
-                                                ? isDark ? 'bg-blue-900/50 text-blue-400' : 'bg-blue-100 text-blue-600'
-                                                : isDark ? 'bg-purple-900/50 text-purple-400' : 'bg-purple-100 text-purple-600'
-                                          }`}>
-                                            {service.inclusionType === 'included' ? 'Incluido' :
-                                              service.inclusionType === 'optional' ? 'Opcional' : 'Adicional'}
-                                          </span>
-                                        </td>
-                                        <td className={`px-4 py-3 text-right ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
-                                          ${service.basePrice.toFixed(2)}
-                                        </td>
-                                        <td className={`px-4 py-3 text-right font-medium ${
-                                          service.companyPricing
-                                            ? isDark ? 'text-green-400' : 'text-green-600'
-                                            : isDark ? 'text-gray-500' : 'text-gray-400'
-                                        }`}>
-                                          {service.companyPricing
-                                            ? `$${service.companyPricing.precioVenta.toFixed(2)}`
-                                            : '-'
-                                          }
-                                        </td>
-                                        <td className="px-4 py-3">
-                                          <div className="flex items-center justify-center gap-2">
-                                            {service.isMandatory && (
-                                              <span className={`text-xs px-1.5 py-0.5 rounded ${
-                                                isDark ? 'bg-red-900/50 text-red-400' : 'bg-red-100 text-red-600'
-                                              }`} title="Obligatorio">
-                                                Req
-                                              </span>
-                                            )}
-                                            {service.generatesBoxTracking && (
-                                              <span className={`text-xs px-1.5 py-0.5 rounded ${
-                                                isDark ? 'bg-orange-900/50 text-orange-400' : 'bg-orange-100 text-orange-600'
-                                              }`} title="Genera tracking de caja">
-                                                Box
-                                              </span>
-                                            )}
-                                            {!service.isActive && (
-                                              <span className={`text-xs px-1.5 py-0.5 rounded ${
-                                                isDark ? 'bg-gray-700 text-gray-400' : 'bg-gray-200 text-gray-500'
-                                              }`}>
-                                                Off
-                                              </span>
-                                            )}
-                                          </div>
-                                        </td>
-                                        <td className="px-4 py-3">
-                                          <div className="flex items-center justify-center gap-1">
-                                            <button
-                                              onClick={() => {
-                                                setSelectedProduct(product)
-                                                setEditingService(service)
-                                                setShowServiceModal(true)
-                                              }}
-                                              className={`p-1.5 rounded transition-colors ${
-                                                isDark
-                                                  ? 'hover:bg-gray-700 text-gray-400 hover:text-white'
-                                                  : 'hover:bg-gray-100 text-gray-500 hover:text-gray-700'
-                                              }`}
-                                              title="Editar"
-                                            >
-                                              <Edit2 className="w-4 h-4" />
-                                            </button>
-                                            <button
-                                              className={`p-1.5 rounded transition-colors ${
-                                                isDark
-                                                  ? 'hover:bg-red-900/50 text-gray-400 hover:text-red-400'
-                                                  : 'hover:bg-red-100 text-gray-500 hover:text-red-600'
-                                              }`}
-                                              title="Eliminar"
-                                            >
-                                              <Trash2 className="w-4 h-4" />
-                                            </button>
-                                          </div>
-                                        </td>
-                                      </tr>
-                                    ))}
-                                  </tbody>
-                                </table>
-                              </div>
-                            ) : (
-                              <div className={`p-8 text-center ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
-                                <Settings className="w-8 h-8 mx-auto mb-2 opacity-50" />
-                                <p>No hay servicios configurados</p>
-                                <button
-                                  onClick={() => {
-                                    setSelectedProduct(product)
-                                    setEditingService(null)
-                                    setShowServiceModal(true)
-                                  }}
-                                  className={`mt-3 px-4 py-2 text-sm rounded-lg transition-colors ${
-                                    isDark
-                                      ? 'bg-blue-600 hover:bg-blue-700 text-white'
-                                      : 'bg-blue-500 hover:bg-blue-600 text-white'
-                                  }`}
-                                >
-                                  Agregar primer servicio
-                                </button>
-                              </div>
-                            )}
-
-                            {/* Margin Health Details */}
-                            {health && (
-                              <div className={`p-4 border-t ${isDark ? 'border-gray-700 bg-gray-750' : 'border-gray-100 bg-gray-50'}`}>
-                                <div className="flex items-start justify-between">
-                                  <div>
-                                    <h4 className={`text-sm font-medium mb-2 ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
-                                      Análisis de Margen
-                                    </h4>
-                                    <div className="grid grid-cols-4 gap-4 text-sm">
-                                      <div>
-                                        <p className={`text-xs ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>Mi Costo</p>
-                                        <p className={isDark ? 'text-gray-300' : 'text-gray-700'}>${health.miCosto.toFixed(2)}</p>
-                                      </div>
-                                      <div>
-                                        <p className={`text-xs ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>Precio Venta</p>
-                                        <p className={isDark ? 'text-gray-300' : 'text-gray-700'}>${health.precioVenta.toFixed(2)}</p>
-                                      </div>
-                                      <div>
-                                        <p className={`text-xs ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>Margen Bruto</p>
-                                        <p className={isDark ? 'text-gray-300' : 'text-gray-700'}>${health.margenBruto.toFixed(2)}</p>
-                                      </div>
-                                      <div>
-                                        <p className={`text-xs ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>Total Comisiones</p>
-                                        <p className={`${health.totalComisiones > health.margenBruto ? 'text-red-500' : isDark ? 'text-gray-300' : 'text-gray-700'}`}>
-                                          ${health.totalComisiones.toFixed(2)}
-                                        </p>
-                                      </div>
-                                    </div>
-                                  </div>
-                                  <div className="text-right">
-                                    <div className={`inline-flex items-center gap-2 px-3 py-2 rounded-lg ${getStatusBgColor(health.status)}`}>
-                                      <span className={getStatusColor(health.status)}>
-                                        {getStatusIcon(health.status)}
-                                      </span>
-                                      <div>
-                                        <p className={`text-sm font-bold ${getStatusColor(health.status)}`}>
-                                          ${health.margenNeto.toFixed(2)}
-                                        </p>
-                                        <p className={`text-xs ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
-                                          Margen Neto
-                                        </p>
-                                      </div>
-                                    </div>
-                                  </div>
-                                </div>
-
-                                {/* Commission breakdown */}
-                                {health.configuredCommissions && health.configuredCommissions.length > 0 && (
-                                  <div className="mt-3 pt-3 border-t border-dashed ${isDark ? 'border-gray-600' : 'border-gray-200'}">
-                                    <p className={`text-xs mb-2 ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
-                                      Comisiones configuradas:
-                                    </p>
-                                    <div className="flex flex-wrap gap-2">
-                                      {health.configuredCommissions.map((comm, idx) => (
-                                        <span
-                                          key={idx}
-                                          className={`text-xs px-2 py-1 rounded ${
-                                            isDark ? 'bg-gray-700 text-gray-300' : 'bg-gray-200 text-gray-600'
-                                          }`}
-                                        >
-                                          {comm.activityType} ({comm.role}): {
-                                            comm.type === 'percentage'
-                                              ? `${comm.value}%`
-                                              : `$${comm.value}`
-                                          }
-                                        </span>
-                                      ))}
-                                    </div>
-                                  </div>
-                                )}
-                              </div>
-                            )}
-                          </div>
-                        </motion.div>
-                      )}
-                    </AnimatePresence>
-                  </motion.div>
-                )
-              })}
-            </AnimatePresence>
-          )}
-        </div>
-          </>
-        )}
-
-        {/* Tab Content: Lista de Precios */}
-        {activeTab === 'precios' && (
-          <div className={`p-6 rounded-xl ${isDark ? 'bg-gray-800' : 'bg-white'} shadow-sm`}>
-            <div className="flex items-center justify-between mb-6">
-              <h2 className={`text-lg font-semibold ${isDark ? 'text-white' : 'text-gray-900'}`}>
-                Lista de Precios por Producto
-              </h2>
               <button
-                onClick={() => fetchProducts()}
-                className={`p-2 rounded-lg ${isDark ? 'hover:bg-gray-700' : 'hover:bg-gray-100'}`}
+                onClick={() => setShowCreateModal(true)}
+                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg flex items-center gap-2"
               >
-                <RefreshCw className={`w-5 h-5 ${isDark ? 'text-gray-400' : 'text-gray-500'}`} />
+                <Plus className="w-5 h-5" />
+                Nuevo Producto
               </button>
             </div>
 
-            {loading ? (
-              <div className="flex items-center justify-center py-12">
-                <RefreshCw className={`w-8 h-8 animate-spin ${isDark ? 'text-gray-500' : 'text-gray-400'}`} />
-              </div>
-            ) : (
-              <div className="overflow-x-auto">
+            {/* Products table */}
+            <div className={`rounded-xl overflow-hidden ${isDark ? 'bg-gray-800' : 'bg-white'} shadow`}>
+              {loading ? (
+                <div className="p-8 text-center">
+                  <RefreshCw className={`w-8 h-8 mx-auto animate-spin ${isDark ? 'text-gray-400' : 'text-gray-500'}`} />
+                  <p className={`mt-2 ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>Cargando...</p>
+                </div>
+              ) : filteredProducts.length === 0 ? (
+                <div className="p-12 text-center">
+                  <div className={`w-20 h-20 mx-auto mb-6 rounded-full flex items-center justify-center ${
+                    isDark ? 'bg-blue-900/30' : 'bg-blue-100'
+                  }`}>
+                    <Package className={`w-10 h-10 ${isDark ? 'text-blue-400' : 'text-blue-500'}`} />
+                  </div>
+                  <h3 className={`text-xl font-semibold mb-2 ${isDark ? 'text-white' : 'text-gray-900'}`}>
+                    {products.length === 0 ? 'Catalogo Vacio' : 'Sin resultados'}
+                  </h3>
+                  <p className={`mb-6 max-w-md mx-auto ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
+                    {products.length === 0
+                      ? 'No hay productos en el catalogo. Crea tu primer producto.'
+                      : 'No se encontraron productos con los filtros seleccionados.'
+                    }
+                  </p>
+                  {products.length === 0 && (
+                    <button
+                      onClick={() => setShowCreateModal(true)}
+                      className="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium"
+                    >
+                      <Plus className="w-5 h-5 inline-block mr-2" />
+                      Crear Primer Producto
+                    </button>
+                  )}
+                </div>
+              ) : (
                 <table className="w-full">
-                  <thead>
-                    <tr className={`border-b ${isDark ? 'border-gray-700' : 'border-gray-200'}`}>
-                      <th className={`text-left py-3 px-4 text-sm font-semibold ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
-                        Producto
+                  <thead className={isDark ? 'bg-gray-900/50' : 'bg-gray-50'}>
+                    <tr>
+                      <th className={`px-4 py-3 text-left text-sm font-medium ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
+                        Codigo
                       </th>
-                      <th className={`text-left py-3 px-4 text-sm font-semibold ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
-                        Categoría
+                      <th className={`px-4 py-3 text-left text-sm font-medium ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
+                        Nombre
                       </th>
-                      <th className={`text-right py-3 px-4 text-sm font-semibold ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
+                      <th className={`px-4 py-3 text-left text-sm font-medium ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
+                        Categoria
+                      </th>
+                      <th className={`px-4 py-3 text-right text-sm font-medium ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
                         Mi Costo
                       </th>
-                      <th className={`text-right py-3 px-4 text-sm font-semibold ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
-                        P. Mayorista
+                      <th className={`px-4 py-3 text-left text-sm font-medium ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
+                        Proveedor
                       </th>
-                      <th className={`text-right py-3 px-4 text-sm font-semibold ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
-                        P. Público
-                      </th>
-                      <th className={`text-right py-3 px-4 text-sm font-semibold ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
-                        Margen
-                      </th>
-                      <th className={`text-center py-3 px-4 text-sm font-semibold ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
-                        Estado
-                      </th>
-                      <th className={`text-center py-3 px-4 text-sm font-semibold ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
+                      <th className={`px-4 py-3 text-center text-sm font-medium ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
                         Acciones
                       </th>
                     </tr>
                   </thead>
-                  <tbody>
-                    {products.map((product, index) => {
-                      const health = getMarginHealthForProduct(product.id)
-                      const margin = product.precioPublico - product.miCosto
-                      const marginPercent = product.precioPublico > 0 ? (margin / product.precioPublico) * 100 : 0
-
-                      return (
-                        <tr
-                          key={product.id}
-                          className={`border-b ${isDark ? 'border-gray-700 hover:bg-gray-700/50' : 'border-gray-100 hover:bg-gray-50'} transition-colors`}
-                        >
-                          <td className="py-3 px-4">
-                            <div>
-                              <p className={`font-medium ${isDark ? 'text-white' : 'text-gray-900'}`}>
-                                {product.name}
-                              </p>
-                              <p className={`text-xs ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
-                                {product.code}
-                              </p>
-                            </div>
-                          </td>
-                          <td className={`py-3 px-4 text-sm ${isDark ? 'text-gray-300' : 'text-gray-600'}`}>
-                            {product.category}
-                          </td>
-                          <td className={`py-3 px-4 text-right text-sm font-mono ${isDark ? 'text-gray-300' : 'text-gray-600'}`}>
-                            ${product.miCosto.toFixed(2)}
-                          </td>
-                          <td className={`py-3 px-4 text-right text-sm font-mono ${isDark ? 'text-gray-300' : 'text-gray-600'}`}>
-                            ${product.precioMayorista.toFixed(2)}
-                          </td>
-                          <td className={`py-3 px-4 text-right text-sm font-mono font-semibold ${isDark ? 'text-white' : 'text-gray-900'}`}>
-                            ${product.precioPublico.toFixed(2)}
-                          </td>
-                          <td className={`py-3 px-4 text-right text-sm`}>
-                            <span className={`font-mono ${
-                              marginPercent >= 20 ? 'text-green-500' :
-                              marginPercent >= 10 ? 'text-yellow-500' :
-                              'text-red-500'
-                            }`}>
-                              {marginPercent.toFixed(1)}%
-                            </span>
-                          </td>
-                          <td className="py-3 px-4 text-center">
-                            {health && (
-                              <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium ${getStatusBgColor(health.status)} ${getStatusColor(health.status)}`}>
-                                {getStatusIcon(health.status)}
-                                {health.status === 'healthy' ? 'OK' : health.status === 'warning' ? 'Alerta' : 'Crítico'}
-                              </span>
-                            )}
-                          </td>
-                          <td className="py-3 px-4 text-center">
+                  <tbody className={`divide-y ${isDark ? 'divide-gray-700' : 'divide-gray-200'}`}>
+                    {filteredProducts.map((product) => (
+                      <tr key={product.id} className={isDark ? 'hover:bg-gray-700/50' : 'hover:bg-gray-50'}>
+                        <td className={`px-4 py-3 font-mono text-sm ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
+                          {product.code}
+                        </td>
+                        <td className={`px-4 py-3 ${isDark ? 'text-white' : 'text-gray-900'}`}>
+                          {product.name}
+                        </td>
+                        <td className={`px-4 py-3`}>
+                          <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                            product.category === 'paqueteria' ? 'bg-blue-100 text-blue-700' :
+                            product.category === 'remesa' ? 'bg-green-100 text-green-700' :
+                            product.category === 'recarga' ? 'bg-purple-100 text-purple-700' :
+                            'bg-orange-100 text-orange-700'
+                          }`}>
+                            {CATEGORIES.find(c => c.id === product.category)?.name || product.category}
+                          </span>
+                        </td>
+                        <td className={`px-4 py-3 text-right font-medium ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
+                          ${product.miCosto.toFixed(2)}
+                        </td>
+                        <td className={`px-4 py-3 ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
+                          {product.providerName || '-'}
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="flex items-center justify-center gap-2">
                             <button
-                              onClick={() => {
-                                setSelectedProduct(product)
-                                setShowPricingModal(true)
-                              }}
-                              className={`p-2 rounded-lg transition-colors ${
-                                isDark ? 'hover:bg-gray-600 text-gray-400 hover:text-white' : 'hover:bg-gray-200 text-gray-500 hover:text-gray-700'
-                              }`}
+                              onClick={() => setEditingProduct(product)}
+                              className={`p-2 rounded-lg ${isDark ? 'hover:bg-gray-600' : 'hover:bg-gray-200'}`}
+                              title="Editar"
                             >
-                              <Edit2 className="w-4 h-4" />
+                              <Edit2 className={`w-4 h-4 ${isDark ? 'text-gray-400' : 'text-gray-600'}`} />
                             </button>
-                          </td>
-                        </tr>
-                      )
-                    })}
+                            <button
+                              onClick={() => handleDeleteProduct(product.id)}
+                              className={`p-2 rounded-lg hover:bg-red-100 dark:hover:bg-red-900/30`}
+                              title="Eliminar"
+                            >
+                              <Trash2 className="w-4 h-4 text-red-500" />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
                   </tbody>
                 </table>
-              </div>
-            )}
+              )}
+            </div>
           </div>
         )}
 
-        {/* Tab Content: Comisiones */}
-        {activeTab === 'comisiones' && (
-          <div className={`p-6 rounded-xl ${isDark ? 'bg-gray-800' : 'bg-white'} shadow-sm`}>
-            <div className="flex items-center justify-between mb-6">
-              <h2 className={`text-lg font-semibold ${isDark ? 'text-white' : 'text-gray-900'}`}>
-                Configuración de Comisiones
-              </h2>
-              <div className="flex items-center gap-3">
-                <button
-                  onClick={() => fetchCommissions()}
-                  className={`p-2 rounded-lg ${isDark ? 'hover:bg-gray-700' : 'hover:bg-gray-100'}`}
-                >
-                  <RefreshCw className={`w-5 h-5 ${loadingCommissions ? 'animate-spin' : ''} ${isDark ? 'text-gray-400' : 'text-gray-500'}`} />
-                </button>
+        {/* Tab: Precios por Empresa */}
+        {activeTab === 'precios' && (
+          <div className="space-y-4">
+            {/* Company selector */}
+            <div className={`p-4 rounded-xl ${isDark ? 'bg-gray-800' : 'bg-white'} shadow`}>
+              <div className="flex flex-col md:flex-row gap-4 items-start md:items-center">
+                <div className="flex-1">
+                  <label className={`block text-sm font-medium mb-2 ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
+                    <Building2 className="w-4 h-4 inline-block mr-2" />
+                    Seleccionar Empresa
+                  </label>
+                  <select
+                    value={selectedCompany || ''}
+                    onChange={(e) => {
+                      setSelectedCompany(e.target.value ? parseInt(e.target.value) : null)
+                      setCompanyPrices({})
+                    }}
+                    className={`w-full md:w-80 px-4 py-2 rounded-lg border ${
+                      isDark
+                        ? 'bg-gray-700 border-gray-600 text-white'
+                        : 'bg-white border-gray-300 text-gray-900'
+                    }`}
+                  >
+                    <option value="">-- Selecciona una empresa --</option>
+                    {companies.map(company => (
+                      <option key={company.id} value={company.id}>
+                        {company.legalName}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                {selectedCompany && (
+                  <button
+                    onClick={handleSaveCompanyPrices}
+                    disabled={savingPrices}
+                    className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg flex items-center gap-2 disabled:opacity-50"
+                  >
+                    {savingPrices ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                    {savingPrices ? 'Guardando...' : 'Guardar Precios'}
+                  </button>
+                )}
               </div>
             </div>
 
-            {loadingCommissions ? (
-              <div className="flex items-center justify-center py-12">
-                <RefreshCw className={`w-8 h-8 animate-spin ${isDark ? 'text-gray-500' : 'text-gray-400'}`} />
-              </div>
-            ) : marginHealth.length > 0 ? (
-              <div className="space-y-4">
-                {marginHealth.map((item) => (
-                  <div
-                    key={item.productId}
-                    className={`p-4 rounded-lg border ${
-                      item.status === 'critical'
-                        ? isDark ? 'border-red-500/50 bg-red-900/20' : 'border-red-200 bg-red-50'
-                        : item.status === 'warning'
-                          ? isDark ? 'border-yellow-500/50 bg-yellow-900/20' : 'border-yellow-200 bg-yellow-50'
-                          : isDark ? 'border-gray-700 bg-gray-700/50' : 'border-gray-200 bg-gray-50'
-                    }`}
-                  >
-                    <div className="flex items-center justify-between mb-3">
-                      <div className="flex items-center gap-3">
-                        <div className={`p-2 rounded-lg ${getStatusBgColor(item.status)}`}>
-                          {getStatusIcon(item.status)}
-                        </div>
-                        <div>
-                          <h3 className={`font-semibold ${isDark ? 'text-white' : 'text-gray-900'}`}>
-                            {item.productName}
-                          </h3>
-                          <p className={`text-sm ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
-                            Margen neto: ${item.margenNeto.toFixed(2)} ({item.margenPorcentaje.toFixed(1)}%)
-                          </p>
-                        </div>
-                      </div>
-                      <div className="text-right">
-                        <p className={`text-sm ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
-                          Total comisiones: <span className="font-semibold text-red-500">${item.totalComisiones.toFixed(2)}</span>
-                        </p>
-                        <p className={`text-xs ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
-                          Costo: ${item.miCosto.toFixed(2)} | Venta: ${item.precioVenta.toFixed(2)}
-                        </p>
-                      </div>
-                    </div>
-
-                    {item.configuredCommissions && item.configuredCommissions.length > 0 && (
-                      <div className={`mt-3 pt-3 border-t ${isDark ? 'border-gray-600' : 'border-gray-200'}`}>
-                        <p className={`text-xs font-medium mb-2 ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
-                          Comisiones configuradas:
-                        </p>
-                        <div className="flex flex-wrap gap-2">
-                          {item.configuredCommissions.map((comm, idx) => (
-                            <span
-                              key={idx}
-                              className={`inline-flex items-center gap-1 px-2 py-1 rounded text-xs ${
-                                isDark ? 'bg-gray-600 text-gray-300' : 'bg-gray-200 text-gray-600'
-                              }`}
-                            >
-                              <span className="font-medium">{comm.activityType}</span>
-                              <span className="opacity-60">({comm.role})</span>:
-                              <span className="font-semibold">
-                                {comm.type === 'fixed' ? `$${comm.value}` : `${comm.value}%`}
-                              </span>
-                            </span>
-                          ))}
-                        </div>
-                      </div>
-                    )}
+            {/* Prices table */}
+            {selectedCompany ? (
+              <div className={`rounded-xl overflow-hidden ${isDark ? 'bg-gray-800' : 'bg-white'} shadow`}>
+                {products.length === 0 ? (
+                  <div className="p-8 text-center">
+                    <p className={isDark ? 'text-gray-400' : 'text-gray-600'}>
+                      No hay productos en el catalogo. Crea productos primero.
+                    </p>
                   </div>
-                ))}
+                ) : (
+                  <table className="w-full">
+                    <thead className={isDark ? 'bg-gray-900/50' : 'bg-gray-50'}>
+                      <tr>
+                        <th className={`px-4 py-3 text-left text-sm font-medium ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
+                          Producto
+                        </th>
+                        <th className={`px-4 py-3 text-left text-sm font-medium ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
+                          Categoria
+                        </th>
+                        <th className={`px-4 py-3 text-right text-sm font-medium ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
+                          Mi Costo
+                        </th>
+                        <th className={`px-4 py-3 text-right text-sm font-medium ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
+                          Precio Venta para Empresa
+                        </th>
+                        <th className={`px-4 py-3 text-right text-sm font-medium ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
+                          Margen
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody className={`divide-y ${isDark ? 'divide-gray-700' : 'divide-gray-200'}`}>
+                      {products.map((product) => {
+                        const customPrice = companyPrices[product.id]
+                        const margin = customPrice ? customPrice - product.miCosto : null
+
+                        return (
+                          <tr key={product.id} className={isDark ? 'hover:bg-gray-700/50' : 'hover:bg-gray-50'}>
+                            <td className={`px-4 py-3 ${isDark ? 'text-white' : 'text-gray-900'}`}>
+                              <div className="font-medium">{product.name}</div>
+                              <div className={`text-xs ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>{product.code}</div>
+                            </td>
+                            <td className="px-4 py-3">
+                              <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                                product.category === 'paqueteria' ? 'bg-blue-100 text-blue-700' :
+                                product.category === 'remesa' ? 'bg-green-100 text-green-700' :
+                                product.category === 'recarga' ? 'bg-purple-100 text-purple-700' :
+                                'bg-orange-100 text-orange-700'
+                              }`}>
+                                {CATEGORIES.find(c => c.id === product.category)?.name || product.category}
+                              </span>
+                            </td>
+                            <td className={`px-4 py-3 text-right ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
+                              ${product.miCosto.toFixed(2)}
+                            </td>
+                            <td className="px-4 py-3">
+                              <input
+                                type="number"
+                                step="0.01"
+                                min="0"
+                                value={customPrice ?? ''}
+                                placeholder="Sin precio"
+                                onChange={(e) => {
+                                  const value = e.target.value ? parseFloat(e.target.value) : null
+                                  setCompanyPrices(prev => ({
+                                    ...prev,
+                                    [product.id]: value
+                                  }))
+                                }}
+                                className={`w-32 px-3 py-1 rounded-lg border text-right ${
+                                  isDark
+                                    ? 'bg-gray-700 border-gray-600 text-white'
+                                    : 'bg-white border-gray-300 text-gray-900'
+                                } focus:ring-2 focus:ring-blue-500`}
+                              />
+                            </td>
+                            <td className={`px-4 py-3 text-right font-medium ${
+                              margin === null ? (isDark ? 'text-gray-500' : 'text-gray-400') :
+                              margin >= 0 ? 'text-green-500' : 'text-red-500'
+                            }`}>
+                              {margin !== null ? (
+                                `$${margin.toFixed(2)}`
+                              ) : (
+                                <span className={isDark ? 'text-gray-600' : 'text-gray-400'}>-</span>
+                              )}
+                            </td>
+                          </tr>
+                        )
+                      })}
+                    </tbody>
+                  </table>
+                )}
               </div>
             ) : (
-              <div className="text-center py-12">
-                <Percent className={`w-12 h-12 mx-auto mb-4 ${isDark ? 'text-gray-600' : 'text-gray-300'}`} />
-                <p className={`text-lg font-medium ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
-                  No hay comisiones configuradas
-                </p>
-                <p className={`text-sm ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
-                  Las comisiones se calculan automáticamente basándose en la configuración del sistema
+              <div className={`p-12 rounded-xl text-center ${isDark ? 'bg-gray-800' : 'bg-white'} shadow`}>
+                <Building2 className={`w-16 h-16 mx-auto mb-4 ${isDark ? 'text-gray-600' : 'text-gray-300'}`} />
+                <h3 className={`text-lg font-medium mb-2 ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
+                  Selecciona una empresa
+                </h3>
+                <p className={`text-sm ${isDark ? 'text-gray-500' : 'text-gray-500'}`}>
+                  Elige una empresa para configurar sus precios personalizados
                 </p>
               </div>
             )}
@@ -1256,109 +554,48 @@ export default function ProductConfigPage() {
         )}
       </div>
 
-      {/* Service Modal - Complete Form */}
+      {/* Create/Edit Product Modal */}
       <AnimatePresence>
-        {showServiceModal && selectedProduct && (
-          <ServiceModal
+        {(showCreateModal || editingProduct) && (
+          <ProductModal
             isDark={isDark}
-            product={selectedProduct}
-            service={editingService}
+            product={editingProduct}
             onClose={() => {
-              setShowServiceModal(false)
-              setEditingService(null)
+              setShowCreateModal(false)
+              setEditingProduct(null)
             }}
-            onSave={async (serviceData) => {
+            onSave={async (productData) => {
               try {
-                const method = editingService ? 'PUT' : 'POST'
-                const url = editingService
-                  ? `/api/products/${selectedProduct.id}/services/${editingService.id}`
-                  : `/api/products/${selectedProduct.id}/services`
+                const isEdit = !!editingProduct
+                const url = isEdit ? `/api/products/${editingProduct.id}` : '/api/products'
+                const method = isEdit ? 'PUT' : 'POST'
 
                 const response = await fetch(url, {
                   method,
                   headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify(serviceData)
+                  body: JSON.stringify({
+                    code: productData.code,
+                    name: productData.name,
+                    description: productData.description,
+                    service_category: productData.category,
+                    product_type: 'producto',
+                    mi_costo: productData.miCosto,
+                    provider_company_name: productData.providerName
+                  })
                 })
 
                 const data = await response.json()
 
                 if (data.success) {
-                  showNotification('success', 'Éxito', editingService ? 'Servicio actualizado' : 'Servicio creado')
-                  setShowServiceModal(false)
-                  setEditingService(null)
+                  showNotification('success', 'Exito', isEdit ? 'Producto actualizado' : 'Producto creado')
+                  setShowCreateModal(false)
+                  setEditingProduct(null)
                   fetchProducts()
                 } else {
-                  showNotification('error', 'Error', data.error || 'Error al guardar servicio')
+                  throw new Error(data.error || 'Error al guardar')
                 }
               } catch (error) {
-                showNotification('error', 'Error', 'Error de conexión')
-              }
-            }}
-          />
-        )}
-      </AnimatePresence>
-
-      {/* Create Product Modal */}
-      <AnimatePresence>
-        {showCreateProductModal && (
-          <CreateProductModal
-            isDark={isDark}
-            onClose={() => setShowCreateProductModal(false)}
-            onSave={async (productData) => {
-              const response = await fetch('/api/products', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                  code: productData.code,
-                  name: productData.name,
-                  description: productData.description,
-                  service_category: productData.category,
-                  product_type: productData.productType,
-                  mi_costo: productData.miCosto,
-                  precio_mayorista: productData.precioMayorista,
-                  precio_publico: productData.precioPublico
-                })
-              })
-              const data = await response.json()
-              if (data.success) {
-                showNotification('success', 'Exito', 'Producto creado correctamente')
-                fetchProducts()
-              } else {
-                throw new Error(data.error || 'Error al crear producto')
-              }
-            }}
-          />
-        )}
-      </AnimatePresence>
-
-      {/* Pricing Modal - Complete Form */}
-      <AnimatePresence>
-        {showPricingModal && selectedProduct && (
-          <PricingModal
-            isDark={isDark}
-            product={selectedProduct}
-            marginHealth={getMarginHealthForProduct(selectedProduct.id)}
-            onClose={() => setShowPricingModal(false)}
-            onSave={async (pricingData) => {
-              try {
-                const response = await fetch(`/api/companies/current/products/${selectedProduct.id}/pricing`, {
-                  method: 'PUT',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify(pricingData)
-                })
-
-                const data = await response.json()
-
-                if (data.success) {
-                  showNotification('success', 'Éxito', 'Precios actualizados')
-                  setShowPricingModal(false)
-                  fetchProducts()
-                  fetchMarginHealth()
-                } else {
-                  showNotification('error', 'Error', data.error || 'Error al guardar precios')
-                }
-              } catch (error) {
-                showNotification('error', 'Error', 'Error de conexión')
+                showNotification('error', 'Error', error instanceof Error ? error.message : 'Error de conexion')
               }
             }}
           />
@@ -1368,518 +605,32 @@ export default function ProductConfigPage() {
   )
 }
 
-// ============== ServiceModal Component ==============
-interface ServiceModalProps {
+// Product Modal Component
+interface ProductModalProps {
   isDark: boolean
-  product: Product
-  service: ProductService | null
+  product: Product | null
   onClose: () => void
-  onSave: (data: any) => Promise<void>
-}
-
-function ServiceModal({ isDark, product, service, onClose, onSave }: ServiceModalProps) {
-  const [saving, setSaving] = useState(false)
-  const [formData, setFormData] = useState({
-    serviceCode: service?.serviceCode || '',
-    serviceName: service?.serviceName || '',
-    description: service?.description || '',
-    sequenceOrder: service?.sequenceOrder || 1,
-    inclusionType: service?.inclusionType || 'included',
-    basePrice: service?.basePrice || 0,
-    generatesBoxTracking: service?.generatesBoxTracking || false,
-    requiresPriorBox: service?.requiresPriorBox || false,
-    isMandatory: service?.isMandatory ?? true,
-    isActive: service?.isActive !== false
-  })
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!formData.serviceCode || !formData.serviceName) {
-      return
-    }
-    setSaving(true)
-    try {
-      await onSave(formData)
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  return (
-    <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
-      onClick={onClose}
-    >
-      <motion.div
-        initial={{ scale: 0.95, opacity: 0 }}
-        animate={{ scale: 1, opacity: 1 }}
-        exit={{ scale: 0.95, opacity: 0 }}
-        className={`w-full max-w-2xl rounded-2xl ${isDark ? 'bg-gray-800' : 'bg-white'} p-6 shadow-xl max-h-[90vh] overflow-y-auto`}
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="flex items-center justify-between mb-4">
-          <div>
-            <h2 className={`text-xl font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>
-              {service ? 'Editar Servicio' : 'Nuevo Servicio'}
-            </h2>
-            <p className={`text-sm ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
-              Producto: {product.name}
-            </p>
-          </div>
-          <span className={`px-2 py-1 text-xs rounded ${isDark ? 'bg-gray-700 text-gray-300' : 'bg-gray-100 text-gray-600'}`}>
-            {product.code}
-          </span>
-        </div>
-
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className={`block text-sm font-medium mb-1 ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
-                Código del Servicio *
-              </label>
-              <input
-                type="text"
-                required
-                value={formData.serviceCode}
-                onChange={(e) => setFormData({ ...formData, serviceCode: e.target.value.toUpperCase().replace(/\s+/g, '_') })}
-                placeholder="ENTREGA_CAJA"
-                className={`w-full px-3 py-2 rounded-lg border ${
-                  isDark
-                    ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-500'
-                    : 'bg-white border-gray-300 text-gray-900 placeholder-gray-400'
-                } focus:outline-none focus:ring-2 focus:ring-blue-500`}
-              />
-            </div>
-            <div>
-              <label className={`block text-sm font-medium mb-1 ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
-                Nombre del Servicio *
-              </label>
-              <input
-                type="text"
-                required
-                value={formData.serviceName}
-                onChange={(e) => setFormData({ ...formData, serviceName: e.target.value })}
-                placeholder="Entrega de Caja"
-                className={`w-full px-3 py-2 rounded-lg border ${
-                  isDark
-                    ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-500'
-                    : 'bg-white border-gray-300 text-gray-900 placeholder-gray-400'
-                } focus:outline-none focus:ring-2 focus:ring-blue-500`}
-              />
-            </div>
-          </div>
-
-          <div>
-            <label className={`block text-sm font-medium mb-1 ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
-              Descripción
-            </label>
-            <textarea
-              value={formData.description}
-              onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-              rows={2}
-              placeholder="Descripción opcional del servicio"
-              className={`w-full px-3 py-2 rounded-lg border ${
-                isDark
-                  ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-500'
-                  : 'bg-white border-gray-300 text-gray-900 placeholder-gray-400'
-              } focus:outline-none focus:ring-2 focus:ring-blue-500`}
-            />
-          </div>
-
-          <div className="grid grid-cols-3 gap-4">
-            <div>
-              <label className={`block text-sm font-medium mb-1 ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
-                Orden de Secuencia
-              </label>
-              <input
-                type="number"
-                min="1"
-                value={formData.sequenceOrder}
-                onChange={(e) => setFormData({ ...formData, sequenceOrder: parseInt(e.target.value) || 1 })}
-                className={`w-full px-3 py-2 rounded-lg border ${
-                  isDark
-                    ? 'bg-gray-700 border-gray-600 text-white'
-                    : 'bg-white border-gray-300 text-gray-900'
-                } focus:outline-none focus:ring-2 focus:ring-blue-500`}
-              />
-            </div>
-            <div>
-              <label className={`block text-sm font-medium mb-1 ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
-                Tipo de Inclusión
-              </label>
-              <select
-                value={formData.inclusionType}
-                onChange={(e) => setFormData({ ...formData, inclusionType: e.target.value as any })}
-                className={`w-full px-3 py-2 rounded-lg border ${
-                  isDark
-                    ? 'bg-gray-700 border-gray-600 text-white'
-                    : 'bg-white border-gray-300 text-gray-900'
-                } focus:outline-none focus:ring-2 focus:ring-blue-500`}
-              >
-                <option value="included">Incluido</option>
-                <option value="optional">Opcional</option>
-                <option value="addon">Adicional</option>
-              </select>
-            </div>
-            <div>
-              <label className={`block text-sm font-medium mb-1 ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
-                Precio Base ($)
-              </label>
-              <input
-                type="number"
-                min="0"
-                step="0.01"
-                value={formData.basePrice}
-                onChange={(e) => setFormData({ ...formData, basePrice: parseFloat(e.target.value) || 0 })}
-                className={`w-full px-3 py-2 rounded-lg border ${
-                  isDark
-                    ? 'bg-gray-700 border-gray-600 text-white'
-                    : 'bg-white border-gray-300 text-gray-900'
-                } focus:outline-none focus:ring-2 focus:ring-blue-500`}
-              />
-            </div>
-          </div>
-
-          <div className={`p-4 rounded-lg ${isDark ? 'bg-gray-700' : 'bg-gray-50'}`}>
-            <p className={`text-sm font-medium mb-3 ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
-              Opciones del Servicio
-            </p>
-            <div className="grid grid-cols-2 gap-4">
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={formData.isMandatory}
-                  onChange={(e) => setFormData({ ...formData, isMandatory: e.target.checked })}
-                  className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                />
-                <span className={`text-sm ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
-                  Obligatorio
-                </span>
-              </label>
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={formData.generatesBoxTracking}
-                  onChange={(e) => setFormData({ ...formData, generatesBoxTracking: e.target.checked })}
-                  className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                />
-                <span className={`text-sm ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
-                  Genera Tracking de Caja
-                </span>
-              </label>
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={formData.requiresPriorBox}
-                  onChange={(e) => setFormData({ ...formData, requiresPriorBox: e.target.checked })}
-                  className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                />
-                <span className={`text-sm ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
-                  Requiere Caja Previa
-                </span>
-              </label>
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={formData.isActive}
-                  onChange={(e) => setFormData({ ...formData, isActive: e.target.checked })}
-                  className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                />
-                <span className={`text-sm ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
-                  Activo
-                </span>
-              </label>
-            </div>
-          </div>
-
-          <div className="flex justify-end gap-3 pt-4 border-t ${isDark ? 'border-gray-700' : 'border-gray-200'}">
-            <button
-              type="button"
-              onClick={onClose}
-              disabled={saving}
-              className={`px-4 py-2 rounded-lg ${
-                isDark
-                  ? 'bg-gray-700 hover:bg-gray-600 text-gray-300'
-                  : 'bg-gray-100 hover:bg-gray-200 text-gray-700'
-              } disabled:opacity-50`}
-            >
-              Cancelar
-            </button>
-            <button
-              type="submit"
-              disabled={saving || !formData.serviceCode || !formData.serviceName}
-              className={`px-4 py-2 rounded-lg ${
-                isDark
-                  ? 'bg-blue-600 hover:bg-blue-700 text-white'
-                  : 'bg-blue-500 hover:bg-blue-600 text-white'
-              } disabled:opacity-50 flex items-center gap-2`}
-            >
-              {saving && <RefreshCw className="w-4 h-4 animate-spin" />}
-              {saving ? 'Guardando...' : 'Guardar'}
-            </button>
-          </div>
-        </form>
-      </motion.div>
-    </motion.div>
-  )
-}
-
-// ============== PricingModal Component ==============
-interface PricingModalProps {
-  isDark: boolean
-  product: Product
-  marginHealth?: MarginHealth
-  onClose: () => void
-  onSave: (data: any) => Promise<void>
-}
-
-function PricingModal({ isDark, product, marginHealth, onClose, onSave }: PricingModalProps) {
-  const [saving, setSaving] = useState(false)
-  const [formData, setFormData] = useState({
-    miCosto: product.companyPricing?.miCosto ?? product.miCosto,
-    precioVenta: product.companyPricing?.precioVenta ?? product.precioPublico,
-  })
-
-  const calculatedMargin = formData.precioVenta - formData.miCosto
-  const marginPercent = formData.precioVenta > 0 ? (calculatedMargin / formData.precioVenta) * 100 : 0
-  const netMargin = marginHealth ? calculatedMargin - marginHealth.totalComisiones : calculatedMargin
-
-  const getMarginStatus = () => {
-    if (netMargin <= 0) return 'critical'
-    if (marginPercent < 10) return 'warning'
-    return 'healthy'
-  }
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setSaving(true)
-    try {
-      await onSave(formData)
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  return (
-    <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
-      onClick={onClose}
-    >
-      <motion.div
-        initial={{ scale: 0.95, opacity: 0 }}
-        animate={{ scale: 1, opacity: 1 }}
-        exit={{ scale: 0.95, opacity: 0 }}
-        className={`w-full max-w-xl rounded-2xl ${isDark ? 'bg-gray-800' : 'bg-white'} p-6 shadow-xl`}
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="flex items-center justify-between mb-4">
-          <div>
-            <h2 className={`text-xl font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>
-              Configurar Precios
-            </h2>
-            <p className={`text-sm ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
-              {product.name}
-            </p>
-          </div>
-        </div>
-
-        <form onSubmit={handleSubmit} className="space-y-4">
-          {/* Current Catalog Prices */}
-          <div className={`p-4 rounded-lg ${isDark ? 'bg-gray-700/50' : 'bg-gray-50'}`}>
-            <p className={`text-xs font-medium mb-2 ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
-              Precios del Catálogo (Referencia)
-            </p>
-            <div className="grid grid-cols-3 gap-4 text-sm">
-              <div>
-                <p className={isDark ? 'text-gray-500' : 'text-gray-400'}>Mi Costo</p>
-                <p className={isDark ? 'text-gray-300' : 'text-gray-700'}>${product.miCosto.toFixed(2)}</p>
-              </div>
-              <div>
-                <p className={isDark ? 'text-gray-500' : 'text-gray-400'}>Precio Mayorista</p>
-                <p className={isDark ? 'text-gray-300' : 'text-gray-700'}>${product.precioMayorista.toFixed(2)}</p>
-              </div>
-              <div>
-                <p className={isDark ? 'text-gray-500' : 'text-gray-400'}>Precio Público</p>
-                <p className={isDark ? 'text-gray-300' : 'text-gray-700'}>${product.precioPublico.toFixed(2)}</p>
-              </div>
-            </div>
-          </div>
-
-          {/* Company-specific prices */}
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className={`block text-sm font-medium mb-1 ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
-                Mi Costo (Empresa) $
-              </label>
-              <input
-                type="number"
-                min="0"
-                step="0.01"
-                value={formData.miCosto}
-                onChange={(e) => setFormData({ ...formData, miCosto: parseFloat(e.target.value) || 0 })}
-                className={`w-full px-3 py-2 rounded-lg border ${
-                  isDark
-                    ? 'bg-gray-700 border-gray-600 text-white'
-                    : 'bg-white border-gray-300 text-gray-900'
-                } focus:outline-none focus:ring-2 focus:ring-blue-500`}
-              />
-            </div>
-            <div>
-              <label className={`block text-sm font-medium mb-1 ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
-                Precio de Venta $
-              </label>
-              <input
-                type="number"
-                min="0"
-                step="0.01"
-                value={formData.precioVenta}
-                onChange={(e) => setFormData({ ...formData, precioVenta: parseFloat(e.target.value) || 0 })}
-                className={`w-full px-3 py-2 rounded-lg border ${
-                  isDark
-                    ? 'bg-gray-700 border-gray-600 text-white'
-                    : 'bg-white border-gray-300 text-gray-900'
-                } focus:outline-none focus:ring-2 focus:ring-blue-500`}
-              />
-            </div>
-          </div>
-
-          {/* Margin Calculator */}
-          <div className={`p-4 rounded-lg border-2 ${
-            getMarginStatus() === 'critical'
-              ? isDark ? 'border-red-500/50 bg-red-900/20' : 'border-red-300 bg-red-50'
-              : getMarginStatus() === 'warning'
-                ? isDark ? 'border-yellow-500/50 bg-yellow-900/20' : 'border-yellow-300 bg-yellow-50'
-                : isDark ? 'border-green-500/50 bg-green-900/20' : 'border-green-300 bg-green-50'
-          }`}>
-            <div className="flex items-center gap-2 mb-3">
-              {getMarginStatus() === 'critical' ? (
-                <AlertCircle className="w-5 h-5 text-red-500" />
-              ) : getMarginStatus() === 'warning' ? (
-                <AlertTriangle className="w-5 h-5 text-yellow-500" />
-              ) : (
-                <CheckCircle className="w-5 h-5 text-green-500" />
-              )}
-              <span className={`font-medium ${
-                getMarginStatus() === 'critical'
-                  ? 'text-red-500'
-                  : getMarginStatus() === 'warning'
-                    ? 'text-yellow-500'
-                    : 'text-green-500'
-              }`}>
-                {getMarginStatus() === 'critical' ? 'Margen Crítico' :
-                  getMarginStatus() === 'warning' ? 'Margen Bajo' : 'Margen Saludable'}
-              </span>
-            </div>
-
-            <div className="grid grid-cols-2 gap-4 text-sm">
-              <div>
-                <p className={isDark ? 'text-gray-400' : 'text-gray-500'}>Margen Bruto</p>
-                <p className={`text-lg font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>
-                  ${calculatedMargin.toFixed(2)} <span className="text-sm font-normal">({marginPercent.toFixed(1)}%)</span>
-                </p>
-              </div>
-              {marginHealth && (
-                <>
-                  <div>
-                    <p className={isDark ? 'text-gray-400' : 'text-gray-500'}>Total Comisiones</p>
-                    <p className={`text-lg font-bold ${isDark ? 'text-orange-400' : 'text-orange-600'}`}>
-                      -${marginHealth.totalComisiones.toFixed(2)}
-                    </p>
-                  </div>
-                  <div className="col-span-2 pt-2 border-t border-dashed ${isDark ? 'border-gray-600' : 'border-gray-300'}">
-                    <p className={isDark ? 'text-gray-400' : 'text-gray-500'}>Margen Neto</p>
-                    <p className={`text-2xl font-bold ${
-                      netMargin <= 0 ? 'text-red-500' : netMargin < 5 ? 'text-yellow-500' : 'text-green-500'
-                    }`}>
-                      ${netMargin.toFixed(2)}
-                    </p>
-                  </div>
-                </>
-              )}
-            </div>
-          </div>
-
-          <div className="flex justify-end gap-3 pt-4 border-t ${isDark ? 'border-gray-700' : 'border-gray-200'}">
-            <button
-              type="button"
-              onClick={onClose}
-              disabled={saving}
-              className={`px-4 py-2 rounded-lg ${
-                isDark
-                  ? 'bg-gray-700 hover:bg-gray-600 text-gray-300'
-                  : 'bg-gray-100 hover:bg-gray-200 text-gray-700'
-              } disabled:opacity-50`}
-            >
-              Cancelar
-            </button>
-            <button
-              type="submit"
-              disabled={saving}
-              className={`px-4 py-2 rounded-lg ${
-                isDark
-                  ? 'bg-blue-600 hover:bg-blue-700 text-white'
-                  : 'bg-blue-500 hover:bg-blue-600 text-white'
-              } disabled:opacity-50 flex items-center gap-2`}
-            >
-              {saving && <RefreshCw className="w-4 h-4 animate-spin" />}
-              {saving ? 'Guardando...' : 'Guardar Precios'}
-            </button>
-          </div>
-        </form>
-      </motion.div>
-    </motion.div>
-  )
-}
-
-// CreateProductModal component
-interface CreateProductModalProps {
-  isDark: boolean
-  onClose: () => void
-  onSave: (product: {
+  onSave: (data: {
     code: string
     name: string
     description: string
     category: string
-    productType: string
     miCosto: number
-    precioMayorista: number
-    precioPublico: number
+    providerName: string
   }) => Promise<void>
 }
 
-function CreateProductModal({ isDark, onClose, onSave }: CreateProductModalProps) {
+function ProductModal({ isDark, product, onClose, onSave }: ProductModalProps) {
   const [formData, setFormData] = useState({
-    code: '',
-    name: '',
-    description: '',
-    category: 'paqueteria',
-    productType: 'caja',
-    miCosto: 0,
-    precioMayorista: 0,
-    precioPublico: 0
+    code: product?.code || '',
+    name: product?.name || '',
+    description: product?.description || '',
+    category: product?.category || 'paqueteria',
+    miCosto: product?.miCosto || 0,
+    providerName: product?.providerName || ''
   })
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
-
-  const categories = [
-    { id: 'paqueteria', name: 'Paqueteria' },
-    { id: 'remesa', name: 'Remesa' },
-    { id: 'recarga', name: 'Recarga' },
-    { id: 'mercado', name: 'Mercado' }
-  ]
-
-  const productTypes = [
-    { id: 'caja', name: 'Caja' },
-    { id: 'sobre', name: 'Sobre' },
-    { id: 'paquete', name: 'Paquete' },
-    { id: 'servicio', name: 'Servicio' }
-  ]
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -1890,23 +641,20 @@ function CreateProductModal({ isDark, onClose, onSave }: CreateProductModalProps
       return
     }
 
-    if (formData.miCosto < 0 || formData.precioMayorista < 0 || formData.precioPublico < 0) {
-      setError('Los precios no pueden ser negativos')
+    if (formData.miCosto < 0) {
+      setError('El costo no puede ser negativo')
       return
     }
 
     try {
       setSaving(true)
       await onSave(formData)
-      onClose()
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Error al crear producto')
+      setError(err instanceof Error ? err.message : 'Error al guardar')
     } finally {
       setSaving(false)
     }
   }
-
-  const margen = formData.precioMayorista - formData.miCosto
 
   return (
     <motion.div
@@ -1920,29 +668,22 @@ function CreateProductModal({ isDark, onClose, onSave }: CreateProductModalProps
         initial={{ scale: 0.95, opacity: 0 }}
         animate={{ scale: 1, opacity: 1 }}
         exit={{ scale: 0.95, opacity: 0 }}
-        className={`w-full max-w-lg rounded-xl shadow-2xl ${
-          isDark ? 'bg-gray-800' : 'bg-white'
-        } max-h-[90vh] overflow-y-auto`}
+        className={`w-full max-w-lg rounded-xl shadow-2xl ${isDark ? 'bg-gray-800' : 'bg-white'}`}
       >
         <div className={`p-6 border-b ${isDark ? 'border-gray-700' : 'border-gray-200'}`}>
           <div className="flex items-center justify-between">
             <h2 className={`text-xl font-semibold ${isDark ? 'text-white' : 'text-gray-900'}`}>
-              Crear Nuevo Producto
+              {product ? 'Editar Producto' : 'Nuevo Producto'}
             </h2>
-            <button
-              onClick={onClose}
-              className={`p-2 rounded-lg ${isDark ? 'hover:bg-gray-700' : 'hover:bg-gray-100'}`}
-            >
-              <AlertCircle className="w-5 h-5" />
+            <button onClick={onClose} className={`p-2 rounded-lg ${isDark ? 'hover:bg-gray-700' : 'hover:bg-gray-100'}`}>
+              <X className="w-5 h-5" />
             </button>
           </div>
         </div>
 
         <form onSubmit={handleSubmit} className="p-6 space-y-4">
           {error && (
-            <div className="p-3 rounded-lg bg-red-100 text-red-700 text-sm">
-              {error}
-            </div>
+            <div className="p-3 rounded-lg bg-red-100 text-red-700 text-sm">{error}</div>
           )}
 
           <div className="grid grid-cols-2 gap-4">
@@ -1955,9 +696,7 @@ function CreateProductModal({ isDark, onClose, onSave }: CreateProductModalProps
                 value={formData.code}
                 onChange={(e) => setFormData({ ...formData, code: e.target.value.toUpperCase() })}
                 className={`w-full px-3 py-2 rounded-lg border ${
-                  isDark
-                    ? 'bg-gray-700 border-gray-600 text-white'
-                    : 'bg-white border-gray-300 text-gray-900'
+                  isDark ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900'
                 } focus:ring-2 focus:ring-blue-500`}
                 placeholder="CAJA-12X12"
               />
@@ -1970,12 +709,10 @@ function CreateProductModal({ isDark, onClose, onSave }: CreateProductModalProps
                 value={formData.category}
                 onChange={(e) => setFormData({ ...formData, category: e.target.value })}
                 className={`w-full px-3 py-2 rounded-lg border ${
-                  isDark
-                    ? 'bg-gray-700 border-gray-600 text-white'
-                    : 'bg-white border-gray-300 text-gray-900'
+                  isDark ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900'
                 } focus:ring-2 focus:ring-blue-500`}
               >
-                {categories.map((cat) => (
+                {CATEGORIES.map(cat => (
                   <option key={cat.id} value={cat.id}>{cat.name}</option>
                 ))}
               </select>
@@ -1991,9 +728,7 @@ function CreateProductModal({ isDark, onClose, onSave }: CreateProductModalProps
               value={formData.name}
               onChange={(e) => setFormData({ ...formData, name: e.target.value })}
               className={`w-full px-3 py-2 rounded-lg border ${
-                isDark
-                  ? 'bg-gray-700 border-gray-600 text-white'
-                  : 'bg-white border-gray-300 text-gray-900'
+                isDark ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900'
               } focus:ring-2 focus:ring-blue-500`}
               placeholder="Caja 12x12x12"
             />
@@ -2001,21 +736,17 @@ function CreateProductModal({ isDark, onClose, onSave }: CreateProductModalProps
 
           <div>
             <label className={`block text-sm font-medium mb-1 ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
-              Tipo de Producto
+              Proveedor
             </label>
-            <select
-              value={formData.productType}
-              onChange={(e) => setFormData({ ...formData, productType: e.target.value })}
+            <input
+              type="text"
+              value={formData.providerName}
+              onChange={(e) => setFormData({ ...formData, providerName: e.target.value })}
               className={`w-full px-3 py-2 rounded-lg border ${
-                isDark
-                  ? 'bg-gray-700 border-gray-600 text-white'
-                  : 'bg-white border-gray-300 text-gray-900'
+                isDark ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900'
               } focus:ring-2 focus:ring-blue-500`}
-            >
-              {productTypes.map((type) => (
-                <option key={type.id} value={type.id}>{type.name}</option>
-              ))}
-            </select>
+              placeholder="Nombre del proveedor"
+            />
           </div>
 
           <div>
@@ -2027,81 +758,30 @@ function CreateProductModal({ isDark, onClose, onSave }: CreateProductModalProps
               onChange={(e) => setFormData({ ...formData, description: e.target.value })}
               rows={2}
               className={`w-full px-3 py-2 rounded-lg border ${
-                isDark
-                  ? 'bg-gray-700 border-gray-600 text-white'
-                  : 'bg-white border-gray-300 text-gray-900'
+                isDark ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900'
               } focus:ring-2 focus:ring-blue-500`}
               placeholder="Descripcion del producto..."
             />
           </div>
 
-          <div className={`p-4 rounded-lg ${isDark ? 'bg-gray-700/50' : 'bg-gray-50'}`}>
-            <h4 className={`font-medium mb-3 ${isDark ? 'text-white' : 'text-gray-900'}`}>
-              Precios
-            </h4>
-            <div className="grid grid-cols-3 gap-3">
-              <div>
-                <label className={`block text-xs mb-1 ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
-                  Mi Costo ($)
-                </label>
-                <input
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  value={formData.miCosto}
-                  onChange={(e) => setFormData({ ...formData, miCosto: parseFloat(e.target.value) || 0 })}
-                  className={`w-full px-3 py-2 rounded-lg border ${
-                    isDark
-                      ? 'bg-gray-600 border-gray-500 text-white'
-                      : 'bg-white border-gray-300 text-gray-900'
-                  } focus:ring-2 focus:ring-blue-500`}
-                />
-              </div>
-              <div>
-                <label className={`block text-xs mb-1 ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
-                  Precio Mayorista ($)
-                </label>
-                <input
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  value={formData.precioMayorista}
-                  onChange={(e) => setFormData({ ...formData, precioMayorista: parseFloat(e.target.value) || 0 })}
-                  className={`w-full px-3 py-2 rounded-lg border ${
-                    isDark
-                      ? 'bg-gray-600 border-gray-500 text-white'
-                      : 'bg-white border-gray-300 text-gray-900'
-                  } focus:ring-2 focus:ring-blue-500`}
-                />
-              </div>
-              <div>
-                <label className={`block text-xs mb-1 ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
-                  Precio Publico ($)
-                </label>
-                <input
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  value={formData.precioPublico}
-                  onChange={(e) => setFormData({ ...formData, precioPublico: parseFloat(e.target.value) || 0 })}
-                  className={`w-full px-3 py-2 rounded-lg border ${
-                    isDark
-                      ? 'bg-gray-600 border-gray-500 text-white'
-                      : 'bg-white border-gray-300 text-gray-900'
-                  } focus:ring-2 focus:ring-blue-500`}
-                />
-              </div>
-            </div>
-            {margen > 0 && (
-              <div className={`mt-3 pt-3 border-t ${isDark ? 'border-gray-600' : 'border-gray-200'}`}>
-                <div className="flex items-center justify-between text-sm">
-                  <span className={isDark ? 'text-gray-400' : 'text-gray-600'}>Margen:</span>
-                  <span className={`font-medium ${margen > 0 ? 'text-green-500' : 'text-red-500'}`}>
-                    ${margen.toFixed(2)}
-                  </span>
-                </div>
-              </div>
-            )}
+          <div>
+            <label className={`block text-sm font-medium mb-1 ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
+              Mi Costo ($)
+            </label>
+            <input
+              type="number"
+              step="0.01"
+              min="0"
+              value={formData.miCosto}
+              onChange={(e) => setFormData({ ...formData, miCosto: parseFloat(e.target.value) || 0 })}
+              className={`w-full px-3 py-2 rounded-lg border ${
+                isDark ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900'
+              } focus:ring-2 focus:ring-blue-500`}
+              placeholder="0.00"
+            />
+            <p className={`mt-1 text-xs ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
+              El precio de venta se configura por empresa en la pestaña "Precios por Empresa"
+            </p>
           </div>
 
           <div className="flex justify-end gap-3 pt-4">
@@ -2110,9 +790,7 @@ function CreateProductModal({ isDark, onClose, onSave }: CreateProductModalProps
               onClick={onClose}
               disabled={saving}
               className={`px-4 py-2 rounded-lg ${
-                isDark
-                  ? 'bg-gray-700 hover:bg-gray-600 text-gray-300'
-                  : 'bg-gray-100 hover:bg-gray-200 text-gray-700'
+                isDark ? 'bg-gray-700 hover:bg-gray-600 text-gray-300' : 'bg-gray-100 hover:bg-gray-200 text-gray-700'
               } disabled:opacity-50`}
             >
               Cancelar
@@ -2120,14 +798,10 @@ function CreateProductModal({ isDark, onClose, onSave }: CreateProductModalProps
             <button
               type="submit"
               disabled={saving}
-              className={`px-4 py-2 rounded-lg ${
-                isDark
-                  ? 'bg-blue-600 hover:bg-blue-700 text-white'
-                  : 'bg-blue-500 hover:bg-blue-600 text-white'
-              } disabled:opacity-50 flex items-center gap-2`}
+              className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg disabled:opacity-50 flex items-center gap-2"
             >
               {saving && <RefreshCw className="w-4 h-4 animate-spin" />}
-              {saving ? 'Creando...' : 'Crear Producto'}
+              {saving ? 'Guardando...' : product ? 'Guardar Cambios' : 'Crear Producto'}
             </button>
           </div>
         </form>
