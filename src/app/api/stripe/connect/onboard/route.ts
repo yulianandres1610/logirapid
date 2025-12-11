@@ -163,14 +163,6 @@ export async function POST(request: NextRequest) {
 
       const user = userResult.rows[0]
 
-      // Verify user is a driver
-      if (user.role !== 'DRIVER') {
-        return NextResponse.json({
-          success: false,
-          error: 'Solo los drivers pueden tener cuenta Connect'
-        }, { status: 400 })
-      }
-
       email = user.email
       name = `${user.firstname} ${user.lastname}`.trim()
       existingAccountId = user.stripe_account_id

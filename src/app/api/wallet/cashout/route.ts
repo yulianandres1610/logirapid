@@ -187,14 +187,6 @@ export async function POST(request: NextRequest) {
 
       const user = userResult.rows[0]
 
-      // Verify user is a driver
-      if (user.role !== 'DRIVER') {
-        return NextResponse.json({
-          success: false,
-          error: 'Solo los drivers pueden realizar retiros'
-        }, { status: 400 })
-      }
-
       stripeAccountId = user.stripe_account_id
       payoutsEnabled = user.stripe_payouts_enabled || false
       walletBalance = parseFloat(user.wallet_balance) || 0
