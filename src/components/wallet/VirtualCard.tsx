@@ -28,6 +28,9 @@ interface VirtualCardProps {
   isSuperAdmin?: boolean
   companyId?: number
   onCreditSettingsChange?: (settings: { creditLimit?: number, dailyLimit?: number, monthlyLimit?: number, creditEnabled?: boolean }) => void
+  // Bank account connection status
+  bankAccountConnected?: boolean
+  bankAccountLast4?: string
   onRecharge?: () => void
   onTransfer?: () => void
   onCashout?: () => void
@@ -111,6 +114,9 @@ export function VirtualCard({
   isSuperAdmin = false,
   companyId,
   onCreditSettingsChange,
+  // Bank account connection status
+  bankAccountConnected = false,
+  bankAccountLast4,
   onRecharge,
   onTransfer,
   onCashout,
@@ -210,6 +216,17 @@ export function VirtualCard({
                       {tierStyle.name}
                     </span>
                   </div>
+                  {/* Bank Account Connected Badge */}
+                  {bankAccountConnected && (
+                    <div className="flex items-center gap-1 px-2 py-0.5 rounded bg-green-500/20 border border-green-400/40">
+                      <svg className="w-3 h-3 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                      </svg>
+                      <span className="text-[9px] font-medium text-green-300">
+                        {bankAccountLast4 ? `****${bankAccountLast4}` : 'Banco'}
+                      </span>
+                    </div>
+                  )}
                   {/* SUPER_ADMIN settings button */}
                   {isSuperAdmin && type === 'company' && onCreditSettingsChange && (
                     <button
