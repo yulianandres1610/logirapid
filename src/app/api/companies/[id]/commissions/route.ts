@@ -13,6 +13,7 @@ interface JWTPayload {
 
 const VALID_ROLES = ['DRIVER', 'USER', 'MANAGER', 'ADMIN', 'ALL']
 const VALID_COMMISSION_TYPES = ['fixed', 'percentage']
+const VALID_ACTIVITY_TYPES = ['creation', 'delivery', 'packing'] // NEW: activity types for multi-user commissions
 
 /**
  * GET /api/companies/[id]/commissions
@@ -23,6 +24,7 @@ const VALID_COMMISSION_TYPES = ['fixed', 'percentage']
  * - role: Filter by role
  * - productId: Filter by product
  * - active: Filter by active status (true/false)
+ * - activityType: Filter by activity type (creation/delivery/packing)
  *
  * Returns:
  * - commissions: Array of commission configurations with product details
@@ -79,6 +81,7 @@ export async function GET(
     const roleFilter = searchParams.get('role')
     const productIdFilter = searchParams.get('productId')
     const activeFilter = searchParams.get('active')
+    const activityTypeFilter = searchParams.get('activityType')
 
     // Get company info
     const companyResult = await db.query(`
@@ -101,6 +104,7 @@ export async function GET(
         ccc.company_id,
         ccc.product_id,
         ccc.role,
+        ccc.activity_type,
         ccc.commission_type,
         ccc.commission_value,
         ccc.min_amount,
@@ -139,7 +143,13 @@ export async function GET(
       paramIndex++
     }
 
-    query += ` ORDER BY pc.service_category, pc.name, ccc.role`
+    if (activityTypeFilter && VALID_ACTIVITY_TYPES.includes(activityTypeFilter)) {
+      query += ` AND ccc.activity_type = $${paramIndex}`
+      queryParams.push(activityTypeFilter)
+      paramIndex++
+    }
+
+    query += ` ORDER BY pc.service_category, pc.name, ccc.role, ccc.activity_type`
 
     const commissionsResult = await db.query(query, queryParams)
 
@@ -172,6 +182,7 @@ export async function GET(
       serviceCategory: c.service_category,
       productBasePrice: parseFloat(c.product_base_price || 0),
       role: c.role,
+      activityType: c.activity_type || 'delivery', // Default to 'delivery' for backwards compatibility
       commissionType: c.commission_type,
       commissionValue: parseFloat(c.commission_value),
       minAmount: c.min_amount ? parseFloat(c.min_amount) : null,
@@ -198,6 +209,7 @@ export async function GET(
       commissionsByProduct[c.productId].roles.push({
         id: c.id,
         role: c.role,
+        activityType: c.activityType,
         commissionType: c.commissionType,
         commissionValue: c.commissionValue,
         minAmount: c.minAmount,
@@ -247,6 +259,7 @@ export async function GET(
  * {
  *   productId: number,
  *   role: 'DRIVER' | 'USER' | 'MANAGER' | 'ADMIN' | 'ALL',
+ *   activityType?: 'creation' | 'delivery' | 'packing',  // NEW: activity type for multi-user commissions
  *   commissionType: 'fixed' | 'percentage',
  *   commissionValue: number,
  *   minAmount?: number,
@@ -312,6 +325,7 @@ export async function POST(
     const {
       productId,
       role,
+      activityType = 'delivery', // Default to 'delivery' for backwards compatibility
       commissionType,
       commissionValue,
       minAmount,
@@ -332,6 +346,14 @@ export async function POST(
       return NextResponse.json({
         success: false,
         error: `Rol invalido. Valores validos: ${VALID_ROLES.join(', ')}`
+      }, { status: 400 })
+    }
+
+    // Validate activity type
+    if (!VALID_ACTIVITY_TYPES.includes(activityType)) {
+      return NextResponse.json({
+        success: false,
+        error: `Tipo de actividad invalido. Valores validos: ${VALID_ACTIVITY_TYPES.join(', ')}`
       }, { status: 400 })
     }
 
@@ -386,11 +408,14 @@ export async function POST(
     const product = productResult.rows[0]
 
     // Upsert commission configuration
+    // Note: The unique constraint is on (company_id, product_id, role, activity_type)
+    // This allows different commission rates for the same product/role based on activity type
     const result = await db.query(`
       INSERT INTO company_commission_config (
         company_id,
         product_id,
         role,
+        activity_type,
         commission_type,
         commission_value,
         min_amount,
@@ -399,8 +424,8 @@ export async function POST(
         created_by,
         created_at,
         updated_at
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW(), NOW())
-      ON CONFLICT (company_id, product_id, role) DO UPDATE SET
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW(), NOW())
+      ON CONFLICT (company_id, product_id, role, activity_type) DO UPDATE SET
         commission_type = EXCLUDED.commission_type,
         commission_value = EXCLUDED.commission_value,
         min_amount = EXCLUDED.min_amount,
@@ -413,6 +438,7 @@ export async function POST(
       companyId,
       productId,
       role,
+      activityType,
       commissionType,
       commissionValue,
       minAmount || null,
@@ -433,6 +459,7 @@ export async function POST(
         productName: product.name,
         serviceCategory: product.service_category,
         role: config.role,
+        activityType: config.activity_type,
         commissionType: config.commission_type,
         commissionValue: parseFloat(config.commission_value),
         minAmount: config.min_amount ? parseFloat(config.min_amount) : null,

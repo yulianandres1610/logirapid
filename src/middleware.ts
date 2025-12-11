@@ -57,6 +57,7 @@ export async function middleware(request: NextRequest) {
         response.headers.set('x-auth-token', authToken)
         response.headers.set('x-user-id', decodedToken.userId?.toString() || '')
         response.headers.set('x-user-role', decodedToken.role || '')
+        response.headers.set('x-user-email', decodedToken.email || '')
         response.headers.set('x-is-super-admin', decodedToken.role === 'SUPER_ADMIN' ? 'true' : 'false')
         if (decodedToken.companyId) {
           response.headers.set('x-company-id', decodedToken.companyId.toString())

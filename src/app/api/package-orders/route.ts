@@ -181,11 +181,68 @@ export async function GET(request: NextRequest) {
   }
 }
 
+// Helper function to validate and recalculate services with product pricing from DB
+async function validateAndEnrichServices(
+  services: any[],
+  companyId: number
+): Promise<{ services: any[]; totalAmount: number }> {
+  const enrichedServices = []
+  let totalAmount = 0
+
+  for (const service of services) {
+    // If service has productId, look up pricing from database
+    if (service.productId) {
+      const priceResult = await db.query(`
+        SELECT
+          pc.id,
+          pc.code,
+          pc.name,
+          COALESCE(cpp.sell_price, pc.precio_publico, pc.platform_price) as sell_price,
+          COALESCE(cpp.cost_price, pc.mi_costo) as cost_price
+        FROM product_catalog pc
+        LEFT JOIN company_product_pricing cpp
+          ON cpp.product_id = pc.id AND cpp.company_id = $1
+        WHERE pc.id = $2 AND pc.is_active = true
+      `, [companyId, service.productId])
+
+      if (priceResult.rows.length > 0) {
+        const product = priceResult.rows[0]
+        const quantity = service.quantity || 1
+        const unitPrice = parseFloat(product.sell_price || 0)
+        const costPrice = parseFloat(product.cost_price || 0)
+        const subtotal = unitPrice * quantity
+
+        enrichedServices.push({
+          productId: product.id,
+          productCode: product.code,
+          name: product.name,
+          quantity,
+          unitPrice,
+          costPrice,
+          subtotal
+        })
+
+        totalAmount += subtotal
+      } else {
+        // Product not found - keep original service data
+        enrichedServices.push(service)
+        totalAmount += parseFloat(service.subtotal || service.unitPrice || 0)
+      }
+    } else {
+      // Legacy service without productId - keep as is
+      enrichedServices.push(service)
+      totalAmount += parseFloat(service.subtotal || service.price || 0)
+    }
+  }
+
+  return { services: enrichedServices, totalAmount }
+}
+
 // POST: Crear nueva orden de paquetería
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    const { isSuperAdmin, companyId: headerCompanyId } = getCompanyFilter(request)
+    const { isSuperAdmin, companyId: headerCompanyId, userId, userRole, userEmail } = getCompanyFilter(request)
     const bodyCompanyId = body.companyId ? parseInt(body.companyId) : null
     const companyId = !isSuperAdmin
       ? headerCompanyId || bodyCompanyId
@@ -289,8 +346,24 @@ export async function POST(request: NextRequest) {
       ? body.zipcode.trim()
       : (body.customerAddress ? extractZipcode(body.customerAddress) : null)
 
+    // Parse services (might be string or array)
+    const rawServices = typeof body.services === 'string'
+      ? JSON.parse(body.services)
+      : body.services
+
+    // Validate and enrich services with pricing from database
+    // This ensures prices come from company_product_pricing or product_catalog
+    const { services: enrichedServices, totalAmount: calculatedTotal } = await validateAndEnrichServices(
+      rawServices,
+      companyId
+    )
+
+    // Use calculated total if services have productIds, otherwise use provided total
+    const hasProductIds = enrichedServices.some((s: any) => s.productId)
+    const finalTotalAmount = hasProductIds ? calculatedTotal : (body.totalAmount || 0)
+
     // Prepare services as JSON string
-    const servicesJson = typeof body.services === 'string' ? body.services : JSON.stringify(body.services)
+    const servicesJson = JSON.stringify(enrichedServices)
     const additionalServicesJson = typeof body.additionalServices === 'string'
       ? body.additionalServices
       : JSON.stringify(body.additionalServices || [])
@@ -315,6 +388,7 @@ export async function POST(request: NextRequest) {
         firstname, lastname, order_type, office_order_data,
         zipcode, street, apartment, city, state, country,
         company_id, paymentmethod, payment_status, paid_amount,
+        created_by_user_id,
         createdat, updatedat
       ) VALUES (
         $1, $2, $3, $4, $5,
@@ -324,6 +398,7 @@ export async function POST(request: NextRequest) {
         $20, $21, $22, $23,
         $24, $25, $26, $27, $28, $29,
         $30, $31, $32, $33,
+        $34,
         NOW(), NOW()
       )
       RETURNING *
@@ -342,12 +417,12 @@ export async function POST(request: NextRequest) {
       emptyToNull(body.scheduledDate),
       emptyToNull(body.timeSlot),
       initialStatus,
-      body.createdBy || 'system',
+      body.createdBy || userEmail || 'system',
       body.latitude || null,
       body.longitude || null,
       body.subtotal || 0,
       body.taxAmount || 0,
-      body.totalAmount || 0,
+      finalTotalAmount,
       body.boxCount || 0,
       body.boxPrice || 0,
       additionalServicesJson,
@@ -365,13 +440,45 @@ export async function POST(request: NextRequest) {
       companyId,
       paymentMethod,
       paymentStatus,
-      paidAmount
+      paidAmount,
+      userId || null  // created_by_user_id
     ]
 
     const result = await db.query(insertQuery, values)
 
-    // Format the response to match expected format
+    // Get the created order
     const newOrder = result.rows[0]
+    const orderId = newOrder.id
+
+    // ================================================
+    // CREAR ORDER_PARTICIPANTS Y ORDER_ACTIVITY_LOG
+    // ================================================
+    if (userId) {
+      try {
+        // Create order_participants entry
+        await db.query(`
+          INSERT INTO order_participants (
+            order_id, company_id, created_by_user_id, created_by_role, created_at
+          ) VALUES ($1, $2, $3, $4, NOW())
+          ON CONFLICT (order_id) DO NOTHING
+        `, [orderId, companyId, userId, userRole || 'USER'])
+
+        // Create order_activity_log entry
+        await db.query(`
+          INSERT INTO order_activity_log (
+            order_id, company_id, user_id, user_role, user_name,
+            activity_type, new_status, source
+          ) VALUES ($1, $2, $3, $4, $5, 'created', $6, 'web')
+        `, [orderId, companyId, userId, userRole || 'USER', userEmail || 'system', initialStatus])
+
+        console.log(`✅ [UserTracking] Order ${orderId} created by user ${userId} (${userRole})`)
+      } catch (trackingError) {
+        // Don't fail order creation if tracking fails
+        console.error('[UserTracking] Error creating participants/activity:', trackingError)
+      }
+    }
+
+    // Format the response to match expected format
     const formattedOrder = {
       id: newOrder.id,
       customerId: newOrder.customerid,

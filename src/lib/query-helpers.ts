@@ -18,6 +18,15 @@ export interface CompanyFilter {
   /** ID de la empresa del usuario o del subdominio */
   companyId: number | null
 
+  /** ID del usuario autenticado */
+  userId: number | null
+
+  /** Rol del usuario autenticado */
+  userRole: string | null
+
+  /** Email del usuario autenticado */
+  userEmail: string | null
+
   /** Agrega condición WHERE de empresa a la query */
   addCompanyFilter: (conditions: string[], params: any[]) => void
 
@@ -65,19 +74,29 @@ export function getCompanyFilter(request: NextRequest): CompanyFilter {
       : null
   const companyId = Number.isFinite(parsedCompany) ? parsedCompany : null
 
+  // Leer user info from headers (set by middleware from JWT)
+  const headerUserId = request.headers.get('x-user-id')
+  const parsedUserId = headerUserId ? parseInt(headerUserId, 10) : null
+  const userId = Number.isFinite(parsedUserId) ? parsedUserId : null
+
+  const userRole = request.headers.get('x-user-role') || request.cookies.get('user-role')?.value || null
+  const userEmail = request.headers.get('x-user-email') || null
+
   const isSuperAdmin =
     headerIsSuperAdmin ||
-    request.headers.get('x-user-role') === 'SUPER_ADMIN' ||
-    request.cookies.get('user-role')?.value === 'SUPER_ADMIN'
+    userRole === 'SUPER_ADMIN'
 
   // Logging para debugging (solo en desarrollo)
   if (process.env.NODE_ENV === 'development') {
-    console.log(`[QueryHelper] isSuperAdmin: ${isSuperAdmin}, companyId: ${companyId}`)
+    console.log(`[QueryHelper] isSuperAdmin: ${isSuperAdmin}, companyId: ${companyId}, userId: ${userId}`)
   }
 
   return {
     isSuperAdmin,
     companyId,
+    userId,
+    userRole,
+    userEmail,
 
     /**
      * Agrega filtro de empresa al array de condiciones

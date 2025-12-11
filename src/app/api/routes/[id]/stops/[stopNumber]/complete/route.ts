@@ -14,6 +14,7 @@ export const runtime = 'nodejs'
  * - Cambia estado de la parada a 'completada'
  * - Cambia estado de las órdenes de esa parada a 'en_bodega'
  * - Si todas las paradas están completadas, cambia estado de ruta a 'completada'
+ * - Procesa distribución de pagos (comisiones a creador y completador, pago a proveedor)
  */
 export async function POST(
   request: NextRequest,
@@ -23,7 +24,7 @@ export async function POST(
     const resolvedParams = await params
     const routeId = parseInt(resolvedParams.id)
     const stopNumber = parseInt(resolvedParams.stopNumber)
-    const { isSuperAdmin, companyId: headerCompanyId } = getCompanyFilter(request)
+    const { isSuperAdmin, companyId: headerCompanyId, userId, userRole } = getCompanyFilter(request)
 
     console.log(`✅ [Completar Parada] Ruta ${routeId}, Parada ${stopNumber}`)
 
@@ -104,6 +105,9 @@ export async function POST(
 
     console.log(`📦 [Órdenes] ${orderIds.length} órdenes a actualizar a 'en_bodega'`)
 
+    // Variables para resultados de billing
+    const billingResults: any[] = []
+
     // Usar transacción para asegurar consistencia
     await db.transaction(async (client: typeof db) => {
       // 1. Actualizar estado de la parada a 'completada'
@@ -150,6 +154,89 @@ export async function POST(
       }
     })
 
+    // 4. Procesar distribución de pagos para cada orden completada
+    // Esto se hace fuera de la transacción para no bloquear si falla el billing
+    // Usa el nuevo API distribute-payment que maneja comisiones multi-usuario y pago a proveedores
+    if (orderIds.length > 0) {
+      const driverId = route.driverid
+      const companyId = route.company_id
+
+      // Determinar quién completó la parada: userId del request o driverId de la ruta
+      const completedByUserId = userId || driverId
+      const completedByRole = userRole || 'DRIVER'
+
+      for (const orderId of orderIds) {
+        try {
+          console.log(`💰 [Distribute-Payment] Procesando distribución para orden ${orderId}`)
+
+          // Registrar actividad de delivery antes del billing
+          try {
+            await db.query(`
+              INSERT INTO order_activity_log (
+                order_id, company_id, user_id, user_role,
+                activity_type, previous_status, new_status,
+                route_id, stop_number, source
+              ) VALUES ($1, $2, $3, $4, 'delivered', 'in_transit', 'en_bodega', $5, $6, 'web')
+            `, [orderId, companyId, completedByUserId, completedByRole, routeId, stopNumber])
+          } catch (activityError) {
+            console.error(`⚠️ [Activity] Error registrando actividad para orden ${orderId}:`, activityError)
+          }
+
+          // Llamar al nuevo API de distribución de pagos
+          const billingResponse = await fetch(
+            `${process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000'}/api/billing/distribute-payment`,
+            {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                orderId,
+                companyId,
+                completedByUserId,
+                completedByRole,
+                chargeType: 'delivery'
+              })
+            }
+          )
+
+          const billingResult = await billingResponse.json()
+
+          // Mapear resultado al formato esperado para compatibilidad
+          const resultData = billingResult.data || {}
+          billingResults.push({
+            orderId,
+            charged: resultData.charged || resultData.success,
+            debitAmount: resultData.distribution?.grossAmount || 0,
+            debitTransactionId: resultData.debitTransactionId,
+            debitTransactionNumber: resultData.debitTransactionNumber,
+            commissionAmount: resultData.commissions?.total || 0,
+            commissionBreakdown: resultData.commissions?.breakdown || [],
+            providerPayments: resultData.providerPayments?.payments || [],
+            distribution: resultData.distribution,
+            reason: resultData.reason,
+            alreadyBilled: resultData.alreadyBilled,
+            insufficientFunds: resultData.insufficientFunds
+          })
+
+          if (billingResult.success && resultData.charged) {
+            const dist = resultData.distribution || {}
+            console.log(`✅ [Distribute-Payment] Orden ${orderId}: ` +
+              `Gross=$${dist.grossAmount || 0}, ` +
+              `Comisiones=$${resultData.commissions?.total || 0}, ` +
+              `Proveedores=$${resultData.providerPayments?.total || 0}`)
+          } else {
+            console.log(`⚠️ [Distribute-Payment] Orden ${orderId}: ${resultData.reason || 'No distribuido'}`)
+          }
+        } catch (billingError) {
+          console.error(`❌ [Distribute-Payment] Error procesando orden ${orderId}:`, billingError)
+          billingResults.push({
+            orderId,
+            charged: false,
+            error: billingError instanceof Error ? billingError.message : 'Error de distribución'
+          })
+        }
+      }
+    }
+
     // Obtener datos actualizados
     const updatedRouteResult = await db.query(
       'SELECT * FROM routes WHERE id = $1',
@@ -166,6 +253,18 @@ export async function POST(
       (s: { status: string }) => s.status === 'completada'
     ).length
 
+    // Calcular resumen de distribución de pagos
+    const billedOrders = billingResults.filter(r => r.charged).length
+    const totalBilled = billingResults.reduce((sum, r) => sum + (r.debitAmount || 0), 0)
+    const totalCommission = billingResults.reduce((sum, r) => sum + (r.commissionAmount || 0), 0)
+    const totalProviderPayments = billingResults.reduce((sum, r) => {
+      const payments = r.providerPayments || []
+      return sum + payments.reduce((ps: number, p: any) => ps + (p.amount || 0), 0)
+    }, 0)
+
+    // Extraer breakdown de comisiones (por usuario y tipo de actividad)
+    const allCommissionBreakdown = billingResults.flatMap(r => r.commissionBreakdown || [])
+
     return NextResponse.json({
       success: true,
       message: `Parada ${stopNumber} completada exitosamente`,
@@ -178,7 +277,24 @@ export async function POST(
         ordersUpdated: orderIds.length,
         completedStops,
         totalStops: updatedStops.length,
-        routeCompleted: updatedRoute.status === 'completada'
+        routeCompleted: updatedRoute.status === 'completada',
+        billing: {
+          processed: billingResults.length,
+          billed: billedOrders,
+          totalAmount: totalBilled,
+          totalCommission,
+          totalProviderPayments,
+          // Desglose de comisiones por tipo de actividad
+          commissionsByActivity: {
+            creation: allCommissionBreakdown
+              .filter((c: any) => c.activityType === 'creation')
+              .reduce((sum: number, c: any) => sum + (c.amount || 0), 0),
+            delivery: allCommissionBreakdown
+              .filter((c: any) => c.activityType === 'delivery')
+              .reduce((sum: number, c: any) => sum + (c.amount || 0), 0)
+          },
+          details: billingResults
+        }
       }
     })
 
