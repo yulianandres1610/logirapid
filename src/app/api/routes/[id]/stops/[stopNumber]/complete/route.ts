@@ -108,6 +108,14 @@ export async function POST(
     // Variables para resultados de billing
     const billingResults: any[] = []
 
+    // Variables para box tracking
+    let boxTrackingUpdates: Array<{
+      boxId: number;
+      trackingCode: string;
+      previousStatus: string;
+      newStatus: string;
+    }> = []
+
     // Usar transacción para asegurar consistencia
     await db.transaction(async (client: typeof db) => {
       // 1. Actualizar estado de la parada a 'completada'
@@ -132,6 +140,86 @@ export async function POST(
         `, [orderIds])
 
         console.log(`✅ [Órdenes] ${orderIds.length} órdenes actualizadas a 'en_bodega'`)
+
+        // 2.5 Actualizar box_tracking para órdenes de tipo recogida
+        // Obtener tipo de orden y actualizar box_tracking relacionados
+        for (const orderId of orderIds) {
+          const orderResult = await client.query(`
+            SELECT order_type FROM package_orders WHERE id = $1
+          `, [orderId])
+
+          if (orderResult.rows.length > 0) {
+            const orderType = orderResult.rows[0].order_type
+
+            // Obtener boxes asociados a esta orden
+            const boxesResult = await client.query(`
+              SELECT id, tracking_code, current_status
+              FROM box_tracking
+              WHERE package_order_id = $1
+            `, [orderId])
+
+            for (const box of boxesResult.rows) {
+              let newBoxStatus: string | null = null
+
+              // Determinar nuevo estado según tipo de orden y estado actual
+              if (orderType === 'recogida') {
+                // Orden de recogida completada = caja recogida
+                if (box.current_status === 'created' || box.current_status === 'caja_entregada' || box.current_status === 'confeccionada') {
+                  newBoxStatus = 'recogida'
+                }
+              } else if (orderType === 'entrega') {
+                // Orden de entrega de caja completada = caja entregada al cliente
+                if (box.current_status === 'created') {
+                  newBoxStatus = 'caja_entregada'
+                }
+              }
+
+              if (newBoxStatus) {
+                // Actualizar estado de la caja
+                await client.query(`
+                  UPDATE box_tracking
+                  SET current_status = $1,
+                      ${newBoxStatus === 'recogida' ? 'recogida_at = NOW(),' : ''}
+                      ${newBoxStatus === 'caja_entregada' ? 'box_delivered_at = NOW(),' : ''}
+                      updated_at = NOW()
+                  WHERE id = $2
+                `, [newBoxStatus, box.id])
+
+                // Registrar en historial
+                await client.query(`
+                  INSERT INTO box_tracking_history (
+                    box_tracking_id, previous_status, new_status,
+                    changed_by_user_id, changed_at, notes
+                  ) VALUES ($1, $2, $3, $4, NOW(), $5)
+                `, [
+                  box.id,
+                  box.current_status,
+                  newBoxStatus,
+                  userId || null,
+                  `Parada ${stopNumber} completada - Ruta ${route.routenumber}`
+                ])
+
+                // Actualizar service_sales para el servicio de recogida
+                if (newBoxStatus === 'recogida') {
+                  await client.query(`
+                    UPDATE service_sales
+                    SET status = 'completed', completed_at = NOW()
+                    WHERE box_tracking_id = $1 AND service_code = 'recogida'
+                  `, [box.id])
+                }
+
+                boxTrackingUpdates.push({
+                  boxId: box.id,
+                  trackingCode: box.tracking_code,
+                  previousStatus: box.current_status,
+                  newStatus: newBoxStatus
+                })
+
+                console.log(`📦 [BoxTracking] Caja ${box.tracking_code}: ${box.current_status} → ${newBoxStatus}`)
+              }
+            }
+          }
+        }
       }
 
       // 3. Verificar si todas las paradas están completadas
@@ -278,6 +366,11 @@ export async function POST(
         completedStops,
         totalStops: updatedStops.length,
         routeCompleted: updatedRoute.status === 'completada',
+        // Box tracking updates
+        boxTracking: boxTrackingUpdates.length > 0 ? {
+          updated: boxTrackingUpdates.length,
+          boxes: boxTrackingUpdates
+        } : undefined,
         billing: {
           processed: billingResults.length,
           billed: billedOrders,

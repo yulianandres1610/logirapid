@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/database'
+import { validateRuntimeCommissions } from '@/lib/commission-validation'
 
 interface ServiceItem {
   productId?: number
@@ -10,6 +11,12 @@ interface ServiceItem {
   costPrice?: number  // mi_costo - provider cost
   subtotal: number
   providerCompanyId?: number  // Product's provider
+  // New fields for service-level tracking
+  boxTrackingId?: number
+  boxTrackingCode?: string
+  serviceId?: number     // product_service.id
+  serviceCode?: string   // Service code from product_services
+  serviceName?: string   // Service name from product_services
 }
 
 interface CommissionBreakdownItem {
@@ -19,8 +26,13 @@ interface CommissionBreakdownItem {
   activityType: 'creation' | 'delivery' | 'packing'
   productId?: number
   productName?: string
+  // New service-level fields
+  serviceId?: number
+  serviceCode?: string
+  serviceName?: string
   amount: number
   transactionId?: number
+  marginWarning?: string  // Warning if commission exceeds margin
 }
 
 interface ProviderPaymentItem {
@@ -392,6 +404,74 @@ export async function POST(request: NextRequest) {
       }
 
       // ========================================
+      // STEP 9.5: Process SERVICE-LEVEL commissions from service_sales
+      // For composite products with box tracking (paquetería)
+      // ========================================
+      const serviceSalesResult = await client.query(`
+        SELECT DISTINCT ss.*, bt.tracking_code
+        FROM service_sales ss
+        JOIN box_tracking bt ON ss.box_tracking_id = bt.id
+        WHERE ss.package_order_id = $1 AND ss.status IN ('paid', 'completed')
+      `, [orderId])
+
+      if (serviceSalesResult.rows.length > 0) {
+        // Process packing/confección commissions
+        for (const sale of serviceSalesResult.rows) {
+          if (sale.service_code === 'confeccion' || sale.service_code === 'packing') {
+            // Pay commission for packing activity
+            const packingCommResult = await processActivityCommission(client, {
+              companyId,
+              userId: sale.sold_by_user_id || completerUserId || creatorUserId,
+              userRole: 'USER',
+              activityType: 'packing',
+              productId: sale.product_service_id ? undefined : null,
+              productPrice: parseFloat(sale.total) || 0,
+              orderId,
+              orderReference: order.trackingnumber,
+              serviceId: sale.product_service_id,
+              serviceCode: sale.service_code
+            })
+
+            if (packingCommResult.paid) {
+              totalCommissions += packingCommResult.amount
+              commissionBreakdown.push({
+                userId: sale.sold_by_user_id || completerUserId || creatorUserId,
+                userRole: 'USER',
+                userName: packingCommResult.userName || sale.sold_by_user_name || '',
+                activityType: 'packing',
+                serviceId: sale.product_service_id,
+                serviceCode: sale.service_code,
+                serviceName: sale.service_name,
+                amount: packingCommResult.amount,
+                transactionId: packingCommResult.transactionId
+              })
+            }
+          }
+        }
+      }
+
+      // ========================================
+      // STEP 9.6: Runtime margin validation
+      // Warn but don't block if commissions exceed margin
+      // ========================================
+      let marginWarnings: string[] = []
+      const productIdsWithCommissions = new Set<number>(
+        enrichedServices.filter(s => s.productId).map(s => s.productId as number)
+      )
+
+      for (const productId of productIdsWithCommissions) {
+        try {
+          const validation = await validateRuntimeCommissions(companyId, productId, totalCommissions)
+          if (!validation.isWithinMargin && validation.warning) {
+            marginWarnings.push(validation.warning)
+            console.warn(`[Distribute-Payment] ${validation.warning}`)
+          }
+        } catch (e) {
+          // Skip validation if it fails
+        }
+      }
+
+      // ========================================
       // STEP 10: Pay providers (mi_costo)
       // ========================================
       const providerMap = new Map<number, { name: string; total: number; products: any[] }>()
@@ -593,7 +673,8 @@ export async function POST(request: NextRequest) {
 }
 
 /**
- * Process commission for a specific activity type (creation or delivery)
+ * Process commission for a specific activity type (creation, delivery, or packing)
+ * Supports both product-level and service-level commissions
  */
 async function processActivityCommission(
   client: any,
@@ -602,32 +683,100 @@ async function processActivityCommission(
     userId: number
     userRole: string
     activityType: 'creation' | 'delivery' | 'packing'
-    productId: number
+    productId?: number | null
     productPrice: number
     orderId: number
     orderReference?: string
+    // New service-level params
+    serviceId?: number
+    serviceCode?: string
   }
 ): Promise<{ paid: boolean; amount: number; transactionId?: number; userName?: string }> {
   try {
-    const { companyId, userId, userRole, activityType, productId, productPrice, orderId, orderReference } = params
+    const { companyId, userId, userRole, activityType, productId, productPrice, orderId, orderReference, serviceId, serviceCode } = params
+
+    // If no productId and no serviceId, can't calculate commission
+    if (!productId && !serviceId) {
+      return { paid: false, amount: 0 }
+    }
+
+    let effectiveProductId = productId
+    let servicePriceInfo: { serviceName: string; basePrice: number } | null = null
+
+    // If we have a serviceId but no productId, look up the product from product_services
+    if (serviceId && !productId) {
+      const serviceResult = await client.query(`
+        SELECT ps.*, pc.id as catalog_product_id, pc.name as catalog_product_name
+        FROM product_services ps
+        LEFT JOIN product_catalog pc ON ps.product_id = pc.id
+        WHERE ps.id = $1
+      `, [serviceId])
+
+      if (serviceResult.rows.length > 0) {
+        const serviceRow = serviceResult.rows[0]
+        // Try to use the catalog product, otherwise use the product_services.product_id
+        effectiveProductId = serviceRow.catalog_product_id || serviceRow.product_id
+        servicePriceInfo = {
+          serviceName: serviceRow.service_name,
+          basePrice: parseFloat(serviceRow.base_price) || 0
+        }
+      }
+    }
+
+    // If still no productId, we can't find commission config
+    if (!effectiveProductId) {
+      console.warn(`[Activity Commission] No effective productId found for serviceId=${serviceId}`)
+      return { paid: false, amount: 0 }
+    }
 
     // Find commission configuration for this activity type
-    const configResult = await client.query(`
+    // First try to find by service-specific config, then fall back to product-level
+    let configResult = await client.query(`
       SELECT
         ccc.*,
         pc.code as product_code,
         pc.name as product_name,
-        pc.platform_price
+        pc.platform_price,
+        ps.service_name,
+        ps.base_price as service_base_price
       FROM company_commission_config ccc
       JOIN product_catalog pc ON ccc.product_id = pc.id
+      LEFT JOIN product_services ps ON ccc.product_service_id = ps.id
       WHERE ccc.company_id = $1
         AND ccc.product_id = $2
         AND (ccc.role = $3 OR ccc.role = 'ALL')
         AND ccc.activity_type = $4
         AND ccc.is_active = true
-      ORDER BY CASE WHEN ccc.role = $3 THEN 0 ELSE 1 END
+        AND (
+          (ccc.product_service_id IS NOT NULL AND ccc.product_service_id = $5)
+          OR (ccc.product_service_id IS NULL AND $5 IS NULL)
+        )
+      ORDER BY
+        CASE WHEN ccc.product_service_id = $5 THEN 0 ELSE 1 END,
+        CASE WHEN ccc.role = $3 THEN 0 ELSE 1 END
       LIMIT 1
-    `, [companyId, productId, userRole, activityType])
+    `, [companyId, effectiveProductId, userRole, activityType, serviceId || null])
+
+    // If no service-specific config found, try product-level config
+    if (configResult.rows.length === 0 && serviceId) {
+      configResult = await client.query(`
+        SELECT
+          ccc.*,
+          pc.code as product_code,
+          pc.name as product_name,
+          pc.platform_price
+        FROM company_commission_config ccc
+        JOIN product_catalog pc ON ccc.product_id = pc.id
+        WHERE ccc.company_id = $1
+          AND ccc.product_id = $2
+          AND (ccc.role = $3 OR ccc.role = 'ALL')
+          AND ccc.activity_type = $4
+          AND ccc.is_active = true
+          AND ccc.product_service_id IS NULL
+        ORDER BY CASE WHEN ccc.role = $3 THEN 0 ELSE 1 END
+        LIMIT 1
+      `, [companyId, effectiveProductId, userRole, activityType])
+    }
 
     if (configResult.rows.length === 0) {
       // No commission config for this activity type, try default 'delivery'
@@ -651,7 +800,7 @@ async function processActivityCommission(
           AND ccc.is_active = true
         ORDER BY CASE WHEN ccc.role = $3 THEN 0 ELSE 1 END
         LIMIT 1
-      `, [companyId, productId, userRole])
+      `, [companyId, effectiveProductId, userRole])
 
       if (fallbackConfig.rows.length === 0) {
         return { paid: false, amount: 0 }
@@ -661,7 +810,8 @@ async function processActivityCommission(
     }
 
     const config = configResult.rows[0]
-    const price = productPrice || parseFloat(config.platform_price || 0)
+    // Use service base price if available, then productPrice, then platform_price
+    const price = productPrice || (servicePriceInfo?.basePrice) || parseFloat(config.platform_price || 0)
 
     // Calculate commission
     let commissionAmount = 0
@@ -699,6 +849,11 @@ async function processActivityCommission(
     // Generate transaction number
     const txnNumber = `COM-${activityType.toUpperCase().substring(0, 3)}-${Date.now()}-${Math.random().toString(36).substring(2, 6).toUpperCase()}`
 
+    // Determine the display name for the commission
+    const activityLabel = activityType === 'creation' ? 'por creación' :
+                          activityType === 'packing' ? 'por confección' : 'por entrega'
+    const itemName = servicePriceInfo?.serviceName || config.service_name || config.product_name
+
     // Create commission transaction
     const txnResult = await client.query(`
       INSERT INTO wallet_transactions (
@@ -717,12 +872,14 @@ async function processActivityCommission(
       userId,
       user.wallet_number,
       commissionAmount,
-      `Comision ${activityType === 'creation' ? 'por creación' : 'por entrega'} - ${config.product_name}`,
-      `Orden: ${orderReference || orderId}`,
+      `Comision ${activityLabel} - ${itemName}`,
+      `Orden: ${orderReference || orderId}${serviceCode ? ` | Servicio: ${serviceCode}` : ''}`,
       JSON.stringify({
         orderId,
         activityType,
-        productId,
+        productId: effectiveProductId,
+        serviceId: serviceId || null,
+        serviceCode: serviceCode || null,
         configId: config.id
       })
     ])
@@ -741,15 +898,17 @@ async function processActivityCommission(
       INSERT INTO employee_commissions (
         company_id, user_id, user_role, service_type, service_id,
         service_reference, product_id, product_name, product_price,
+        product_service_id, product_service_code, product_service_name,
         commission_config_id, commission_type, commission_rate, commission_amount,
         transaction_id, transaction_number, status, created_at, paid_at
       ) VALUES (
-        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15,
-        'paid', NOW(), NOW()
+        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16,
+        $17, $18, 'paid', NOW(), NOW()
       )
     `, [
       companyId, userId, userRole, activityType, orderId,
-      orderReference, productId, config.product_name, price,
+      orderReference, effectiveProductId, config.product_name, price,
+      serviceId || null, serviceCode || null, servicePriceInfo?.serviceName || config.service_name || null,
       config.id, config.commission_type, config.commission_value, commissionAmount,
       transaction.id, transaction.transaction_number
     ])

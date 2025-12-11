@@ -2,6 +2,13 @@ import { NextRequest, NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
 import jwt from 'jsonwebtoken'
 import { db } from '@/lib/database'
+import {
+  validateCommission,
+  updateConfiguredCommissionsTotal,
+  calculateAvailableMargin,
+  getCommissionSummary,
+  CommissionConfig
+} from '@/lib/commission-validation'
 
 interface JWTPayload {
   userId: number
@@ -13,7 +20,7 @@ interface JWTPayload {
 
 const VALID_ROLES = ['DRIVER', 'USER', 'MANAGER', 'ADMIN', 'ALL']
 const VALID_COMMISSION_TYPES = ['fixed', 'percentage']
-const VALID_ACTIVITY_TYPES = ['creation', 'delivery', 'packing'] // NEW: activity types for multi-user commissions
+const VALID_ACTIVITY_TYPES = ['creation', 'delivery', 'packing'] // Activity types for multi-user commissions
 
 /**
  * GET /api/companies/[id]/commissions
@@ -194,28 +201,79 @@ export async function GET(
     }))
 
     // Group commissions by product for easier UI rendering
+    // Also calculate margin info for each product
     const commissionsByProduct: Record<number, any> = {}
-    commissions.forEach(c => {
-      if (!commissionsByProduct[c.productId]) {
-        commissionsByProduct[c.productId] = {
-          productId: c.productId,
-          productCode: c.productCode,
-          productName: c.productName,
-          serviceCategory: c.serviceCategory,
-          productBasePrice: c.productBasePrice,
+    const productIds = new Set<number>(commissions.map(c => c.productId as number))
+
+    // Get margin info for all products with commissions
+    for (const productId of productIds) {
+      try {
+        const margin = await calculateAvailableMargin(companyId, productId)
+        const productCommissions = commissions.filter(c => c.productId === productId)
+        const totalConfigured = productCommissions.reduce((sum, c) => {
+          if (c.commissionType === 'fixed') {
+            return sum + c.commissionValue
+          } else {
+            return sum + (margin.precioPublico * (c.commissionValue / 100))
+          }
+        }, 0)
+
+        const firstComm = productCommissions[0]
+        commissionsByProduct[productId] = {
+          productId: firstComm.productId,
+          productCode: firstComm.productCode,
+          productName: firstComm.productName,
+          serviceCategory: firstComm.serviceCategory,
+          productBasePrice: firstComm.productBasePrice,
+          // Margin info
+          margin: {
+            miCosto: margin.miCosto,
+            precioPublico: margin.precioPublico,
+            margenBruto: margin.margenBruto,
+            maxCommissionPercentage: margin.maxCommissionPercentage,
+            maxComisionesPermitidas: margin.maxComisionesPermitidas,
+            totalConfigured,
+            margenRestante: Math.max(0, margin.maxComisionesPermitidas - totalConfigured),
+            porcentajeUsado: margin.maxComisionesPermitidas > 0
+              ? (totalConfigured / margin.maxComisionesPermitidas) * 100
+              : 0,
+            estadoSalud: totalConfigured > margin.maxComisionesPermitidas
+              ? 'critical'
+              : totalConfigured > margin.maxComisionesPermitidas * 0.8
+                ? 'warning'
+                : 'good'
+          },
+          roles: []
+        }
+      } catch (e) {
+        // Fallback without margin info if calculation fails
+        const firstComm = commissions.find(c => c.productId === productId)!
+        commissionsByProduct[productId] = {
+          productId: firstComm.productId,
+          productCode: firstComm.productCode,
+          productName: firstComm.productName,
+          serviceCategory: firstComm.serviceCategory,
+          productBasePrice: firstComm.productBasePrice,
+          margin: null,
           roles: []
         }
       }
-      commissionsByProduct[c.productId].roles.push({
-        id: c.id,
-        role: c.role,
-        activityType: c.activityType,
-        commissionType: c.commissionType,
-        commissionValue: c.commissionValue,
-        minAmount: c.minAmount,
-        maxAmount: c.maxAmount,
-        isActive: c.isActive
-      })
+    }
+
+    // Add roles to each product
+    commissions.forEach(c => {
+      if (commissionsByProduct[c.productId]) {
+        commissionsByProduct[c.productId].roles.push({
+          id: c.id,
+          role: c.role,
+          activityType: c.activityType,
+          commissionType: c.commissionType,
+          commissionValue: c.commissionValue,
+          minAmount: c.minAmount,
+          maxAmount: c.maxAmount,
+          isActive: c.isActive
+        })
+      }
     })
 
     return NextResponse.json({
@@ -407,6 +465,60 @@ export async function POST(
 
     const product = productResult.rows[0]
 
+    // Check if there's an existing configuration to exclude from validation
+    const existingConfigResult = await db.query(`
+      SELECT id FROM company_commission_config
+      WHERE company_id = $1 AND product_id = $2 AND role = $3 AND activity_type = $4
+    `, [companyId, productId, role, activityType])
+
+    const existingConfigId = existingConfigResult.rows.length > 0
+      ? existingConfigResult.rows[0].id
+      : undefined
+
+    // Build new commission config for validation
+    const newCommissionConfig: CommissionConfig = {
+      role,
+      activityType,
+      commissionType,
+      commissionValue,
+      minAmount: minAmount || undefined,
+      maxAmount: maxAmount || undefined
+    }
+
+    // Validate commission against margin
+    const validation = await validateCommission(
+      companyId,
+      productId,
+      newCommissionConfig,
+      existingConfigId
+    )
+
+    // If validation fails, return error with detailed info
+    if (!validation.isValid) {
+      return NextResponse.json({
+        success: false,
+        error: 'La comisión excede el margen permitido del producto',
+        details: {
+          margin: {
+            miCosto: validation.margin.miCosto,
+            precioPublico: validation.margin.precioPublico,
+            margenBruto: validation.margin.margenBruto,
+            maxComisionesPermitidas: validation.margin.maxComisionesPermitidas
+          },
+          totalComisionesProyectadas: validation.totalComisionesProyectadas,
+          exceso: validation.exceso,
+          porcentajeUsado: validation.porcentajeUsado,
+          detalleComisiones: validation.detalleComisiones,
+          sugerencia: `La comisión máxima permitida para este producto es $${validation.margin.maxComisionesPermitidas.toFixed(2)}. El total proyectado con esta configuración sería $${validation.totalComisionesProyectadas.toFixed(2)}, excediendo por $${validation.exceso.toFixed(2)}.`
+        }
+      }, { status: 400 })
+    }
+
+    // Warn if margin usage is high but still valid
+    const marginWarning = validation.estadoSalud === 'warning'
+      ? `Advertencia: Se está usando el ${validation.porcentajeUsado.toFixed(1)}% del margen disponible para comisiones.`
+      : null
+
     // Upsert commission configuration
     // Note: The unique constraint is on (company_id, product_id, role, activity_type)
     // This allows different commission rates for the same product/role based on activity type
@@ -449,6 +561,13 @@ export async function POST(
 
     const config = result.rows[0]
 
+    // Update the total configured commissions for this product
+    try {
+      await updateConfiguredCommissionsTotal(companyId, productId)
+    } catch (e) {
+      console.warn('Warning: Could not update configured commissions total:', e)
+    }
+
     return NextResponse.json({
       success: true,
       data: {
@@ -466,9 +585,19 @@ export async function POST(
         maxAmount: config.max_amount ? parseFloat(config.max_amount) : null,
         isActive: config.is_active,
         createdAt: config.created_at,
-        updatedAt: config.updated_at
+        updatedAt: config.updated_at,
+        // Include margin validation info
+        marginValidation: {
+          margin: validation.margin,
+          totalComisionesProyectadas: validation.totalComisionesProyectadas,
+          margenRestante: validation.margenRestante,
+          porcentajeUsado: validation.porcentajeUsado,
+          estadoSalud: validation.estadoSalud
+        }
       },
-      message: 'Configuracion de comision guardada exitosamente'
+      message: marginWarning
+        ? `Configuración de comisión guardada. ${marginWarning}`
+        : 'Configuración de comisión guardada exitosamente'
     })
 
   } catch (error) {
@@ -552,9 +681,9 @@ export async function DELETE(
       }, { status: 400 })
     }
 
-    // Verify the config belongs to this company
+    // Verify the config belongs to this company and get product_id
     const configResult = await db.query(`
-      SELECT id, company_id FROM company_commission_config
+      SELECT id, company_id, product_id FROM company_commission_config
       WHERE id = $1 AND company_id = $2
     `, [parseInt(configId), companyId])
 
@@ -565,10 +694,19 @@ export async function DELETE(
       }, { status: 404 })
     }
 
+    const productId = configResult.rows[0].product_id
+
     // Delete the configuration
     await db.query(`
       DELETE FROM company_commission_config WHERE id = $1
     `, [parseInt(configId)])
+
+    // Update the total configured commissions for this product
+    try {
+      await updateConfiguredCommissionsTotal(companyId, productId)
+    } catch (e) {
+      console.warn('Warning: Could not update configured commissions total:', e)
+    }
 
     return NextResponse.json({
       success: true,

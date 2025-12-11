@@ -8,6 +8,17 @@ export const dynamic = 'force-dynamic'
 export const dynamicParams = true
 export const runtime = 'nodejs'
 
+/**
+ * Helper to generate box tracking code
+ * Format: BOX-{companyId}-{YYYYMMDD}-{sequence}
+ */
+async function generateBoxTrackingCode(companyId: number, client: typeof db = db): Promise<string> {
+  const date = new Date().toISOString().slice(0, 10).replace(/-/g, '')
+  const seqResult = await client.query("SELECT NEXTVAL('box_tracking_code_seq') as seq")
+  const seq = seqResult.rows[0].seq
+  return `BOX-${String(companyId).padStart(4, '0')}-${date}-${String(seq).padStart(6, '0')}`
+}
+
 
 // GET: Obtener todas las órdenes de paquetería con paginación y filtros
 export async function GET(request: NextRequest) {
@@ -182,12 +193,30 @@ export async function GET(request: NextRequest) {
 }
 
 // Helper function to validate and recalculate services with product pricing from DB
+// Also checks for box tracking products and returns metadata
 async function validateAndEnrichServices(
   services: any[],
   companyId: number
-): Promise<{ services: any[]; totalAmount: number }> {
+): Promise<{
+  services: any[];
+  totalAmount: number;
+  boxTrackingProducts: Array<{
+    productId: number;
+    productName: string;
+    hasBoxTracking: boolean;
+    isComposite: boolean;
+    quantity: number;
+  }>;
+}> {
   const enrichedServices = []
   let totalAmount = 0
+  const boxTrackingProducts: Array<{
+    productId: number;
+    productName: string;
+    hasBoxTracking: boolean;
+    isComposite: boolean;
+    quantity: number;
+  }> = []
 
   for (const service of services) {
     // If service has productId, look up pricing from database
@@ -198,7 +227,9 @@ async function validateAndEnrichServices(
           pc.code,
           pc.name,
           COALESCE(cpp.sell_price, pc.precio_publico, pc.platform_price) as sell_price,
-          COALESCE(cpp.cost_price, pc.mi_costo) as cost_price
+          COALESCE(cpp.cost_price, pc.mi_costo) as cost_price,
+          pc.has_box_tracking,
+          pc.is_composite
         FROM product_catalog pc
         LEFT JOIN company_product_pricing cpp
           ON cpp.product_id = pc.id AND cpp.company_id = $1
@@ -219,8 +250,21 @@ async function validateAndEnrichServices(
           quantity,
           unitPrice,
           costPrice,
-          subtotal
+          subtotal,
+          hasBoxTracking: product.has_box_tracking || false,
+          isComposite: product.is_composite || false
         })
+
+        // Track products that need box tracking
+        if (product.has_box_tracking) {
+          boxTrackingProducts.push({
+            productId: product.id,
+            productName: product.name,
+            hasBoxTracking: true,
+            isComposite: product.is_composite || false,
+            quantity
+          })
+        }
 
         totalAmount += subtotal
       } else {
@@ -235,7 +279,142 @@ async function validateAndEnrichServices(
     }
   }
 
-  return { services: enrichedServices, totalAmount }
+  return { services: enrichedServices, totalAmount, boxTrackingProducts }
+}
+
+/**
+ * Creates box tracking records and service sales for composite products
+ */
+async function createBoxTrackingRecords(
+  orderId: number,
+  companyId: number,
+  customerId: number | null,
+  customerName: string | null,
+  userId: number | null,
+  userName: string | null,
+  boxTrackingProducts: Array<{
+    productId: number;
+    productName: string;
+    hasBoxTracking: boolean;
+    isComposite: boolean;
+    quantity: number;
+  }>,
+  warehouseId: number | null
+): Promise<Array<{
+  trackingCode: string;
+  productId: number;
+  productName: string;
+  boxId: number;
+  serviceSales: Array<{ serviceId: number; serviceName: string; saleId: number }>;
+}>> {
+  const createdBoxes: Array<{
+    trackingCode: string;
+    productId: number;
+    productName: string;
+    boxId: number;
+    serviceSales: Array<{ serviceId: number; serviceName: string; saleId: number }>;
+  }> = []
+
+  for (const product of boxTrackingProducts) {
+    // Create one box_tracking per quantity
+    for (let i = 0; i < product.quantity; i++) {
+      // Generate tracking code
+      const trackingCode = await generateBoxTrackingCode(companyId)
+
+      // Create box_tracking record
+      const boxResult = await db.query(`
+        INSERT INTO box_tracking (
+          tracking_code, product_id, product_name, company_id,
+          customer_id, customer_name, current_status, warehouse_id,
+          created_by_user_id, package_order_id, created_at, updated_at
+        ) VALUES ($1, $2, $3, $4, $5, $6, 'created', $7, $8, $9, NOW(), NOW())
+        RETURNING id
+      `, [
+        trackingCode,
+        product.productId,
+        product.productName,
+        companyId,
+        customerId,
+        customerName,
+        warehouseId,
+        userId,
+        orderId
+      ])
+
+      const boxId = boxResult.rows[0].id
+
+      // Record initial history
+      await db.query(`
+        INSERT INTO box_tracking_history (
+          box_tracking_id, previous_status, new_status,
+          changed_by_user_id, changed_by_user_name, changed_at, notes
+        ) VALUES ($1, NULL, 'created', $2, $3, NOW(), 'Caja creada con orden')
+      `, [boxId, userId, userName])
+
+      const serviceSales: Array<{ serviceId: number; serviceName: string; saleId: number }> = []
+
+      // If composite product, get its services and create service_sales
+      if (product.isComposite) {
+        // Get included services for this product
+        const servicesResult = await db.query(`
+          SELECT
+            ps.id as service_id,
+            ps.service_code,
+            ps.service_name,
+            ps.base_price,
+            ps.inclusion_type,
+            COALESCE(csp.precio_venta, ps.base_price, 0) as effective_price
+          FROM product_services ps
+          LEFT JOIN company_service_pricing csp
+            ON ps.id = csp.product_service_id AND csp.company_id = $2
+          WHERE ps.product_id = $1 AND ps.is_active = true
+          ORDER BY ps.sequence_order ASC
+        `, [product.productId, companyId])
+
+        // Create service_sales for each included service
+        for (const svc of servicesResult.rows) {
+          const price = parseFloat(svc.effective_price) || 0
+
+          const saleResult = await db.query(`
+            INSERT INTO service_sales (
+              box_tracking_id, product_service_id, service_code, service_name,
+              company_id, customer_id, sold_by_user_id, sold_by_user_name,
+              precio_unitario, cantidad, subtotal, descuento, total,
+              status, package_order_id, paid_at, created_at
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 1, $9, 0, $9, 'paid', $10, NOW(), NOW())
+            RETURNING id
+          `, [
+            boxId,
+            svc.service_id,
+            svc.service_code,
+            svc.service_name,
+            companyId,
+            customerId,
+            userId,
+            userName,
+            price,
+            orderId
+          ])
+
+          serviceSales.push({
+            serviceId: svc.service_id,
+            serviceName: svc.service_name,
+            saleId: saleResult.rows[0].id
+          })
+        }
+      }
+
+      createdBoxes.push({
+        trackingCode,
+        productId: product.productId,
+        productName: product.productName,
+        boxId,
+        serviceSales
+      })
+    }
+  }
+
+  return createdBoxes
 }
 
 // POST: Crear nueva orden de paquetería
@@ -353,7 +532,7 @@ export async function POST(request: NextRequest) {
 
     // Validate and enrich services with pricing from database
     // This ensures prices come from company_product_pricing or product_catalog
-    const { services: enrichedServices, totalAmount: calculatedTotal } = await validateAndEnrichServices(
+    const { services: enrichedServices, totalAmount: calculatedTotal, boxTrackingProducts } = await validateAndEnrichServices(
       rawServices,
       companyId
     )
@@ -478,6 +657,60 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // ================================================
+    // CREAR BOX_TRACKING Y SERVICE_SALES PARA PRODUCTOS COMPUESTOS
+    // ================================================
+    let createdBoxes: Array<{
+      trackingCode: string;
+      productId: number;
+      productName: string;
+      boxId: number;
+      serviceSales: Array<{ serviceId: number; serviceName: string; saleId: number }>;
+    }> = []
+
+    if (boxTrackingProducts.length > 0) {
+      try {
+        createdBoxes = await createBoxTrackingRecords(
+          orderId,
+          companyId,
+          body.customerId || null,
+          body.customerName || null,
+          userId || null,
+          userEmail || null,
+          boxTrackingProducts,
+          body.warehouseId || null
+        )
+
+        console.log(`✅ [BoxTracking] Created ${createdBoxes.length} box tracking records for order ${orderId}`)
+
+        // Update services JSON with box tracking info
+        if (createdBoxes.length > 0) {
+          // Map box tracking codes to services
+          const servicesWithTracking = enrichedServices.map(svc => {
+            if (svc.hasBoxTracking && svc.productId) {
+              const matchingBoxes = createdBoxes.filter(b => b.productId === svc.productId)
+              return {
+                ...svc,
+                boxTrackingCodes: matchingBoxes.map(b => b.trackingCode),
+                boxIds: matchingBoxes.map(b => b.boxId)
+              }
+            }
+            return svc
+          })
+
+          // Update order with enriched services
+          await db.query(`
+            UPDATE package_orders
+            SET services = $1, updatedat = NOW()
+            WHERE id = $2
+          `, [JSON.stringify(servicesWithTracking), orderId])
+        }
+      } catch (boxTrackingError) {
+        // Don't fail order creation if box tracking fails
+        console.error('[BoxTracking] Error creating box tracking:', boxTrackingError)
+      }
+    }
+
     // Format the response to match expected format
     const formattedOrder = {
       id: newOrder.id,
@@ -505,7 +738,15 @@ export async function POST(request: NextRequest) {
       createdAt: newOrder.createdat,
       updatedAt: newOrder.updatedat,
       paymentMethod: newOrder.paymentmethod,
-      paymentStatus: newOrder.payment_status
+      paymentStatus: newOrder.payment_status,
+      // Box tracking info if applicable
+      boxTracking: createdBoxes.length > 0 ? createdBoxes.map(b => ({
+        trackingCode: b.trackingCode,
+        productId: b.productId,
+        productName: b.productName,
+        boxId: b.boxId,
+        servicesIncluded: b.serviceSales.length
+      })) : undefined
     }
 
     // ================================================
