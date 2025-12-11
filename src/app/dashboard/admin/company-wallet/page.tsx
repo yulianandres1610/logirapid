@@ -209,6 +209,14 @@ export default function CompanyWalletPage() {
   const [showCashoutModal, setShowCashoutModal] = useState(false)
   const [connectStatus, setConnectStatus] = useState<'not_connected' | 'pending' | 'active' | 'restricted'>('not_connected')
   const [connectLoading, setConnectLoading] = useState(false)
+  const [externalAccounts, setExternalAccounts] = useState<Array<{
+    id: string
+    type: string
+    last4: string
+    bankName: string
+    currency: string
+    default: boolean
+  }>>([])
 
   // Transaction details modal state
   const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null)
@@ -1885,6 +1893,7 @@ export default function CompanyWalletPage() {
           walletBalance={companyWallet.balance}
           walletNumber={companyWallet.walletNumber}
           connectStatus={connectStatus}
+          externalAccounts={externalAccounts}
           onSuccess={(result) => {
             // Update balance after successful cashout
             setCompanyWallet({
@@ -1910,6 +1919,7 @@ export default function CompanyWalletPage() {
             entityId={companyWallet.id}
             onStatusChange={(status) => {
               setConnectStatus(status.status)
+              setExternalAccounts(status.externalAccounts || [])
             }}
             compact
           />
