@@ -104,6 +104,11 @@ export default function ProductConfigPage() {
   const [showServiceModal, setShowServiceModal] = useState(false)
   const [showPricingModal, setShowPricingModal] = useState(false)
   const [editingService, setEditingService] = useState<ProductService | null>(null)
+  const [activeTab, setActiveTab] = useState<'productos' | 'precios' | 'comisiones'>('productos')
+  const [commissions, setCommissions] = useState<any[]>([])
+  const [loadingCommissions, setLoadingCommissions] = useState(false)
+  const [editingCommission, setEditingCommission] = useState<any | null>(null)
+  const [showCommissionModal, setShowCommissionModal] = useState(false)
 
   // Fetch products and their services
   const fetchProducts = useCallback(async () => {
@@ -179,10 +184,34 @@ export default function ProductConfigPage() {
     }
   }, [])
 
+  // Fetch commissions
+  const fetchCommissions = useCallback(async () => {
+    try {
+      setLoadingCommissions(true)
+      const response = await fetch('/api/commissions/config')
+      const data = await response.json()
+
+      if (data.success) {
+        setCommissions(data.data || [])
+      }
+    } catch (error) {
+      console.error('Error fetching commissions:', error)
+    } finally {
+      setLoadingCommissions(false)
+    }
+  }, [])
+
   useEffect(() => {
     fetchProducts()
     fetchMarginHealth()
   }, [fetchProducts, fetchMarginHealth])
+
+  // Load commissions when switching to that tab
+  useEffect(() => {
+    if (activeTab === 'comisiones' && commissions.length === 0) {
+      fetchCommissions()
+    }
+  }, [activeTab, commissions.length, fetchCommissions])
 
   const toggleProductExpanded = (productId: number) => {
     setExpandedProducts(prev => {
@@ -443,6 +472,58 @@ export default function ProductConfigPage() {
           </motion.div>
         </div>
 
+        {/* Tabs Navigation */}
+        <div className={`p-1 rounded-xl ${isDark ? 'bg-gray-800' : 'bg-white'} shadow-sm flex gap-1`}>
+          <button
+            onClick={() => setActiveTab('productos')}
+            className={`flex-1 px-6 py-3 rounded-lg font-medium text-sm transition-all flex items-center justify-center gap-2 ${
+              activeTab === 'productos'
+                ? isDark
+                  ? 'bg-blue-600 text-white'
+                  : 'bg-blue-500 text-white'
+                : isDark
+                  ? 'text-gray-400 hover:text-white hover:bg-gray-700'
+                  : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
+            }`}
+          >
+            <Package className="w-4 h-4" />
+            Productos y Servicios
+          </button>
+          <button
+            onClick={() => setActiveTab('precios')}
+            className={`flex-1 px-6 py-3 rounded-lg font-medium text-sm transition-all flex items-center justify-center gap-2 ${
+              activeTab === 'precios'
+                ? isDark
+                  ? 'bg-green-600 text-white'
+                  : 'bg-green-500 text-white'
+                : isDark
+                  ? 'text-gray-400 hover:text-white hover:bg-gray-700'
+                  : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
+            }`}
+          >
+            <DollarSign className="w-4 h-4" />
+            Lista de Precios
+          </button>
+          <button
+            onClick={() => setActiveTab('comisiones')}
+            className={`flex-1 px-6 py-3 rounded-lg font-medium text-sm transition-all flex items-center justify-center gap-2 ${
+              activeTab === 'comisiones'
+                ? isDark
+                  ? 'bg-purple-600 text-white'
+                  : 'bg-purple-500 text-white'
+                : isDark
+                  ? 'text-gray-400 hover:text-white hover:bg-gray-700'
+                  : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
+            }`}
+          >
+            <Percent className="w-4 h-4" />
+            Comisiones
+          </button>
+        </div>
+
+        {/* Tab Content: Productos */}
+        {activeTab === 'productos' && (
+          <>
         {/* Filters */}
         <div className={`p-4 rounded-xl ${isDark ? 'bg-gray-800' : 'bg-white'} shadow-sm`}>
           <div className="flex flex-col md:flex-row gap-4">
@@ -923,6 +1004,229 @@ export default function ProductConfigPage() {
             </AnimatePresence>
           )}
         </div>
+          </>
+        )}
+
+        {/* Tab Content: Lista de Precios */}
+        {activeTab === 'precios' && (
+          <div className={`p-6 rounded-xl ${isDark ? 'bg-gray-800' : 'bg-white'} shadow-sm`}>
+            <div className="flex items-center justify-between mb-6">
+              <h2 className={`text-lg font-semibold ${isDark ? 'text-white' : 'text-gray-900'}`}>
+                Lista de Precios por Producto
+              </h2>
+              <button
+                onClick={() => fetchProducts()}
+                className={`p-2 rounded-lg ${isDark ? 'hover:bg-gray-700' : 'hover:bg-gray-100'}`}
+              >
+                <RefreshCw className={`w-5 h-5 ${isDark ? 'text-gray-400' : 'text-gray-500'}`} />
+              </button>
+            </div>
+
+            {loading ? (
+              <div className="flex items-center justify-center py-12">
+                <RefreshCw className={`w-8 h-8 animate-spin ${isDark ? 'text-gray-500' : 'text-gray-400'}`} />
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead>
+                    <tr className={`border-b ${isDark ? 'border-gray-700' : 'border-gray-200'}`}>
+                      <th className={`text-left py-3 px-4 text-sm font-semibold ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
+                        Producto
+                      </th>
+                      <th className={`text-left py-3 px-4 text-sm font-semibold ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
+                        Categoría
+                      </th>
+                      <th className={`text-right py-3 px-4 text-sm font-semibold ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
+                        Mi Costo
+                      </th>
+                      <th className={`text-right py-3 px-4 text-sm font-semibold ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
+                        P. Mayorista
+                      </th>
+                      <th className={`text-right py-3 px-4 text-sm font-semibold ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
+                        P. Público
+                      </th>
+                      <th className={`text-right py-3 px-4 text-sm font-semibold ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
+                        Margen
+                      </th>
+                      <th className={`text-center py-3 px-4 text-sm font-semibold ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
+                        Estado
+                      </th>
+                      <th className={`text-center py-3 px-4 text-sm font-semibold ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
+                        Acciones
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {products.map((product, index) => {
+                      const health = getMarginHealthForProduct(product.id)
+                      const margin = product.precioPublico - product.miCosto
+                      const marginPercent = product.precioPublico > 0 ? (margin / product.precioPublico) * 100 : 0
+
+                      return (
+                        <tr
+                          key={product.id}
+                          className={`border-b ${isDark ? 'border-gray-700 hover:bg-gray-700/50' : 'border-gray-100 hover:bg-gray-50'} transition-colors`}
+                        >
+                          <td className="py-3 px-4">
+                            <div>
+                              <p className={`font-medium ${isDark ? 'text-white' : 'text-gray-900'}`}>
+                                {product.name}
+                              </p>
+                              <p className={`text-xs ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
+                                {product.code}
+                              </p>
+                            </div>
+                          </td>
+                          <td className={`py-3 px-4 text-sm ${isDark ? 'text-gray-300' : 'text-gray-600'}`}>
+                            {product.category}
+                          </td>
+                          <td className={`py-3 px-4 text-right text-sm font-mono ${isDark ? 'text-gray-300' : 'text-gray-600'}`}>
+                            ${product.miCosto.toFixed(2)}
+                          </td>
+                          <td className={`py-3 px-4 text-right text-sm font-mono ${isDark ? 'text-gray-300' : 'text-gray-600'}`}>
+                            ${product.precioMayorista.toFixed(2)}
+                          </td>
+                          <td className={`py-3 px-4 text-right text-sm font-mono font-semibold ${isDark ? 'text-white' : 'text-gray-900'}`}>
+                            ${product.precioPublico.toFixed(2)}
+                          </td>
+                          <td className={`py-3 px-4 text-right text-sm`}>
+                            <span className={`font-mono ${
+                              marginPercent >= 20 ? 'text-green-500' :
+                              marginPercent >= 10 ? 'text-yellow-500' :
+                              'text-red-500'
+                            }`}>
+                              {marginPercent.toFixed(1)}%
+                            </span>
+                          </td>
+                          <td className="py-3 px-4 text-center">
+                            {health && (
+                              <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium ${getStatusBgColor(health.status)} ${getStatusColor(health.status)}`}>
+                                {getStatusIcon(health.status)}
+                                {health.status === 'healthy' ? 'OK' : health.status === 'warning' ? 'Alerta' : 'Crítico'}
+                              </span>
+                            )}
+                          </td>
+                          <td className="py-3 px-4 text-center">
+                            <button
+                              onClick={() => {
+                                setSelectedProduct(product)
+                                setShowPricingModal(true)
+                              }}
+                              className={`p-2 rounded-lg transition-colors ${
+                                isDark ? 'hover:bg-gray-600 text-gray-400 hover:text-white' : 'hover:bg-gray-200 text-gray-500 hover:text-gray-700'
+                              }`}
+                            >
+                              <Edit2 className="w-4 h-4" />
+                            </button>
+                          </td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Tab Content: Comisiones */}
+        {activeTab === 'comisiones' && (
+          <div className={`p-6 rounded-xl ${isDark ? 'bg-gray-800' : 'bg-white'} shadow-sm`}>
+            <div className="flex items-center justify-between mb-6">
+              <h2 className={`text-lg font-semibold ${isDark ? 'text-white' : 'text-gray-900'}`}>
+                Configuración de Comisiones
+              </h2>
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={() => fetchCommissions()}
+                  className={`p-2 rounded-lg ${isDark ? 'hover:bg-gray-700' : 'hover:bg-gray-100'}`}
+                >
+                  <RefreshCw className={`w-5 h-5 ${loadingCommissions ? 'animate-spin' : ''} ${isDark ? 'text-gray-400' : 'text-gray-500'}`} />
+                </button>
+              </div>
+            </div>
+
+            {loadingCommissions ? (
+              <div className="flex items-center justify-center py-12">
+                <RefreshCw className={`w-8 h-8 animate-spin ${isDark ? 'text-gray-500' : 'text-gray-400'}`} />
+              </div>
+            ) : marginHealth.length > 0 ? (
+              <div className="space-y-4">
+                {marginHealth.map((item) => (
+                  <div
+                    key={item.productId}
+                    className={`p-4 rounded-lg border ${
+                      item.status === 'critical'
+                        ? isDark ? 'border-red-500/50 bg-red-900/20' : 'border-red-200 bg-red-50'
+                        : item.status === 'warning'
+                          ? isDark ? 'border-yellow-500/50 bg-yellow-900/20' : 'border-yellow-200 bg-yellow-50'
+                          : isDark ? 'border-gray-700 bg-gray-700/50' : 'border-gray-200 bg-gray-50'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="flex items-center gap-3">
+                        <div className={`p-2 rounded-lg ${getStatusBgColor(item.status)}`}>
+                          {getStatusIcon(item.status)}
+                        </div>
+                        <div>
+                          <h3 className={`font-semibold ${isDark ? 'text-white' : 'text-gray-900'}`}>
+                            {item.productName}
+                          </h3>
+                          <p className={`text-sm ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
+                            Margen neto: ${item.margenNeto.toFixed(2)} ({item.margenPorcentaje.toFixed(1)}%)
+                          </p>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <p className={`text-sm ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
+                          Total comisiones: <span className="font-semibold text-red-500">${item.totalComisiones.toFixed(2)}</span>
+                        </p>
+                        <p className={`text-xs ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
+                          Costo: ${item.miCosto.toFixed(2)} | Venta: ${item.precioVenta.toFixed(2)}
+                        </p>
+                      </div>
+                    </div>
+
+                    {item.configuredCommissions && item.configuredCommissions.length > 0 && (
+                      <div className={`mt-3 pt-3 border-t ${isDark ? 'border-gray-600' : 'border-gray-200'}`}>
+                        <p className={`text-xs font-medium mb-2 ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
+                          Comisiones configuradas:
+                        </p>
+                        <div className="flex flex-wrap gap-2">
+                          {item.configuredCommissions.map((comm, idx) => (
+                            <span
+                              key={idx}
+                              className={`inline-flex items-center gap-1 px-2 py-1 rounded text-xs ${
+                                isDark ? 'bg-gray-600 text-gray-300' : 'bg-gray-200 text-gray-600'
+                              }`}
+                            >
+                              <span className="font-medium">{comm.activityType}</span>
+                              <span className="opacity-60">({comm.role})</span>:
+                              <span className="font-semibold">
+                                {comm.type === 'fixed' ? `$${comm.value}` : `${comm.value}%`}
+                              </span>
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="text-center py-12">
+                <Percent className={`w-12 h-12 mx-auto mb-4 ${isDark ? 'text-gray-600' : 'text-gray-300'}`} />
+                <p className={`text-lg font-medium ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
+                  No hay comisiones configuradas
+                </p>
+                <p className={`text-sm ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
+                  Las comisiones se calculan automáticamente basándose en la configuración del sistema
+                </p>
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Service Modal - Complete Form */}
