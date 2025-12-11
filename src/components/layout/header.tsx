@@ -82,7 +82,7 @@ export function Header({ onToggleSidebar, sidebarCollapsed }: HeaderProps) {
     }
   }
 
-  // Navigate to wallet page based on user role
+  // Navigate to company wallet page based on user role
   const handleWalletClick = () => {
     if (user?.role === 'SUPER_ADMIN') {
       router.push('/dashboard/admin/wallet')
@@ -90,6 +90,20 @@ export function Header({ onToggleSidebar, sidebarCollapsed }: HeaderProps) {
       // ADMIN, MANAGER, USER - go to company wallet
       router.push('/dashboard/admin/company-wallet')
     }
+  }
+
+  // Navigate to personal wallet (Mi Wallet) based on user role
+  const handleMyWalletClick = () => {
+    const roleMap: Record<string, string> = {
+      'SUPER_ADMIN': '/dashboard/admin/my-wallet',
+      'ADMIN': '/dashboard/admin/my-wallet',
+      'AGENCY_ADMIN': '/dashboard/agency-admin/my-wallet',
+      'MANAGER': '/dashboard/manager/my-wallet',
+      'USER': '/dashboard/user/my-wallet',
+      'DRIVER': '/dashboard/driver/my-wallet'
+    }
+    const path = roleMap[user?.role || 'USER'] || '/dashboard/user/my-wallet'
+    router.push(path)
   }
 
   return (
@@ -225,6 +239,48 @@ export function Header({ onToggleSidebar, sidebarCollapsed }: HeaderProps) {
           {/* Right section */}
           <div className="flex items-center gap-3">
 
+            {/* Personal Wallet Balance - Navigate to Mi Wallet */}
+            <motion.div
+              onClick={handleMyWalletClick}
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+              className={cn(
+                "flex items-center gap-2 px-3 py-2 rounded-xl border transition-all duration-300 cursor-pointer",
+                theme === 'dark'
+                  ? "bg-blue-500/10 border-blue-500/20 hover:bg-blue-500/15"
+                  : "bg-blue-50 border-blue-200 hover:bg-blue-100"
+              )}
+              title="Mi Billetera Personal"
+            >
+              <User className={cn(
+                "w-4 h-4",
+                theme === 'dark' ? "text-blue-400" : "text-blue-600"
+              )} />
+              {walletLoading ? (
+                <span className={cn(
+                  "text-sm font-semibold",
+                  theme === 'dark' ? "text-blue-400" : "text-blue-600"
+                )}>
+                  $...
+                </span>
+              ) : (
+                <AnimatedCounter
+                  value={userBalance}
+                  previousValue={prevUserBalance}
+                  changeDirection={userBalanceChange}
+                  prefix="$"
+                  decimals={2}
+                  className={cn(
+                    "text-sm font-semibold",
+                    theme === 'dark' ? "text-blue-400" : "text-blue-600"
+                  )}
+                  showChangeIndicator={true}
+                />
+              )}
+            </motion.div>
+
             {/* Company Wallet Balance - Clickable to navigate to wallet */}
             <motion.div
               onClick={handleWalletClick}
@@ -238,6 +294,7 @@ export function Header({ onToggleSidebar, sidebarCollapsed }: HeaderProps) {
                   ? "bg-green-500/10 border-green-500/20 hover:bg-green-500/15"
                   : "bg-green-50 border-green-200 hover:bg-green-100"
               )}
+              title="Billetera de Empresa"
             >
               <Wallet className={cn(
                 "w-4 h-4",

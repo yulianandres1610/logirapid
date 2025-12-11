@@ -196,6 +196,13 @@ export async function middleware(request: NextRequest) {
     return response
   }
 
+  // Excepción: Permitir que DRIVER acceda a /dashboard/driver/my-wallet
+  // Wallet personal del driver
+  if (userRole === 'DRIVER' && pathname === '/dashboard/driver/my-wallet') {
+    console.log('✅ DRIVER accessing personal wallet page, companyId:', companyId)
+    return response
+  }
+
   // Excepción: Permitir que ADMIN acceda a /dashboard/admin/comisiones
   // Sistema de comisiones para empleados de la empresa
   if (userRole === 'ADMIN' && pathname.startsWith('/dashboard/admin/comisiones')) {
@@ -207,6 +214,13 @@ export async function middleware(request: NextRequest) {
   // Configuración de productos y servicios de paquetería
   if (userRole === 'ADMIN' && pathname === '/dashboard/admin/product-config') {
     console.log('✅ ADMIN accessing product-config page, companyId:', companyId)
+    return response
+  }
+
+  // Excepción: Permitir que ADMIN acceda a /dashboard/admin/my-wallet
+  // Wallet personal del admin (alias para consistency con SUPER_ADMIN)
+  if (userRole === 'ADMIN' && pathname === '/dashboard/admin/my-wallet') {
+    console.log('✅ ADMIN accessing personal wallet page, companyId:', companyId)
     return response
   }
 

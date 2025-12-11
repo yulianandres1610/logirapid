@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Building2, ExternalLink, CheckCircle2, AlertCircle, Clock, Loader2, RefreshCw } from 'lucide-react'
+import { Building2, ExternalLink, CheckCircle2, AlertCircle, Clock, Loader2, RefreshCw, Unlink, X } from 'lucide-react'
 
 interface ConnectStatus {
   entityType: string
@@ -49,6 +49,8 @@ export default function StripeConnectStatus({
   const [status, setStatus] = useState<ConnectStatus | null>(null)
   const [loading, setLoading] = useState(true)
   const [connecting, setConnecting] = useState(false)
+  const [disconnecting, setDisconnecting] = useState(false)
+  const [showDisconnectModal, setShowDisconnectModal] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   const fetchStatus = async () => {
@@ -98,6 +100,32 @@ export default function StripeConnectStatus({
     } catch (err) {
       setError('Error de conexion')
       setConnecting(false)
+    }
+  }
+
+  const handleDisconnect = async () => {
+    try {
+      setDisconnecting(true)
+      setError(null)
+
+      const res = await fetch('/api/stripe/connect/disconnect', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ entityType, entityId })
+      })
+
+      const data = await res.json()
+
+      if (data.success) {
+        setShowDisconnectModal(false)
+        fetchStatus() // Refresh status
+      } else {
+        setError(data.error || 'Error al desconectar cuenta')
+      }
+    } catch (err) {
+      setError('Error de conexion')
+    } finally {
+      setDisconnecting(false)
     }
   }
 
@@ -291,6 +319,17 @@ export default function StripeConnectStatus({
               Conectada el {new Date(status.connectedAt).toLocaleDateString('es-ES')}
             </p>
           )}
+
+          {/* Disconnect button */}
+          <div className="pt-2 border-t border-gray-100">
+            <button
+              onClick={() => setShowDisconnectModal(true)}
+              className="flex items-center gap-1.5 text-xs text-red-500 hover:text-red-700 transition-colors"
+            >
+              <Unlink className="w-3 h-3" />
+              Desconectar cuenta bancaria
+            </button>
+          </div>
         </div>
       )}
 
@@ -331,6 +370,94 @@ export default function StripeConnectStatus({
         <RefreshCw className="w-3 h-3" />
         Actualizar estado
       </button>
+
+      {/* Disconnect Confirmation Modal */}
+      {showDisconnectModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          {/* Backdrop */}
+          <div
+            className="absolute inset-0 bg-black/50 backdrop-blur-sm"
+            onClick={() => setShowDisconnectModal(false)}
+          />
+
+          {/* Dialog */}
+          <div className="relative w-full max-w-sm mx-4 bg-white rounded-2xl shadow-2xl overflow-hidden">
+            {/* Header */}
+            <div className="bg-gradient-to-r from-red-500 to-red-600 p-5 text-white">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center">
+                    <Unlink className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h2 className="text-lg font-semibold">Desconectar Cuenta</h2>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setShowDisconnectModal(false)}
+                  className="p-2 hover:bg-white/20 rounded-lg transition-colors"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+            </div>
+
+            {/* Body */}
+            <div className="p-6">
+              <div className="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+                <div className="flex items-start gap-2">
+                  <AlertCircle className="w-5 h-5 text-yellow-600 flex-shrink-0 mt-0.5" />
+                  <div className="text-sm text-yellow-800">
+                    <p className="font-medium mb-1">Esta accion no se puede deshacer</p>
+                    <p className="text-yellow-700">
+                      Al desconectar tu cuenta bancaria, no podras recibir retiros hasta que conectes una nueva cuenta.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {status.externalAccounts && status.externalAccounts.length > 0 && (
+                <div className="mb-4 p-3 bg-gray-50 rounded-lg">
+                  <p className="text-xs text-gray-500 mb-2">Cuenta a desconectar:</p>
+                  <div className="flex items-center gap-2">
+                    <Building2 className="w-4 h-4 text-gray-400" />
+                    <span className="text-sm font-medium text-gray-700">
+                      {status.externalAccounts[0].bankName || 'Banco'} ****{status.externalAccounts[0].last4}
+                    </span>
+                  </div>
+                </div>
+              )}
+
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setShowDisconnectModal(false)}
+                  disabled={disconnecting}
+                  className="flex-1 py-3 border border-gray-200 text-gray-700 rounded-lg font-medium hover:bg-gray-50 transition-all disabled:opacity-50"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={handleDisconnect}
+                  disabled={disconnecting}
+                  className="flex-1 py-3 bg-red-600 text-white rounded-lg font-medium hover:bg-red-700 transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+                >
+                  {disconnecting ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Desconectando...
+                    </>
+                  ) : (
+                    <>
+                      <Unlink className="w-4 h-4" />
+                      Desconectar
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

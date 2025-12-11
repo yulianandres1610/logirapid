@@ -19,6 +19,7 @@ function generateTransactionNumber(): string {
  *
  * Events handled:
  * - account.updated: Update Connect account status
+ * - account.deleted: Connect account was deleted
  * - transfer.created: Transfer to connected account created
  * - transfer.reversed: Transfer was reversed
  * - transfer.updated: Transfer status updated
@@ -81,6 +82,8 @@ export async function POST(request: NextRequest) {
       await handlePayoutFailed(event.data.object as Stripe.Payout)
     } else if (eventType === 'payment_intent.succeeded') {
       await handlePaymentIntentSucceeded(event.data.object as Stripe.PaymentIntent)
+    } else if (eventType === 'account.deleted') {
+      await handleAccountDeleted(event.data.object as Stripe.Account)
     } else {
       console.log(`Unhandled event type: ${event.type}`)
     }
@@ -536,6 +539,49 @@ async function handlePaymentIntentSucceeded(paymentIntent: Stripe.PaymentIntent)
     await db.query('ROLLBACK')
     console.error(`Error processing redirect payment ${paymentIntent.id}:`, error)
     throw error
+  }
+}
+
+/**
+ * Handle account.deleted event
+ * Stripe Connect account was deleted - clean up database
+ */
+async function handleAccountDeleted(account: Stripe.Account) {
+  console.log(`Account deleted: ${account.id}`)
+
+  // Clear fields in companies table
+  const companyResult = await db.query(`
+    UPDATE companies SET
+      stripe_account_id = NULL,
+      stripe_account_status = 'not_connected',
+      stripe_payouts_enabled = false,
+      stripe_charges_enabled = false,
+      stripe_details_submitted = false,
+      stripe_connected_at = NULL
+    WHERE stripe_account_id = $1
+    RETURNING id, legalname
+  `, [account.id])
+
+  if (companyResult.rows.length > 0) {
+    console.log(`Cleared Stripe Connect data for company ${companyResult.rows[0].legalname}`)
+    return
+  }
+
+  // Clear fields in users table
+  const userResult = await db.query(`
+    UPDATE users SET
+      stripe_account_id = NULL,
+      stripe_account_status = 'not_connected',
+      stripe_payouts_enabled = false,
+      stripe_charges_enabled = false,
+      stripe_details_submitted = false,
+      stripe_connected_at = NULL
+    WHERE stripe_account_id = $1
+    RETURNING id, email
+  `, [account.id])
+
+  if (userResult.rows.length > 0) {
+    console.log(`Cleared Stripe Connect data for user ${userResult.rows[0].email}`)
   }
 }
 

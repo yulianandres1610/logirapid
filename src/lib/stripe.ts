@@ -294,6 +294,14 @@ export async function getConnectAccount(accountId: string): Promise<Stripe.Accou
 }
 
 /**
+ * Delete a Stripe Connect account
+ * Note: This permanently deletes the account from Stripe
+ */
+export async function deleteConnectAccount(accountId: string): Promise<{ deleted: boolean; id: string }> {
+  return getStripe().accounts.del(accountId)
+}
+
+/**
  * Create a payout to a connected account
  * In test mode, if insufficient funds, simulates the transfer
  */
