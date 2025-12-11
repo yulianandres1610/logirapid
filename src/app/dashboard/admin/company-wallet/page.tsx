@@ -612,8 +612,20 @@ export default function CompanyWalletPage() {
     }
   }
 
-  // Password verification dialog (shown as overlay, not blocking layout)
-  // The dialog will be rendered at the end of the main return
+  // Password verification - show ONLY the dialog without any DashboardLayout to prevent header movement
+  if (!isAuthenticated && showPasswordDialog) {
+    return (
+      <PasswordConfirmDialog
+        isOpen={true}
+        onClose={() => {}}
+        onSuccess={() => {
+          setIsAuthenticated(true)
+          setShowPasswordDialog(false)
+        }}
+        preventClose={true}
+      />
+    )
+  }
 
   if (error && !companyWallet) {
     return (
@@ -2151,16 +2163,6 @@ export default function CompanyWalletPage() {
         )}
       </AnimatePresence>
 
-      {/* Password verification dialog - shown as full screen gate */}
-      <PasswordConfirmDialog
-        isOpen={!isAuthenticated && showPasswordDialog}
-        onClose={() => {}} // No-op, preventClose handles this
-        onSuccess={() => {
-          setIsAuthenticated(true)
-          setShowPasswordDialog(false)
-        }}
-        preventClose={true}
-      />
     </DashboardLayout>
   )
 }
