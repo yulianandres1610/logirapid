@@ -1,9 +1,20 @@
 import Stripe from 'stripe'
 
-// Initialize Stripe with platform credentials
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || '', {
-  apiVersion: '2024-12-18.acacia' as Stripe.LatestApiVersion
-})
+// Lazy initialization of Stripe client to avoid build-time errors
+let _stripe: Stripe | null = null
+
+function getStripe(): Stripe {
+  if (!_stripe) {
+    const apiKey = process.env.STRIPE_SECRET_KEY
+    if (!apiKey) {
+      throw new Error('STRIPE_SECRET_KEY is not configured')
+    }
+    _stripe = new Stripe(apiKey, {
+      apiVersion: '2024-12-18.acacia' as Stripe.LatestApiVersion
+    })
+  }
+  return _stripe
+}
 
 // Fee percentage for wallet recharges
 export const STRIPE_FEE_PERCENTAGE = 3.5
@@ -41,7 +52,7 @@ export async function createRechargePaymentIntent(
   const totalCharged = amount + fee
   const totalCents = Math.round(totalCharged * 100)
 
-  const paymentIntent = await stripe.paymentIntents.create({
+  const paymentIntent = await getStripe().paymentIntents.create({
     amount: totalCents,
     currency: 'usd',
     automatic_payment_methods: { enabled: true },
@@ -73,7 +84,7 @@ export async function createRechargePaymentIntent(
  * Retrieve a PaymentIntent by ID with full payment details
  */
 export async function getPaymentIntent(paymentIntentId: string): Promise<Stripe.PaymentIntent> {
-  return stripe.paymentIntents.retrieve(paymentIntentId, {
+  return getStripe().paymentIntents.retrieve(paymentIntentId, {
     expand: ['payment_method', 'latest_charge']
   })
 }
@@ -82,7 +93,7 @@ export async function getPaymentIntent(paymentIntentId: string): Promise<Stripe.
  * Check if a PaymentIntent has succeeded
  */
 export async function confirmPaymentSucceeded(paymentIntentId: string): Promise<boolean> {
-  const intent = await stripe.paymentIntents.retrieve(paymentIntentId)
+  const intent = await getStripe().paymentIntents.retrieve(paymentIntentId)
   return intent.status === 'succeeded'
 }
 
@@ -234,7 +245,7 @@ export function constructWebhookEvent(
   signature: string,
   webhookSecret: string
 ): Stripe.Event {
-  return stripe.webhooks.constructEvent(body, signature, webhookSecret)
+  return getStripe().webhooks.constructEvent(body, signature, webhookSecret)
 }
 
 /**
@@ -245,7 +256,7 @@ export async function createConnectAccount(params: {
   companyName: string
   country?: string
 }): Promise<Stripe.Account> {
-  return stripe.accounts.create({
+  return getStripe().accounts.create({
     type: 'express',
     country: params.country || 'US',
     email: params.email,
@@ -267,7 +278,7 @@ export async function createAccountLink(params: {
   refreshUrl: string
   returnUrl: string
 }): Promise<Stripe.AccountLink> {
-  return stripe.accountLinks.create({
+  return getStripe().accountLinks.create({
     account: params.accountId,
     refresh_url: params.refreshUrl,
     return_url: params.returnUrl,
@@ -279,7 +290,7 @@ export async function createAccountLink(params: {
  * Get a Stripe Connect Account status
  */
 export async function getConnectAccount(accountId: string): Promise<Stripe.Account> {
-  return stripe.accounts.retrieve(accountId)
+  return getStripe().accounts.retrieve(accountId)
 }
 
 /**
@@ -295,7 +306,7 @@ export async function createPayout(params: {
   const isTestMode = (process.env.STRIPE_SECRET_KEY || '').startsWith('sk_test_')
 
   try {
-    return await stripe.transfers.create({
+    return await getStripe().transfers.create({
       amount: amountCents,
       currency: 'usd',
       destination: params.accountId,
@@ -334,5 +345,5 @@ export async function createPayout(params: {
   }
 }
 
-// Export the Stripe instance for advanced usage
-export { stripe }
+// Export the getStripe function for advanced usage
+export { getStripe }

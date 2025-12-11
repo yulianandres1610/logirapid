@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { constructWebhookEvent, getFullPaymentDetails, STRIPE_FEE_PERCENTAGE, stripe } from '@/lib/stripe'
+import { constructWebhookEvent, getFullPaymentDetails, STRIPE_FEE_PERCENTAGE, getStripe } from '@/lib/stripe'
 import { db } from '@/lib/database'
 import Stripe from 'stripe'
 
@@ -393,7 +393,7 @@ async function handlePaymentIntentSucceeded(paymentIntent: Stripe.PaymentIntent)
   console.log(`Processing redirect payment: ${paymentIntent.id} for ${targetType} ${targetId}, amount: $${baseAmount}`)
 
   // Retrieve full payment intent with expanded details
-  const fullPaymentIntent = await stripe.paymentIntents.retrieve(paymentIntent.id, {
+  const fullPaymentIntent = await getStripe().paymentIntents.retrieve(paymentIntent.id, {
     expand: ['payment_method', 'latest_charge']
   })
 
