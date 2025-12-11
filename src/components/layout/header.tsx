@@ -239,48 +239,6 @@ export function Header({ onToggleSidebar, sidebarCollapsed }: HeaderProps) {
           {/* Right section */}
           <div className="flex items-center gap-3">
 
-            {/* Personal Wallet Balance - Navigate to Mi Wallet */}
-            <motion.div
-              onClick={handleMyWalletClick}
-              initial={{ opacity: 0, scale: 0.9 }}
-              animate={{ opacity: 1, scale: 1 }}
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
-              className={cn(
-                "flex items-center gap-2 px-3 py-2 rounded-xl border transition-all duration-300 cursor-pointer",
-                theme === 'dark'
-                  ? "bg-blue-500/10 border-blue-500/20 hover:bg-blue-500/15"
-                  : "bg-blue-50 border-blue-200 hover:bg-blue-100"
-              )}
-              title="Mi Billetera Personal"
-            >
-              <User className={cn(
-                "w-4 h-4",
-                theme === 'dark' ? "text-blue-400" : "text-blue-600"
-              )} />
-              {walletLoading ? (
-                <span className={cn(
-                  "text-sm font-semibold",
-                  theme === 'dark' ? "text-blue-400" : "text-blue-600"
-                )}>
-                  $...
-                </span>
-              ) : (
-                <AnimatedCounter
-                  value={userBalance}
-                  previousValue={prevUserBalance}
-                  changeDirection={userBalanceChange}
-                  prefix="$"
-                  decimals={2}
-                  className={cn(
-                    "text-sm font-semibold",
-                    theme === 'dark' ? "text-blue-400" : "text-blue-600"
-                  )}
-                  showChangeIndicator={true}
-                />
-              )}
-            </motion.div>
-
             {/* Company Wallet Balance - Clickable to navigate to wallet */}
             <motion.div
               onClick={handleWalletClick}
@@ -581,11 +539,18 @@ export function Header({ onToggleSidebar, sidebarCollapsed }: HeaderProps) {
                           )}>{user?.email || 'admin@cubarapid.com'}</p>
                         </div>
                       </div>
-                      {/* User Wallet Balance */}
-                      <div className={cn(
-                        "flex items-center gap-3 mt-3 pt-3 border-t",
-                        theme === 'dark' ? "border-gray-700" : "border-gray-200"
-                      )}>
+                      {/* User Wallet Balance - Clickable to navigate to personal wallet */}
+                      <div
+                        onClick={() => {
+                          setShowUserMenu(false)
+                          handleMyWalletClick()
+                        }}
+                        className={cn(
+                          "flex items-center gap-3 mt-3 pt-3 border-t cursor-pointer rounded-lg p-2 -m-2 transition-colors",
+                          theme === 'dark' ? "border-gray-700 hover:bg-gray-700/50" : "border-gray-200 hover:bg-gray-100"
+                        )}
+                        title="Ir a Mi Wallet Personal"
+                      >
                         <div className={cn(
                           "w-8 h-8 rounded-full flex items-center justify-center",
                           theme === 'dark' ? "bg-green-500/20" : "bg-green-100"

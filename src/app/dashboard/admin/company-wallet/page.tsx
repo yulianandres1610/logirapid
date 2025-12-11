@@ -42,6 +42,7 @@ import StripeCardForm from '@/components/wallet/StripeCardForm'
 import { PaymentReceiptStep, PaymentReceiptData } from '@/components/wallet/PaymentReceiptStep'
 import CashoutModal from '@/components/wallet/CashoutModal'
 import StripeConnectStatus from '@/components/wallet/StripeConnectStatus'
+import PasswordConfirmDialog from '@/components/ui/PasswordConfirmDialog'
 
 type Tab = 'statement' | 'recharge' | 'transfer' | 'pending'
 type PaymentMethod = 'card_manual' | 'cash' | 'wire' | 'zelle'
@@ -160,6 +161,10 @@ export default function CompanyWalletPage() {
   const [activeTab, setActiveTab] = useState<Tab>(tabParam || 'statement')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+
+  // Password verification state
+  const [isAuthenticated, setIsAuthenticated] = useState(false)
+  const [showPasswordDialog, setShowPasswordDialog] = useState(true)
 
   // Dashboard data
   const [companyWallet, setCompanyWallet] = useState<CompanyWallet | null>(null)
@@ -605,6 +610,29 @@ export default function CompanyWalletPage() {
       showNotification('error', 'Error', 'Error de conexion al iniciar el proceso')
       setConnectLoading(false)
     }
+  }
+
+  // Password verification gate
+  if (!isAuthenticated) {
+    return (
+      <DashboardLayout>
+        <div className={cn(
+          "min-h-screen flex items-center justify-center",
+          theme === 'dark' ? 'bg-gray-900' : 'bg-gray-50'
+        )}>
+          <PasswordConfirmDialog
+            isOpen={showPasswordDialog}
+            onClose={() => router.back()}
+            onSuccess={() => {
+              setIsAuthenticated(true)
+              setShowPasswordDialog(false)
+            }}
+            title="Acceso a Wallet de Empresa"
+            message="Por favor ingresa tu contrasena para acceder al wallet de la empresa."
+          />
+        </div>
+      </DashboardLayout>
+    )
   }
 
   if (error && !companyWallet) {

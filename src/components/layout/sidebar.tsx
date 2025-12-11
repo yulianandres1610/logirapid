@@ -308,7 +308,6 @@ export function Sidebar({ isCollapsed, onToggle }: SidebarProps) {
     { icon: Settings, label: "Catálogo Productos", href: "/dashboard/admin/product-config" },
     { icon: UserCheck, label: "CRM", href: "/dashboard/admin/crm" },
     { icon: Wallet, label: "Wallet Manager", href: "/dashboard/admin/wallet" },
-    { icon: User, label: "Mi Wallet Personal", href: "/dashboard/admin/my-wallet" },
     { icon: Send, label: "Cupones Familiares", href: "/dashboard/admin/remittance" },
     { icon: Smartphone, label: "Recarga", href: "/dashboard/admin/recharge" },
     { icon: Package, label: "Rastreador", href: "/dashboard/admin/tracker" },
@@ -340,7 +339,6 @@ export function Sidebar({ isCollapsed, onToggle }: SidebarProps) {
     { icon: Settings, label: "Catálogo Productos", href: "/dashboard/admin/product-config", requiredService: null },
     { icon: Package, label: "Rastreador", href: "/dashboard/agency-admin/tracker", requiredService: 'tracker' },
     { icon: Wallet, label: "Wallet Empresa", href: "/dashboard/admin/company-wallet", requiredService: 'wallet' },
-    { icon: User, label: "Mi Wallet Personal", href: "/dashboard/agency-admin/my-wallet", requiredService: null },
     { icon: Send, label: "Cupones Familiares", href: "/dashboard/agency-admin/remittance", requiredService: 'remittance' },
     { icon: Smartphone, label: "Recargas", href: "/dashboard/agency-admin/recargas", requiredService: 'recharge' },
     { icon: BarChart3, label: "Tasa de Cambio", href: "/dashboard/agency-admin/exchange-rate", requiredService: 'exchange' },
@@ -370,7 +368,6 @@ export function Sidebar({ isCollapsed, onToggle }: SidebarProps) {
     { icon: Users, label: "Usuarios", href: "/dashboard/manager/users", requiredService: null },
     { icon: UserCheck, label: "CRM", href: "/dashboard/manager/crm", requiredService: null },
     { icon: Wallet, label: "Wallet Empresa", href: "/dashboard/admin/company-wallet", requiredService: 'wallet' },
-    { icon: User, label: "Mi Wallet Personal", href: "/dashboard/manager/my-wallet", requiredService: null },
     { icon: BarChart3, label: "Tasa de Cambio", href: "/dashboard/manager/exchange-rate", requiredService: 'exchange' },
     { icon: ShoppingCart, label: "Mercado", href: "/dashboard/manager/marketplace", requiredService: 'marketplace' },
     {
@@ -395,7 +392,6 @@ export function Sidebar({ isCollapsed, onToggle }: SidebarProps) {
   // Menu items para USER (solo puede vender servicios)
   const userMenuItems = [
     { icon: Home, label: "Dashboard", href: "/dashboard/user", requiredService: null },
-    { icon: User, label: "Mi Wallet Personal", href: "/dashboard/user/my-wallet", requiredService: null },
     { icon: Send, label: "Vender Cupón Familiar", href: "/dashboard/user/remittance", requiredService: 'remittance' },
     { icon: Smartphone, label: "Recargar Móvil", href: "/dashboard/user/recharge", requiredService: 'recharge' },
     { icon: Package, label: "Paquetes", href: "/dashboard/user/packages", requiredService: 'paqueteria' },
