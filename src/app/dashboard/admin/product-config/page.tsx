@@ -925,117 +925,550 @@ export default function ProductConfigPage() {
         </div>
       </div>
 
-      {/* Service Modal - Placeholder */}
+      {/* Service Modal - Complete Form */}
       <AnimatePresence>
         {showServiceModal && selectedProduct && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
-            onClick={() => setShowServiceModal(false)}
-          >
-            <motion.div
-              initial={{ scale: 0.95, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.95, opacity: 0 }}
-              className={`w-full max-w-2xl rounded-2xl ${isDark ? 'bg-gray-800' : 'bg-white'} p-6 shadow-xl`}
-              onClick={(e) => e.stopPropagation()}
-            >
-              <h2 className={`text-xl font-bold mb-4 ${isDark ? 'text-white' : 'text-gray-900'}`}>
-                {editingService ? 'Editar Servicio' : 'Nuevo Servicio'}
-              </h2>
-              <p className={`text-sm mb-4 ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
-                Producto: {selectedProduct.name}
-              </p>
-              {/* TODO: Implement service form */}
-              <div className={`p-8 text-center rounded-lg ${isDark ? 'bg-gray-700' : 'bg-gray-100'}`}>
-                <Settings className={`w-12 h-12 mx-auto mb-4 ${isDark ? 'text-gray-500' : 'text-gray-400'}`} />
-                <p className={isDark ? 'text-gray-400' : 'text-gray-600'}>
-                  Formulario de servicio en desarrollo
-                </p>
-              </div>
-              <div className="flex justify-end gap-3 mt-6">
-                <button
-                  onClick={() => setShowServiceModal(false)}
-                  className={`px-4 py-2 rounded-lg ${
-                    isDark
-                      ? 'bg-gray-700 hover:bg-gray-600 text-gray-300'
-                      : 'bg-gray-100 hover:bg-gray-200 text-gray-700'
-                  }`}
-                >
-                  Cancelar
-                </button>
-                <button
-                  className={`px-4 py-2 rounded-lg ${
-                    isDark
-                      ? 'bg-blue-600 hover:bg-blue-700 text-white'
-                      : 'bg-blue-500 hover:bg-blue-600 text-white'
-                  }`}
-                >
-                  Guardar
-                </button>
-              </div>
-            </motion.div>
-          </motion.div>
+          <ServiceModal
+            isDark={isDark}
+            product={selectedProduct}
+            service={editingService}
+            onClose={() => {
+              setShowServiceModal(false)
+              setEditingService(null)
+            }}
+            onSave={async (serviceData) => {
+              try {
+                const method = editingService ? 'PUT' : 'POST'
+                const url = editingService
+                  ? `/api/products/${selectedProduct.id}/services/${editingService.id}`
+                  : `/api/products/${selectedProduct.id}/services`
+
+                const response = await fetch(url, {
+                  method,
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify(serviceData)
+                })
+
+                const data = await response.json()
+
+                if (data.success) {
+                  showNotification('success', 'Éxito', editingService ? 'Servicio actualizado' : 'Servicio creado')
+                  setShowServiceModal(false)
+                  setEditingService(null)
+                  fetchProducts()
+                } else {
+                  showNotification('error', 'Error', data.error || 'Error al guardar servicio')
+                }
+              } catch (error) {
+                showNotification('error', 'Error', 'Error de conexión')
+              }
+            }}
+          />
         )}
       </AnimatePresence>
 
-      {/* Pricing Modal - Placeholder */}
+      {/* Pricing Modal - Complete Form */}
       <AnimatePresence>
         {showPricingModal && selectedProduct && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
-            onClick={() => setShowPricingModal(false)}
-          >
-            <motion.div
-              initial={{ scale: 0.95, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.95, opacity: 0 }}
-              className={`w-full max-w-2xl rounded-2xl ${isDark ? 'bg-gray-800' : 'bg-white'} p-6 shadow-xl`}
-              onClick={(e) => e.stopPropagation()}
-            >
-              <h2 className={`text-xl font-bold mb-4 ${isDark ? 'text-white' : 'text-gray-900'}`}>
-                Configurar Precios
-              </h2>
-              <p className={`text-sm mb-4 ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
-                Producto: {selectedProduct.name}
-              </p>
-              {/* TODO: Implement pricing form */}
-              <div className={`p-8 text-center rounded-lg ${isDark ? 'bg-gray-700' : 'bg-gray-100'}`}>
-                <DollarSign className={`w-12 h-12 mx-auto mb-4 ${isDark ? 'text-gray-500' : 'text-gray-400'}`} />
-                <p className={isDark ? 'text-gray-400' : 'text-gray-600'}>
-                  Formulario de precios en desarrollo
-                </p>
-              </div>
-              <div className="flex justify-end gap-3 mt-6">
-                <button
-                  onClick={() => setShowPricingModal(false)}
-                  className={`px-4 py-2 rounded-lg ${
-                    isDark
-                      ? 'bg-gray-700 hover:bg-gray-600 text-gray-300'
-                      : 'bg-gray-100 hover:bg-gray-200 text-gray-700'
-                  }`}
-                >
-                  Cancelar
-                </button>
-                <button
-                  className={`px-4 py-2 rounded-lg ${
-                    isDark
-                      ? 'bg-blue-600 hover:bg-blue-700 text-white'
-                      : 'bg-blue-500 hover:bg-blue-600 text-white'
-                  }`}
-                >
-                  Guardar
-                </button>
-              </div>
-            </motion.div>
-          </motion.div>
+          <PricingModal
+            isDark={isDark}
+            product={selectedProduct}
+            marginHealth={getMarginHealthForProduct(selectedProduct.id)}
+            onClose={() => setShowPricingModal(false)}
+            onSave={async (pricingData) => {
+              try {
+                const response = await fetch(`/api/companies/current/products/${selectedProduct.id}/pricing`, {
+                  method: 'PUT',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify(pricingData)
+                })
+
+                const data = await response.json()
+
+                if (data.success) {
+                  showNotification('success', 'Éxito', 'Precios actualizados')
+                  setShowPricingModal(false)
+                  fetchProducts()
+                  fetchMarginHealth()
+                } else {
+                  showNotification('error', 'Error', data.error || 'Error al guardar precios')
+                }
+              } catch (error) {
+                showNotification('error', 'Error', 'Error de conexión')
+              }
+            }}
+          />
         )}
       </AnimatePresence>
     </DashboardLayout>
+  )
+}
+
+// ============== ServiceModal Component ==============
+interface ServiceModalProps {
+  isDark: boolean
+  product: Product
+  service: ProductService | null
+  onClose: () => void
+  onSave: (data: any) => Promise<void>
+}
+
+function ServiceModal({ isDark, product, service, onClose, onSave }: ServiceModalProps) {
+  const [saving, setSaving] = useState(false)
+  const [formData, setFormData] = useState({
+    serviceCode: service?.serviceCode || '',
+    serviceName: service?.serviceName || '',
+    description: service?.description || '',
+    sequenceOrder: service?.sequenceOrder || 1,
+    inclusionType: service?.inclusionType || 'included',
+    basePrice: service?.basePrice || 0,
+    generatesBoxTracking: service?.generatesBoxTracking || false,
+    requiresPriorBox: service?.requiresPriorBox || false,
+    isMandatory: service?.isMandatory ?? true,
+    isActive: service?.isActive !== false
+  })
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!formData.serviceCode || !formData.serviceName) {
+      return
+    }
+    setSaving(true)
+    try {
+      await onSave(formData)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+      onClick={onClose}
+    >
+      <motion.div
+        initial={{ scale: 0.95, opacity: 0 }}
+        animate={{ scale: 1, opacity: 1 }}
+        exit={{ scale: 0.95, opacity: 0 }}
+        className={`w-full max-w-2xl rounded-2xl ${isDark ? 'bg-gray-800' : 'bg-white'} p-6 shadow-xl max-h-[90vh] overflow-y-auto`}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <h2 className={`text-xl font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>
+              {service ? 'Editar Servicio' : 'Nuevo Servicio'}
+            </h2>
+            <p className={`text-sm ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
+              Producto: {product.name}
+            </p>
+          </div>
+          <span className={`px-2 py-1 text-xs rounded ${isDark ? 'bg-gray-700 text-gray-300' : 'bg-gray-100 text-gray-600'}`}>
+            {product.code}
+          </span>
+        </div>
+
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className={`block text-sm font-medium mb-1 ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
+                Código del Servicio *
+              </label>
+              <input
+                type="text"
+                required
+                value={formData.serviceCode}
+                onChange={(e) => setFormData({ ...formData, serviceCode: e.target.value.toUpperCase().replace(/\s+/g, '_') })}
+                placeholder="ENTREGA_CAJA"
+                className={`w-full px-3 py-2 rounded-lg border ${
+                  isDark
+                    ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-500'
+                    : 'bg-white border-gray-300 text-gray-900 placeholder-gray-400'
+                } focus:outline-none focus:ring-2 focus:ring-blue-500`}
+              />
+            </div>
+            <div>
+              <label className={`block text-sm font-medium mb-1 ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
+                Nombre del Servicio *
+              </label>
+              <input
+                type="text"
+                required
+                value={formData.serviceName}
+                onChange={(e) => setFormData({ ...formData, serviceName: e.target.value })}
+                placeholder="Entrega de Caja"
+                className={`w-full px-3 py-2 rounded-lg border ${
+                  isDark
+                    ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-500'
+                    : 'bg-white border-gray-300 text-gray-900 placeholder-gray-400'
+                } focus:outline-none focus:ring-2 focus:ring-blue-500`}
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className={`block text-sm font-medium mb-1 ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
+              Descripción
+            </label>
+            <textarea
+              value={formData.description}
+              onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+              rows={2}
+              placeholder="Descripción opcional del servicio"
+              className={`w-full px-3 py-2 rounded-lg border ${
+                isDark
+                  ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-500'
+                  : 'bg-white border-gray-300 text-gray-900 placeholder-gray-400'
+              } focus:outline-none focus:ring-2 focus:ring-blue-500`}
+            />
+          </div>
+
+          <div className="grid grid-cols-3 gap-4">
+            <div>
+              <label className={`block text-sm font-medium mb-1 ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
+                Orden de Secuencia
+              </label>
+              <input
+                type="number"
+                min="1"
+                value={formData.sequenceOrder}
+                onChange={(e) => setFormData({ ...formData, sequenceOrder: parseInt(e.target.value) || 1 })}
+                className={`w-full px-3 py-2 rounded-lg border ${
+                  isDark
+                    ? 'bg-gray-700 border-gray-600 text-white'
+                    : 'bg-white border-gray-300 text-gray-900'
+                } focus:outline-none focus:ring-2 focus:ring-blue-500`}
+              />
+            </div>
+            <div>
+              <label className={`block text-sm font-medium mb-1 ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
+                Tipo de Inclusión
+              </label>
+              <select
+                value={formData.inclusionType}
+                onChange={(e) => setFormData({ ...formData, inclusionType: e.target.value as any })}
+                className={`w-full px-3 py-2 rounded-lg border ${
+                  isDark
+                    ? 'bg-gray-700 border-gray-600 text-white'
+                    : 'bg-white border-gray-300 text-gray-900'
+                } focus:outline-none focus:ring-2 focus:ring-blue-500`}
+              >
+                <option value="included">Incluido</option>
+                <option value="optional">Opcional</option>
+                <option value="addon">Adicional</option>
+              </select>
+            </div>
+            <div>
+              <label className={`block text-sm font-medium mb-1 ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
+                Precio Base ($)
+              </label>
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                value={formData.basePrice}
+                onChange={(e) => setFormData({ ...formData, basePrice: parseFloat(e.target.value) || 0 })}
+                className={`w-full px-3 py-2 rounded-lg border ${
+                  isDark
+                    ? 'bg-gray-700 border-gray-600 text-white'
+                    : 'bg-white border-gray-300 text-gray-900'
+                } focus:outline-none focus:ring-2 focus:ring-blue-500`}
+              />
+            </div>
+          </div>
+
+          <div className={`p-4 rounded-lg ${isDark ? 'bg-gray-700' : 'bg-gray-50'}`}>
+            <p className={`text-sm font-medium mb-3 ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
+              Opciones del Servicio
+            </p>
+            <div className="grid grid-cols-2 gap-4">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={formData.isMandatory}
+                  onChange={(e) => setFormData({ ...formData, isMandatory: e.target.checked })}
+                  className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                />
+                <span className={`text-sm ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
+                  Obligatorio
+                </span>
+              </label>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={formData.generatesBoxTracking}
+                  onChange={(e) => setFormData({ ...formData, generatesBoxTracking: e.target.checked })}
+                  className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                />
+                <span className={`text-sm ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
+                  Genera Tracking de Caja
+                </span>
+              </label>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={formData.requiresPriorBox}
+                  onChange={(e) => setFormData({ ...formData, requiresPriorBox: e.target.checked })}
+                  className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                />
+                <span className={`text-sm ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
+                  Requiere Caja Previa
+                </span>
+              </label>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={formData.isActive}
+                  onChange={(e) => setFormData({ ...formData, isActive: e.target.checked })}
+                  className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                />
+                <span className={`text-sm ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
+                  Activo
+                </span>
+              </label>
+            </div>
+          </div>
+
+          <div className="flex justify-end gap-3 pt-4 border-t ${isDark ? 'border-gray-700' : 'border-gray-200'}">
+            <button
+              type="button"
+              onClick={onClose}
+              disabled={saving}
+              className={`px-4 py-2 rounded-lg ${
+                isDark
+                  ? 'bg-gray-700 hover:bg-gray-600 text-gray-300'
+                  : 'bg-gray-100 hover:bg-gray-200 text-gray-700'
+              } disabled:opacity-50`}
+            >
+              Cancelar
+            </button>
+            <button
+              type="submit"
+              disabled={saving || !formData.serviceCode || !formData.serviceName}
+              className={`px-4 py-2 rounded-lg ${
+                isDark
+                  ? 'bg-blue-600 hover:bg-blue-700 text-white'
+                  : 'bg-blue-500 hover:bg-blue-600 text-white'
+              } disabled:opacity-50 flex items-center gap-2`}
+            >
+              {saving && <RefreshCw className="w-4 h-4 animate-spin" />}
+              {saving ? 'Guardando...' : 'Guardar'}
+            </button>
+          </div>
+        </form>
+      </motion.div>
+    </motion.div>
+  )
+}
+
+// ============== PricingModal Component ==============
+interface PricingModalProps {
+  isDark: boolean
+  product: Product
+  marginHealth?: MarginHealth
+  onClose: () => void
+  onSave: (data: any) => Promise<void>
+}
+
+function PricingModal({ isDark, product, marginHealth, onClose, onSave }: PricingModalProps) {
+  const [saving, setSaving] = useState(false)
+  const [formData, setFormData] = useState({
+    miCosto: product.companyPricing?.miCosto ?? product.miCosto,
+    precioVenta: product.companyPricing?.precioVenta ?? product.precioPublico,
+  })
+
+  const calculatedMargin = formData.precioVenta - formData.miCosto
+  const marginPercent = formData.precioVenta > 0 ? (calculatedMargin / formData.precioVenta) * 100 : 0
+  const netMargin = marginHealth ? calculatedMargin - marginHealth.totalComisiones : calculatedMargin
+
+  const getMarginStatus = () => {
+    if (netMargin <= 0) return 'critical'
+    if (marginPercent < 10) return 'warning'
+    return 'healthy'
+  }
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setSaving(true)
+    try {
+      await onSave(formData)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+      onClick={onClose}
+    >
+      <motion.div
+        initial={{ scale: 0.95, opacity: 0 }}
+        animate={{ scale: 1, opacity: 1 }}
+        exit={{ scale: 0.95, opacity: 0 }}
+        className={`w-full max-w-xl rounded-2xl ${isDark ? 'bg-gray-800' : 'bg-white'} p-6 shadow-xl`}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <h2 className={`text-xl font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>
+              Configurar Precios
+            </h2>
+            <p className={`text-sm ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
+              {product.name}
+            </p>
+          </div>
+        </div>
+
+        <form onSubmit={handleSubmit} className="space-y-4">
+          {/* Current Catalog Prices */}
+          <div className={`p-4 rounded-lg ${isDark ? 'bg-gray-700/50' : 'bg-gray-50'}`}>
+            <p className={`text-xs font-medium mb-2 ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
+              Precios del Catálogo (Referencia)
+            </p>
+            <div className="grid grid-cols-3 gap-4 text-sm">
+              <div>
+                <p className={isDark ? 'text-gray-500' : 'text-gray-400'}>Mi Costo</p>
+                <p className={isDark ? 'text-gray-300' : 'text-gray-700'}>${product.miCosto.toFixed(2)}</p>
+              </div>
+              <div>
+                <p className={isDark ? 'text-gray-500' : 'text-gray-400'}>Precio Mayorista</p>
+                <p className={isDark ? 'text-gray-300' : 'text-gray-700'}>${product.precioMayorista.toFixed(2)}</p>
+              </div>
+              <div>
+                <p className={isDark ? 'text-gray-500' : 'text-gray-400'}>Precio Público</p>
+                <p className={isDark ? 'text-gray-300' : 'text-gray-700'}>${product.precioPublico.toFixed(2)}</p>
+              </div>
+            </div>
+          </div>
+
+          {/* Company-specific prices */}
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className={`block text-sm font-medium mb-1 ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
+                Mi Costo (Empresa) $
+              </label>
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                value={formData.miCosto}
+                onChange={(e) => setFormData({ ...formData, miCosto: parseFloat(e.target.value) || 0 })}
+                className={`w-full px-3 py-2 rounded-lg border ${
+                  isDark
+                    ? 'bg-gray-700 border-gray-600 text-white'
+                    : 'bg-white border-gray-300 text-gray-900'
+                } focus:outline-none focus:ring-2 focus:ring-blue-500`}
+              />
+            </div>
+            <div>
+              <label className={`block text-sm font-medium mb-1 ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
+                Precio de Venta $
+              </label>
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                value={formData.precioVenta}
+                onChange={(e) => setFormData({ ...formData, precioVenta: parseFloat(e.target.value) || 0 })}
+                className={`w-full px-3 py-2 rounded-lg border ${
+                  isDark
+                    ? 'bg-gray-700 border-gray-600 text-white'
+                    : 'bg-white border-gray-300 text-gray-900'
+                } focus:outline-none focus:ring-2 focus:ring-blue-500`}
+              />
+            </div>
+          </div>
+
+          {/* Margin Calculator */}
+          <div className={`p-4 rounded-lg border-2 ${
+            getMarginStatus() === 'critical'
+              ? isDark ? 'border-red-500/50 bg-red-900/20' : 'border-red-300 bg-red-50'
+              : getMarginStatus() === 'warning'
+                ? isDark ? 'border-yellow-500/50 bg-yellow-900/20' : 'border-yellow-300 bg-yellow-50'
+                : isDark ? 'border-green-500/50 bg-green-900/20' : 'border-green-300 bg-green-50'
+          }`}>
+            <div className="flex items-center gap-2 mb-3">
+              {getMarginStatus() === 'critical' ? (
+                <AlertCircle className="w-5 h-5 text-red-500" />
+              ) : getMarginStatus() === 'warning' ? (
+                <AlertTriangle className="w-5 h-5 text-yellow-500" />
+              ) : (
+                <CheckCircle className="w-5 h-5 text-green-500" />
+              )}
+              <span className={`font-medium ${
+                getMarginStatus() === 'critical'
+                  ? 'text-red-500'
+                  : getMarginStatus() === 'warning'
+                    ? 'text-yellow-500'
+                    : 'text-green-500'
+              }`}>
+                {getMarginStatus() === 'critical' ? 'Margen Crítico' :
+                  getMarginStatus() === 'warning' ? 'Margen Bajo' : 'Margen Saludable'}
+              </span>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4 text-sm">
+              <div>
+                <p className={isDark ? 'text-gray-400' : 'text-gray-500'}>Margen Bruto</p>
+                <p className={`text-lg font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>
+                  ${calculatedMargin.toFixed(2)} <span className="text-sm font-normal">({marginPercent.toFixed(1)}%)</span>
+                </p>
+              </div>
+              {marginHealth && (
+                <>
+                  <div>
+                    <p className={isDark ? 'text-gray-400' : 'text-gray-500'}>Total Comisiones</p>
+                    <p className={`text-lg font-bold ${isDark ? 'text-orange-400' : 'text-orange-600'}`}>
+                      -${marginHealth.totalComisiones.toFixed(2)}
+                    </p>
+                  </div>
+                  <div className="col-span-2 pt-2 border-t border-dashed ${isDark ? 'border-gray-600' : 'border-gray-300'}">
+                    <p className={isDark ? 'text-gray-400' : 'text-gray-500'}>Margen Neto</p>
+                    <p className={`text-2xl font-bold ${
+                      netMargin <= 0 ? 'text-red-500' : netMargin < 5 ? 'text-yellow-500' : 'text-green-500'
+                    }`}>
+                      ${netMargin.toFixed(2)}
+                    </p>
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+
+          <div className="flex justify-end gap-3 pt-4 border-t ${isDark ? 'border-gray-700' : 'border-gray-200'}">
+            <button
+              type="button"
+              onClick={onClose}
+              disabled={saving}
+              className={`px-4 py-2 rounded-lg ${
+                isDark
+                  ? 'bg-gray-700 hover:bg-gray-600 text-gray-300'
+                  : 'bg-gray-100 hover:bg-gray-200 text-gray-700'
+              } disabled:opacity-50`}
+            >
+              Cancelar
+            </button>
+            <button
+              type="submit"
+              disabled={saving}
+              className={`px-4 py-2 rounded-lg ${
+                isDark
+                  ? 'bg-blue-600 hover:bg-blue-700 text-white'
+                  : 'bg-blue-500 hover:bg-blue-600 text-white'
+              } disabled:opacity-50 flex items-center gap-2`}
+            >
+              {saving && <RefreshCw className="w-4 h-4 animate-spin" />}
+              {saving ? 'Guardando...' : 'Guardar Precios'}
+            </button>
+          </div>
+        </form>
+      </motion.div>
+    </motion.div>
   )
 }
