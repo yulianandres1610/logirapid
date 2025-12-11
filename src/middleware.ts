@@ -203,6 +203,13 @@ export async function middleware(request: NextRequest) {
     return response
   }
 
+  // Excepción: Permitir que ADMIN acceda a /dashboard/admin/product-config
+  // Configuración de productos y servicios de paquetería
+  if (userRole === 'ADMIN' && pathname === '/dashboard/admin/product-config') {
+    console.log('✅ ADMIN accessing product-config page, companyId:', companyId)
+    return response
+  }
+
   // Redirección basada en rol si intenta acceder a rutas no permitidas
   if (userRole === 'ADMIN' && pathname.startsWith('/dashboard/admin')) {
     console.log('🔄 Redirecting ADMIN from admin to agency dashboard')
