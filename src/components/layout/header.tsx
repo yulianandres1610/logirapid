@@ -517,6 +517,7 @@ export function Header({ onToggleSidebar, sidebarCollapsed }: HeaderProps) {
                         : "bg-white/95 backdrop-blur-xl border-exa-primary/20 shadow-xl"
                     )}
                   >
+                    {/* User Profile Header */}
                     <div className={cn(
                       "p-5 border-b",
                       theme === 'dark' ? "border-gray-700" : "border-gray-100 bg-gradient-to-br from-exa-primary/8 to-exa-secondary/8"
@@ -539,54 +540,56 @@ export function Header({ onToggleSidebar, sidebarCollapsed }: HeaderProps) {
                           )}>{user?.email || 'admin@cubarapid.com'}</p>
                         </div>
                       </div>
-                      {/* User Wallet Balance - Clickable to navigate to personal wallet */}
-                      <div
-                        onClick={() => {
-                          setShowUserMenu(false)
-                          handleMyWalletClick()
-                        }}
-                        className={cn(
-                          "flex items-center gap-3 mt-3 pt-3 border-t cursor-pointer rounded-lg px-2 py-2 transition-colors",
-                          theme === 'dark' ? "border-gray-700 hover:bg-gray-700/50" : "border-gray-200 hover:bg-gray-100"
-                        )}
-                        title="Ir a Mi Wallet Personal"
-                      >
-                        <div className={cn(
-                          "w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0",
-                          theme === 'dark' ? "bg-green-500/20" : "bg-green-100"
-                        )}>
-                          <Wallet className={cn(
-                            "w-4 h-4",
-                            theme === 'dark' ? "text-green-400" : "text-green-600"
-                          )} />
-                        </div>
-                        <div className="flex-1 min-w-0">
+                    </div>
+                    {/* User Wallet Balance - Separate section below user info */}
+                    <div
+                      onClick={() => {
+                        setShowUserMenu(false)
+                        handleMyWalletClick()
+                      }}
+                      className={cn(
+                        "flex items-center gap-3 mx-5 my-3 p-3 cursor-pointer rounded-xl transition-colors",
+                        theme === 'dark'
+                          ? "bg-gray-700/50 hover:bg-gray-700"
+                          : "bg-gray-50 hover:bg-gray-100"
+                      )}
+                      title="Ir a Mi Wallet Personal"
+                    >
+                      <div className={cn(
+                        "w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0",
+                        theme === 'dark' ? "bg-green-500/20" : "bg-green-100"
+                      )}>
+                        <Wallet className={cn(
+                          "w-5 h-5",
+                          theme === 'dark' ? "text-green-400" : "text-green-600"
+                        )} />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className={cn(
+                          "text-xs font-medium",
+                          theme === 'dark' ? "text-gray-400" : "text-gray-500"
+                        )}>Mi Saldo Personal</p>
+                        {walletLoading ? (
                           <p className={cn(
-                            "text-xs",
-                            theme === 'dark' ? "text-gray-400" : "text-gray-500"
-                          )}>Mi Saldo</p>
-                          {walletLoading ? (
-                            <p className={cn(
-                              "text-sm font-bold",
+                            "text-lg font-bold",
+                            theme === 'dark' ? "text-green-400" : "text-green-600"
+                          )}>
+                            $...
+                          </p>
+                        ) : (
+                          <AnimatedCounter
+                            value={userBalance}
+                            previousValue={prevUserBalance}
+                            changeDirection={userBalanceChange}
+                            prefix="$"
+                            decimals={2}
+                            className={cn(
+                              "text-lg font-bold",
                               theme === 'dark' ? "text-green-400" : "text-green-600"
-                            )}>
-                              $...
-                            </p>
-                          ) : (
-                            <AnimatedCounter
-                              value={userBalance}
-                              previousValue={prevUserBalance}
-                              changeDirection={userBalanceChange}
-                              prefix="$"
-                              decimals={2}
-                              className={cn(
-                                "text-sm font-bold",
-                                theme === 'dark' ? "text-green-400" : "text-green-600"
-                              )}
-                              showChangeIndicator={true}
-                            />
-                          )}
-                        </div>
+                            )}
+                            showChangeIndicator={true}
+                          />
+                        )}
                       </div>
                     </div>
                     <div className="p-2">
