@@ -76,21 +76,21 @@ export default function PasswordConfirmDialog({
   if (!isOpen) return null
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
-      {/* Backdrop - solid color, no transparency */}
+    <div
+      className={cn(
+        "fixed inset-0 z-[100]",
+        theme === 'dark' ? "bg-gray-900" : "bg-gray-100"
+      )}
+      onClick={handleClose}
+    >
+      {/* Dialog - centered with transform for stable positioning */}
       <div
         className={cn(
-          "absolute inset-0",
-          theme === 'dark' ? "bg-gray-900" : "bg-gray-100"
+          "fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-sm p-6 rounded-xl shadow-lg",
+          theme === 'dark' ? "bg-gray-800" : "bg-white"
         )}
-        onClick={handleClose}
-      />
-
-      {/* Dialog */}
-      <div className={cn(
-        "relative w-full max-w-sm mx-4 p-6 rounded-xl shadow-lg",
-        theme === 'dark' ? "bg-gray-800" : "bg-white"
-      )}>
+        onClick={(e) => e.stopPropagation()}
+      >
         <form onSubmit={handleSubmit}>
           {/* Password Input */}
           <div className="relative">
