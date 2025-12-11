@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
+import { motion, AnimatePresence } from 'framer-motion'
 import {
   Wallet,
   ArrowUpRight,
@@ -15,6 +16,7 @@ import {
   Building
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { AnimatedNumber } from '@/components/ui/animated-counter'
 import { useTheme } from '@/contexts/theme-context'
 import { useNotifications } from '@/contexts/NotificationContext'
 import { DashboardLayout } from '@/components/layout/dashboard-layout'
@@ -86,6 +88,9 @@ export default function MyWalletPage({ role }: MyWalletPageProps) {
   const { theme } = useTheme()
   const { showNotification } = useNotifications()
   const router = useRouter()
+
+  // Brand colors (matching company wallet)
+  const brandText = theme === 'dark' ? 'text-blue-500' : 'text-red-500'
 
   // Password verification state
   const [isAuthenticated, setIsAuthenticated] = useState(false)
@@ -247,27 +252,44 @@ export default function MyWalletPage({ role }: MyWalletPageProps) {
     <DashboardLayout>
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Header */}
-        <div className="flex items-center justify-between mb-8">
+        <motion.div
+          initial={{ opacity: 0, y: -20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="flex items-center justify-between mb-8"
+        >
           <div>
-            <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
+            <h1 className={cn("text-2xl font-bold", theme === 'dark' ? 'text-white' : 'text-gray-900')}>
               Mi Billetera
             </h1>
-            <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+            <p className={cn("text-sm mt-1", theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}>
               Gestiona tu billetera personal
             </p>
           </div>
-          <button
+          <motion.button
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
             onClick={fetchWalletData}
             disabled={loading}
-            className="p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+            className={cn(
+              "p-2 rounded-lg transition-colors",
+              theme === 'dark'
+                ? "text-gray-400 hover:text-gray-200 hover:bg-gray-800"
+                : "text-gray-500 hover:text-gray-700 hover:bg-gray-100"
+            )}
           >
             <RefreshCw className={cn("w-5 h-5", loading && "animate-spin")} />
-          </button>
-        </div>
+          </motion.button>
+        </motion.div>
 
         {/* Virtual Card */}
-        <div className="mb-8">
+        <motion.div
+          initial={{ opacity: 0, scale: 0.95 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ delay: 0.1, type: 'spring', stiffness: 100 }}
+          className="mb-8"
+        >
           <VirtualCard
+            key={`card-${walletData.balance}`}
             walletNumber={walletData.walletNumber}
             name={walletData.name}
             balance={walletData.balance}
@@ -277,120 +299,224 @@ export default function MyWalletPage({ role }: MyWalletPageProps) {
             email={walletData.email}
             phone={walletData.phone}
           />
-        </div>
+        </motion.div>
 
-        {/* Tabs */}
-        <div className="mb-6 border-b border-gray-200 dark:border-gray-700">
-          <nav className="flex space-x-4 overflow-x-auto pb-2">
-            {tabs.map((tab) => (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id as Tab)}
-                className={cn(
-                  "flex items-center gap-2 px-4 py-2 text-sm font-medium whitespace-nowrap rounded-lg transition-colors",
-                  activeTab === tab.id
-                    ? "bg-gray-900 text-white dark:bg-white dark:text-gray-900"
-                    : "text-gray-600 hover:text-gray-900 hover:bg-gray-100 dark:text-gray-400 dark:hover:text-white dark:hover:bg-gray-800"
-                )}
-              >
-                <tab.icon className="w-4 h-4" />
-                {tab.label}
-              </button>
-            ))}
-          </nav>
-        </div>
+        {/* Tabs - matching company wallet style */}
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.2 }}
+          className={cn(
+            "flex flex-wrap gap-2 p-1.5 rounded-xl mb-6",
+            theme === 'dark' ? 'bg-gray-800/50' : 'bg-gray-100'
+          )}
+        >
+          {tabs.map((tab) => (
+            <motion.button
+              key={tab.id}
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+              onClick={() => setActiveTab(tab.id as Tab)}
+              className={cn(
+                "relative flex items-center gap-2 px-4 py-2.5 text-sm font-medium whitespace-nowrap rounded-lg transition-all",
+                activeTab === tab.id
+                  ? theme === 'dark'
+                    ? "bg-gray-700 text-white shadow-lg"
+                    : "bg-white text-gray-900 shadow-lg"
+                  : theme === 'dark'
+                    ? "text-gray-400 hover:text-gray-200"
+                    : "text-gray-600 hover:text-gray-900"
+              )}
+            >
+              <tab.icon className="w-5 h-5" />
+              <span className="hidden sm:inline">{tab.label}</span>
+            </motion.button>
+          ))}
+        </motion.div>
 
         {/* Tab Content */}
-        <div className="min-h-[400px]">
+        <AnimatePresence mode="wait">
           {/* Dashboard Tab */}
-          {activeTab === 'dashboard' && stats && (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-              <div className="bg-white dark:bg-gray-800 rounded-xl p-6 border border-gray-200 dark:border-gray-700">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm text-gray-500 dark:text-gray-400">Recargas</p>
-                    <p className="text-2xl font-bold text-gray-900 dark:text-white">
-                      ${stats.rechargesAmount.toLocaleString('en-US', { minimumFractionDigits: 2 })}
-                    </p>
-                    <p className="text-xs text-gray-400">{stats.totalRecharges} transacciones</p>
+          {activeTab === 'dashboard' && (
+            <motion.div
+              key="dashboard"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }}
+              className="space-y-6"
+            >
+              {/* Stats Cards Grid */}
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                {/* Balance */}
+                <motion.div
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.1 }}
+                  className={cn(
+                    "rounded-xl p-5 border col-span-2 lg:col-span-1",
+                    theme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'
+                  )}
+                >
+                  <div className="flex items-center gap-2 mb-2">
+                    <Wallet className="w-5 h-5 text-green-500" />
+                    <p className={cn("text-sm", theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}>Balance</p>
                   </div>
-                  <div className="w-12 h-12 bg-green-100 dark:bg-green-900/30 rounded-full flex items-center justify-center">
-                    <ArrowDownRight className="w-6 h-6 text-green-600 dark:text-green-400" />
+                  <p className={cn("text-2xl font-bold", theme === 'dark' ? 'text-white' : 'text-gray-900')}>
+                    $<AnimatedNumber value={walletData.balance} decimals={2} />
+                  </p>
+                  <p className={cn("text-xs mt-1", theme === 'dark' ? 'text-gray-500' : 'text-gray-400')}>
+                    {walletData.name}
+                  </p>
+                </motion.div>
+
+                {/* Recargas */}
+                <motion.div
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.15 }}
+                  className={cn(
+                    "rounded-xl p-5 border",
+                    theme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'
+                  )}
+                >
+                  <div className="flex items-center gap-2 mb-2">
+                    <ArrowDownRight className="w-5 h-5 text-green-500" />
+                    <p className={cn("text-sm", theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}>Recargas</p>
                   </div>
-                </div>
+                  <p className={cn("text-2xl font-bold", theme === 'dark' ? 'text-white' : 'text-gray-900')}>
+                    $<AnimatedNumber value={stats?.rechargesAmount || 0} decimals={2} />
+                  </p>
+                  <p className={cn("text-xs mt-1", theme === 'dark' ? 'text-gray-500' : 'text-gray-400')}>
+                    {stats?.totalRecharges || 0} transacciones
+                  </p>
+                </motion.div>
+
+                {/* Enviado */}
+                <motion.div
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.2 }}
+                  className={cn(
+                    "rounded-xl p-5 border",
+                    theme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'
+                  )}
+                >
+                  <div className="flex items-center gap-2 mb-2">
+                    <ArrowUpRight className={cn("w-5 h-5", brandText)} />
+                    <p className={cn("text-sm", theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}>Enviado</p>
+                  </div>
+                  <p className={cn("text-2xl font-bold", theme === 'dark' ? 'text-white' : 'text-gray-900')}>
+                    $<AnimatedNumber value={stats?.transfersSentAmount || 0} decimals={2} />
+                  </p>
+                  <p className={cn("text-xs mt-1", theme === 'dark' ? 'text-gray-500' : 'text-gray-400')}>
+                    {stats?.transfersSent || 0} transferencias
+                  </p>
+                </motion.div>
+
+                {/* Recibido */}
+                <motion.div
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.25 }}
+                  className={cn(
+                    "rounded-xl p-5 border",
+                    theme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'
+                  )}
+                >
+                  <div className="flex items-center gap-2 mb-2">
+                    <ArrowDownRight className="w-5 h-5 text-blue-500" />
+                    <p className={cn("text-sm", theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}>Recibido</p>
+                  </div>
+                  <p className={cn("text-2xl font-bold", theme === 'dark' ? 'text-white' : 'text-gray-900')}>
+                    $<AnimatedNumber value={stats?.transfersReceivedAmount || 0} decimals={2} />
+                  </p>
+                  <p className={cn("text-xs mt-1", theme === 'dark' ? 'text-gray-500' : 'text-gray-400')}>
+                    {stats?.transfersReceived || 0} transferencias
+                  </p>
+                </motion.div>
               </div>
 
-              <div className="bg-white dark:bg-gray-800 rounded-xl p-6 border border-gray-200 dark:border-gray-700">
+              {/* Retiros Card - Full width */}
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.3 }}
+                className={cn(
+                  "rounded-xl p-5 border",
+                  theme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'
+                )}
+              >
                 <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm text-gray-500 dark:text-gray-400">Enviado</p>
-                    <p className="text-2xl font-bold text-gray-900 dark:text-white">
-                      ${stats.transfersSentAmount.toLocaleString('en-US', { minimumFractionDigits: 2 })}
-                    </p>
-                    <p className="text-xs text-gray-400">{stats.transfersSent} transferencias</p>
+                  <div className="flex items-center gap-3">
+                    <div className="w-12 h-12 bg-purple-100 dark:bg-purple-900/30 rounded-full flex items-center justify-center">
+                      <Download className="w-6 h-6 text-purple-600 dark:text-purple-400" />
+                    </div>
+                    <div>
+                      <p className={cn("text-sm", theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}>Retiros Totales</p>
+                      <p className={cn("text-2xl font-bold", theme === 'dark' ? 'text-white' : 'text-gray-900')}>
+                        $<AnimatedNumber value={stats?.cashoutsAmount || 0} decimals={2} />
+                      </p>
+                    </div>
                   </div>
-                  <div className="w-12 h-12 bg-red-100 dark:bg-red-900/30 rounded-full flex items-center justify-center">
-                    <ArrowUpRight className="w-6 h-6 text-red-600 dark:text-red-400" />
-                  </div>
+                  <p className={cn("text-sm", theme === 'dark' ? 'text-gray-500' : 'text-gray-400')}>
+                    {stats?.totalCashouts || 0} retiros realizados
+                  </p>
                 </div>
-              </div>
-
-              <div className="bg-white dark:bg-gray-800 rounded-xl p-6 border border-gray-200 dark:border-gray-700">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm text-gray-500 dark:text-gray-400">Recibido</p>
-                    <p className="text-2xl font-bold text-gray-900 dark:text-white">
-                      ${stats.transfersReceivedAmount.toLocaleString('en-US', { minimumFractionDigits: 2 })}
-                    </p>
-                    <p className="text-xs text-gray-400">{stats.transfersReceived} transferencias</p>
-                  </div>
-                  <div className="w-12 h-12 bg-blue-100 dark:bg-blue-900/30 rounded-full flex items-center justify-center">
-                    <ArrowDownRight className="w-6 h-6 text-blue-600 dark:text-blue-400" />
-                  </div>
-                </div>
-              </div>
-
-              <div className="bg-white dark:bg-gray-800 rounded-xl p-6 border border-gray-200 dark:border-gray-700">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm text-gray-500 dark:text-gray-400">Retiros</p>
-                    <p className="text-2xl font-bold text-gray-900 dark:text-white">
-                      ${stats.cashoutsAmount.toLocaleString('en-US', { minimumFractionDigits: 2 })}
-                    </p>
-                    <p className="text-xs text-gray-400">{stats.totalCashouts} retiros</p>
-                  </div>
-                  <div className="w-12 h-12 bg-purple-100 dark:bg-purple-900/30 rounded-full flex items-center justify-center">
-                    <Download className="w-6 h-6 text-purple-600 dark:text-purple-400" />
-                  </div>
-                </div>
-              </div>
-            </div>
+              </motion.div>
+            </motion.div>
           )}
 
           {/* Transfer Tab */}
           {activeTab === 'transfer' && (
-            <div className="max-w-xl mx-auto">
-              <div className="bg-white dark:bg-gray-800 rounded-xl p-6 border border-gray-200 dark:border-gray-700">
-                <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
+            <motion.div
+              key="transfer"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }}
+              className="max-w-xl mx-auto"
+            >
+              <motion.div
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ delay: 0.1 }}
+                className={cn(
+                  "rounded-xl p-6 border",
+                  theme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'
+                )}
+              >
+                <h3 className={cn("text-lg font-semibold mb-4", theme === 'dark' ? 'text-white' : 'text-gray-900')}>
                   Transferir a Empresa
                 </h3>
 
                 {walletData.company ? (
                   <>
                     {/* Target company info */}
-                    <div className="mb-6 p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
-                      <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">Destino</p>
-                      <p className="text-lg font-semibold text-gray-900 dark:text-white">
+                    <motion.div
+                      initial={{ opacity: 0, x: -10 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ delay: 0.15 }}
+                      className={cn(
+                        "mb-6 p-4 rounded-lg",
+                        theme === 'dark' ? 'bg-gray-700/50' : 'bg-gray-50'
+                      )}
+                    >
+                      <p className={cn("text-sm mb-1", theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}>Destino</p>
+                      <p className={cn("text-lg font-semibold", theme === 'dark' ? 'text-white' : 'text-gray-900')}>
                         {walletData.company.name}
                       </p>
-                      <p className="text-sm text-gray-500 dark:text-gray-400">
+                      <p className={cn("text-sm", theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}>
                         {walletData.company.walletNumber}
                       </p>
-                    </div>
+                    </motion.div>
 
                     {/* Amount input */}
-                    <div className="mb-6">
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    <motion.div
+                      initial={{ opacity: 0, x: -10 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ delay: 0.2 }}
+                      className="mb-6"
+                    >
+                      <label className={cn("block text-sm font-medium mb-2", theme === 'dark' ? 'text-gray-300' : 'text-gray-700')}>
                         Monto a transferir
                       </label>
                       <div className="relative">
@@ -401,18 +527,33 @@ export default function MyWalletPage({ role }: MyWalletPageProps) {
                           onChange={(e) => setTransferAmount(e.target.value)}
                           placeholder="0.00"
                           max={walletData.balance}
-                          className="w-full pl-8 pr-4 py-3 border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                          className={cn(
+                            "w-full pl-8 pr-4 py-3 border rounded-lg",
+                            theme === 'dark'
+                              ? 'bg-gray-700 border-gray-600 text-white'
+                              : 'bg-white border-gray-200 text-gray-900'
+                          )}
                         />
                       </div>
-                      <p className="text-xs text-gray-500 mt-1">
+                      <p className={cn("text-xs mt-1", theme === 'dark' ? 'text-gray-500' : 'text-gray-500')}>
                         Disponible: {walletData.balanceFormatted}
                       </p>
-                    </div>
+                    </motion.div>
 
-                    <button
+                    <motion.button
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: 0.25 }}
+                      whileHover={{ scale: 1.02 }}
+                      whileTap={{ scale: 0.98 }}
                       onClick={handleTransferToCompany}
                       disabled={transferring || !transferAmount || parseFloat(transferAmount) <= 0}
-                      className="w-full py-3 bg-gray-900 text-white rounded-lg font-medium hover:bg-gray-800 dark:bg-white dark:text-gray-900 dark:hover:bg-gray-100 disabled:opacity-50 flex items-center justify-center gap-2"
+                      className={cn(
+                        "w-full py-3 rounded-lg font-medium flex items-center justify-center gap-2 disabled:opacity-50 transition-colors",
+                        theme === 'dark'
+                          ? 'bg-white text-gray-900 hover:bg-gray-100'
+                          : 'bg-gray-900 text-white hover:bg-gray-800'
+                      )}
                     >
                       {transferring ? (
                         <>
@@ -425,64 +566,105 @@ export default function MyWalletPage({ role }: MyWalletPageProps) {
                           Transferir
                         </>
                       )}
-                    </button>
+                    </motion.button>
                   </>
                 ) : (
                   <div className="text-center py-8">
-                    <Building className="w-12 h-12 mx-auto text-gray-300 mb-4" />
-                    <p className="text-gray-500 dark:text-gray-400">
+                    <Building className={cn("w-12 h-12 mx-auto mb-4", theme === 'dark' ? 'text-gray-600' : 'text-gray-300')} />
+                    <p className={cn(theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}>
                       No tienes una empresa asociada
                     </p>
                   </div>
                 )}
-              </div>
-            </div>
+              </motion.div>
+            </motion.div>
           )}
 
           {/* Cashout Tab */}
           {activeTab === 'cashout' && (
-            <div className="max-w-xl mx-auto space-y-6">
+            <motion.div
+              key="cashout"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }}
+              className="max-w-xl mx-auto space-y-6"
+            >
               {/* Stripe Connect Status */}
-              <StripeConnectStatus
-                entityType="user"
-                entityId={walletData.id}
-              />
+              <motion.div
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ delay: 0.1 }}
+              >
+                <StripeConnectStatus
+                  entityType="user"
+                  entityId={walletData.id}
+                />
+              </motion.div>
 
               {/* Cashout info */}
               {walletData.canCashout && (
-                <div className="bg-white dark:bg-gray-800 rounded-xl p-6 border border-gray-200 dark:border-gray-700">
-                  <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.95 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  transition={{ delay: 0.2 }}
+                  className={cn(
+                    "rounded-xl p-6 border",
+                    theme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'
+                  )}
+                >
+                  <h3 className={cn("text-lg font-semibold mb-2", theme === 'dark' ? 'text-white' : 'text-gray-900')}>
                     Retirar Fondos
                   </h3>
-                  <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
+                  <p className={cn("text-sm mb-4", theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}>
                     Retira fondos de tu billetera a tu cuenta bancaria vinculada.
                   </p>
-                  <p className="text-2xl font-bold text-gray-900 dark:text-white mb-4">
+                  <p className={cn("text-2xl font-bold mb-4", theme === 'dark' ? 'text-white' : 'text-gray-900')}>
                     {walletData.balanceFormatted}
-                    <span className="text-sm font-normal text-gray-500 ml-2">disponible</span>
+                    <span className={cn("text-sm font-normal ml-2", theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}>disponible</span>
                   </p>
-                  <p className="text-sm text-gray-500">
+                  <p className={cn("text-sm", theme === 'dark' ? 'text-gray-500' : 'text-gray-500')}>
                     Contacta a soporte para solicitar retiros manuales.
                   </p>
-                </div>
+                </motion.div>
               )}
-            </div>
+            </motion.div>
           )}
 
           {/* History Tab */}
           {activeTab === 'history' && (
-            <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
-              <div className="divide-y divide-gray-100 dark:divide-gray-700">
+            <motion.div
+              key="history"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }}
+              className={cn(
+                "rounded-xl border overflow-hidden",
+                theme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'
+              )}
+            >
+              <div className={cn(
+                "divide-y",
+                theme === 'dark' ? 'divide-gray-700' : 'divide-gray-100'
+              )}>
                 {transactions.length === 0 ? (
                   <div className="p-8 text-center">
-                    <History className="w-12 h-12 mx-auto text-gray-300 mb-4" />
-                    <p className="text-gray-500 dark:text-gray-400">
+                    <History className={cn("w-12 h-12 mx-auto mb-4", theme === 'dark' ? 'text-gray-600' : 'text-gray-300')} />
+                    <p className={cn(theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}>
                       No hay transacciones aun
                     </p>
                   </div>
                 ) : (
-                  transactions.map((tx) => (
-                    <div key={tx.id} className="p-4 hover:bg-gray-50 dark:hover:bg-gray-700/50">
+                  transactions.map((tx, index) => (
+                    <motion.div
+                      key={tx.id}
+                      initial={{ opacity: 0, x: -10 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ delay: index * 0.05 }}
+                      className={cn(
+                        "p-4 cursor-pointer transition-colors",
+                        theme === 'dark' ? 'hover:bg-gray-700/50' : 'hover:bg-gray-50'
+                      )}
+                    >
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-3">
                           <div className={cn(
@@ -498,10 +680,10 @@ export default function MyWalletPage({ role }: MyWalletPageProps) {
                             )}
                           </div>
                           <div>
-                            <p className="font-medium text-gray-900 dark:text-white">
+                            <p className={cn("font-medium", theme === 'dark' ? 'text-white' : 'text-gray-900')}>
                               {tx.typeLabel}
                             </p>
-                            <p className="text-sm text-gray-500 dark:text-gray-400">
+                            <p className={cn("text-sm", theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}>
                               {tx.isIncoming ? `De: ${tx.sourceName}` : `A: ${tx.targetName}`}
                             </p>
                           </div>
@@ -515,7 +697,7 @@ export default function MyWalletPage({ role }: MyWalletPageProps) {
                           )}>
                             {tx.isIncoming ? '+' : '-'}{tx.amountFormatted}
                           </p>
-                          <p className="text-xs text-gray-400">
+                          <p className={cn("text-xs", theme === 'dark' ? 'text-gray-500' : 'text-gray-400')}>
                             {new Date(tx.createdAt).toLocaleDateString('es-ES', {
                               day: '2-digit',
                               month: 'short',
@@ -524,13 +706,13 @@ export default function MyWalletPage({ role }: MyWalletPageProps) {
                           </p>
                         </div>
                       </div>
-                    </div>
+                    </motion.div>
                   ))
                 )}
               </div>
-            </div>
+            </motion.div>
           )}
-        </div>
+        </AnimatePresence>
       </div>
     </DashboardLayout>
   )
