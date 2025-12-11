@@ -206,10 +206,15 @@ export async function GET(request: NextRequest) {
         t.source_user_id,
         t.amount,
         t.fee,
+        t.total_charged,
         t.net_amount,
         t.currency,
         t.payment_method,
         t.payment_reference,
+        t.card_brand,
+        t.card_last4,
+        t.metadata,
+        t.stripe_payment_intent_id,
         t.status,
         t.description,
         t.created_at,
@@ -265,6 +270,17 @@ export async function GET(request: NextRequest) {
         displayDescription = targetName ? `Recarga a ${targetName}` : 'Recarga'
       }
 
+      // Parse metadata for receipt URL
+      let receiptUrl: string | null = null
+      try {
+        if (t.metadata) {
+          const metadata = typeof t.metadata === 'string' ? JSON.parse(t.metadata) : t.metadata
+          receiptUrl = metadata.receiptUrl || null
+        }
+      } catch {
+        // Ignore parse errors
+      }
+
       return {
         id: t.id,
         transactionNumber: t.transaction_number,
@@ -275,11 +291,16 @@ export async function GET(request: NextRequest) {
         amount: parseFloat(t.amount),
         amountFormatted: `$${parseFloat(t.amount).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
         fee: parseFloat(t.fee || '0'),
+        totalCharged: parseFloat(t.total_charged || t.amount || '0'),
         netAmount: parseFloat(t.net_amount),
         currency: t.currency,
         paymentMethod: t.payment_method,
         paymentMethodLabel: methodLabels[t.payment_method] || t.payment_method,
         paymentReference: t.payment_reference,
+        cardBrand: t.card_brand,
+        cardLast4: t.card_last4,
+        receiptUrl,
+        stripePaymentIntentId: t.stripe_payment_intent_id,
         status: t.status,
         description: displayDescription,
         createdAt: t.created_at,

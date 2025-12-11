@@ -220,6 +220,10 @@ export default function WalletManagementPage() {
   } | null>(null)
   const [creatingPaymentIntent, setCreatingPaymentIntent] = useState(false)
 
+  // Redirect return handling state (for Klarna, Affirm, etc.)
+  const [redirectPaymentProcessing, setRedirectPaymentProcessing] = useState(false)
+  const [redirectPaymentError, setRedirectPaymentError] = useState<string | null>(null)
+
   // Terminal checkout state
   const [availableTerminals, setAvailableTerminals] = useState<Array<{ id: number; name: string; deviceId: string; locationName: string }>>([])
   const [selectedTerminalId, setSelectedTerminalId] = useState<number | null>(null)
@@ -273,6 +277,106 @@ export default function WalletManagementPage() {
     const role = getCookie('user-role') || ''
     setUserRole(role)
   }, [])
+
+  // Handle redirect payment return (Klarna, Affirm, Link, etc.)
+  // When user returns from a redirect-based payment, the webhook has already processed the payment
+  // We need to look up the transaction and show the receipt
+  useEffect(() => {
+    const handleRedirectReturn = async () => {
+      // Check if returning from Stripe redirect
+      const paymentIntentId = searchParams.get('payment_intent')
+      const redirectStatus = searchParams.get('redirect_status')
+
+      if (!paymentIntentId || !redirectStatus) return
+
+      // Clean URL params first
+      const cleanUrl = window.location.pathname
+      window.history.replaceState({}, '', cleanUrl)
+
+      // If payment failed or requires more action, don't look it up
+      if (redirectStatus !== 'succeeded') {
+        setRedirectPaymentError(
+          redirectStatus === 'processing'
+            ? 'El pago esta siendo procesado. Por favor espere unos minutos.'
+            : 'El pago no se completo. Por favor intente nuevamente.'
+        )
+        setActiveTab('recharge')
+        return
+      }
+
+      // Payment succeeded, look up the transaction
+      setRedirectPaymentProcessing(true)
+      setActiveTab('recharge')
+
+      // Poll for transaction (webhook might take a moment to process)
+      let attempts = 0
+      const maxAttempts = 10
+      const pollInterval = 1500 // 1.5 seconds
+
+      const pollTransaction = async (): Promise<boolean> => {
+        try {
+          const response = await fetch(`/api/wallet/recharge/stripe/lookup?paymentIntentId=${paymentIntentId}`)
+          const data = await response.json()
+
+          if (data.success) {
+            // Transaction found, show receipt
+            setReceiptData({
+              transactionNumber: data.data.transactionNumber,
+              amount: data.data.amount,
+              fee: data.data.fee,
+              totalCharged: data.data.totalCharged,
+              newBalance: data.data.newBalance,
+              cardBrand: data.data.cardBrand,
+              cardLast4: data.data.cardLast4,
+              recipientName: data.data.recipientName,
+              recipientPhone: data.data.recipientPhone,
+              walletNumber: data.data.walletNumber,
+              paymentDate: new Date(data.data.paymentDate)
+            })
+            setShowReceiptStep(true)
+            setRedirectPaymentProcessing(false)
+            // Refresh dashboard data
+            fetchDashboard()
+            fetchTransactions()
+            return true
+          } else if (data.code === 'NOT_FOUND' && attempts < maxAttempts) {
+            // Transaction not found yet, keep polling
+            return false
+          } else {
+            // Error or max attempts reached
+            setRedirectPaymentError(data.error || 'No se pudo encontrar la transaccion')
+            setRedirectPaymentProcessing(false)
+            return true
+          }
+        } catch (err) {
+          setRedirectPaymentError('Error al verificar el pago')
+          setRedirectPaymentProcessing(false)
+          return true
+        }
+      }
+
+      // Start polling
+      const poll = async () => {
+        while (attempts < maxAttempts) {
+          const done = await pollTransaction()
+          if (done) break
+          attempts++
+          await new Promise(resolve => setTimeout(resolve, pollInterval))
+        }
+
+        // If we exhausted all attempts
+        if (attempts >= maxAttempts && !showReceiptStep) {
+          setRedirectPaymentError('El pago fue procesado pero no pudimos cargar el recibo. Por favor revise el historial de transacciones.')
+          setRedirectPaymentProcessing(false)
+        }
+      }
+
+      poll()
+    }
+
+    handleRedirectReturn()
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams])
 
   // Handle credit settings change
   const handleCreditSettingsChange = async (settings: { creditLimit?: number, dailyLimit?: number, monthlyLimit?: number, creditEnabled?: boolean }) => {
@@ -1497,6 +1601,38 @@ export default function WalletManagementPage() {
                 exit={{ opacity: 0, y: -20 }}
                 className="max-w-3xl mx-auto pt-16"
               >
+                {/* Redirect Payment Processing State */}
+                {redirectPaymentProcessing && (
+                  <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-8 text-center mb-8">
+                    <div className="animate-spin w-16 h-16 border-4 border-blue-500 border-t-transparent rounded-full mx-auto mb-4"></div>
+                    <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">
+                      Verificando pago...
+                    </h3>
+                    <p className="text-gray-600 dark:text-gray-400">
+                      Por favor espere mientras confirmamos su transaccion.
+                    </p>
+                  </div>
+                )}
+
+                {/* Redirect Payment Error State */}
+                {redirectPaymentError && !redirectPaymentProcessing && !showReceiptStep && (
+                  <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-6 mb-8">
+                    <div className="flex items-center gap-3 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
+                      <AlertCircle className="w-6 h-6 text-red-500 flex-shrink-0" />
+                      <div className="flex-1">
+                        <h4 className="text-red-700 dark:text-red-400 font-medium">Error en el pago</h4>
+                        <p className="text-red-600 dark:text-red-300 text-sm mt-1">{redirectPaymentError}</p>
+                      </div>
+                      <button
+                        onClick={() => setRedirectPaymentError(null)}
+                        className="text-red-500 hover:text-red-700 dark:hover:text-red-300"
+                      >
+                        <X className="w-5 h-5" />
+                      </button>
+                    </div>
+                  </div>
+                )}
+
                 {/* Step Progress */}
                 <div className="mb-8">
                   <div className="flex items-center justify-center">

@@ -1,7 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { constructWebhookEvent } from '@/lib/stripe'
+import { constructWebhookEvent, getFullPaymentDetails, STRIPE_FEE_PERCENTAGE, stripe } from '@/lib/stripe'
 import { db } from '@/lib/database'
 import Stripe from 'stripe'
+
+/**
+ * Generate a unique transaction number for webhook-processed payments
+ */
+function generateTransactionNumber(): string {
+  const timestamp = Date.now().toString(36).toUpperCase()
+  const random = Math.random().toString(36).substring(2, 6).toUpperCase()
+  return `WTX-${timestamp}${random}`
+}
 
 /**
  * POST /api/stripe/webhook
@@ -339,19 +348,23 @@ async function handlePayoutFailed(payout: Stripe.Payout) {
 /**
  * Handle payment_intent.succeeded event
  * Payment for wallet recharge succeeded
+ *
+ * This is critical for redirect-based payment methods like Klarna, Affirm, etc.
+ * When the user is redirected away, the frontend loses state, so we process
+ * the payment automatically here via webhook.
  */
 async function handlePaymentIntentSucceeded(paymentIntent: Stripe.PaymentIntent) {
   console.log(`PaymentIntent succeeded: ${paymentIntent.id}`)
 
-  // This is handled by the confirm endpoint, but we can use this for backup/verification
   const metadata = paymentIntent.metadata
 
+  // Only process LogiRapid payments
   if (metadata.platform !== 'LogiRapid') {
-    // Not a LogiRapid payment, ignore
+    console.log(`PaymentIntent ${paymentIntent.id} is not a LogiRapid payment, ignoring`)
     return
   }
 
-  // Check if already processed
+  // Check if already processed (idempotency)
   const existing = await db.query(`
     SELECT id FROM wallet_transactions
     WHERE stripe_payment_intent_id = $1
@@ -362,8 +375,168 @@ async function handlePaymentIntentSucceeded(paymentIntent: Stripe.PaymentIntent)
     return
   }
 
-  // Log for manual review if not processed yet
-  console.log(`PaymentIntent ${paymentIntent.id} succeeded but not processed via confirm endpoint. Metadata:`, metadata)
+  // Extract metadata
+  const targetType = metadata.targetType as 'company' | 'user' | 'customer'
+  const targetId = parseInt(metadata.targetId || '0')
+  const walletNumber = metadata.walletNumber
+  const baseAmount = parseFloat(metadata.baseAmount || '0')
+  const fee = parseFloat(metadata.fee || '0')
+  const operatorId = parseInt(metadata.operatorId || '0')
+  const companyId = parseInt(metadata.companyId || '0')
+
+  // Validate required metadata
+  if (!targetType || !targetId || !walletNumber || baseAmount <= 0) {
+    console.error(`PaymentIntent ${paymentIntent.id} has invalid metadata:`, metadata)
+    return
+  }
+
+  console.log(`Processing redirect payment: ${paymentIntent.id} for ${targetType} ${targetId}, amount: $${baseAmount}`)
+
+  // Retrieve full payment intent with expanded details
+  const fullPaymentIntent = await stripe.paymentIntents.retrieve(paymentIntent.id, {
+    expand: ['payment_method', 'latest_charge']
+  })
+
+  // Get payment details
+  const paymentDetails = getFullPaymentDetails(fullPaymentIntent)
+
+  // Generate transaction number
+  const transactionNumber = generateTransactionNumber()
+
+  // Calculate total charged (in dollars from cents)
+  const totalCharged = paymentIntent.amount / 100
+
+  // Start transaction
+  await db.query('BEGIN')
+
+  try {
+    let newBalance: number = 0
+
+    // Update wallet balance based on target type
+    if (targetType === 'company') {
+      const updateResult = await db.query(`
+        UPDATE companies
+        SET
+          walletbalance = COALESCE(walletbalance, 0) + $1,
+          "walletBalance" = (COALESCE("walletBalance"::numeric, walletbalance, 0) + $1)::varchar
+        WHERE id = $2
+        RETURNING COALESCE("walletBalance"::numeric, walletbalance, 0) as new_balance
+      `, [baseAmount, targetId])
+
+      if (updateResult.rows.length === 0) {
+        throw new Error(`Company ${targetId} not found`)
+      }
+      newBalance = parseFloat(updateResult.rows[0].new_balance)
+
+    } else if (targetType === 'user') {
+      const updateResult = await db.query(`
+        UPDATE users
+        SET wallet_balance = COALESCE(wallet_balance, 0) + $1
+        WHERE id = $2
+        RETURNING wallet_balance as new_balance
+      `, [baseAmount, targetId])
+
+      if (updateResult.rows.length === 0) {
+        throw new Error(`User ${targetId} not found`)
+      }
+      newBalance = parseFloat(updateResult.rows[0].new_balance)
+
+    } else if (targetType === 'customer') {
+      const updateResult = await db.query(`
+        UPDATE customers
+        SET wallet_balance = COALESCE(wallet_balance, 0) + $1
+        WHERE id = $2
+        RETURNING wallet_balance as new_balance
+      `, [baseAmount, targetId])
+
+      if (updateResult.rows.length === 0) {
+        throw new Error(`Customer ${targetId} not found`)
+      }
+      newBalance = parseFloat(updateResult.rows[0].new_balance)
+    }
+
+    // Prepare transaction metadata
+    const transactionMetadata = {
+      paymentMethodType: paymentDetails.paymentMethodType,
+      cardBrand: paymentDetails.brand,
+      cardLast4: paymentDetails.last4,
+      cardCountry: paymentDetails.country || null,
+      cardFunding: paymentDetails.funding || null,
+      cardNetwork: paymentDetails.network || null,
+      wallet: paymentDetails.wallet || null,
+      fingerprint: paymentDetails.fingerprint || null,
+      receiptUrl: paymentDetails.receiptUrl || null,
+      receiptEmail: paymentDetails.receiptEmail || null,
+      processedVia: 'webhook'
+    }
+
+    // Insert transaction record
+    await db.query(`
+      INSERT INTO wallet_transactions (
+        transaction_number,
+        type,
+        source_type,
+        source_company_id,
+        source_user_id,
+        target_type,
+        target_company_id,
+        target_user_id,
+        target_customer_id,
+        target_wallet_number,
+        amount,
+        net_amount,
+        fee,
+        fee_percentage,
+        total_charged,
+        payment_method,
+        status,
+        card_brand,
+        card_last4,
+        stripe_payment_intent_id,
+        notes,
+        metadata,
+        created_at,
+        updated_at
+      ) VALUES (
+        $1, 'recharge', 'platform', $2, $3,
+        $4,
+        $5, $6, $7,
+        $8, $9, $10, $11, $12, $13,
+        'card_stripe', 'completed',
+        $14, $15, $16,
+        $17, $18,
+        CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+      )
+    `, [
+      transactionNumber,
+      companyId || null,
+      operatorId || null,
+      targetType,
+      targetType === 'company' ? targetId : null,
+      targetType === 'user' ? targetId : null,
+      targetType === 'customer' ? targetId : null,
+      walletNumber,
+      baseAmount,
+      baseAmount,
+      fee,
+      STRIPE_FEE_PERCENTAGE,
+      totalCharged,
+      paymentDetails.brand,
+      paymentDetails.last4,
+      paymentIntent.id,
+      `Recarga via Stripe (webhook) - ${paymentDetails.brand} ****${paymentDetails.last4}`,
+      JSON.stringify(transactionMetadata)
+    ])
+
+    await db.query('COMMIT')
+
+    console.log(`Successfully processed redirect payment ${paymentIntent.id}: ${transactionNumber}, credited $${baseAmount} to ${targetType} ${targetId}, new balance: $${newBalance}`)
+
+  } catch (error) {
+    await db.query('ROLLBACK')
+    console.error(`Error processing redirect payment ${paymentIntent.id}:`, error)
+    throw error
+  }
 }
 
 // Disable body parser for webhook (need raw body for signature verification)

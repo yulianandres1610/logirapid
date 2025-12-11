@@ -27,7 +27,9 @@ import {
   User,
   Calendar,
   Filter,
-  Download
+  Download,
+  ExternalLink,
+  Receipt
 } from 'lucide-react'
 import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, Tooltip, Cell } from 'recharts'
 import { cn } from '@/lib/utils'
@@ -93,10 +95,15 @@ interface Transaction {
   amountFormatted: string
   displayAmount?: number
   fee?: number
+  totalCharged?: number
   netAmount?: number
   paymentMethod?: string
   paymentMethodLabel?: string
   paymentReference?: string
+  cardBrand?: string
+  cardLast4?: string
+  receiptUrl?: string | null
+  stripePaymentIntentId?: string
   status: string
   description?: string
   createdAt: string
@@ -202,6 +209,10 @@ export default function CompanyWalletPage() {
   const [showCashoutModal, setShowCashoutModal] = useState(false)
   const [connectStatus, setConnectStatus] = useState<'not_connected' | 'pending' | 'active' | 'restricted'>('not_connected')
   const [connectLoading, setConnectLoading] = useState(false)
+
+  // Transaction details modal state
+  const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null)
+  const [showTransactionDetails, setShowTransactionDetails] = useState(false)
 
   // Tabs configuration
   const tabs = [
@@ -991,8 +1002,12 @@ export default function CompanyWalletPage() {
                         {transactions.map((tx) => (
                           <div
                             key={tx.id}
+                            onClick={() => {
+                              setSelectedTransaction(tx)
+                              setShowTransactionDetails(true)
+                            }}
                             className={cn(
-                              "flex items-center justify-between p-4 rounded-lg transition-colors",
+                              "flex items-center justify-between p-4 rounded-lg transition-colors cursor-pointer",
                               theme === 'dark' ? 'bg-gray-700/50 hover:bg-gray-700' : 'bg-gray-50 hover:bg-gray-100'
                             )}
                           >
@@ -1014,22 +1029,26 @@ export default function CompanyWalletPage() {
                                 <p className={cn("text-sm", theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}>
                                   {new Date(tx.createdAt).toLocaleDateString('es-ES', { day: '2-digit', month: 'short', year: 'numeric' })}
                                   {tx.paymentMethodLabel && ` • ${tx.paymentMethodLabel}`}
+                                  {tx.cardLast4 && ` • ****${tx.cardLast4}`}
                                 </p>
                               </div>
                             </div>
-                            <div className="text-right">
-                              <p className={cn(
-                                'font-semibold',
-                                (tx.displayAmount || 0) < 0 ? 'text-red-600' : 'text-green-600'
-                              )}>
-                                {(tx.displayAmount || 0) >= 0 ? '+' : ''}{tx.amountFormatted}
-                              </p>
-                              <p className={cn(
-                                'text-xs',
-                                tx.status === 'completed' ? 'text-green-500' : 'text-yellow-500'
-                              )}>
-                                {tx.status === 'completed' ? 'Completada' : 'Pendiente'}
-                              </p>
+                            <div className="flex items-center gap-3">
+                              <div className="text-right">
+                                <p className={cn(
+                                  'font-semibold',
+                                  (tx.displayAmount || 0) < 0 ? 'text-red-600' : 'text-green-600'
+                                )}>
+                                  {(tx.displayAmount || 0) >= 0 ? '+' : ''}{tx.amountFormatted}
+                                </p>
+                                <p className={cn(
+                                  'text-xs',
+                                  tx.status === 'completed' ? 'text-green-500' : 'text-yellow-500'
+                                )}>
+                                  {tx.status === 'completed' ? 'Completada' : 'Pendiente'}
+                                </p>
+                              </div>
+                              <ChevronRight className={cn("w-4 h-4", theme === 'dark' ? 'text-gray-500' : 'text-gray-400')} />
                             </div>
                           </div>
                         ))}
@@ -1896,6 +1915,223 @@ export default function CompanyWalletPage() {
           />
         </div>
       )}
+
+      {/* Transaction Details Modal */}
+      <AnimatePresence>
+        {showTransactionDetails && selectedTransaction && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+            onClick={(e) => {
+              if (e.target === e.currentTarget) {
+                setShowTransactionDetails(false)
+                setSelectedTransaction(null)
+              }
+            }}
+          >
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              transition={{ type: 'spring', duration: 0.3 }}
+              className={cn(
+                "w-full max-w-md rounded-xl shadow-2xl overflow-hidden",
+                theme === 'dark' ? 'bg-gray-800' : 'bg-white'
+              )}
+            >
+              {/* Header */}
+              <div className="p-6 border-b" style={{ borderColor: theme === 'dark' ? '#374151' : '#E5E7EB' }}>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className={cn(
+                      'w-12 h-12 rounded-full flex items-center justify-center',
+                      selectedTransaction.isOutgoing ? 'bg-red-100 dark:bg-red-900/30' : 'bg-green-100 dark:bg-green-900/30'
+                    )}>
+                      {selectedTransaction.isOutgoing ? (
+                        <ArrowUpRight className="w-6 h-6 text-red-600 dark:text-red-400" />
+                      ) : (
+                        <ArrowDownRight className="w-6 h-6 text-green-600 dark:text-green-400" />
+                      )}
+                    </div>
+                    <div>
+                      <h3 className={cn("font-semibold text-lg", theme === 'dark' ? 'text-white' : 'text-gray-900')}>
+                        Detalles de Transaccion
+                      </h3>
+                      <p className={cn("text-sm", theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}>
+                        #{selectedTransaction.transactionNumber || selectedTransaction.id}
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => {
+                      setShowTransactionDetails(false)
+                      setSelectedTransaction(null)
+                    }}
+                    className={cn(
+                      "p-2 rounded-lg transition-colors",
+                      theme === 'dark' ? 'hover:bg-gray-700' : 'hover:bg-gray-100'
+                    )}
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+              </div>
+
+              {/* Content */}
+              <div className="p-6 space-y-4">
+                {/* Amount */}
+                <div className="text-center py-4">
+                  <p className={cn(
+                    "text-3xl font-bold",
+                    (selectedTransaction.displayAmount || 0) < 0 ? 'text-red-600' : 'text-green-600'
+                  )}>
+                    {(selectedTransaction.displayAmount || 0) >= 0 ? '+' : ''}{selectedTransaction.amountFormatted}
+                  </p>
+                  <p className={cn(
+                    "text-sm mt-1",
+                    selectedTransaction.status === 'completed' ? 'text-green-500' : 'text-yellow-500'
+                  )}>
+                    {selectedTransaction.status === 'completed' ? 'Completada' : 'Pendiente'}
+                  </p>
+                </div>
+
+                {/* Details */}
+                <div className={cn("rounded-lg p-4 space-y-3", theme === 'dark' ? 'bg-gray-700/50' : 'bg-gray-50')}>
+                  <div className="flex justify-between">
+                    <span className={cn("text-sm", theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}>Tipo</span>
+                    <span className={cn("text-sm font-medium", theme === 'dark' ? 'text-white' : 'text-gray-900')}>
+                      {selectedTransaction.typeLabel}
+                    </span>
+                  </div>
+
+                  <div className="flex justify-between">
+                    <span className={cn("text-sm", theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}>Fecha</span>
+                    <span className={cn("text-sm font-medium", theme === 'dark' ? 'text-white' : 'text-gray-900')}>
+                      {new Date(selectedTransaction.createdAt).toLocaleString('es-ES', {
+                        day: '2-digit',
+                        month: 'short',
+                        year: 'numeric',
+                        hour: '2-digit',
+                        minute: '2-digit'
+                      })}
+                    </span>
+                  </div>
+
+                  {selectedTransaction.paymentMethodLabel && (
+                    <div className="flex justify-between">
+                      <span className={cn("text-sm", theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}>Metodo de Pago</span>
+                      <span className={cn("text-sm font-medium", theme === 'dark' ? 'text-white' : 'text-gray-900')}>
+                        {selectedTransaction.paymentMethodLabel}
+                      </span>
+                    </div>
+                  )}
+
+                  {selectedTransaction.cardBrand && selectedTransaction.cardLast4 && (
+                    <div className="flex justify-between">
+                      <span className={cn("text-sm", theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}>Tarjeta</span>
+                      <span className={cn("text-sm font-medium flex items-center gap-1", theme === 'dark' ? 'text-white' : 'text-gray-900')}>
+                        <CreditCard className="w-4 h-4" />
+                        {selectedTransaction.cardBrand} ****{selectedTransaction.cardLast4}
+                      </span>
+                    </div>
+                  )}
+
+                  {selectedTransaction.fee !== undefined && selectedTransaction.fee > 0 && (
+                    <div className="flex justify-between">
+                      <span className={cn("text-sm", theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}>Comision</span>
+                      <span className={cn("text-sm font-medium", theme === 'dark' ? 'text-white' : 'text-gray-900')}>
+                        ${selectedTransaction.fee.toFixed(2)}
+                      </span>
+                    </div>
+                  )}
+
+                  {selectedTransaction.totalCharged && selectedTransaction.totalCharged !== selectedTransaction.amount && (
+                    <div className="flex justify-between">
+                      <span className={cn("text-sm", theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}>Total Cobrado</span>
+                      <span className={cn("text-sm font-medium", theme === 'dark' ? 'text-white' : 'text-gray-900')}>
+                        ${selectedTransaction.totalCharged.toFixed(2)}
+                      </span>
+                    </div>
+                  )}
+
+                  {selectedTransaction.targetName && (
+                    <div className="flex justify-between">
+                      <span className={cn("text-sm", theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}>Destinatario</span>
+                      <span className={cn("text-sm font-medium", theme === 'dark' ? 'text-white' : 'text-gray-900')}>
+                        {selectedTransaction.targetName}
+                      </span>
+                    </div>
+                  )}
+
+                  {selectedTransaction.sourceName && selectedTransaction.isIncoming && (
+                    <div className="flex justify-between">
+                      <span className={cn("text-sm", theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}>Origen</span>
+                      <span className={cn("text-sm font-medium", theme === 'dark' ? 'text-white' : 'text-gray-900')}>
+                        {selectedTransaction.sourceName}
+                      </span>
+                    </div>
+                  )}
+
+                  {selectedTransaction.paymentReference && (
+                    <div className="flex justify-between">
+                      <span className={cn("text-sm", theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}>Referencia</span>
+                      <span className={cn("text-sm font-medium", theme === 'dark' ? 'text-white' : 'text-gray-900')}>
+                        {selectedTransaction.paymentReference}
+                      </span>
+                    </div>
+                  )}
+
+                  {selectedTransaction.description && (
+                    <div className="flex justify-between">
+                      <span className={cn("text-sm", theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}>Descripcion</span>
+                      <span className={cn("text-sm font-medium text-right max-w-[200px]", theme === 'dark' ? 'text-white' : 'text-gray-900')}>
+                        {selectedTransaction.description}
+                      </span>
+                    </div>
+                  )}
+                </div>
+
+                {/* Receipt Button */}
+                {selectedTransaction.receiptUrl && (
+                  <a
+                    href={selectedTransaction.receiptUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className={cn(
+                      "flex items-center justify-center gap-2 w-full py-3 rounded-lg font-medium transition-colors",
+                      theme === 'dark'
+                        ? 'bg-blue-600 hover:bg-blue-700 text-white'
+                        : 'bg-blue-500 hover:bg-blue-600 text-white'
+                    )}
+                  >
+                    <Receipt className="w-5 h-5" />
+                    Ver Recibo de Stripe
+                    <ExternalLink className="w-4 h-4" />
+                  </a>
+                )}
+
+                {/* Close Button */}
+                <button
+                  onClick={() => {
+                    setShowTransactionDetails(false)
+                    setSelectedTransaction(null)
+                  }}
+                  className={cn(
+                    "w-full py-3 rounded-lg font-medium transition-colors",
+                    theme === 'dark'
+                      ? 'bg-gray-700 hover:bg-gray-600 text-white'
+                      : 'bg-gray-100 hover:bg-gray-200 text-gray-900'
+                  )}
+                >
+                  Cerrar
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </DashboardLayout>
   )
 }
