@@ -588,9 +588,37 @@ export default function ProductConfigPage() {
               <p className={isDark ? 'text-gray-400' : 'text-gray-600'}>Cargando productos...</p>
             </div>
           ) : filteredProducts.length === 0 ? (
-            <div className={`p-8 rounded-xl ${isDark ? 'bg-gray-800' : 'bg-white'} shadow-sm text-center`}>
-              <Package className={`w-12 h-12 mx-auto mb-4 ${isDark ? 'text-gray-600' : 'text-gray-300'}`} />
-              <p className={isDark ? 'text-gray-400' : 'text-gray-600'}>No se encontraron productos</p>
+            <div className={`p-12 rounded-xl ${isDark ? 'bg-gray-800' : 'bg-white'} shadow-sm text-center`}>
+              <div className={`w-20 h-20 mx-auto mb-6 rounded-full flex items-center justify-center ${
+                isDark ? 'bg-blue-900/30' : 'bg-blue-100'
+              }`}>
+                <Package className={`w-10 h-10 ${isDark ? 'text-blue-400' : 'text-blue-500'}`} />
+              </div>
+              <h3 className={`text-xl font-semibold mb-2 ${isDark ? 'text-white' : 'text-gray-900'}`}>
+                {products.length === 0 ? 'Catalogo Vacio' : 'Sin resultados'}
+              </h3>
+              <p className={`mb-6 max-w-md mx-auto ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
+                {products.length === 0
+                  ? 'No hay productos en el catalogo. Crea tu primer producto para comenzar a configurar precios y servicios.'
+                  : 'No se encontraron productos con los filtros seleccionados. Intenta cambiar los criterios de busqueda.'
+                }
+              </p>
+              {products.length === 0 && (
+                <button
+                  onClick={() => {
+                    setSelectedProduct(null)
+                    setShowPricingModal(true)
+                  }}
+                  className={`px-6 py-3 rounded-lg font-medium transition-all ${
+                    isDark
+                      ? 'bg-blue-600 hover:bg-blue-700 text-white'
+                      : 'bg-blue-500 hover:bg-blue-600 text-white'
+                  } shadow-lg hover:shadow-xl`}
+                >
+                  <Plus className="w-5 h-5 inline-block mr-2" />
+                  Crear Primer Producto
+                </button>
+              )}
             </div>
           ) : (
             <AnimatePresence>
