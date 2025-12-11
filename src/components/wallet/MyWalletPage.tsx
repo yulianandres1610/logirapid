@@ -189,29 +189,17 @@ export default function MyWalletPage({ role }: MyWalletPageProps) {
     }
   }
 
-  // Show password dialog
-  if (!isAuthenticated) {
+  // Show password dialog - render OUTSIDE DashboardLayout to prevent header animation
+  if (!isAuthenticated && showPasswordDialog) {
     return (
-      <DashboardLayout>
-        <div className="min-h-[60vh] flex items-center justify-center">
-          <div className="text-center">
-            <Wallet className="w-16 h-16 mx-auto text-gray-300 mb-4" />
-            <h2 className="text-xl font-semibold text-gray-700 dark:text-gray-300 mb-2">
-              Mi Billetera Personal
-            </h2>
-            <p className="text-gray-500 dark:text-gray-400 mb-4">
-              Verifica tu identidad para acceder
-            </p>
-          </div>
-        </div>
-        <PasswordConfirmDialog
-          isOpen={showPasswordDialog}
-          onClose={() => router.back()}
-          onSuccess={handlePasswordSuccess}
-          title="Acceso a Mi Billetera"
-          message="Por seguridad, ingresa tu contrasena para acceder a tu billetera personal."
-        />
-      </DashboardLayout>
+      <PasswordConfirmDialog
+        isOpen={true}
+        onClose={() => router.back()}
+        onSuccess={handlePasswordSuccess}
+        title="Acceso a Mi Billetera"
+        message="Por seguridad, ingresa tu contrasena para acceder a tu billetera personal."
+        preventClose={true}
+      />
     )
   }
 

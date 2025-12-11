@@ -546,13 +546,13 @@ export function Header({ onToggleSidebar, sidebarCollapsed }: HeaderProps) {
                           handleMyWalletClick()
                         }}
                         className={cn(
-                          "flex items-center gap-3 mt-3 pt-3 border-t cursor-pointer rounded-lg p-2 -m-2 transition-colors",
+                          "flex items-center gap-3 mt-3 pt-3 border-t cursor-pointer rounded-lg px-2 py-2 transition-colors",
                           theme === 'dark' ? "border-gray-700 hover:bg-gray-700/50" : "border-gray-200 hover:bg-gray-100"
                         )}
                         title="Ir a Mi Wallet Personal"
                       >
                         <div className={cn(
-                          "w-8 h-8 rounded-full flex items-center justify-center",
+                          "w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0",
                           theme === 'dark' ? "bg-green-500/20" : "bg-green-100"
                         )}>
                           <Wallet className={cn(
@@ -560,7 +560,7 @@ export function Header({ onToggleSidebar, sidebarCollapsed }: HeaderProps) {
                             theme === 'dark' ? "text-green-400" : "text-green-600"
                           )} />
                         </div>
-                        <div>
+                        <div className="flex-1 min-w-0">
                           <p className={cn(
                             "text-xs",
                             theme === 'dark' ? "text-gray-400" : "text-gray-500"
