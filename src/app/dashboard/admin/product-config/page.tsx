@@ -109,6 +109,7 @@ export default function ProductConfigPage() {
   const [loadingCommissions, setLoadingCommissions] = useState(false)
   const [editingCommission, setEditingCommission] = useState<any | null>(null)
   const [showCommissionModal, setShowCommissionModal] = useState(false)
+  const [showCreateProductModal, setShowCreateProductModal] = useState(false)
 
   // Fetch products and their services
   const fetchProducts = useCallback(async () => {
@@ -605,10 +606,7 @@ export default function ProductConfigPage() {
               </p>
               {products.length === 0 && (
                 <button
-                  onClick={() => {
-                    setSelectedProduct(null)
-                    setShowPricingModal(true)
-                  }}
+                  onClick={() => setShowCreateProductModal(true)}
                   className={`px-6 py-3 rounded-lg font-medium transition-all ${
                     isDark
                       ? 'bg-blue-600 hover:bg-blue-700 text-white'
@@ -1300,6 +1298,39 @@ export default function ProductConfigPage() {
         )}
       </AnimatePresence>
 
+      {/* Create Product Modal */}
+      <AnimatePresence>
+        {showCreateProductModal && (
+          <CreateProductModal
+            isDark={isDark}
+            onClose={() => setShowCreateProductModal(false)}
+            onSave={async (productData) => {
+              const response = await fetch('/api/products', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  code: productData.code,
+                  name: productData.name,
+                  description: productData.description,
+                  service_category: productData.category,
+                  product_type: productData.productType,
+                  mi_costo: productData.miCosto,
+                  precio_mayorista: productData.precioMayorista,
+                  precio_publico: productData.precioPublico
+                })
+              })
+              const data = await response.json()
+              if (data.success) {
+                showNotification('success', 'Exito', 'Producto creado correctamente')
+                fetchProducts()
+              } else {
+                throw new Error(data.error || 'Error al crear producto')
+              }
+            }}
+          />
+        )}
+      </AnimatePresence>
+
       {/* Pricing Modal - Complete Form */}
       <AnimatePresence>
         {showPricingModal && selectedProduct && (
@@ -1798,6 +1829,305 @@ function PricingModal({ isDark, product, marginHealth, onClose, onSave }: Pricin
             >
               {saving && <RefreshCw className="w-4 h-4 animate-spin" />}
               {saving ? 'Guardando...' : 'Guardar Precios'}
+            </button>
+          </div>
+        </form>
+      </motion.div>
+    </motion.div>
+  )
+}
+
+// CreateProductModal component
+interface CreateProductModalProps {
+  isDark: boolean
+  onClose: () => void
+  onSave: (product: {
+    code: string
+    name: string
+    description: string
+    category: string
+    productType: string
+    miCosto: number
+    precioMayorista: number
+    precioPublico: number
+  }) => Promise<void>
+}
+
+function CreateProductModal({ isDark, onClose, onSave }: CreateProductModalProps) {
+  const [formData, setFormData] = useState({
+    code: '',
+    name: '',
+    description: '',
+    category: 'paqueteria',
+    productType: 'caja',
+    miCosto: 0,
+    precioMayorista: 0,
+    precioPublico: 0
+  })
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  const categories = [
+    { id: 'paqueteria', name: 'Paqueteria' },
+    { id: 'remesa', name: 'Remesa' },
+    { id: 'recarga', name: 'Recarga' },
+    { id: 'mercado', name: 'Mercado' }
+  ]
+
+  const productTypes = [
+    { id: 'caja', name: 'Caja' },
+    { id: 'sobre', name: 'Sobre' },
+    { id: 'paquete', name: 'Paquete' },
+    { id: 'servicio', name: 'Servicio' }
+  ]
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setError(null)
+
+    if (!formData.code || !formData.name) {
+      setError('Codigo y nombre son requeridos')
+      return
+    }
+
+    if (formData.miCosto < 0 || formData.precioMayorista < 0 || formData.precioPublico < 0) {
+      setError('Los precios no pueden ser negativos')
+      return
+    }
+
+    try {
+      setSaving(true)
+      await onSave(formData)
+      onClose()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Error al crear producto')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const margen = formData.precioMayorista - formData.miCosto
+
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
+      onClick={(e) => e.target === e.currentTarget && onClose()}
+    >
+      <motion.div
+        initial={{ scale: 0.95, opacity: 0 }}
+        animate={{ scale: 1, opacity: 1 }}
+        exit={{ scale: 0.95, opacity: 0 }}
+        className={`w-full max-w-lg rounded-xl shadow-2xl ${
+          isDark ? 'bg-gray-800' : 'bg-white'
+        } max-h-[90vh] overflow-y-auto`}
+      >
+        <div className={`p-6 border-b ${isDark ? 'border-gray-700' : 'border-gray-200'}`}>
+          <div className="flex items-center justify-between">
+            <h2 className={`text-xl font-semibold ${isDark ? 'text-white' : 'text-gray-900'}`}>
+              Crear Nuevo Producto
+            </h2>
+            <button
+              onClick={onClose}
+              className={`p-2 rounded-lg ${isDark ? 'hover:bg-gray-700' : 'hover:bg-gray-100'}`}
+            >
+              <AlertCircle className="w-5 h-5" />
+            </button>
+          </div>
+        </div>
+
+        <form onSubmit={handleSubmit} className="p-6 space-y-4">
+          {error && (
+            <div className="p-3 rounded-lg bg-red-100 text-red-700 text-sm">
+              {error}
+            </div>
+          )}
+
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className={`block text-sm font-medium mb-1 ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
+                Codigo *
+              </label>
+              <input
+                type="text"
+                value={formData.code}
+                onChange={(e) => setFormData({ ...formData, code: e.target.value.toUpperCase() })}
+                className={`w-full px-3 py-2 rounded-lg border ${
+                  isDark
+                    ? 'bg-gray-700 border-gray-600 text-white'
+                    : 'bg-white border-gray-300 text-gray-900'
+                } focus:ring-2 focus:ring-blue-500`}
+                placeholder="CAJA-12X12"
+              />
+            </div>
+            <div>
+              <label className={`block text-sm font-medium mb-1 ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
+                Categoria *
+              </label>
+              <select
+                value={formData.category}
+                onChange={(e) => setFormData({ ...formData, category: e.target.value })}
+                className={`w-full px-3 py-2 rounded-lg border ${
+                  isDark
+                    ? 'bg-gray-700 border-gray-600 text-white'
+                    : 'bg-white border-gray-300 text-gray-900'
+                } focus:ring-2 focus:ring-blue-500`}
+              >
+                {categories.map((cat) => (
+                  <option key={cat.id} value={cat.id}>{cat.name}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          <div>
+            <label className={`block text-sm font-medium mb-1 ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
+              Nombre *
+            </label>
+            <input
+              type="text"
+              value={formData.name}
+              onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+              className={`w-full px-3 py-2 rounded-lg border ${
+                isDark
+                  ? 'bg-gray-700 border-gray-600 text-white'
+                  : 'bg-white border-gray-300 text-gray-900'
+              } focus:ring-2 focus:ring-blue-500`}
+              placeholder="Caja 12x12x12"
+            />
+          </div>
+
+          <div>
+            <label className={`block text-sm font-medium mb-1 ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
+              Tipo de Producto
+            </label>
+            <select
+              value={formData.productType}
+              onChange={(e) => setFormData({ ...formData, productType: e.target.value })}
+              className={`w-full px-3 py-2 rounded-lg border ${
+                isDark
+                  ? 'bg-gray-700 border-gray-600 text-white'
+                  : 'bg-white border-gray-300 text-gray-900'
+              } focus:ring-2 focus:ring-blue-500`}
+            >
+              {productTypes.map((type) => (
+                <option key={type.id} value={type.id}>{type.name}</option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label className={`block text-sm font-medium mb-1 ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
+              Descripcion
+            </label>
+            <textarea
+              value={formData.description}
+              onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+              rows={2}
+              className={`w-full px-3 py-2 rounded-lg border ${
+                isDark
+                  ? 'bg-gray-700 border-gray-600 text-white'
+                  : 'bg-white border-gray-300 text-gray-900'
+              } focus:ring-2 focus:ring-blue-500`}
+              placeholder="Descripcion del producto..."
+            />
+          </div>
+
+          <div className={`p-4 rounded-lg ${isDark ? 'bg-gray-700/50' : 'bg-gray-50'}`}>
+            <h4 className={`font-medium mb-3 ${isDark ? 'text-white' : 'text-gray-900'}`}>
+              Precios
+            </h4>
+            <div className="grid grid-cols-3 gap-3">
+              <div>
+                <label className={`block text-xs mb-1 ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
+                  Mi Costo ($)
+                </label>
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={formData.miCosto}
+                  onChange={(e) => setFormData({ ...formData, miCosto: parseFloat(e.target.value) || 0 })}
+                  className={`w-full px-3 py-2 rounded-lg border ${
+                    isDark
+                      ? 'bg-gray-600 border-gray-500 text-white'
+                      : 'bg-white border-gray-300 text-gray-900'
+                  } focus:ring-2 focus:ring-blue-500`}
+                />
+              </div>
+              <div>
+                <label className={`block text-xs mb-1 ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
+                  Precio Mayorista ($)
+                </label>
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={formData.precioMayorista}
+                  onChange={(e) => setFormData({ ...formData, precioMayorista: parseFloat(e.target.value) || 0 })}
+                  className={`w-full px-3 py-2 rounded-lg border ${
+                    isDark
+                      ? 'bg-gray-600 border-gray-500 text-white'
+                      : 'bg-white border-gray-300 text-gray-900'
+                  } focus:ring-2 focus:ring-blue-500`}
+                />
+              </div>
+              <div>
+                <label className={`block text-xs mb-1 ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
+                  Precio Publico ($)
+                </label>
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={formData.precioPublico}
+                  onChange={(e) => setFormData({ ...formData, precioPublico: parseFloat(e.target.value) || 0 })}
+                  className={`w-full px-3 py-2 rounded-lg border ${
+                    isDark
+                      ? 'bg-gray-600 border-gray-500 text-white'
+                      : 'bg-white border-gray-300 text-gray-900'
+                  } focus:ring-2 focus:ring-blue-500`}
+                />
+              </div>
+            </div>
+            {margen > 0 && (
+              <div className={`mt-3 pt-3 border-t ${isDark ? 'border-gray-600' : 'border-gray-200'}`}>
+                <div className="flex items-center justify-between text-sm">
+                  <span className={isDark ? 'text-gray-400' : 'text-gray-600'}>Margen:</span>
+                  <span className={`font-medium ${margen > 0 ? 'text-green-500' : 'text-red-500'}`}>
+                    ${margen.toFixed(2)}
+                  </span>
+                </div>
+              </div>
+            )}
+          </div>
+
+          <div className="flex justify-end gap-3 pt-4">
+            <button
+              type="button"
+              onClick={onClose}
+              disabled={saving}
+              className={`px-4 py-2 rounded-lg ${
+                isDark
+                  ? 'bg-gray-700 hover:bg-gray-600 text-gray-300'
+                  : 'bg-gray-100 hover:bg-gray-200 text-gray-700'
+              } disabled:opacity-50`}
+            >
+              Cancelar
+            </button>
+            <button
+              type="submit"
+              disabled={saving}
+              className={`px-4 py-2 rounded-lg ${
+                isDark
+                  ? 'bg-blue-600 hover:bg-blue-700 text-white'
+                  : 'bg-blue-500 hover:bg-blue-600 text-white'
+              } disabled:opacity-50 flex items-center gap-2`}
+            >
+              {saving && <RefreshCw className="w-4 h-4 animate-spin" />}
+              {saving ? 'Creando...' : 'Crear Producto'}
             </button>
           </div>
         </form>
