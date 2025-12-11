@@ -15,6 +15,7 @@ interface CreatePaymentIntentParams {
   targetId: number
   targetName: string
   description?: string
+  receiptEmail?: string    // Email to send payment receipt
   metadata?: Record<string, string>
 }
 
@@ -44,7 +45,8 @@ export async function createRechargePaymentIntent(
     amount: totalCents,
     currency: 'usd',
     automatic_payment_methods: { enabled: true },
-    description: description || `Recarga de wallet ${walletNumber}`,
+    receipt_email: params.receiptEmail,
+    description: description || walletNumber,
     metadata: {
       ...metadata,
       walletNumber,

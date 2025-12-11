@@ -172,7 +172,8 @@ export async function POST(request: NextRequest) {
       targetType,
       targetId,
       targetName,
-      description: `Recarga de wallet ${walletNumber} - ${targetName}`,
+      description: walletNumber,
+      receiptEmail: payload.email,
       metadata: {
         operatorId: String(payload.userId),
         operatorEmail: payload.email || '',
