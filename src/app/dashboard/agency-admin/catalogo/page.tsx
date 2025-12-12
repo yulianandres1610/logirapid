@@ -1,6 +1,7 @@
 'use client'
 
 import React, { useState, useEffect, useCallback } from 'react'
+import { useSearchParams, useRouter } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
 import { DashboardLayout } from '@/components/layout/dashboard-layout'
 import { useTheme } from '@/contexts/theme-context'
@@ -93,8 +94,17 @@ export default function CatalogoEmpresaPage() {
   const { theme } = useTheme()
   const { showNotification } = useNotifications()
   const { user } = useAuth()
+  const searchParams = useSearchParams()
+  const router = useRouter()
   const isDark = theme === 'dark'
   const companyId = user?.companyId
+
+  // Get initial tab from URL or default to 'productos'
+  const validTabs = ['productos', 'sucursales', 'precios', 'comisiones'] as const
+  const tabFromUrl = searchParams.get('tab')
+  const initialTab = validTabs.includes(tabFromUrl as typeof validTabs[number])
+    ? tabFromUrl as typeof validTabs[number]
+    : 'productos'
 
   // States
   const [products, setProducts] = useState<Product[]>([])
@@ -102,8 +112,16 @@ export default function CatalogoEmpresaPage() {
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState('')
   const [categoryFilter, setCategoryFilter] = useState<string>('all')
-  const [activeTab, setActiveTab] = useState<'productos' | 'sucursales' | 'precios' | 'comisiones'>('productos')
+  const [activeTab, setActiveTab] = useState<'productos' | 'sucursales' | 'precios' | 'comisiones'>(initialTab)
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('list')
+
+  // Update URL when tab changes
+  const handleTabChange = useCallback((tab: typeof validTabs[number]) => {
+    setActiveTab(tab)
+    const params = new URLSearchParams(searchParams.toString())
+    params.set('tab', tab)
+    router.push(`?${params.toString()}`, { scroll: false })
+  }, [router, searchParams])
 
   // Modals
   const [showServiceModal, setShowServiceModal] = useState(false)
@@ -863,7 +881,7 @@ export default function CatalogoEmpresaPage() {
             <div className="flex items-center gap-2">
               <div className={`flex p-1 rounded-xl ${isDark ? 'bg-gray-800' : 'bg-gray-100'}`}>
                 <button
-                  onClick={() => setActiveTab('productos')}
+                  onClick={() => handleTabChange('productos')}
                   className={`px-4 py-2 rounded-lg text-sm font-medium transition-all flex items-center gap-2 ${
                     activeTab === 'productos'
                       ? isDark ? 'bg-gray-700 text-white shadow-lg' : 'bg-white text-gray-900 shadow-md'
@@ -881,7 +899,7 @@ export default function CatalogoEmpresaPage() {
                   </span>
                 </button>
                 <button
-                  onClick={() => setActiveTab('sucursales')}
+                  onClick={() => handleTabChange('sucursales')}
                   className={`px-4 py-2 rounded-lg text-sm font-medium transition-all flex items-center gap-2 ${
                     activeTab === 'sucursales'
                       ? isDark ? 'bg-gray-700 text-white shadow-lg' : 'bg-white text-gray-900 shadow-md'
@@ -892,7 +910,7 @@ export default function CatalogoEmpresaPage() {
                   Precios Sucursales
                 </button>
                 <button
-                  onClick={() => setActiveTab('precios')}
+                  onClick={() => handleTabChange('precios')}
                   className={`px-4 py-2 rounded-lg text-sm font-medium transition-all flex items-center gap-2 ${
                     activeTab === 'precios'
                       ? isDark ? 'bg-gray-700 text-white shadow-lg' : 'bg-white text-gray-900 shadow-md'
@@ -903,7 +921,7 @@ export default function CatalogoEmpresaPage() {
                   Precio Venta
                 </button>
                 <button
-                  onClick={() => setActiveTab('comisiones')}
+                  onClick={() => handleTabChange('comisiones')}
                   className={`px-4 py-2 rounded-lg text-sm font-medium transition-all flex items-center gap-2 ${
                     activeTab === 'comisiones'
                       ? isDark ? 'bg-gray-700 text-white shadow-lg' : 'bg-white text-gray-900 shadow-md'
@@ -1669,8 +1687,8 @@ export default function CatalogoEmpresaPage() {
               <div className={`rounded-2xl p-6 ${isDark ? 'bg-gray-800 border border-gray-700' : 'bg-white border border-gray-200 shadow-sm'}`}>
                 <div className="flex items-center justify-between gap-4">
                   <div className="flex items-center gap-4">
-                    <div className={`p-3 rounded-xl ${isDark ? 'bg-purple-500/20' : 'bg-purple-100'}`}>
-                      <Percent className="w-6 h-6 text-purple-500" />
+                    <div className={`p-3 rounded-xl ${isDark ? 'bg-blue-500/20' : 'bg-blue-100'}`}>
+                      <Percent className="w-6 h-6 text-blue-500" />
                     </div>
                     <div>
                       <label className={`block text-sm font-medium mb-2 ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
@@ -1684,7 +1702,7 @@ export default function CatalogoEmpresaPage() {
                             isDark
                               ? 'bg-gray-700 border-gray-600 text-white'
                               : 'bg-gray-50 border-gray-200 text-gray-900'
-                          } border focus:outline-none focus:ring-2 focus:ring-purple-500/20`}
+                          } border focus:outline-none focus:ring-2 focus:ring-blue-500/20`}
                         >
                           {ROLES.map(role => (
                             <option key={role} value={role}>{role}</option>
@@ -1697,7 +1715,7 @@ export default function CatalogoEmpresaPage() {
                   <button
                     onClick={handleSaveCommissions}
                     disabled={savingCommissions}
-                    className="px-5 py-3 bg-gradient-to-r from-purple-500 to-purple-600 hover:from-purple-600 hover:to-purple-700 text-white font-medium rounded-xl flex items-center gap-2 shadow-lg shadow-purple-500/25 disabled:opacity-50 transition-all"
+                    className="px-5 py-3 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white font-medium rounded-xl flex items-center gap-2 shadow-lg shadow-blue-500/25 disabled:opacity-50 transition-all"
                   >
                     {savingCommissions ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
                     Guardar Comisiones
@@ -1729,7 +1747,7 @@ export default function CatalogoEmpresaPage() {
                       <th className={`px-6 py-4 text-center text-xs font-semibold uppercase tracking-wider ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
                         Tipo
                       </th>
-                      <th className={`px-6 py-4 text-center text-xs font-semibold uppercase tracking-wider ${isDark ? 'text-purple-400' : 'text-purple-600'}`}>
+                      <th className={`px-6 py-4 text-center text-xs font-semibold uppercase tracking-wider ${isDark ? 'text-blue-400' : 'text-blue-600'}`}>
                         Valor
                       </th>
                       <th className={`px-6 py-4 text-center text-xs font-semibold uppercase tracking-wider ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
@@ -1821,7 +1839,7 @@ export default function CatalogoEmpresaPage() {
                                   isDark
                                     ? 'bg-gray-700 border-gray-600 text-white'
                                     : 'bg-gray-50 border-gray-200 text-gray-900'
-                                } border focus:outline-none focus:ring-2 focus:ring-purple-500/20`}
+                                } border focus:outline-none focus:ring-2 focus:ring-blue-500/20`}
                               >
                                 <option value="percentage">Porcentaje %</option>
                                 <option value="fixed">Monto Fijo $</option>
@@ -1831,7 +1849,7 @@ export default function CatalogoEmpresaPage() {
                           <td className="px-6 py-4">
                             <div className="flex justify-center">
                               <div className="relative">
-                                <span className={`absolute left-3 top-1/2 -translate-y-1/2 text-sm ${exceedsMargin ? (isDark ? 'text-red-400' : 'text-red-500') : (isDark ? 'text-purple-400' : 'text-purple-500')}`}>
+                                <span className={`absolute left-3 top-1/2 -translate-y-1/2 text-sm ${exceedsMargin ? (isDark ? 'text-red-400' : 'text-red-500') : (isDark ? 'text-blue-400' : 'text-blue-500')}`}>
                                   {commission.type === 'percentage' ? '%' : '$'}
                                 </span>
                                 <input
@@ -1852,12 +1870,12 @@ export default function CatalogoEmpresaPage() {
                                         : 'bg-red-50 border-red-300 text-red-700 focus:border-red-400'
                                       : commission.value > 0
                                         ? isDark
-                                          ? 'bg-purple-900/30 border-purple-600 text-purple-300 focus:border-purple-500'
-                                          : 'bg-purple-50 border-purple-300 text-purple-700 focus:border-purple-400'
+                                          ? 'bg-blue-900/30 border-blue-600 text-blue-300 focus:border-blue-500'
+                                          : 'bg-blue-50 border-blue-300 text-blue-700 focus:border-blue-400'
                                         : isDark
-                                          ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-600 focus:border-purple-500'
-                                          : 'bg-white border-gray-200 text-gray-900 placeholder-gray-400 focus:border-purple-400'
-                                  } focus:outline-none focus:ring-4 focus:ring-purple-500/10`}
+                                          ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-600 focus:border-blue-500'
+                                          : 'bg-white border-gray-200 text-gray-900 placeholder-gray-400 focus:border-blue-400'
+                                  } focus:outline-none focus:ring-4 focus:ring-blue-500/10`}
                                 />
                               </div>
                             </div>
@@ -1879,9 +1897,9 @@ export default function CatalogoEmpresaPage() {
                                   }))}
                                   className={`w-28 pl-8 pr-3 py-2 text-center rounded-xl border transition-all ${
                                     isDark
-                                      ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-600 focus:border-purple-500'
-                                      : 'bg-white border-gray-200 text-gray-900 placeholder-gray-400 focus:border-purple-400'
-                                  } focus:outline-none focus:ring-2 focus:ring-purple-500/10`}
+                                      ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-600 focus:border-blue-500'
+                                      : 'bg-white border-gray-200 text-gray-900 placeholder-gray-400 focus:border-blue-400'
+                                  } focus:outline-none focus:ring-2 focus:ring-blue-500/10`}
                                 />
                               </div>
                             </div>
@@ -1900,9 +1918,9 @@ export default function CatalogoEmpresaPage() {
                 <div className={`rounded-2xl p-8 ${isDark ? 'bg-gray-800/50 border border-gray-800' : 'bg-white border border-gray-200'}`}>
                   <div className="text-center py-12">
                     <div className={`w-20 h-20 mx-auto mb-6 rounded-3xl flex items-center justify-center ${
-                      isDark ? 'bg-gradient-to-br from-purple-900/50 to-purple-800/30' : 'bg-gradient-to-br from-purple-100 to-purple-50'
+                      isDark ? 'bg-gradient-to-br from-blue-900/50 to-blue-800/30' : 'bg-gradient-to-br from-blue-100 to-blue-50'
                     }`}>
-                      <Percent className={`w-10 h-10 ${isDark ? 'text-purple-400' : 'text-purple-500'}`} />
+                      <Percent className={`w-10 h-10 ${isDark ? 'text-blue-400' : 'text-blue-500'}`} />
                     </div>
                     <h3 className={`text-lg font-semibold mb-2 ${isDark ? 'text-white' : 'text-gray-900'}`}>
                       Sin productos disponibles
