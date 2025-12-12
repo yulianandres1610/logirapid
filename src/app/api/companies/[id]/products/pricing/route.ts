@@ -180,8 +180,8 @@ export async function GET(
           pc.precio_publico as catalog_precio_publico,
           pc.is_active,
           pc.display_order,
-          -- For matrix: mi_costo is catalog's precio_mayorista
-          pc.precio_mayorista as mi_costo,
+          -- For matrix: mi_costo es el precio especial de la empresa, o el precio global si no tiene
+          COALESCE(cpp.mi_costo, pc.precio_mayorista) as mi_costo,
           -- Current company pricing
           cpp.id as pricing_id,
           cpp.mi_costo as current_mi_costo,
