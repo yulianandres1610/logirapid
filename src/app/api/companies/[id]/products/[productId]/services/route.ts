@@ -33,7 +33,12 @@ export async function GET(
     const companyId = parseInt(id)
     const productId = parseInt(prodId)
 
+    console.log('=== GET Services API ===')
+    console.log('URL params - id:', id, 'productId:', prodId)
+    console.log('Parsed - companyId:', companyId, 'productId:', productId)
+
     if (isNaN(companyId) || isNaN(productId)) {
+      console.log('ERROR: IDs inválidos')
       return NextResponse.json({
         success: false,
         error: 'IDs inválidos'
@@ -63,7 +68,11 @@ export async function GET(
     }
 
     // Authorization: SUPER_ADMIN can view any company, others only their own
+    console.log('User payload - role:', payload.role, 'companyId:', payload.companyId)
+    console.log('Requested companyId:', companyId, 'Match:', payload.companyId === companyId)
+
     if (payload.role !== 'SUPER_ADMIN' && payload.companyId !== companyId) {
+      console.log('ERROR: No autorizado - user companyId', payload.companyId, '!== requested', companyId)
       return NextResponse.json({
         success: false,
         error: 'No autorizado para ver servicios de esta empresa'
@@ -139,6 +148,8 @@ export async function GET(
     const requiredServicesCost = requiredServices.reduce((sum, s) => sum + parseFloat(s.cost_price || 0), 0)
     const requiredServicesSell = requiredServices.reduce((sum, s) => sum + parseFloat(s.sell_price || 0), 0)
     const requiredServicesMargin = requiredServicesSell - requiredServicesCost
+
+    console.log('=== SUCCESS: Returning', services.length, 'services ===')
 
     return NextResponse.json({
       success: true,
