@@ -1106,18 +1106,51 @@ interface ProductModalProps {
   }) => Promise<void>
 }
 
+// Generate automatic SKU based on category
+const generateSKU = (category: string): string => {
+  const prefixes: Record<string, string> = {
+    'paqueteria': 'PAQ',
+    'remesa': 'REM',
+    'recarga': 'REC',
+    'mercado': 'MER'
+  }
+  const prefix = prefixes[category] || 'PRD'
+  // Generate unique ID: timestamp (base36) + random chars
+  const timestamp = Date.now().toString(36).toUpperCase().slice(-4)
+  const random = Math.random().toString(36).substring(2, 5).toUpperCase()
+  return `${prefix}-${timestamp}${random}`
+}
+
 function ProductModal({ isDark, product, providerCompanies, onClose, onSave }: ProductModalProps) {
-  const [formData, setFormData] = useState({
-    code: product?.code || '',
-    name: product?.name || '',
-    description: product?.description || '',
-    category: product?.category || 'paqueteria',
-    miCosto: product?.miCosto || 0,
-    precioMayorista: product?.precioMayorista || 0,
-    providerCompanyId: product?.providerCompanyId || null as number | null
+  const isNewProduct = !product
+
+  const [formData, setFormData] = useState(() => {
+    const initialCategory = product?.category || 'paqueteria'
+    return {
+      code: product?.code || generateSKU(initialCategory),
+      name: product?.name || '',
+      description: product?.description || '',
+      category: initialCategory,
+      miCosto: product?.miCosto || 0,
+      precioMayorista: product?.precioMayorista || 0,
+      providerCompanyId: product?.providerCompanyId || null as number | null
+    }
   })
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  // Regenerate SKU when category changes (only for new products)
+  const handleCategoryChange = (newCategory: string) => {
+    if (isNewProduct) {
+      setFormData({
+        ...formData,
+        category: newCategory,
+        code: generateSKU(newCategory)
+      })
+    } else {
+      setFormData({ ...formData, category: newCategory })
+    }
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -1213,7 +1246,7 @@ function ProductModal({ isDark, product, providerCompanies, onClose, onSave }: P
                     <button
                       key={cat.id}
                       type="button"
-                      onClick={() => setFormData({ ...formData, category: cat.id })}
+                      onClick={() => handleCategoryChange(cat.id)}
                       className={`p-3 rounded-xl flex flex-col items-center gap-2 transition-all ${
                         isSelected
                           ? `bg-gradient-to-br ${cat.gradient} text-white shadow-lg`
@@ -1234,16 +1267,21 @@ function ProductModal({ isDark, product, providerCompanies, onClose, onSave }: P
             <div className="grid grid-cols-3 gap-4">
               <div>
                 <label className={`block text-sm font-medium mb-2 ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
-                  Codigo
+                  SKU {isNewProduct && <span className={`text-xs ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>(Auto)</span>}
                 </label>
                 <input
                   type="text"
                   value={formData.code}
                   onChange={(e) => setFormData({ ...formData, code: e.target.value.toUpperCase() })}
+                  readOnly={isNewProduct}
                   className={`w-full px-4 py-3 rounded-xl border text-sm font-mono transition-all ${
-                    isDark
-                      ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-500 focus:border-blue-500'
-                      : 'bg-gray-50 border-gray-200 text-gray-900 placeholder-gray-400 focus:border-blue-400'
+                    isNewProduct
+                      ? isDark
+                        ? 'bg-gray-800 border-gray-700 text-gray-400 cursor-not-allowed'
+                        : 'bg-gray-100 border-gray-200 text-gray-500 cursor-not-allowed'
+                      : isDark
+                        ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-500 focus:border-blue-500'
+                        : 'bg-gray-50 border-gray-200 text-gray-900 placeholder-gray-400 focus:border-blue-400'
                   } focus:outline-none focus:ring-2 focus:ring-blue-500/20`}
                   placeholder="SKU-001"
                 />
