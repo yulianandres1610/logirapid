@@ -209,6 +209,19 @@ export async function GET(
 
     const result = await db.query(costSourceQuery, costParams)
 
+    // Get services count for each product
+    const servicesCountResult = await db.query(`
+      SELECT product_id, COUNT(*) as services_count
+      FROM company_product_services
+      WHERE company_id = $1 AND is_active = true
+      GROUP BY product_id
+    `, [companyId])
+
+    const servicesCountMap: Record<number, number> = {}
+    servicesCountResult.rows.forEach((row: any) => {
+      servicesCountMap[row.product_id] = parseInt(row.services_count) || 0
+    })
+
     // Format response with new field names
     const products = result.rows.map(row => ({
       productId: row.id,
@@ -222,6 +235,7 @@ export async function GET(
       unitType: row.unit_type,
       pricingModel: row.pricing_model,
       displayOrder: row.display_order,
+      servicesCount: servicesCountMap[row.id] || 0,
 
       // Catalog level prices (for reference - provider level)
       catalogMiCosto: parseFloat(row.catalog_mi_costo || 0),
