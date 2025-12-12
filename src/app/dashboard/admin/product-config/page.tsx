@@ -826,8 +826,8 @@ export default function ProductConfigPage() {
               <div className={`rounded-2xl p-6 ${isDark ? 'bg-gray-800 border border-gray-700' : 'bg-white border border-gray-200 shadow-sm'}`}>
                 <div className="flex items-center justify-between gap-4">
                   <div className="flex items-center gap-4">
-                    <div className={`p-3 rounded-xl ${isDark ? 'bg-purple-500/20' : 'bg-purple-100'}`}>
-                      <Building2 className="w-6 h-6 text-purple-500" />
+                    <div className={`p-3 rounded-xl ${isDark ? 'bg-blue-500/20' : 'bg-blue-100'}`}>
+                      <Building2 className="w-6 h-6 text-blue-500" />
                     </div>
                     <div>
                       <label className={`block text-sm font-medium mb-2 ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
@@ -844,7 +844,7 @@ export default function ProductConfigPage() {
                             isDark
                               ? 'bg-gray-700 border-gray-600 text-white'
                               : 'bg-gray-50 border-gray-200 text-gray-900'
-                          } border focus:outline-none focus:ring-2 focus:ring-purple-500/20`}
+                          } border focus:outline-none focus:ring-2 focus:ring-blue-500/20`}
                         >
                           <option value="">Selecciona una empresa...</option>
                           {companies.map(company => (
@@ -884,8 +884,8 @@ export default function ProductConfigPage() {
                 ) : (
                   <div className={`rounded-2xl overflow-hidden border ${isDark ? 'bg-gray-800/50 border-gray-800' : 'bg-white border-gray-200'}`}>
                     {/* Info banner */}
-                    <div className={`px-6 py-3 border-b ${isDark ? 'bg-purple-500/10 border-gray-800' : 'bg-purple-50 border-gray-200'}`}>
-                      <p className={`text-sm ${isDark ? 'text-purple-300' : 'text-purple-700'}`}>
+                    <div className={`px-6 py-3 border-b ${isDark ? 'bg-blue-500/10 border-gray-800' : 'bg-blue-50 border-gray-200'}`}>
+                      <p className={`text-sm ${isDark ? 'text-blue-300' : 'text-blue-700'}`}>
                         <strong>Precio Global:</strong> Precio base para todas las empresas. <strong>Precio Especial:</strong> Sobrescribe el precio global solo para esta empresa.
                       </p>
                     </div>
@@ -898,7 +898,7 @@ export default function ProductConfigPage() {
                           <th className={`px-6 py-4 text-right text-xs font-semibold uppercase tracking-wider ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
                             Precio Global
                           </th>
-                          <th className={`px-6 py-4 text-center text-xs font-semibold uppercase tracking-wider ${isDark ? 'text-purple-400' : 'text-purple-600'}`}>
+                          <th className={`px-6 py-4 text-center text-xs font-semibold uppercase tracking-wider ${isDark ? 'text-blue-400' : 'text-blue-600'}`}>
                             Precio Especial
                           </th>
                           <th className={`px-6 py-4 text-right text-xs font-semibold uppercase tracking-wider ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
@@ -952,7 +952,7 @@ export default function ProductConfigPage() {
                                     <span className={`absolute left-4 top-1/2 -translate-y-1/2 ${
                                       isPriceInvalid
                                         ? 'text-red-500'
-                                        : isDark ? 'text-purple-400' : 'text-purple-500'
+                                        : isDark ? 'text-blue-400' : 'text-blue-500'
                                     }`}>$</span>
                                     <input
                                       type="number"
@@ -974,12 +974,12 @@ export default function ProductConfigPage() {
                                             : 'bg-red-50 border-red-400 text-red-600 focus:border-red-500'
                                           : customPrice !== null
                                             ? isDark
-                                              ? 'bg-purple-900/30 border-purple-600 text-purple-300 focus:border-purple-500'
-                                              : 'bg-purple-50 border-purple-300 text-purple-700 focus:border-purple-400'
+                                              ? 'bg-blue-900/30 border-blue-600 text-blue-300 focus:border-blue-500'
+                                              : 'bg-blue-50 border-blue-300 text-blue-700 focus:border-blue-400'
                                             : isDark
-                                              ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-600 focus:border-purple-500'
-                                              : 'bg-white border-gray-200 text-gray-900 placeholder-gray-400 focus:border-purple-400'
-                                      } focus:outline-none focus:ring-4 ${isPriceInvalid ? 'focus:ring-red-500/20' : 'focus:ring-purple-500/10'}`}
+                                              ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-600 focus:border-blue-500'
+                                              : 'bg-white border-gray-200 text-gray-900 placeholder-gray-400 focus:border-blue-400'
+                                      } focus:outline-none focus:ring-4 ${isPriceInvalid ? 'focus:ring-red-500/20' : 'focus:ring-blue-500/10'}`}
                                     />
                                   </div>
                                   {isPriceInvalid && (
@@ -1018,9 +1018,9 @@ export default function ProductConfigPage() {
                 <div className="flex items-center justify-center py-20">
                   <div className="text-center max-w-sm">
                     <div className={`w-20 h-20 mx-auto mb-6 rounded-3xl flex items-center justify-center ${
-                      isDark ? 'bg-gradient-to-br from-gray-800 to-gray-700' : 'bg-gradient-to-br from-purple-100 to-purple-50'
+                      isDark ? 'bg-gradient-to-br from-gray-800 to-gray-700' : 'bg-gradient-to-br from-blue-100 to-blue-50'
                     }`}>
-                      <Building2 className={`w-10 h-10 ${isDark ? 'text-gray-600' : 'text-purple-400'}`} />
+                      <Building2 className={`w-10 h-10 ${isDark ? 'text-gray-600' : 'text-blue-400'}`} />
                     </div>
                     <h3 className={`text-lg font-semibold mb-2 ${isDark ? 'text-white' : 'text-gray-900'}`}>
                       Selecciona una empresa
