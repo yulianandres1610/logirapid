@@ -658,8 +658,14 @@ export default function CatalogoEmpresaPage() {
 
       if (savedCount > 0 && errorCount === 0) {
         showNotification('success', 'Exito', `${savedCount} comisiones para ${selectedRole} guardadas`)
+        // Reload commissions to reflect saved changes
+        await fetchCommissions()
+        await fetchAllRolesCommissions()
       } else if (savedCount > 0 && errorCount > 0) {
         showNotification('warning', 'Parcial', `${savedCount} guardadas, ${errorCount} con error`)
+        // Reload commissions to reflect saved changes
+        await fetchCommissions()
+        await fetchAllRolesCommissions()
       } else if (savedCount === 0 && errorCount === 0) {
         showNotification('info', 'Info', 'No hay comisiones con valor para guardar')
       } else {
