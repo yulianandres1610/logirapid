@@ -50,7 +50,7 @@ interface ProductService {
   id: number
   productId: number
   serviceName: string
-  description: string | null
+  serviceDescription: string | null
   costPrice: number
   sellPrice: number
   margin: number
@@ -987,9 +987,9 @@ export default function CatalogoEmpresaPage() {
                                                 <div className={`font-medium ${isDark ? 'text-white' : 'text-gray-900'}`}>
                                                   {service.serviceName}
                                                 </div>
-                                                {service.description && (
+                                                {service.serviceDescription && (
                                                   <div className={`text-sm ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
-                                                    {service.description}
+                                                    {service.serviceDescription}
                                                   </div>
                                                 )}
                                               </div>
@@ -1406,9 +1406,9 @@ export default function CatalogoEmpresaPage() {
                                 <div className={`font-medium ${isDark ? 'text-white' : 'text-gray-900'}`}>
                                   {service.serviceName}
                                 </div>
-                                {service.description && (
+                                {service.serviceDescription && (
                                   <div className={`text-sm ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
-                                    {service.description}
+                                    {service.serviceDescription}
                                   </div>
                                 )}
                               </div>
@@ -1675,9 +1675,9 @@ export default function CatalogoEmpresaPage() {
                                 <div className={`font-medium ${isDark ? 'text-white' : 'text-gray-900'}`}>
                                   {service.serviceName}
                                 </div>
-                                {service.description && (
+                                {service.serviceDescription && (
                                   <div className={`text-sm ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
-                                    {service.description}
+                                    {service.serviceDescription}
                                   </div>
                                 )}
                               </div>
@@ -1824,7 +1824,7 @@ interface ServiceModalProps {
 function ServiceModal({ isDark, product, services, editingService, onClose, onSave, onEdit, onDelete }: ServiceModalProps) {
   const [formData, setFormData] = useState({
     serviceName: editingService?.serviceName || '',
-    description: editingService?.description || '',
+    description: editingService?.serviceDescription || '',
     costPrice: editingService?.costPrice || 0,
     sellPrice: editingService?.sellPrice || 0,
     isRequired: editingService?.isRequired || false,
@@ -1837,7 +1837,7 @@ function ServiceModal({ isDark, product, services, editingService, onClose, onSa
     if (editingService) {
       setFormData({
         serviceName: editingService.serviceName,
-        description: editingService.description || '',
+        description: editingService.serviceDescription || '',
         costPrice: editingService.costPrice,
         sellPrice: editingService.sellPrice,
         isRequired: editingService.isRequired,
