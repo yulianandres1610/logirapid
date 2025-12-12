@@ -508,6 +508,65 @@ export default function CatalogoEmpresaPage() {
   const handleSaveCommissions = async () => {
     if (!companyId) return
 
+    // First, validate that no commission exceeds its margin
+    const invalidProducts: string[] = []
+    const invalidServices: string[] = []
+
+    // Validate product commissions
+    for (const product of products) {
+      const commission = productCommissions[product.id]
+      if (!commission || commission.value === 0) continue
+
+      const servicesCost = getServicesCost(product.id)
+      const totalCost = product.miCosto + servicesCost
+      const productPublicPrice = publicPrices[product.id] ?? 0
+      const margin = productPublicPrice > 0 ? productPublicPrice - totalCost : 0
+
+      let effectiveCommission = 0
+      if (commission.type === 'percentage') {
+        effectiveCommission = productPublicPrice > 0 ? (productPublicPrice * commission.value / 100) : 0
+      } else {
+        effectiveCommission = commission.value
+      }
+      if (commission.maxAmount !== null && effectiveCommission > commission.maxAmount) {
+        effectiveCommission = commission.maxAmount
+      }
+
+      if (effectiveCommission > margin && margin > 0) {
+        invalidProducts.push(product.name)
+      }
+    }
+
+    // Validate service commissions
+    for (const service of allServices) {
+      const commission = serviceCommissions[service.id]
+      if (!commission || commission.value === 0) continue
+
+      const serviceSellPrice = servicePrices[service.id] ?? service.sellPrice ?? 0
+      const serviceMargin = serviceSellPrice > 0 ? serviceSellPrice - service.costPrice : 0
+
+      let effectiveCommission = 0
+      if (commission.type === 'percentage') {
+        effectiveCommission = serviceSellPrice > 0 ? (serviceSellPrice * commission.value / 100) : 0
+      } else {
+        effectiveCommission = commission.value
+      }
+      if (commission.maxAmount !== null && effectiveCommission > commission.maxAmount) {
+        effectiveCommission = commission.maxAmount
+      }
+
+      if (effectiveCommission > serviceMargin && serviceMargin > 0) {
+        invalidServices.push(service.serviceName)
+      }
+    }
+
+    // If there are invalid commissions, show error and don't save
+    if (invalidProducts.length > 0 || invalidServices.length > 0) {
+      const allInvalid = [...invalidProducts, ...invalidServices]
+      showNotification('error', 'Comisiones invalidas', `Comisiones exceden el margen en: ${allInvalid.slice(0, 3).join(', ')}${allInvalid.length > 3 ? ` y ${allInvalid.length - 3} mas...` : ''}`)
+      return
+    }
+
     setSavingCommissions(true)
     try {
       let savedCount = 0
@@ -534,6 +593,35 @@ export default function CatalogoEmpresaPage() {
               savedCount++
             } else {
               console.error('Error saving commission:', data.error)
+              errorCount++
+            }
+          } catch (e) {
+            errorCount++
+          }
+        }
+      }
+
+      // Save service commissions
+      for (const [serviceId, config] of Object.entries(serviceCommissions)) {
+        if (config.value > 0) {
+          try {
+            const response = await fetch(`/api/companies/${companyId}/commissions`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                serviceId: parseInt(serviceId),
+                role: selectedRole,
+                commissionType: config.type,
+                commissionValue: config.value,
+                maxAmount: config.maxAmount,
+                activityType: 'service'
+              })
+            })
+            const data = await response.json()
+            if (data.success) {
+              savedCount++
+            } else {
+              console.error('Error saving service commission:', data.error)
               errorCount++
             }
           } catch (e) {
@@ -1588,7 +1676,8 @@ export default function CatalogoEmpresaPage() {
                     Comisiones por Producto
                   </h4>
                   <p className={`text-sm mt-1 ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
-                    Configura la comision que recibe el rol <strong>{selectedRole}</strong> por cada venta
+                    Configura la comision que recibe el rol <strong>{selectedRole}</strong> por cada venta.
+                    <span className={`ml-1 ${isDark ? 'text-red-400' : 'text-red-500'}`}>La comision no puede exceder el margen.</span>
                   </p>
                 </div>
                 <table className="w-full">
@@ -1596,6 +1685,9 @@ export default function CatalogoEmpresaPage() {
                     <tr className={isDark ? 'bg-gray-800' : 'bg-gray-50'}>
                       <th className={`px-6 py-4 text-left text-xs font-semibold uppercase tracking-wider ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
                         Producto
+                      </th>
+                      <th className={`px-6 py-4 text-right text-xs font-semibold uppercase tracking-wider ${isDark ? 'text-emerald-400' : 'text-emerald-600'}`}>
+                        Margen Disp.
                       </th>
                       <th className={`px-6 py-4 text-center text-xs font-semibold uppercase tracking-wider ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
                         Tipo
@@ -1614,8 +1706,28 @@ export default function CatalogoEmpresaPage() {
                       const Icon = catConfig.icon
                       const commission = productCommissions[product.id] || { type: 'percentage' as const, value: 0, maxAmount: null }
 
+                      // Calculate margin for this product
+                      const servicesCost = getServicesCost(product.id)
+                      const totalCost = product.miCosto + servicesCost
+                      const publicPrice = publicPrices[product.id] ?? 0
+                      const margin = publicPrice > 0 ? publicPrice - totalCost : 0
+
+                      // Calculate effective commission amount
+                      let effectiveCommission = 0
+                      if (commission.type === 'percentage') {
+                        effectiveCommission = publicPrice > 0 ? (publicPrice * commission.value / 100) : 0
+                      } else {
+                        effectiveCommission = commission.value
+                      }
+                      // Apply max amount cap if set
+                      if (commission.maxAmount !== null && effectiveCommission > commission.maxAmount) {
+                        effectiveCommission = commission.maxAmount
+                      }
+
+                      const exceedsMargin = effectiveCommission > margin && margin > 0
+
                       return (
-                        <tr key={product.id} className={`transition-colors ${isDark ? 'hover:bg-gray-700/50' : 'hover:bg-gray-50'}`}>
+                        <tr key={product.id} className={`transition-colors ${exceedsMargin ? (isDark ? 'bg-red-900/20' : 'bg-red-50') : ''} ${isDark ? 'hover:bg-gray-700/50' : 'hover:bg-gray-50'}`}>
                           <td className="px-6 py-4">
                             <div className="flex items-center gap-4">
                               <div className={`w-10 h-10 rounded-xl flex items-center justify-center bg-gradient-to-br ${catConfig.gradient}`}>
@@ -1630,6 +1742,24 @@ export default function CatalogoEmpresaPage() {
                                 </div>
                               </div>
                             </div>
+                          </td>
+                          <td className="px-6 py-4 text-right">
+                            {margin > 0 ? (
+                              <div>
+                                <span className={`text-lg font-semibold ${isDark ? 'text-emerald-400' : 'text-emerald-600'}`}>
+                                  ${margin.toFixed(2)}
+                                </span>
+                                {exceedsMargin && (
+                                  <div className={`text-xs mt-1 ${isDark ? 'text-red-400' : 'text-red-500'}`}>
+                                    Comisión: ${effectiveCommission.toFixed(2)}
+                                  </div>
+                                )}
+                              </div>
+                            ) : (
+                              <span className={`text-sm ${isDark ? 'text-gray-600' : 'text-gray-400'}`}>
+                                Sin precio
+                              </span>
+                            )}
                           </td>
                           <td className="px-6 py-4">
                             <div className="flex justify-center">
@@ -1653,7 +1783,7 @@ export default function CatalogoEmpresaPage() {
                           <td className="px-6 py-4">
                             <div className="flex justify-center">
                               <div className="relative">
-                                <span className={`absolute left-3 top-1/2 -translate-y-1/2 text-sm ${isDark ? 'text-purple-400' : 'text-purple-500'}`}>
+                                <span className={`absolute left-3 top-1/2 -translate-y-1/2 text-sm ${exceedsMargin ? (isDark ? 'text-red-400' : 'text-red-500') : (isDark ? 'text-purple-400' : 'text-purple-500')}`}>
                                   {commission.type === 'percentage' ? '%' : '$'}
                                 </span>
                                 <input
@@ -1668,13 +1798,17 @@ export default function CatalogoEmpresaPage() {
                                     [product.id]: { ...commission, value: parseFloat(e.target.value) || 0 }
                                   }))}
                                   className={`w-28 pl-8 pr-3 py-2.5 text-center text-lg font-semibold rounded-xl border-2 transition-all ${
-                                    commission.value > 0
+                                    exceedsMargin
                                       ? isDark
-                                        ? 'bg-purple-900/30 border-purple-600 text-purple-300 focus:border-purple-500'
-                                        : 'bg-purple-50 border-purple-300 text-purple-700 focus:border-purple-400'
-                                      : isDark
-                                        ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-600 focus:border-purple-500'
-                                        : 'bg-white border-gray-200 text-gray-900 placeholder-gray-400 focus:border-purple-400'
+                                        ? 'bg-red-900/30 border-red-600 text-red-300 focus:border-red-500'
+                                        : 'bg-red-50 border-red-300 text-red-700 focus:border-red-400'
+                                      : commission.value > 0
+                                        ? isDark
+                                          ? 'bg-purple-900/30 border-purple-600 text-purple-300 focus:border-purple-500'
+                                          : 'bg-purple-50 border-purple-300 text-purple-700 focus:border-purple-400'
+                                        : isDark
+                                          ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-600 focus:border-purple-500'
+                                          : 'bg-white border-gray-200 text-gray-900 placeholder-gray-400 focus:border-purple-400'
                                   } focus:outline-none focus:ring-4 focus:ring-purple-500/10`}
                                 />
                               </div>
@@ -1688,6 +1822,7 @@ export default function CatalogoEmpresaPage() {
                                   type="number"
                                   step="0.01"
                                   min="0"
+                                  max={margin > 0 ? margin : undefined}
                                   value={commission.maxAmount ?? ''}
                                   placeholder="—"
                                   onChange={(e) => setProductCommissions(prev => ({
@@ -1719,7 +1854,8 @@ export default function CatalogoEmpresaPage() {
                       Comisiones por Servicio
                     </h4>
                     <p className={`text-sm mt-1 ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
-                      Comisiones adicionales por servicios personalizados
+                      Comisiones adicionales por servicios personalizados.
+                      <span className={`ml-1 ${isDark ? 'text-red-400' : 'text-red-500'}`}>La comision no puede exceder el margen.</span>
                     </p>
                   </div>
                   <table className="w-full">
@@ -1727,6 +1863,9 @@ export default function CatalogoEmpresaPage() {
                       <tr className={isDark ? 'bg-gray-800' : 'bg-gray-50'}>
                         <th className={`px-6 py-4 text-left text-xs font-semibold uppercase tracking-wider ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
                           Servicio
+                        </th>
+                        <th className={`px-6 py-4 text-right text-xs font-semibold uppercase tracking-wider ${isDark ? 'text-emerald-400' : 'text-emerald-600'}`}>
+                          Margen Disp.
                         </th>
                         <th className={`px-6 py-4 text-center text-xs font-semibold uppercase tracking-wider ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
                           Tipo
@@ -1743,8 +1882,26 @@ export default function CatalogoEmpresaPage() {
                       {allServices.map(service => {
                         const commission = serviceCommissions[service.id] || { type: 'percentage' as const, value: 0, maxAmount: null }
 
+                        // Calculate margin for this service (sellPrice - costPrice)
+                        const serviceSellPrice = servicePrices[service.id] ?? service.sellPrice ?? 0
+                        const serviceMargin = serviceSellPrice > 0 ? serviceSellPrice - service.costPrice : 0
+
+                        // Calculate effective commission amount
+                        let effectiveServiceCommission = 0
+                        if (commission.type === 'percentage') {
+                          effectiveServiceCommission = serviceSellPrice > 0 ? (serviceSellPrice * commission.value / 100) : 0
+                        } else {
+                          effectiveServiceCommission = commission.value
+                        }
+                        // Apply max amount cap if set
+                        if (commission.maxAmount !== null && effectiveServiceCommission > commission.maxAmount) {
+                          effectiveServiceCommission = commission.maxAmount
+                        }
+
+                        const serviceExceedsMargin = effectiveServiceCommission > serviceMargin && serviceMargin > 0
+
                         return (
-                          <tr key={service.id} className={`transition-colors ${isDark ? 'hover:bg-gray-700/50' : 'hover:bg-gray-50'}`}>
+                          <tr key={service.id} className={`transition-colors ${serviceExceedsMargin ? (isDark ? 'bg-red-900/20' : 'bg-red-50') : ''} ${isDark ? 'hover:bg-gray-700/50' : 'hover:bg-gray-50'}`}>
                             <td className="px-6 py-4">
                               <div>
                                 <div className={`font-medium ${isDark ? 'text-white' : 'text-gray-900'}`}>
@@ -1756,6 +1913,24 @@ export default function CatalogoEmpresaPage() {
                                   </div>
                                 )}
                               </div>
+                            </td>
+                            <td className="px-6 py-4 text-right">
+                              {serviceMargin > 0 ? (
+                                <div>
+                                  <span className={`text-lg font-semibold ${isDark ? 'text-emerald-400' : 'text-emerald-600'}`}>
+                                    ${serviceMargin.toFixed(2)}
+                                  </span>
+                                  {serviceExceedsMargin && (
+                                    <div className={`text-xs mt-1 ${isDark ? 'text-red-400' : 'text-red-500'}`}>
+                                      Comision: ${effectiveServiceCommission.toFixed(2)}
+                                    </div>
+                                  )}
+                                </div>
+                              ) : (
+                                <span className={`text-sm ${isDark ? 'text-gray-600' : 'text-gray-400'}`}>
+                                  Sin precio
+                                </span>
+                              )}
                             </td>
                             <td className="px-6 py-4">
                               <div className="flex justify-center">
@@ -1779,7 +1954,7 @@ export default function CatalogoEmpresaPage() {
                             <td className="px-6 py-4">
                               <div className="flex justify-center">
                                 <div className="relative">
-                                  <span className={`absolute left-3 top-1/2 -translate-y-1/2 text-sm ${isDark ? 'text-purple-400' : 'text-purple-500'}`}>
+                                  <span className={`absolute left-3 top-1/2 -translate-y-1/2 text-sm ${serviceExceedsMargin ? (isDark ? 'text-red-400' : 'text-red-500') : (isDark ? 'text-purple-400' : 'text-purple-500')}`}>
                                     {commission.type === 'percentage' ? '%' : '$'}
                                   </span>
                                   <input
@@ -1794,13 +1969,17 @@ export default function CatalogoEmpresaPage() {
                                       [service.id]: { ...commission, value: parseFloat(e.target.value) || 0 }
                                     }))}
                                     className={`w-28 pl-8 pr-3 py-2.5 text-center text-lg font-semibold rounded-xl border-2 transition-all ${
-                                      commission.value > 0
+                                      serviceExceedsMargin
                                         ? isDark
-                                          ? 'bg-purple-900/30 border-purple-600 text-purple-300 focus:border-purple-500'
-                                          : 'bg-purple-50 border-purple-300 text-purple-700 focus:border-purple-400'
-                                        : isDark
-                                          ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-600 focus:border-purple-500'
-                                          : 'bg-white border-gray-200 text-gray-900 placeholder-gray-400 focus:border-purple-400'
+                                          ? 'bg-red-900/30 border-red-600 text-red-300 focus:border-red-500'
+                                          : 'bg-red-50 border-red-300 text-red-700 focus:border-red-400'
+                                        : commission.value > 0
+                                          ? isDark
+                                            ? 'bg-purple-900/30 border-purple-600 text-purple-300 focus:border-purple-500'
+                                            : 'bg-purple-50 border-purple-300 text-purple-700 focus:border-purple-400'
+                                          : isDark
+                                            ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-600 focus:border-purple-500'
+                                            : 'bg-white border-gray-200 text-gray-900 placeholder-gray-400 focus:border-purple-400'
                                     } focus:outline-none focus:ring-4 focus:ring-purple-500/10`}
                                   />
                                 </div>
@@ -1814,6 +1993,7 @@ export default function CatalogoEmpresaPage() {
                                     type="number"
                                     step="0.01"
                                     min="0"
+                                    max={serviceMargin > 0 ? serviceMargin : undefined}
                                     value={commission.maxAmount ?? ''}
                                     placeholder="—"
                                     onChange={(e) => setServiceCommissions(prev => ({
