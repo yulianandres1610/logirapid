@@ -210,12 +210,8 @@ export async function middleware(request: NextRequest) {
     return response
   }
 
-  // Excepción: Permitir que ADMIN acceda a /dashboard/admin/product-config
-  // Configuración de productos y servicios de paquetería
-  if (userRole === 'ADMIN' && pathname === '/dashboard/admin/product-config') {
-    console.log('✅ ADMIN accessing product-config page, companyId:', companyId)
-    return response
-  }
+  // NOTA: ADMIN ya no puede acceder a /dashboard/admin/product-config
+  // Debe usar /dashboard/agency-admin/catalogo para gestionar su catálogo
 
   // Excepción: Permitir que ADMIN acceda a /dashboard/admin/my-wallet
   // Wallet personal del admin (alias para consistency con SUPER_ADMIN)
