@@ -47,7 +47,6 @@ interface Product {
   category: string
   miCosto: number
   precioMayorista: number
-  precioPublico: number
   providerCompanyId: number | null
   providerName: string | null
   isActive: boolean
@@ -116,7 +115,6 @@ export default function ProductConfigPage() {
           category: p.service_category,
           miCosto: parseFloat(p.mi_costo) || 0,
           precioMayorista: parseFloat(p.precio_mayorista) || 0,
-          precioPublico: parseFloat(p.precio_publico) || 0,
           providerCompanyId: p.provider_company_id || null,
           providerName: p.provider_company_name || null,
           isActive: p.is_active !== false
@@ -706,9 +704,6 @@ export default function ProductConfigPage() {
                         <th className={`px-6 py-4 text-right text-xs font-semibold uppercase tracking-wider ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
                           Venta Empresas
                         </th>
-                        <th className={`px-6 py-4 text-right text-xs font-semibold uppercase tracking-wider ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
-                          Precio Publico
-                        </th>
                         <th className={`px-6 py-4 text-left text-xs font-semibold uppercase tracking-wider ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
                           Proveedor
                         </th>
@@ -769,11 +764,6 @@ export default function ProductConfigPage() {
                             <td className={`px-6 py-4 text-right`}>
                               <span className={`text-lg font-bold ${isDark ? 'text-emerald-400' : 'text-emerald-600'}`}>
                                 ${product.precioMayorista.toFixed(2)}
-                              </span>
-                            </td>
-                            <td className={`px-6 py-4 text-right`}>
-                              <span className={`text-base ${isDark ? 'text-blue-400' : 'text-blue-600'}`}>
-                                ${product.precioPublico.toFixed(2)}
                               </span>
                             </td>
                             <td className={`px-6 py-4 ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
@@ -875,6 +865,12 @@ export default function ProductConfigPage() {
                   </div>
                 ) : (
                   <div className={`rounded-2xl overflow-hidden border ${isDark ? 'bg-gray-800/50 border-gray-800' : 'bg-white border-gray-200'}`}>
+                    {/* Info banner */}
+                    <div className={`px-6 py-3 border-b ${isDark ? 'bg-purple-500/10 border-gray-800' : 'bg-purple-50 border-gray-200'}`}>
+                      <p className={`text-sm ${isDark ? 'text-purple-300' : 'text-purple-700'}`}>
+                        <strong>Precio Global:</strong> Precio base para todas las empresas. <strong>Precio Especial:</strong> Sobrescribe el precio global solo para esta empresa.
+                      </p>
+                    </div>
                     <table className="w-full">
                       <thead>
                         <tr className={isDark ? 'bg-gray-800' : 'bg-gray-50'}>
@@ -882,13 +878,13 @@ export default function ProductConfigPage() {
                             Producto
                           </th>
                           <th className={`px-6 py-4 text-right text-xs font-semibold uppercase tracking-wider ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
-                            Tu Costo
+                            Precio Global
                           </th>
-                          <th className={`px-6 py-4 text-center text-xs font-semibold uppercase tracking-wider ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
-                            Precio de Venta
+                          <th className={`px-6 py-4 text-center text-xs font-semibold uppercase tracking-wider ${isDark ? 'text-purple-400' : 'text-purple-600'}`}>
+                            Precio Especial
                           </th>
                           <th className={`px-6 py-4 text-right text-xs font-semibold uppercase tracking-wider ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
-                            Margen
+                            Descuento
                           </th>
                         </tr>
                       </thead>
@@ -897,9 +893,12 @@ export default function ProductConfigPage() {
                           const catConfig = getCategoryConfig(product.category)
                           const Icon = catConfig.icon
                           const customPrice = companyPrices[product.id]
-                          const margin = customPrice ? customPrice - product.miCosto : null
-                          const marginPercent = customPrice && product.miCosto > 0
-                            ? ((customPrice - product.miCosto) / product.miCosto * 100)
+                          // El descuento es la diferencia entre el precio global y el precio especial
+                          const discount = customPrice !== null && customPrice < product.precioMayorista
+                            ? product.precioMayorista - customPrice
+                            : null
+                          const discountPercent = discount && product.precioMayorista > 0
+                            ? (discount / product.precioMayorista * 100)
                             : null
 
                           return (
@@ -923,20 +922,20 @@ export default function ProductConfigPage() {
                                 </div>
                               </td>
                               <td className={`px-6 py-4 text-right`}>
-                                <span className={`text-lg font-medium ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
-                                  ${product.miCosto.toFixed(2)}
+                                <span className={`text-lg font-semibold ${isDark ? 'text-emerald-400' : 'text-emerald-600'}`}>
+                                  ${product.precioMayorista.toFixed(2)}
                                 </span>
                               </td>
                               <td className="px-6 py-4">
                                 <div className="flex justify-center">
                                   <div className="relative">
-                                    <span className={`absolute left-4 top-1/2 -translate-y-1/2 ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>$</span>
+                                    <span className={`absolute left-4 top-1/2 -translate-y-1/2 ${isDark ? 'text-purple-400' : 'text-purple-500'}`}>$</span>
                                     <input
                                       type="number"
                                       step="0.01"
                                       min="0"
                                       value={customPrice ?? ''}
-                                      placeholder="0.00"
+                                      placeholder={product.precioMayorista.toFixed(2)}
                                       onChange={(e) => {
                                         const value = e.target.value ? parseFloat(e.target.value) : null
                                         setCompanyPrices(prev => ({
@@ -945,32 +944,32 @@ export default function ProductConfigPage() {
                                         }))
                                       }}
                                       className={`w-36 pl-8 pr-4 py-2.5 text-center text-lg font-semibold rounded-xl border-2 transition-all ${
-                                        isDark
-                                          ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-600 focus:border-purple-500'
-                                          : 'bg-white border-gray-200 text-gray-900 placeholder-gray-300 focus:border-purple-400'
+                                        customPrice !== null
+                                          ? isDark
+                                            ? 'bg-purple-900/30 border-purple-600 text-purple-300 focus:border-purple-500'
+                                            : 'bg-purple-50 border-purple-300 text-purple-700 focus:border-purple-400'
+                                          : isDark
+                                            ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-600 focus:border-purple-500'
+                                            : 'bg-white border-gray-200 text-gray-900 placeholder-gray-400 focus:border-purple-400'
                                       } focus:outline-none focus:ring-4 focus:ring-purple-500/10`}
                                     />
                                   </div>
                                 </div>
                               </td>
                               <td className="px-6 py-4 text-right">
-                                {margin !== null ? (
+                                {discount !== null ? (
                                   <div className="flex flex-col items-end">
-                                    <span className={`text-lg font-bold ${
-                                      margin >= 0 ? 'text-emerald-500' : 'text-red-500'
-                                    }`}>
-                                      {margin >= 0 ? '+' : ''}${margin.toFixed(2)}
+                                    <span className={`text-lg font-bold ${isDark ? 'text-green-400' : 'text-green-600'}`}>
+                                      -${discount.toFixed(2)}
                                     </span>
-                                    {marginPercent !== null && (
-                                      <span className={`text-sm font-medium ${
-                                        marginPercent >= 0
-                                          ? isDark ? 'text-emerald-400/70' : 'text-emerald-600/70'
-                                          : isDark ? 'text-red-400/70' : 'text-red-600/70'
-                                      }`}>
-                                        {marginPercent >= 0 ? '+' : ''}{marginPercent.toFixed(1)}%
+                                    {discountPercent !== null && (
+                                      <span className={`text-sm font-medium ${isDark ? 'text-green-400/70' : 'text-green-600/70'}`}>
+                                        -{discountPercent.toFixed(1)}%
                                       </span>
                                     )}
                                   </div>
+                                ) : customPrice !== null && customPrice >= product.precioMayorista ? (
+                                  <span className={`text-sm ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>Sin descuento</span>
                                 ) : (
                                   <span className={isDark ? 'text-gray-600' : 'text-gray-300'}>—</span>
                                 )}
@@ -1032,7 +1031,6 @@ export default function ProductConfigPage() {
                     product_type: 'producto',
                     mi_costo: productData.miCosto,
                     precio_mayorista: productData.precioMayorista,
-                    precio_publico: productData.precioPublico,
                     provider_company_id: productData.providerCompanyId
                   })
                 })
@@ -1071,7 +1069,6 @@ interface ProductModalProps {
     category: string
     miCosto: number
     precioMayorista: number
-    precioPublico: number
     providerCompanyId: number | null
   }) => Promise<void>
 }
@@ -1084,7 +1081,6 @@ function ProductModal({ isDark, product, providerCompanies, onClose, onSave }: P
     category: product?.category || 'paqueteria',
     miCosto: product?.miCosto || 0,
     precioMayorista: product?.precioMayorista || 0,
-    precioPublico: product?.precioPublico || 0,
     providerCompanyId: product?.providerCompanyId || null as number | null
   })
   const [saving, setSaving] = useState(false)
@@ -1099,7 +1095,7 @@ function ProductModal({ isDark, product, providerCompanies, onClose, onSave }: P
       return
     }
 
-    if (formData.miCosto < 0 || formData.precioMayorista < 0 || formData.precioPublico < 0) {
+    if (formData.miCosto < 0 || formData.precioMayorista < 0) {
       setError('Los precios no pueden ser negativos')
       return
     }
@@ -1264,7 +1260,7 @@ function ProductModal({ isDark, product, providerCompanies, onClose, onSave }: P
             </div>
 
             {/* Prices */}
-            <div className="grid grid-cols-3 gap-4">
+            <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className={`block text-sm font-medium mb-2 ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
                   Mi Costo ($)
@@ -1278,14 +1274,12 @@ function ProductModal({ isDark, product, providerCompanies, onClose, onSave }: P
                     value={formData.miCosto}
                     onChange={(e) => {
                       const miCosto = parseFloat(e.target.value) || 0
-                      // Auto-calculate if other prices are 0
+                      // Auto-calculate precio mayorista if it's 0
                       const precioMayorista = formData.precioMayorista || miCosto * 1.2
-                      const precioPublico = formData.precioPublico || precioMayorista * 1.5
                       setFormData({
                         ...formData,
                         miCosto,
-                        precioMayorista: formData.precioMayorista === 0 ? parseFloat(precioMayorista.toFixed(2)) : formData.precioMayorista,
-                        precioPublico: formData.precioPublico === 0 ? parseFloat(precioPublico.toFixed(2)) : formData.precioPublico
+                        precioMayorista: formData.precioMayorista === 0 ? parseFloat(precioMayorista.toFixed(2)) : formData.precioMayorista
                       })
                     }}
                     className={`w-full pl-8 pr-3 py-3 rounded-xl border text-sm text-right font-semibold transition-all ${
@@ -1297,12 +1291,12 @@ function ProductModal({ isDark, product, providerCompanies, onClose, onSave }: P
                   />
                 </div>
                 <p className={`text-xs mt-1 ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
-                  Lo que pagas
+                  Lo que pagas por el producto
                 </p>
               </div>
               <div>
                 <label className={`block text-sm font-medium mb-2 ${isDark ? 'text-emerald-400' : 'text-emerald-600'}`}>
-                  Venta Empresas ($)
+                  Precio Venta Empresas ($)
                 </label>
                 <div className="relative">
                   <span className={`absolute left-3 top-1/2 -translate-y-1/2 text-sm ${isDark ? 'text-emerald-500' : 'text-emerald-400'}`}>$</span>
@@ -1321,31 +1315,7 @@ function ProductModal({ isDark, product, providerCompanies, onClose, onSave }: P
                   />
                 </div>
                 <p className={`text-xs mt-1 ${isDark ? 'text-emerald-500/70' : 'text-emerald-500'}`}>
-                  Costo para empresas
-                </p>
-              </div>
-              <div>
-                <label className={`block text-sm font-medium mb-2 ${isDark ? 'text-blue-400' : 'text-blue-600'}`}>
-                  Precio Publico ($)
-                </label>
-                <div className="relative">
-                  <span className={`absolute left-3 top-1/2 -translate-y-1/2 text-sm ${isDark ? 'text-blue-500' : 'text-blue-400'}`}>$</span>
-                  <input
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    value={formData.precioPublico}
-                    onChange={(e) => setFormData({ ...formData, precioPublico: parseFloat(e.target.value) || 0 })}
-                    className={`w-full pl-8 pr-3 py-3 rounded-xl border text-sm text-right font-semibold transition-all ${
-                      isDark
-                        ? 'bg-blue-900/30 border-blue-700 text-blue-400 placeholder-blue-700 focus:border-blue-500'
-                        : 'bg-blue-50 border-blue-200 text-blue-700 placeholder-blue-300 focus:border-blue-400'
-                    } focus:outline-none focus:ring-2 focus:ring-blue-500/20`}
-                    placeholder="0.00"
-                  />
-                </div>
-                <p className={`text-xs mt-1 ${isDark ? 'text-blue-500/70' : 'text-blue-500'}`}>
-                  Sugerido al publico
+                  Precio global para todas las empresas
                 </p>
               </div>
             </div>
