@@ -73,7 +73,7 @@ export async function calculateAvailableMargin(
   const result = await client.query(`
     SELECT
       COALESCE(cpp.mi_costo, pc.mi_costo, 0) as mi_costo,
-      COALESCE(cpp.precio_clientes, cpp.precio_publico, pc.precio_publico, 0) as precio_publico,
+      COALESCE(cpp.precio_clientes, pc.precio_publico, 0) as precio_publico,
       COALESCE(pc.max_commission_percentage, 100) as max_commission_pct
     FROM product_catalog pc
     LEFT JOIN company_product_pricing cpp
