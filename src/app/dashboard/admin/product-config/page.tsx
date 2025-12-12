@@ -17,16 +17,28 @@ import {
   X,
   Save,
   Filter,
-  MoreVertical,
+  MoreHorizontal,
   ChevronDown,
+  ChevronRight,
   Layers,
   TrendingUp,
   CheckCircle,
   Tag,
-  BarChart3
+  BarChart3,
+  Box,
+  Banknote,
+  Smartphone,
+  ShoppingBag,
+  Eye,
+  Copy,
+  ArrowUpRight,
+  Sparkles,
+  Grid3X3,
+  List,
+  SlidersHorizontal
 } from 'lucide-react'
 
-// Interfaces simplificadas
+// Interfaces
 interface Product {
   id: number
   code: string
@@ -45,11 +57,15 @@ interface Company {
 }
 
 const CATEGORIES = [
-  { id: 'paqueteria', name: 'Paqueteria' },
-  { id: 'remesa', name: 'Remesa' },
-  { id: 'recarga', name: 'Recarga' },
-  { id: 'mercado', name: 'Mercado' }
+  { id: 'paqueteria', name: 'Paqueteria', icon: Box, color: 'blue', gradient: 'from-blue-500 to-blue-600' },
+  { id: 'remesa', name: 'Remesa', icon: Banknote, color: 'emerald', gradient: 'from-emerald-500 to-emerald-600' },
+  { id: 'recarga', name: 'Recarga', icon: Smartphone, color: 'purple', gradient: 'from-purple-500 to-purple-600' },
+  { id: 'mercado', name: 'Mercado', icon: ShoppingBag, color: 'orange', gradient: 'from-orange-500 to-orange-600' }
 ]
+
+const getCategoryConfig = (categoryId: string) => {
+  return CATEGORIES.find(c => c.id === categoryId) || CATEGORIES[0]
+}
 
 export default function ProductConfigPage() {
   const { theme } = useTheme()
@@ -63,10 +79,12 @@ export default function ProductConfigPage() {
   const [searchTerm, setSearchTerm] = useState('')
   const [categoryFilter, setCategoryFilter] = useState<string>('all')
   const [activeTab, setActiveTab] = useState<'productos' | 'precios'>('productos')
+  const [viewMode, setViewMode] = useState<'grid' | 'list'>('list')
 
   // Modals
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [editingProduct, setEditingProduct] = useState<Product | null>(null)
+  const [viewingProduct, setViewingProduct] = useState<Product | null>(null)
 
   // Precios por empresa
   const [selectedCompany, setSelectedCompany] = useState<number | null>(null)
@@ -107,7 +125,6 @@ export default function ProductConfigPage() {
       const response = await fetch('/api/companies')
       const data = await response.json()
       if (data.success) {
-        // Filter only active companies (not LogiRapid itself)
         const filtered = data.data.filter((c: any) => c.status === 'active' && c.id !== 1)
         setCompanies(filtered.map((c: any) => ({
           id: c.id,
@@ -120,7 +137,7 @@ export default function ProductConfigPage() {
     }
   }, [])
 
-  // Fetch company prices for a product
+  // Fetch company prices
   const fetchCompanyPrices = useCallback(async () => {
     if (!selectedCompany) return
 
@@ -180,6 +197,12 @@ export default function ProductConfigPage() {
     }
   }
 
+  // Copy code to clipboard
+  const copyToClipboard = (text: string) => {
+    navigator.clipboard.writeText(text)
+    showNotification('success', 'Copiado', 'Codigo copiado al portapapeles')
+  }
+
   // Save company prices
   const handleSaveCompanyPrices = async () => {
     if (!selectedCompany) return
@@ -231,402 +254,641 @@ export default function ProductConfigPage() {
     count: products.filter(p => p.category === cat.id).length
   }))
 
-  // Stats cards data
-  const statsCards = [
-    {
-      label: 'Total Productos',
-      value: totalProducts.toString(),
-      icon: Package,
-      color: 'blue'
-    },
-    {
-      label: 'Activos',
-      value: activeProducts.toString(),
-      icon: CheckCircle,
-      color: 'emerald'
-    },
-    {
-      label: 'Categorias',
-      value: categoryCounts.filter(c => c.count > 0).length.toString(),
-      icon: Tag,
-      color: 'purple'
-    },
-    {
-      label: 'Costo Promedio',
-      value: `$${avgCost.toFixed(2)}`,
-      icon: BarChart3,
-      color: 'amber'
-    }
-  ]
-
-  const getColorClasses = (color: string) => {
-    const colors: Record<string, { bg: string; icon: string }> = {
-      blue: {
-        bg: isDark ? 'bg-blue-500/20' : 'bg-blue-100',
-        icon: 'text-blue-500'
-      },
-      emerald: {
-        bg: isDark ? 'bg-emerald-500/20' : 'bg-emerald-100',
-        icon: 'text-emerald-500'
-      },
-      purple: {
-        bg: isDark ? 'bg-purple-500/20' : 'bg-purple-100',
-        icon: 'text-purple-500'
-      },
-      amber: {
-        bg: isDark ? 'bg-amber-500/20' : 'bg-amber-100',
-        icon: 'text-amber-500'
-      }
-    }
-    return colors[color] || colors.blue
-  }
-
   return (
     <DashboardLayout>
-      <div className="h-full flex flex-col">
-        {/* Stats Cards */}
-        <div className="px-6 pt-4 pb-2">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            {statsCards.map((stat, idx) => {
-              const colorClasses = getColorClasses(stat.color)
-              return (
-                <motion.div
-                  key={stat.label}
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: idx * 0.05 }}
-                  className={`rounded-2xl border p-4 ${
-                    isDark ? 'bg-white/5 border-white/10' : 'bg-white border-gray-200'
-                  }`}
-                >
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className={`text-xs font-medium ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
-                        {stat.label}
-                      </p>
-                      <p className={`text-xl font-bold mt-1 ${isDark ? 'text-white' : 'text-gray-900'}`}>
-                        {stat.value}
-                      </p>
-                    </div>
-                    <div className={`w-10 h-10 rounded-full flex items-center justify-center ${colorClasses.bg}`}>
-                      <stat.icon className={`w-5 h-5 ${colorClasses.icon}`} />
-                    </div>
-                  </div>
-                </motion.div>
-              )
-            })}
+      <div className={`min-h-full ${isDark ? 'bg-gray-900' : 'bg-gray-50'}`}>
+        {/* Hero Header */}
+        <div className={`relative overflow-hidden ${isDark ? 'bg-gradient-to-br from-gray-800 via-gray-900 to-gray-800' : 'bg-gradient-to-br from-white via-blue-50/30 to-white'}`}>
+          <div className="absolute inset-0 overflow-hidden">
+            <div className={`absolute -top-40 -right-40 w-80 h-80 rounded-full ${isDark ? 'bg-blue-500/10' : 'bg-blue-500/5'} blur-3xl`} />
+            <div className={`absolute -bottom-40 -left-40 w-80 h-80 rounded-full ${isDark ? 'bg-purple-500/10' : 'bg-purple-500/5'} blur-3xl`} />
           </div>
-        </div>
 
-        {/* Sticky Header with Tabs and Actions */}
-        <div className={`sticky top-0 z-10 ${isDark ? 'bg-gray-900/95 backdrop-blur-sm' : 'bg-gray-50/95 backdrop-blur-sm'}`}>
-          <div className="px-6 py-3">
-            <div className="flex items-center justify-between gap-4">
-              {/* Left: Tabs */}
-              <div className="flex items-center gap-1">
-                <button
-                  onClick={() => setActiveTab('productos')}
-                  className={`px-4 py-2 rounded-lg font-medium text-sm transition-all flex items-center gap-2 ${
-                    activeTab === 'productos'
-                      ? isDark
-                        ? 'bg-white/10 text-white'
-                        : 'bg-white text-gray-900 shadow-sm'
-                      : isDark
-                        ? 'text-gray-400 hover:text-white hover:bg-white/5'
-                        : 'text-gray-500 hover:text-gray-900 hover:bg-white/50'
-                  }`}
-                >
-                  <Layers className="w-4 h-4" />
-                  Productos
-                  {totalProducts > 0 && (
-                    <span className={`ml-1 px-1.5 py-0.5 rounded text-xs ${
-                      activeTab === 'productos'
-                        ? isDark ? 'bg-white/20' : 'bg-gray-100'
-                        : isDark ? 'bg-white/10' : 'bg-gray-200'
-                    }`}>
-                      {totalProducts}
-                    </span>
-                  )}
-                </button>
-                <button
-                  onClick={() => setActiveTab('precios')}
-                  className={`px-4 py-2 rounded-lg font-medium text-sm transition-all flex items-center gap-2 ${
-                    activeTab === 'precios'
-                      ? isDark
-                        ? 'bg-white/10 text-white'
-                        : 'bg-white text-gray-900 shadow-sm'
-                      : isDark
-                        ? 'text-gray-400 hover:text-white hover:bg-white/5'
-                        : 'text-gray-500 hover:text-gray-900 hover:bg-white/50'
-                  }`}
-                >
-                  <TrendingUp className="w-4 h-4" />
-                  Precios
-                </button>
+          <div className="relative px-6 py-8">
+            <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
+              {/* Title Section */}
+              <div>
+                <div className="flex items-center gap-3 mb-2">
+                  <div className={`p-2.5 rounded-xl ${isDark ? 'bg-blue-500/20' : 'bg-blue-100'}`}>
+                    <Package className="w-6 h-6 text-blue-500" />
+                  </div>
+                  <div>
+                    <h1 className={`text-2xl font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>
+                      Catalogo de Productos
+                    </h1>
+                    <p className={`text-sm ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
+                      Gestiona productos y configura precios por empresa
+                    </p>
+                  </div>
+                </div>
               </div>
 
-              {/* Right: Search and Actions */}
+              {/* Quick Actions */}
               <div className="flex items-center gap-3">
-                {activeTab === 'productos' && (
-                  <>
-                    <div className="relative">
-                      <Search className={`absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 ${isDark ? 'text-gray-500' : 'text-gray-400'}`} />
-                      <input
-                        type="text"
-                        placeholder="Buscar..."
-                        value={searchTerm}
-                        onChange={(e) => setSearchTerm(e.target.value)}
-                        className={`w-48 pl-9 pr-3 py-2 text-sm rounded-lg border transition-all focus:w-64 ${
-                          isDark
-                            ? 'bg-gray-800 border-gray-700 text-white placeholder-gray-500 focus:border-gray-600'
-                            : 'bg-white border-gray-200 text-gray-900 placeholder-gray-400 focus:border-gray-300'
-                        } focus:outline-none focus:ring-1 focus:ring-blue-500/30`}
-                      />
-                    </div>
-
-                    <div className="relative">
-                      <select
-                        value={categoryFilter}
-                        onChange={(e) => setCategoryFilter(e.target.value)}
-                        className={`appearance-none pl-3 pr-8 py-2 text-sm rounded-lg border cursor-pointer ${
-                          isDark
-                            ? 'bg-gray-800 border-gray-700 text-white'
-                            : 'bg-white border-gray-200 text-gray-900'
-                        } focus:outline-none focus:ring-1 focus:ring-blue-500/30`}
-                      >
-                        <option value="all">Todas</option>
-                        {CATEGORIES.map(cat => (
-                          <option key={cat.id} value={cat.id}>{cat.name}</option>
-                        ))}
-                      </select>
-                      <ChevronDown className={`absolute right-2 top-1/2 -translate-y-1/2 w-4 h-4 pointer-events-none ${isDark ? 'text-gray-500' : 'text-gray-400'}`} />
-                    </div>
-
-                    <button
-                      onClick={() => setShowCreateModal(true)}
-                      className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg flex items-center gap-2 transition-colors"
-                    >
-                      <Plus className="w-4 h-4" />
-                      Nuevo
-                    </button>
-                  </>
-                )}
-
-                {activeTab === 'precios' && selectedCompany && (
-                  <button
-                    onClick={handleSaveCompanyPrices}
-                    disabled={savingPrices}
-                    className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium rounded-lg flex items-center gap-2 transition-colors disabled:opacity-50"
-                  >
-                    {savingPrices ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-                    Guardar
-                  </button>
-                )}
+                <button
+                  onClick={() => fetchProducts()}
+                  className={`p-2.5 rounded-xl transition-all ${
+                    isDark
+                      ? 'bg-white/5 hover:bg-white/10 text-gray-400'
+                      : 'bg-white hover:bg-gray-50 text-gray-500 shadow-sm border border-gray-200'
+                  }`}
+                >
+                  <RefreshCw className={`w-5 h-5 ${loading ? 'animate-spin' : ''}`} />
+                </button>
+                <button
+                  onClick={() => setShowCreateModal(true)}
+                  className="px-5 py-2.5 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white font-medium rounded-xl flex items-center gap-2 shadow-lg shadow-blue-500/25 transition-all hover:shadow-blue-500/40"
+                >
+                  <Plus className="w-5 h-5" />
+                  Nuevo Producto
+                </button>
               </div>
+            </div>
+
+            {/* Stats Cards */}
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mt-6">
+              {/* Total Products */}
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                className={`relative overflow-hidden rounded-2xl p-5 ${
+                  isDark ? 'bg-white/5 border border-white/10' : 'bg-white border border-gray-100 shadow-sm'
+                }`}
+              >
+                <div className="flex items-start justify-between">
+                  <div>
+                    <p className={`text-sm font-medium ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
+                      Total Productos
+                    </p>
+                    <p className={`text-3xl font-bold mt-1 ${isDark ? 'text-white' : 'text-gray-900'}`}>
+                      {totalProducts}
+                    </p>
+                    <p className={`text-xs mt-2 ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
+                      En catalogo
+                    </p>
+                  </div>
+                  <div className={`p-3 rounded-xl ${isDark ? 'bg-blue-500/20' : 'bg-blue-50'}`}>
+                    <Layers className="w-6 h-6 text-blue-500" />
+                  </div>
+                </div>
+                <div className={`absolute bottom-0 left-0 right-0 h-1 bg-gradient-to-r from-blue-500 to-blue-400`} />
+              </motion.div>
+
+              {/* Active Products */}
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.1 }}
+                className={`relative overflow-hidden rounded-2xl p-5 ${
+                  isDark ? 'bg-white/5 border border-white/10' : 'bg-white border border-gray-100 shadow-sm'
+                }`}
+              >
+                <div className="flex items-start justify-between">
+                  <div>
+                    <p className={`text-sm font-medium ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
+                      Activos
+                    </p>
+                    <p className={`text-3xl font-bold mt-1 ${isDark ? 'text-white' : 'text-gray-900'}`}>
+                      {activeProducts}
+                    </p>
+                    <p className={`text-xs mt-2 ${isDark ? 'text-emerald-400' : 'text-emerald-600'}`}>
+                      <CheckCircle className="w-3 h-3 inline mr-1" />
+                      {totalProducts > 0 ? Math.round((activeProducts / totalProducts) * 100) : 0}% del total
+                    </p>
+                  </div>
+                  <div className={`p-3 rounded-xl ${isDark ? 'bg-emerald-500/20' : 'bg-emerald-50'}`}>
+                    <CheckCircle className="w-6 h-6 text-emerald-500" />
+                  </div>
+                </div>
+                <div className={`absolute bottom-0 left-0 right-0 h-1 bg-gradient-to-r from-emerald-500 to-emerald-400`} />
+              </motion.div>
+
+              {/* Categories */}
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.2 }}
+                className={`relative overflow-hidden rounded-2xl p-5 ${
+                  isDark ? 'bg-white/5 border border-white/10' : 'bg-white border border-gray-100 shadow-sm'
+                }`}
+              >
+                <div className="flex items-start justify-between">
+                  <div>
+                    <p className={`text-sm font-medium ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
+                      Categorias
+                    </p>
+                    <p className={`text-3xl font-bold mt-1 ${isDark ? 'text-white' : 'text-gray-900'}`}>
+                      {categoryCounts.filter(c => c.count > 0).length}
+                    </p>
+                    <p className={`text-xs mt-2 ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
+                      de {CATEGORIES.length} disponibles
+                    </p>
+                  </div>
+                  <div className={`p-3 rounded-xl ${isDark ? 'bg-purple-500/20' : 'bg-purple-50'}`}>
+                    <Tag className="w-6 h-6 text-purple-500" />
+                  </div>
+                </div>
+                <div className={`absolute bottom-0 left-0 right-0 h-1 bg-gradient-to-r from-purple-500 to-purple-400`} />
+              </motion.div>
+
+              {/* Average Cost */}
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.3 }}
+                className={`relative overflow-hidden rounded-2xl p-5 ${
+                  isDark ? 'bg-white/5 border border-white/10' : 'bg-white border border-gray-100 shadow-sm'
+                }`}
+              >
+                <div className="flex items-start justify-between">
+                  <div>
+                    <p className={`text-sm font-medium ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
+                      Costo Promedio
+                    </p>
+                    <p className={`text-3xl font-bold mt-1 ${isDark ? 'text-white' : 'text-gray-900'}`}>
+                      ${avgCost.toFixed(2)}
+                    </p>
+                    <p className={`text-xs mt-2 ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
+                      Total: ${totalCost.toFixed(2)}
+                    </p>
+                  </div>
+                  <div className={`p-3 rounded-xl ${isDark ? 'bg-amber-500/20' : 'bg-amber-50'}`}>
+                    <DollarSign className="w-6 h-6 text-amber-500" />
+                  </div>
+                </div>
+                <div className={`absolute bottom-0 left-0 right-0 h-1 bg-gradient-to-r from-amber-500 to-amber-400`} />
+              </motion.div>
             </div>
           </div>
         </div>
 
-        {/* Content Area */}
-        <div className="flex-1 overflow-auto">
-          {/* Tab: Productos */}
+        {/* Tabs Navigation */}
+        <div className={`sticky top-0 z-20 px-6 py-3 border-b ${isDark ? 'bg-gray-900/95 backdrop-blur-lg border-gray-800' : 'bg-white/95 backdrop-blur-lg border-gray-200'}`}>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              {/* Tabs */}
+              <div className={`flex p-1 rounded-xl ${isDark ? 'bg-gray-800' : 'bg-gray-100'}`}>
+                <button
+                  onClick={() => setActiveTab('productos')}
+                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-all flex items-center gap-2 ${
+                    activeTab === 'productos'
+                      ? isDark
+                        ? 'bg-gray-700 text-white shadow-lg'
+                        : 'bg-white text-gray-900 shadow-md'
+                      : isDark
+                        ? 'text-gray-400 hover:text-white'
+                        : 'text-gray-500 hover:text-gray-900'
+                  }`}
+                >
+                  <Package className="w-4 h-4" />
+                  Productos
+                  <span className={`px-2 py-0.5 rounded-full text-xs ${
+                    activeTab === 'productos'
+                      ? isDark ? 'bg-blue-500/20 text-blue-400' : 'bg-blue-100 text-blue-600'
+                      : isDark ? 'bg-gray-700 text-gray-400' : 'bg-gray-200 text-gray-500'
+                  }`}>
+                    {totalProducts}
+                  </span>
+                </button>
+                <button
+                  onClick={() => setActiveTab('precios')}
+                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-all flex items-center gap-2 ${
+                    activeTab === 'precios'
+                      ? isDark
+                        ? 'bg-gray-700 text-white shadow-lg'
+                        : 'bg-white text-gray-900 shadow-md'
+                      : isDark
+                        ? 'text-gray-400 hover:text-white'
+                        : 'text-gray-500 hover:text-gray-900'
+                  }`}
+                >
+                  <TrendingUp className="w-4 h-4" />
+                  Precios por Empresa
+                </button>
+              </div>
+            </div>
+
+            {/* Right side controls */}
+            {activeTab === 'productos' && (
+              <div className="flex items-center gap-3">
+                {/* Search */}
+                <div className="relative">
+                  <Search className={`absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 ${isDark ? 'text-gray-500' : 'text-gray-400'}`} />
+                  <input
+                    type="text"
+                    placeholder="Buscar productos..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className={`w-64 pl-10 pr-4 py-2 rounded-xl text-sm transition-all ${
+                      isDark
+                        ? 'bg-gray-800 border-gray-700 text-white placeholder-gray-500 focus:border-blue-500'
+                        : 'bg-gray-50 border-gray-200 text-gray-900 placeholder-gray-400 focus:border-blue-400'
+                    } border focus:outline-none focus:ring-2 focus:ring-blue-500/20`}
+                  />
+                </div>
+
+                {/* Category Filter */}
+                <div className="relative">
+                  <select
+                    value={categoryFilter}
+                    onChange={(e) => setCategoryFilter(e.target.value)}
+                    className={`appearance-none pl-4 pr-10 py-2 rounded-xl text-sm cursor-pointer ${
+                      isDark
+                        ? 'bg-gray-800 border-gray-700 text-white'
+                        : 'bg-gray-50 border-gray-200 text-gray-900'
+                    } border focus:outline-none focus:ring-2 focus:ring-blue-500/20`}
+                  >
+                    <option value="all">Todas las categorias</option>
+                    {CATEGORIES.map(cat => (
+                      <option key={cat.id} value={cat.id}>{cat.name}</option>
+                    ))}
+                  </select>
+                  <ChevronDown className={`absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 pointer-events-none ${isDark ? 'text-gray-500' : 'text-gray-400'}`} />
+                </div>
+
+                {/* View Toggle */}
+                <div className={`flex p-1 rounded-lg ${isDark ? 'bg-gray-800' : 'bg-gray-100'}`}>
+                  <button
+                    onClick={() => setViewMode('list')}
+                    className={`p-2 rounded-md transition-colors ${
+                      viewMode === 'list'
+                        ? isDark ? 'bg-gray-700 text-white' : 'bg-white text-gray-900 shadow-sm'
+                        : isDark ? 'text-gray-500' : 'text-gray-400'
+                    }`}
+                  >
+                    <List className="w-4 h-4" />
+                  </button>
+                  <button
+                    onClick={() => setViewMode('grid')}
+                    className={`p-2 rounded-md transition-colors ${
+                      viewMode === 'grid'
+                        ? isDark ? 'bg-gray-700 text-white' : 'bg-white text-gray-900 shadow-sm'
+                        : isDark ? 'text-gray-500' : 'text-gray-400'
+                    }`}
+                  >
+                    <Grid3X3 className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {activeTab === 'precios' && selectedCompany && (
+              <button
+                onClick={handleSaveCompanyPrices}
+                disabled={savingPrices}
+                className="px-5 py-2 bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 text-white font-medium rounded-xl flex items-center gap-2 shadow-lg shadow-emerald-500/25 disabled:opacity-50 transition-all"
+              >
+                {savingPrices ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                Guardar Precios
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Content */}
+        <div className="px-6 py-6">
+          {/* Products Tab */}
           {activeTab === 'productos' && (
-            <div className="px-6 pb-6">
+            <>
+              {/* Category Pills */}
+              <div className="flex items-center gap-2 mb-6 overflow-x-auto pb-2">
+                <button
+                  onClick={() => setCategoryFilter('all')}
+                  className={`px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap transition-all ${
+                    categoryFilter === 'all'
+                      ? 'bg-gradient-to-r from-blue-500 to-blue-600 text-white shadow-lg shadow-blue-500/25'
+                      : isDark
+                        ? 'bg-gray-800 text-gray-400 hover:text-white hover:bg-gray-700'
+                        : 'bg-white text-gray-600 hover:text-gray-900 hover:bg-gray-50 border border-gray-200'
+                  }`}
+                >
+                  Todos ({totalProducts})
+                </button>
+                {CATEGORIES.map(cat => {
+                  const count = categoryCounts.find(c => c.id === cat.id)?.count || 0
+                  const Icon = cat.icon
+                  return (
+                    <button
+                      key={cat.id}
+                      onClick={() => setCategoryFilter(cat.id)}
+                      className={`px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap transition-all flex items-center gap-2 ${
+                        categoryFilter === cat.id
+                          ? `bg-gradient-to-r ${cat.gradient} text-white shadow-lg`
+                          : isDark
+                            ? 'bg-gray-800 text-gray-400 hover:text-white hover:bg-gray-700'
+                            : 'bg-white text-gray-600 hover:text-gray-900 hover:bg-gray-50 border border-gray-200'
+                      }`}
+                    >
+                      <Icon className="w-4 h-4" />
+                      {cat.name} ({count})
+                    </button>
+                  )
+                })}
+              </div>
+
               {loading ? (
                 <div className="flex items-center justify-center py-20">
                   <div className="text-center">
-                    <RefreshCw className={`w-8 h-8 mx-auto animate-spin ${isDark ? 'text-gray-600' : 'text-gray-400'}`} />
-                    <p className={`mt-3 text-sm ${isDark ? 'text-gray-500' : 'text-gray-500'}`}>Cargando productos...</p>
+                    <div className={`w-16 h-16 mx-auto mb-4 rounded-2xl flex items-center justify-center ${isDark ? 'bg-gray-800' : 'bg-gray-100'}`}>
+                      <RefreshCw className={`w-8 h-8 animate-spin ${isDark ? 'text-blue-400' : 'text-blue-500'}`} />
+                    </div>
+                    <p className={isDark ? 'text-gray-400' : 'text-gray-500'}>Cargando productos...</p>
                   </div>
                 </div>
               ) : filteredProducts.length === 0 ? (
                 <div className="flex items-center justify-center py-20">
-                  <div className="text-center max-w-sm">
-                    <div className={`w-16 h-16 mx-auto mb-4 rounded-2xl flex items-center justify-center ${
-                      isDark ? 'bg-gray-800' : 'bg-gray-100'
+                  <div className="text-center max-w-md">
+                    <div className={`w-20 h-20 mx-auto mb-6 rounded-3xl flex items-center justify-center ${
+                      isDark ? 'bg-gradient-to-br from-gray-800 to-gray-700' : 'bg-gradient-to-br from-gray-100 to-gray-50'
                     }`}>
-                      <Package className={`w-8 h-8 ${isDark ? 'text-gray-600' : 'text-gray-400'}`} />
+                      <Package className={`w-10 h-10 ${isDark ? 'text-gray-600' : 'text-gray-400'}`} />
                     </div>
-                    <h3 className={`text-lg font-medium mb-1 ${isDark ? 'text-white' : 'text-gray-900'}`}>
+                    <h3 className={`text-xl font-semibold mb-2 ${isDark ? 'text-white' : 'text-gray-900'}`}>
                       {products.length === 0 ? 'Sin productos' : 'Sin resultados'}
                     </h3>
-                    <p className={`text-sm mb-4 ${isDark ? 'text-gray-500' : 'text-gray-500'}`}>
+                    <p className={`mb-6 ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
                       {products.length === 0
-                        ? 'Comienza agregando tu primer producto al catalogo'
-                        : 'Intenta con otros terminos de busqueda'
+                        ? 'Comienza agregando tu primer producto al catalogo para empezar a gestionar tu inventario'
+                        : 'No se encontraron productos que coincidan con tu busqueda'
                       }
                     </p>
                     {products.length === 0 && (
                       <button
                         onClick={() => setShowCreateModal(true)}
-                        className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg inline-flex items-center gap-2"
+                        className="px-6 py-3 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white font-medium rounded-xl inline-flex items-center gap-2 shadow-lg shadow-blue-500/25 transition-all"
                       >
-                        <Plus className="w-4 h-4" />
-                        Crear producto
+                        <Plus className="w-5 h-5" />
+                        Crear primer producto
                       </button>
                     )}
                   </div>
                 </div>
+              ) : viewMode === 'grid' ? (
+                /* Grid View */
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                  {filteredProducts.map((product, idx) => {
+                    const catConfig = getCategoryConfig(product.category)
+                    const Icon = catConfig.icon
+                    return (
+                      <motion.div
+                        key={product.id}
+                        initial={{ opacity: 0, scale: 0.95 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        transition={{ delay: idx * 0.03 }}
+                        className={`group relative rounded-2xl p-5 transition-all hover:shadow-xl ${
+                          isDark
+                            ? 'bg-gray-800 border border-gray-700 hover:border-gray-600'
+                            : 'bg-white border border-gray-200 hover:border-gray-300 hover:shadow-gray-200/50'
+                        }`}
+                      >
+                        {/* Category Badge */}
+                        <div className={`absolute top-4 right-4 px-2.5 py-1 rounded-lg text-xs font-medium bg-gradient-to-r ${catConfig.gradient} text-white`}>
+                          {catConfig.name}
+                        </div>
+
+                        {/* Icon */}
+                        <div className={`w-14 h-14 rounded-2xl flex items-center justify-center mb-4 bg-gradient-to-br ${catConfig.gradient}`}>
+                          <Icon className="w-7 h-7 text-white" />
+                        </div>
+
+                        {/* Product Info */}
+                        <h3 className={`font-semibold text-lg mb-1 pr-16 ${isDark ? 'text-white' : 'text-gray-900'}`}>
+                          {product.name}
+                        </h3>
+                        <p className={`text-sm font-mono mb-3 ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
+                          {product.code}
+                        </p>
+
+                        {product.description && (
+                          <p className={`text-sm mb-4 line-clamp-2 ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
+                            {product.description}
+                          </p>
+                        )}
+
+                        {/* Price */}
+                        <div className={`text-2xl font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>
+                          ${product.miCosto.toFixed(2)}
+                        </div>
+                        <p className={`text-xs ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
+                          {product.providerName || 'Sin proveedor'}
+                        </p>
+
+                        {/* Actions */}
+                        <div className="flex items-center gap-2 mt-4 pt-4 border-t border-dashed opacity-0 group-hover:opacity-100 transition-opacity" style={{ borderColor: isDark ? '#374151' : '#e5e7eb' }}>
+                          <button
+                            onClick={() => setEditingProduct(product)}
+                            className={`flex-1 py-2 rounded-lg text-sm font-medium transition-colors ${
+                              isDark ? 'bg-gray-700 hover:bg-gray-600 text-white' : 'bg-gray-100 hover:bg-gray-200 text-gray-700'
+                            }`}
+                          >
+                            <Edit2 className="w-4 h-4 inline mr-1" />
+                            Editar
+                          </button>
+                          <button
+                            onClick={() => handleDeleteProduct(product.id)}
+                            className={`p-2 rounded-lg transition-colors ${
+                              isDark ? 'hover:bg-red-500/20 text-red-400' : 'hover:bg-red-50 text-red-500'
+                            }`}
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </motion.div>
+                    )
+                  })}
+                </div>
               ) : (
-                <div className={`rounded-xl overflow-hidden border ${isDark ? 'bg-gray-800/50 border-gray-800' : 'bg-white border-gray-200'}`}>
+                /* List View */
+                <div className={`rounded-2xl overflow-hidden border ${isDark ? 'bg-gray-800/50 border-gray-800' : 'bg-white border-gray-200'}`}>
                   <table className="w-full">
                     <thead>
-                      <tr className={isDark ? 'border-b border-gray-700' : 'border-b border-gray-100'}>
-                        <th className={`px-4 py-3 text-left text-xs font-medium uppercase tracking-wider ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
+                      <tr className={isDark ? 'bg-gray-800' : 'bg-gray-50'}>
+                        <th className={`px-6 py-4 text-left text-xs font-semibold uppercase tracking-wider ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
                           Producto
                         </th>
-                        <th className={`px-4 py-3 text-left text-xs font-medium uppercase tracking-wider ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
+                        <th className={`px-6 py-4 text-left text-xs font-semibold uppercase tracking-wider ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
                           Categoria
                         </th>
-                        <th className={`px-4 py-3 text-right text-xs font-medium uppercase tracking-wider ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
+                        <th className={`px-6 py-4 text-right text-xs font-semibold uppercase tracking-wider ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
                           Costo
                         </th>
-                        <th className={`px-4 py-3 text-left text-xs font-medium uppercase tracking-wider ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
+                        <th className={`px-6 py-4 text-left text-xs font-semibold uppercase tracking-wider ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
                           Proveedor
                         </th>
-                        <th className={`px-4 py-3 w-20`}></th>
+                        <th className={`px-6 py-4 text-center text-xs font-semibold uppercase tracking-wider ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
+                          Estado
+                        </th>
+                        <th className={`px-6 py-4 w-28`}></th>
                       </tr>
                     </thead>
-                    <tbody>
-                      {filteredProducts.map((product, idx) => (
-                        <motion.tr
-                          key={product.id}
-                          initial={{ opacity: 0, y: 10 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          transition={{ delay: idx * 0.02 }}
-                          className={`group ${isDark ? 'hover:bg-gray-700/30' : 'hover:bg-gray-50'} ${
-                            idx !== filteredProducts.length - 1 ? (isDark ? 'border-b border-gray-800' : 'border-b border-gray-50') : ''
-                          }`}
-                        >
-                          <td className="px-4 py-3">
-                            <div className="flex items-center gap-3">
-                              <div className={`w-9 h-9 rounded-lg flex items-center justify-center ${
-                                product.category === 'paqueteria' ? (isDark ? 'bg-blue-500/20' : 'bg-blue-50') :
-                                product.category === 'remesa' ? (isDark ? 'bg-emerald-500/20' : 'bg-emerald-50') :
-                                product.category === 'recarga' ? (isDark ? 'bg-purple-500/20' : 'bg-purple-50') :
-                                (isDark ? 'bg-orange-500/20' : 'bg-orange-50')
+                    <tbody className={`divide-y ${isDark ? 'divide-gray-800' : 'divide-gray-100'}`}>
+                      {filteredProducts.map((product, idx) => {
+                        const catConfig = getCategoryConfig(product.category)
+                        const Icon = catConfig.icon
+                        return (
+                          <motion.tr
+                            key={product.id}
+                            initial={{ opacity: 0, x: -10 }}
+                            animate={{ opacity: 1, x: 0 }}
+                            transition={{ delay: idx * 0.02 }}
+                            className={`group transition-colors ${isDark ? 'hover:bg-gray-700/50' : 'hover:bg-gray-50'}`}
+                          >
+                            <td className="px-6 py-4">
+                              <div className="flex items-center gap-4">
+                                <div className={`w-12 h-12 rounded-xl flex items-center justify-center bg-gradient-to-br ${catConfig.gradient}`}>
+                                  <Icon className="w-6 h-6 text-white" />
+                                </div>
+                                <div>
+                                  <div className={`font-semibold ${isDark ? 'text-white' : 'text-gray-900'}`}>
+                                    {product.name}
+                                  </div>
+                                  <div className="flex items-center gap-2 mt-0.5">
+                                    <span className={`text-sm font-mono ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
+                                      {product.code}
+                                    </span>
+                                    <button
+                                      onClick={() => copyToClipboard(product.code)}
+                                      className={`opacity-0 group-hover:opacity-100 p-1 rounded transition-all ${
+                                        isDark ? 'hover:bg-gray-600' : 'hover:bg-gray-200'
+                                      }`}
+                                    >
+                                      <Copy className="w-3 h-3" />
+                                    </button>
+                                  </div>
+                                </div>
+                              </div>
+                            </td>
+                            <td className="px-6 py-4">
+                              <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium bg-gradient-to-r ${catConfig.gradient} text-white`}>
+                                <Icon className="w-3.5 h-3.5" />
+                                {catConfig.name}
+                              </span>
+                            </td>
+                            <td className={`px-6 py-4 text-right`}>
+                              <span className={`text-lg font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>
+                                ${product.miCosto.toFixed(2)}
+                              </span>
+                            </td>
+                            <td className={`px-6 py-4 ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
+                              {product.providerName || (
+                                <span className={isDark ? 'text-gray-600' : 'text-gray-300'}>Sin asignar</span>
+                              )}
+                            </td>
+                            <td className="px-6 py-4 text-center">
+                              <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium ${
+                                product.isActive
+                                  ? isDark ? 'bg-emerald-500/20 text-emerald-400' : 'bg-emerald-100 text-emerald-700'
+                                  : isDark ? 'bg-gray-700 text-gray-400' : 'bg-gray-100 text-gray-500'
                               }`}>
-                                <Package className={`w-4 h-4 ${
-                                  product.category === 'paqueteria' ? 'text-blue-500' :
-                                  product.category === 'remesa' ? 'text-emerald-500' :
-                                  product.category === 'recarga' ? 'text-purple-500' :
-                                  'text-orange-500'
-                                }`} />
+                                <span className={`w-1.5 h-1.5 rounded-full ${product.isActive ? 'bg-emerald-500' : 'bg-gray-400'}`} />
+                                {product.isActive ? 'Activo' : 'Inactivo'}
+                              </span>
+                            </td>
+                            <td className="px-6 py-4">
+                              <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                <button
+                                  onClick={() => setEditingProduct(product)}
+                                  className={`p-2 rounded-lg transition-colors ${
+                                    isDark ? 'hover:bg-gray-600 text-gray-400' : 'hover:bg-gray-100 text-gray-500'
+                                  }`}
+                                  title="Editar"
+                                >
+                                  <Edit2 className="w-4 h-4" />
+                                </button>
+                                <button
+                                  onClick={() => handleDeleteProduct(product.id)}
+                                  className={`p-2 rounded-lg transition-colors ${
+                                    isDark ? 'hover:bg-red-500/20 text-red-400' : 'hover:bg-red-50 text-red-500'
+                                  }`}
+                                  title="Eliminar"
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </button>
                               </div>
-                              <div>
-                                <div className={`font-medium text-sm ${isDark ? 'text-white' : 'text-gray-900'}`}>
-                                  {product.name}
-                                </div>
-                                <div className={`text-xs font-mono ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
-                                  {product.code}
-                                </div>
-                              </div>
-                            </div>
-                          </td>
-                          <td className="px-4 py-3">
-                            <span className={`inline-flex px-2 py-0.5 rounded text-xs font-medium ${
-                              product.category === 'paqueteria'
-                                ? isDark ? 'bg-blue-500/20 text-blue-400' : 'bg-blue-50 text-blue-600'
-                              : product.category === 'remesa'
-                                ? isDark ? 'bg-emerald-500/20 text-emerald-400' : 'bg-emerald-50 text-emerald-600'
-                              : product.category === 'recarga'
-                                ? isDark ? 'bg-purple-500/20 text-purple-400' : 'bg-purple-50 text-purple-600'
-                              : isDark ? 'bg-orange-500/20 text-orange-400' : 'bg-orange-50 text-orange-600'
-                            }`}>
-                              {CATEGORIES.find(c => c.id === product.category)?.name || product.category}
-                            </span>
-                          </td>
-                          <td className={`px-4 py-3 text-right tabular-nums text-sm font-medium ${isDark ? 'text-gray-300' : 'text-gray-900'}`}>
-                            ${product.miCosto.toFixed(2)}
-                          </td>
-                          <td className={`px-4 py-3 text-sm ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
-                            {product.providerName || <span className={isDark ? 'text-gray-600' : 'text-gray-300'}>-</span>}
-                          </td>
-                          <td className="px-4 py-3">
-                            <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                              <button
-                                onClick={() => setEditingProduct(product)}
-                                className={`p-1.5 rounded-md ${isDark ? 'hover:bg-gray-600' : 'hover:bg-gray-100'}`}
-                                title="Editar"
-                              >
-                                <Edit2 className={`w-3.5 h-3.5 ${isDark ? 'text-gray-400' : 'text-gray-500'}`} />
-                              </button>
-                              <button
-                                onClick={() => handleDeleteProduct(product.id)}
-                                className={`p-1.5 rounded-md ${isDark ? 'hover:bg-red-500/20' : 'hover:bg-red-50'}`}
-                                title="Eliminar"
-                              >
-                                <Trash2 className="w-3.5 h-3.5 text-red-500" />
-                              </button>
-                            </div>
-                          </td>
-                        </motion.tr>
-                      ))}
+                            </td>
+                          </motion.tr>
+                        )
+                      })}
                     </tbody>
                   </table>
                 </div>
               )}
-            </div>
+            </>
           )}
 
-          {/* Tab: Precios por Empresa */}
+          {/* Prices Tab */}
           {activeTab === 'precios' && (
-            <div className="px-6 pb-6">
-              {/* Company selector - Inline style */}
-              <div className={`mb-4 flex items-center gap-3 p-3 rounded-xl ${isDark ? 'bg-gray-800/50' : 'bg-white'} border ${isDark ? 'border-gray-800' : 'border-gray-200'}`}>
-                <Building2 className={`w-5 h-5 ${isDark ? 'text-gray-500' : 'text-gray-400'}`} />
-                <select
-                  value={selectedCompany || ''}
-                  onChange={(e) => {
-                    setSelectedCompany(e.target.value ? parseInt(e.target.value) : null)
-                    setCompanyPrices({})
-                  }}
-                  className={`flex-1 bg-transparent text-sm font-medium focus:outline-none cursor-pointer ${
-                    isDark ? 'text-white' : 'text-gray-900'
-                  }`}
-                >
-                  <option value="" className={isDark ? 'bg-gray-800' : 'bg-white'}>Selecciona una empresa...</option>
-                  {companies.map(company => (
-                    <option key={company.id} value={company.id} className={isDark ? 'bg-gray-800' : 'bg-white'}>
-                      {company.legalName}
-                    </option>
-                  ))}
-                </select>
-                <ChevronDown className={`w-4 h-4 ${isDark ? 'text-gray-500' : 'text-gray-400'}`} />
+            <div className="space-y-6">
+              {/* Company Selector Card */}
+              <div className={`rounded-2xl p-6 ${isDark ? 'bg-gray-800 border border-gray-700' : 'bg-white border border-gray-200 shadow-sm'}`}>
+                <div className="flex items-center gap-4">
+                  <div className={`p-3 rounded-xl ${isDark ? 'bg-purple-500/20' : 'bg-purple-100'}`}>
+                    <Building2 className="w-6 h-6 text-purple-500" />
+                  </div>
+                  <div className="flex-1">
+                    <label className={`block text-sm font-medium mb-2 ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
+                      Seleccionar Empresa
+                    </label>
+                    <div className="relative">
+                      <select
+                        value={selectedCompany || ''}
+                        onChange={(e) => {
+                          setSelectedCompany(e.target.value ? parseInt(e.target.value) : null)
+                          setCompanyPrices({})
+                        }}
+                        className={`w-full md:w-96 appearance-none px-4 py-3 pr-10 rounded-xl text-sm font-medium cursor-pointer ${
+                          isDark
+                            ? 'bg-gray-700 border-gray-600 text-white'
+                            : 'bg-gray-50 border-gray-200 text-gray-900'
+                        } border focus:outline-none focus:ring-2 focus:ring-purple-500/20`}
+                      >
+                        <option value="">Selecciona una empresa...</option>
+                        {companies.map(company => (
+                          <option key={company.id} value={company.id}>
+                            {company.legalName}
+                          </option>
+                        ))}
+                      </select>
+                      <ChevronDown className={`absolute right-4 top-1/2 -translate-y-1/2 w-5 h-5 pointer-events-none ${isDark ? 'text-gray-500' : 'text-gray-400'}`} />
+                    </div>
+                  </div>
+                </div>
               </div>
 
-              {/* Prices table */}
+              {/* Prices Table */}
               {selectedCompany ? (
                 products.length === 0 ? (
-                  <div className="flex items-center justify-center py-16">
+                  <div className="flex items-center justify-center py-20">
                     <div className="text-center">
-                      <Package className={`w-12 h-12 mx-auto mb-3 ${isDark ? 'text-gray-600' : 'text-gray-300'}`} />
-                      <p className={`text-sm ${isDark ? 'text-gray-500' : 'text-gray-500'}`}>
-                        No hay productos. Crea productos primero.
+                      <Package className={`w-16 h-16 mx-auto mb-4 ${isDark ? 'text-gray-600' : 'text-gray-300'}`} />
+                      <p className={isDark ? 'text-gray-400' : 'text-gray-500'}>
+                        No hay productos en el catalogo
                       </p>
                     </div>
                   </div>
                 ) : (
-                  <div className={`rounded-xl overflow-hidden border ${isDark ? 'bg-gray-800/50 border-gray-800' : 'bg-white border-gray-200'}`}>
+                  <div className={`rounded-2xl overflow-hidden border ${isDark ? 'bg-gray-800/50 border-gray-800' : 'bg-white border-gray-200'}`}>
                     <table className="w-full">
                       <thead>
-                        <tr className={isDark ? 'border-b border-gray-700' : 'border-b border-gray-100'}>
-                          <th className={`px-4 py-3 text-left text-xs font-medium uppercase tracking-wider ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
+                        <tr className={isDark ? 'bg-gray-800' : 'bg-gray-50'}>
+                          <th className={`px-6 py-4 text-left text-xs font-semibold uppercase tracking-wider ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
                             Producto
                           </th>
-                          <th className={`px-4 py-3 text-right text-xs font-medium uppercase tracking-wider ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
-                            Costo
+                          <th className={`px-6 py-4 text-right text-xs font-semibold uppercase tracking-wider ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
+                            Tu Costo
                           </th>
-                          <th className={`px-4 py-3 text-right text-xs font-medium uppercase tracking-wider ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
-                            Precio Venta
+                          <th className={`px-6 py-4 text-center text-xs font-semibold uppercase tracking-wider ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
+                            Precio de Venta
                           </th>
-                          <th className={`px-4 py-3 text-right text-xs font-medium uppercase tracking-wider ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
+                          <th className={`px-6 py-4 text-right text-xs font-semibold uppercase tracking-wider ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
                             Margen
                           </th>
                         </tr>
                       </thead>
-                      <tbody>
+                      <tbody className={`divide-y ${isDark ? 'divide-gray-800' : 'divide-gray-100'}`}>
                         {products.map((product, idx) => {
+                          const catConfig = getCategoryConfig(product.category)
+                          const Icon = catConfig.icon
                           const customPrice = companyPrices[product.id]
                           const margin = customPrice ? customPrice - product.miCosto : null
                           const marginPercent = customPrice && product.miCosto > 0
@@ -636,80 +898,74 @@ export default function ProductConfigPage() {
                           return (
                             <tr
                               key={product.id}
-                              className={`${isDark ? 'hover:bg-gray-700/30' : 'hover:bg-gray-50'} ${
-                                idx !== products.length - 1 ? (isDark ? 'border-b border-gray-800' : 'border-b border-gray-50') : ''
-                              }`}
+                              className={`transition-colors ${isDark ? 'hover:bg-gray-700/50' : 'hover:bg-gray-50'}`}
                             >
-                              <td className="px-4 py-3">
-                                <div className="flex items-center gap-3">
-                                  <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${
-                                    product.category === 'paqueteria' ? (isDark ? 'bg-blue-500/20' : 'bg-blue-50') :
-                                    product.category === 'remesa' ? (isDark ? 'bg-emerald-500/20' : 'bg-emerald-50') :
-                                    product.category === 'recarga' ? (isDark ? 'bg-purple-500/20' : 'bg-purple-50') :
-                                    (isDark ? 'bg-orange-500/20' : 'bg-orange-50')
-                                  }`}>
-                                    <Package className={`w-4 h-4 ${
-                                      product.category === 'paqueteria' ? 'text-blue-500' :
-                                      product.category === 'remesa' ? 'text-emerald-500' :
-                                      product.category === 'recarga' ? 'text-purple-500' :
-                                      'text-orange-500'
-                                    }`} />
+                              <td className="px-6 py-4">
+                                <div className="flex items-center gap-4">
+                                  <div className={`w-10 h-10 rounded-xl flex items-center justify-center bg-gradient-to-br ${catConfig.gradient}`}>
+                                    <Icon className="w-5 h-5 text-white" />
                                   </div>
                                   <div>
-                                    <div className={`font-medium text-sm ${isDark ? 'text-white' : 'text-gray-900'}`}>
+                                    <div className={`font-medium ${isDark ? 'text-white' : 'text-gray-900'}`}>
                                       {product.name}
                                     </div>
-                                    <div className={`text-xs ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
+                                    <div className={`text-sm ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
                                       {product.code}
                                     </div>
                                   </div>
                                 </div>
                               </td>
-                              <td className={`px-4 py-3 text-right tabular-nums text-sm ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
-                                ${product.miCosto.toFixed(2)}
+                              <td className={`px-6 py-4 text-right`}>
+                                <span className={`text-lg font-medium ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
+                                  ${product.miCosto.toFixed(2)}
+                                </span>
                               </td>
-                              <td className="px-4 py-3 text-right">
-                                <div className="inline-flex items-center">
-                                  <span className={`mr-1 text-sm ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>$</span>
-                                  <input
-                                    type="number"
-                                    step="0.01"
-                                    min="0"
-                                    value={customPrice ?? ''}
-                                    placeholder="0.00"
-                                    onChange={(e) => {
-                                      const value = e.target.value ? parseFloat(e.target.value) : null
-                                      setCompanyPrices(prev => ({
-                                        ...prev,
-                                        [product.id]: value
-                                      }))
-                                    }}
-                                    className={`w-24 px-2 py-1.5 text-sm text-right rounded-lg border transition-colors ${
-                                      isDark
-                                        ? 'bg-gray-700/50 border-gray-600 text-white placeholder-gray-600 focus:border-blue-500'
-                                        : 'bg-gray-50 border-gray-200 text-gray-900 placeholder-gray-300 focus:border-blue-400'
-                                    } focus:outline-none focus:ring-1 focus:ring-blue-500/30`}
-                                  />
+                              <td className="px-6 py-4">
+                                <div className="flex justify-center">
+                                  <div className="relative">
+                                    <span className={`absolute left-4 top-1/2 -translate-y-1/2 ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>$</span>
+                                    <input
+                                      type="number"
+                                      step="0.01"
+                                      min="0"
+                                      value={customPrice ?? ''}
+                                      placeholder="0.00"
+                                      onChange={(e) => {
+                                        const value = e.target.value ? parseFloat(e.target.value) : null
+                                        setCompanyPrices(prev => ({
+                                          ...prev,
+                                          [product.id]: value
+                                        }))
+                                      }}
+                                      className={`w-36 pl-8 pr-4 py-2.5 text-center text-lg font-semibold rounded-xl border-2 transition-all ${
+                                        isDark
+                                          ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-600 focus:border-purple-500'
+                                          : 'bg-white border-gray-200 text-gray-900 placeholder-gray-300 focus:border-purple-400'
+                                      } focus:outline-none focus:ring-4 focus:ring-purple-500/10`}
+                                    />
+                                  </div>
                                 </div>
                               </td>
-                              <td className="px-4 py-3 text-right">
+                              <td className="px-6 py-4 text-right">
                                 {margin !== null ? (
                                   <div className="flex flex-col items-end">
-                                    <span className={`text-sm font-medium tabular-nums ${
+                                    <span className={`text-lg font-bold ${
                                       margin >= 0 ? 'text-emerald-500' : 'text-red-500'
                                     }`}>
                                       {margin >= 0 ? '+' : ''}${margin.toFixed(2)}
                                     </span>
                                     {marginPercent !== null && (
-                                      <span className={`text-xs ${
-                                        marginPercent >= 0 ? (isDark ? 'text-emerald-400/60' : 'text-emerald-600/60') : (isDark ? 'text-red-400/60' : 'text-red-600/60')
+                                      <span className={`text-sm font-medium ${
+                                        marginPercent >= 0
+                                          ? isDark ? 'text-emerald-400/70' : 'text-emerald-600/70'
+                                          : isDark ? 'text-red-400/70' : 'text-red-600/70'
                                       }`}>
-                                        {marginPercent >= 0 ? '+' : ''}{marginPercent.toFixed(0)}%
+                                        {marginPercent >= 0 ? '+' : ''}{marginPercent.toFixed(1)}%
                                       </span>
                                     )}
                                   </div>
                                 ) : (
-                                  <span className={`text-sm ${isDark ? 'text-gray-600' : 'text-gray-300'}`}>-</span>
+                                  <span className={isDark ? 'text-gray-600' : 'text-gray-300'}>—</span>
                                 )}
                               </td>
                             </tr>
@@ -721,14 +977,17 @@ export default function ProductConfigPage() {
                 )
               ) : (
                 <div className="flex items-center justify-center py-20">
-                  <div className="text-center max-w-xs">
-                    <div className={`w-14 h-14 mx-auto mb-4 rounded-2xl flex items-center justify-center ${
-                      isDark ? 'bg-gray-800' : 'bg-gray-100'
+                  <div className="text-center max-w-sm">
+                    <div className={`w-20 h-20 mx-auto mb-6 rounded-3xl flex items-center justify-center ${
+                      isDark ? 'bg-gradient-to-br from-gray-800 to-gray-700' : 'bg-gradient-to-br from-purple-100 to-purple-50'
                     }`}>
-                      <Building2 className={`w-7 h-7 ${isDark ? 'text-gray-600' : 'text-gray-400'}`} />
+                      <Building2 className={`w-10 h-10 ${isDark ? 'text-gray-600' : 'text-purple-400'}`} />
                     </div>
-                    <p className={`text-sm ${isDark ? 'text-gray-500' : 'text-gray-500'}`}>
-                      Selecciona una empresa para configurar precios
+                    <h3 className={`text-lg font-semibold mb-2 ${isDark ? 'text-white' : 'text-gray-900'}`}>
+                      Selecciona una empresa
+                    </h3>
+                    <p className={isDark ? 'text-gray-400' : 'text-gray-500'}>
+                      Elige una empresa del selector para configurar los precios de venta personalizados
                     </p>
                   </div>
                 </div>
@@ -840,11 +1099,8 @@ function ProductModal({ isDark, product, onClose, onSave }: ProductModalProps) {
     }
   }
 
-  const inputClasses = `w-full px-3 py-2 text-sm rounded-lg border transition-colors ${
-    isDark
-      ? 'bg-gray-700/50 border-gray-600 text-white placeholder-gray-500 focus:border-blue-500'
-      : 'bg-gray-50 border-gray-200 text-gray-900 placeholder-gray-400 focus:border-blue-400'
-  } focus:outline-none focus:ring-1 focus:ring-blue-500/30`
+  const selectedCategory = getCategoryConfig(formData.category)
+  const CategoryIcon = selectedCategory.icon
 
   return (
     <motion.div
@@ -855,129 +1111,184 @@ function ProductModal({ isDark, product, onClose, onSave }: ProductModalProps) {
       onClick={(e) => e.target === e.currentTarget && onClose()}
     >
       <motion.div
-        initial={{ scale: 0.95, opacity: 0, y: 10 }}
+        initial={{ scale: 0.9, opacity: 0, y: 20 }}
         animate={{ scale: 1, opacity: 1, y: 0 }}
-        exit={{ scale: 0.95, opacity: 0, y: 10 }}
-        transition={{ type: 'spring', duration: 0.3 }}
-        className={`w-full max-w-md rounded-2xl shadow-2xl ${isDark ? 'bg-gray-800' : 'bg-white'}`}
+        exit={{ scale: 0.9, opacity: 0, y: 20 }}
+        transition={{ type: 'spring', duration: 0.4 }}
+        className={`w-full max-w-lg rounded-3xl shadow-2xl overflow-hidden ${isDark ? 'bg-gray-800' : 'bg-white'}`}
       >
-        {/* Header */}
-        <div className="flex items-center justify-between px-5 py-4">
-          <h2 className={`text-base font-semibold ${isDark ? 'text-white' : 'text-gray-900'}`}>
-            {product ? 'Editar producto' : 'Nuevo producto'}
-          </h2>
+        {/* Header with gradient */}
+        <div className={`relative px-6 py-8 bg-gradient-to-r ${selectedCategory.gradient}`}>
+          <div className="absolute inset-0 bg-black/10" />
+          <div className="relative flex items-center gap-4">
+            <div className="w-16 h-16 rounded-2xl bg-white/20 backdrop-blur-sm flex items-center justify-center">
+              <CategoryIcon className="w-8 h-8 text-white" />
+            </div>
+            <div>
+              <h2 className="text-xl font-bold text-white">
+                {product ? 'Editar Producto' : 'Nuevo Producto'}
+              </h2>
+              <p className="text-white/70 text-sm">
+                {product ? 'Modifica los datos del producto' : 'Completa los datos del nuevo producto'}
+              </p>
+            </div>
+          </div>
           <button
             onClick={onClose}
-            className={`p-1.5 rounded-lg transition-colors ${isDark ? 'hover:bg-gray-700 text-gray-400' : 'hover:bg-gray-100 text-gray-500'}`}
+            className="absolute top-4 right-4 p-2 rounded-xl bg-white/10 hover:bg-white/20 text-white transition-colors"
           >
-            <X className="w-4 h-4" />
+            <X className="w-5 h-5" />
           </button>
         </div>
 
         <form onSubmit={handleSubmit}>
-          <div className={`px-5 pb-5 space-y-4 border-t ${isDark ? 'border-gray-700/50' : 'border-gray-100'} pt-4`}>
+          <div className="p-6 space-y-5">
             {error && (
-              <div className="p-2.5 rounded-lg bg-red-500/10 border border-red-500/20 text-red-500 text-xs">
+              <motion.div
+                initial={{ opacity: 0, y: -10 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="p-4 rounded-xl bg-red-500/10 border border-red-500/20 text-red-500 text-sm flex items-center gap-3"
+              >
+                <div className="p-1 rounded-full bg-red-500/20">
+                  <X className="w-4 h-4" />
+                </div>
                 {error}
-              </div>
+              </motion.div>
             )}
 
-            {/* Codigo y Categoria en fila */}
-            <div className="grid grid-cols-2 gap-3">
+            {/* Category Selector */}
+            <div>
+              <label className={`block text-sm font-medium mb-3 ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
+                Categoria
+              </label>
+              <div className="grid grid-cols-4 gap-2">
+                {CATEGORIES.map(cat => {
+                  const Icon = cat.icon
+                  const isSelected = formData.category === cat.id
+                  return (
+                    <button
+                      key={cat.id}
+                      type="button"
+                      onClick={() => setFormData({ ...formData, category: cat.id })}
+                      className={`p-3 rounded-xl flex flex-col items-center gap-2 transition-all ${
+                        isSelected
+                          ? `bg-gradient-to-br ${cat.gradient} text-white shadow-lg`
+                          : isDark
+                            ? 'bg-gray-700 text-gray-400 hover:bg-gray-600'
+                            : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+                      }`}
+                    >
+                      <Icon className="w-5 h-5" />
+                      <span className="text-xs font-medium">{cat.name}</span>
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+
+            {/* Code and Name */}
+            <div className="grid grid-cols-3 gap-4">
               <div>
-                <label className={`block text-xs font-medium mb-1.5 ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
+                <label className={`block text-sm font-medium mb-2 ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
                   Codigo
                 </label>
                 <input
                   type="text"
                   value={formData.code}
                   onChange={(e) => setFormData({ ...formData, code: e.target.value.toUpperCase() })}
-                  className={inputClasses}
-                  placeholder="CAJA-12X12"
+                  className={`w-full px-4 py-3 rounded-xl border text-sm font-mono transition-all ${
+                    isDark
+                      ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-500 focus:border-blue-500'
+                      : 'bg-gray-50 border-gray-200 text-gray-900 placeholder-gray-400 focus:border-blue-400'
+                  } focus:outline-none focus:ring-2 focus:ring-blue-500/20`}
+                  placeholder="SKU-001"
                 />
               </div>
-              <div>
-                <label className={`block text-xs font-medium mb-1.5 ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
-                  Categoria
+              <div className="col-span-2">
+                <label className={`block text-sm font-medium mb-2 ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
+                  Nombre del producto
                 </label>
-                <select
-                  value={formData.category}
-                  onChange={(e) => setFormData({ ...formData, category: e.target.value })}
-                  className={inputClasses}
-                >
-                  {CATEGORIES.map(cat => (
-                    <option key={cat.id} value={cat.id}>{cat.name}</option>
-                  ))}
-                </select>
+                <input
+                  type="text"
+                  value={formData.name}
+                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                  className={`w-full px-4 py-3 rounded-xl border text-sm transition-all ${
+                    isDark
+                      ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-500 focus:border-blue-500'
+                      : 'bg-gray-50 border-gray-200 text-gray-900 placeholder-gray-400 focus:border-blue-400'
+                  } focus:outline-none focus:ring-2 focus:ring-blue-500/20`}
+                  placeholder="Nombre del producto"
+                />
               </div>
             </div>
 
-            {/* Nombre */}
-            <div>
-              <label className={`block text-xs font-medium mb-1.5 ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
-                Nombre
-              </label>
-              <input
-                type="text"
-                value={formData.name}
-                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                className={inputClasses}
-                placeholder="Caja 12x12x12"
-              />
-            </div>
-
-            {/* Proveedor y Costo en fila */}
-            <div className="grid grid-cols-2 gap-3">
+            {/* Provider and Cost */}
+            <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className={`block text-xs font-medium mb-1.5 ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
+                <label className={`block text-sm font-medium mb-2 ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
                   Proveedor
                 </label>
                 <input
                   type="text"
                   value={formData.providerName}
                   onChange={(e) => setFormData({ ...formData, providerName: e.target.value })}
-                  className={inputClasses}
+                  className={`w-full px-4 py-3 rounded-xl border text-sm transition-all ${
+                    isDark
+                      ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-500 focus:border-blue-500'
+                      : 'bg-gray-50 border-gray-200 text-gray-900 placeholder-gray-400 focus:border-blue-400'
+                  } focus:outline-none focus:ring-2 focus:ring-blue-500/20`}
                   placeholder="Opcional"
                 />
               </div>
               <div>
-                <label className={`block text-xs font-medium mb-1.5 ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
+                <label className={`block text-sm font-medium mb-2 ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
                   Costo ($)
                 </label>
-                <input
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  value={formData.miCosto}
-                  onChange={(e) => setFormData({ ...formData, miCosto: parseFloat(e.target.value) || 0 })}
-                  className={inputClasses}
-                  placeholder="0.00"
-                />
+                <div className="relative">
+                  <span className={`absolute left-4 top-1/2 -translate-y-1/2 text-lg ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>$</span>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={formData.miCosto}
+                    onChange={(e) => setFormData({ ...formData, miCosto: parseFloat(e.target.value) || 0 })}
+                    className={`w-full pl-10 pr-4 py-3 rounded-xl border text-sm text-right font-semibold transition-all ${
+                      isDark
+                        ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-500 focus:border-blue-500'
+                        : 'bg-gray-50 border-gray-200 text-gray-900 placeholder-gray-400 focus:border-blue-400'
+                    } focus:outline-none focus:ring-2 focus:ring-blue-500/20`}
+                    placeholder="0.00"
+                  />
+                </div>
               </div>
             </div>
 
-            {/* Descripcion */}
+            {/* Description */}
             <div>
-              <label className={`block text-xs font-medium mb-1.5 ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
+              <label className={`block text-sm font-medium mb-2 ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
                 Descripcion
               </label>
               <textarea
                 value={formData.description}
                 onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                rows={2}
-                className={inputClasses}
-                placeholder="Opcional..."
+                rows={3}
+                className={`w-full px-4 py-3 rounded-xl border text-sm transition-all resize-none ${
+                  isDark
+                    ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-500 focus:border-blue-500'
+                    : 'bg-gray-50 border-gray-200 text-gray-900 placeholder-gray-400 focus:border-blue-400'
+                } focus:outline-none focus:ring-2 focus:ring-blue-500/20`}
+                placeholder="Descripcion opcional del producto..."
               />
             </div>
           </div>
 
           {/* Footer */}
-          <div className={`flex items-center justify-end gap-2 px-5 py-3 border-t ${isDark ? 'border-gray-700/50 bg-gray-800/50' : 'border-gray-100 bg-gray-50/50'} rounded-b-2xl`}>
+          <div className={`flex items-center justify-end gap-3 px-6 py-4 border-t ${isDark ? 'border-gray-700 bg-gray-800/50' : 'border-gray-100 bg-gray-50'}`}>
             <button
               type="button"
               onClick={onClose}
               disabled={saving}
-              className={`px-3 py-1.5 text-sm rounded-lg transition-colors ${
+              className={`px-5 py-2.5 rounded-xl font-medium transition-colors ${
                 isDark ? 'hover:bg-gray-700 text-gray-400' : 'hover:bg-gray-200 text-gray-600'
               } disabled:opacity-50`}
             >
@@ -986,10 +1297,19 @@ function ProductModal({ isDark, product, onClose, onSave }: ProductModalProps) {
             <button
               type="submit"
               disabled={saving}
-              className="px-4 py-1.5 text-sm bg-blue-600 hover:bg-blue-700 text-white rounded-lg disabled:opacity-50 flex items-center gap-2 transition-colors"
+              className={`px-6 py-2.5 bg-gradient-to-r ${selectedCategory.gradient} text-white font-medium rounded-xl disabled:opacity-50 flex items-center gap-2 shadow-lg transition-all hover:shadow-xl`}
             >
-              {saving && <RefreshCw className="w-3.5 h-3.5 animate-spin" />}
-              {saving ? 'Guardando...' : product ? 'Guardar' : 'Crear'}
+              {saving ? (
+                <>
+                  <RefreshCw className="w-4 h-4 animate-spin" />
+                  Guardando...
+                </>
+              ) : (
+                <>
+                  {product ? <Save className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
+                  {product ? 'Guardar Cambios' : 'Crear Producto'}
+                </>
+              )}
             </button>
           </div>
         </form>
