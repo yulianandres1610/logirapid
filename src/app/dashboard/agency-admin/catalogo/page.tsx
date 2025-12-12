@@ -334,6 +334,23 @@ export default function CatalogoEmpresaPage() {
 
     setSavingBranchPrices(true)
     try {
+      // Validar que ningún precio sea menor al costo
+      const invalidPrices: string[] = []
+      Object.entries(branchPrices).forEach(([productId, price]) => {
+        if (price !== null) {
+          const product = products.find(p => p.id === parseInt(productId))
+          if (product && price < product.miCosto) {
+            invalidPrices.push(product.name)
+          }
+        }
+      })
+
+      if (invalidPrices.length > 0) {
+        showNotification('error', 'Error', `Precio menor al costo en: ${invalidPrices.slice(0, 3).join(', ')}${invalidPrices.length > 3 ? '...' : ''}`)
+        setSavingBranchPrices(false)
+        return
+      }
+
       const productsToUpdate = Object.entries(branchPrices)
         .filter(([_, price]) => price !== null)
         .map(([productId, price]) => ({
@@ -1010,9 +1027,13 @@ export default function CatalogoEmpresaPage() {
                               </span>
                             </td>
                             <td className="px-6 py-4">
-                              <div className="flex justify-center">
+                              <div className="flex flex-col items-center gap-1">
                                 <div className="relative">
-                                  <span className={`absolute left-4 top-1/2 -translate-y-1/2 ${isDark ? 'text-blue-400' : 'text-blue-500'}`}>$</span>
+                                  <span className={`absolute left-4 top-1/2 -translate-y-1/2 ${
+                                    branchPrice !== null && branchPrice < product.miCosto
+                                      ? 'text-red-500'
+                                      : isDark ? 'text-blue-400' : 'text-blue-500'
+                                  }`}>$</span>
                                   <input
                                     type="number"
                                     step="0.01"
@@ -1027,16 +1048,25 @@ export default function CatalogoEmpresaPage() {
                                       }))
                                     }}
                                     className={`w-36 pl-8 pr-4 py-2.5 text-center text-lg font-semibold rounded-xl border-2 transition-all ${
-                                      branchPrice !== null
+                                      branchPrice !== null && branchPrice < product.miCosto
                                         ? isDark
-                                          ? 'bg-blue-900/30 border-blue-600 text-blue-300 focus:border-blue-500'
-                                          : 'bg-blue-50 border-blue-300 text-blue-700 focus:border-blue-400'
-                                        : isDark
-                                          ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-600 focus:border-blue-500'
-                                          : 'bg-white border-gray-200 text-gray-900 placeholder-gray-400 focus:border-blue-400'
-                                    } focus:outline-none focus:ring-4 focus:ring-blue-500/10`}
+                                          ? 'bg-red-900/30 border-red-500 text-red-300 focus:border-red-400'
+                                          : 'bg-red-50 border-red-400 text-red-700 focus:border-red-500'
+                                        : branchPrice !== null
+                                          ? isDark
+                                            ? 'bg-blue-900/30 border-blue-600 text-blue-300 focus:border-blue-500'
+                                            : 'bg-blue-50 border-blue-300 text-blue-700 focus:border-blue-400'
+                                          : isDark
+                                            ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-600 focus:border-blue-500'
+                                            : 'bg-white border-gray-200 text-gray-900 placeholder-gray-400 focus:border-blue-400'
+                                    } focus:outline-none focus:ring-4 ${branchPrice !== null && branchPrice < product.miCosto ? 'focus:ring-red-500/10' : 'focus:ring-blue-500/10'}`}
                                   />
                                 </div>
+                                {branchPrice !== null && branchPrice < product.miCosto && (
+                                  <span className="text-xs text-red-500 font-medium">
+                                    Min: ${product.miCosto.toFixed(2)}
+                                  </span>
+                                )}
                               </div>
                             </td>
                             <td className="px-6 py-4 text-right">
