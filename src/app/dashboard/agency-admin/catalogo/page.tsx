@@ -33,8 +33,25 @@ import {
   List,
   Users,
   Percent,
-  Store
+  Store,
+  BarChart3,
+  PieChart
 } from 'lucide-react'
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  Legend,
+  ResponsiveContainer,
+  PieChart as RechartsPieChart,
+  Pie,
+  Cell,
+  LineChart,
+  Line
+} from 'recharts'
 
 // Interfaces
 interface Product {
@@ -101,7 +118,7 @@ export default function CatalogoEmpresaPage() {
   const companyId = user?.companyId
 
   // Get initial tab from URL or default to 'productos'
-  const validTabs = ['productos', 'sucursales', 'precios', 'comisiones'] as const
+  const validTabs = ['productos', 'sucursales', 'precios', 'comisiones', 'reporte'] as const
   const tabFromUrl = searchParams.get('tab')
   const initialTab = validTabs.includes(tabFromUrl as typeof validTabs[number])
     ? tabFromUrl as typeof validTabs[number]
@@ -113,7 +130,7 @@ export default function CatalogoEmpresaPage() {
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState('')
   const [categoryFilter, setCategoryFilter] = useState<string>('all')
-  const [activeTab, setActiveTab] = useState<'productos' | 'sucursales' | 'precios' | 'comisiones'>(initialTab)
+  const [activeTab, setActiveTab] = useState<'productos' | 'sucursales' | 'precios' | 'comisiones' | 'reporte'>(initialTab)
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('list')
 
   // Update URL when tab changes
@@ -142,6 +159,7 @@ export default function CatalogoEmpresaPage() {
 
   // Tab 3: Precio Venta Publico
   const [publicPrices, setPublicPrices] = useState<Record<number, number | null>>({})
+  const [branchSalePrices, setBranchSalePrices] = useState<Record<number, number | null>>({}) // precio_sucursales
   const [servicePrices, setServicePrices] = useState<Record<number, number | null>>({})
   const [allServices, setAllServices] = useState<ProductService[]>([])
   const [savingPublicPrices, setSavingPublicPrices] = useState(false)
@@ -179,12 +197,17 @@ export default function CatalogoEmpresaPage() {
 
         // Also load public prices (precio_clientes) from the same API response
         const prices: Record<number, number | null> = {}
+        const branchPricesData: Record<number, number | null> = {}
         data.data.products.forEach((p: any) => {
           if (p.precioClientes !== null && p.precioClientes !== undefined) {
             prices[p.productId] = parseFloat(p.precioClientes)
           }
+          if (p.precioSucursales !== null && p.precioSucursales !== undefined) {
+            branchPricesData[p.productId] = parseFloat(p.precioSucursales)
+          }
         })
         setPublicPrices(prev => ({ ...prev, ...prices }))
+        setBranchSalePrices(prev => ({ ...prev, ...branchPricesData }))
       }
     } catch (error) {
       console.error('Error fetching products:', error)
@@ -1042,6 +1065,17 @@ export default function CatalogoEmpresaPage() {
                 >
                   <Percent className="w-4 h-4" />
                   Comisiones
+                </button>
+                <button
+                  onClick={() => handleTabChange('reporte')}
+                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-all flex items-center gap-2 ${
+                    activeTab === 'reporte'
+                      ? isDark ? 'bg-gray-700 text-white shadow-lg' : 'bg-white text-gray-900 shadow-md'
+                      : isDark ? 'text-gray-400 hover:text-white' : 'text-gray-500 hover:text-gray-900'
+                  }`}
+                >
+                  <BarChart3 className="w-4 h-4" />
+                  Reporte
                 </button>
               </div>
             </div>
@@ -2035,6 +2069,382 @@ export default function CatalogoEmpresaPage() {
                     </h3>
                     <p className={`max-w-md mx-auto ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
                       No hay productos en tu catalogo para configurar comisiones.
+                    </p>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Tab 5: Reporte */}
+          {activeTab === 'reporte' && (
+            <div className="space-y-6">
+              {/* Report Cards */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {/* Total Utility Card */}
+                <div className={cn(
+                  "relative rounded-2xl p-6 shadow-xl overflow-hidden",
+                  isDark ? "bg-gray-800/80" : "bg-white"
+                )}>
+                  <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-emerald-500 to-emerald-600" />
+                  <div className="flex items-center gap-4">
+                    <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-emerald-500 to-emerald-600 flex items-center justify-center shadow-lg">
+                      <TrendingUp className="w-7 h-7 text-white" />
+                    </div>
+                    <div>
+                      <p className={`text-sm font-medium ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
+                        Utilidad Total Estimada
+                      </p>
+                      <p className={`text-2xl font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>
+                        ${products.reduce((acc, p) => {
+                          const publicPrice = publicPrices[p.id] ?? 0
+                          const branchPrice = branchSalePrices[p.id] ?? 0
+                          const servicesCost = allServices.filter(s => s.productId === p.id).reduce((sum, s) => sum + s.costPrice, 0)
+                          const totalCost = p.miCosto + servicesCost
+
+                          // Calculate commissions for this product
+                          let totalCommissions = 0
+                          allRolesCommissions.filter(c => c.productId === p.id).forEach(c => {
+                            if (c.commissionType === 'percentage') {
+                              totalCommissions += (publicPrice * c.commissionValue / 100)
+                            } else {
+                              totalCommissions += c.commissionValue
+                            }
+                          })
+
+                          const publicUtility = publicPrice > 0 ? (publicPrice - totalCost - totalCommissions) : 0
+                          const branchUtility = branchPrice > 0 ? (branchPrice - totalCost) : 0 // Sucursales no pagan comision
+                          return acc + publicUtility + branchUtility
+                        }, 0).toFixed(2)}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Public Sales Utility */}
+                <div className={cn(
+                  "relative rounded-2xl p-6 shadow-xl overflow-hidden",
+                  isDark ? "bg-gray-800/80" : "bg-white"
+                )}>
+                  <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-blue-500 to-blue-600" />
+                  <div className="flex items-center gap-4">
+                    <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center shadow-lg">
+                      <Users className="w-7 h-7 text-white" />
+                    </div>
+                    <div>
+                      <p className={`text-sm font-medium ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
+                        Utilidad Venta Público
+                      </p>
+                      <p className={`text-2xl font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>
+                        ${products.reduce((acc, p) => {
+                          const publicPrice = publicPrices[p.id] ?? 0
+                          const servicesCost = allServices.filter(s => s.productId === p.id).reduce((sum, s) => sum + s.costPrice, 0)
+                          const totalCost = p.miCosto + servicesCost
+
+                          let totalCommissions = 0
+                          allRolesCommissions.filter(c => c.productId === p.id).forEach(c => {
+                            if (c.commissionType === 'percentage') {
+                              totalCommissions += (publicPrice * c.commissionValue / 100)
+                            } else {
+                              totalCommissions += c.commissionValue
+                            }
+                          })
+
+                          const utility = publicPrice > 0 ? (publicPrice - totalCost - totalCommissions) : 0
+                          return acc + utility
+                        }, 0).toFixed(2)}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Branch Sales Utility */}
+                <div className={cn(
+                  "relative rounded-2xl p-6 shadow-xl overflow-hidden",
+                  isDark ? "bg-gray-800/80" : "bg-white"
+                )}>
+                  <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-purple-500 to-purple-600" />
+                  <div className="flex items-center gap-4">
+                    <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-purple-500 to-purple-600 flex items-center justify-center shadow-lg">
+                      <Store className="w-7 h-7 text-white" />
+                    </div>
+                    <div>
+                      <p className={`text-sm font-medium ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
+                        Utilidad Venta Sucursales
+                      </p>
+                      <p className={`text-2xl font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>
+                        ${products.reduce((acc, p) => {
+                          const branchPrice = branchSalePrices[p.id] ?? 0
+                          const servicesCost = allServices.filter(s => s.productId === p.id).reduce((sum, s) => sum + s.costPrice, 0)
+                          const totalCost = p.miCosto + servicesCost
+                          const utility = branchPrice > 0 ? (branchPrice - totalCost) : 0
+                          return acc + utility
+                        }, 0).toFixed(2)}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Charts Section */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                {/* Bar Chart - Utility Comparison */}
+                <div className={`rounded-2xl p-6 ${isDark ? 'bg-gray-800/50 border border-gray-800' : 'bg-white border border-gray-200'}`}>
+                  <h3 className={`text-lg font-semibold mb-4 flex items-center gap-2 ${isDark ? 'text-white' : 'text-gray-900'}`}>
+                    <BarChart3 className="w-5 h-5" />
+                    Utilidad por Producto
+                  </h3>
+                  <div className="h-80">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart
+                        data={products.slice(0, 8).map(p => {
+                          const publicPrice = publicPrices[p.id] ?? 0
+                          const branchPrice = branchSalePrices[p.id] ?? 0
+                          const servicesCost = allServices.filter(s => s.productId === p.id).reduce((sum, s) => sum + s.costPrice, 0)
+                          const totalCost = p.miCosto + servicesCost
+
+                          let totalCommissions = 0
+                          allRolesCommissions.filter(c => c.productId === p.id).forEach(c => {
+                            if (c.commissionType === 'percentage') {
+                              totalCommissions += (publicPrice * c.commissionValue / 100)
+                            } else {
+                              totalCommissions += c.commissionValue
+                            }
+                          })
+
+                          return {
+                            name: p.name.length > 12 ? p.name.substring(0, 12) + '...' : p.name,
+                            publico: Math.max(0, publicPrice - totalCost - totalCommissions),
+                            sucursales: Math.max(0, branchPrice - totalCost)
+                          }
+                        })}
+                        margin={{ top: 20, right: 30, left: 20, bottom: 60 }}
+                      >
+                        <CartesianGrid strokeDasharray="3 3" stroke={isDark ? '#374151' : '#e5e7eb'} />
+                        <XAxis
+                          dataKey="name"
+                          tick={{ fill: isDark ? '#9ca3af' : '#6b7280', fontSize: 11 }}
+                          angle={-45}
+                          textAnchor="end"
+                          height={60}
+                        />
+                        <YAxis tick={{ fill: isDark ? '#9ca3af' : '#6b7280' }} />
+                        <Tooltip
+                          contentStyle={{
+                            backgroundColor: isDark ? '#1f2937' : '#fff',
+                            border: 'none',
+                            borderRadius: '12px',
+                            boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
+                          }}
+                          labelStyle={{ color: isDark ? '#fff' : '#111827' }}
+                          formatter={(value: number) => [`$${value.toFixed(2)}`, '']}
+                        />
+                        <Legend />
+                        <Bar dataKey="publico" name="Venta Público" fill="#3b82f6" radius={[4, 4, 0, 0]} />
+                        <Bar dataKey="sucursales" name="Venta Sucursales" fill="#8b5cf6" radius={[4, 4, 0, 0]} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
+
+                {/* Pie Chart - Distribution */}
+                <div className={`rounded-2xl p-6 ${isDark ? 'bg-gray-800/50 border border-gray-800' : 'bg-white border border-gray-200'}`}>
+                  <h3 className={`text-lg font-semibold mb-4 flex items-center gap-2 ${isDark ? 'text-white' : 'text-gray-900'}`}>
+                    <PieChart className="w-5 h-5" />
+                    Distribución de Ingresos
+                  </h3>
+                  <div className="h-80">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <RechartsPieChart>
+                        <Pie
+                          data={(() => {
+                            let totalPublicUtility = 0
+                            let totalBranchUtility = 0
+                            let totalCommissions = 0
+                            let totalCosts = 0
+
+                            products.forEach(p => {
+                              const publicPrice = publicPrices[p.id] ?? 0
+                              const branchPrice = branchSalePrices[p.id] ?? 0
+                              const servicesCost = allServices.filter(s => s.productId === p.id).reduce((sum, s) => sum + s.costPrice, 0)
+                              const totalCost = p.miCosto + servicesCost
+                              totalCosts += totalCost
+
+                              let productCommissions = 0
+                              allRolesCommissions.filter(c => c.productId === p.id).forEach(c => {
+                                if (c.commissionType === 'percentage') {
+                                  productCommissions += (publicPrice * c.commissionValue / 100)
+                                } else {
+                                  productCommissions += c.commissionValue
+                                }
+                              })
+                              totalCommissions += productCommissions
+
+                              if (publicPrice > 0) {
+                                totalPublicUtility += Math.max(0, publicPrice - totalCost - productCommissions)
+                              }
+                              if (branchPrice > 0) {
+                                totalBranchUtility += Math.max(0, branchPrice - totalCost)
+                              }
+                            })
+
+                            return [
+                              { name: 'Utilidad Público', value: totalPublicUtility, color: '#3b82f6' },
+                              { name: 'Utilidad Sucursales', value: totalBranchUtility, color: '#8b5cf6' },
+                              { name: 'Comisiones', value: totalCommissions, color: '#f59e0b' },
+                              { name: 'Costos', value: totalCosts, color: '#ef4444' }
+                            ].filter(item => item.value > 0)
+                          })()}
+                          cx="50%"
+                          cy="50%"
+                          innerRadius={60}
+                          outerRadius={100}
+                          paddingAngle={2}
+                          dataKey="value"
+                          label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+                          labelLine={false}
+                        >
+                          {(() => {
+                            const data = [
+                              { color: '#3b82f6' },
+                              { color: '#8b5cf6' },
+                              { color: '#f59e0b' },
+                              { color: '#ef4444' }
+                            ]
+                            return data.map((entry, index) => (
+                              <Cell key={`cell-${index}`} fill={entry.color} />
+                            ))
+                          })()}
+                        </Pie>
+                        <Tooltip
+                          contentStyle={{
+                            backgroundColor: isDark ? '#1f2937' : '#fff',
+                            border: 'none',
+                            borderRadius: '12px'
+                          }}
+                          formatter={(value: number) => [`$${value.toFixed(2)}`, '']}
+                        />
+                      </RechartsPieChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
+              </div>
+
+              {/* Detailed Table */}
+              <div className={`rounded-2xl overflow-hidden border ${isDark ? 'bg-gray-800/50 border-gray-800' : 'bg-white border-gray-200'}`}>
+                <div className={`px-6 py-4 border-b ${isDark ? 'border-gray-800' : 'border-gray-200'}`}>
+                  <h3 className={`font-semibold flex items-center gap-2 ${isDark ? 'text-white' : 'text-gray-900'}`}>
+                    <DollarSign className="w-5 h-5" />
+                    Detalle de Utilidades por Producto
+                  </h3>
+                </div>
+                <table className="w-full">
+                  <thead>
+                    <tr className={isDark ? 'bg-gray-800' : 'bg-gray-50'}>
+                      <th className={`px-6 py-4 text-left text-xs font-semibold uppercase tracking-wider ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
+                        Producto
+                      </th>
+                      <th className={`px-6 py-4 text-right text-xs font-semibold uppercase tracking-wider ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
+                        Mi Costo
+                      </th>
+                      <th className={`px-6 py-4 text-right text-xs font-semibold uppercase tracking-wider ${isDark ? 'text-blue-400' : 'text-blue-600'}`}>
+                        Precio Público
+                      </th>
+                      <th className={`px-6 py-4 text-right text-xs font-semibold uppercase tracking-wider ${isDark ? 'text-purple-400' : 'text-purple-600'}`}>
+                        Precio Sucursales
+                      </th>
+                      <th className={`px-6 py-4 text-right text-xs font-semibold uppercase tracking-wider ${isDark ? 'text-amber-400' : 'text-amber-600'}`}>
+                        Comisiones
+                      </th>
+                      <th className={`px-6 py-4 text-right text-xs font-semibold uppercase tracking-wider ${isDark ? 'text-emerald-400' : 'text-emerald-600'}`}>
+                        Utilidad Público
+                      </th>
+                      <th className={`px-6 py-4 text-right text-xs font-semibold uppercase tracking-wider ${isDark ? 'text-emerald-400' : 'text-emerald-600'}`}>
+                        Utilidad Sucursales
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className={`divide-y ${isDark ? 'divide-gray-800' : 'divide-gray-100'}`}>
+                    {products.map(product => {
+                      const catConfig = getCategoryConfig(product.category)
+                      const Icon = catConfig.icon
+                      const publicPrice = publicPrices[product.id] ?? 0
+                      const branchPrice = branchSalePrices[product.id] ?? 0
+                      const servicesCost = allServices.filter(s => s.productId === product.id).reduce((sum, s) => sum + s.costPrice, 0)
+                      const totalCost = product.miCosto + servicesCost
+
+                      let totalCommissions = 0
+                      allRolesCommissions.filter(c => c.productId === product.id).forEach(c => {
+                        if (c.commissionType === 'percentage') {
+                          totalCommissions += (publicPrice * c.commissionValue / 100)
+                        } else {
+                          totalCommissions += c.commissionValue
+                        }
+                      })
+
+                      const publicUtility = publicPrice > 0 ? (publicPrice - totalCost - totalCommissions) : 0
+                      const branchUtility = branchPrice > 0 ? (branchPrice - totalCost) : 0
+
+                      return (
+                        <tr key={product.id} className={`transition-colors ${isDark ? 'hover:bg-gray-700/50' : 'hover:bg-gray-50'}`}>
+                          <td className="px-6 py-4">
+                            <div className="flex items-center gap-3">
+                              <div className={`w-10 h-10 rounded-xl flex items-center justify-center bg-gradient-to-br ${catConfig.gradient}`}>
+                                <Icon className="w-5 h-5 text-white" />
+                              </div>
+                              <div>
+                                <div className={`font-medium ${isDark ? 'text-white' : 'text-gray-900'}`}>
+                                  {product.name}
+                                </div>
+                                <div className={`text-sm ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
+                                  {product.code}
+                                </div>
+                              </div>
+                            </div>
+                          </td>
+                          <td className={`px-6 py-4 text-right ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
+                            ${totalCost.toFixed(2)}
+                          </td>
+                          <td className={`px-6 py-4 text-right ${isDark ? 'text-blue-400' : 'text-blue-600'}`}>
+                            {publicPrice > 0 ? `$${publicPrice.toFixed(2)}` : '-'}
+                          </td>
+                          <td className={`px-6 py-4 text-right ${isDark ? 'text-purple-400' : 'text-purple-600'}`}>
+                            {branchPrice > 0 ? `$${branchPrice.toFixed(2)}` : '-'}
+                          </td>
+                          <td className={`px-6 py-4 text-right ${isDark ? 'text-amber-400' : 'text-amber-600'}`}>
+                            {totalCommissions > 0 ? `$${totalCommissions.toFixed(2)}` : '-'}
+                          </td>
+                          <td className="px-6 py-4 text-right">
+                            <span className={`font-semibold ${publicUtility > 0 ? (isDark ? 'text-emerald-400' : 'text-emerald-600') : (isDark ? 'text-red-400' : 'text-red-600')}`}>
+                              {publicPrice > 0 ? `$${publicUtility.toFixed(2)}` : '-'}
+                            </span>
+                          </td>
+                          <td className="px-6 py-4 text-right">
+                            <span className={`font-semibold ${branchUtility > 0 ? (isDark ? 'text-emerald-400' : 'text-emerald-600') : (isDark ? 'text-red-400' : 'text-red-600')}`}>
+                              {branchPrice > 0 ? `$${branchUtility.toFixed(2)}` : '-'}
+                            </span>
+                          </td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Empty state */}
+              {products.length === 0 && (
+                <div className={`rounded-2xl p-8 ${isDark ? 'bg-gray-800/50 border border-gray-800' : 'bg-white border border-gray-200'}`}>
+                  <div className="text-center py-12">
+                    <div className={`w-20 h-20 mx-auto mb-6 rounded-3xl flex items-center justify-center ${
+                      isDark ? 'bg-gradient-to-br from-blue-900/50 to-blue-800/30' : 'bg-gradient-to-br from-blue-100 to-blue-50'
+                    }`}>
+                      <BarChart3 className={`w-10 h-10 ${isDark ? 'text-blue-400' : 'text-blue-500'}`} />
+                    </div>
+                    <h3 className={`text-lg font-semibold mb-2 ${isDark ? 'text-white' : 'text-gray-900'}`}>
+                      Sin datos para reportes
+                    </h3>
+                    <p className={`max-w-md mx-auto ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
+                      Configura precios en tus productos para ver los reportes de utilidad.
                     </p>
                   </div>
                 </div>
