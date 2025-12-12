@@ -165,8 +165,10 @@ export default function ProductConfigPage() {
       if (data.success && data.data.products) {
         const prices: Record<number, number | null> = {}
         data.data.products.forEach((p: any) => {
-          if (p.hasPricing && p.precioClientes) {
-            prices[p.productId] = parseFloat(p.precioClientes)
+          // Leer el mi_costo específico de la empresa (precio especial asignado por LogiRapid)
+          // Solo si difiere del precio global del catálogo
+          if (p.hasPricing && p.miCosto && p.miCosto !== p.catalogPrecioMayorista) {
+            prices[p.productId] = parseFloat(p.miCosto)
           }
         })
         setCompanyPrices(prices)
@@ -230,7 +232,7 @@ export default function ProductConfigPage() {
         .filter(([_, price]) => price !== null)
         .map(([productId, price]) => ({
           productId: parseInt(productId),
-          precioClientes: price
+          miCostoEspecial: price  // Precio especial que LogiRapid asigna a esta empresa
         }))
 
       if (productsToUpdate.length === 0) {

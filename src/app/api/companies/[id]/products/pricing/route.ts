@@ -392,6 +392,8 @@ export async function POST(
           // New field names
           precioSucursales,
           precioClientes,
+          // Precio especial que LogiRapid asigna a esta empresa (sobrescribe precio global)
+          miCostoEspecial,
           // Provider fields
           providerCost,
           precioALogiRapid,
@@ -459,7 +461,11 @@ export async function POST(
         }
 
         const productInfo = productResult.rows[0]
-        const miCosto = parseFloat(productInfo.mi_costo || 0)
+        // Si LogiRapid asigna un precio especial a esta empresa, usar ese; si no, usar el precio global del catálogo
+        const catalogMiCosto = parseFloat(productInfo.mi_costo || 0)
+        const miCosto = miCostoEspecial !== undefined && miCostoEspecial !== null
+          ? parseFloat(miCostoEspecial)
+          : catalogMiCosto
         const catalogPrecioPublico = parseFloat(productInfo.catalog_publico || 0)
         const productCategory = productInfo.service_category || ''
 
