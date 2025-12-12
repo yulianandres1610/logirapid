@@ -640,19 +640,17 @@ export default function CatalogoEmpresaPage() {
                     {totalProducts}
                   </span>
                 </button>
-                {branches.length > 0 && (
-                  <button
-                    onClick={() => setActiveTab('sucursales')}
-                    className={`px-4 py-2 rounded-lg text-sm font-medium transition-all flex items-center gap-2 ${
-                      activeTab === 'sucursales'
-                        ? isDark ? 'bg-gray-700 text-white shadow-lg' : 'bg-white text-gray-900 shadow-md'
-                        : isDark ? 'text-gray-400 hover:text-white' : 'text-gray-500 hover:text-gray-900'
-                    }`}
-                  >
-                    <Store className="w-4 h-4" />
-                    Precios Sucursales
-                  </button>
-                )}
+                <button
+                  onClick={() => setActiveTab('sucursales')}
+                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-all flex items-center gap-2 ${
+                    activeTab === 'sucursales'
+                      ? isDark ? 'bg-gray-700 text-white shadow-lg' : 'bg-white text-gray-900 shadow-md'
+                      : isDark ? 'text-gray-400 hover:text-white' : 'text-gray-500 hover:text-gray-900'
+                  }`}
+                >
+                  <Store className="w-4 h-4" />
+                  Precios Sucursales
+                </button>
                 <button
                   onClick={() => setActiveTab('precios')}
                   className={`px-4 py-2 rounded-lg text-sm font-medium transition-all flex items-center gap-2 ${
