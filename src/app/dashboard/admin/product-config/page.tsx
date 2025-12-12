@@ -258,7 +258,7 @@ export default function ProductConfigPage() {
     <DashboardLayout>
       <div className="min-h-full">
         {/* Stats Cards */}
-        <div className="pb-4">
+        <div className="pt-2 pb-4">
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
               {/* Total Products */}
               <motion.div
