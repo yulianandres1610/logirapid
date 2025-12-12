@@ -131,6 +131,7 @@ export default function CatalogoEmpresaPage() {
   // Tab 4: Comisiones
   const [selectedRole, setSelectedRole] = useState<string>('USER')
   const [commissions, setCommissions] = useState<Commission[]>([])
+  const [allRolesCommissions, setAllRolesCommissions] = useState<Commission[]>([]) // All commissions from all roles
   const [savingCommissions, setSavingCommissions] = useState(false)
   // Comisiones editables: { [productId]: { type, value, maxAmount } }
   const [productCommissions, setProductCommissions] = useState<Record<number, { type: 'percentage' | 'fixed', value: number, maxAmount: number | null }>>({})
@@ -212,7 +213,7 @@ export default function CatalogoEmpresaPage() {
     }
   }, [companyId])
 
-  // Fetch commissions
+  // Fetch commissions for selected role
   const fetchCommissions = useCallback(async () => {
     if (!companyId) return
     try {
@@ -226,6 +227,40 @@ export default function CatalogoEmpresaPage() {
       console.error('Error fetching commissions:', error)
     }
   }, [companyId, selectedRole])
+
+  // Fetch ALL commissions (all roles) to calculate used margin
+  const fetchAllRolesCommissions = useCallback(async () => {
+    if (!companyId) return
+    try {
+      const response = await fetch(`/api/companies/${companyId}/commissions`)
+      const data = await response.json()
+      if (data.success && data.data) {
+        setAllRolesCommissions(data.data.commissions || [])
+      }
+    } catch (error) {
+      console.error('Error fetching all commissions:', error)
+    }
+  }, [companyId])
+
+  // Load public prices from API (for commissions tab)
+  const loadPublicPricesFromAPI = useCallback(async () => {
+    if (!companyId) return
+    try {
+      const response = await fetch(`/api/companies/${companyId}/products/pricing`)
+      const data = await response.json()
+      if (data.success && data.data?.products) {
+        const prices: Record<number, number | null> = {}
+        data.data.products.forEach((product: any) => {
+          if (product.precioClientes !== null && product.precioClientes !== undefined) {
+            prices[product.productId] = parseFloat(product.precioClientes)
+          }
+        })
+        setPublicPrices(prev => ({ ...prev, ...prices }))
+      }
+    } catch (error) {
+      console.error('Error loading public prices:', error)
+    }
+  }, [companyId])
 
   useEffect(() => {
     fetchProducts()
@@ -241,8 +276,11 @@ export default function CatalogoEmpresaPage() {
   useEffect(() => {
     if (activeTab === 'comisiones') {
       fetchCommissions()
+      fetchAllRolesCommissions()
+      fetchAllServices()
+      loadPublicPricesFromAPI()
     }
-  }, [activeTab, fetchCommissions])
+  }, [activeTab, fetchCommissions, fetchAllRolesCommissions, fetchAllServices, loadPublicPricesFromAPI])
 
   // Load branch prices when a branch is selected
   useEffect(() => {
@@ -508,7 +546,7 @@ export default function CatalogoEmpresaPage() {
   const handleSaveCommissions = async () => {
     if (!companyId) return
 
-    // First, validate that no commission exceeds its margin
+    // First, validate that no commission exceeds its available margin (considering other roles)
     const invalidProducts: string[] = []
     const invalidServices: string[] = []
 
@@ -520,7 +558,11 @@ export default function CatalogoEmpresaPage() {
       const servicesCost = getServicesCost(product.id)
       const totalCost = product.miCosto + servicesCost
       const productPublicPrice = publicPrices[product.id] ?? 0
-      const margin = productPublicPrice > 0 ? productPublicPrice - totalCost : 0
+      const totalMargin = productPublicPrice > 0 ? productPublicPrice - totalCost : 0
+
+      // Consider commissions from other roles
+      const otherRolesUsed = getOtherRolesCommissionForProduct(product.id, productPublicPrice)
+      const availableMargin = Math.max(0, totalMargin - otherRolesUsed)
 
       let effectiveCommission = 0
       if (commission.type === 'percentage') {
@@ -532,7 +574,7 @@ export default function CatalogoEmpresaPage() {
         effectiveCommission = commission.maxAmount
       }
 
-      if (effectiveCommission > margin && margin > 0) {
+      if (effectiveCommission > availableMargin && availableMargin >= 0) {
         invalidProducts.push(product.name)
       }
     }
@@ -543,7 +585,11 @@ export default function CatalogoEmpresaPage() {
       if (!commission || commission.value === 0) continue
 
       const serviceSellPrice = servicePrices[service.id] ?? service.sellPrice ?? 0
-      const serviceMargin = serviceSellPrice > 0 ? serviceSellPrice - service.costPrice : 0
+      const serviceTotalMargin = serviceSellPrice > 0 ? serviceSellPrice - service.costPrice : 0
+
+      // Consider commissions from other roles
+      const serviceOtherRolesUsed = getOtherRolesCommissionForService(service.id, serviceSellPrice)
+      const serviceAvailableMargin = Math.max(0, serviceTotalMargin - serviceOtherRolesUsed)
 
       let effectiveCommission = 0
       if (commission.type === 'percentage') {
@@ -555,7 +601,7 @@ export default function CatalogoEmpresaPage() {
         effectiveCommission = commission.maxAmount
       }
 
-      if (effectiveCommission > serviceMargin && serviceMargin > 0) {
+      if (effectiveCommission > serviceAvailableMargin && serviceAvailableMargin >= 0) {
         invalidServices.push(service.serviceName)
       }
     }
@@ -679,6 +725,36 @@ export default function CatalogoEmpresaPage() {
   // Helper: Calculate total services cost for a product
   const getServicesCost = (productId: number) => {
     return getProductServices(productId).reduce((sum, s) => sum + s.costPrice, 0)
+  }
+
+  // Helper: Calculate commission amount used by OTHER roles (not selected role) for a product
+  const getOtherRolesCommissionForProduct = (productId: number, productPublicPrice: number) => {
+    const otherRolesCommissions = allRolesCommissions.filter(
+      c => c.productId === productId && c.role !== selectedRole
+    )
+    return otherRolesCommissions.reduce((sum, c) => {
+      if (c.commissionType === 'fixed') {
+        return sum + c.commissionValue
+      } else {
+        // percentage
+        return sum + (productPublicPrice * c.commissionValue / 100)
+      }
+    }, 0)
+  }
+
+  // Helper: Calculate commission amount used by OTHER roles for a service
+  const getOtherRolesCommissionForService = (serviceId: number, serviceSellPrice: number) => {
+    const otherRolesCommissions = allRolesCommissions.filter(
+      c => c.serviceId === serviceId && c.role !== selectedRole
+    )
+    return otherRolesCommissions.reduce((sum, c) => {
+      if (c.commissionType === 'fixed') {
+        return sum + c.commissionValue
+      } else {
+        // percentage
+        return sum + (serviceSellPrice * c.commissionValue / 100)
+      }
+    }, 0)
   }
 
   // Toggle product expansion in price tab
@@ -1710,9 +1786,15 @@ export default function CatalogoEmpresaPage() {
                       const servicesCost = getServicesCost(product.id)
                       const totalCost = product.miCosto + servicesCost
                       const publicPrice = publicPrices[product.id] ?? 0
-                      const margin = publicPrice > 0 ? publicPrice - totalCost : 0
+                      const totalMargin = publicPrice > 0 ? publicPrice - totalCost : 0
 
-                      // Calculate effective commission amount
+                      // Calculate commission used by OTHER roles
+                      const otherRolesUsed = getOtherRolesCommissionForProduct(product.id, publicPrice)
+
+                      // Available margin = total margin - commissions of other roles
+                      const availableMargin = Math.max(0, totalMargin - otherRolesUsed)
+
+                      // Calculate effective commission amount for current role
                       let effectiveCommission = 0
                       if (commission.type === 'percentage') {
                         effectiveCommission = publicPrice > 0 ? (publicPrice * commission.value / 100) : 0
@@ -1724,7 +1806,7 @@ export default function CatalogoEmpresaPage() {
                         effectiveCommission = commission.maxAmount
                       }
 
-                      const exceedsMargin = effectiveCommission > margin && margin > 0
+                      const exceedsMargin = effectiveCommission > availableMargin && availableMargin >= 0
 
                       return (
                         <tr key={product.id} className={`transition-colors ${exceedsMargin ? (isDark ? 'bg-red-900/20' : 'bg-red-50') : ''} ${isDark ? 'hover:bg-gray-700/50' : 'hover:bg-gray-50'}`}>
@@ -1744,14 +1826,19 @@ export default function CatalogoEmpresaPage() {
                             </div>
                           </td>
                           <td className="px-6 py-4 text-right">
-                            {margin > 0 ? (
+                            {publicPrice > 0 ? (
                               <div>
-                                <span className={`text-lg font-semibold ${isDark ? 'text-emerald-400' : 'text-emerald-600'}`}>
-                                  ${margin.toFixed(2)}
+                                <span className={`text-lg font-semibold ${availableMargin > 0 ? (isDark ? 'text-emerald-400' : 'text-emerald-600') : (isDark ? 'text-amber-400' : 'text-amber-600')}`}>
+                                  ${availableMargin.toFixed(2)}
                                 </span>
+                                {otherRolesUsed > 0 && (
+                                  <div className={`text-xs mt-1 ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
+                                    Otros roles: ${otherRolesUsed.toFixed(2)}
+                                  </div>
+                                )}
                                 {exceedsMargin && (
                                   <div className={`text-xs mt-1 ${isDark ? 'text-red-400' : 'text-red-500'}`}>
-                                    Comisión: ${effectiveCommission.toFixed(2)}
+                                    Comision: ${effectiveCommission.toFixed(2)}
                                   </div>
                                 )}
                               </div>
@@ -1822,7 +1909,7 @@ export default function CatalogoEmpresaPage() {
                                   type="number"
                                   step="0.01"
                                   min="0"
-                                  max={margin > 0 ? margin : undefined}
+                                  max={availableMargin > 0 ? availableMargin : undefined}
                                   value={commission.maxAmount ?? ''}
                                   placeholder="—"
                                   onChange={(e) => setProductCommissions(prev => ({
@@ -1884,7 +1971,13 @@ export default function CatalogoEmpresaPage() {
 
                         // Calculate margin for this service (sellPrice - costPrice)
                         const serviceSellPrice = servicePrices[service.id] ?? service.sellPrice ?? 0
-                        const serviceMargin = serviceSellPrice > 0 ? serviceSellPrice - service.costPrice : 0
+                        const serviceTotalMargin = serviceSellPrice > 0 ? serviceSellPrice - service.costPrice : 0
+
+                        // Calculate commission used by OTHER roles for this service
+                        const serviceOtherRolesUsed = getOtherRolesCommissionForService(service.id, serviceSellPrice)
+
+                        // Available margin for this service
+                        const serviceAvailableMargin = Math.max(0, serviceTotalMargin - serviceOtherRolesUsed)
 
                         // Calculate effective commission amount
                         let effectiveServiceCommission = 0
@@ -1898,7 +1991,7 @@ export default function CatalogoEmpresaPage() {
                           effectiveServiceCommission = commission.maxAmount
                         }
 
-                        const serviceExceedsMargin = effectiveServiceCommission > serviceMargin && serviceMargin > 0
+                        const serviceExceedsMargin = effectiveServiceCommission > serviceAvailableMargin && serviceAvailableMargin >= 0
 
                         return (
                           <tr key={service.id} className={`transition-colors ${serviceExceedsMargin ? (isDark ? 'bg-red-900/20' : 'bg-red-50') : ''} ${isDark ? 'hover:bg-gray-700/50' : 'hover:bg-gray-50'}`}>
@@ -1915,11 +2008,16 @@ export default function CatalogoEmpresaPage() {
                               </div>
                             </td>
                             <td className="px-6 py-4 text-right">
-                              {serviceMargin > 0 ? (
+                              {serviceSellPrice > 0 ? (
                                 <div>
-                                  <span className={`text-lg font-semibold ${isDark ? 'text-emerald-400' : 'text-emerald-600'}`}>
-                                    ${serviceMargin.toFixed(2)}
+                                  <span className={`text-lg font-semibold ${serviceAvailableMargin > 0 ? (isDark ? 'text-emerald-400' : 'text-emerald-600') : (isDark ? 'text-amber-400' : 'text-amber-600')}`}>
+                                    ${serviceAvailableMargin.toFixed(2)}
                                   </span>
+                                  {serviceOtherRolesUsed > 0 && (
+                                    <div className={`text-xs mt-1 ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
+                                      Otros roles: ${serviceOtherRolesUsed.toFixed(2)}
+                                    </div>
+                                  )}
                                   {serviceExceedsMargin && (
                                     <div className={`text-xs mt-1 ${isDark ? 'text-red-400' : 'text-red-500'}`}>
                                       Comision: ${effectiveServiceCommission.toFixed(2)}
@@ -1993,7 +2091,7 @@ export default function CatalogoEmpresaPage() {
                                     type="number"
                                     step="0.01"
                                     min="0"
-                                    max={serviceMargin > 0 ? serviceMargin : undefined}
+                                    max={serviceAvailableMargin > 0 ? serviceAvailableMargin : undefined}
                                     value={commission.maxAmount ?? ''}
                                     placeholder="—"
                                     onChange={(e) => setServiceCommissions(prev => ({
