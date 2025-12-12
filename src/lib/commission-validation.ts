@@ -325,10 +325,11 @@ export async function updateConfiguredCommissionsTotal(
   const margin = await calculateAvailableMargin(companyId, productId, client)
 
   // Update or insert into company_product_pricing
+  // Use ON CONFLICT ON CONSTRAINT to reference the named constraint
   await client.query(`
     INSERT INTO company_product_pricing (company_id, product_id, total_configured_commissions, max_commission_amount, updated_at)
     VALUES ($1, $2, $3, $4, NOW())
-    ON CONFLICT (company_id, product_id)
+    ON CONFLICT ON CONSTRAINT unique_company_product
     DO UPDATE SET
       total_configured_commissions = $3,
       max_commission_amount = $4,
