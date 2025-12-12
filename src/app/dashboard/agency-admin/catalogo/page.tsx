@@ -243,6 +243,36 @@ export default function CatalogoEmpresaPage() {
     }
   }, [activeTab, fetchCommissions])
 
+  // Load branch prices when a branch is selected
+  useEffect(() => {
+    const loadBranchPrices = async () => {
+      if (!companyId || !selectedBranch) {
+        setBranchPrices({})
+        return
+      }
+
+      try {
+        const response = await fetch(`/api/companies/${companyId}/branches/pricing`)
+        const data = await response.json()
+
+        if (data.success && data.data?.products) {
+          const prices: Record<number, number | null> = {}
+          data.data.products.forEach((product: any) => {
+            const branchPrice = product.branchPrices?.[selectedBranch]
+            if (branchPrice?.isCustom) {
+              prices[product.productId] = branchPrice.precio
+            }
+          })
+          setBranchPrices(prices)
+        }
+      } catch (error) {
+        console.error('Error loading branch prices:', error)
+      }
+    }
+
+    loadBranchPrices()
+  }, [companyId, selectedBranch])
+
   // Filter products
   const filteredProducts = products.filter(product => {
     const matchesSearch = product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -1051,7 +1081,6 @@ export default function CatalogoEmpresaPage() {
                           value={selectedBranch || ''}
                           onChange={(e) => {
                             setSelectedBranch(e.target.value ? parseInt(e.target.value) : null)
-                            setBranchPrices({})
                           }}
                           className={`w-full md:w-96 appearance-none px-4 py-3 pr-10 rounded-xl text-sm font-medium cursor-pointer ${
                             isDark
