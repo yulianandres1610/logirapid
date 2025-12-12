@@ -157,6 +157,15 @@ export default function CatalogoEmpresaPage() {
           isActive: p.isActive !== false
         }))
         setProducts(mappedProducts)
+
+        // Also load public prices (precio_clientes) from the same API response
+        const prices: Record<number, number | null> = {}
+        data.data.products.forEach((p: any) => {
+          if (p.precioClientes !== null && p.precioClientes !== undefined) {
+            prices[p.productId] = parseFloat(p.precioClientes)
+          }
+        })
+        setPublicPrices(prev => ({ ...prev, ...prices }))
       }
     } catch (error) {
       console.error('Error fetching products:', error)
@@ -206,7 +215,17 @@ export default function CatalogoEmpresaPage() {
       const response = await fetch(`/api/companies/${companyId}/products/services`)
       const data = await response.json()
       if (data.success) {
-        setAllServices(data.data || [])
+        const services = data.data || []
+        setAllServices(services)
+
+        // Also load service sell prices for margin calculation
+        const prices: Record<number, number | null> = {}
+        services.forEach((s: ProductService) => {
+          if (s.sellPrice !== null && s.sellPrice !== undefined) {
+            prices[s.id] = s.sellPrice
+          }
+        })
+        setServicePrices(prev => ({ ...prev, ...prices }))
       }
     } catch (error) {
       console.error('Error fetching all services:', error)
