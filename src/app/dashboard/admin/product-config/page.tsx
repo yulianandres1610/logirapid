@@ -824,49 +824,49 @@ export default function ProductConfigPage() {
             <div className="space-y-6">
               {/* Company Selector Card */}
               <div className={`rounded-2xl p-6 ${isDark ? 'bg-gray-800 border border-gray-700' : 'bg-white border border-gray-200 shadow-sm'}`}>
-                <div className="flex items-center gap-4">
-                  <div className={`p-3 rounded-xl ${isDark ? 'bg-purple-500/20' : 'bg-purple-100'}`}>
-                    <Building2 className="w-6 h-6 text-purple-500" />
-                  </div>
-                  <div className="flex-1">
-                    <label className={`block text-sm font-medium mb-2 ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
-                      Seleccionar Empresa
-                    </label>
-                    <div className="flex items-center gap-3">
-                    <div className="relative">
-                      <select
-                        value={selectedCompany || ''}
-                        onChange={(e) => {
-                          setSelectedCompany(e.target.value ? parseInt(e.target.value) : null)
-                          setCompanyPrices({})
-                        }}
-                        className={`w-full md:w-96 appearance-none px-4 py-3 pr-10 rounded-xl text-sm font-medium cursor-pointer ${
-                          isDark
-                            ? 'bg-gray-700 border-gray-600 text-white'
-                            : 'bg-gray-50 border-gray-200 text-gray-900'
-                        } border focus:outline-none focus:ring-2 focus:ring-purple-500/20`}
-                      >
-                        <option value="">Selecciona una empresa...</option>
-                        {companies.map(company => (
-                          <option key={company.id} value={company.id}>
-                            {company.legalName}
-                          </option>
-                        ))}
-                      </select>
-                      <ChevronDown className={`absolute right-4 top-1/2 -translate-y-1/2 w-5 h-5 pointer-events-none ${isDark ? 'text-gray-500' : 'text-gray-400'}`} />
+                <div className="flex items-center justify-between gap-4">
+                  <div className="flex items-center gap-4">
+                    <div className={`p-3 rounded-xl ${isDark ? 'bg-purple-500/20' : 'bg-purple-100'}`}>
+                      <Building2 className="w-6 h-6 text-purple-500" />
                     </div>
-                    {selectedCompany && (
-                      <button
-                        onClick={handleSaveCompanyPrices}
-                        disabled={savingPrices}
-                        className="px-5 py-3 bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 text-white font-medium rounded-xl flex items-center gap-2 shadow-lg shadow-emerald-500/25 disabled:opacity-50 transition-all"
-                      >
-                        {savingPrices ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-                        Guardar Precios
-                      </button>
-                    )}
+                    <div>
+                      <label className={`block text-sm font-medium mb-2 ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
+                        Seleccionar Empresa
+                      </label>
+                      <div className="relative">
+                        <select
+                          value={selectedCompany || ''}
+                          onChange={(e) => {
+                            setSelectedCompany(e.target.value ? parseInt(e.target.value) : null)
+                            setCompanyPrices({})
+                          }}
+                          className={`w-full md:w-96 appearance-none px-4 py-3 pr-10 rounded-xl text-sm font-medium cursor-pointer ${
+                            isDark
+                              ? 'bg-gray-700 border-gray-600 text-white'
+                              : 'bg-gray-50 border-gray-200 text-gray-900'
+                          } border focus:outline-none focus:ring-2 focus:ring-purple-500/20`}
+                        >
+                          <option value="">Selecciona una empresa...</option>
+                          {companies.map(company => (
+                            <option key={company.id} value={company.id}>
+                              {company.legalName}
+                            </option>
+                          ))}
+                        </select>
+                        <ChevronDown className={`absolute right-4 top-1/2 -translate-y-1/2 w-5 h-5 pointer-events-none ${isDark ? 'text-gray-500' : 'text-gray-400'}`} />
+                      </div>
+                    </div>
                   </div>
-                  </div>
+                  {selectedCompany && (
+                    <button
+                      onClick={handleSaveCompanyPrices}
+                      disabled={savingPrices}
+                      className="px-5 py-3 bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 text-white font-medium rounded-xl flex items-center gap-2 shadow-lg shadow-emerald-500/25 disabled:opacity-50 transition-all"
+                    >
+                      {savingPrices ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                      Guardar Precios
+                    </button>
+                  )}
                 </div>
               </div>
 
