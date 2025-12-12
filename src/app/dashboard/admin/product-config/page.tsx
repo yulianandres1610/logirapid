@@ -517,16 +517,6 @@ export default function ProductConfigPage() {
               </div>
             )}
 
-            {activeTab === 'precios' && selectedCompany && (
-              <button
-                onClick={handleSaveCompanyPrices}
-                disabled={savingPrices}
-                className="px-5 py-2 bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 text-white font-medium rounded-xl flex items-center gap-2 shadow-lg shadow-emerald-500/25 disabled:opacity-50 transition-all"
-              >
-                {savingPrices ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-                Guardar Precios
-              </button>
-            )}
           </div>
         </div>
 
@@ -842,6 +832,7 @@ export default function ProductConfigPage() {
                     <label className={`block text-sm font-medium mb-2 ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
                       Seleccionar Empresa
                     </label>
+                    <div className="flex items-center gap-3">
                     <div className="relative">
                       <select
                         value={selectedCompany || ''}
@@ -864,6 +855,17 @@ export default function ProductConfigPage() {
                       </select>
                       <ChevronDown className={`absolute right-4 top-1/2 -translate-y-1/2 w-5 h-5 pointer-events-none ${isDark ? 'text-gray-500' : 'text-gray-400'}`} />
                     </div>
+                    {selectedCompany && (
+                      <button
+                        onClick={handleSaveCompanyPrices}
+                        disabled={savingPrices}
+                        className="px-5 py-3 bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 text-white font-medium rounded-xl flex items-center gap-2 shadow-lg shadow-emerald-500/25 disabled:opacity-50 transition-all"
+                      >
+                        {savingPrices ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                        Guardar Precios
+                      </button>
+                    )}
+                  </div>
                   </div>
                 </div>
               </div>
