@@ -266,15 +266,24 @@ export default function CatalogoEmpresaPage() {
 
     try {
       const isEdit = !!editingService
-      const url = isEdit
-        ? `/api/companies/${companyId}/products/${selectedProductForService.id}/services/${editingService.id}`
-        : `/api/companies/${companyId}/products/${selectedProductForService.id}/services`
+      const url = `/api/companies/${companyId}/products/${selectedProductForService.id}/services`
       const method = isEdit ? 'PUT' : 'POST'
+
+      // Map form fields to API fields
+      const apiData = {
+        serviceName: serviceData.serviceName,
+        serviceDescription: serviceData.description || null,
+        costPrice: serviceData.costPrice,
+        sellPrice: serviceData.sellPrice,
+        isRequired: serviceData.isRequired,
+        isDefaultSelected: serviceData.isDefaultSelected,
+        ...(isEdit && { serviceId: editingService.id })
+      }
 
       const response = await fetch(url, {
         method,
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(serviceData)
+        body: JSON.stringify(apiData)
       })
 
       const data = await response.json()
@@ -299,8 +308,12 @@ export default function CatalogoEmpresaPage() {
 
     try {
       const response = await fetch(
-        `/api/companies/${companyId}/products/${selectedProductForService.id}/services/${serviceId}`,
-        { method: 'DELETE' }
+        `/api/companies/${companyId}/products/${selectedProductForService.id}/services`,
+        {
+          method: 'DELETE',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ serviceId })
+        }
       )
       const data = await response.json()
 
@@ -403,55 +416,46 @@ export default function CatalogoEmpresaPage() {
 
     setSavingCommissions(true)
     try {
-      // Build commission data to save
-      const commissionsToSave: any[] = []
+      let savedCount = 0
+      let errorCount = 0
 
-      // Product commissions
-      Object.entries(productCommissions).forEach(([productId, config]) => {
+      // Save product commissions one by one (API expects individual requests)
+      for (const [productId, config] of Object.entries(productCommissions)) {
         if (config.value > 0) {
-          commissionsToSave.push({
-            productId: parseInt(productId),
-            serviceId: null,
-            role: selectedRole,
-            commissionType: config.type,
-            commissionValue: config.value,
-            maxAmount: config.maxAmount
-          })
+          try {
+            const response = await fetch(`/api/companies/${companyId}/commissions`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                productId: parseInt(productId),
+                role: selectedRole,
+                commissionType: config.type,
+                commissionValue: config.value,
+                maxAmount: config.maxAmount,
+                activityType: 'delivery'
+              })
+            })
+            const data = await response.json()
+            if (data.success) {
+              savedCount++
+            } else {
+              console.error('Error saving commission:', data.error)
+              errorCount++
+            }
+          } catch (e) {
+            errorCount++
+          }
         }
-      })
-
-      // Service commissions
-      Object.entries(serviceCommissions).forEach(([serviceId, config]) => {
-        if (config.value > 0) {
-          commissionsToSave.push({
-            productId: null,
-            serviceId: parseInt(serviceId),
-            role: selectedRole,
-            commissionType: config.type,
-            commissionValue: config.value,
-            maxAmount: config.maxAmount
-          })
-        }
-      })
-
-      if (commissionsToSave.length === 0) {
-        showNotification('warning', 'Aviso', 'No hay comisiones para guardar')
-        setSavingCommissions(false)
-        return
       }
 
-      const response = await fetch(`/api/companies/${companyId}/commissions`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ role: selectedRole, commissions: commissionsToSave })
-      })
-
-      const data = await response.json()
-
-      if (data.success) {
-        showNotification('success', 'Exito', `Comisiones para ${selectedRole} guardadas`)
+      if (savedCount > 0 && errorCount === 0) {
+        showNotification('success', 'Exito', `${savedCount} comisiones para ${selectedRole} guardadas`)
+      } else if (savedCount > 0 && errorCount > 0) {
+        showNotification('warning', 'Parcial', `${savedCount} guardadas, ${errorCount} con error`)
+      } else if (savedCount === 0 && errorCount === 0) {
+        showNotification('info', 'Info', 'No hay comisiones con valor para guardar')
       } else {
-        showNotification('error', 'Error', data.error || 'Error al guardar comisiones')
+        showNotification('error', 'Error', 'Error al guardar comisiones')
       }
     } catch (error) {
       showNotification('error', 'Error', 'Error al guardar comisiones')
