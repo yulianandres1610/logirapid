@@ -258,13 +258,7 @@ export default function ProductConfigPage() {
     <DashboardLayout>
       <div className={`min-h-full ${isDark ? 'bg-gray-900' : 'bg-gray-50'}`}>
         {/* Hero Header */}
-        <div className={`relative overflow-hidden ${isDark ? 'bg-gradient-to-br from-gray-800 via-gray-900 to-gray-800' : 'bg-gradient-to-br from-white via-blue-50/30 to-white'}`}>
-          <div className="absolute inset-0 overflow-hidden">
-            <div className={`absolute -top-40 -right-40 w-80 h-80 rounded-full ${isDark ? 'bg-blue-500/10' : 'bg-blue-500/5'} blur-3xl`} />
-            <div className={`absolute -bottom-40 -left-40 w-80 h-80 rounded-full ${isDark ? 'bg-purple-500/10' : 'bg-purple-500/5'} blur-3xl`} />
-          </div>
-
-          <div className="relative px-6 py-8">
+        <div className="px-6 pt-6 pb-4">
             <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
               {/* Title Section */}
               <div>
@@ -289,8 +283,8 @@ export default function ProductConfigPage() {
                   onClick={() => fetchProducts()}
                   className={`p-2.5 rounded-xl transition-all ${
                     isDark
-                      ? 'bg-white/5 hover:bg-white/10 text-gray-400'
-                      : 'bg-white hover:bg-gray-50 text-gray-500 shadow-sm border border-gray-200'
+                      ? 'bg-gray-800 hover:bg-gray-700 text-gray-400'
+                      : 'bg-white hover:bg-gray-100 text-gray-500 shadow-sm border border-gray-200'
                   }`}
                 >
                   <RefreshCw className={`w-5 h-5 ${loading ? 'animate-spin' : ''}`} />
@@ -419,11 +413,10 @@ export default function ProductConfigPage() {
                 <div className={`absolute bottom-0 left-0 right-0 h-1 bg-gradient-to-r from-amber-500 to-amber-400`} />
               </motion.div>
             </div>
-          </div>
         </div>
 
         {/* Tabs Navigation */}
-        <div className={`sticky top-0 z-20 px-6 py-3 border-b ${isDark ? 'bg-gray-900/95 backdrop-blur-lg border-gray-800' : 'bg-white/95 backdrop-blur-lg border-gray-200'}`}>
+        <div className={`sticky top-0 z-20 px-6 py-3 border-b ${isDark ? 'bg-gray-900 border-gray-800' : 'bg-gray-50 border-gray-200'}`}>
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               {/* Tabs */}
