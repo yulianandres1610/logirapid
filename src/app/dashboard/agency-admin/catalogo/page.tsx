@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useCallback } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
+import { cn } from '@/lib/utils'
 import { DashboardLayout } from '@/components/layout/dashboard-layout'
 import { useTheme } from '@/contexts/theme-context'
 import { useNotifications } from '@/contexts/NotificationContext'
@@ -760,117 +761,217 @@ export default function CatalogoEmpresaPage() {
       <div className="min-h-full">
         {/* Stats Cards */}
         <div className="pt-2 pb-4">
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-5">
             {/* Total Products */}
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
-              className={`relative overflow-hidden rounded-2xl p-5 ${
-                isDark ? 'bg-white/5 border border-white/10' : 'bg-white border border-gray-100 shadow-sm'
-              }`}
+              transition={{ delay: 0.1 }}
+              className={cn(
+                'relative overflow-hidden',
+                isDark
+                  ? 'bg-gradient-to-br from-gray-800 to-gray-900 border-gray-700'
+                  : 'bg-gradient-to-br from-slate-50 to-white border-slate-200',
+                'rounded-2xl border shadow-xl'
+              )}
             >
-              <div className="flex items-start justify-between">
-                <div>
-                  <p className={`text-sm font-medium ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
-                    Total Productos
-                  </p>
-                  <p className={`text-3xl font-bold mt-1 ${isDark ? 'text-white' : 'text-gray-900'}`}>
-                    {totalProducts}
-                  </p>
-                  <p className={`text-xs mt-2 ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
-                    En tu catalogo
-                  </p>
+              <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-400 to-blue-600"></div>
+              <div className="p-6">
+                <div className="flex items-start justify-between mb-4">
+                  <div className="flex items-center gap-3">
+                    <div className={cn(
+                      'p-3 rounded-xl shadow-sm',
+                      isDark
+                        ? 'bg-blue-900/30 border border-blue-800/50'
+                        : 'bg-gradient-to-br from-blue-50 to-blue-100 border border-blue-200'
+                    )}>
+                      <Layers className="w-6 h-6 text-blue-600" />
+                    </div>
+                    <div>
+                      <p className={cn(
+                        'text-sm font-medium',
+                        isDark ? 'text-gray-400' : 'text-black'
+                      )}>Total Productos</p>
+                      <p className={cn(
+                        'text-3xl font-bold mt-1',
+                        isDark ? 'text-white' : 'text-slate-900'
+                      )}>{totalProducts}</p>
+                    </div>
+                  </div>
                 </div>
-                <div className={`p-3 rounded-xl ${isDark ? 'bg-blue-500/20' : 'bg-blue-50'}`}>
-                  <Layers className="w-6 h-6 text-blue-500" />
+                <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-1">
+                    <div className="w-2 h-2 bg-blue-400 rounded-full animate-pulse"></div>
+                    <span className={cn(
+                      'text-xs font-medium',
+                      isDark ? 'text-gray-500' : 'text-black'
+                    )}>En tu catálogo</span>
+                  </div>
                 </div>
               </div>
-              <div className="absolute bottom-0 left-0 right-0 h-1 bg-gradient-to-r from-blue-500 to-blue-400" />
             </motion.div>
 
             {/* Products with Services */}
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.1 }}
-              className={`relative overflow-hidden rounded-2xl p-5 ${
-                isDark ? 'bg-white/5 border border-white/10' : 'bg-white border border-gray-100 shadow-sm'
-              }`}
+              transition={{ delay: 0.2 }}
+              className={cn(
+                'relative overflow-hidden',
+                isDark
+                  ? 'bg-gradient-to-br from-gray-800 to-gray-900 border-gray-700'
+                  : 'bg-gradient-to-br from-slate-50 to-white border-slate-200',
+                'rounded-2xl border shadow-xl'
+              )}
             >
-              <div className="flex items-start justify-between">
-                <div>
-                  <p className={`text-sm font-medium ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
-                    Con Servicios
-                  </p>
-                  <p className={`text-3xl font-bold mt-1 ${isDark ? 'text-white' : 'text-gray-900'}`}>
-                    {productsWithServices}
-                  </p>
-                  <p className={`text-xs mt-2 ${isDark ? 'text-emerald-400' : 'text-emerald-600'}`}>
-                    <CheckCircle className="w-3 h-3 inline mr-1" />
-                    {totalProducts > 0 ? Math.round((productsWithServices / totalProducts) * 100) : 0}% del total
-                  </p>
+              <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-emerald-400 to-green-600"></div>
+              <div className="p-6">
+                <div className="flex items-start justify-between mb-4">
+                  <div className="flex items-center gap-3">
+                    <div className={cn(
+                      'p-3 rounded-xl shadow-sm',
+                      isDark
+                        ? 'bg-emerald-900/30 border border-emerald-800/50'
+                        : 'bg-gradient-to-br from-emerald-50 to-green-100 border border-emerald-200'
+                    )}>
+                      <CheckCircle className="w-6 h-6 text-emerald-600" />
+                    </div>
+                    <div>
+                      <p className={cn(
+                        'text-sm font-medium',
+                        isDark ? 'text-gray-400' : 'text-black'
+                      )}>Con Servicios</p>
+                      <p className={cn(
+                        'text-3xl font-bold mt-1',
+                        isDark ? 'text-white' : 'text-slate-900'
+                      )}>{productsWithServices}</p>
+                    </div>
+                  </div>
                 </div>
-                <div className={`p-3 rounded-xl ${isDark ? 'bg-emerald-500/20' : 'bg-emerald-50'}`}>
-                  <CheckCircle className="w-6 h-6 text-emerald-500" />
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-1">
+                      <div className="w-2 h-2 bg-emerald-400 rounded-full"></div>
+                      <span className={cn(
+                        'text-xs font-medium',
+                        isDark ? 'text-gray-500' : 'text-black'
+                      )}>Del total</span>
+                    </div>
+                    <span className={cn(
+                      'text-xs font-bold',
+                      isDark ? 'text-emerald-400' : 'text-emerald-600'
+                    )}>
+                      {totalProducts > 0 ? Math.round((productsWithServices / totalProducts) * 100) : 0}%
+                    </span>
+                  </div>
+                  <div className="w-full bg-emerald-100 dark:bg-emerald-900/30 rounded-full h-2">
+                    <div
+                      className="bg-gradient-to-r from-emerald-400 to-green-500 h-2 rounded-full transition-all duration-500"
+                      style={{
+                        width: `${totalProducts > 0 ? (productsWithServices / totalProducts) * 100 : 0}%`
+                      }}
+                    ></div>
+                  </div>
                 </div>
               </div>
-              <div className="absolute bottom-0 left-0 right-0 h-1 bg-gradient-to-r from-emerald-500 to-emerald-400" />
             </motion.div>
 
             {/* Branches */}
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.2 }}
-              className={`relative overflow-hidden rounded-2xl p-5 ${
-                isDark ? 'bg-white/5 border border-white/10' : 'bg-white border border-gray-100 shadow-sm'
-              }`}
+              transition={{ delay: 0.3 }}
+              className={cn(
+                'relative overflow-hidden',
+                isDark
+                  ? 'bg-gradient-to-br from-gray-800 to-gray-900 border-gray-700'
+                  : 'bg-gradient-to-br from-slate-50 to-white border-slate-200',
+                'rounded-2xl border shadow-xl'
+              )}
             >
-              <div className="flex items-start justify-between">
-                <div>
-                  <p className={`text-sm font-medium ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
-                    Sucursales
-                  </p>
-                  <p className={`text-3xl font-bold mt-1 ${isDark ? 'text-white' : 'text-gray-900'}`}>
-                    {branches.length}
-                  </p>
-                  <p className={`text-xs mt-2 ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
-                    Configuradas
-                  </p>
+              <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-violet-400 to-purple-600"></div>
+              <div className="p-6">
+                <div className="flex items-start justify-between mb-4">
+                  <div className="flex items-center gap-3">
+                    <div className={cn(
+                      'p-3 rounded-xl shadow-sm',
+                      isDark
+                        ? 'bg-violet-900/30 border border-violet-800/50'
+                        : 'bg-gradient-to-br from-violet-50 to-purple-100 border border-violet-200'
+                    )}>
+                      <Store className="w-6 h-6 text-violet-600" />
+                    </div>
+                    <div>
+                      <p className={cn(
+                        'text-sm font-medium',
+                        isDark ? 'text-gray-400' : 'text-black'
+                      )}>Sucursales</p>
+                      <p className={cn(
+                        'text-3xl font-bold mt-1',
+                        isDark ? 'text-white' : 'text-slate-900'
+                      )}>{branches.length}</p>
+                    </div>
+                  </div>
                 </div>
-                <div className={`p-3 rounded-xl ${isDark ? 'bg-purple-500/20' : 'bg-purple-50'}`}>
-                  <Store className="w-6 h-6 text-purple-500" />
+                <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-1">
+                    <div className="w-2 h-2 bg-violet-400 rounded-full"></div>
+                    <span className={cn(
+                      'text-xs font-medium',
+                      isDark ? 'text-gray-500' : 'text-black'
+                    )}>Configuradas</span>
+                  </div>
                 </div>
               </div>
-              <div className="absolute bottom-0 left-0 right-0 h-1 bg-gradient-to-r from-purple-500 to-purple-400" />
             </motion.div>
 
             {/* Categories */}
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.3 }}
-              className={`relative overflow-hidden rounded-2xl p-5 ${
-                isDark ? 'bg-white/5 border border-white/10' : 'bg-white border border-gray-100 shadow-sm'
-              }`}
+              transition={{ delay: 0.4 }}
+              className={cn(
+                'relative overflow-hidden',
+                isDark
+                  ? 'bg-gradient-to-br from-gray-800 to-gray-900 border-gray-700'
+                  : 'bg-gradient-to-br from-slate-50 to-white border-slate-200',
+                'rounded-2xl border shadow-xl'
+              )}
             >
-              <div className="flex items-start justify-between">
-                <div>
-                  <p className={`text-sm font-medium ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
-                    Categorias
-                  </p>
-                  <p className={`text-3xl font-bold mt-1 ${isDark ? 'text-white' : 'text-gray-900'}`}>
-                    {categoryCounts.filter(c => c.count > 0).length}
-                  </p>
-                  <p className={`text-xs mt-2 ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
-                    de {CATEGORIES.length} disponibles
-                  </p>
+              <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-amber-400 to-orange-600"></div>
+              <div className="p-6">
+                <div className="flex items-start justify-between mb-4">
+                  <div className="flex items-center gap-3">
+                    <div className={cn(
+                      'p-3 rounded-xl shadow-sm',
+                      isDark
+                        ? 'bg-amber-900/30 border border-amber-800/50'
+                        : 'bg-gradient-to-br from-amber-50 to-orange-100 border border-amber-200'
+                    )}>
+                      <Tag className="w-6 h-6 text-amber-600" />
+                    </div>
+                    <div>
+                      <p className={cn(
+                        'text-sm font-medium',
+                        isDark ? 'text-gray-400' : 'text-black'
+                      )}>Categorías</p>
+                      <p className={cn(
+                        'text-3xl font-bold mt-1',
+                        isDark ? 'text-white' : 'text-slate-900'
+                      )}>{categoryCounts.filter(c => c.count > 0).length}</p>
+                    </div>
+                  </div>
                 </div>
-                <div className={`p-3 rounded-xl ${isDark ? 'bg-amber-500/20' : 'bg-amber-50'}`}>
-                  <Tag className="w-6 h-6 text-amber-500" />
+                <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-1">
+                    <div className="w-2 h-2 bg-amber-400 rounded-full"></div>
+                    <span className={cn(
+                      'text-xs font-medium',
+                      isDark ? 'text-gray-500' : 'text-black'
+                    )}>de {CATEGORIES.length} disponibles</span>
+                  </div>
                 </div>
               </div>
-              <div className="absolute bottom-0 left-0 right-0 h-1 bg-gradient-to-r from-amber-500 to-amber-400" />
             </motion.div>
           </div>
         </div>
