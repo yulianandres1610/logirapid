@@ -758,9 +758,14 @@ export default function CatalogoEmpresaPage() {
 
   return (
     <DashboardLayout>
-      <div className="min-h-full">
+      <div className="min-h-screen p-6">
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="space-y-6"
+        >
         {/* Stats Cards */}
-        <div className="pt-2 pb-4">
+        <div>
           <div className="grid grid-cols-1 md:grid-cols-4 gap-5">
             {/* Total Products */}
             <motion.div
@@ -2031,6 +2036,7 @@ export default function CatalogoEmpresaPage() {
             </div>
           )}
         </div>
+        </motion.div>
       </div>
 
       {/* Service Modal */}
