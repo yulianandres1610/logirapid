@@ -126,6 +126,9 @@ export default function CatalogoEmpresaPage() {
   const [selectedRole, setSelectedRole] = useState<string>('USER')
   const [commissions, setCommissions] = useState<Commission[]>([])
   const [savingCommissions, setSavingCommissions] = useState(false)
+  // Comisiones editables: { [productId]: { type, value, maxAmount } }
+  const [productCommissions, setProductCommissions] = useState<Record<number, { type: 'percentage' | 'fixed', value: number, maxAmount: number | null }>>({})
+  const [serviceCommissions, setServiceCommissions] = useState<Record<number, { type: 'percentage' | 'fixed', value: number, maxAmount: number | null }>>({})
 
   // Fetch products for this company
   const fetchProducts = useCallback(async () => {
@@ -400,14 +403,87 @@ export default function CatalogoEmpresaPage() {
 
     setSavingCommissions(true)
     try {
-      // Implementation depends on commission API structure
-      showNotification('success', 'Exito', 'Comisiones guardadas')
+      // Build commission data to save
+      const commissionsToSave: any[] = []
+
+      // Product commissions
+      Object.entries(productCommissions).forEach(([productId, config]) => {
+        if (config.value > 0) {
+          commissionsToSave.push({
+            productId: parseInt(productId),
+            serviceId: null,
+            role: selectedRole,
+            commissionType: config.type,
+            commissionValue: config.value,
+            maxAmount: config.maxAmount
+          })
+        }
+      })
+
+      // Service commissions
+      Object.entries(serviceCommissions).forEach(([serviceId, config]) => {
+        if (config.value > 0) {
+          commissionsToSave.push({
+            productId: null,
+            serviceId: parseInt(serviceId),
+            role: selectedRole,
+            commissionType: config.type,
+            commissionValue: config.value,
+            maxAmount: config.maxAmount
+          })
+        }
+      })
+
+      if (commissionsToSave.length === 0) {
+        showNotification('warning', 'Aviso', 'No hay comisiones para guardar')
+        setSavingCommissions(false)
+        return
+      }
+
+      const response = await fetch(`/api/companies/${companyId}/commissions`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ role: selectedRole, commissions: commissionsToSave })
+      })
+
+      const data = await response.json()
+
+      if (data.success) {
+        showNotification('success', 'Exito', `Comisiones para ${selectedRole} guardadas`)
+      } else {
+        showNotification('error', 'Error', data.error || 'Error al guardar comisiones')
+      }
     } catch (error) {
       showNotification('error', 'Error', 'Error al guardar comisiones')
     } finally {
       setSavingCommissions(false)
     }
   }
+
+  // Initialize commissions when role changes
+  useEffect(() => {
+    if (activeTab === 'comisiones' && products.length > 0) {
+      // Initialize product commissions with default values
+      const initialProductCommissions: Record<number, { type: 'percentage' | 'fixed', value: number, maxAmount: number | null }> = {}
+      products.forEach(p => {
+        const existing = commissions.find(c => c.productId === p.id && c.role === selectedRole)
+        initialProductCommissions[p.id] = existing
+          ? { type: existing.commissionType, value: existing.commissionValue, maxAmount: existing.maxAmount }
+          : { type: 'percentage', value: 0, maxAmount: null }
+      })
+      setProductCommissions(initialProductCommissions)
+
+      // Initialize service commissions
+      const initialServiceCommissions: Record<number, { type: 'percentage' | 'fixed', value: number, maxAmount: number | null }> = {}
+      allServices.forEach(s => {
+        const existing = commissions.find(c => c.serviceId === s.id && c.role === selectedRole)
+        initialServiceCommissions[s.id] = existing
+          ? { type: existing.commissionType, value: existing.commissionValue, maxAmount: existing.maxAmount }
+          : { type: 'percentage', value: 0, maxAmount: null }
+      })
+      setServiceCommissions(initialServiceCommissions)
+    }
+  }, [activeTab, selectedRole, products, allServices, commissions])
 
   // Stats calculation
   const totalProducts = products.length
@@ -1283,21 +1359,281 @@ export default function CatalogoEmpresaPage() {
                 </div>
               </div>
 
-              <div className={`rounded-2xl p-8 ${isDark ? 'bg-gray-800/50 border border-gray-800' : 'bg-white border border-gray-200'}`}>
-                <div className="text-center py-12">
-                  <div className={`w-20 h-20 mx-auto mb-6 rounded-3xl flex items-center justify-center ${
-                    isDark ? 'bg-gradient-to-br from-purple-900/50 to-purple-800/30' : 'bg-gradient-to-br from-purple-100 to-purple-50'
-                  }`}>
-                    <Percent className={`w-10 h-10 ${isDark ? 'text-purple-400' : 'text-purple-500'}`} />
-                  </div>
-                  <h3 className={`text-lg font-semibold mb-2 ${isDark ? 'text-white' : 'text-gray-900'}`}>
-                    Configuracion de Comisiones
-                  </h3>
-                  <p className={`max-w-md mx-auto ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
-                    Configura las comisiones que recibiran los usuarios con rol <strong>{selectedRole}</strong> por cada venta de producto o servicio.
+              {/* Product Commissions Table */}
+              <div className={`rounded-2xl overflow-hidden border ${isDark ? 'bg-gray-800/50 border-gray-800' : 'bg-white border-gray-200'}`}>
+                <div className={`px-6 py-4 border-b ${isDark ? 'border-gray-800' : 'border-gray-200'}`}>
+                  <h4 className={`font-semibold flex items-center gap-2 ${isDark ? 'text-white' : 'text-gray-900'}`}>
+                    <Package className="w-5 h-5" />
+                    Comisiones por Producto
+                  </h4>
+                  <p className={`text-sm mt-1 ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
+                    Configura la comision que recibe el rol <strong>{selectedRole}</strong> por cada venta
                   </p>
                 </div>
+                <table className="w-full">
+                  <thead>
+                    <tr className={isDark ? 'bg-gray-800' : 'bg-gray-50'}>
+                      <th className={`px-6 py-4 text-left text-xs font-semibold uppercase tracking-wider ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
+                        Producto
+                      </th>
+                      <th className={`px-6 py-4 text-center text-xs font-semibold uppercase tracking-wider ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
+                        Tipo
+                      </th>
+                      <th className={`px-6 py-4 text-center text-xs font-semibold uppercase tracking-wider ${isDark ? 'text-purple-400' : 'text-purple-600'}`}>
+                        Valor
+                      </th>
+                      <th className={`px-6 py-4 text-center text-xs font-semibold uppercase tracking-wider ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
+                        Max. Monto
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className={`divide-y ${isDark ? 'divide-gray-800' : 'divide-gray-100'}`}>
+                    {products.map(product => {
+                      const catConfig = getCategoryConfig(product.category)
+                      const Icon = catConfig.icon
+                      const commission = productCommissions[product.id] || { type: 'percentage' as const, value: 0, maxAmount: null }
+
+                      return (
+                        <tr key={product.id} className={`transition-colors ${isDark ? 'hover:bg-gray-700/50' : 'hover:bg-gray-50'}`}>
+                          <td className="px-6 py-4">
+                            <div className="flex items-center gap-4">
+                              <div className={`w-10 h-10 rounded-xl flex items-center justify-center bg-gradient-to-br ${catConfig.gradient}`}>
+                                <Icon className="w-5 h-5 text-white" />
+                              </div>
+                              <div>
+                                <div className={`font-medium ${isDark ? 'text-white' : 'text-gray-900'}`}>
+                                  {product.name}
+                                </div>
+                                <div className={`text-sm ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
+                                  {product.code}
+                                </div>
+                              </div>
+                            </div>
+                          </td>
+                          <td className="px-6 py-4">
+                            <div className="flex justify-center">
+                              <select
+                                value={commission.type}
+                                onChange={(e) => setProductCommissions(prev => ({
+                                  ...prev,
+                                  [product.id]: { ...commission, type: e.target.value as 'percentage' | 'fixed' }
+                                }))}
+                                className={`appearance-none px-3 py-2 rounded-lg text-sm cursor-pointer ${
+                                  isDark
+                                    ? 'bg-gray-700 border-gray-600 text-white'
+                                    : 'bg-gray-50 border-gray-200 text-gray-900'
+                                } border focus:outline-none focus:ring-2 focus:ring-purple-500/20`}
+                              >
+                                <option value="percentage">Porcentaje %</option>
+                                <option value="fixed">Monto Fijo $</option>
+                              </select>
+                            </div>
+                          </td>
+                          <td className="px-6 py-4">
+                            <div className="flex justify-center">
+                              <div className="relative">
+                                <span className={`absolute left-3 top-1/2 -translate-y-1/2 text-sm ${isDark ? 'text-purple-400' : 'text-purple-500'}`}>
+                                  {commission.type === 'percentage' ? '%' : '$'}
+                                </span>
+                                <input
+                                  type="number"
+                                  step={commission.type === 'percentage' ? '1' : '0.01'}
+                                  min="0"
+                                  max={commission.type === 'percentage' ? '100' : undefined}
+                                  value={commission.value || ''}
+                                  placeholder="0"
+                                  onChange={(e) => setProductCommissions(prev => ({
+                                    ...prev,
+                                    [product.id]: { ...commission, value: parseFloat(e.target.value) || 0 }
+                                  }))}
+                                  className={`w-28 pl-8 pr-3 py-2.5 text-center text-lg font-semibold rounded-xl border-2 transition-all ${
+                                    commission.value > 0
+                                      ? isDark
+                                        ? 'bg-purple-900/30 border-purple-600 text-purple-300 focus:border-purple-500'
+                                        : 'bg-purple-50 border-purple-300 text-purple-700 focus:border-purple-400'
+                                      : isDark
+                                        ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-600 focus:border-purple-500'
+                                        : 'bg-white border-gray-200 text-gray-900 placeholder-gray-400 focus:border-purple-400'
+                                  } focus:outline-none focus:ring-4 focus:ring-purple-500/10`}
+                                />
+                              </div>
+                            </div>
+                          </td>
+                          <td className="px-6 py-4">
+                            <div className="flex justify-center">
+                              <div className="relative">
+                                <span className={`absolute left-3 top-1/2 -translate-y-1/2 text-sm ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>$</span>
+                                <input
+                                  type="number"
+                                  step="0.01"
+                                  min="0"
+                                  value={commission.maxAmount ?? ''}
+                                  placeholder="—"
+                                  onChange={(e) => setProductCommissions(prev => ({
+                                    ...prev,
+                                    [product.id]: { ...commission, maxAmount: e.target.value ? parseFloat(e.target.value) : null }
+                                  }))}
+                                  className={`w-28 pl-8 pr-3 py-2 text-center rounded-xl border transition-all ${
+                                    isDark
+                                      ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-600 focus:border-purple-500'
+                                      : 'bg-white border-gray-200 text-gray-900 placeholder-gray-400 focus:border-purple-400'
+                                  } focus:outline-none focus:ring-2 focus:ring-purple-500/10`}
+                                />
+                              </div>
+                            </div>
+                          </td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
               </div>
+
+              {/* Service Commissions Table */}
+              {allServices.length > 0 && (
+                <div className={`rounded-2xl overflow-hidden border ${isDark ? 'bg-gray-800/50 border-gray-800' : 'bg-white border-gray-200'}`}>
+                  <div className={`px-6 py-4 border-b ${isDark ? 'border-gray-800' : 'border-gray-200'}`}>
+                    <h4 className={`font-semibold flex items-center gap-2 ${isDark ? 'text-white' : 'text-gray-900'}`}>
+                      <Tag className="w-5 h-5" />
+                      Comisiones por Servicio
+                    </h4>
+                    <p className={`text-sm mt-1 ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
+                      Comisiones adicionales por servicios personalizados
+                    </p>
+                  </div>
+                  <table className="w-full">
+                    <thead>
+                      <tr className={isDark ? 'bg-gray-800' : 'bg-gray-50'}>
+                        <th className={`px-6 py-4 text-left text-xs font-semibold uppercase tracking-wider ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
+                          Servicio
+                        </th>
+                        <th className={`px-6 py-4 text-center text-xs font-semibold uppercase tracking-wider ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
+                          Tipo
+                        </th>
+                        <th className={`px-6 py-4 text-center text-xs font-semibold uppercase tracking-wider ${isDark ? 'text-purple-400' : 'text-purple-600'}`}>
+                          Valor
+                        </th>
+                        <th className={`px-6 py-4 text-center text-xs font-semibold uppercase tracking-wider ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
+                          Max. Monto
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody className={`divide-y ${isDark ? 'divide-gray-800' : 'divide-gray-100'}`}>
+                      {allServices.map(service => {
+                        const commission = serviceCommissions[service.id] || { type: 'percentage' as const, value: 0, maxAmount: null }
+
+                        return (
+                          <tr key={service.id} className={`transition-colors ${isDark ? 'hover:bg-gray-700/50' : 'hover:bg-gray-50'}`}>
+                            <td className="px-6 py-4">
+                              <div>
+                                <div className={`font-medium ${isDark ? 'text-white' : 'text-gray-900'}`}>
+                                  {service.serviceName}
+                                </div>
+                                {service.description && (
+                                  <div className={`text-sm ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
+                                    {service.description}
+                                  </div>
+                                )}
+                              </div>
+                            </td>
+                            <td className="px-6 py-4">
+                              <div className="flex justify-center">
+                                <select
+                                  value={commission.type}
+                                  onChange={(e) => setServiceCommissions(prev => ({
+                                    ...prev,
+                                    [service.id]: { ...commission, type: e.target.value as 'percentage' | 'fixed' }
+                                  }))}
+                                  className={`appearance-none px-3 py-2 rounded-lg text-sm cursor-pointer ${
+                                    isDark
+                                      ? 'bg-gray-700 border-gray-600 text-white'
+                                      : 'bg-gray-50 border-gray-200 text-gray-900'
+                                  } border focus:outline-none focus:ring-2 focus:ring-purple-500/20`}
+                                >
+                                  <option value="percentage">Porcentaje %</option>
+                                  <option value="fixed">Monto Fijo $</option>
+                                </select>
+                              </div>
+                            </td>
+                            <td className="px-6 py-4">
+                              <div className="flex justify-center">
+                                <div className="relative">
+                                  <span className={`absolute left-3 top-1/2 -translate-y-1/2 text-sm ${isDark ? 'text-purple-400' : 'text-purple-500'}`}>
+                                    {commission.type === 'percentage' ? '%' : '$'}
+                                  </span>
+                                  <input
+                                    type="number"
+                                    step={commission.type === 'percentage' ? '1' : '0.01'}
+                                    min="0"
+                                    max={commission.type === 'percentage' ? '100' : undefined}
+                                    value={commission.value || ''}
+                                    placeholder="0"
+                                    onChange={(e) => setServiceCommissions(prev => ({
+                                      ...prev,
+                                      [service.id]: { ...commission, value: parseFloat(e.target.value) || 0 }
+                                    }))}
+                                    className={`w-28 pl-8 pr-3 py-2.5 text-center text-lg font-semibold rounded-xl border-2 transition-all ${
+                                      commission.value > 0
+                                        ? isDark
+                                          ? 'bg-purple-900/30 border-purple-600 text-purple-300 focus:border-purple-500'
+                                          : 'bg-purple-50 border-purple-300 text-purple-700 focus:border-purple-400'
+                                        : isDark
+                                          ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-600 focus:border-purple-500'
+                                          : 'bg-white border-gray-200 text-gray-900 placeholder-gray-400 focus:border-purple-400'
+                                    } focus:outline-none focus:ring-4 focus:ring-purple-500/10`}
+                                  />
+                                </div>
+                              </div>
+                            </td>
+                            <td className="px-6 py-4">
+                              <div className="flex justify-center">
+                                <div className="relative">
+                                  <span className={`absolute left-3 top-1/2 -translate-y-1/2 text-sm ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>$</span>
+                                  <input
+                                    type="number"
+                                    step="0.01"
+                                    min="0"
+                                    value={commission.maxAmount ?? ''}
+                                    placeholder="—"
+                                    onChange={(e) => setServiceCommissions(prev => ({
+                                      ...prev,
+                                      [service.id]: { ...commission, maxAmount: e.target.value ? parseFloat(e.target.value) : null }
+                                    }))}
+                                    className={`w-28 pl-8 pr-3 py-2 text-center rounded-xl border transition-all ${
+                                      isDark
+                                        ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-600 focus:border-purple-500'
+                                        : 'bg-white border-gray-200 text-gray-900 placeholder-gray-400 focus:border-purple-400'
+                                    } focus:outline-none focus:ring-2 focus:ring-purple-500/10`}
+                                  />
+                                </div>
+                              </div>
+                            </td>
+                          </tr>
+                        )
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+
+              {/* Empty state if no products */}
+              {products.length === 0 && (
+                <div className={`rounded-2xl p-8 ${isDark ? 'bg-gray-800/50 border border-gray-800' : 'bg-white border border-gray-200'}`}>
+                  <div className="text-center py-12">
+                    <div className={`w-20 h-20 mx-auto mb-6 rounded-3xl flex items-center justify-center ${
+                      isDark ? 'bg-gradient-to-br from-purple-900/50 to-purple-800/30' : 'bg-gradient-to-br from-purple-100 to-purple-50'
+                    }`}>
+                      <Percent className={`w-10 h-10 ${isDark ? 'text-purple-400' : 'text-purple-500'}`} />
+                    </div>
+                    <h3 className={`text-lg font-semibold mb-2 ${isDark ? 'text-white' : 'text-gray-900'}`}>
+                      Sin productos disponibles
+                    </h3>
+                    <p className={`max-w-md mx-auto ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
+                      No hay productos en tu catalogo para configurar comisiones.
+                    </p>
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </div>
