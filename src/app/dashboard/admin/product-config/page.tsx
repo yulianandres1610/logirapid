@@ -256,9 +256,9 @@ export default function ProductConfigPage() {
 
   return (
     <DashboardLayout>
-      <div className={`min-h-full ${isDark ? 'bg-gray-900' : 'bg-gray-50'}`}>
+      <div className="min-h-full">
         {/* Hero Header */}
-        <div className="px-6 pt-6 pb-4">
+        <div className="pb-4">
             <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
               {/* Title Section */}
               <div>
@@ -416,7 +416,7 @@ export default function ProductConfigPage() {
         </div>
 
         {/* Tabs Navigation */}
-        <div className={`sticky top-0 z-20 px-6 py-3 border-b ${isDark ? 'bg-gray-900 border-gray-800' : 'bg-gray-50 border-gray-200'}`}>
+        <div className={`py-3 border-b ${isDark ? 'border-gray-800' : 'border-gray-200'}`}>
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               {/* Tabs */}
@@ -539,7 +539,7 @@ export default function ProductConfigPage() {
         </div>
 
         {/* Content */}
-        <div className="px-6 py-6">
+        <div className="pt-6">
           {/* Products Tab */}
           {activeTab === 'productos' && (
             <>
