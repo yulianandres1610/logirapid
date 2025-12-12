@@ -126,6 +126,7 @@ export default function CatalogoEmpresaPage() {
   const [servicePrices, setServicePrices] = useState<Record<number, number | null>>({})
   const [allServices, setAllServices] = useState<ProductService[]>([])
   const [savingPublicPrices, setSavingPublicPrices] = useState(false)
+  const [expandedPriceProducts, setExpandedPriceProducts] = useState<Set<number>>(new Set())
 
   // Tab 4: Comisiones
   const [selectedRole, setSelectedRole] = useState<string>('USER')
@@ -583,6 +584,27 @@ export default function CatalogoEmpresaPage() {
       setServiceCommissions(initialServiceCommissions)
     }
   }, [activeTab, selectedRole, products, allServices, commissions])
+
+  // Helper: Get services for a product
+  const getProductServices = (productId: number) => {
+    return allServices.filter(s => s.productId === productId)
+  }
+
+  // Helper: Calculate total services cost for a product
+  const getServicesCost = (productId: number) => {
+    return getProductServices(productId).reduce((sum, s) => sum + s.costPrice, 0)
+  }
+
+  // Toggle product expansion in price tab
+  const togglePriceProductExpanded = (productId: number) => {
+    const newExpanded = new Set(expandedPriceProducts)
+    if (newExpanded.has(productId)) {
+      newExpanded.delete(productId)
+    } else {
+      newExpanded.add(productId)
+    }
+    setExpandedPriceProducts(newExpanded)
+  }
 
   // Stats calculation
   const totalProducts = products.length
@@ -1301,13 +1323,16 @@ export default function CatalogoEmpresaPage() {
                 </div>
               </div>
 
-              {/* Products Prices */}
+              {/* Products Prices with Expandable Services */}
               <div className={`rounded-2xl overflow-hidden border ${isDark ? 'bg-gray-800/50 border-gray-800' : 'bg-white border-gray-200'}`}>
                 <div className={`px-6 py-4 border-b ${isDark ? 'border-gray-800' : 'border-gray-200'}`}>
                   <h4 className={`font-semibold flex items-center gap-2 ${isDark ? 'text-white' : 'text-gray-900'}`}>
                     <Package className="w-5 h-5" />
-                    Productos
+                    Productos y Servicios
                   </h4>
+                  <p className={`text-sm mt-1 ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
+                    Costo Total = Precio Proveedor + Costos de Servicios
+                  </p>
                 </div>
                 <table className="w-full">
                   <thead>
@@ -1316,7 +1341,7 @@ export default function CatalogoEmpresaPage() {
                         Producto
                       </th>
                       <th className={`px-6 py-4 text-right text-xs font-semibold uppercase tracking-wider ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
-                        Mi Costo
+                        Costo Total
                       </th>
                       <th className={`px-6 py-4 text-center text-xs font-semibold uppercase tracking-wider ${isDark ? 'text-emerald-400' : 'text-emerald-600'}`}>
                         Precio Publico
@@ -1330,138 +1355,60 @@ export default function CatalogoEmpresaPage() {
                     {products.map(product => {
                       const catConfig = getCategoryConfig(product.category)
                       const Icon = catConfig.icon
+                      const productServices = getProductServices(product.id)
+                      const servicesCost = getServicesCost(product.id)
+                      const totalCost = product.miCosto + servicesCost
                       const publicPrice = publicPrices[product.id]
                       const margin = publicPrice !== null && publicPrice !== undefined
-                        ? publicPrice - product.miCosto
+                        ? publicPrice - totalCost
                         : null
-                      const marginPct = margin !== null && product.miCosto > 0
-                        ? (margin / product.miCosto * 100)
+                      const marginPct = margin !== null && totalCost > 0
+                        ? (margin / totalCost * 100)
                         : null
+                      const isExpanded = expandedPriceProducts.has(product.id)
+                      const hasServices = productServices.length > 0
 
                       return (
-                        <tr key={product.id} className={`transition-colors ${isDark ? 'hover:bg-gray-700/50' : 'hover:bg-gray-50'}`}>
-                          <td className="px-6 py-4">
-                            <div className="flex items-center gap-4">
-                              <div className={`w-10 h-10 rounded-xl flex items-center justify-center bg-gradient-to-br ${catConfig.gradient}`}>
-                                <Icon className="w-5 h-5 text-white" />
-                              </div>
-                              <div>
-                                <div className={`font-medium ${isDark ? 'text-white' : 'text-gray-900'}`}>
-                                  {product.name}
-                                </div>
-                                <div className={`text-sm ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
-                                  {product.code}
-                                </div>
-                              </div>
-                            </div>
-                          </td>
-                          <td className="px-6 py-4 text-right">
-                            <span className={`text-lg font-semibold ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
-                              ${product.miCosto.toFixed(2)}
-                            </span>
-                          </td>
-                          <td className="px-6 py-4">
-                            <div className="flex justify-center">
-                              <div className="relative">
-                                <span className={`absolute left-4 top-1/2 -translate-y-1/2 ${isDark ? 'text-emerald-400' : 'text-emerald-500'}`}>$</span>
-                                <input
-                                  type="number"
-                                  step="0.01"
-                                  min={product.miCosto}
-                                  value={publicPrice ?? ''}
-                                  placeholder="—"
-                                  onChange={(e) => {
-                                    const value = e.target.value ? parseFloat(e.target.value) : null
-                                    setPublicPrices(prev => ({
-                                      ...prev,
-                                      [product.id]: value
-                                    }))
-                                  }}
-                                  className={`w-36 pl-8 pr-4 py-2.5 text-center text-lg font-semibold rounded-xl border-2 transition-all ${
-                                    publicPrice !== null
-                                      ? isDark
-                                        ? 'bg-emerald-900/30 border-emerald-600 text-emerald-300 focus:border-emerald-500'
-                                        : 'bg-emerald-50 border-emerald-300 text-emerald-700 focus:border-emerald-400'
-                                      : isDark
-                                        ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-600 focus:border-emerald-500'
-                                        : 'bg-white border-gray-200 text-gray-900 placeholder-gray-400 focus:border-emerald-400'
-                                  } focus:outline-none focus:ring-4 focus:ring-emerald-500/10`}
-                                />
-                              </div>
-                            </div>
-                          </td>
-                          <td className="px-6 py-4 text-right">
-                            {margin !== null ? (
-                              <div className="flex flex-col items-end">
-                                <span className={`text-lg font-bold ${margin >= 0 ? (isDark ? 'text-emerald-400' : 'text-emerald-600') : (isDark ? 'text-red-400' : 'text-red-600')}`}>
-                                  ${margin.toFixed(2)}
-                                </span>
-                                {marginPct !== null && (
-                                  <span className={`text-sm font-medium ${margin >= 0 ? (isDark ? 'text-emerald-400/70' : 'text-emerald-600/70') : (isDark ? 'text-red-400/70' : 'text-red-600/70')}`}>
-                                    {marginPct.toFixed(1)}%
-                                  </span>
-                                )}
-                              </div>
-                            ) : (
-                              <span className={isDark ? 'text-gray-600' : 'text-gray-300'}>—</span>
-                            )}
-                          </td>
-                        </tr>
-                      )
-                    })}
-                  </tbody>
-                </table>
-              </div>
-
-              {/* Services Prices */}
-              {allServices.length > 0 && (
-                <div className={`rounded-2xl overflow-hidden border ${isDark ? 'bg-gray-800/50 border-gray-800' : 'bg-white border-gray-200'}`}>
-                  <div className={`px-6 py-4 border-b ${isDark ? 'border-gray-800' : 'border-gray-200'}`}>
-                    <h4 className={`font-semibold flex items-center gap-2 ${isDark ? 'text-white' : 'text-gray-900'}`}>
-                      <Tag className="w-5 h-5" />
-                      Servicios
-                    </h4>
-                  </div>
-                  <table className="w-full">
-                    <thead>
-                      <tr className={isDark ? 'bg-gray-800' : 'bg-gray-50'}>
-                        <th className={`px-6 py-4 text-left text-xs font-semibold uppercase tracking-wider ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
-                          Servicio
-                        </th>
-                        <th className={`px-6 py-4 text-right text-xs font-semibold uppercase tracking-wider ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
-                          Mi Costo
-                        </th>
-                        <th className={`px-6 py-4 text-center text-xs font-semibold uppercase tracking-wider ${isDark ? 'text-emerald-400' : 'text-emerald-600'}`}>
-                          Precio Venta
-                        </th>
-                        <th className={`px-6 py-4 text-right text-xs font-semibold uppercase tracking-wider ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
-                          Margen
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody className={`divide-y ${isDark ? 'divide-gray-800' : 'divide-gray-100'}`}>
-                      {allServices.map(service => {
-                        const sellPrice = servicePrices[service.id] ?? service.sellPrice
-                        const margin = sellPrice - service.costPrice
-                        const marginPct = service.costPrice > 0 ? (margin / service.costPrice * 100) : 0
-
-                        return (
-                          <tr key={service.id} className={`transition-colors ${isDark ? 'hover:bg-gray-700/50' : 'hover:bg-gray-50'}`}>
+                        <React.Fragment key={product.id}>
+                          <tr className={`transition-colors ${isDark ? 'hover:bg-gray-700/50' : 'hover:bg-gray-50'}`}>
                             <td className="px-6 py-4">
-                              <div>
-                                <div className={`font-medium ${isDark ? 'text-white' : 'text-gray-900'}`}>
-                                  {service.serviceName}
+                              <div className="flex items-center gap-4">
+                                <div className={`w-10 h-10 rounded-xl flex items-center justify-center bg-gradient-to-br ${catConfig.gradient}`}>
+                                  <Icon className="w-5 h-5 text-white" />
                                 </div>
-                                {service.serviceDescription && (
-                                  <div className={`text-sm ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
-                                    {service.serviceDescription}
+                                <div>
+                                  <div className="flex items-center gap-2">
+                                    <span className={`font-medium ${isDark ? 'text-white' : 'text-gray-900'}`}>
+                                      {product.name}
+                                    </span>
+                                    {hasServices && (
+                                      <button
+                                        onClick={() => togglePriceProductExpanded(product.id)}
+                                        className={`px-2 py-0.5 rounded-full text-xs font-medium transition-all ${
+                                          isDark ? 'bg-blue-500/20 text-blue-400 hover:bg-blue-500/30' : 'bg-blue-100 text-blue-600 hover:bg-blue-200'
+                                        }`}
+                                      >
+                                        <span className="flex items-center gap-1">
+                                          <ChevronDown className={`w-3 h-3 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
+                                          {productServices.length} servicio{productServices.length > 1 ? 's' : ''}
+                                        </span>
+                                      </button>
+                                    )}
                                   </div>
-                                )}
+                                  <div className={`text-sm ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
+                                    {product.code}
+                                    {hasServices && (
+                                      <span className={`ml-2 ${isDark ? 'text-gray-600' : 'text-gray-400'}`}>
+                                        (Proveedor: ${product.miCosto.toFixed(2)} + Servicios: ${servicesCost.toFixed(2)})
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
                               </div>
                             </td>
                             <td className="px-6 py-4 text-right">
                               <span className={`text-lg font-semibold ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
-                                ${service.costPrice.toFixed(2)}
+                                ${totalCost.toFixed(2)}
                               </span>
                             </td>
                             <td className="px-6 py-4">
@@ -1471,41 +1418,125 @@ export default function CatalogoEmpresaPage() {
                                   <input
                                     type="number"
                                     step="0.01"
-                                    min={service.costPrice}
-                                    value={servicePrices[service.id] ?? service.sellPrice}
+                                    min={totalCost}
+                                    value={publicPrice ?? ''}
+                                    placeholder="—"
                                     onChange={(e) => {
                                       const value = e.target.value ? parseFloat(e.target.value) : null
-                                      setServicePrices(prev => ({
+                                      setPublicPrices(prev => ({
                                         ...prev,
-                                        [service.id]: value
+                                        [product.id]: value
                                       }))
                                     }}
                                     className={`w-36 pl-8 pr-4 py-2.5 text-center text-lg font-semibold rounded-xl border-2 transition-all ${
-                                      isDark
-                                        ? 'bg-emerald-900/30 border-emerald-600 text-emerald-300 focus:border-emerald-500'
-                                        : 'bg-emerald-50 border-emerald-300 text-emerald-700 focus:border-emerald-400'
+                                      publicPrice !== null
+                                        ? isDark
+                                          ? 'bg-emerald-900/30 border-emerald-600 text-emerald-300 focus:border-emerald-500'
+                                          : 'bg-emerald-50 border-emerald-300 text-emerald-700 focus:border-emerald-400'
+                                        : isDark
+                                          ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-600 focus:border-emerald-500'
+                                          : 'bg-white border-gray-200 text-gray-900 placeholder-gray-400 focus:border-emerald-400'
                                     } focus:outline-none focus:ring-4 focus:ring-emerald-500/10`}
                                   />
                                 </div>
                               </div>
                             </td>
                             <td className="px-6 py-4 text-right">
-                              <div className="flex flex-col items-end">
-                                <span className={`text-lg font-bold ${margin >= 0 ? (isDark ? 'text-emerald-400' : 'text-emerald-600') : (isDark ? 'text-red-400' : 'text-red-600')}`}>
-                                  ${margin.toFixed(2)}
-                                </span>
-                                <span className={`text-sm font-medium ${margin >= 0 ? (isDark ? 'text-emerald-400/70' : 'text-emerald-600/70') : (isDark ? 'text-red-400/70' : 'text-red-600/70')}`}>
-                                  {marginPct.toFixed(1)}%
-                                </span>
-                              </div>
+                              {margin !== null ? (
+                                <div className="flex flex-col items-end">
+                                  <span className={`text-lg font-bold ${margin >= 0 ? (isDark ? 'text-emerald-400' : 'text-emerald-600') : (isDark ? 'text-red-400' : 'text-red-600')}`}>
+                                    ${margin.toFixed(2)}
+                                  </span>
+                                  {marginPct !== null && (
+                                    <span className={`text-sm font-medium ${margin >= 0 ? (isDark ? 'text-emerald-400/70' : 'text-emerald-600/70') : (isDark ? 'text-red-400/70' : 'text-red-600/70')}`}>
+                                      {marginPct.toFixed(1)}%
+                                    </span>
+                                  )}
+                                </div>
+                              ) : (
+                                <span className={isDark ? 'text-gray-600' : 'text-gray-300'}>—</span>
+                              )}
                             </td>
                           </tr>
-                        )
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-              )}
+                          {/* Expanded Services Row */}
+                          {isExpanded && hasServices && (
+                            <tr className={isDark ? 'bg-gray-800/30' : 'bg-gray-50/50'}>
+                              <td colSpan={4} className="px-6 py-4">
+                                <div className="ml-14 space-y-3">
+                                  <div className={`text-xs font-semibold uppercase tracking-wider ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
+                                    Servicios - Configura precio de venta
+                                  </div>
+                                  {productServices.map(service => {
+                                    const sellPrice = servicePrices[service.id] ?? service.sellPrice
+                                    const sMargin = sellPrice - service.costPrice
+                                    const sMarginPct = service.costPrice > 0 ? (sMargin / service.costPrice * 100) : 0
+
+                                    return (
+                                      <div
+                                        key={service.id}
+                                        className={`flex items-center justify-between p-3 rounded-xl ${
+                                          isDark ? 'bg-gray-700/50 border border-gray-700' : 'bg-white border border-gray-200'
+                                        }`}
+                                      >
+                                        <div className="flex items-center gap-3">
+                                          <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${
+                                            isDark ? 'bg-blue-500/20' : 'bg-blue-100'
+                                          }`}>
+                                            <Tag className={`w-4 h-4 ${isDark ? 'text-blue-400' : 'text-blue-600'}`} />
+                                          </div>
+                                          <div>
+                                            <div className={`font-medium ${isDark ? 'text-white' : 'text-gray-900'}`}>
+                                              {service.serviceName}
+                                            </div>
+                                            <div className={`text-sm ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
+                                              Costo: ${service.costPrice.toFixed(2)}
+                                            </div>
+                                          </div>
+                                        </div>
+                                        <div className="flex items-center gap-4">
+                                          <div className="relative">
+                                            <span className={`absolute left-3 top-1/2 -translate-y-1/2 text-sm ${isDark ? 'text-emerald-400' : 'text-emerald-500'}`}>$</span>
+                                            <input
+                                              type="number"
+                                              step="0.01"
+                                              min={service.costPrice}
+                                              value={servicePrices[service.id] ?? service.sellPrice}
+                                              onChange={(e) => {
+                                                const value = e.target.value ? parseFloat(e.target.value) : null
+                                                setServicePrices(prev => ({
+                                                  ...prev,
+                                                  [service.id]: value
+                                                }))
+                                              }}
+                                              className={`w-28 pl-7 pr-3 py-2 text-center font-semibold rounded-lg border transition-all ${
+                                                isDark
+                                                  ? 'bg-emerald-900/30 border-emerald-700 text-emerald-300 focus:border-emerald-500'
+                                                  : 'bg-emerald-50 border-emerald-200 text-emerald-700 focus:border-emerald-400'
+                                              } focus:outline-none focus:ring-2 focus:ring-emerald-500/20`}
+                                            />
+                                          </div>
+                                          <div className="text-right min-w-[80px]">
+                                            <div className={`font-semibold ${sMargin >= 0 ? (isDark ? 'text-emerald-400' : 'text-emerald-600') : (isDark ? 'text-red-400' : 'text-red-600')}`}>
+                                              ${sMargin.toFixed(2)}
+                                            </div>
+                                            <div className={`text-xs ${sMargin >= 0 ? (isDark ? 'text-emerald-400/70' : 'text-emerald-600/70') : (isDark ? 'text-red-400/70' : 'text-red-600/70')}`}>
+                                              {sMarginPct.toFixed(1)}%
+                                            </div>
+                                          </div>
+                                        </div>
+                                      </div>
+                                    )
+                                  })}
+                                </div>
+                              </td>
+                            </tr>
+                          )}
+                        </React.Fragment>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
             </div>
           )}
 
@@ -1976,7 +2007,7 @@ function ServiceModal({ isDark, product, services, editingService, onClose, onSa
                         )}
                       </div>
                       <p className={`text-sm mt-1 ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
-                        Costo: ${service.costPrice.toFixed(2)} | Venta: ${service.sellPrice.toFixed(2)} | Margen: ${service.margin.toFixed(2)} ({service.marginPercentage.toFixed(1)}%)
+                        Costo: ${service.costPrice.toFixed(2)}
                       </p>
                     </div>
                     <div className="flex items-center gap-2">
@@ -2036,41 +2067,25 @@ function ServiceModal({ isDark, product, services, editingService, onClose, onSa
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className={`block text-sm font-medium mb-2 ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
-                    Costo ($)
-                  </label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    value={formData.costPrice}
-                    onChange={(e) => setFormData({ ...formData, costPrice: parseFloat(e.target.value) || 0 })}
-                    className={`w-full px-4 py-3 rounded-xl border text-sm transition-all ${
-                      isDark
-                        ? 'bg-gray-700 border-gray-600 text-white focus:border-blue-500'
-                        : 'bg-gray-50 border-gray-200 text-gray-900 focus:border-blue-400'
-                    } focus:outline-none focus:ring-2 focus:ring-blue-500/20`}
-                  />
-                </div>
-                <div>
-                  <label className={`block text-sm font-medium mb-2 ${isDark ? 'text-emerald-400' : 'text-emerald-600'}`}>
-                    Precio Venta ($)
-                  </label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    value={formData.sellPrice}
-                    onChange={(e) => setFormData({ ...formData, sellPrice: parseFloat(e.target.value) || 0 })}
-                    className={`w-full px-4 py-3 rounded-xl border text-sm transition-all ${
-                      isDark
-                        ? 'bg-emerald-900/30 border-emerald-700 text-emerald-300 focus:border-emerald-500'
-                        : 'bg-emerald-50 border-emerald-200 text-emerald-700 focus:border-emerald-400'
-                    } focus:outline-none focus:ring-2 focus:ring-emerald-500/20`}
-                  />
-                </div>
+              <div>
+                <label className={`block text-sm font-medium mb-2 ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
+                  Costo del Servicio ($)
+                </label>
+                <p className={`text-xs mb-2 ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
+                  El precio de venta se configura en la pestaña "Precio Venta"
+                </p>
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={formData.costPrice}
+                  onChange={(e) => setFormData({ ...formData, costPrice: parseFloat(e.target.value) || 0 })}
+                  className={`w-full px-4 py-3 rounded-xl border text-sm transition-all ${
+                    isDark
+                      ? 'bg-gray-700 border-gray-600 text-white focus:border-blue-500'
+                      : 'bg-gray-50 border-gray-200 text-gray-900 focus:border-blue-400'
+                  } focus:outline-none focus:ring-2 focus:ring-blue-500/20`}
+                />
               </div>
 
               <div className="flex items-center gap-6">
