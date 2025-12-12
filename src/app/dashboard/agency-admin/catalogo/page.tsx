@@ -214,8 +214,9 @@ export default function CatalogoEmpresaPage() {
     try {
       const response = await fetch(`/api/companies/${companyId}/commissions?role=${selectedRole}`)
       const data = await response.json()
-      if (data.success) {
-        setCommissions(data.data || [])
+      if (data.success && data.data) {
+        // API returns { commissions: [...], commissionsByProduct: [...], ... }
+        setCommissions(data.data.commissions || [])
       }
     } catch (error) {
       console.error('Error fetching commissions:', error)
