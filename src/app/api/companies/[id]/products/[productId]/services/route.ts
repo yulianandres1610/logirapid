@@ -97,12 +97,12 @@ export async function GET(
 
     // Get company product pricing (to calculate total margins)
     const pricingResult = await db.query(`
-      SELECT cost_price, sell_price, margin
+      SELECT mi_costo, precio_clientes, margen_clientes
       FROM company_product_pricing
       WHERE company_id = $1 AND product_id = $2
     `, [companyId, productId])
 
-    const productPricing = pricingResult.rows[0] || { cost_price: 0, sell_price: 0, margin: 0 }
+    const productPricing = pricingResult.rows[0] || { mi_costo: 0, precio_clientes: 0, margen_clientes: 0 }
 
     // Get all services for this company/product
     console.log('Fetching services for companyId:', companyId, 'productId:', productId)
@@ -162,9 +162,9 @@ export async function GET(
           type: product.product_type
         },
         productPricing: {
-          costPrice: parseFloat(productPricing.cost_price) || 0,
-          sellPrice: parseFloat(productPricing.sell_price) || 0,
-          margin: parseFloat(productPricing.margin) || 0
+          costPrice: parseFloat(productPricing.mi_costo) || 0,
+          sellPrice: parseFloat(productPricing.precio_clientes) || 0,
+          margin: parseFloat(productPricing.margen_clientes) || 0
         },
         services: services.map(s => ({
           id: s.id,
@@ -200,9 +200,9 @@ export async function GET(
           requiredServicesSell,
           requiredServicesMargin,
           // Combined totals
-          totalCost: parseFloat(productPricing.cost_price || 0) + requiredServicesCost,
-          totalSell: parseFloat(productPricing.sell_price || 0) + requiredServicesSell,
-          totalMargin: parseFloat(productPricing.margin || 0) + requiredServicesMargin
+          totalCost: parseFloat(productPricing.mi_costo || 0) + requiredServicesCost,
+          totalSell: parseFloat(productPricing.precio_clientes || 0) + requiredServicesSell,
+          totalMargin: parseFloat(productPricing.margen_clientes || 0) + requiredServicesMargin
         }
       }
     })
