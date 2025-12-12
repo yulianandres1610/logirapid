@@ -87,9 +87,12 @@ export async function GET(
     const productPricing = pricingResult.rows[0] || { cost_price: 0, sell_price: 0, margin: 0 }
 
     // Get all services for this company/product
+    console.log('Fetching services for companyId:', companyId, 'productId:', productId)
     const servicesResult = await db.query(`
       SELECT
         id,
+        company_id,
+        product_id,
         service_code,
         service_name,
         service_description,
@@ -114,6 +117,7 @@ export async function GET(
       WHERE company_id = $1 AND product_id = $2
       ORDER BY is_required DESC, display_order ASC, service_name ASC
     `, [companyId, productId])
+    console.log('Services found:', servicesResult.rows.length, 'rows:', servicesResult.rows)
 
     // Calculate total services margin
     const services = servicesResult.rows
