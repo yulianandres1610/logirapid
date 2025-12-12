@@ -255,10 +255,18 @@ export async function POST(
           continue
         }
 
-        // Validate product exists
+        // Validate product exists and get matrix company's cost
         const productCheck = await db.query(`
-          SELECT id FROM product_catalog WHERE id = $1 AND is_active = true
-        `, [bp.productId])
+          SELECT
+            pc.id,
+            pc.name,
+            COALESCE(cpp.mi_costo, pc.precio_mayorista) as mi_costo
+          FROM product_catalog pc
+          LEFT JOIN company_product_pricing cpp
+            ON cpp.product_id = pc.id
+            AND cpp.company_id = $2
+          WHERE pc.id = $1 AND pc.is_active = true
+        `, [bp.productId, matrixCompanyId])
 
         if (productCheck.rows.length === 0) {
           results.push({
@@ -266,6 +274,18 @@ export async function POST(
             productId: bp.productId,
             success: false,
             error: 'Producto no encontrado o inactivo'
+          })
+          continue
+        }
+
+        // Validate price is not below cost
+        const miCosto = parseFloat(productCheck.rows[0].mi_costo || 0)
+        if (bp.precioSucursal < miCosto) {
+          results.push({
+            branchId: bp.branchId,
+            productId: bp.productId,
+            success: false,
+            error: `Precio ($${bp.precioSucursal}) no puede ser menor al costo ($${miCosto.toFixed(2)})`
           })
           continue
         }
