@@ -228,12 +228,26 @@ export default function ProductConfigPage() {
 
     setSavingPrices(true)
     try {
+      // Validar que ningún precio sea menor al costo de LogiRapid
+      const invalidPrices: string[] = []
       const productsToUpdate = Object.entries(companyPrices)
         .filter(([_, price]) => price !== null)
-        .map(([productId, price]) => ({
-          productId: parseInt(productId),
-          miCostoEspecial: price  // Precio especial que LogiRapid asigna a esta empresa
-        }))
+        .map(([productId, price]) => {
+          const product = products.find(p => p.id === parseInt(productId))
+          if (product && price !== null && price < product.miCosto) {
+            invalidPrices.push(`${product.name}: $${price} < Costo $${product.miCosto}`)
+          }
+          return {
+            productId: parseInt(productId),
+            miCostoEspecial: price  // Precio especial que LogiRapid asigna a esta empresa
+          }
+        })
+
+      if (invalidPrices.length > 0) {
+        showNotification('error', 'Precios invalidos', `El precio no puede ser menor al costo: ${invalidPrices.join(', ')}`)
+        setSavingPrices(false)
+        return
+      }
 
       if (productsToUpdate.length === 0) {
         showNotification('warning', 'Aviso', 'No hay precios para guardar')
@@ -902,6 +916,8 @@ export default function ProductConfigPage() {
                           const discountPercent = discount && product.precioMayorista > 0
                             ? (discount / product.precioMayorista * 100)
                             : null
+                          // Validar que el precio no sea menor al costo de LogiRapid
+                          const isPriceInvalid = customPrice !== null && customPrice < product.miCosto
 
                           return (
                             <tr
@@ -929,13 +945,17 @@ export default function ProductConfigPage() {
                                 </span>
                               </td>
                               <td className="px-6 py-4">
-                                <div className="flex justify-center">
+                                <div className="flex flex-col items-center gap-1">
                                   <div className="relative">
-                                    <span className={`absolute left-4 top-1/2 -translate-y-1/2 ${isDark ? 'text-purple-400' : 'text-purple-500'}`}>$</span>
+                                    <span className={`absolute left-4 top-1/2 -translate-y-1/2 ${
+                                      isPriceInvalid
+                                        ? 'text-red-500'
+                                        : isDark ? 'text-purple-400' : 'text-purple-500'
+                                    }`}>$</span>
                                     <input
                                       type="number"
                                       step="0.01"
-                                      min="0"
+                                      min={product.miCosto}
                                       value={customPrice ?? ''}
                                       placeholder={product.precioMayorista.toFixed(2)}
                                       onChange={(e) => {
@@ -946,16 +966,25 @@ export default function ProductConfigPage() {
                                         }))
                                       }}
                                       className={`w-36 pl-8 pr-4 py-2.5 text-center text-lg font-semibold rounded-xl border-2 transition-all ${
-                                        customPrice !== null
+                                        isPriceInvalid
                                           ? isDark
-                                            ? 'bg-purple-900/30 border-purple-600 text-purple-300 focus:border-purple-500'
-                                            : 'bg-purple-50 border-purple-300 text-purple-700 focus:border-purple-400'
-                                          : isDark
-                                            ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-600 focus:border-purple-500'
-                                            : 'bg-white border-gray-200 text-gray-900 placeholder-gray-400 focus:border-purple-400'
-                                      } focus:outline-none focus:ring-4 focus:ring-purple-500/10`}
+                                            ? 'bg-red-900/30 border-red-500 text-red-400 focus:border-red-500'
+                                            : 'bg-red-50 border-red-400 text-red-600 focus:border-red-500'
+                                          : customPrice !== null
+                                            ? isDark
+                                              ? 'bg-purple-900/30 border-purple-600 text-purple-300 focus:border-purple-500'
+                                              : 'bg-purple-50 border-purple-300 text-purple-700 focus:border-purple-400'
+                                            : isDark
+                                              ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-600 focus:border-purple-500'
+                                              : 'bg-white border-gray-200 text-gray-900 placeholder-gray-400 focus:border-purple-400'
+                                      } focus:outline-none focus:ring-4 ${isPriceInvalid ? 'focus:ring-red-500/20' : 'focus:ring-purple-500/10'}`}
                                     />
                                   </div>
+                                  {isPriceInvalid && (
+                                    <span className={`text-xs ${isDark ? 'text-red-400' : 'text-red-500'}`}>
+                                      Min: ${product.miCosto.toFixed(2)}
+                                    </span>
+                                  )}
                                 </div>
                               </td>
                               <td className="px-6 py-4 text-right">
