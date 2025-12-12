@@ -257,50 +257,9 @@ export default function ProductConfigPage() {
   return (
     <DashboardLayout>
       <div className="min-h-full">
-        {/* Hero Header */}
+        {/* Stats Cards */}
         <div className="pb-4">
-            <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
-              {/* Title Section */}
-              <div>
-                <div className="flex items-center gap-3 mb-2">
-                  <div className={`p-2.5 rounded-xl ${isDark ? 'bg-blue-500/20' : 'bg-blue-100'}`}>
-                    <Package className="w-6 h-6 text-blue-500" />
-                  </div>
-                  <div>
-                    <h1 className={`text-2xl font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>
-                      Catalogo de Productos
-                    </h1>
-                    <p className={`text-sm ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
-                      Gestiona productos y configura precios por empresa
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              {/* Quick Actions */}
-              <div className="flex items-center gap-3">
-                <button
-                  onClick={() => fetchProducts()}
-                  className={`p-2.5 rounded-xl transition-all ${
-                    isDark
-                      ? 'bg-gray-800 hover:bg-gray-700 text-gray-400'
-                      : 'bg-white hover:bg-gray-100 text-gray-500 shadow-sm border border-gray-200'
-                  }`}
-                >
-                  <RefreshCw className={`w-5 h-5 ${loading ? 'animate-spin' : ''}`} />
-                </button>
-                <button
-                  onClick={() => setShowCreateModal(true)}
-                  className="px-5 py-2.5 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white font-medium rounded-xl flex items-center gap-2 shadow-lg shadow-blue-500/25 transition-all hover:shadow-blue-500/40"
-                >
-                  <Plus className="w-5 h-5" />
-                  Nuevo Producto
-                </button>
-              </div>
-            </div>
-
-            {/* Stats Cards */}
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mt-6">
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
               {/* Total Products */}
               <motion.div
                 initial={{ opacity: 0, y: 20 }}
@@ -543,40 +502,49 @@ export default function ProductConfigPage() {
           {/* Products Tab */}
           {activeTab === 'productos' && (
             <>
-              {/* Category Pills */}
-              <div className="flex items-center gap-2 mb-6 overflow-x-auto pb-2">
+              {/* Category Pills + New Product Button */}
+              <div className="flex items-center justify-between gap-4 mb-6">
+                <div className="flex items-center gap-2 overflow-x-auto pb-2">
+                  <button
+                    onClick={() => setCategoryFilter('all')}
+                    className={`px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap transition-all ${
+                      categoryFilter === 'all'
+                        ? 'bg-gradient-to-r from-blue-500 to-blue-600 text-white shadow-lg shadow-blue-500/25'
+                        : isDark
+                          ? 'bg-gray-800 text-gray-400 hover:text-white hover:bg-gray-700'
+                          : 'bg-white text-gray-600 hover:text-gray-900 hover:bg-gray-50 border border-gray-200'
+                    }`}
+                  >
+                    Todos ({totalProducts})
+                  </button>
+                  {CATEGORIES.map(cat => {
+                    const count = categoryCounts.find(c => c.id === cat.id)?.count || 0
+                    const Icon = cat.icon
+                    return (
+                      <button
+                        key={cat.id}
+                        onClick={() => setCategoryFilter(cat.id)}
+                        className={`px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap transition-all flex items-center gap-2 ${
+                          categoryFilter === cat.id
+                            ? `bg-gradient-to-r ${cat.gradient} text-white shadow-lg`
+                            : isDark
+                              ? 'bg-gray-800 text-gray-400 hover:text-white hover:bg-gray-700'
+                              : 'bg-white text-gray-600 hover:text-gray-900 hover:bg-gray-50 border border-gray-200'
+                        }`}
+                      >
+                        <Icon className="w-4 h-4" />
+                        {cat.name} ({count})
+                      </button>
+                    )
+                  })}
+                </div>
                 <button
-                  onClick={() => setCategoryFilter('all')}
-                  className={`px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap transition-all ${
-                    categoryFilter === 'all'
-                      ? 'bg-gradient-to-r from-blue-500 to-blue-600 text-white shadow-lg shadow-blue-500/25'
-                      : isDark
-                        ? 'bg-gray-800 text-gray-400 hover:text-white hover:bg-gray-700'
-                        : 'bg-white text-gray-600 hover:text-gray-900 hover:bg-gray-50 border border-gray-200'
-                  }`}
+                  onClick={() => setShowCreateModal(true)}
+                  className="px-5 py-2.5 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white font-medium rounded-xl flex items-center gap-2 shadow-lg shadow-blue-500/25 transition-all hover:shadow-blue-500/40 whitespace-nowrap"
                 >
-                  Todos ({totalProducts})
+                  <Plus className="w-5 h-5" />
+                  Nuevo Producto
                 </button>
-                {CATEGORIES.map(cat => {
-                  const count = categoryCounts.find(c => c.id === cat.id)?.count || 0
-                  const Icon = cat.icon
-                  return (
-                    <button
-                      key={cat.id}
-                      onClick={() => setCategoryFilter(cat.id)}
-                      className={`px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap transition-all flex items-center gap-2 ${
-                        categoryFilter === cat.id
-                          ? `bg-gradient-to-r ${cat.gradient} text-white shadow-lg`
-                          : isDark
-                            ? 'bg-gray-800 text-gray-400 hover:text-white hover:bg-gray-700'
-                            : 'bg-white text-gray-600 hover:text-gray-900 hover:bg-gray-50 border border-gray-200'
-                      }`}
-                    >
-                      <Icon className="w-4 h-4" />
-                      {cat.name} ({count})
-                    </button>
-                  )
-                })}
               </div>
 
               {loading ? (
