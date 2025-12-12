@@ -301,10 +301,8 @@ export default function CatalogoEmpresaPage() {
       try {
         const response = await fetch(`/api/companies/${companyId}/products/${productId}/services`)
         const data = await response.json()
-        console.log('Services API response for product', productId, ':', data)
         if (data.success) {
           const services = data.data?.services || []
-          console.log('Setting services for product', productId, ':', services)
           setProductServicesMap(prev => ({ ...prev, [productId]: services }))
         } else {
           console.error('API error:', data.error)
