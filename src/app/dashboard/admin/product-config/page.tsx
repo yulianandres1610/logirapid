@@ -46,8 +46,16 @@ interface Product {
   description: string | null
   category: string
   miCosto: number
+  precioMayorista: number
+  precioPublico: number
+  providerCompanyId: number | null
   providerName: string | null
   isActive: boolean
+}
+
+interface ProviderCompany {
+  id: number
+  legalName: string
 }
 
 interface Company {
@@ -75,6 +83,7 @@ export default function ProductConfigPage() {
   // States
   const [products, setProducts] = useState<Product[]>([])
   const [companies, setCompanies] = useState<Company[]>([])
+  const [providerCompanies, setProviderCompanies] = useState<ProviderCompany[]>([])
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState('')
   const [categoryFilter, setCategoryFilter] = useState<string>('all')
@@ -106,6 +115,9 @@ export default function ProductConfigPage() {
           description: p.description,
           category: p.service_category,
           miCosto: parseFloat(p.mi_costo) || 0,
+          precioMayorista: parseFloat(p.precio_mayorista) || 0,
+          precioPublico: parseFloat(p.precio_publico) || 0,
+          providerCompanyId: p.provider_company_id || null,
           providerName: p.provider_company_name || null,
           isActive: p.is_active !== false
         }))
@@ -119,7 +131,7 @@ export default function ProductConfigPage() {
     }
   }, [showNotification])
 
-  // Fetch companies
+  // Fetch companies (for pricing tab)
   const fetchCompanies = useCallback(async () => {
     try {
       const response = await fetch('/api/companies')
@@ -131,6 +143,13 @@ export default function ProductConfigPage() {
           legalName: c.legalname || c.legalName,
           status: c.status
         })))
+        // Also set provider companies (all active companies can be providers)
+        setProviderCompanies(data.data
+          .filter((c: any) => c.status === 'active')
+          .map((c: any) => ({
+            id: c.id,
+            legalName: c.legalname || c.legalName
+          })))
       }
     } catch (error) {
       console.error('Error fetching companies:', error)
@@ -626,11 +645,22 @@ export default function ProductConfigPage() {
                           </p>
                         )}
 
-                        {/* Price */}
-                        <div className={`text-2xl font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>
-                          ${product.miCosto.toFixed(2)}
+                        {/* Prices */}
+                        <div className="space-y-1">
+                          <div className="flex items-center justify-between">
+                            <span className={`text-xs ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>Mi Costo:</span>
+                            <span className={`text-sm ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
+                              ${product.miCosto.toFixed(2)}
+                            </span>
+                          </div>
+                          <div className="flex items-center justify-between">
+                            <span className={`text-xs ${isDark ? 'text-emerald-500' : 'text-emerald-600'}`}>Venta:</span>
+                            <span className={`text-lg font-bold ${isDark ? 'text-emerald-400' : 'text-emerald-600'}`}>
+                              ${product.precioMayorista.toFixed(2)}
+                            </span>
+                          </div>
                         </div>
-                        <p className={`text-xs ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
+                        <p className={`text-xs mt-2 ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
                           {product.providerName || 'Sin proveedor'}
                         </p>
 
@@ -671,7 +701,13 @@ export default function ProductConfigPage() {
                           Categoria
                         </th>
                         <th className={`px-6 py-4 text-right text-xs font-semibold uppercase tracking-wider ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
-                          Costo
+                          Mi Costo
+                        </th>
+                        <th className={`px-6 py-4 text-right text-xs font-semibold uppercase tracking-wider ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
+                          Venta Empresas
+                        </th>
+                        <th className={`px-6 py-4 text-right text-xs font-semibold uppercase tracking-wider ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
+                          Precio Publico
                         </th>
                         <th className={`px-6 py-4 text-left text-xs font-semibold uppercase tracking-wider ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
                           Proveedor
@@ -726,8 +762,18 @@ export default function ProductConfigPage() {
                               </span>
                             </td>
                             <td className={`px-6 py-4 text-right`}>
-                              <span className={`text-lg font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>
+                              <span className={`text-base font-semibold ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
                                 ${product.miCosto.toFixed(2)}
+                              </span>
+                            </td>
+                            <td className={`px-6 py-4 text-right`}>
+                              <span className={`text-lg font-bold ${isDark ? 'text-emerald-400' : 'text-emerald-600'}`}>
+                                ${product.precioMayorista.toFixed(2)}
+                              </span>
+                            </td>
+                            <td className={`px-6 py-4 text-right`}>
+                              <span className={`text-base ${isDark ? 'text-blue-400' : 'text-blue-600'}`}>
+                                ${product.precioPublico.toFixed(2)}
                               </span>
                             </td>
                             <td className={`px-6 py-4 ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
@@ -964,6 +1010,7 @@ export default function ProductConfigPage() {
           <ProductModal
             isDark={isDark}
             product={editingProduct}
+            providerCompanies={providerCompanies}
             onClose={() => {
               setShowCreateModal(false)
               setEditingProduct(null)
@@ -984,7 +1031,9 @@ export default function ProductConfigPage() {
                     service_category: productData.category,
                     product_type: 'producto',
                     mi_costo: productData.miCosto,
-                    provider_company_name: productData.providerName
+                    precio_mayorista: productData.precioMayorista,
+                    precio_publico: productData.precioPublico,
+                    provider_company_id: productData.providerCompanyId
                   })
                 })
 
@@ -1013,6 +1062,7 @@ export default function ProductConfigPage() {
 interface ProductModalProps {
   isDark: boolean
   product: Product | null
+  providerCompanies: ProviderCompany[]
   onClose: () => void
   onSave: (data: {
     code: string
@@ -1020,18 +1070,22 @@ interface ProductModalProps {
     description: string
     category: string
     miCosto: number
-    providerName: string
+    precioMayorista: number
+    precioPublico: number
+    providerCompanyId: number | null
   }) => Promise<void>
 }
 
-function ProductModal({ isDark, product, onClose, onSave }: ProductModalProps) {
+function ProductModal({ isDark, product, providerCompanies, onClose, onSave }: ProductModalProps) {
   const [formData, setFormData] = useState({
     code: product?.code || '',
     name: product?.name || '',
     description: product?.description || '',
     category: product?.category || 'paqueteria',
     miCosto: product?.miCosto || 0,
-    providerName: product?.providerName || ''
+    precioMayorista: product?.precioMayorista || 0,
+    precioPublico: product?.precioPublico || 0,
+    providerCompanyId: product?.providerCompanyId || null as number | null
   })
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -1045,8 +1099,8 @@ function ProductModal({ isDark, product, onClose, onSave }: ProductModalProps) {
       return
     }
 
-    if (formData.miCosto < 0) {
-      setError('El costo no puede ser negativo')
+    if (formData.miCosto < 0 || formData.precioMayorista < 0 || formData.precioPublico < 0) {
+      setError('Los precios no pueden ser negativos')
       return
     }
 
@@ -1183,37 +1237,58 @@ function ProductModal({ isDark, product, onClose, onSave }: ProductModalProps) {
               </div>
             </div>
 
-            {/* Provider and Cost */}
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className={`block text-sm font-medium mb-2 ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
-                  Proveedor
-                </label>
-                <input
-                  type="text"
-                  value={formData.providerName}
-                  onChange={(e) => setFormData({ ...formData, providerName: e.target.value })}
-                  className={`w-full px-4 py-3 rounded-xl border text-sm transition-all ${
+            {/* Provider */}
+            <div>
+              <label className={`block text-sm font-medium mb-2 ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
+                Proveedor
+              </label>
+              <div className="relative">
+                <select
+                  value={formData.providerCompanyId ?? ''}
+                  onChange={(e) => setFormData({ ...formData, providerCompanyId: e.target.value ? parseInt(e.target.value) : null })}
+                  className={`w-full appearance-none px-4 py-3 pr-10 rounded-xl border text-sm transition-all cursor-pointer ${
                     isDark
-                      ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-500 focus:border-blue-500'
-                      : 'bg-gray-50 border-gray-200 text-gray-900 placeholder-gray-400 focus:border-blue-400'
+                      ? 'bg-gray-700 border-gray-600 text-white focus:border-blue-500'
+                      : 'bg-gray-50 border-gray-200 text-gray-900 focus:border-blue-400'
                   } focus:outline-none focus:ring-2 focus:ring-blue-500/20`}
-                  placeholder="Opcional"
-                />
+                >
+                  <option value="">Sin proveedor asignado</option>
+                  {providerCompanies.map(company => (
+                    <option key={company.id} value={company.id}>
+                      {company.legalName}
+                    </option>
+                  ))}
+                </select>
+                <ChevronDown className={`absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 pointer-events-none ${isDark ? 'text-gray-500' : 'text-gray-400'}`} />
               </div>
+            </div>
+
+            {/* Prices */}
+            <div className="grid grid-cols-3 gap-4">
               <div>
                 <label className={`block text-sm font-medium mb-2 ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
-                  Costo ($)
+                  Mi Costo ($)
                 </label>
                 <div className="relative">
-                  <span className={`absolute left-4 top-1/2 -translate-y-1/2 text-lg ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>$</span>
+                  <span className={`absolute left-3 top-1/2 -translate-y-1/2 text-sm ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>$</span>
                   <input
                     type="number"
                     step="0.01"
                     min="0"
                     value={formData.miCosto}
-                    onChange={(e) => setFormData({ ...formData, miCosto: parseFloat(e.target.value) || 0 })}
-                    className={`w-full pl-10 pr-4 py-3 rounded-xl border text-sm text-right font-semibold transition-all ${
+                    onChange={(e) => {
+                      const miCosto = parseFloat(e.target.value) || 0
+                      // Auto-calculate if other prices are 0
+                      const precioMayorista = formData.precioMayorista || miCosto * 1.2
+                      const precioPublico = formData.precioPublico || precioMayorista * 1.5
+                      setFormData({
+                        ...formData,
+                        miCosto,
+                        precioMayorista: formData.precioMayorista === 0 ? parseFloat(precioMayorista.toFixed(2)) : formData.precioMayorista,
+                        precioPublico: formData.precioPublico === 0 ? parseFloat(precioPublico.toFixed(2)) : formData.precioPublico
+                      })
+                    }}
+                    className={`w-full pl-8 pr-3 py-3 rounded-xl border text-sm text-right font-semibold transition-all ${
                       isDark
                         ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-500 focus:border-blue-500'
                         : 'bg-gray-50 border-gray-200 text-gray-900 placeholder-gray-400 focus:border-blue-400'
@@ -1221,6 +1296,57 @@ function ProductModal({ isDark, product, onClose, onSave }: ProductModalProps) {
                     placeholder="0.00"
                   />
                 </div>
+                <p className={`text-xs mt-1 ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
+                  Lo que pagas
+                </p>
+              </div>
+              <div>
+                <label className={`block text-sm font-medium mb-2 ${isDark ? 'text-emerald-400' : 'text-emerald-600'}`}>
+                  Venta Empresas ($)
+                </label>
+                <div className="relative">
+                  <span className={`absolute left-3 top-1/2 -translate-y-1/2 text-sm ${isDark ? 'text-emerald-500' : 'text-emerald-400'}`}>$</span>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={formData.precioMayorista}
+                    onChange={(e) => setFormData({ ...formData, precioMayorista: parseFloat(e.target.value) || 0 })}
+                    className={`w-full pl-8 pr-3 py-3 rounded-xl border text-sm text-right font-bold transition-all ${
+                      isDark
+                        ? 'bg-emerald-900/30 border-emerald-700 text-emerald-400 placeholder-emerald-700 focus:border-emerald-500'
+                        : 'bg-emerald-50 border-emerald-200 text-emerald-700 placeholder-emerald-300 focus:border-emerald-400'
+                    } focus:outline-none focus:ring-2 focus:ring-emerald-500/20`}
+                    placeholder="0.00"
+                  />
+                </div>
+                <p className={`text-xs mt-1 ${isDark ? 'text-emerald-500/70' : 'text-emerald-500'}`}>
+                  Costo para empresas
+                </p>
+              </div>
+              <div>
+                <label className={`block text-sm font-medium mb-2 ${isDark ? 'text-blue-400' : 'text-blue-600'}`}>
+                  Precio Publico ($)
+                </label>
+                <div className="relative">
+                  <span className={`absolute left-3 top-1/2 -translate-y-1/2 text-sm ${isDark ? 'text-blue-500' : 'text-blue-400'}`}>$</span>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={formData.precioPublico}
+                    onChange={(e) => setFormData({ ...formData, precioPublico: parseFloat(e.target.value) || 0 })}
+                    className={`w-full pl-8 pr-3 py-3 rounded-xl border text-sm text-right font-semibold transition-all ${
+                      isDark
+                        ? 'bg-blue-900/30 border-blue-700 text-blue-400 placeholder-blue-700 focus:border-blue-500'
+                        : 'bg-blue-50 border-blue-200 text-blue-700 placeholder-blue-300 focus:border-blue-400'
+                    } focus:outline-none focus:ring-2 focus:ring-blue-500/20`}
+                    placeholder="0.00"
+                  />
+                </div>
+                <p className={`text-xs mt-1 ${isDark ? 'text-blue-500/70' : 'text-blue-500'}`}>
+                  Sugerido al publico
+                </p>
               </div>
             </div>
 
