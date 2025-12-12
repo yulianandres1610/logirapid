@@ -336,7 +336,7 @@ export function Sidebar({ isCollapsed, onToggle }: SidebarProps) {
     { icon: Users, label: "Usuarios", href: "/dashboard/agency-admin/users", requiredService: null },
     { icon: Building2, label: "Sucursales", href: "/dashboard/agency-admin/sucursales", requiredService: null },
     { icon: UserCheck, label: "CRM", href: "/dashboard/agency-admin/crm", requiredService: null },
-    { icon: Settings, label: "Catálogo Productos", href: "/dashboard/admin/product-config", requiredService: null },
+    { icon: Package, label: "Catálogo", href: "/dashboard/agency-admin/catalogo", requiredService: null },
     { icon: Package, label: "Rastreador", href: "/dashboard/agency-admin/tracker", requiredService: 'tracker' },
     { icon: Wallet, label: "Wallet Empresa", href: "/dashboard/admin/company-wallet", requiredService: 'wallet' },
     { icon: Send, label: "Cupones Familiares", href: "/dashboard/agency-admin/remittance", requiredService: 'remittance' },
