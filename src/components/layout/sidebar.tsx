@@ -252,6 +252,7 @@ export function Sidebar({ isCollapsed, onToggle }: SidebarProps) {
   const { user } = useAuth()
   const [openSubmenus, setOpenSubmenus] = useState<{ [key: string]: boolean }>({})
   const [branding, setBranding] = useState<BrandingData | null>(null)
+  const [isBranch, setIsBranch] = useState<boolean>(false)
 
   const toggleSubmenu = (key: string) => {
     setOpenSubmenus(prev => ({
@@ -299,6 +300,25 @@ export function Sidebar({ isCollapsed, onToggle }: SidebarProps) {
     fetchBranding()
   }, [user?.companyId])
 
+  // Fetch company info to determine if it's a branch
+  useEffect(() => {
+    const fetchCompanyInfo = async () => {
+      if (!user?.companyId) return
+      try {
+        const response = await fetch(`/api/companies/${user.companyId}`)
+        if (!response.ok) return
+        const data = await response.json()
+        if (data?.success && data.data) {
+          setIsBranch(data.data.isBranch === true || data.data.parentCompanyId !== null)
+        }
+      } catch (error) {
+        console.warn('Error fetching company info:', error)
+      }
+    }
+
+    fetchCompanyInfo()
+  }, [user?.companyId])
+
   // Menu items para SUPER_ADMIN (acceso completo a todo el sistema)
   const superAdminMenuItems = [
     { icon: Home, label: "Dashboard", href: "/dashboard/admin" },
@@ -334,9 +354,11 @@ export function Sidebar({ isCollapsed, onToggle }: SidebarProps) {
   const adminMenuItems = [
     { icon: Home, label: "Dashboard", href: "/dashboard/agency-admin", requiredService: null },
     { icon: Users, label: "Usuarios", href: "/dashboard/agency-admin/users", requiredService: null },
-    { icon: Building2, label: "Sucursales", href: "/dashboard/agency-admin/sucursales", requiredService: null },
+    // Sucursales solo visible para empresas matriz (no sucursales)
+    ...(!isBranch ? [{ icon: Building2, label: "Sucursales", href: "/dashboard/agency-admin/sucursales", requiredService: null }] : []),
     { icon: UserCheck, label: "CRM", href: "/dashboard/agency-admin/crm", requiredService: null },
-    { icon: Package, label: "Catálogo", href: "/dashboard/agency-admin/catalogo", requiredService: null },
+    // Catálogo condicional: empresas matriz usan /catalogo, sucursales usan /catalogo-sucursal
+    { icon: Package, label: "Catálogo", href: isBranch ? "/dashboard/agency-admin/catalogo-sucursal" : "/dashboard/agency-admin/catalogo", requiredService: null },
     { icon: Package, label: "Rastreador", href: "/dashboard/agency-admin/tracker", requiredService: 'tracker' },
     { icon: Wallet, label: "Wallet Empresa", href: "/dashboard/admin/company-wallet", requiredService: 'wallet' },
     { icon: Send, label: "Cupones Familiares", href: "/dashboard/agency-admin/remittance", requiredService: 'remittance' },
