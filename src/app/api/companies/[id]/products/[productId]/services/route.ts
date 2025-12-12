@@ -29,7 +29,16 @@ export async function GET(
   { params }: RouteParams
 ) {
   try {
-    const { id: companyId, productId } = await params
+    const { id, productId: prodId } = await params
+    const companyId = parseInt(id)
+    const productId = parseInt(prodId)
+
+    if (isNaN(companyId) || isNaN(productId)) {
+      return NextResponse.json({
+        success: false,
+        error: 'IDs inválidos'
+      }, { status: 400 })
+    }
 
     // Verify auth
     const cookieStore = await cookies()
@@ -54,7 +63,7 @@ export async function GET(
     }
 
     // Authorization: SUPER_ADMIN can view any company, others only their own
-    if (payload.role !== 'SUPER_ADMIN' && payload.companyId !== parseInt(companyId)) {
+    if (payload.role !== 'SUPER_ADMIN' && payload.companyId !== companyId) {
       return NextResponse.json({
         success: false,
         error: 'No autorizado para ver servicios de esta empresa'
@@ -206,7 +215,9 @@ export async function POST(
   { params }: RouteParams
 ) {
   try {
-    const { id: companyId, productId } = await params
+    const { id, productId: prodId } = await params
+    const companyId = parseInt(id)
+    const productId = parseInt(prodId)
 
     // Verify auth
     const cookieStore = await cookies()
@@ -232,7 +243,7 @@ export async function POST(
 
     // Authorization: SUPER_ADMIN or ADMIN of the company
     if (payload.role !== 'SUPER_ADMIN' &&
-        !(payload.role === 'ADMIN' && payload.companyId === parseInt(companyId))) {
+        !(payload.role === 'ADMIN' && payload.companyId === companyId)) {
       return NextResponse.json({
         success: false,
         error: 'No autorizado. Solo ADMIN puede crear servicios.'
@@ -425,7 +436,9 @@ export async function PUT(
   { params }: RouteParams
 ) {
   try {
-    const { id: companyId, productId } = await params
+    const { id, productId: prodId } = await params
+    const companyId = parseInt(id)
+    const productId = parseInt(prodId)
 
     // Verify auth
     const cookieStore = await cookies()
@@ -451,7 +464,7 @@ export async function PUT(
 
     // Authorization: SUPER_ADMIN or ADMIN of the company
     if (payload.role !== 'SUPER_ADMIN' &&
-        !(payload.role === 'ADMIN' && payload.companyId === parseInt(companyId))) {
+        !(payload.role === 'ADMIN' && payload.companyId === companyId)) {
       return NextResponse.json({
         success: false,
         error: 'No autorizado. Solo ADMIN puede actualizar servicios.'
@@ -579,7 +592,9 @@ export async function DELETE(
   { params }: RouteParams
 ) {
   try {
-    const { id: companyId, productId } = await params
+    const { id, productId: prodId } = await params
+    const companyId = parseInt(id)
+    const productId = parseInt(prodId)
 
     // Verify auth
     const cookieStore = await cookies()
@@ -605,7 +620,7 @@ export async function DELETE(
 
     // Authorization: SUPER_ADMIN or ADMIN of the company
     if (payload.role !== 'SUPER_ADMIN' &&
-        !(payload.role === 'ADMIN' && payload.companyId === parseInt(companyId))) {
+        !(payload.role === 'ADMIN' && payload.companyId === companyId)) {
       return NextResponse.json({
         success: false,
         error: 'No autorizado. Solo ADMIN puede eliminar servicios.'
