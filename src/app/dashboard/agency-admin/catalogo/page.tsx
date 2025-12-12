@@ -1730,10 +1730,6 @@ export default function CatalogoEmpresaPage() {
                     <Package className="w-5 h-5" />
                     Comisiones por Producto
                   </h4>
-                  <p className={`text-sm mt-1 ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
-                    Configura la comision que recibe el rol <strong>{selectedRole}</strong> por cada venta.
-                    <span className={`ml-1 ${isDark ? 'text-red-400' : 'text-red-500'}`}>La comision no puede exceder el margen.</span>
-                  </p>
                 </div>
                 <table className="w-full">
                   <thead>
