@@ -567,9 +567,8 @@ export default function CatalogoEmpresaPage() {
 
     // First, validate that no commission exceeds its available margin (considering other roles)
     const invalidProducts: string[] = []
-    const invalidServices: string[] = []
 
-    // Validate product commissions
+    // Validate product commissions (margin includes services)
     for (const product of products) {
       const commission = productCommissions[product.id]
       if (!commission || commission.value === 0) continue
@@ -598,37 +597,9 @@ export default function CatalogoEmpresaPage() {
       }
     }
 
-    // Validate service commissions
-    for (const service of allServices) {
-      const commission = serviceCommissions[service.id]
-      if (!commission || commission.value === 0) continue
-
-      const serviceSellPrice = servicePrices[service.id] ?? service.sellPrice ?? 0
-      const serviceTotalMargin = serviceSellPrice > 0 ? serviceSellPrice - service.costPrice : 0
-
-      // Consider commissions from other roles
-      const serviceOtherRolesUsed = getOtherRolesCommissionForService(service.id, serviceSellPrice)
-      const serviceAvailableMargin = Math.max(0, serviceTotalMargin - serviceOtherRolesUsed)
-
-      let effectiveCommission = 0
-      if (commission.type === 'percentage') {
-        effectiveCommission = serviceSellPrice > 0 ? (serviceSellPrice * commission.value / 100) : 0
-      } else {
-        effectiveCommission = commission.value
-      }
-      if (commission.maxAmount !== null && effectiveCommission > commission.maxAmount) {
-        effectiveCommission = commission.maxAmount
-      }
-
-      if (effectiveCommission > serviceAvailableMargin && serviceAvailableMargin >= 0) {
-        invalidServices.push(service.serviceName)
-      }
-    }
-
     // If there are invalid commissions, show error and don't save
-    if (invalidProducts.length > 0 || invalidServices.length > 0) {
-      const allInvalid = [...invalidProducts, ...invalidServices]
-      showNotification('error', 'Comisiones invalidas', `Comisiones exceden el margen en: ${allInvalid.slice(0, 3).join(', ')}${allInvalid.length > 3 ? ` y ${allInvalid.length - 3} mas...` : ''}`)
+    if (invalidProducts.length > 0) {
+      showNotification('error', 'Comisiones invalidas', `Comisiones exceden el margen en: ${invalidProducts.slice(0, 3).join(', ')}${invalidProducts.length > 3 ? ` y ${invalidProducts.length - 3} mas...` : ''}`)
       return
     }
 
@@ -658,35 +629,6 @@ export default function CatalogoEmpresaPage() {
               savedCount++
             } else {
               console.error('Error saving commission:', data.error)
-              errorCount++
-            }
-          } catch (e) {
-            errorCount++
-          }
-        }
-      }
-
-      // Save service commissions
-      for (const [serviceId, config] of Object.entries(serviceCommissions)) {
-        if (config.value > 0) {
-          try {
-            const response = await fetch(`/api/companies/${companyId}/commissions`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                serviceId: parseInt(serviceId),
-                role: selectedRole,
-                commissionType: config.type,
-                commissionValue: config.value,
-                maxAmount: config.maxAmount,
-                activityType: 'service'
-              })
-            })
-            const data = await response.json()
-            if (data.success) {
-              savedCount++
-            } else {
-              console.error('Error saving service commission:', data.error)
               errorCount++
             }
           } catch (e) {
@@ -1951,188 +1893,7 @@ export default function CatalogoEmpresaPage() {
                 </table>
               </div>
 
-              {/* Service Commissions Table */}
-              {allServices.length > 0 && (
-                <div className={`rounded-2xl overflow-hidden border ${isDark ? 'bg-gray-800/50 border-gray-800' : 'bg-white border-gray-200'}`}>
-                  <div className={`px-6 py-4 border-b ${isDark ? 'border-gray-800' : 'border-gray-200'}`}>
-                    <h4 className={`font-semibold flex items-center gap-2 ${isDark ? 'text-white' : 'text-gray-900'}`}>
-                      <Tag className="w-5 h-5" />
-                      Comisiones por Servicio
-                    </h4>
-                    <p className={`text-sm mt-1 ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
-                      Comisiones adicionales por servicios personalizados.
-                      <span className={`ml-1 ${isDark ? 'text-red-400' : 'text-red-500'}`}>La comision no puede exceder el margen.</span>
-                    </p>
-                  </div>
-                  <table className="w-full">
-                    <thead>
-                      <tr className={isDark ? 'bg-gray-800' : 'bg-gray-50'}>
-                        <th className={`px-6 py-4 text-left text-xs font-semibold uppercase tracking-wider ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
-                          Servicio
-                        </th>
-                        <th className={`px-6 py-4 text-right text-xs font-semibold uppercase tracking-wider ${isDark ? 'text-emerald-400' : 'text-emerald-600'}`}>
-                          Margen Disp.
-                        </th>
-                        <th className={`px-6 py-4 text-center text-xs font-semibold uppercase tracking-wider ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
-                          Tipo
-                        </th>
-                        <th className={`px-6 py-4 text-center text-xs font-semibold uppercase tracking-wider ${isDark ? 'text-purple-400' : 'text-purple-600'}`}>
-                          Valor
-                        </th>
-                        <th className={`px-6 py-4 text-center text-xs font-semibold uppercase tracking-wider ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
-                          Max. Monto
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody className={`divide-y ${isDark ? 'divide-gray-800' : 'divide-gray-100'}`}>
-                      {allServices.map(service => {
-                        const commission = serviceCommissions[service.id] || { type: 'percentage' as const, value: 0, maxAmount: null }
-
-                        // Calculate margin for this service (sellPrice - costPrice)
-                        const serviceSellPrice = servicePrices[service.id] ?? service.sellPrice ?? 0
-                        const serviceTotalMargin = serviceSellPrice > 0 ? serviceSellPrice - service.costPrice : 0
-
-                        // Calculate commission used by OTHER roles for this service
-                        const serviceOtherRolesUsed = getOtherRolesCommissionForService(service.id, serviceSellPrice)
-
-                        // Available margin for this service
-                        const serviceAvailableMargin = Math.max(0, serviceTotalMargin - serviceOtherRolesUsed)
-
-                        // Calculate effective commission amount
-                        let effectiveServiceCommission = 0
-                        if (commission.type === 'percentage') {
-                          effectiveServiceCommission = serviceSellPrice > 0 ? (serviceSellPrice * commission.value / 100) : 0
-                        } else {
-                          effectiveServiceCommission = commission.value
-                        }
-                        // Apply max amount cap if set
-                        if (commission.maxAmount !== null && effectiveServiceCommission > commission.maxAmount) {
-                          effectiveServiceCommission = commission.maxAmount
-                        }
-
-                        const serviceExceedsMargin = effectiveServiceCommission > serviceAvailableMargin && serviceAvailableMargin >= 0
-
-                        return (
-                          <tr key={service.id} className={`transition-colors ${serviceExceedsMargin ? (isDark ? 'bg-red-900/20' : 'bg-red-50') : ''} ${isDark ? 'hover:bg-gray-700/50' : 'hover:bg-gray-50'}`}>
-                            <td className="px-6 py-4">
-                              <div>
-                                <div className={`font-medium ${isDark ? 'text-white' : 'text-gray-900'}`}>
-                                  {service.serviceName}
-                                </div>
-                                {service.serviceDescription && (
-                                  <div className={`text-sm ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
-                                    {service.serviceDescription}
-                                  </div>
-                                )}
-                              </div>
-                            </td>
-                            <td className="px-6 py-4 text-right">
-                              {serviceSellPrice > 0 ? (
-                                <div>
-                                  <span className={`text-lg font-semibold ${serviceAvailableMargin > 0 ? (isDark ? 'text-emerald-400' : 'text-emerald-600') : (isDark ? 'text-amber-400' : 'text-amber-600')}`}>
-                                    ${serviceAvailableMargin.toFixed(2)}
-                                  </span>
-                                  {serviceOtherRolesUsed > 0 && (
-                                    <div className={`text-xs mt-1 ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
-                                      Otros roles: ${serviceOtherRolesUsed.toFixed(2)}
-                                    </div>
-                                  )}
-                                  {serviceExceedsMargin && (
-                                    <div className={`text-xs mt-1 ${isDark ? 'text-red-400' : 'text-red-500'}`}>
-                                      Comision: ${effectiveServiceCommission.toFixed(2)}
-                                    </div>
-                                  )}
-                                </div>
-                              ) : (
-                                <span className={`text-sm ${isDark ? 'text-gray-600' : 'text-gray-400'}`}>
-                                  Sin precio
-                                </span>
-                              )}
-                            </td>
-                            <td className="px-6 py-4">
-                              <div className="flex justify-center">
-                                <select
-                                  value={commission.type}
-                                  onChange={(e) => setServiceCommissions(prev => ({
-                                    ...prev,
-                                    [service.id]: { ...commission, type: e.target.value as 'percentage' | 'fixed' }
-                                  }))}
-                                  className={`appearance-none px-3 py-2 rounded-lg text-sm cursor-pointer ${
-                                    isDark
-                                      ? 'bg-gray-700 border-gray-600 text-white'
-                                      : 'bg-gray-50 border-gray-200 text-gray-900'
-                                  } border focus:outline-none focus:ring-2 focus:ring-purple-500/20`}
-                                >
-                                  <option value="percentage">Porcentaje %</option>
-                                  <option value="fixed">Monto Fijo $</option>
-                                </select>
-                              </div>
-                            </td>
-                            <td className="px-6 py-4">
-                              <div className="flex justify-center">
-                                <div className="relative">
-                                  <span className={`absolute left-3 top-1/2 -translate-y-1/2 text-sm ${serviceExceedsMargin ? (isDark ? 'text-red-400' : 'text-red-500') : (isDark ? 'text-purple-400' : 'text-purple-500')}`}>
-                                    {commission.type === 'percentage' ? '%' : '$'}
-                                  </span>
-                                  <input
-                                    type="number"
-                                    step={commission.type === 'percentage' ? '1' : '0.01'}
-                                    min="0"
-                                    max={commission.type === 'percentage' ? '100' : undefined}
-                                    value={commission.value || ''}
-                                    placeholder="0"
-                                    onChange={(e) => setServiceCommissions(prev => ({
-                                      ...prev,
-                                      [service.id]: { ...commission, value: parseFloat(e.target.value) || 0 }
-                                    }))}
-                                    className={`w-28 pl-8 pr-3 py-2.5 text-center text-lg font-semibold rounded-xl border-2 transition-all ${
-                                      serviceExceedsMargin
-                                        ? isDark
-                                          ? 'bg-red-900/30 border-red-600 text-red-300 focus:border-red-500'
-                                          : 'bg-red-50 border-red-300 text-red-700 focus:border-red-400'
-                                        : commission.value > 0
-                                          ? isDark
-                                            ? 'bg-purple-900/30 border-purple-600 text-purple-300 focus:border-purple-500'
-                                            : 'bg-purple-50 border-purple-300 text-purple-700 focus:border-purple-400'
-                                          : isDark
-                                            ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-600 focus:border-purple-500'
-                                            : 'bg-white border-gray-200 text-gray-900 placeholder-gray-400 focus:border-purple-400'
-                                    } focus:outline-none focus:ring-4 focus:ring-purple-500/10`}
-                                  />
-                                </div>
-                              </div>
-                            </td>
-                            <td className="px-6 py-4">
-                              <div className="flex justify-center">
-                                <div className="relative">
-                                  <span className={`absolute left-3 top-1/2 -translate-y-1/2 text-sm ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>$</span>
-                                  <input
-                                    type="number"
-                                    step="0.01"
-                                    min="0"
-                                    max={serviceAvailableMargin > 0 ? serviceAvailableMargin : undefined}
-                                    value={commission.maxAmount ?? ''}
-                                    placeholder="—"
-                                    onChange={(e) => setServiceCommissions(prev => ({
-                                      ...prev,
-                                      [service.id]: { ...commission, maxAmount: e.target.value ? parseFloat(e.target.value) : null }
-                                    }))}
-                                    className={`w-28 pl-8 pr-3 py-2 text-center rounded-xl border transition-all ${
-                                      isDark
-                                        ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-600 focus:border-purple-500'
-                                        : 'bg-white border-gray-200 text-gray-900 placeholder-gray-400 focus:border-purple-400'
-                                    } focus:outline-none focus:ring-2 focus:ring-purple-500/10`}
-                                  />
-                                </div>
-                              </div>
-                            </td>
-                          </tr>
-                        )
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-              )}
+              {/* Note: Service commissions are not separate - the product margin includes services */}
 
               {/* Empty state if no products */}
               {products.length === 0 && (
