@@ -353,6 +353,12 @@ export default function CatalogoEmpresaPage() {
         showNotification('success', 'Exito', isEdit ? 'Servicio actualizado' : 'Servicio creado')
         await fetchProductServices(selectedProductForService.id)
         setEditingService(null)
+        // Invalidate cached services for this product so dropdown reloads
+        setProductServicesMap(prev => {
+          const newMap = { ...prev }
+          delete newMap[selectedProductForService.id]
+          return newMap
+        })
         fetchProducts() // Refresh to update service count
       } else {
         showNotification('error', 'Error', data.error || 'Error al guardar servicio')
@@ -381,6 +387,12 @@ export default function CatalogoEmpresaPage() {
       if (data.success) {
         showNotification('success', 'Exito', 'Servicio eliminado')
         await fetchProductServices(selectedProductForService.id)
+        // Invalidate cached services for this product so dropdown reloads
+        setProductServicesMap(prev => {
+          const newMap = { ...prev }
+          delete newMap[selectedProductForService.id]
+          return newMap
+        })
         fetchProducts()
       } else {
         showNotification('error', 'Error', data.error || 'Error al eliminar')
