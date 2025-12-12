@@ -324,16 +324,16 @@ export async function updateConfiguredCommissionsTotal(
   const { total } = await calculateTotalCommissions(companyId, productId, undefined, undefined, client)
   const margin = await calculateAvailableMargin(companyId, productId, client)
 
-  // Update or insert into company_product_pricing
-  // Use ON CONFLICT ON CONSTRAINT to reference the named constraint
+  // Update company_product_pricing if row exists
+  // We only UPDATE because the row should already exist from product pricing configuration
+  // If it doesn't exist, we skip - no need to create a row just for commission tracking
   await client.query(`
-    INSERT INTO company_product_pricing (company_id, product_id, total_configured_commissions, max_commission_amount, updated_at)
-    VALUES ($1, $2, $3, $4, NOW())
-    ON CONFLICT ON CONSTRAINT unique_company_product
-    DO UPDATE SET
+    UPDATE company_product_pricing
+    SET
       total_configured_commissions = $3,
       max_commission_amount = $4,
       updated_at = NOW()
+    WHERE company_id = $1 AND product_id = $2
   `, [companyId, productId, total, margin.maxComisionesPermitidas])
 }
 
