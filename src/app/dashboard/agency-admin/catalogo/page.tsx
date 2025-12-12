@@ -163,16 +163,14 @@ export default function CatalogoEmpresaPage() {
   const fetchBranches = useCallback(async () => {
     if (!companyId) return
     try {
-      const response = await fetch(`/api/companies?parent_id=${companyId}`)
+      const response = await fetch(`/api/companies?parentId=${companyId}`)
       const data = await response.json()
-      if (data.success) {
-        const branchList = data.data
-          .filter((c: any) => c.parent_company_id === companyId || c.parentCompanyId === companyId)
-          .map((c: any) => ({
-            id: c.id,
-            legalName: c.legalname || c.legalName,
-            status: c.status
-          }))
+      if (data.success && data.data) {
+        const branchList = data.data.map((c: any) => ({
+          id: c.id,
+          legalName: c.legalName || c.legalname,
+          status: c.status
+        }))
         setBranches(branchList)
       }
     } catch (error) {
