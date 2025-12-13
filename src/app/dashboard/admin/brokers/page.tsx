@@ -5,11 +5,22 @@ import { motion } from 'framer-motion'
 import mapboxgl from 'mapbox-gl'
 import 'mapbox-gl/dist/mapbox-gl.css'
 import {
+  AreaChart,
+  Area,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+  ReferenceLine
+} from 'recharts'
+import {
   Users,
   MapPin,
   DollarSign,
   Package,
   TrendingUp,
+  TrendingDown,
   Building2,
   Clock,
   CheckCircle,
@@ -24,7 +35,10 @@ import {
   Map as MapIcon,
   Satellite,
   ArrowUpRight,
-  Sparkles
+  Sparkles,
+  BarChart3,
+  ArrowUp,
+  ArrowDown
 } from 'lucide-react'
 import Link from 'next/link'
 import { DashboardLayout } from '@/components/layout/dashboard-layout'
@@ -72,6 +86,21 @@ interface OrderStats {
   totalAmount: number
 }
 
+interface ExchangeRate {
+  rate: number
+  formatted: string
+  lastUpdate: string
+  variacion: number
+}
+
+interface RateHistory {
+  timestamp: string
+  currency: string
+  baserate: number
+  agencyrate: number
+  adjustmentpercentage: number
+}
+
 // Cuba provinces with coordinates and colors
 const CUBA_PROVINCES: Record<string, { coords: [number, number], color: string }> = {
   'Pinar del Río': { coords: [-83.6978, 22.4175], color: '#3b82f6' },
@@ -116,6 +145,12 @@ export default function AdminBrokersDashboardPage() {
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
 
+  // Exchange rates state
+  const [exchangeRates, setExchangeRates] = useState<Record<string, ExchangeRate>>({})
+  const [rateHistory, setRateHistory] = useState<RateHistory[]>([])
+  const [selectedCurrency, setSelectedCurrency] = useState<'USD' | 'EUR' | 'MLC'>('USD')
+  const [ratePeriod, setRatePeriod] = useState<'24h' | '7d' | '30d'>('7d')
+
   const fetchData = useCallback(async () => {
     try {
       const res = await fetch('/api/admin/brokers')
@@ -135,14 +170,78 @@ export default function AdminBrokersDashboardPage() {
     }
   }, [])
 
+  // Fetch exchange rates
+  const fetchExchangeRates = useCallback(async () => {
+    try {
+      const res = await fetch('/api/exchange-rates')
+      if (res.ok) {
+        const data = await res.json()
+        if (data.success && data.data) {
+          setExchangeRates(data.data)
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching exchange rates:', error)
+    }
+  }, [])
+
+  // Fetch rate history
+  const fetchRateHistory = useCallback(async () => {
+    const days = ratePeriod === '24h' ? 1 : ratePeriod === '7d' ? 7 : 30
+    try {
+      const res = await fetch(`/api/agency-rates/history?currency=${selectedCurrency}&days=${days}`)
+      if (res.ok) {
+        const data = await res.json()
+        if (data.success && data.data) {
+          setRateHistory(data.data)
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching rate history:', error)
+    }
+  }, [selectedCurrency, ratePeriod])
+
   useEffect(() => {
     fetchData()
-  }, [fetchData])
+    fetchExchangeRates()
+  }, [fetchData, fetchExchangeRates])
+
+  useEffect(() => {
+    fetchRateHistory()
+  }, [fetchRateHistory])
 
   const handleRefresh = () => {
     setRefreshing(true)
     fetchData()
+    fetchExchangeRates()
+    fetchRateHistory()
   }
+
+  // Format chart data
+  const chartData = rateHistory.map(item => ({
+    date: new Date(item.timestamp).toLocaleDateString('es-ES', {
+      day: '2-digit',
+      month: 'short',
+      hour: ratePeriod === '24h' ? '2-digit' : undefined,
+      minute: ratePeriod === '24h' ? '2-digit' : undefined
+    }),
+    rate: item.baserate,
+    fullDate: new Date(item.timestamp).toLocaleDateString('es-ES', {
+      day: '2-digit',
+      month: 'long',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    })
+  }))
+
+  // Calculate rate stats
+  const currentRate = exchangeRates[selectedCurrency]
+  const rateChange = currentRate?.variacion || 0
+  const isPositive = rateChange >= 0
+  const minRate = chartData.length > 0 ? Math.min(...chartData.map(d => d.rate)) : 0
+  const maxRate = chartData.length > 0 ? Math.max(...chartData.map(d => d.rate)) : 0
+  const avgRate = chartData.length > 0 ? chartData.reduce((acc, d) => acc + d.rate, 0) / chartData.length : 0
 
   // Calculate province data from brokers
   const provinceData = brokers.reduce((acc, broker) => {
@@ -253,10 +352,18 @@ export default function AdminBrokersDashboardPage() {
     map.current = new mapboxgl.Map({
       container: mapContainer.current,
       style: 'mapbox://styles/mapbox/streets-v12',
-      center: [-79.5, 21.8],
-      zoom: 6.8,
+      center: [-79.0, 22.0],
+      zoom: 6.2,
+      minZoom: 5.5,
+      maxZoom: 12,
       attributionControl: false
     })
+
+    // Fit bounds to show all of Cuba
+    map.current.fitBounds([
+      [-85.2, 19.5], // Southwest corner
+      [-74.0, 23.5]  // Northeast corner
+    ], { padding: 30 })
 
     map.current.addControl(new mapboxgl.NavigationControl(), 'top-right')
 
@@ -400,14 +507,15 @@ export default function AdminBrokersDashboardPage() {
           </div>
         </div>
 
-        {/* Map Section */}
-        <div className="px-4 pb-3">
+        {/* Map and Chart Section - Side by Side */}
+        <div className="px-4 pb-3 grid grid-cols-1 xl:grid-cols-5 gap-4">
+          {/* Map Section - 3 columns */}
           <motion.div
             initial={{ opacity: 0, scale: 0.98 }}
             animate={{ opacity: 1, scale: 1 }}
             transition={{ delay: 0.3 }}
             className={cn(
-              "relative rounded-2xl overflow-hidden border shadow-sm",
+              "relative rounded-2xl overflow-hidden border shadow-sm xl:col-span-3",
               theme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'
             )}
           >
@@ -432,7 +540,7 @@ export default function AdminBrokersDashboardPage() {
             )}
 
             {/* Map Container */}
-            <div ref={mapContainer} className="w-full h-[420px]" />
+            <div ref={mapContainer} className="w-full h-[380px]" />
 
             {/* Map Controls - Top Left */}
             <div className="absolute top-4 left-4 z-10">
@@ -495,6 +603,226 @@ export default function AdminBrokersDashboardPage() {
             >
               <RefreshCw className={cn("w-4 h-4", refreshing && "animate-spin")} />
             </motion.button>
+          </motion.div>
+
+          {/* Exchange Rate Chart - 2 columns */}
+          <motion.div
+            initial={{ opacity: 0, x: 20 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ delay: 0.35 }}
+            className={cn(
+              "relative rounded-2xl overflow-hidden border shadow-sm xl:col-span-2",
+              theme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'
+            )}
+          >
+            {/* Header */}
+            <div className="p-4 border-b border-gray-200 dark:border-gray-700">
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2">
+                  <div className="p-2 rounded-lg bg-gradient-to-br from-emerald-500 to-teal-600">
+                    <BarChart3 className="w-4 h-4 text-white" />
+                  </div>
+                  <div>
+                    <h3 className={cn("font-semibold text-sm", theme === 'dark' ? 'text-white' : 'text-gray-900')}>
+                      Tasa de Cambio
+                    </h3>
+                    <p className="text-xs text-gray-500">Tiempo real</p>
+                  </div>
+                </div>
+                {currentRate && (
+                  <div className="text-right">
+                    <p className={cn("text-xl font-bold", theme === 'dark' ? 'text-white' : 'text-gray-900')}>
+                      {currentRate.formatted} <span className="text-xs font-normal text-gray-500">CUP</span>
+                    </p>
+                    <div className={cn(
+                      "flex items-center justify-end gap-1 text-xs font-medium",
+                      isPositive ? "text-emerald-500" : "text-red-500"
+                    )}>
+                      {isPositive ? <ArrowUp className="w-3 h-3" /> : <ArrowDown className="w-3 h-3" />}
+                      {Math.abs(rateChange).toFixed(2)}%
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Currency and Period Selector */}
+              <div className="flex items-center gap-2">
+                <div className="flex gap-1">
+                  {(['USD', 'EUR', 'MLC'] as const).map(currency => (
+                    <button
+                      key={currency}
+                      onClick={() => setSelectedCurrency(currency)}
+                      className={cn(
+                        "px-3 py-1.5 text-xs font-medium rounded-lg transition-all",
+                        selectedCurrency === currency
+                          ? "bg-gradient-to-r from-blue-500 to-indigo-600 text-white shadow-sm"
+                          : theme === 'dark' ? "bg-gray-700 text-gray-400 hover:bg-gray-600" : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                      )}
+                    >
+                      {currency}
+                    </button>
+                  ))}
+                </div>
+                <div className="ml-auto flex gap-1">
+                  {(['24h', '7d', '30d'] as const).map(period => (
+                    <button
+                      key={period}
+                      onClick={() => setRatePeriod(period)}
+                      className={cn(
+                        "px-2.5 py-1 text-xs rounded-lg transition-all",
+                        ratePeriod === period
+                          ? theme === 'dark' ? "bg-gray-600 text-white" : "bg-gray-800 text-white"
+                          : theme === 'dark' ? "text-gray-500 hover:text-gray-300" : "text-gray-400 hover:text-gray-600"
+                      )}
+                    >
+                      {period}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* Chart */}
+            <div className="h-[200px] p-2">
+              {chartData.length > 0 ? (
+                <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart data={chartData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+                    <defs>
+                      <linearGradient id="rateGradient" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor={isPositive ? "#10b981" : "#ef4444"} stopOpacity={0.4}/>
+                        <stop offset="95%" stopColor={isPositive ? "#10b981" : "#ef4444"} stopOpacity={0}/>
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" stroke={theme === 'dark' ? '#374151' : '#e5e7eb'} vertical={false} />
+                    <XAxis
+                      dataKey="date"
+                      tick={{ fontSize: 10, fill: theme === 'dark' ? '#9ca3af' : '#6b7280' }}
+                      axisLine={false}
+                      tickLine={false}
+                    />
+                    <YAxis
+                      domain={['auto', 'auto']}
+                      tick={{ fontSize: 10, fill: theme === 'dark' ? '#9ca3af' : '#6b7280' }}
+                      axisLine={false}
+                      tickLine={false}
+                      width={45}
+                      tickFormatter={(value) => value.toFixed(0)}
+                    />
+                    <Tooltip
+                      contentStyle={{
+                        backgroundColor: theme === 'dark' ? '#1f2937' : '#ffffff',
+                        border: 'none',
+                        borderRadius: '12px',
+                        boxShadow: '0 10px 40px rgba(0,0,0,0.15)',
+                        padding: '10px 14px'
+                      }}
+                      labelStyle={{ color: theme === 'dark' ? '#f3f4f6' : '#111827', fontWeight: 600, marginBottom: 4 }}
+                      formatter={(value: number) => [`${value.toFixed(2)} CUP`, 'Tasa']}
+                      labelFormatter={(label, payload) => payload?.[0]?.payload?.fullDate || label}
+                    />
+                    <ReferenceLine y={avgRate} stroke={theme === 'dark' ? '#6b7280' : '#9ca3af'} strokeDasharray="5 5" />
+                    <Area
+                      type="monotone"
+                      dataKey="rate"
+                      stroke={isPositive ? "#10b981" : "#ef4444"}
+                      strokeWidth={2}
+                      fill="url(#rateGradient)"
+                      dot={false}
+                      activeDot={{ r: 4, fill: isPositive ? "#10b981" : "#ef4444", strokeWidth: 0 }}
+                    />
+                  </AreaChart>
+                </ResponsiveContainer>
+              ) : (
+                <div className="h-full flex items-center justify-center">
+                  <div className="text-center">
+                    <BarChart3 className={cn("w-8 h-8 mx-auto mb-2", theme === 'dark' ? 'text-gray-600' : 'text-gray-300')} />
+                    <p className="text-xs text-gray-500">Sin datos históricos</p>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Stats Row */}
+            <div className="p-3 border-t border-gray-200 dark:border-gray-700 grid grid-cols-3 gap-2">
+              <div className={cn(
+                "text-center p-2 rounded-lg",
+                theme === 'dark' ? 'bg-gray-700/50' : 'bg-gray-50'
+              )}>
+                <p className="text-xs text-gray-500">Mínimo</p>
+                <p className={cn("font-semibold text-sm", theme === 'dark' ? 'text-white' : 'text-gray-900')}>
+                  {minRate.toFixed(2)}
+                </p>
+              </div>
+              <div className={cn(
+                "text-center p-2 rounded-lg",
+                theme === 'dark' ? 'bg-gray-700/50' : 'bg-gray-50'
+              )}>
+                <p className="text-xs text-gray-500">Promedio</p>
+                <p className={cn("font-semibold text-sm", theme === 'dark' ? 'text-white' : 'text-gray-900')}>
+                  {avgRate.toFixed(2)}
+                </p>
+              </div>
+              <div className={cn(
+                "text-center p-2 rounded-lg",
+                theme === 'dark' ? 'bg-gray-700/50' : 'bg-gray-50'
+              )}>
+                <p className="text-xs text-gray-500">Máximo</p>
+                <p className={cn("font-semibold text-sm", theme === 'dark' ? 'text-white' : 'text-gray-900')}>
+                  {maxRate.toFixed(2)}
+                </p>
+              </div>
+            </div>
+          </motion.div>
+        </div>
+
+        {/* Exchange Rate Cards Row */}
+        <div className="px-4 pb-3">
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.4 }}
+            className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3"
+          >
+            {Object.entries(exchangeRates).map(([currency, rate], i) => (
+              <motion.div
+                key={currency}
+                initial={{ opacity: 0, scale: 0.9 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ delay: 0.45 + i * 0.03 }}
+                whileHover={{ y: -2 }}
+                className={cn(
+                  "p-4 rounded-xl border backdrop-blur-sm cursor-pointer transition-all",
+                  theme === 'dark'
+                    ? 'bg-gray-800/60 border-gray-700/50 hover:border-gray-600'
+                    : 'bg-white/80 border-gray-200/60 hover:border-gray-300 hover:shadow-md'
+                )}
+              >
+                <div className="flex items-center justify-between mb-2">
+                  <span className={cn(
+                    "text-xs font-bold px-2 py-1 rounded-md",
+                    currency === 'USD' && "bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-400",
+                    currency === 'EUR' && "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-400",
+                    currency === 'MLC' && "bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-400",
+                    !['USD', 'EUR', 'MLC'].includes(currency) && "bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-400"
+                  )}>
+                    {currency}
+                  </span>
+                  <div className={cn(
+                    "flex items-center gap-0.5 text-xs",
+                    (rate.variacion || 0) >= 0 ? "text-emerald-500" : "text-red-500"
+                  )}>
+                    {(rate.variacion || 0) >= 0 ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
+                    {Math.abs(rate.variacion || 0).toFixed(1)}%
+                  </div>
+                </div>
+                <p className={cn("text-lg font-bold", theme === 'dark' ? 'text-white' : 'text-gray-900')}>
+                  {rate.formatted}
+                </p>
+                <p className="text-xs text-gray-500 mt-1 truncate">
+                  {rate.lastUpdate}
+                </p>
+              </motion.div>
+            ))}
           </motion.div>
         </div>
 
