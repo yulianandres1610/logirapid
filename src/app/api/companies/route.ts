@@ -157,12 +157,23 @@ export async function POST(request: NextRequest) {
       broker_contact_phone
     })
 
-    // Validaciones básicas
-    if (!legalName || !phone || !address || !city || !country || !einNumber) {
-      return NextResponse.json({
-        success: false,
-        error: 'Faltan campos requeridos'
-      }, { status: 400 })
+    // Validaciones básicas según tipo de empresa
+    if (companyType === 'broker') {
+      // Para brokers: nombre, carnet de identidad, teléfono, provincia y municipio
+      if (!legalName || !einNumber || !phone || !broker_province || !broker_municipality) {
+        return NextResponse.json({
+          success: false,
+          error: 'Faltan campos requeridos para el broker'
+        }, { status: 400 })
+      }
+    } else {
+      // Para otras empresas: campos estándar
+      if (!legalName || !phone || !address || !city || !country || !einNumber) {
+        return NextResponse.json({
+          success: false,
+          error: 'Faltan campos requeridos'
+        }, { status: 400 })
+      }
     }
 
     // Variables para almacenar configuración final
@@ -275,6 +286,11 @@ export async function POST(request: NextRequest) {
       ? `${broker_delivery_start} - ${broker_delivery_end}`
       : null
 
+    // Para brokers, usar campos específicos como fallback
+    const finalAddress = companyType === 'broker' ? (address || broker_address || '') : address
+    const finalCity = companyType === 'broker' ? (city || broker_municipality || '') : city
+    const finalCountry = companyType === 'broker' ? (country || 'Cuba') : country
+
     const values = [
       legalName,
       einNumber,
@@ -282,10 +298,10 @@ export async function POST(request: NextRequest) {
       finalCustomerServicePhone || null, // Usar phone de soporte heredado o configurado
       email || '',
       finalWebsite || null, // Usar website heredado o configurado
-      address,
-      city,
-      state || '',
-      country,
+      finalAddress,
+      finalCity,
+      state || broker_province || '',
+      finalCountry,
       zipCode || '',
       walletNumber || '',
       currency || 'USD',
