@@ -34,7 +34,10 @@ import {
   Satellite,
   ArrowUp,
   ArrowDown,
-  Wallet
+  Wallet,
+  Maximize2,
+  Minimize2,
+  X
 } from 'lucide-react'
 import { DashboardLayout } from '@/components/layout/dashboard-layout'
 import { cn } from '@/lib/utils'
@@ -142,6 +145,7 @@ export default function AdminBrokersDashboardPage() {
   const markersRef = useRef<mapboxgl.Marker[]>([])
   const [mapStyle, setMapStyle] = useState<'streets' | 'satellite'>('streets')
   const [mapLoading, setMapLoading] = useState(true)
+  const [mapFullscreen, setMapFullscreen] = useState(false)
 
   const [brokers, setBrokers] = useState<Broker[]>([])
   const [summary, setSummary] = useState<Summary | null>(null)
@@ -500,26 +504,41 @@ export default function AdminBrokersDashboardPage() {
         </div>
 
         {/* Main Content - Map + Rate Chart */}
-        <div className="grid grid-cols-1 xl:grid-cols-3 gap-4 mb-4">
+        <div className={cn("grid gap-4 mb-4", mapFullscreen ? "" : "grid-cols-1 xl:grid-cols-3")}>
           {/* Map */}
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             className={cn(
-              "xl:col-span-2 relative rounded-xl overflow-hidden border",
+              "relative rounded-xl overflow-hidden border transition-all duration-300",
+              mapFullscreen
+                ? "fixed inset-4 z-50"
+                : "xl:col-span-2",
               theme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'
             )}
           >
+            {/* Overlay de fondo en fullscreen */}
+            {mapFullscreen && (
+              <div
+                className="fixed inset-0 bg-black/80 -z-10"
+                onClick={() => setMapFullscreen(false)}
+              />
+            )}
+
             {mapLoading && (
               <div className={cn("absolute inset-0 z-20 flex items-center justify-center", theme === 'dark' ? 'bg-gray-800' : 'bg-gray-100')}>
                 <Layers className="w-8 h-8 animate-spin text-blue-500" />
               </div>
             )}
-            <div ref={mapContainer} className="w-full h-[320px]" />
+            <div
+              ref={mapContainer}
+              className={cn("w-full", mapFullscreen ? "h-full" : "h-[320px]")}
+            />
 
+            {/* Header con controles */}
             <div className="absolute top-3 left-3 z-10 flex items-center gap-2">
               <div className={cn("px-3 py-1.5 rounded-lg text-xs font-medium flex items-center gap-2", theme === 'dark' ? 'bg-gray-900/80 text-white' : 'bg-white/90 text-gray-900')}>
-                <MapPin className="w-4 h-4 text-blue-500" />
+                <MapPin className="w-4 h-4 text-red-500" />
                 <span>{brokers.filter(b => b.latitude && b.longitude).length} brokers en mapa</span>
               </div>
               <button
@@ -531,16 +550,41 @@ export default function AdminBrokersDashboardPage() {
               </button>
             </div>
 
-            <button
-              onClick={() => setMapStyle(prev => prev === 'streets' ? 'satellite' : 'streets')}
-              className={cn("absolute bottom-3 right-3 z-10 px-3 py-1.5 rounded-lg text-xs font-medium flex items-center gap-2", theme === 'dark' ? 'bg-gray-900/80 text-white' : 'bg-white/90 text-gray-900')}
-            >
-              {mapStyle === 'streets' ? <Satellite className="w-4 h-4" /> : <MapIcon className="w-4 h-4" />}
-              {mapStyle === 'streets' ? 'Satélite' : 'Calles'}
-            </button>
+            {/* Botón cerrar en fullscreen (esquina superior derecha) */}
+            {mapFullscreen && (
+              <button
+                onClick={() => setMapFullscreen(false)}
+                className="absolute top-3 right-3 z-10 p-2 rounded-lg bg-gray-900/80 text-white hover:bg-gray-800"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            )}
+
+            {/* Botones inferiores */}
+            <div className="absolute bottom-3 right-3 z-10 flex items-center gap-2">
+              <button
+                onClick={() => setMapStyle(prev => prev === 'streets' ? 'satellite' : 'streets')}
+                className={cn("px-3 py-1.5 rounded-lg text-xs font-medium flex items-center gap-2", theme === 'dark' ? 'bg-gray-900/80 text-white' : 'bg-white/90 text-gray-900')}
+              >
+                {mapStyle === 'streets' ? <Satellite className="w-4 h-4" /> : <MapIcon className="w-4 h-4" />}
+                {mapStyle === 'streets' ? 'Satélite' : 'Calles'}
+              </button>
+              <button
+                onClick={() => {
+                  setMapFullscreen(!mapFullscreen)
+                  // Resize del mapa después de cambiar el modo
+                  setTimeout(() => map.current?.resize(), 100)
+                }}
+                className={cn("px-3 py-1.5 rounded-lg text-xs font-medium flex items-center gap-2", theme === 'dark' ? 'bg-gray-900/80 text-white' : 'bg-white/90 text-gray-900')}
+              >
+                {mapFullscreen ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
+                {mapFullscreen ? 'Salir' : 'Pantalla completa'}
+              </button>
+            </div>
           </motion.div>
 
-          {/* Exchange Rate Chart */}
+          {/* Exchange Rate Chart - oculto en fullscreen */}
+          {!mapFullscreen && (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -601,9 +645,12 @@ export default function AdminBrokersDashboardPage() {
               )}
             </div>
           </motion.div>
+          )}
         </div>
 
-        {/* Charts Row */}
+        {/* Charts Row - oculto en fullscreen */}
+        {!mapFullscreen && (
+        <>
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-4">
           {/* Brokers by Province Chart */}
           <motion.div
@@ -791,6 +838,8 @@ export default function AdminBrokersDashboardPage() {
             </div>
           </motion.div>
         </div>
+        </>
+        )}
       </div>
     </DashboardLayout>
   )
