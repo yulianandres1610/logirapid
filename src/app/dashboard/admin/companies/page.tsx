@@ -36,7 +36,8 @@ import {
   Package,
   Archive,
   Truck,
-  Tag
+  Tag,
+  Save
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useTheme } from '@/contexts/theme-context'
@@ -829,6 +830,85 @@ export default function CompaniesPage() {
     } catch (error) {
       console.error('Error creating company:', error)
       showNotification('error', 'Error', 'Error al crear empresa. Por favor intenta de nuevo')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  // Función para guardar progreso en cualquier momento
+  const handleSaveProgress = async () => {
+    // Validar que al menos tenga nombre legal
+    if (!formData.legalName || formData.legalName.trim() === '') {
+      showNotification('warning', 'Atención', 'Debes ingresar al menos el nombre legal de la empresa')
+      return
+    }
+
+    try {
+      setLoading(true)
+
+      // Generar número de wallet si no existe
+      if (!formData.walletNumber) {
+        const timestamp = Date.now().toString().slice(-14)
+        formData.walletNumber = `2026${timestamp}`
+      }
+
+      // Si está en modo edición, actualizar; sino, crear
+      if (formData.editMode && formData.id) {
+        const response = await fetch(`/api/companies/${formData.id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            ...formData,
+            status: formData.status || 'draft' // Guardar como borrador
+          })
+        })
+
+        const data = await response.json()
+
+        if (!data.success) {
+          showNotification('error', 'Error', data.error || 'Error al guardar')
+          return
+        }
+
+        showNotification('success', '¡Guardado!', 'Cambios guardados correctamente')
+      } else {
+        // Crear nueva empresa como borrador
+        const response = await fetch('/api/companies', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            ...formData,
+            status: 'draft' // Guardar como borrador
+          })
+        })
+
+        const data = await response.json()
+
+        if (!data.success) {
+          showNotification('error', 'Error', data.error || 'Error al guardar')
+          return
+        }
+
+        // Actualizar formData con el ID de la empresa creada para poder seguir editando
+        setFormData((prev: any) => ({
+          ...prev,
+          id: data.data.id,
+          editMode: true
+        }))
+
+        showNotification('success', '¡Guardado!', 'Empresa guardada como borrador. Puedes continuar editando.')
+      }
+
+      // Recargar lista de empresas
+      const companiesResponse = await fetch('/api/companies?includeBranches=true')
+      const companiesData = await companiesResponse.json()
+      if (companiesData.success) {
+        setCompanies(companiesData.data)
+      }
+
+    } catch (error) {
+      console.error('Error saving progress:', error)
+      showNotification('error', 'Error', 'Error al guardar. Por favor intenta de nuevo')
     } finally {
       setLoading(false)
     }
@@ -3038,6 +3118,27 @@ export default function CompaniesPage() {
             >
               <ChevronLeft className="w-4 h-4" />
               Anterior
+            </motion.button>
+
+            {/* Botón Guardar Progreso */}
+            <motion.button
+              onClick={handleSaveProgress}
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+              disabled={loading || !formData.legalName}
+              className={cn(
+                "flex items-center gap-2 px-6 py-3 rounded-xl font-medium transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed",
+                theme === 'dark'
+                  ? "bg-amber-600 text-white hover:bg-amber-500"
+                  : "bg-amber-500 text-white hover:bg-amber-600"
+              )}
+            >
+              {loading ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <Save className="w-4 h-4" />
+              )}
+              Guardar
             </motion.button>
 
             {currentStep === STEPS.length ? (
