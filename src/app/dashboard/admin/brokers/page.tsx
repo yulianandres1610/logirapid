@@ -50,6 +50,9 @@ interface Broker {
   currency: string
   province: string
   municipality: string
+  latitude: number | null
+  longitude: number | null
+  contactPhone?: string
   isActive: boolean
 }
 
@@ -263,51 +266,129 @@ export default function AdminBrokersDashboardPage() {
   const currentRate = exchangeRates[selectedCurrency]
   const isPositive = (currentRate?.variacion || 0) >= 0
 
-  // Map markers
+  // Map markers - usando coordenadas individuales de cada broker
   const addMarkersToMap = useCallback(() => {
     if (!map.current) return
     markersRef.current.forEach(m => m.remove())
     markersRef.current = []
 
-    Object.entries(provinceData).forEach(([name, data]) => {
-      if (name === 'Sin asignar' || !PROVINCES[name]) return
-      const { coords, color } = PROVINCES[name]
+    // Agregar estilos de animación una sola vez
+    if (!document.getElementById('broker-marker-styles')) {
+      const styleEl = document.createElement('style')
+      styleEl.id = 'broker-marker-styles'
+      styleEl.textContent = `
+        @keyframes brokerMarkerBounce {
+          0%, 100% { transform: rotate(-45deg) scale(1); }
+          50% { transform: rotate(-45deg) scale(1.1); }
+        }
+        @keyframes brokerPulseAnimation {
+          0% { transform: translate(-50%, -50%) scale(0.8); opacity: 0.8; }
+          100% { transform: translate(-50%, -50%) scale(1.5); opacity: 0; }
+        }
+      `
+      document.head.appendChild(styleEl)
+    }
+
+    // Crear marcador para cada broker con coordenadas válidas
+    brokers.forEach((broker, index) => {
+      if (!broker.latitude || !broker.longitude) return
+
+      const provinceName = PROVINCE_ID_TO_NAME[broker.province] || broker.province || ''
+      const markerColor = PROVINCES[provinceName]?.color || '#3b82f6'
 
       const el = document.createElement('div')
+      el.className = 'broker-marker'
       el.innerHTML = `
-        <div style="
-          width: 36px; height: 36px; background: ${color};
-          border-radius: 50%; display: flex; align-items: center;
-          justify-content: center; border: 2px solid white;
-          box-shadow: 0 2px 8px rgba(0,0,0,0.3); cursor: pointer;
+        <div class="marker-container" style="
+          position: relative;
+          cursor: pointer;
+          transition: all 0.3s ease;
+          filter: drop-shadow(0 4px 6px rgba(0, 0, 0, 0.3));
         ">
-          <span style="color: white; font-weight: 700; font-size: 14px;">${data.count}</span>
+          <!-- Pin principal con animación -->
+          <div class="marker-pin" style="
+            width: 36px;
+            height: 36px;
+            background: ${markerColor};
+            border-radius: 50% 50% 50% 15%;
+            transform: rotate(-45deg);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border: 3px solid white;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+            position: relative;
+            animation: brokerMarkerBounce 2s infinite ease-in-out;
+          ">
+            <span style="
+              transform: rotate(45deg);
+              font-size: 16px;
+              filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.3));
+            ">🏪</span>
+          </div>
+
+          <!-- Círculo exterior pulsante -->
+          <div class="pulse-ring" style="
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 50px;
+            height: 50px;
+            border: 2px solid ${markerColor};
+            border-radius: 50%;
+            opacity: 0;
+            animation: brokerPulseAnimation 2s infinite;
+            animation-delay: ${index * 0.2}s;
+          "></div>
         </div>
       `
 
-      const popup = new mapboxgl.Popup({ offset: 20, closeButton: false })
+      const municipalityName = PROVINCE_ID_TO_NAME[broker.municipality] || broker.municipality || ''
+      const popup = new mapboxgl.Popup({ offset: 25, closeButton: false })
         .setHTML(`
-          <div style="padding: 10px; min-width: 150px;">
-            <h4 style="font-weight: 700; margin: 0 0 8px 0; color: #1f2937;">${name}</h4>
-            <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
-              <span style="color: #6b7280; font-size: 12px;">Brokers:</span>
-              <span style="font-weight: 600;">${data.count}</span>
+          <div style="padding: 12px; min-width: 180px;">
+            <h4 style="font-weight: 700; margin: 0 0 8px 0; color: #1f2937; font-size: 14px;">${broker.name}</h4>
+            <div style="display: flex; align-items: center; gap: 4px; margin-bottom: 6px;">
+              <span style="color: #6b7280; font-size: 11px;">📍</span>
+              <span style="color: #374151; font-size: 12px;">${municipalityName}, ${provinceName}</span>
             </div>
-            <div style="display: flex; justify-content: space-between;">
+            <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
               <span style="color: #6b7280; font-size: 12px;">Balance:</span>
-              <span style="font-weight: 600; color: #059669;">$${data.balance.toLocaleString('en-US', { minimumFractionDigits: 2 })}</span>
+              <span style="font-weight: 600; color: #059669;">${broker.walletBalanceFormatted}</span>
+            </div>
+            ${broker.contactPhone ? `
+            <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
+              <span style="color: #6b7280; font-size: 12px;">Teléfono:</span>
+              <span style="font-weight: 500; color: #374151;">${broker.contactPhone}</span>
+            </div>
+            ` : ''}
+            <div style="display: flex; justify-content: space-between;">
+              <span style="color: #6b7280; font-size: 12px;">Estado:</span>
+              <span style="font-weight: 500; color: ${broker.isActive ? '#059669' : '#dc2626'};">${broker.isActive ? '✓ Activo' : '✗ Inactivo'}</span>
             </div>
           </div>
         `)
 
-      const marker = new mapboxgl.Marker({ element: el, anchor: 'center' })
-        .setLngLat(coords)
+      const marker = new mapboxgl.Marker({ element: el, anchor: 'bottom' })
+        .setLngLat([broker.longitude, broker.latitude])
         .setPopup(popup)
         .addTo(map.current!)
 
       markersRef.current.push(marker)
     })
-  }, [provinceData])
+
+    // Ajustar bounds para mostrar todos los brokers
+    if (brokers.filter(b => b.latitude && b.longitude).length > 0) {
+      const bounds = new mapboxgl.LngLatBounds()
+      brokers.forEach(broker => {
+        if (broker.latitude && broker.longitude) {
+          bounds.extend([broker.longitude, broker.latitude])
+        }
+      })
+      map.current.fitBounds(bounds, { padding: 50, maxZoom: 10 })
+    }
+  }, [brokers])
 
   useEffect(() => {
     if (!mapContainer.current || map.current) return
@@ -436,8 +517,8 @@ export default function AdminBrokersDashboardPage() {
 
             <div className="absolute top-3 left-3 z-10 flex items-center gap-2">
               <div className={cn("px-3 py-1.5 rounded-lg text-xs font-medium flex items-center gap-2", theme === 'dark' ? 'bg-gray-900/80 text-white' : 'bg-white/90 text-gray-900')}>
-                <Globe className="w-4 h-4 text-blue-500" />
-                <span>{Object.keys(provinceData).filter(k => k !== 'Sin asignar').length} provincias</span>
+                <MapPin className="w-4 h-4 text-blue-500" />
+                <span>{brokers.filter(b => b.latitude && b.longitude).length} brokers en mapa</span>
               </div>
               <button
                 onClick={handleRefresh}

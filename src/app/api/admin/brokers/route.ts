@@ -86,6 +86,8 @@ export async function GET(request: NextRequest) {
         c.phone,
         c.email,
         c.logo,
+        c.latitude,
+        c.longitude,
         c.createdat as created_at,
         c.status,
         -- Get transaction stats
@@ -185,6 +187,8 @@ export async function GET(request: NextRequest) {
           contactPhone: row.broker_contact_phone || row.phone,
           email: row.email,
           logo: row.logo,
+          latitude: row.latitude ? parseFloat(row.latitude) : null,
+          longitude: row.longitude ? parseFloat(row.longitude) : null,
           isActive: row.is_active,
           status: row.status,
           maxDailyAmount: row.broker_max_daily_amount ? parseFloat(row.broker_max_daily_amount) : null,
