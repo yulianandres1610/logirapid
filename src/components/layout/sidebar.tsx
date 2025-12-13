@@ -35,7 +35,9 @@ import {
   Box,
   Store,
   Truck,
-  Percent
+  Percent,
+  Banknote,
+  Globe
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
@@ -276,6 +278,13 @@ export function Sidebar({ isCollapsed, onToggle }: SidebarProps) {
         'Paquetería': true
       }))
     }
+    // Auto-expand Brokers submenu
+    if (pathname.includes('/admin/brokers')) {
+      setOpenSubmenus(prev => ({
+        ...prev,
+        'Brokers Cuba': true
+      }))
+    }
   }, [pathname])
 
   // Fetch branding data for company logo
@@ -329,6 +338,17 @@ export function Sidebar({ isCollapsed, onToggle }: SidebarProps) {
     { icon: UserCheck, label: "CRM", href: "/dashboard/admin/crm" },
     { icon: Wallet, label: "Wallet Manager", href: "/dashboard/admin/wallet" },
     { icon: Send, label: "Cupones Familiares", href: "/dashboard/admin/remittance" },
+    {
+      icon: Globe,
+      label: "Brokers Cuba",
+      href: "/dashboard/admin/brokers",
+      hasSubmenu: true,
+      submenuItems: [
+        { icon: Building2, label: "Vista General", href: "/dashboard/admin/brokers" },
+        { icon: Package, label: "Órdenes Remesas", href: "/dashboard/admin/brokers/orders" },
+        { icon: Wallet, label: "Wallets", href: "/dashboard/admin/brokers/wallets" }
+      ]
+    },
     { icon: Smartphone, label: "Recarga", href: "/dashboard/admin/recharge" },
     { icon: Package, label: "Rastreador", href: "/dashboard/admin/tracker" },
     { icon: ShoppingCart, label: "Mercado", href: "/dashboard/admin/marketplace" },
@@ -361,7 +381,7 @@ export function Sidebar({ isCollapsed, onToggle }: SidebarProps) {
     { icon: Package, label: "Catálogo", href: isBranch ? "/dashboard/agency-admin/catalogo-sucursal" : "/dashboard/agency-admin/catalogo", requiredService: null },
     { icon: Package, label: "Rastreador", href: "/dashboard/agency-admin/tracker", requiredService: 'tracker' },
     { icon: Wallet, label: "Wallet Empresa", href: "/dashboard/admin/company-wallet", requiredService: 'wallet' },
-    { icon: Send, label: "Cupones Familiares", href: "/dashboard/agency-admin/remittance", requiredService: 'remittance' },
+    { icon: Banknote, label: "Cupones Familiares", href: "/dashboard/agency-admin/cupones-familiares", requiredService: 'remittance' },
     { icon: Smartphone, label: "Recargas", href: "/dashboard/agency-admin/recargas", requiredService: 'recharge' },
     { icon: BarChart3, label: "Tasa de Cambio", href: "/dashboard/agency-admin/exchange-rate", requiredService: 'exchange' },
     { icon: ShoppingCart, label: "Mercado", href: "/dashboard/agency-admin/marketplace", requiredService: 'marketplace' },
@@ -414,7 +434,7 @@ export function Sidebar({ isCollapsed, onToggle }: SidebarProps) {
   // Menu items para USER (solo puede vender servicios)
   const userMenuItems = [
     { icon: Home, label: "Dashboard", href: "/dashboard/user", requiredService: null },
-    { icon: Send, label: "Vender Cupón Familiar", href: "/dashboard/user/remittance", requiredService: 'remittance' },
+    { icon: Banknote, label: "Vender Cupón Familiar", href: "/dashboard/agency-admin/cupones-familiares", requiredService: 'remittance' },
     { icon: Smartphone, label: "Recargar Móvil", href: "/dashboard/user/recharge", requiredService: 'recharge' },
     { icon: Package, label: "Paquetes", href: "/dashboard/user/packages", requiredService: 'paqueteria' },
     { icon: UserCheck, label: "CRM", href: "/dashboard/user/crm", requiredService: null },

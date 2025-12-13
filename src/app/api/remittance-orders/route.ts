@@ -1,0 +1,431 @@
+import { NextRequest, NextResponse } from 'next/server'
+import { cookies } from 'next/headers'
+import jwt from 'jsonwebtoken'
+import { db } from '@/lib/database'
+
+interface JWTPayload {
+  userId: number
+  email: string
+  role: string
+  companyId: number
+  companyName: string
+}
+
+/**
+ * GET /api/remittance-orders
+ * List remittance orders with filters
+ */
+export async function GET(request: NextRequest) {
+  try {
+    const cookieStore = await cookies()
+    const authToken = cookieStore.get('auth-token')?.value
+
+    if (!authToken) {
+      return NextResponse.json({
+        success: false,
+        error: 'No autorizado'
+      }, { status: 401 })
+    }
+
+    let payload: JWTPayload
+    try {
+      const secret = process.env.JWT_SECRET || 'your-secret-key'
+      payload = jwt.verify(authToken, secret) as JWTPayload
+    } catch {
+      return NextResponse.json({
+        success: false,
+        error: 'Token inválido'
+      }, { status: 401 })
+    }
+
+    const { searchParams } = new URL(request.url)
+    const page = parseInt(searchParams.get('page') || '1')
+    const limit = parseInt(searchParams.get('limit') || '20')
+    const status = searchParams.get('status')
+    const province = searchParams.get('province')
+    const search = searchParams.get('search')
+
+    const offset = (page - 1) * limit
+    const params: any[] = []
+
+    // Build WHERE clause based on role
+    let whereClause = 'WHERE 1=1'
+
+    // SUPER_ADMIN can see all, others see their company's orders
+    if (payload.role !== 'SUPER_ADMIN') {
+      params.push(payload.companyId)
+      whereClause += ` AND ro.selling_company_id = $${params.length}`
+    }
+
+    if (status) {
+      params.push(status)
+      whereClause += ` AND ro.status = $${params.length}`
+    }
+
+    if (province) {
+      params.push(province)
+      whereClause += ` AND ro.recipient_province = $${params.length}`
+    }
+
+    if (search) {
+      params.push(`%${search}%`)
+      const searchParam = params.length
+      whereClause += ` AND (
+        ro.order_number ILIKE $${searchParam}
+        OR ro.recipient_name ILIKE $${searchParam}
+        OR ro.recipient_phone ILIKE $${searchParam}
+        OR ro.sender_name ILIKE $${searchParam}
+      )`
+    }
+
+    // Count total
+    const countResult = await db.query(`
+      SELECT COUNT(*) as total FROM remittance_orders ro ${whereClause}
+    `, params)
+    const total = parseInt(countResult.rows[0].total)
+
+    // Get orders
+    const query = `
+      SELECT
+        ro.*,
+        sc.legalname as selling_company_name,
+        bc.legalname as broker_company_name,
+        su.full_name as sold_by_name
+      FROM remittance_orders ro
+      LEFT JOIN companies sc ON ro.selling_company_id = sc.id
+      LEFT JOIN companies bc ON ro.broker_company_id = bc.id
+      LEFT JOIN users su ON ro.sold_by_user_id = su.id
+      ${whereClause}
+      ORDER BY ro.created_at DESC
+      LIMIT $${params.length + 1} OFFSET $${params.length + 2}
+    `
+
+    params.push(limit, offset)
+    const result = await db.query(query, params)
+
+    return NextResponse.json({
+      success: true,
+      data: {
+        orders: result.rows.map(row => ({
+          id: row.id,
+          orderNumber: row.order_number,
+          status: row.status,
+          paymentStatus: row.payment_status,
+          // Amounts
+          sendAmount: parseFloat(row.send_amount),
+          sendCurrency: row.send_currency,
+          receiveAmount: parseFloat(row.receive_amount),
+          receiveCurrency: row.receive_currency,
+          totalCharged: parseFloat(row.total_charged),
+          serviceFee: parseFloat(row.service_fee) || 0,
+          deliveryFee: parseFloat(row.delivery_fee) || 0,
+          // Recipient
+          recipientName: row.recipient_name,
+          recipientPhone: row.recipient_phone,
+          recipientProvince: row.recipient_province,
+          recipientMunicipality: row.recipient_municipality,
+          recipientAddress: row.recipient_address,
+          // Sender
+          senderName: row.sender_name,
+          senderPhone: row.sender_phone,
+          // Companies
+          sellingCompanyId: row.selling_company_id,
+          sellingCompanyName: row.selling_company_name,
+          brokerCompanyId: row.broker_company_id,
+          brokerCompanyName: row.broker_company_name,
+          soldByName: row.sold_by_name,
+          // Times
+          estimatedDelivery: row.estimated_delivery,
+          createdAt: row.created_at,
+          deliveredAt: row.delivered_at,
+          // Payment
+          paymentMethod: row.payment_method
+        })),
+        pagination: {
+          page,
+          limit,
+          total,
+          totalPages: Math.ceil(total / limit)
+        }
+      }
+    })
+
+  } catch (error) {
+    console.error('[Remittance Orders API] GET error:', error)
+    return NextResponse.json({
+      success: false,
+      error: error instanceof Error ? error.message : 'Error al obtener órdenes'
+    }, { status: 500 })
+  }
+}
+
+/**
+ * POST /api/remittance-orders
+ * Create a new remittance order
+ */
+export async function POST(request: NextRequest) {
+  try {
+    const cookieStore = await cookies()
+    const authToken = cookieStore.get('auth-token')?.value
+
+    if (!authToken) {
+      return NextResponse.json({
+        success: false,
+        error: 'No autorizado'
+      }, { status: 401 })
+    }
+
+    let payload: JWTPayload
+    try {
+      const secret = process.env.JWT_SECRET || 'your-secret-key'
+      payload = jwt.verify(authToken, secret) as JWTPayload
+    } catch {
+      return NextResponse.json({
+        success: false,
+        error: 'Token inválido'
+      }, { status: 401 })
+    }
+
+    const body = await request.json()
+    const {
+      // Location
+      province,
+      municipality,
+      // Service
+      productId,
+      serviceType,
+      // Amounts
+      sendAmount,
+      sendCurrency = 'USD',
+      receiveCurrency,
+      deliveryFee = 0,
+      exchangeRate = 1,
+      // Recipient
+      recipient,
+      // Sender
+      sender,
+      // Payment
+      paymentMethod,
+      paymentReference,
+      cashReceived,
+      // Optional broker assignment
+      brokerId
+    } = body
+
+    // Validate required fields
+    if (!province || !municipality) {
+      return NextResponse.json({
+        success: false,
+        error: 'Provincia y municipio son requeridos'
+      }, { status: 400 })
+    }
+
+    if (!sendAmount || sendAmount <= 0) {
+      return NextResponse.json({
+        success: false,
+        error: 'El monto debe ser mayor a 0'
+      }, { status: 400 })
+    }
+
+    if (!recipient?.name || !recipient?.phone) {
+      return NextResponse.json({
+        success: false,
+        error: 'Nombre y teléfono del destinatario son requeridos'
+      }, { status: 400 })
+    }
+
+    if (!sender?.name) {
+      return NextResponse.json({
+        success: false,
+        error: 'Nombre del remitente es requerido'
+      }, { status: 400 })
+    }
+
+    // Get product info for pricing
+    let serviceFee = 0
+    let serviceFeePercentage = 0
+    let productName = serviceType || 'Remesa USD'
+    const finalReceiveCurrency = receiveCurrency || sendCurrency
+
+    if (productId) {
+      const productResult = await db.query(`
+        SELECT
+          pc.name,
+          pc.mi_costo,
+          pc.precio_publico,
+          pc.mi_costo_fijo,
+          cpp.mi_costo as company_mi_costo,
+          cpp.precio_clientes as company_precio,
+          cpp.mi_costo_fijo as company_mi_costo_fijo,
+          cpp.precio_clientes_fijo as company_precio_fijo
+        FROM product_catalog pc
+        LEFT JOIN company_product_pricing cpp
+          ON cpp.product_id = pc.id AND cpp.company_id = $1
+        WHERE pc.id = $2
+      `, [payload.companyId, productId])
+
+      if (productResult.rows.length > 0) {
+        const product = productResult.rows[0]
+        productName = product.name
+
+        // Calculate service fee (percentage)
+        const feePercentage = parseFloat(product.company_precio || product.precio_publico) || 0
+        serviceFeePercentage = feePercentage
+        serviceFee = (sendAmount * feePercentage / 100)
+
+        // Add fixed fee if exists
+        const fixedFee = parseFloat(product.company_precio_fijo || product.mi_costo_fijo) || 0
+        serviceFee += fixedFee
+      }
+    }
+
+    // Calculate totals
+    const receiveAmount = sendAmount * exchangeRate
+    const totalCharged = sendAmount + serviceFee + deliveryFee
+    const cashChange = cashReceived ? cashReceived - totalCharged : null
+
+    // Find best broker or use provided one
+    let brokerCompanyId = brokerId
+    let estimatedDelivery = '1-3 días'
+
+    if (!brokerCompanyId) {
+      // Find broker with most available funds in this location
+      const brokerResult = await db.query(`
+        SELECT
+          c.id,
+          c.legalname,
+          bwb.available_balance
+        FROM companies c
+        LEFT JOIN broker_wallet_balances bwb
+          ON bwb.company_id = c.id AND bwb.currency = $3
+        WHERE c.companytype = 'broker'
+          AND c.broker_is_active = true
+          AND c.broker_province = $1
+          AND (c.broker_municipality = $2 OR c.broker_coverage_area::jsonb ? $2)
+        ORDER BY COALESCE(bwb.available_balance, 0) DESC
+        LIMIT 1
+      `, [province, municipality, finalReceiveCurrency])
+
+      if (brokerResult.rows.length > 0) {
+        brokerCompanyId = brokerResult.rows[0].id
+        const availableBalance = parseFloat(brokerResult.rows[0].available_balance) || 0
+
+        if (availableBalance >= receiveAmount) {
+          estimatedDelivery = '1-24 horas'
+        } else if (availableBalance > 0) {
+          estimatedDelivery = '24-48 horas'
+        }
+      }
+    } else {
+      // Check provided broker's availability
+      const brokerBalance = await db.query(`
+        SELECT available_balance FROM broker_wallet_balances
+        WHERE company_id = $1 AND currency = $2
+      `, [brokerCompanyId, finalReceiveCurrency])
+
+      if (brokerBalance.rows.length > 0) {
+        const available = parseFloat(brokerBalance.rows[0].available_balance) || 0
+        if (available >= receiveAmount) {
+          estimatedDelivery = '1-24 horas'
+        }
+      }
+    }
+
+    // Begin transaction
+    await db.query('BEGIN')
+
+    try {
+      // Generate order number
+      const orderNumResult = await db.query('SELECT generate_remittance_order_number() as order_number')
+      const orderNumber = orderNumResult.rows[0].order_number
+
+      // Create the order
+      const insertResult = await db.query(`
+        INSERT INTO remittance_orders (
+          order_number,
+          selling_company_id, sold_by_user_id,
+          broker_company_id, broker_province, broker_municipality,
+          product_id, product_name, service_type,
+          send_amount, send_currency, receive_amount, receive_currency, exchange_rate,
+          service_fee, service_fee_percentage, delivery_fee, total_charged,
+          recipient_name, recipient_phone, recipient_id_number,
+          recipient_address, recipient_neighborhood,
+          recipient_province, recipient_municipality, recipient_address_references,
+          has_alternate_contact, alternate_contact_name, alternate_contact_phone,
+          sender_name, sender_phone, sender_email, sender_id_type, sender_id_number,
+          status, payment_status, estimated_delivery,
+          payment_method, payment_reference, cash_received, cash_change
+        ) VALUES (
+          $1, $2, $3, $4, $5, $6, $7, $8, $9, $10,
+          $11, $12, $13, $14, $15, $16, $17, $18, $19, $20,
+          $21, $22, $23, $24, $25, $26, $27, $28, $29, $30,
+          $31, $32, $33, $34, $35, $36, $37, $38, $39, $40
+        )
+        RETURNING *
+      `, [
+        orderNumber,
+        payload.companyId, payload.userId,
+        brokerCompanyId, province, municipality,
+        productId, productName, serviceType,
+        sendAmount, sendCurrency, receiveAmount, finalReceiveCurrency, exchangeRate,
+        serviceFee, serviceFeePercentage, deliveryFee, totalCharged,
+        recipient.name, recipient.phone, recipient.idNumber || null,
+        recipient.address || null, recipient.neighborhood || null,
+        province, municipality, recipient.addressReferences || null,
+        recipient.hasAlternateContact || false,
+        recipient.alternateContactName || null,
+        recipient.alternateContactPhone || null,
+        sender.name, sender.phone || null, sender.email || null,
+        sender.idType || null, sender.idNumber || null,
+        'pending', paymentMethod ? 'paid' : 'pending', estimatedDelivery,
+        paymentMethod, paymentReference, cashReceived, cashChange
+      ])
+
+      const order = insertResult.rows[0]
+
+      // Reserve funds in broker's wallet if broker was assigned and has funds
+      if (brokerCompanyId && estimatedDelivery === '1-24 horas') {
+        await db.query(`
+          SELECT reserve_broker_funds($1, $2, $3, $4, $5)
+        `, [brokerCompanyId, finalReceiveCurrency, receiveAmount, order.id, payload.userId])
+      }
+
+      await db.query('COMMIT')
+
+      return NextResponse.json({
+        success: true,
+        data: {
+          id: order.id,
+          orderNumber: order.order_number,
+          status: order.status,
+          paymentStatus: order.payment_status,
+          sendAmount: parseFloat(order.send_amount),
+          sendCurrency: order.send_currency,
+          receiveAmount: parseFloat(order.receive_amount),
+          receiveCurrency: order.receive_currency,
+          serviceFee: parseFloat(order.service_fee),
+          deliveryFee: parseFloat(order.delivery_fee),
+          totalCharged: parseFloat(order.total_charged),
+          cashChange: order.cash_change ? parseFloat(order.cash_change) : null,
+          estimatedDelivery: order.estimated_delivery,
+          recipientName: order.recipient_name,
+          recipientProvince: order.recipient_province,
+          recipientMunicipality: order.recipient_municipality,
+          brokerCompanyId: order.broker_company_id,
+          createdAt: order.created_at
+        }
+      })
+
+    } catch (err) {
+      await db.query('ROLLBACK')
+      throw err
+    }
+
+  } catch (error) {
+    console.error('[Remittance Orders API] POST error:', error)
+    return NextResponse.json({
+      success: false,
+      error: error instanceof Error ? error.message : 'Error al crear orden'
+    }, { status: 500 })
+  }
+}
