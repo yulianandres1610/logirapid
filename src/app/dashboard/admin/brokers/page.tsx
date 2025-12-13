@@ -148,15 +148,100 @@ export default function AdminBrokersDashboardPage() {
     .sort((a, b) => b.walletBalance - a.walletBalance)
     .slice(0, 5)
 
+  // Function to add markers
+  const addMarkersToMap = useCallback(() => {
+    if (!map.current) return
+
+    // Clear existing markers
+    markersRef.current.forEach(m => m.remove())
+    markersRef.current = []
+
+    // Add markers for each province with brokers
+    Object.entries(provinceData).forEach(([name, data]) => {
+      if (name === 'Sin asignar' || !CUBA_PROVINCES[name]) return
+
+      const { coords, color } = CUBA_PROVINCES[name]
+
+      const el = document.createElement('div')
+      el.className = 'broker-marker-pin'
+      el.innerHTML = `
+        <div class="marker-container" style="
+          position: relative;
+          cursor: pointer;
+          transition: all 0.3s ease;
+          filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.3));
+        ">
+          <div class="marker-pin" style="
+            width: 44px;
+            height: 44px;
+            background: ${color};
+            border-radius: 50% 50% 50% 15%;
+            transform: rotate(-45deg);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border: 3px solid white;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+            position: relative;
+          ">
+            <span style="
+              transform: rotate(45deg);
+              color: white;
+              font-weight: 700;
+              font-size: 16px;
+            ">${data.count}</span>
+          </div>
+        </div>
+      `
+
+      const popup = new mapboxgl.Popup({ offset: 25, closeButton: false })
+        .setHTML(`
+          <div style="padding: 12px; min-width: 180px;">
+            <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 10px;">
+              <div style="width: 12px; height: 12px; border-radius: 50%; background: ${color};"></div>
+              <h4 style="font-weight: 700; font-size: 15px; color: #1f2937; margin: 0;">${name}</h4>
+            </div>
+            <div style="display: grid; gap: 6px;">
+              <div style="display: flex; justify-content: space-between; padding: 6px 10px; background: #f3f4f6; border-radius: 6px;">
+                <span style="color: #6b7280; font-size: 12px;">Brokers</span>
+                <span style="font-weight: 600; color: #1f2937;">${data.count}</span>
+              </div>
+              <div style="display: flex; justify-content: space-between; padding: 6px 10px; background: #ecfdf5; border-radius: 6px;">
+                <span style="color: #059669; font-size: 12px;">Balance</span>
+                <span style="font-weight: 600; color: #059669;">$${data.balance.toLocaleString('en-US', { minimumFractionDigits: 2 })}</span>
+              </div>
+            </div>
+            ${data.brokers.length > 0 ? `
+              <div style="margin-top: 10px; padding-top: 10px; border-top: 1px solid #e5e7eb;">
+                <p style="font-size: 10px; color: #9ca3af; margin-bottom: 6px; text-transform: uppercase;">Brokers:</p>
+                ${data.brokers.slice(0, 3).map(b => `
+                  <div style="display: flex; align-items: center; gap: 6px; padding: 4px 0; font-size: 11px;">
+                    <div style="width: 5px; height: 5px; border-radius: 50%; background: ${b.isActive ? '#10b981' : '#9ca3af'};"></div>
+                    <span style="color: #374151;">${b.name}</span>
+                  </div>
+                `).join('')}
+                ${data.brokers.length > 3 ? `<p style="font-size: 10px; color: #9ca3af; margin-top: 4px;">+${data.brokers.length - 3} más</p>` : ''}
+              </div>
+            ` : ''}
+          </div>
+        `)
+
+      const marker = new mapboxgl.Marker({ element: el, anchor: 'bottom' })
+        .setLngLat(coords)
+        .setPopup(popup)
+        .addTo(map.current!)
+
+      markersRef.current.push(marker)
+    })
+  }, [provinceData])
+
   // Initialize map
   useEffect(() => {
     if (!mapContainer.current || map.current) return
 
     map.current = new mapboxgl.Map({
       container: mapContainer.current,
-      style: mapStyle === 'streets'
-        ? 'mapbox://styles/mapbox/streets-v12'
-        : 'mapbox://styles/mapbox/satellite-streets-v12',
+      style: 'mapbox://styles/mapbox/streets-v12',
       center: [-79.5, 22.0],
       zoom: 6,
       attributionControl: false
@@ -166,6 +251,7 @@ export default function AdminBrokersDashboardPage() {
 
     map.current.on('load', () => {
       setMapLoading(false)
+      addMarkersToMap()
     })
 
     return () => {
@@ -175,137 +261,34 @@ export default function AdminBrokersDashboardPage() {
         map.current = null
       }
     }
-  }, [])
+  }, [addMarkersToMap])
 
-  // Update map style
+  // Update map style and re-add markers
   useEffect(() => {
     if (!map.current) return
-    map.current.setStyle(
-      mapStyle === 'streets'
-        ? 'mapbox://styles/mapbox/streets-v12'
-        : 'mapbox://styles/mapbox/satellite-streets-v12'
-    )
-  }, [mapStyle])
 
-  // Add markers when data changes
+    const newStyle = mapStyle === 'streets'
+      ? 'mapbox://styles/mapbox/streets-v12'
+      : 'mapbox://styles/mapbox/satellite-streets-v12'
+
+    map.current.setStyle(newStyle)
+
+    // Re-add markers after style change
+    map.current.once('style.load', () => {
+      addMarkersToMap()
+    })
+  }, [mapStyle, addMarkersToMap])
+
+  // Re-add markers when brokers data changes
   useEffect(() => {
     if (!map.current || brokers.length === 0) return
 
-    // Wait for style to load
-    const addMarkers = () => {
-      // Clear existing markers
-      markersRef.current.forEach(m => m.remove())
-      markersRef.current = []
-
-      // Add markers for each province with brokers
-      Object.entries(provinceData).forEach(([name, data]) => {
-        if (name === 'Sin asignar' || !CUBA_PROVINCES[name]) return
-
-        const { coords, color } = CUBA_PROVINCES[name]
-
-        const el = document.createElement('div')
-        el.className = 'broker-marker-pin'
-        el.innerHTML = `
-          <div class="marker-container" style="
-            position: relative;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.3));
-          ">
-            <div class="marker-pin" style="
-              width: 44px;
-              height: 44px;
-              background: ${color};
-              border-radius: 50% 50% 50% 15%;
-              transform: rotate(-45deg);
-              display: flex;
-              align-items: center;
-              justify-content: center;
-              border: 3px solid white;
-              box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
-              position: relative;
-              animation: markerBounce 2s infinite ease-in-out;
-            ">
-              <span style="
-                transform: rotate(45deg);
-                color: white;
-                font-weight: 700;
-                font-size: 16px;
-              ">${data.count}</span>
-            </div>
-            <div class="pulse-ring" style="
-              position: absolute;
-              top: 50%;
-              left: 50%;
-              transform: translate(-50%, -50%);
-              width: 60px;
-              height: 60px;
-              border: 2px solid ${color};
-              border-radius: 50%;
-              opacity: 0;
-              animation: pulseAnimation 2s infinite;
-            "></div>
-          </div>
-          <style>
-            @keyframes markerBounce {
-              0%, 100% { transform: rotate(-45deg) scale(1); }
-              50% { transform: rotate(-45deg) scale(1.08); }
-            }
-            @keyframes pulseAnimation {
-              0% { transform: translate(-50%, -50%) scale(0.8); opacity: 0.8; }
-              100% { transform: translate(-50%, -50%) scale(1.5); opacity: 0; }
-            }
-          </style>
-        `
-
-        const popup = new mapboxgl.Popup({ offset: 25, closeButton: false })
-          .setHTML(`
-            <div style="padding: 12px; min-width: 180px;">
-              <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 10px;">
-                <div style="width: 12px; height: 12px; border-radius: 50%; background: ${color};"></div>
-                <h4 style="font-weight: 700; font-size: 15px; color: #1f2937; margin: 0;">${name}</h4>
-              </div>
-              <div style="display: grid; gap: 6px;">
-                <div style="display: flex; justify-content: space-between; padding: 6px 10px; background: #f3f4f6; border-radius: 6px;">
-                  <span style="color: #6b7280; font-size: 12px;">Brokers</span>
-                  <span style="font-weight: 600; color: #1f2937;">${data.count}</span>
-                </div>
-                <div style="display: flex; justify-content: space-between; padding: 6px 10px; background: #ecfdf5; border-radius: 6px;">
-                  <span style="color: #059669; font-size: 12px;">Balance</span>
-                  <span style="font-weight: 600; color: #059669;">$${data.balance.toLocaleString('en-US', { minimumFractionDigits: 2 })}</span>
-                </div>
-              </div>
-              ${data.brokers.length > 0 ? `
-                <div style="margin-top: 10px; padding-top: 10px; border-top: 1px solid #e5e7eb;">
-                  <p style="font-size: 10px; color: #9ca3af; margin-bottom: 6px; text-transform: uppercase;">Brokers:</p>
-                  ${data.brokers.slice(0, 3).map(b => `
-                    <div style="display: flex; align-items: center; gap: 6px; padding: 4px 0; font-size: 11px;">
-                      <div style="width: 5px; height: 5px; border-radius: 50%; background: ${b.isActive ? '#10b981' : '#9ca3af'};"></div>
-                      <span style="color: #374151;">${b.name}</span>
-                    </div>
-                  `).join('')}
-                  ${data.brokers.length > 3 ? `<p style="font-size: 10px; color: #9ca3af; margin-top: 4px;">+${data.brokers.length - 3} más</p>` : ''}
-                </div>
-              ` : ''}
-            </div>
-          `)
-
-        const marker = new mapboxgl.Marker({ element: el, anchor: 'bottom' })
-          .setLngLat(coords)
-          .setPopup(popup)
-          .addTo(map.current!)
-
-        markersRef.current.push(marker)
-      })
-    }
-
-    // Add markers after style loads
     if (map.current.isStyleLoaded()) {
-      addMarkers()
+      addMarkersToMap()
     } else {
-      map.current.once('styledata', addMarkers)
+      map.current.once('style.load', addMarkersToMap)
     }
-  }, [provinceData, brokers])
+  }, [brokers, addMarkersToMap])
 
   const toggleMapStyle = () => {
     setMapStyle(prev => prev === 'streets' ? 'satellite' : 'streets')

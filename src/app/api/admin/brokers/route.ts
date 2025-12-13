@@ -74,7 +74,6 @@ export async function GET(request: NextRequest) {
       SELECT
         c.id,
         c.legalname,
-        c.tradename,
         COALESCE("walletNumber", walletnumber) as wallet_number,
         COALESCE("walletBalance"::numeric, walletbalance, 0) as wallet_balance,
         c.currency,
@@ -87,7 +86,7 @@ export async function GET(request: NextRequest) {
         c.phone,
         c.email,
         c.logo,
-        c.created_at,
+        c.createdat as created_at,
         c.status,
         -- Get transaction stats
         (SELECT COUNT(*) FROM wallet_transactions wt
@@ -175,7 +174,7 @@ export async function GET(request: NextRequest) {
         brokers: result.rows.map(row => ({
           id: row.id,
           name: row.legalname,
-          tradeName: row.tradename,
+          tradeName: row.legalname,
           walletNumber: row.wallet_number,
           walletBalance: parseFloat(row.wallet_balance) || 0,
           walletBalanceFormatted: `$${(parseFloat(row.wallet_balance) || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
