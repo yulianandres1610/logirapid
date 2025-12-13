@@ -7,12 +7,17 @@ import 'mapbox-gl/dist/mapbox-gl.css'
 import {
   AreaChart,
   Area,
+  BarChart,
+  Bar,
+  PieChart,
+  Pie,
+  Cell,
   XAxis,
   YAxis,
   CartesianGrid,
   Tooltip,
   ResponsiveContainer,
-  ReferenceLine
+  Legend
 } from 'recharts'
 import {
   Users,
@@ -22,50 +27,30 @@ import {
   TrendingUp,
   TrendingDown,
   Building2,
-  Clock,
-  CheckCircle,
-  ChevronRight,
-  Activity,
   RefreshCw,
-  XCircle,
-  Truck,
-  Zap,
   Globe,
   Layers,
   Map as MapIcon,
   Satellite,
-  ArrowUpRight,
-  Sparkles,
-  BarChart3,
   ArrowUp,
-  ArrowDown
+  ArrowDown,
+  Wallet
 } from 'lucide-react'
-import Link from 'next/link'
 import { DashboardLayout } from '@/components/layout/dashboard-layout'
 import { cn } from '@/lib/utils'
 import { useTheme } from '@/contexts/theme-context'
 
-// Mapbox token
 mapboxgl.accessToken = 'pk.eyJ1IjoieXVsaWFuYW5kcmVzMTYxMCIsImEiOiJjbWgycTlsZGsxM200YnNvbnN2d2wwcHJ5In0.wlU7-bazAs2eYjknx7H97Q'
 
 interface Broker {
   id: number
   name: string
-  tradeName: string
-  walletNumber: string
   walletBalance: number
   walletBalanceFormatted: string
   currency: string
   province: string
   municipality: string
   isActive: boolean
-  email: string
-  contactPhone: string
-  stats: {
-    totalTransactions: number
-    totalDeposits: number
-    totalWithdrawals: number
-  }
 }
 
 interface Summary {
@@ -95,14 +80,11 @@ interface ExchangeRate {
 
 interface RateHistory {
   timestamp: string
-  currency: string
   baserate: number
-  agencyrate: number
-  adjustmentpercentage: number
 }
 
-// Cuba provinces with coordinates and colors
-const CUBA_PROVINCES: Record<string, { coords: [number, number], color: string }> = {
+// Provinces with coordinates
+const PROVINCES: Record<string, { coords: [number, number], color: string }> = {
   'Pinar del Río': { coords: [-83.6978, 22.4175], color: '#3b82f6' },
   'Artemisa': { coords: [-82.7617, 22.8136], color: '#8b5cf6' },
   'La Habana': { coords: [-82.3666, 23.1136], color: '#ef4444' },
@@ -116,20 +98,18 @@ const CUBA_PROVINCES: Record<string, { coords: [number, number], color: string }
   'Las Tunas': { coords: [-76.9514, 20.9597], color: '#a855f7' },
   'Holguín': { coords: [-76.2633, 20.7869], color: '#ec4899' },
   'Granma': { coords: [-76.6431, 20.3847], color: '#f43f5e' },
-  'Santiago de Cuba': { coords: [-75.8219, 20.0247], color: '#f59e0b' },
+  'Santiago': { coords: [-75.8219, 20.0247], color: '#f59e0b' },
   'Guantánamo': { coords: [-75.2092, 20.1447], color: '#84cc16' },
   'Isla de la Juventud': { coords: [-82.8500, 21.7000], color: '#10b981' }
 }
 
-// Stat card configurations
-const statCards = [
-  { key: 'totalBrokers', label: 'Total Brokers', icon: Users, gradient: 'from-blue-500 to-blue-600', bg: 'bg-blue-500/10' },
-  { key: 'activeBrokers', label: 'Activos', icon: Zap, gradient: 'from-emerald-500 to-green-600', bg: 'bg-emerald-500/10' },
-  { key: 'provinces', label: 'Provincias', icon: MapPin, gradient: 'from-purple-500 to-indigo-600', bg: 'bg-purple-500/10' },
-  { key: 'balance', label: 'Balance Total', icon: DollarSign, gradient: 'from-amber-500 to-orange-600', bg: 'bg-amber-500/10' },
-  { key: 'orders', label: 'Órdenes', icon: Package, gradient: 'from-pink-500 to-rose-600', bg: 'bg-pink-500/10' },
-  { key: 'volume', label: 'Volumen', icon: TrendingUp, gradient: 'from-cyan-500 to-teal-600', bg: 'bg-cyan-500/10' },
-]
+const ORDER_COLORS = {
+  pending: '#f59e0b',
+  confirmed: '#3b82f6',
+  inDelivery: '#8b5cf6',
+  delivered: '#10b981',
+  cancelled: '#ef4444'
+}
 
 export default function AdminBrokersDashboardPage() {
   const { theme } = useTheme()
@@ -145,11 +125,9 @@ export default function AdminBrokersDashboardPage() {
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
 
-  // Exchange rates state
   const [exchangeRates, setExchangeRates] = useState<Record<string, ExchangeRate>>({})
   const [rateHistory, setRateHistory] = useState<RateHistory[]>([])
   const [selectedCurrency, setSelectedCurrency] = useState<'USD' | 'EUR' | 'MLC'>('USD')
-  const [ratePeriod, setRatePeriod] = useState<'24h' | '7d' | '30d'>('7d')
 
   const fetchData = useCallback(async () => {
     try {
@@ -170,7 +148,6 @@ export default function AdminBrokersDashboardPage() {
     }
   }, [])
 
-  // Fetch exchange rates
   const fetchExchangeRates = useCallback(async () => {
     try {
       const res = await fetch('/api/exchange-rates')
@@ -185,11 +162,9 @@ export default function AdminBrokersDashboardPage() {
     }
   }, [])
 
-  // Fetch rate history
   const fetchRateHistory = useCallback(async () => {
-    const days = ratePeriod === '24h' ? 1 : ratePeriod === '7d' ? 7 : 30
     try {
-      const res = await fetch(`/api/agency-rates/history?currency=${selectedCurrency}&days=${days}`)
+      const res = await fetch(`/api/agency-rates/history?currency=${selectedCurrency}&days=7`)
       if (res.ok) {
         const data = await res.json()
         if (data.success && data.data) {
@@ -199,7 +174,7 @@ export default function AdminBrokersDashboardPage() {
     } catch (error) {
       console.error('Error fetching rate history:', error)
     }
-  }, [selectedCurrency, ratePeriod])
+  }, [selectedCurrency])
 
   useEffect(() => {
     fetchData()
@@ -217,33 +192,22 @@ export default function AdminBrokersDashboardPage() {
     fetchRateHistory()
   }
 
-  // Format chart data
-  const chartData = rateHistory.map(item => ({
-    date: new Date(item.timestamp).toLocaleDateString('es-ES', {
-      day: '2-digit',
-      month: 'short',
-      hour: ratePeriod === '24h' ? '2-digit' : undefined,
-      minute: ratePeriod === '24h' ? '2-digit' : undefined
-    }),
-    rate: item.baserate,
-    fullDate: new Date(item.timestamp).toLocaleDateString('es-ES', {
-      day: '2-digit',
-      month: 'long',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    })
+  // Chart data: Rate history
+  const rateChartData = rateHistory.map(item => ({
+    date: new Date(item.timestamp).toLocaleDateString('es-ES', { day: '2-digit', month: 'short' }),
+    rate: item.baserate
   }))
 
-  // Calculate rate stats
-  const currentRate = exchangeRates[selectedCurrency]
-  const rateChange = currentRate?.variacion || 0
-  const isPositive = rateChange >= 0
-  const minRate = chartData.length > 0 ? Math.min(...chartData.map(d => d.rate)) : 0
-  const maxRate = chartData.length > 0 ? Math.max(...chartData.map(d => d.rate)) : 0
-  const avgRate = chartData.length > 0 ? chartData.reduce((acc, d) => acc + d.rate, 0) / chartData.length : 0
+  // Chart data: Orders by status
+  const orderChartData = orderStats ? [
+    { name: 'Pendientes', value: orderStats.pending, color: ORDER_COLORS.pending },
+    { name: 'Confirmadas', value: orderStats.confirmed, color: ORDER_COLORS.confirmed },
+    { name: 'En Entrega', value: orderStats.inDelivery, color: ORDER_COLORS.inDelivery },
+    { name: 'Entregadas', value: orderStats.delivered, color: ORDER_COLORS.delivered },
+    { name: 'Canceladas', value: orderStats.cancelled, color: ORDER_COLORS.cancelled },
+  ].filter(d => d.value > 0) : []
 
-  // Calculate province data from brokers
+  // Chart data: Brokers by province
   const provinceData = brokers.reduce((acc, broker) => {
     const prov = broker.province || 'Sin asignar'
     if (!acc[prov]) acc[prov] = { count: 0, balance: 0, brokers: [] as Broker[] }
@@ -253,90 +217,67 @@ export default function AdminBrokersDashboardPage() {
     return acc
   }, {} as Record<string, { count: number, balance: number, brokers: Broker[] }>)
 
-  // Top brokers by balance
-  const topBrokers = [...brokers]
-    .sort((a, b) => b.walletBalance - a.walletBalance)
-    .slice(0, 5)
+  const provinceChartData = Object.entries(provinceData)
+    .filter(([name]) => name !== 'Sin asignar')
+    .map(([name, data]) => ({
+      name: name.length > 12 ? name.slice(0, 12) + '...' : name,
+      fullName: name,
+      brokers: data.count,
+      balance: data.balance
+    }))
+    .sort((a, b) => b.brokers - a.brokers)
+    .slice(0, 8)
 
-  // Function to add markers
+  // Chart data: Balance by currency (from rates)
+  const currencyBalanceData = Object.entries(exchangeRates)
+    .slice(0, 6)
+    .map(([currency, rate]) => ({
+      currency,
+      rate: rate.rate,
+      variacion: rate.variacion || 0
+    }))
+
+  const currentRate = exchangeRates[selectedCurrency]
+  const isPositive = (currentRate?.variacion || 0) >= 0
+
+  // Map markers
   const addMarkersToMap = useCallback(() => {
     if (!map.current) return
-
-    // Clear existing markers
     markersRef.current.forEach(m => m.remove())
     markersRef.current = []
 
-    // Add markers for each province with brokers
     Object.entries(provinceData).forEach(([name, data]) => {
-      if (name === 'Sin asignar' || !CUBA_PROVINCES[name]) return
-
-      const { coords, color } = CUBA_PROVINCES[name]
+      if (name === 'Sin asignar' || !PROVINCES[name]) return
+      const { coords, color } = PROVINCES[name]
 
       const el = document.createElement('div')
-      el.className = 'broker-marker-pin'
       el.innerHTML = `
-        <div class="marker-container" style="
-          position: relative;
-          cursor: pointer;
-          transition: all 0.3s ease;
-          filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.3));
+        <div style="
+          width: 36px; height: 36px; background: ${color};
+          border-radius: 50%; display: flex; align-items: center;
+          justify-content: center; border: 2px solid white;
+          box-shadow: 0 2px 8px rgba(0,0,0,0.3); cursor: pointer;
         ">
-          <div class="marker-pin" style="
-            width: 44px;
-            height: 44px;
-            background: ${color};
-            border-radius: 50% 50% 50% 15%;
-            transform: rotate(-45deg);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            border: 3px solid white;
-            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
-            position: relative;
-          ">
-            <span style="
-              transform: rotate(45deg);
-              color: white;
-              font-weight: 700;
-              font-size: 16px;
-            ">${data.count}</span>
-          </div>
+          <span style="color: white; font-weight: 700; font-size: 14px;">${data.count}</span>
         </div>
       `
 
-      const popup = new mapboxgl.Popup({ offset: 25, closeButton: false })
+      const popup = new mapboxgl.Popup({ offset: 20, closeButton: false })
         .setHTML(`
-          <div style="padding: 12px; min-width: 180px;">
-            <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 10px;">
-              <div style="width: 12px; height: 12px; border-radius: 50%; background: ${color};"></div>
-              <h4 style="font-weight: 700; font-size: 15px; color: #1f2937; margin: 0;">${name}</h4>
+          <div style="padding: 10px; min-width: 150px;">
+            <h4 style="font-weight: 700; margin: 0 0 8px 0; color: #1f2937;">${name}</h4>
+            <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
+              <span style="color: #6b7280; font-size: 12px;">Brokers:</span>
+              <span style="font-weight: 600;">${data.count}</span>
             </div>
-            <div style="display: grid; gap: 6px;">
-              <div style="display: flex; justify-content: space-between; padding: 6px 10px; background: #f3f4f6; border-radius: 6px;">
-                <span style="color: #6b7280; font-size: 12px;">Brokers</span>
-                <span style="font-weight: 600; color: #1f2937;">${data.count}</span>
-              </div>
-              <div style="display: flex; justify-content: space-between; padding: 6px 10px; background: #ecfdf5; border-radius: 6px;">
-                <span style="color: #059669; font-size: 12px;">Balance</span>
-                <span style="font-weight: 600; color: #059669;">$${data.balance.toLocaleString('en-US', { minimumFractionDigits: 2 })}</span>
-              </div>
+            <div style="display: flex; justify-content: space-between;">
+              <span style="color: #6b7280; font-size: 12px;">Balance:</span>
+              <span style="font-weight: 600; color: #059669;">$${data.balance.toLocaleString('en-US', { minimumFractionDigits: 2 })}</span>
             </div>
-            ${data.brokers.length > 0 ? `
-              <div style="margin-top: 10px; padding-top: 10px; border-top: 1px solid #e5e7eb;">
-                <p style="font-size: 10px; color: #9ca3af; margin-bottom: 6px; text-transform: uppercase;">Brokers:</p>
-                ${data.brokers.slice(0, 3).map(b => `
-                  <div style="display: flex; align-items: center; gap: 6px; padding: 4px 0; font-size: 11px;">
-                    <div style="width: 5px; height: 5px; border-radius: 50%; background: ${b.isActive ? '#10b981' : '#9ca3af'};"></div>
-                    <span style="color: #374151;">${b.name}</span>
-                  </div>
-                `).join('')}
-                ${data.brokers.length > 3 ? `<p style="font-size: 10px; color: #9ca3af; margin-top: 4px;">+${data.brokers.length - 3} más</p>` : ''}
-              </div>
-            ` : ''}
           </div>
         `)
 
-      const marker = new mapboxgl.Marker({ element: el, anchor: 'bottom' })
+      const marker = new mapboxgl.Marker({ element: el, anchor: 'center' })
         .setLngLat(coords)
         .setPopup(popup)
         .addTo(map.current!)
@@ -345,7 +286,6 @@ export default function AdminBrokersDashboardPage() {
     })
   }, [provinceData])
 
-  // Initialize map
   useEffect(() => {
     if (!mapContainer.current || map.current) return
 
@@ -353,18 +293,13 @@ export default function AdminBrokersDashboardPage() {
       container: mapContainer.current,
       style: 'mapbox://styles/mapbox/streets-v12',
       center: [-79.0, 22.0],
-      zoom: 6.2,
+      zoom: 6,
       minZoom: 5.5,
-      maxZoom: 12,
+      maxZoom: 10,
       attributionControl: false
     })
 
-    // Fit bounds to show all of Cuba
-    map.current.fitBounds([
-      [-85.2, 19.5], // Southwest corner
-      [-74.0, 23.5]  // Northeast corner
-    ], { padding: 30 })
-
+    map.current.fitBounds([[-85.2, 19.5], [-74.0, 23.5]], { padding: 20 })
     map.current.addControl(new mapboxgl.NavigationControl(), 'top-right')
 
     map.current.on('load', () => {
@@ -374,74 +309,36 @@ export default function AdminBrokersDashboardPage() {
 
     return () => {
       markersRef.current.forEach(m => m.remove())
-      if (map.current) {
-        map.current.remove()
-        map.current = null
-      }
+      if (map.current) { map.current.remove(); map.current = null }
     }
   }, [addMarkersToMap])
 
-  // Update map style and re-add markers
   useEffect(() => {
     if (!map.current) return
-
-    const newStyle = mapStyle === 'streets'
-      ? 'mapbox://styles/mapbox/streets-v12'
-      : 'mapbox://styles/mapbox/satellite-streets-v12'
-
-    map.current.setStyle(newStyle)
-
-    // Re-add markers after style change
-    map.current.once('style.load', () => {
-      addMarkersToMap()
-    })
+    const style = mapStyle === 'streets' ? 'mapbox://styles/mapbox/streets-v12' : 'mapbox://styles/mapbox/satellite-streets-v12'
+    map.current.setStyle(style)
+    map.current.once('style.load', addMarkersToMap)
   }, [mapStyle, addMarkersToMap])
 
-  // Re-add markers when brokers data changes
   useEffect(() => {
     if (!map.current || brokers.length === 0) return
-
-    if (map.current.isStyleLoaded()) {
-      addMarkersToMap()
-    } else {
-      map.current.once('style.load', addMarkersToMap)
-    }
+    if (map.current.isStyleLoaded()) addMarkersToMap()
+    else map.current.once('style.load', addMarkersToMap)
   }, [brokers, addMarkersToMap])
-
-  const toggleMapStyle = () => {
-    setMapStyle(prev => prev === 'streets' ? 'satellite' : 'streets')
-  }
-
-  const successRate = orderStats && orderStats.total > 0
-    ? (orderStats.delivered / orderStats.total) * 100
-    : 0
-
-  const getStatValue = (key: string) => {
-    switch (key) {
-      case 'totalBrokers': return summary?.totalBrokers || 0
-      case 'activeBrokers': return summary?.activeBrokers || 0
-      case 'provinces': return `${summary?.provincesCovered || 0}/16`
-      case 'balance': return summary?.totalBalanceFormatted || '$0'
-      case 'orders': return orderStats?.total || 0
-      case 'volume': return `$${(orderStats?.totalAmount || 0).toLocaleString('en-US', { maximumFractionDigits: 0 })}`
-      default: return 0
-    }
-  }
 
   if (loading) {
     return (
       <DashboardLayout>
         <div className={cn("min-h-screen p-4", theme === 'dark' ? 'bg-gray-900' : 'bg-gray-50')}>
           <div className="animate-pulse space-y-4">
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
-              {[...Array(6)].map((_, i) => (
-                <div key={i} className="h-24 bg-gray-200 dark:bg-gray-700 rounded-2xl"></div>
+            <div className="grid grid-cols-4 gap-4">
+              {[...Array(4)].map((_, i) => (
+                <div key={i} className="h-20 bg-gray-200 dark:bg-gray-700 rounded-xl" />
               ))}
             </div>
-            <div className="h-[420px] bg-gray-200 dark:bg-gray-700 rounded-2xl"></div>
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-              <div className="h-80 bg-gray-200 dark:bg-gray-700 rounded-2xl"></div>
-              <div className="h-80 bg-gray-200 dark:bg-gray-700 rounded-2xl"></div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="h-[350px] bg-gray-200 dark:bg-gray-700 rounded-xl" />
+              <div className="h-[350px] bg-gray-200 dark:bg-gray-700 rounded-xl" />
             </div>
           </div>
         </div>
@@ -451,623 +348,338 @@ export default function AdminBrokersDashboardPage() {
 
   return (
     <DashboardLayout>
-      <div className={cn("min-h-screen", theme === 'dark' ? 'bg-gray-900' : 'bg-slate-50')}>
+      <div className={cn("min-h-screen p-4", theme === 'dark' ? 'bg-gray-900' : 'bg-slate-50')}>
 
-        {/* Top Stats Row - Modern Cards */}
-        <div className="p-4 pb-3">
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
-            {statCards.map((card, i) => (
-              <motion.div
-                key={card.key}
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: i * 0.05 }}
-                whileHover={{ y: -2, transition: { duration: 0.2 } }}
-                className="group relative"
-              >
-                {/* Gradient glow on hover */}
+        {/* Header Stats - Compact */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
+          {[
+            { icon: Users, label: 'Brokers', value: summary?.totalBrokers || 0, sub: `${summary?.activeBrokers || 0} activos`, color: 'blue' },
+            { icon: MapPin, label: 'Provincias', value: summary?.provincesCovered || 0, sub: 'con cobertura', color: 'purple' },
+            { icon: Wallet, label: 'Balance Total', value: summary?.totalBalanceFormatted || '$0', sub: 'en wallets', color: 'emerald' },
+            { icon: Package, label: 'Órdenes', value: orderStats?.total || 0, sub: `$${(orderStats?.totalAmount || 0).toLocaleString()}`, color: 'amber' },
+          ].map((stat, i) => (
+            <motion.div
+              key={stat.label}
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: i * 0.05 }}
+              className={cn(
+                "p-4 rounded-xl border",
+                theme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'
+              )}
+            >
+              <div className="flex items-center gap-3">
                 <div className={cn(
-                  "absolute inset-0 rounded-2xl bg-gradient-to-br opacity-0 group-hover:opacity-20 transition-opacity duration-300 blur-xl",
-                  card.gradient
-                )} />
-
-                <div className={cn(
-                  "relative rounded-2xl p-4 border backdrop-blur-sm transition-all duration-300",
-                  theme === 'dark'
-                    ? 'bg-gray-800/60 border-gray-700/50 hover:border-gray-600'
-                    : 'bg-white/80 border-gray-200/60 hover:border-gray-300 hover:shadow-lg'
+                  "p-2 rounded-lg",
+                  stat.color === 'blue' && 'bg-blue-100 dark:bg-blue-900/30',
+                  stat.color === 'purple' && 'bg-purple-100 dark:bg-purple-900/30',
+                  stat.color === 'emerald' && 'bg-emerald-100 dark:bg-emerald-900/30',
+                  stat.color === 'amber' && 'bg-amber-100 dark:bg-amber-900/30'
                 )}>
-                  <div className="flex items-start justify-between">
-                    <div className={cn("p-2.5 rounded-xl bg-gradient-to-br", card.gradient)}>
-                      <card.icon className="w-4 h-4 text-white" />
-                    </div>
-                    <motion.div
-                      initial={{ scale: 0 }}
-                      animate={{ scale: 1 }}
-                      transition={{ delay: 0.3 + i * 0.05, type: "spring" }}
-                      className="opacity-0 group-hover:opacity-100 transition-opacity"
-                    >
-                      <ArrowUpRight className="w-4 h-4 text-gray-400" />
-                    </motion.div>
-                  </div>
-                  <div className="mt-3">
-                    <p className={cn(
-                      "text-2xl font-bold tracking-tight",
-                      theme === 'dark' ? 'text-white' : 'text-gray-900'
-                    )}>
-                      {getStatValue(card.key)}
-                    </p>
-                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5 font-medium">
-                      {card.label}
-                    </p>
-                  </div>
-                </div>
-              </motion.div>
-            ))}
-          </div>
-        </div>
-
-        {/* Map and Chart Section - Side by Side */}
-        <div className="px-4 pb-3 grid grid-cols-1 xl:grid-cols-5 gap-4">
-          {/* Map Section - 3 columns */}
-          <motion.div
-            initial={{ opacity: 0, scale: 0.98 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{ delay: 0.3 }}
-            className={cn(
-              "relative rounded-2xl overflow-hidden border shadow-sm xl:col-span-3",
-              theme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'
-            )}
-          >
-            {/* Map Loading */}
-            {mapLoading && (
-              <div className={cn(
-                "absolute inset-0 z-20 flex items-center justify-center",
-                theme === 'dark' ? 'bg-gray-800' : 'bg-gray-100'
-              )}>
-                <div className="text-center">
-                  <motion.div
-                    animate={{ rotate: 360 }}
-                    transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
-                  >
-                    <Layers className={cn("w-8 h-8 mx-auto mb-2", theme === 'dark' ? 'text-blue-400' : 'text-blue-600')} />
-                  </motion.div>
-                  <p className={cn("text-sm", theme === 'dark' ? 'text-gray-400' : 'text-gray-600')}>
-                    Cargando mapa...
-                  </p>
-                </div>
-              </div>
-            )}
-
-            {/* Map Container */}
-            <div ref={mapContainer} className="w-full h-[380px]" />
-
-            {/* Map Controls - Top Left */}
-            <div className="absolute top-4 left-4 z-10">
-              <div className={cn(
-                "px-4 py-2.5 rounded-xl shadow-lg backdrop-blur-md flex items-center gap-3",
-                theme === 'dark' ? 'bg-gray-900/90 border border-gray-700' : 'bg-white/90 border border-gray-200'
-              )}>
-                <div className="flex items-center gap-2">
-                  <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                  <Globe className={cn("w-4 h-4", theme === 'dark' ? 'text-blue-400' : 'text-blue-600')} />
+                  <stat.icon className={cn(
+                    "w-5 h-5",
+                    stat.color === 'blue' && 'text-blue-600 dark:text-blue-400',
+                    stat.color === 'purple' && 'text-purple-600 dark:text-purple-400',
+                    stat.color === 'emerald' && 'text-emerald-600 dark:text-emerald-400',
+                    stat.color === 'amber' && 'text-amber-600 dark:text-amber-400'
+                  )} />
                 </div>
                 <div>
-                  <span className={cn("text-sm font-semibold", theme === 'dark' ? 'text-white' : 'text-gray-900')}>
-                    Cuba
-                  </span>
-                  <span className={cn("text-xs ml-2", theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}>
-                    {Object.keys(provinceData).filter(k => k !== 'Sin asignar').length} provincias activas
-                  </span>
+                  <p className={cn("text-xl font-bold", theme === 'dark' ? 'text-white' : 'text-gray-900')}>{stat.value}</p>
+                  <p className="text-xs text-gray-500">{stat.sub}</p>
                 </div>
               </div>
-            </div>
+            </motion.div>
+          ))}
+        </div>
 
-            {/* Map Style Toggle */}
-            <motion.button
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
-              onClick={toggleMapStyle}
-              className={cn(
-                "absolute bottom-4 right-4 z-10 px-4 py-2.5 rounded-xl shadow-lg backdrop-blur-md flex items-center gap-2 transition-all",
-                theme === 'dark'
-                  ? 'bg-gray-900/90 hover:bg-gray-800 text-white border border-gray-700'
-                  : 'bg-white/90 hover:bg-white text-gray-900 border border-gray-200'
-              )}
-            >
-              {mapStyle === 'streets' ? (
-                <>
-                  <Satellite className="w-4 h-4" />
-                  <span className="text-xs font-medium">Satélite</span>
-                </>
-              ) : (
-                <>
-                  <MapIcon className="w-4 h-4" />
-                  <span className="text-xs font-medium">Calles</span>
-                </>
-              )}
-            </motion.button>
-
-            {/* Refresh Button */}
-            <motion.button
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
-              onClick={handleRefresh}
-              disabled={refreshing}
-              className={cn(
-                "absolute bottom-4 left-4 z-10 p-2.5 rounded-xl shadow-lg backdrop-blur-md transition-all",
-                theme === 'dark'
-                  ? 'bg-gray-900/90 hover:bg-gray-800 text-white border border-gray-700'
-                  : 'bg-white/90 hover:bg-white text-gray-900 border border-gray-200'
-              )}
-            >
-              <RefreshCw className={cn("w-4 h-4", refreshing && "animate-spin")} />
-            </motion.button>
-          </motion.div>
-
-          {/* Exchange Rate Chart - 2 columns */}
+        {/* Main Content - Map + Rate Chart */}
+        <div className="grid grid-cols-1 xl:grid-cols-3 gap-4 mb-4">
+          {/* Map */}
           <motion.div
-            initial={{ opacity: 0, x: 20 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ delay: 0.35 }}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
             className={cn(
-              "relative rounded-2xl overflow-hidden border shadow-sm xl:col-span-2",
+              "xl:col-span-2 relative rounded-xl overflow-hidden border",
               theme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'
             )}
           >
-            {/* Header */}
-            <div className="p-4 border-b border-gray-200 dark:border-gray-700">
-              <div className="flex items-center justify-between mb-3">
-                <div className="flex items-center gap-2">
-                  <div className="p-2 rounded-lg bg-gradient-to-br from-emerald-500 to-teal-600">
-                    <BarChart3 className="w-4 h-4 text-white" />
-                  </div>
-                  <div>
-                    <h3 className={cn("font-semibold text-sm", theme === 'dark' ? 'text-white' : 'text-gray-900')}>
-                      Tasa de Cambio
-                    </h3>
-                    <p className="text-xs text-gray-500">Tiempo real</p>
-                  </div>
-                </div>
+            {mapLoading && (
+              <div className={cn("absolute inset-0 z-20 flex items-center justify-center", theme === 'dark' ? 'bg-gray-800' : 'bg-gray-100')}>
+                <Layers className="w-8 h-8 animate-spin text-blue-500" />
+              </div>
+            )}
+            <div ref={mapContainer} className="w-full h-[320px]" />
+
+            <div className="absolute top-3 left-3 z-10 flex items-center gap-2">
+              <div className={cn("px-3 py-1.5 rounded-lg text-xs font-medium flex items-center gap-2", theme === 'dark' ? 'bg-gray-900/80 text-white' : 'bg-white/90 text-gray-900')}>
+                <Globe className="w-4 h-4 text-blue-500" />
+                <span>{Object.keys(provinceData).filter(k => k !== 'Sin asignar').length} provincias</span>
+              </div>
+              <button
+                onClick={handleRefresh}
+                disabled={refreshing}
+                className={cn("p-1.5 rounded-lg", theme === 'dark' ? 'bg-gray-900/80 text-white' : 'bg-white/90 text-gray-900')}
+              >
+                <RefreshCw className={cn("w-4 h-4", refreshing && "animate-spin")} />
+              </button>
+            </div>
+
+            <button
+              onClick={() => setMapStyle(prev => prev === 'streets' ? 'satellite' : 'streets')}
+              className={cn("absolute bottom-3 right-3 z-10 px-3 py-1.5 rounded-lg text-xs font-medium flex items-center gap-2", theme === 'dark' ? 'bg-gray-900/80 text-white' : 'bg-white/90 text-gray-900')}
+            >
+              {mapStyle === 'streets' ? <Satellite className="w-4 h-4" /> : <MapIcon className="w-4 h-4" />}
+              {mapStyle === 'streets' ? 'Satélite' : 'Calles'}
+            </button>
+          </motion.div>
+
+          {/* Exchange Rate Chart */}
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 0.1 }}
+            className={cn("rounded-xl border p-4", theme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200')}
+          >
+            <div className="flex items-center justify-between mb-3">
+              <div>
+                <h3 className={cn("font-semibold text-sm", theme === 'dark' ? 'text-white' : 'text-gray-900')}>Tasa de Cambio</h3>
                 {currentRate && (
-                  <div className="text-right">
-                    <p className={cn("text-xl font-bold", theme === 'dark' ? 'text-white' : 'text-gray-900')}>
-                      {currentRate.formatted} <span className="text-xs font-normal text-gray-500">CUP</span>
-                    </p>
-                    <div className={cn(
-                      "flex items-center justify-end gap-1 text-xs font-medium",
-                      isPositive ? "text-emerald-500" : "text-red-500"
-                    )}>
+                  <div className="flex items-center gap-2 mt-1">
+                    <span className={cn("text-2xl font-bold", theme === 'dark' ? 'text-white' : 'text-gray-900')}>{currentRate.formatted}</span>
+                    <span className={cn("text-xs flex items-center gap-0.5", isPositive ? "text-emerald-500" : "text-red-500")}>
                       {isPositive ? <ArrowUp className="w-3 h-3" /> : <ArrowDown className="w-3 h-3" />}
-                      {Math.abs(rateChange).toFixed(2)}%
-                    </div>
+                      {Math.abs(currentRate.variacion || 0).toFixed(1)}%
+                    </span>
                   </div>
                 )}
               </div>
-
-              {/* Currency and Period Selector */}
-              <div className="flex items-center gap-2">
-                <div className="flex gap-1">
-                  {(['USD', 'EUR', 'MLC'] as const).map(currency => (
-                    <button
-                      key={currency}
-                      onClick={() => setSelectedCurrency(currency)}
-                      className={cn(
-                        "px-3 py-1.5 text-xs font-medium rounded-lg transition-all",
-                        selectedCurrency === currency
-                          ? "bg-gradient-to-r from-blue-500 to-indigo-600 text-white shadow-sm"
-                          : theme === 'dark' ? "bg-gray-700 text-gray-400 hover:bg-gray-600" : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-                      )}
-                    >
-                      {currency}
-                    </button>
-                  ))}
-                </div>
-                <div className="ml-auto flex gap-1">
-                  {(['24h', '7d', '30d'] as const).map(period => (
-                    <button
-                      key={period}
-                      onClick={() => setRatePeriod(period)}
-                      className={cn(
-                        "px-2.5 py-1 text-xs rounded-lg transition-all",
-                        ratePeriod === period
-                          ? theme === 'dark' ? "bg-gray-600 text-white" : "bg-gray-800 text-white"
-                          : theme === 'dark' ? "text-gray-500 hover:text-gray-300" : "text-gray-400 hover:text-gray-600"
-                      )}
-                    >
-                      {period}
-                    </button>
-                  ))}
-                </div>
+              <div className="flex gap-1">
+                {(['USD', 'EUR', 'MLC'] as const).map(c => (
+                  <button
+                    key={c}
+                    onClick={() => setSelectedCurrency(c)}
+                    className={cn(
+                      "px-2 py-1 text-xs rounded-md transition-all",
+                      selectedCurrency === c
+                        ? "bg-blue-500 text-white"
+                        : theme === 'dark' ? "bg-gray-700 text-gray-400" : "bg-gray-100 text-gray-600"
+                    )}
+                  >{c}</button>
+                ))}
               </div>
             </div>
 
-            {/* Chart */}
-            <div className="h-[200px] p-2">
-              {chartData.length > 0 ? (
+            <div className="h-[200px]">
+              {rateChartData.length > 0 ? (
                 <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={chartData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+                  <AreaChart data={rateChartData} margin={{ top: 5, right: 5, left: -20, bottom: 0 }}>
                     <defs>
-                      <linearGradient id="rateGradient" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor={isPositive ? "#10b981" : "#ef4444"} stopOpacity={0.4}/>
+                      <linearGradient id="rateGrad" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor={isPositive ? "#10b981" : "#ef4444"} stopOpacity={0.3}/>
                         <stop offset="95%" stopColor={isPositive ? "#10b981" : "#ef4444"} stopOpacity={0}/>
                       </linearGradient>
                     </defs>
                     <CartesianGrid strokeDasharray="3 3" stroke={theme === 'dark' ? '#374151' : '#e5e7eb'} vertical={false} />
-                    <XAxis
-                      dataKey="date"
-                      tick={{ fontSize: 10, fill: theme === 'dark' ? '#9ca3af' : '#6b7280' }}
-                      axisLine={false}
-                      tickLine={false}
-                    />
-                    <YAxis
-                      domain={['auto', 'auto']}
-                      tick={{ fontSize: 10, fill: theme === 'dark' ? '#9ca3af' : '#6b7280' }}
-                      axisLine={false}
-                      tickLine={false}
-                      width={45}
-                      tickFormatter={(value) => value.toFixed(0)}
-                    />
+                    <XAxis dataKey="date" tick={{ fontSize: 10, fill: theme === 'dark' ? '#9ca3af' : '#6b7280' }} axisLine={false} tickLine={false} />
+                    <YAxis domain={['auto', 'auto']} tick={{ fontSize: 10, fill: theme === 'dark' ? '#9ca3af' : '#6b7280' }} axisLine={false} tickLine={false} />
                     <Tooltip
-                      contentStyle={{
-                        backgroundColor: theme === 'dark' ? '#1f2937' : '#ffffff',
-                        border: 'none',
-                        borderRadius: '12px',
-                        boxShadow: '0 10px 40px rgba(0,0,0,0.15)',
-                        padding: '10px 14px'
-                      }}
-                      labelStyle={{ color: theme === 'dark' ? '#f3f4f6' : '#111827', fontWeight: 600, marginBottom: 4 }}
+                      contentStyle={{ backgroundColor: theme === 'dark' ? '#1f2937' : '#fff', border: 'none', borderRadius: '8px', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
                       formatter={(value: number) => [`${value.toFixed(2)} CUP`, 'Tasa']}
-                      labelFormatter={(label, payload) => payload?.[0]?.payload?.fullDate || label}
                     />
-                    <ReferenceLine y={avgRate} stroke={theme === 'dark' ? '#6b7280' : '#9ca3af'} strokeDasharray="5 5" />
-                    <Area
-                      type="monotone"
-                      dataKey="rate"
-                      stroke={isPositive ? "#10b981" : "#ef4444"}
-                      strokeWidth={2}
-                      fill="url(#rateGradient)"
-                      dot={false}
-                      activeDot={{ r: 4, fill: isPositive ? "#10b981" : "#ef4444", strokeWidth: 0 }}
-                    />
+                    <Area type="monotone" dataKey="rate" stroke={isPositive ? "#10b981" : "#ef4444"} strokeWidth={2} fill="url(#rateGrad)" dot={false} />
                   </AreaChart>
                 </ResponsiveContainer>
               ) : (
-                <div className="h-full flex items-center justify-center">
-                  <div className="text-center">
-                    <BarChart3 className={cn("w-8 h-8 mx-auto mb-2", theme === 'dark' ? 'text-gray-600' : 'text-gray-300')} />
-                    <p className="text-xs text-gray-500">Sin datos históricos</p>
-                  </div>
-                </div>
+                <div className="h-full flex items-center justify-center text-gray-500 text-sm">Sin datos</div>
               )}
             </div>
+          </motion.div>
+        </div>
 
-            {/* Stats Row */}
-            <div className="p-3 border-t border-gray-200 dark:border-gray-700 grid grid-cols-3 gap-2">
-              <div className={cn(
-                "text-center p-2 rounded-lg",
-                theme === 'dark' ? 'bg-gray-700/50' : 'bg-gray-50'
-              )}>
-                <p className="text-xs text-gray-500">Mínimo</p>
-                <p className={cn("font-semibold text-sm", theme === 'dark' ? 'text-white' : 'text-gray-900')}>
-                  {minRate.toFixed(2)}
-                </p>
-              </div>
-              <div className={cn(
-                "text-center p-2 rounded-lg",
-                theme === 'dark' ? 'bg-gray-700/50' : 'bg-gray-50'
-              )}>
-                <p className="text-xs text-gray-500">Promedio</p>
-                <p className={cn("font-semibold text-sm", theme === 'dark' ? 'text-white' : 'text-gray-900')}>
-                  {avgRate.toFixed(2)}
-                </p>
-              </div>
-              <div className={cn(
-                "text-center p-2 rounded-lg",
-                theme === 'dark' ? 'bg-gray-700/50' : 'bg-gray-50'
-              )}>
-                <p className="text-xs text-gray-500">Máximo</p>
-                <p className={cn("font-semibold text-sm", theme === 'dark' ? 'text-white' : 'text-gray-900')}>
-                  {maxRate.toFixed(2)}
-                </p>
-              </div>
+        {/* Charts Row */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-4">
+          {/* Brokers by Province Chart */}
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 0.15 }}
+            className={cn("rounded-xl border p-4", theme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200')}
+          >
+            <h3 className={cn("font-semibold text-sm mb-3", theme === 'dark' ? 'text-white' : 'text-gray-900')}>Brokers por Provincia</h3>
+            <div className="h-[220px]">
+              {provinceChartData.length > 0 ? (
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={provinceChartData} layout="vertical" margin={{ top: 0, right: 10, left: 0, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke={theme === 'dark' ? '#374151' : '#e5e7eb'} horizontal={false} />
+                    <XAxis type="number" tick={{ fontSize: 10, fill: theme === 'dark' ? '#9ca3af' : '#6b7280' }} axisLine={false} tickLine={false} />
+                    <YAxis dataKey="name" type="category" tick={{ fontSize: 10, fill: theme === 'dark' ? '#9ca3af' : '#6b7280' }} axisLine={false} tickLine={false} width={80} />
+                    <Tooltip
+                      contentStyle={{ backgroundColor: theme === 'dark' ? '#1f2937' : '#fff', border: 'none', borderRadius: '8px' }}
+                      formatter={(value: number, name: string) => [value, name === 'brokers' ? 'Brokers' : 'Balance']}
+                      labelFormatter={(label, payload) => payload?.[0]?.payload?.fullName || label}
+                    />
+                    <Bar dataKey="brokers" fill="#3b82f6" radius={[0, 4, 4, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              ) : (
+                <div className="h-full flex items-center justify-center text-gray-500 text-sm">Sin datos</div>
+              )}
+            </div>
+          </motion.div>
+
+          {/* Orders by Status Chart */}
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 0.2 }}
+            className={cn("rounded-xl border p-4", theme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200')}
+          >
+            <h3 className={cn("font-semibold text-sm mb-3", theme === 'dark' ? 'text-white' : 'text-gray-900')}>Órdenes por Estado</h3>
+            <div className="h-[220px]">
+              {orderChartData.length > 0 ? (
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={orderChartData}
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={50}
+                      outerRadius={80}
+                      paddingAngle={2}
+                      dataKey="value"
+                    >
+                      {orderChartData.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={entry.color} />
+                      ))}
+                    </Pie>
+                    <Tooltip
+                      contentStyle={{ backgroundColor: theme === 'dark' ? '#1f2937' : '#fff', border: 'none', borderRadius: '8px' }}
+                      formatter={(value: number) => [value, 'Órdenes']}
+                    />
+                    <Legend
+                      verticalAlign="bottom"
+                      height={36}
+                      formatter={(value) => <span className={cn("text-xs", theme === 'dark' ? 'text-gray-400' : 'text-gray-600')}>{value}</span>}
+                    />
+                  </PieChart>
+                </ResponsiveContainer>
+              ) : (
+                <div className="h-full flex items-center justify-center text-gray-500 text-sm">Sin órdenes</div>
+              )}
+            </div>
+          </motion.div>
+
+          {/* Currency Rates Chart */}
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 0.25 }}
+            className={cn("rounded-xl border p-4", theme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200')}
+          >
+            <h3 className={cn("font-semibold text-sm mb-3", theme === 'dark' ? 'text-white' : 'text-gray-900')}>Tasas por Moneda</h3>
+            <div className="h-[220px]">
+              {currencyBalanceData.length > 0 ? (
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={currencyBalanceData} margin={{ top: 0, right: 10, left: -10, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke={theme === 'dark' ? '#374151' : '#e5e7eb'} vertical={false} />
+                    <XAxis dataKey="currency" tick={{ fontSize: 10, fill: theme === 'dark' ? '#9ca3af' : '#6b7280' }} axisLine={false} tickLine={false} />
+                    <YAxis tick={{ fontSize: 10, fill: theme === 'dark' ? '#9ca3af' : '#6b7280' }} axisLine={false} tickLine={false} />
+                    <Tooltip
+                      contentStyle={{ backgroundColor: theme === 'dark' ? '#1f2937' : '#fff', border: 'none', borderRadius: '8px' }}
+                      formatter={(value: number) => [`${value.toFixed(2)} CUP`, 'Tasa']}
+                    />
+                    <Bar dataKey="rate" radius={[4, 4, 0, 0]}>
+                      {currencyBalanceData.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={entry.variacion >= 0 ? '#10b981' : '#ef4444'} />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              ) : (
+                <div className="h-full flex items-center justify-center text-gray-500 text-sm">Sin datos</div>
+              )}
             </div>
           </motion.div>
         </div>
 
-        {/* Exchange Rate Cards Row */}
-        <div className="px-4 pb-3">
+        {/* Bottom: Balance by Province + Top Brokers List */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          {/* Balance by Province */}
           <motion.div
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.4 }}
-            className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 0.3 }}
+            className={cn("rounded-xl border p-4", theme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200')}
           >
-            {Object.entries(exchangeRates).map(([currency, rate], i) => (
-              <motion.div
-                key={currency}
-                initial={{ opacity: 0, scale: 0.9 }}
-                animate={{ opacity: 1, scale: 1 }}
-                transition={{ delay: 0.45 + i * 0.03 }}
-                whileHover={{ y: -2 }}
-                className={cn(
-                  "p-4 rounded-xl border backdrop-blur-sm cursor-pointer transition-all",
-                  theme === 'dark'
-                    ? 'bg-gray-800/60 border-gray-700/50 hover:border-gray-600'
-                    : 'bg-white/80 border-gray-200/60 hover:border-gray-300 hover:shadow-md'
-                )}
-              >
-                <div className="flex items-center justify-between mb-2">
-                  <span className={cn(
-                    "text-xs font-bold px-2 py-1 rounded-md",
-                    currency === 'USD' && "bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-400",
-                    currency === 'EUR' && "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-400",
-                    currency === 'MLC' && "bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-400",
-                    !['USD', 'EUR', 'MLC'].includes(currency) && "bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-400"
-                  )}>
-                    {currency}
-                  </span>
-                  <div className={cn(
-                    "flex items-center gap-0.5 text-xs",
-                    (rate.variacion || 0) >= 0 ? "text-emerald-500" : "text-red-500"
-                  )}>
-                    {(rate.variacion || 0) >= 0 ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
-                    {Math.abs(rate.variacion || 0).toFixed(1)}%
-                  </div>
-                </div>
-                <p className={cn("text-lg font-bold", theme === 'dark' ? 'text-white' : 'text-gray-900')}>
-                  {rate.formatted}
-                </p>
-                <p className="text-xs text-gray-500 mt-1 truncate">
-                  {rate.lastUpdate}
-                </p>
-              </motion.div>
-            ))}
+            <h3 className={cn("font-semibold text-sm mb-3", theme === 'dark' ? 'text-white' : 'text-gray-900')}>Balance por Provincia</h3>
+            <div className="h-[200px]">
+              {provinceChartData.length > 0 ? (
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={provinceChartData} margin={{ top: 0, right: 10, left: -10, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke={theme === 'dark' ? '#374151' : '#e5e7eb'} vertical={false} />
+                    <XAxis dataKey="name" tick={{ fontSize: 9, fill: theme === 'dark' ? '#9ca3af' : '#6b7280' }} axisLine={false} tickLine={false} />
+                    <YAxis tick={{ fontSize: 10, fill: theme === 'dark' ? '#9ca3af' : '#6b7280' }} axisLine={false} tickLine={false} tickFormatter={(v) => `$${(v/1000).toFixed(0)}k`} />
+                    <Tooltip
+                      contentStyle={{ backgroundColor: theme === 'dark' ? '#1f2937' : '#fff', border: 'none', borderRadius: '8px' }}
+                      formatter={(value: number) => [`$${value.toLocaleString('en-US', { minimumFractionDigits: 2 })}`, 'Balance']}
+                      labelFormatter={(label, payload) => payload?.[0]?.payload?.fullName || label}
+                    />
+                    <Bar dataKey="balance" fill="#10b981" radius={[4, 4, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              ) : (
+                <div className="h-full flex items-center justify-center text-gray-500 text-sm">Sin datos</div>
+              )}
+            </div>
           </motion.div>
-        </div>
 
-        {/* Order Status Row - Modern Design */}
-        <div className="px-4 pb-3">
+          {/* Top Brokers List */}
           <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
             transition={{ delay: 0.35 }}
-            className={cn(
-              "rounded-2xl p-5 border backdrop-blur-sm",
-              theme === 'dark' ? 'bg-gray-800/60 border-gray-700/50' : 'bg-white/80 border-gray-200/60 shadow-sm'
-            )}
+            className={cn("rounded-xl border p-4", theme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200')}
           >
-            <div className="flex items-center justify-between mb-4">
-              <div className="flex items-center gap-3">
-                <div className="p-2 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600">
-                  <Activity className="w-4 h-4 text-white" />
-                </div>
-                <div>
-                  <span className={cn("font-semibold", theme === 'dark' ? 'text-white' : 'text-gray-900')}>
-                    Estado de Órdenes
-                  </span>
-                  <p className="text-xs text-gray-500">Resumen en tiempo real</p>
-                </div>
-              </div>
-              <div className="flex items-center gap-3">
-                <Link href="/dashboard/admin/brokers/orders">
-                  <motion.div
-                    whileHover={{ x: 2 }}
-                    className="text-sm text-blue-500 hover:text-blue-600 flex items-center gap-1 font-medium"
-                  >
-                    Ver todas <ChevronRight className="w-4 h-4" />
-                  </motion.div>
-                </Link>
-                <Link href="/dashboard/admin/brokers/wallets">
-                  <motion.div
-                    whileHover={{ x: 2 }}
-                    className="text-sm text-emerald-500 hover:text-emerald-600 flex items-center gap-1 font-medium"
-                  >
-                    Wallets <ChevronRight className="w-4 h-4" />
-                  </motion.div>
-                </Link>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
-              {[
-                { icon: Clock, label: 'Pendientes', value: orderStats?.pending || 0, color: 'amber', gradient: 'from-amber-500 to-yellow-600' },
-                { icon: CheckCircle, label: 'Confirmadas', value: orderStats?.confirmed || 0, color: 'blue', gradient: 'from-blue-500 to-cyan-600' },
-                { icon: Truck, label: 'En Entrega', value: orderStats?.inDelivery || 0, color: 'purple', gradient: 'from-purple-500 to-pink-600' },
-                { icon: CheckCircle, label: 'Entregadas', value: orderStats?.delivered || 0, color: 'emerald', gradient: 'from-emerald-500 to-green-600' },
-                { icon: XCircle, label: 'Canceladas', value: orderStats?.cancelled || 0, color: 'red', gradient: 'from-red-500 to-rose-600' },
-                { icon: TrendingUp, label: 'Tasa Éxito', value: `${successRate.toFixed(0)}%`, color: 'teal', gradient: 'from-teal-500 to-cyan-600' },
-              ].map((item, i) => (
-                <motion.div
-                  key={item.label}
-                  initial={{ opacity: 0, scale: 0.9 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  transition={{ delay: 0.4 + i * 0.05 }}
-                  whileHover={{ scale: 1.02 }}
-                  className={cn(
-                    "relative overflow-hidden rounded-xl p-4 transition-all cursor-pointer group",
-                    theme === 'dark'
-                      ? `bg-${item.color}-900/20 hover:bg-${item.color}-900/30`
-                      : `bg-${item.color}-50 hover:bg-${item.color}-100/80`
-                  )}
-                >
-                  <div className={cn(
-                    "absolute top-0 right-0 w-20 h-20 rounded-full opacity-10 -mr-6 -mt-6 bg-gradient-to-br",
-                    item.gradient
-                  )} />
-                  <div className="relative">
-                    <div className={cn("p-2 rounded-lg w-fit bg-gradient-to-br mb-2", item.gradient)}>
-                      <item.icon className="w-4 h-4 text-white" />
-                    </div>
-                    <p className={cn(
-                      "text-2xl font-bold",
-                      theme === 'dark' ? `text-${item.color}-300` : `text-${item.color}-700`
-                    )}>
-                      {item.value}
-                    </p>
-                    <p className={cn(
-                      "text-xs font-medium",
-                      theme === 'dark' ? `text-${item.color}-400` : `text-${item.color}-600`
-                    )}>
-                      {item.label}
-                    </p>
-                  </div>
-                </motion.div>
-              ))}
-            </div>
-          </motion.div>
-        </div>
-
-        {/* Bottom Section - Top Brokers & All Brokers */}
-        <div className="px-4 pb-4 grid grid-cols-1 lg:grid-cols-2 gap-4">
-
-          {/* Top Brokers */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.5 }}
-            className={cn(
-              "rounded-2xl p-5 border backdrop-blur-sm",
-              theme === 'dark' ? 'bg-gray-800/60 border-gray-700/50' : 'bg-white/80 border-gray-200/60 shadow-sm'
-            )}
-          >
-            <div className="flex items-center justify-between mb-4">
-              <div className="flex items-center gap-3">
-                <div className="p-2 rounded-xl bg-gradient-to-br from-amber-500 to-orange-600">
-                  <Sparkles className="w-4 h-4 text-white" />
-                </div>
-                <div>
-                  <span className={cn("font-semibold", theme === 'dark' ? 'text-white' : 'text-gray-900')}>
-                    Top Brokers
-                  </span>
-                  <p className="text-xs text-gray-500">Por balance</p>
-                </div>
-              </div>
-              <Link href="/dashboard/admin/brokers/wallets">
-                <motion.span whileHover={{ x: 2 }} className="text-xs text-blue-500 hover:text-blue-600 flex items-center gap-1 font-medium">
-                  Ver todos <ChevronRight className="w-3 h-3" />
-                </motion.span>
-              </Link>
-            </div>
-
-            <div className="space-y-2">
-              {topBrokers.map((broker, i) => (
-                <motion.div
-                  key={broker.id}
-                  initial={{ opacity: 0, x: -20 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{ delay: 0.55 + i * 0.05 }}
-                  whileHover={{ x: 4 }}
-                  className={cn(
-                    "flex items-center gap-3 p-3 rounded-xl transition-all cursor-pointer",
-                    theme === 'dark' ? 'hover:bg-gray-700/50' : 'hover:bg-gray-50'
-                  )}
-                >
-                  <div className={cn(
-                    "w-9 h-9 rounded-xl flex items-center justify-center font-bold text-sm shadow-sm",
-                    i === 0 && "bg-gradient-to-br from-yellow-400 to-amber-500 text-white",
-                    i === 1 && "bg-gradient-to-br from-gray-300 to-gray-400 text-gray-700",
-                    i === 2 && "bg-gradient-to-br from-amber-600 to-orange-700 text-white",
-                    i > 2 && (theme === 'dark' ? "bg-gray-700 text-gray-400" : "bg-gray-100 text-gray-500")
-                  )}>
-                    #{i + 1}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className={cn("font-medium text-sm truncate", theme === 'dark' ? 'text-white' : 'text-gray-900')}>
-                      {broker.name}
-                    </p>
-                    <p className="text-xs text-gray-500 truncate flex items-center gap-1">
-                      <MapPin className="w-3 h-3" />
-                      {broker.province || 'Sin provincia'}
-                    </p>
-                  </div>
-                  <div className="text-right">
-                    <p className="font-semibold text-emerald-600 dark:text-emerald-400 text-sm">
-                      {broker.walletBalanceFormatted}
-                    </p>
-                    <p className="text-xs text-gray-500">
-                      {broker.stats?.totalTransactions || 0} tx
-                    </p>
-                  </div>
-                </motion.div>
-              ))}
-              {topBrokers.length === 0 && (
-                <div className="text-center py-8">
-                  <Building2 className="w-10 h-10 mx-auto text-gray-300 dark:text-gray-600 mb-2" />
-                  <p className="text-sm text-gray-500">No hay brokers</p>
-                </div>
-              )}
-            </div>
-          </motion.div>
-
-          {/* All Brokers */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.55 }}
-            className={cn(
-              "rounded-2xl p-5 border backdrop-blur-sm",
-              theme === 'dark' ? 'bg-gray-800/60 border-gray-700/50' : 'bg-white/80 border-gray-200/60 shadow-sm'
-            )}
-          >
-            <div className="flex items-center justify-between mb-4">
-              <div className="flex items-center gap-3">
-                <div className="p-2 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600">
-                  <Building2 className="w-4 h-4 text-white" />
-                </div>
-                <div>
-                  <span className={cn("font-semibold", theme === 'dark' ? 'text-white' : 'text-gray-900')}>
-                    Todos los Brokers
-                  </span>
-                  <p className="text-xs text-gray-500">Lista completa</p>
-                </div>
-              </div>
-              <span className={cn(
-                "text-xs px-3 py-1.5 rounded-full font-medium",
-                theme === 'dark' ? 'bg-blue-900/30 text-blue-400' : 'bg-blue-100 text-blue-600'
-              )}>
+            <div className="flex items-center justify-between mb-3">
+              <h3 className={cn("font-semibold text-sm", theme === 'dark' ? 'text-white' : 'text-gray-900')}>Top Brokers</h3>
+              <span className={cn("text-xs px-2 py-1 rounded-full", theme === 'dark' ? 'bg-gray-700 text-gray-400' : 'bg-gray-100 text-gray-600')}>
                 {brokers.length} total
               </span>
             </div>
-
-            <div className="space-y-1 max-h-[300px] overflow-y-auto scrollbar-thin pr-1">
-              {brokers.map((broker, i) => (
-                <motion.div
-                  key={broker.id}
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  transition={{ delay: 0.6 + i * 0.02 }}
-                  whileHover={{ x: 4 }}
-                  className={cn(
-                    "flex items-center justify-between p-3 rounded-xl transition-all cursor-pointer",
-                    theme === 'dark' ? 'hover:bg-gray-700/50' : 'hover:bg-gray-50'
-                  )}
-                >
-                  <div className="flex items-center gap-3">
-                    <div className={cn(
-                      "w-2.5 h-2.5 rounded-full ring-2",
-                      broker.isActive
-                        ? "bg-emerald-500 ring-emerald-500/30"
-                        : "bg-gray-400 ring-gray-400/30"
-                    )} />
-                    <div>
-                      <p className={cn("font-medium text-sm", theme === 'dark' ? 'text-white' : 'text-gray-900')}>
-                        {broker.name}
-                      </p>
-                      <p className="text-xs text-gray-500">
-                        {broker.municipality ? `${broker.municipality}, ` : ''}{broker.province || 'Sin ubicación'}
-                      </p>
+            <div className="space-y-2 max-h-[200px] overflow-y-auto">
+              {brokers
+                .sort((a, b) => b.walletBalance - a.walletBalance)
+                .slice(0, 6)
+                .map((broker, i) => (
+                  <div
+                    key={broker.id}
+                    className={cn(
+                      "flex items-center justify-between p-2.5 rounded-lg",
+                      theme === 'dark' ? 'bg-gray-700/50' : 'bg-gray-50'
+                    )}
+                  >
+                    <div className="flex items-center gap-3">
+                      <span className={cn(
+                        "w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold",
+                        i < 3 ? "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400" : "bg-gray-200 text-gray-600 dark:bg-gray-600 dark:text-gray-400"
+                      )}>
+                        {i + 1}
+                      </span>
+                      <div>
+                        <p className={cn("text-sm font-medium", theme === 'dark' ? 'text-white' : 'text-gray-900')}>{broker.name}</p>
+                        <p className="text-xs text-gray-500">{broker.province || 'Sin provincia'}</p>
+                      </div>
                     </div>
+                    <span className="text-sm font-semibold text-emerald-600 dark:text-emerald-400">
+                      {broker.walletBalanceFormatted}
+                    </span>
                   </div>
-                  <p className="font-semibold text-emerald-600 dark:text-emerald-400 text-sm">
-                    {broker.walletBalanceFormatted}
-                  </p>
-                </motion.div>
-              ))}
+                ))}
               {brokers.length === 0 && (
-                <div className="text-center py-12">
-                  <Building2 className="w-12 h-12 mx-auto text-gray-200 dark:text-gray-700 mb-3" />
-                  <p className="text-sm text-gray-500">No hay brokers registrados</p>
+                <div className="text-center py-8 text-gray-500 text-sm">
+                  <Building2 className="w-8 h-8 mx-auto mb-2 opacity-50" />
+                  No hay brokers
                 </div>
               )}
             </div>
