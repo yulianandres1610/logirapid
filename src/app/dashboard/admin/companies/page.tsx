@@ -373,7 +373,7 @@ const BROKER_PROVINCES = [
 ]
 
 // Componente del Mapa para seleccionar ubicación del Broker
-const MAPBOX_TOKEN = 'pk.eyJ1IjoibG9naXJhcGlkIiwiYSI6ImNtMnVpZHdxcjBjNncyanBzNm93OXQ3bnkifQ.sJ2wvpXvnOcGvCfsKDBYdg'
+const MAPBOX_TOKEN = process.env.NEXT_PUBLIC_MAPBOX_TOKEN || 'pk.eyJ1IjoieXVsaWFuYW5kcmVzMTYxMCIsImEiOiJjbWgycTlsZGsxM200YnNvbnN2d2wwcHJ5In0.wlU7-bazAs2eYjknx7H97Q'
 
 interface BrokerMapPickerProps {
   theme: string
