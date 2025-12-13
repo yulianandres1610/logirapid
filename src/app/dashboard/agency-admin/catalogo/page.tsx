@@ -60,7 +60,12 @@ interface Product {
   name: string
   description: string | null
   category: string
-  miCosto: number // Lo que la empresa paga a LogiRapid
+  miCosto: number // Lo que la empresa paga a LogiRapid (% para remesa)
+  miCostoFijo: number // Fee fijo para remesa
+  precioMayorista: number // Precio de venta a empresas (% para remesa)
+  precioMayoristaFijo: number // Fee fijo de venta para remesa
+  pricingModel: string // 'fixed' or 'percentage'
+  currency: string | null // Currency for remesa
   serviciosCount: number
   isActive: boolean
 }
@@ -106,6 +111,25 @@ const ROLES = ['USER', 'MANAGER', 'DRIVER']
 
 const getCategoryConfig = (categoryId: string) => {
   return CATEGORIES.find(c => c.id === categoryId) || CATEGORIES[0]
+}
+
+// Helper to format price display for remesa products (percentage + fixed fee)
+const formatPrice = (product: Product, priceField: 'miCosto' | 'precioMayorista' = 'miCosto') => {
+  const isRemesa = product.category === 'remesa' && product.pricingModel === 'percentage'
+
+  if (isRemesa) {
+    const percentage = priceField === 'miCosto' ? product.miCosto : product.precioMayorista
+    const fixedFee = priceField === 'miCosto' ? product.miCostoFijo : product.precioMayoristaFijo
+
+    if (fixedFee > 0) {
+      return `${percentage}% + $${fixedFee.toFixed(2)}`
+    }
+    return `${percentage}%`
+  }
+
+  // Normal fixed price
+  const price = priceField === 'miCosto' ? product.miCosto : product.precioMayorista
+  return `$${price.toFixed(2)}`
 }
 
 export default function CatalogoEmpresaPage() {
@@ -190,6 +214,12 @@ export default function CatalogoEmpresaPage() {
           description: p.description,
           category: p.serviceCategory,
           miCosto: parseFloat(p.miCosto) || 0,
+          // For fixed fee, use catalog values (these come from LogiRapid's configuration)
+          miCostoFijo: parseFloat(p.catalogMiCostoFijo) || 0,
+          precioMayorista: parseFloat(p.catalogPrecioMayorista) || 0,
+          precioMayoristaFijo: parseFloat(p.catalogPrecioMayoristaFijo) || 0,
+          pricingModel: p.pricingModel || 'fixed',
+          currency: p.currency || null,
           serviciosCount: p.servicesCount || 0,
           isActive: p.isActive !== false
         }))
@@ -1275,7 +1305,7 @@ export default function CatalogoEmpresaPage() {
                               </td>
                               <td className="px-6 py-4 text-right">
                                 <span className={`text-lg font-bold ${isDark ? 'text-emerald-400' : 'text-emerald-600'}`}>
-                                  ${product.miCosto.toFixed(2)}
+                                  {formatPrice(product)}
                                 </span>
                               </td>
                               <td className="px-6 py-4 text-center">
@@ -1493,7 +1523,7 @@ export default function CatalogoEmpresaPage() {
                             </td>
                             <td className="px-6 py-4 text-right">
                               <span className={`text-lg font-semibold ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
-                                ${product.miCosto.toFixed(2)}
+                                {formatPrice(product)}
                               </span>
                             </td>
                             <td className="px-6 py-4">
@@ -1532,9 +1562,9 @@ export default function CatalogoEmpresaPage() {
                                     } focus:outline-none focus:ring-4 ${branchPrice !== null && branchPrice < product.miCosto ? 'focus:ring-red-500/10' : 'focus:ring-blue-500/10'}`}
                                   />
                                 </div>
-                                {branchPrice !== null && branchPrice < product.miCosto && (
+                                {branchPrice !== null && branchPrice < product.miCosto && product.pricingModel !== 'percentage' && (
                                   <span className="text-xs text-red-500 font-medium">
-                                    Min: ${product.miCosto.toFixed(2)}
+                                    Min: {formatPrice(product)}
                                   </span>
                                 )}
                               </div>
@@ -1686,7 +1716,7 @@ export default function CatalogoEmpresaPage() {
                                     {product.code}
                                     {hasServices && (
                                       <span className={`ml-2 ${isDark ? 'text-gray-600' : 'text-gray-400'}`}>
-                                        (Proveedor: ${product.miCosto.toFixed(2)} + Servicios: ${servicesCost.toFixed(2)})
+                                        (Proveedor: {formatPrice(product)} + Servicios: ${servicesCost.toFixed(2)})
                                       </span>
                                     )}
                                   </div>

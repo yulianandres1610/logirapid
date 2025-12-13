@@ -46,7 +46,9 @@ interface Product {
   description: string | null
   category: string
   miCosto: number
+  miCostoFijo: number
   precioMayorista: number
+  precioMayoristaFijo: number
   providerCompanyId: number | null
   providerName: string | null
   isActive: boolean
@@ -128,7 +130,9 @@ export default function ProductConfigPage() {
           description: p.description,
           category: p.service_category,
           miCosto: parseFloat(p.mi_costo) || 0,
+          miCostoFijo: parseFloat(p.mi_costo_fijo) || 0,
           precioMayorista: parseFloat(p.precio_mayorista) || 0,
+          precioMayoristaFijo: parseFloat(p.precio_mayorista_fijo) || 0,
           providerCompanyId: p.provider_company_id || null,
           providerName: p.provider_company_name || null,
           isActive: p.is_active !== false,
@@ -670,13 +674,17 @@ export default function ProductConfigPage() {
                           <div className="flex items-center justify-between">
                             <span className={`text-xs ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>Mi Costo:</span>
                             <span className={`text-sm ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
-                              {product.pricingModel === 'percentage' ? `${product.miCosto}%` : `$${product.miCosto.toFixed(2)}`}
+                              {product.pricingModel === 'percentage'
+                                ? `${product.miCosto}%${product.miCostoFijo > 0 ? ` + $${product.miCostoFijo}` : ''}`
+                                : `$${product.miCosto.toFixed(2)}`}
                             </span>
                           </div>
                           <div className="flex items-center justify-between">
                             <span className={`text-xs ${isDark ? 'text-emerald-500' : 'text-emerald-600'}`}>Venta:</span>
                             <span className={`text-lg font-bold ${isDark ? 'text-emerald-400' : 'text-emerald-600'}`}>
-                              {product.pricingModel === 'percentage' ? `${product.precioMayorista}%` : `$${product.precioMayorista.toFixed(2)}`}
+                              {product.pricingModel === 'percentage'
+                                ? `${product.precioMayorista}%${product.precioMayoristaFijo > 0 ? ` + $${product.precioMayoristaFijo}` : ''}`
+                                : `$${product.precioMayorista.toFixed(2)}`}
                             </span>
                           </div>
                           {product.currency && (
@@ -788,13 +796,17 @@ export default function ProductConfigPage() {
                             </td>
                             <td className={`px-6 py-4 text-right`}>
                               <span className={`text-base font-semibold ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
-                                {product.pricingModel === 'percentage' ? `${product.miCosto}%` : `$${product.miCosto.toFixed(2)}`}
+                                {product.pricingModel === 'percentage'
+                                  ? `${product.miCosto}%${product.miCostoFijo > 0 ? ` + $${product.miCostoFijo}` : ''}`
+                                  : `$${product.miCosto.toFixed(2)}`}
                               </span>
                             </td>
                             <td className={`px-6 py-4 text-right`}>
                               <div className="flex flex-col items-end">
                                 <span className={`text-lg font-bold ${isDark ? 'text-emerald-400' : 'text-emerald-600'}`}>
-                                  {product.pricingModel === 'percentage' ? `${product.precioMayorista}%` : `$${product.precioMayorista.toFixed(2)}`}
+                                  {product.pricingModel === 'percentage'
+                                    ? `${product.precioMayorista}%${product.precioMayoristaFijo > 0 ? ` + $${product.precioMayoristaFijo}` : ''}`
+                                    : `$${product.precioMayorista.toFixed(2)}`}
                                 </span>
                                 {product.currency && (
                                   <span className={`text-xs ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
@@ -1107,7 +1119,9 @@ export default function ProductConfigPage() {
                     service_category: productData.category,
                     product_type: productData.category === 'remesa' ? 'transferencia' : 'producto',
                     mi_costo: productData.miCosto,
+                    mi_costo_fijo: productData.miCostoFijo,
                     precio_mayorista: productData.precioMayorista,
+                    precio_mayorista_fijo: productData.precioMayoristaFijo,
                     provider_company_id: productData.providerCompanyId,
                     pricing_model: productData.pricingModel,
                     currency: productData.currency
@@ -1147,7 +1161,9 @@ interface ProductModalProps {
     description: string
     category: string
     miCosto: number
+    miCostoFijo: number
     precioMayorista: number
+    precioMayoristaFijo: number
     providerCompanyId: number | null
     pricingModel: string
     currency: string | null
@@ -1181,7 +1197,9 @@ function ProductModal({ isDark, product, providerCompanies, onClose, onSave }: P
       description: product?.description || '',
       category: initialCategory,
       miCosto: product?.miCosto || 0,
+      miCostoFijo: product?.miCostoFijo || 0,
       precioMayorista: product?.precioMayorista || 0,
+      precioMayoristaFijo: product?.precioMayoristaFijo || 0,
       providerCompanyId: product?.providerCompanyId || null as number | null,
       pricingModel: product?.pricingModel || (isRemesa ? 'percentage' : 'fixed'),
       currency: product?.currency || (isRemesa ? 'USD' : null) as string | null
@@ -1204,7 +1222,9 @@ function ProductModal({ isDark, product, providerCompanies, onClose, onSave }: P
         currency: newIsRemesa ? 'USD' : null,
         // Reset prices when switching to/from remesa
         miCosto: newIsRemesa ? 2 : 0,
-        precioMayorista: newIsRemesa ? 3 : 0
+        miCostoFijo: newIsRemesa ? 3 : 0,
+        precioMayorista: newIsRemesa ? 3 : 0,
+        precioMayoristaFijo: newIsRemesa ? 5 : 0
       })
     } else {
       setFormData({
@@ -1494,19 +1514,86 @@ function ProductModal({ isDark, product, providerCompanies, onClose, onSave }: P
               </div>
             </div>
 
+            {/* Fixed Fee for Remesa (Transaction Fee / Delivery Fee) */}
+            {isRemesa && (
+              <div className={`p-4 rounded-xl ${isDark ? 'bg-amber-900/20 border border-amber-800' : 'bg-amber-50 border border-amber-200'}`}>
+                <label className={`block text-sm font-medium mb-3 ${isDark ? 'text-amber-400' : 'text-amber-700'}`}>
+                  Fee de Transaccion (Monto Fijo)
+                </label>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className={`block text-xs mb-1 ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
+                      Costo Fee ($)
+                    </label>
+                    <div className="relative">
+                      <span className={`absolute left-3 top-1/2 -translate-y-1/2 text-sm ${isDark ? 'text-amber-500' : 'text-amber-600'}`}>$</span>
+                      <input
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        value={formData.miCostoFijo}
+                        onChange={(e) => setFormData({ ...formData, miCostoFijo: parseFloat(e.target.value) || 0 })}
+                        className={`w-full pl-8 pr-3 py-2 rounded-lg border text-sm text-right font-semibold transition-all ${
+                          isDark
+                            ? 'bg-gray-700 border-gray-600 text-white focus:border-amber-500'
+                            : 'bg-white border-gray-200 text-gray-900 focus:border-amber-400'
+                        } focus:outline-none focus:ring-2 focus:ring-amber-500/20`}
+                        placeholder="3.00"
+                      />
+                    </div>
+                    <p className={`text-xs mt-1 ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
+                      Fee que cobra el proveedor
+                    </p>
+                  </div>
+                  <div>
+                    <label className={`block text-xs mb-1 ${isDark ? 'text-amber-400' : 'text-amber-600'}`}>
+                      Venta Fee ($)
+                    </label>
+                    <div className="relative">
+                      <span className={`absolute left-3 top-1/2 -translate-y-1/2 text-sm ${isDark ? 'text-amber-400' : 'text-amber-500'}`}>$</span>
+                      <input
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        value={formData.precioMayoristaFijo}
+                        onChange={(e) => setFormData({ ...formData, precioMayoristaFijo: parseFloat(e.target.value) || 0 })}
+                        className={`w-full pl-8 pr-3 py-2 rounded-lg border text-sm text-right font-bold transition-all ${
+                          isDark
+                            ? 'bg-amber-900/30 border-amber-700 text-amber-400 focus:border-amber-500'
+                            : 'bg-amber-50 border-amber-300 text-amber-700 focus:border-amber-400'
+                        } focus:outline-none focus:ring-2 focus:ring-amber-500/20`}
+                        placeholder="5.00"
+                      />
+                    </div>
+                    <p className={`text-xs mt-1 ${isDark ? 'text-amber-500/70' : 'text-amber-600'}`}>
+                      Fee que cobran las empresas
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* Margin info for Remesa */}
-            {isRemesa && formData.precioMayorista > formData.miCosto && (
+            {isRemesa && (formData.precioMayorista > formData.miCosto || formData.precioMayoristaFijo > formData.miCostoFijo) && (
               <div className={`p-4 rounded-xl ${isDark ? 'bg-emerald-900/20 border border-emerald-800' : 'bg-emerald-50 border border-emerald-200'}`}>
-                <div className="flex items-center justify-between">
+                <div className="flex items-center justify-between mb-2">
                   <span className={`text-sm ${isDark ? 'text-emerald-400' : 'text-emerald-700'}`}>
-                    Margen de ganancia:
+                    Margen porcentual:
                   </span>
                   <span className={`text-lg font-bold ${isDark ? 'text-emerald-400' : 'text-emerald-600'}`}>
                     {(formData.precioMayorista - formData.miCosto).toFixed(1)}%
                   </span>
                 </div>
-                <p className={`text-xs mt-1 ${isDark ? 'text-emerald-500/70' : 'text-emerald-600/70'}`}>
-                  Por cada $100 enviados, ganas ${((formData.precioMayorista - formData.miCosto)).toFixed(2)}
+                <div className="flex items-center justify-between">
+                  <span className={`text-sm ${isDark ? 'text-emerald-400' : 'text-emerald-700'}`}>
+                    Margen fee fijo:
+                  </span>
+                  <span className={`text-lg font-bold ${isDark ? 'text-emerald-400' : 'text-emerald-600'}`}>
+                    ${(formData.precioMayoristaFijo - formData.miCostoFijo).toFixed(2)}
+                  </span>
+                </div>
+                <p className={`text-xs mt-2 ${isDark ? 'text-emerald-500/70' : 'text-emerald-600/70'}`}>
+                  Ejemplo: $100 enviados = ${formData.precioMayorista - formData.miCosto} (%) + ${(formData.precioMayoristaFijo - formData.miCostoFijo).toFixed(2)} (fee) = ${((formData.precioMayorista - formData.miCosto) + (formData.precioMayoristaFijo - formData.miCostoFijo)).toFixed(2)} ganancia
                 </p>
               </div>
             )}

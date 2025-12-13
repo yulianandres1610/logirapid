@@ -111,6 +111,9 @@ export async function GET(
           pc.weight_capacity,
           pc.unit_type,
           pc.pricing_model,
+          pc.currency,
+          pc.mi_costo_fijo as catalog_mi_costo_fijo,
+          pc.precio_mayorista_fijo as catalog_precio_mayorista_fijo,
           -- Catalog prices (provider level)
           pc.mi_costo as catalog_mi_costo,
           pc.precio_mayorista as catalog_precio_mayorista,
@@ -174,6 +177,9 @@ export async function GET(
           pc.weight_capacity,
           pc.unit_type,
           pc.pricing_model,
+          pc.currency,
+          pc.mi_costo_fijo as catalog_mi_costo_fijo,
+          pc.precio_mayorista_fijo as catalog_precio_mayorista_fijo,
           -- Catalog prices (provider level)
           pc.mi_costo as catalog_mi_costo,
           pc.precio_mayorista as catalog_precio_mayorista,
@@ -234,12 +240,15 @@ export async function GET(
       weightCapacity: row.weight_capacity,
       unitType: row.unit_type,
       pricingModel: row.pricing_model,
+      currency: row.currency || null,
       displayOrder: row.display_order,
       servicesCount: servicesCountMap[row.id] || 0,
 
       // Catalog level prices (for reference - provider level)
       catalogMiCosto: parseFloat(row.catalog_mi_costo || 0),
+      catalogMiCostoFijo: parseFloat(row.catalog_mi_costo_fijo || 0),
       catalogPrecioMayorista: parseFloat(row.catalog_precio_mayorista || 0),
+      catalogPrecioMayoristaFijo: parseFloat(row.catalog_precio_mayorista_fijo || 0),
       catalogPrecioPublico: parseFloat(row.catalog_precio_publico || 0),
 
       // Company level pricing - NEW SIMPLIFIED NAMES

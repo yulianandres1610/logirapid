@@ -75,7 +75,9 @@ export async function GET(request: NextRequest) {
         pc.weight_capacity,
         pc.unit_type,
         pc.mi_costo,
+        pc.mi_costo_fijo,
         pc.precio_mayorista,
+        pc.precio_mayorista_fijo,
         pc.precio_publico,
         pc.pricing_model,
         pc.currency,
@@ -156,7 +158,9 @@ export async function POST(request: NextRequest) {
       unit_type,
       // New field names
       mi_costo,
+      mi_costo_fijo,
       precio_mayorista,
+      precio_mayorista_fijo,
       precio_publico,
       // Legacy support
       provider_cost,
@@ -191,13 +195,16 @@ export async function POST(request: NextRequest) {
     const finalPrecioMayorista = precio_mayorista ?? provider_b2b_price ?? (finalMiCosto * 1.2)
     const finalPrecioPublico = precio_publico ?? platform_min_b2c ?? (finalPrecioMayorista * 1.5)
 
+    const finalMiCostoFijo = mi_costo_fijo ?? 0
+    const finalPrecioMayoristaFijo = precio_mayorista_fijo ?? 0
+
     const result = await db.query(`
       INSERT INTO product_catalog (
         code, name, description, service_category, product_type,
         dimensions, weight_capacity, unit_type,
-        mi_costo, precio_mayorista, precio_publico,
+        mi_costo, mi_costo_fijo, precio_mayorista, precio_mayorista_fijo, precio_publico,
         pricing_model, provider_company_id, display_order, currency
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
       RETURNING *
     `, [
       code,
@@ -209,7 +216,9 @@ export async function POST(request: NextRequest) {
       weight_capacity || null,
       unit_type || (service_category === 'remesa' ? 'usd' : 'unit'),
       finalMiCosto,
+      finalMiCostoFijo,
       finalPrecioMayorista,
+      finalPrecioMayoristaFijo,
       finalPrecioPublico,
       pricing_model || (service_category === 'remesa' ? 'percentage' : 'fixed'),
       provider_company_id || null,
