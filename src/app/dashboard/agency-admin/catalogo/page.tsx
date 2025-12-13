@@ -1674,13 +1674,16 @@ export default function CatalogoEmpresaPage() {
                       const Icon = catConfig.icon
                       const productServices = getProductServices(product.id)
                       const servicesCost = getServicesCost(product.id)
-                      const totalCost = product.miCosto + servicesCost
+                      const isRemesa = product.category === 'remesa' && product.pricingModel === 'percentage'
+                      // For remesa: cost is % + fixed fee, not additive with services
+                      const totalCost = isRemesa ? product.miCosto : (product.miCosto + servicesCost)
                       const publicPrice = publicPrices[product.id]
+                      // For remesa: margin is the difference in percentage points
                       const margin = publicPrice !== null && publicPrice !== undefined
-                        ? publicPrice - totalCost
+                        ? (isRemesa ? publicPrice - product.miCosto : publicPrice - totalCost)
                         : null
                       const marginPct = margin !== null && totalCost > 0
-                        ? (margin / totalCost * 100)
+                        ? (isRemesa ? margin : (margin / totalCost * 100))
                         : null
                       const isExpanded = expandedPriceProducts.has(product.id)
                       const hasServices = productServices.length > 0
@@ -1714,9 +1717,14 @@ export default function CatalogoEmpresaPage() {
                                   </div>
                                   <div className={`text-sm ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
                                     {product.code}
-                                    {hasServices && (
+                                    {hasServices && !isRemesa && (
                                       <span className={`ml-2 ${isDark ? 'text-gray-600' : 'text-gray-400'}`}>
                                         (Proveedor: {formatPrice(product)} + Servicios: ${servicesCost.toFixed(2)})
+                                      </span>
+                                    )}
+                                    {isRemesa && product.miCostoFijo > 0 && (
+                                      <span className={`ml-2 ${isDark ? 'text-gray-600' : 'text-gray-400'}`}>
+                                        (Fee transaccion: ${product.miCostoFijo.toFixed(2)})
                                       </span>
                                     )}
                                   </div>
@@ -1725,17 +1733,19 @@ export default function CatalogoEmpresaPage() {
                             </td>
                             <td className="px-6 py-4 text-right">
                               <span className={`text-lg font-semibold ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
-                                ${totalCost.toFixed(2)}
+                                {isRemesa ? formatPrice(product) : `$${totalCost.toFixed(2)}`}
                               </span>
                             </td>
                             <td className="px-6 py-4">
                               <div className="flex justify-center">
                                 <div className="relative">
-                                  <span className={`absolute left-4 top-1/2 -translate-y-1/2 ${isDark ? 'text-emerald-400' : 'text-emerald-500'}`}>$</span>
+                                  <span className={`absolute left-4 top-1/2 -translate-y-1/2 ${isDark ? 'text-emerald-400' : 'text-emerald-500'}`}>
+                                    {isRemesa ? '' : '$'}
+                                  </span>
                                   <input
                                     type="number"
-                                    step="0.01"
-                                    min={totalCost}
+                                    step={isRemesa ? '0.1' : '0.01'}
+                                    min={isRemesa ? product.miCosto : totalCost}
                                     value={publicPrice ?? ''}
                                     placeholder="—"
                                     onChange={(e) => {
@@ -1745,7 +1755,7 @@ export default function CatalogoEmpresaPage() {
                                         [product.id]: value
                                       }))
                                     }}
-                                    className={`w-36 pl-8 pr-4 py-2.5 text-center text-lg font-semibold rounded-xl border-2 transition-all ${
+                                    className={`w-36 ${isRemesa ? 'pl-4' : 'pl-8'} pr-4 py-2.5 text-center text-lg font-semibold rounded-xl border-2 transition-all ${
                                       publicPrice !== null
                                         ? isDark
                                           ? 'bg-emerald-900/30 border-emerald-600 text-emerald-300 focus:border-emerald-500'
@@ -1755,6 +1765,9 @@ export default function CatalogoEmpresaPage() {
                                           : 'bg-white border-gray-200 text-gray-900 placeholder-gray-400 focus:border-emerald-400'
                                     } focus:outline-none focus:ring-4 focus:ring-emerald-500/10`}
                                   />
+                                  {isRemesa && (
+                                    <span className={`absolute right-4 top-1/2 -translate-y-1/2 ${isDark ? 'text-emerald-400' : 'text-emerald-500'}`}>%</span>
+                                  )}
                                 </div>
                               </div>
                             </td>
@@ -1762,11 +1775,16 @@ export default function CatalogoEmpresaPage() {
                               {margin !== null ? (
                                 <div className="flex flex-col items-end">
                                   <span className={`text-lg font-bold ${margin >= 0 ? (isDark ? 'text-emerald-400' : 'text-emerald-600') : (isDark ? 'text-red-400' : 'text-red-600')}`}>
-                                    ${margin.toFixed(2)}
+                                    {isRemesa ? `${margin.toFixed(1)}%` : `$${margin.toFixed(2)}`}
                                   </span>
-                                  {marginPct !== null && (
+                                  {!isRemesa && marginPct !== null && (
                                     <span className={`text-sm font-medium ${margin >= 0 ? (isDark ? 'text-emerald-400/70' : 'text-emerald-600/70') : (isDark ? 'text-red-400/70' : 'text-red-600/70')}`}>
                                       {marginPct.toFixed(1)}%
+                                    </span>
+                                  )}
+                                  {isRemesa && product.miCostoFijo > 0 && (
+                                    <span className={`text-xs ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
+                                      + ${product.miCostoFijo.toFixed(2)} fee
                                     </span>
                                   )}
                                 </div>
