@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   Building2,
@@ -46,6 +46,8 @@ import { WalletCard } from '@/components/wallet-card'
 import { Button } from '@/components/ui/button'
 import LogoUpload from '@/components/ui/LogoUpload'
 import MapboxAddressAutofill from '@/components/ui/MapboxAddressAutofill'
+import mapboxgl from 'mapbox-gl'
+import 'mapbox-gl/dist/mapbox-gl.css'
 import LoadingBox from '@/components/ui/LoadingBox'
 import ConfirmDialog from '@/components/ui/ConfirmDialog'
 
@@ -165,6 +167,308 @@ const COMPANY_TYPES = [
   { id: 'all', name: 'Todos', description: 'Todos los servicios disponibles' },
 ]
 
+// Provincias y Municipios para Brokers
+const BROKER_PROVINCES = [
+  { id: 'pinar-del-rio', name: 'Pinar del Río', coords: [-83.6978, 22.4175], municipalities: [
+    { id: 'pinar-del-rio', name: 'Pinar del Río' },
+    { id: 'consolacion-del-sur', name: 'Consolación del Sur' },
+    { id: 'sandino', name: 'Sandino' },
+    { id: 'san-juan-y-martinez', name: 'San Juan y Martínez' },
+    { id: 'guane', name: 'Guane' },
+    { id: 'los-palacios', name: 'Los Palacios' },
+    { id: 'vinales', name: 'Viñales' },
+    { id: 'la-palma', name: 'La Palma' },
+    { id: 'minas-de-matahambre', name: 'Minas de Matahambre' },
+    { id: 'san-luis', name: 'San Luis' },
+    { id: 'mantua', name: 'Mantua' },
+  ]},
+  { id: 'artemisa', name: 'Artemisa', coords: [-82.7617, 22.8136], municipalities: [
+    { id: 'artemisa', name: 'Artemisa' },
+    { id: 'bahia-honda', name: 'Bahía Honda' },
+    { id: 'candelaria', name: 'Candelaria' },
+    { id: 'guanajay', name: 'Guanajay' },
+    { id: 'mariel', name: 'Mariel' },
+    { id: 'san-antonio-de-los-banos', name: 'San Antonio de los Baños' },
+    { id: 'san-cristobal', name: 'San Cristóbal' },
+    { id: 'bauta', name: 'Bauta' },
+    { id: 'caimito', name: 'Caimito' },
+    { id: 'guira-de-melena', name: 'Güira de Melena' },
+    { id: 'alquizar', name: 'Alquízar' },
+  ]},
+  { id: 'la-habana', name: 'La Habana', coords: [-82.3666, 23.1136], municipalities: [
+    { id: 'playa', name: 'Playa' },
+    { id: 'plaza-de-la-revolucion', name: 'Plaza de la Revolución' },
+    { id: 'centro-habana', name: 'Centro Habana' },
+    { id: 'habana-vieja', name: 'La Habana Vieja' },
+    { id: 'regla', name: 'Regla' },
+    { id: 'habana-del-este', name: 'Habana del Este' },
+    { id: 'guanabacoa', name: 'Guanabacoa' },
+    { id: 'san-miguel-del-padron', name: 'San Miguel del Padrón' },
+    { id: 'diez-de-octubre', name: 'Diez de Octubre' },
+    { id: 'cerro', name: 'Cerro' },
+    { id: 'marianao', name: 'Marianao' },
+    { id: 'la-lisa', name: 'La Lisa' },
+    { id: 'boyeros', name: 'Boyeros' },
+    { id: 'arroyo-naranjo', name: 'Arroyo Naranjo' },
+    { id: 'cotorro', name: 'Cotorro' },
+  ]},
+  { id: 'mayabeque', name: 'Mayabeque', coords: [-81.9300, 22.9200], municipalities: [
+    { id: 'bejucal', name: 'Bejucal' },
+    { id: 'san-jose-de-las-lajas', name: 'San José de las Lajas' },
+    { id: 'jaruco', name: 'Jaruco' },
+    { id: 'santa-cruz-del-norte', name: 'Santa Cruz del Norte' },
+    { id: 'madruga', name: 'Madruga' },
+    { id: 'nueva-paz', name: 'Nueva Paz' },
+    { id: 'san-nicolas-de-bari', name: 'San Nicolás de Bari' },
+    { id: 'guines', name: 'Güines' },
+    { id: 'melena-del-sur', name: 'Melena del Sur' },
+    { id: 'batabano', name: 'Batabanó' },
+    { id: 'quivican', name: 'Quivicán' },
+  ]},
+  { id: 'matanzas', name: 'Matanzas', coords: [-81.5775, 22.4117], municipalities: [
+    { id: 'matanzas', name: 'Matanzas' },
+    { id: 'cardenas', name: 'Cárdenas' },
+    { id: 'varadero', name: 'Varadero' },
+    { id: 'colon', name: 'Colón' },
+    { id: 'jovellanos', name: 'Jovellanos' },
+    { id: 'pedro-betancourt', name: 'Pedro Betancourt' },
+    { id: 'limonar', name: 'Limonar' },
+    { id: 'union-de-reyes', name: 'Unión de Reyes' },
+    { id: 'los-arabos', name: 'Los Arabos' },
+    { id: 'perico', name: 'Perico' },
+    { id: 'marti', name: 'Martí' },
+    { id: 'jaguey-grande', name: 'Jagüey Grande' },
+    { id: 'cienaga-de-zapata', name: 'Ciénaga de Zapata' },
+  ]},
+  { id: 'cienfuegos', name: 'Cienfuegos', coords: [-80.4536, 22.1456], municipalities: [
+    { id: 'cienfuegos', name: 'Cienfuegos' },
+    { id: 'palmira', name: 'Palmira' },
+    { id: 'rodas', name: 'Rodas' },
+    { id: 'lajas', name: 'Lajas' },
+    { id: 'cruces', name: 'Cruces' },
+    { id: 'cumanayagua', name: 'Cumanayagua' },
+    { id: 'aguada-de-pasajeros', name: 'Aguada de Pasajeros' },
+    { id: 'abreus', name: 'Abreus' },
+  ]},
+  { id: 'villa-clara', name: 'Villa Clara', coords: [-79.9658, 22.4058], municipalities: [
+    { id: 'santa-clara', name: 'Santa Clara' },
+    { id: 'remedios', name: 'Remedios' },
+    { id: 'caibarien', name: 'Caibarién' },
+    { id: 'camajuani', name: 'Camajuaní' },
+    { id: 'placetas', name: 'Placetas' },
+    { id: 'sancti-spiritus', name: 'Sancti Spíritus' },
+    { id: 'sagua-la-grande', name: 'Sagua la Grande' },
+    { id: 'cifuentes', name: 'Cifuentes' },
+    { id: 'santo-domingo', name: 'Santo Domingo' },
+    { id: 'ranchuelo', name: 'Ranchuelo' },
+    { id: 'manicaragua', name: 'Manicaragua' },
+    { id: 'encrucijada', name: 'Encrucijada' },
+    { id: 'quemado-de-guines', name: 'Quemado de Güines' },
+  ]},
+  { id: 'sancti-spiritus', name: 'Sancti Spíritus', coords: [-79.4428, 21.9303], municipalities: [
+    { id: 'sancti-spiritus', name: 'Sancti Spíritus' },
+    { id: 'trinidad', name: 'Trinidad' },
+    { id: 'fomento', name: 'Fomento' },
+    { id: 'cabaiguan', name: 'Cabaiguán' },
+    { id: 'jatibonico', name: 'Jatibonico' },
+    { id: 'taguasco', name: 'Taguasco' },
+    { id: 'yaguajay', name: 'Yaguajay' },
+    { id: 'la-sierpe', name: 'La Sierpe' },
+  ]},
+  { id: 'ciego-de-avila', name: 'Ciego de Ávila', coords: [-78.7619, 21.8403], municipalities: [
+    { id: 'ciego-de-avila', name: 'Ciego de Ávila' },
+    { id: 'moron', name: 'Morón' },
+    { id: 'chambas', name: 'Chambas' },
+    { id: 'ciro-redondo', name: 'Ciro Redondo' },
+    { id: 'majagua', name: 'Majagua' },
+    { id: 'florencia', name: 'Florencia' },
+    { id: 'venezuela', name: 'Venezuela' },
+    { id: 'baraguá', name: 'Baraguá' },
+    { id: 'primero-de-enero', name: 'Primero de Enero' },
+    { id: 'bolivia', name: 'Bolivia' },
+  ]},
+  { id: 'camaguey', name: 'Camagüey', coords: [-77.9169, 21.3808], municipalities: [
+    { id: 'camaguey', name: 'Camagüey' },
+    { id: 'florida', name: 'Florida' },
+    { id: 'vertientes', name: 'Vertientes' },
+    { id: 'guaimaro', name: 'Guáimaro' },
+    { id: 'sibanicu', name: 'Sibanicú' },
+    { id: 'nuevitas', name: 'Nuevitas' },
+    { id: 'esmeralda', name: 'Esmeralda' },
+    { id: 'minas', name: 'Minas' },
+    { id: 'jimaguayu', name: 'Jimaguayú' },
+    { id: 'santa-cruz-del-sur', name: 'Santa Cruz del Sur' },
+    { id: 'najasa', name: 'Najasa' },
+    { id: 'sierra-de-cubitas', name: 'Sierra de Cubitas' },
+    { id: 'cespedes', name: 'Céspedes' },
+  ]},
+  { id: 'las-tunas', name: 'Las Tunas', coords: [-76.9514, 20.9597], municipalities: [
+    { id: 'las-tunas', name: 'Las Tunas' },
+    { id: 'puerto-padre', name: 'Puerto Padre' },
+    { id: 'jesus-menendez', name: 'Jesús Menéndez' },
+    { id: 'manati', name: 'Manatí' },
+    { id: 'majibacoa', name: 'Majibacoa' },
+    { id: 'jobabo', name: 'Jobabo' },
+    { id: 'colombia', name: 'Colombia' },
+    { id: 'amancio', name: 'Amancio' },
+  ]},
+  { id: 'holguin', name: 'Holguín', coords: [-76.2633, 20.7869], municipalities: [
+    { id: 'holguin', name: 'Holguín' },
+    { id: 'gibara', name: 'Gibara' },
+    { id: 'banes', name: 'Banes' },
+    { id: 'moa', name: 'Moa' },
+    { id: 'mayari', name: 'Mayarí' },
+    { id: 'sagua-de-tanamo', name: 'Sagua de Tánamo' },
+    { id: 'antilla', name: 'Antilla' },
+    { id: 'baráguano', name: 'Báguano' },
+    { id: 'calixto-garcia', name: 'Calixto García' },
+    { id: 'cacocum', name: 'Cacocum' },
+    { id: 'cueto', name: 'Cueto' },
+    { id: 'frank-pais', name: 'Frank País' },
+    { id: 'rafael-freyre', name: 'Rafael Freyre' },
+    { id: 'urbano-noris', name: 'Urbano Noris' },
+  ]},
+  { id: 'granma', name: 'Granma', coords: [-76.6431, 20.3847], municipalities: [
+    { id: 'bayamo', name: 'Bayamo' },
+    { id: 'manzanillo', name: 'Manzanillo' },
+    { id: 'jiguani', name: 'Jiguaní' },
+    { id: 'rio-cauto', name: 'Río Cauto' },
+    { id: 'yara', name: 'Yara' },
+    { id: 'campechuela', name: 'Campechuela' },
+    { id: 'media-luna', name: 'Media Luna' },
+    { id: 'niquero', name: 'Niquero' },
+    { id: 'pilon', name: 'Pilón' },
+    { id: 'bartolome-maso', name: 'Bartolomé Masó' },
+    { id: 'buey-arriba', name: 'Buey Arriba' },
+    { id: 'guisa', name: 'Guisa' },
+    { id: 'cauto-cristo', name: 'Cauto Cristo' },
+  ]},
+  { id: 'santiago-de-cuba', name: 'Santiago', coords: [-75.8219, 20.0247], municipalities: [
+    { id: 'santiago-de-cuba', name: 'Santiago de Cuba' },
+    { id: 'palma-soriano', name: 'Palma Soriano' },
+    { id: 'contramaestre', name: 'Contramaestre' },
+    { id: 'san-luis', name: 'San Luis' },
+    { id: 'segundo-frente', name: 'Segundo Frente' },
+    { id: 'songo-la-maya', name: 'Songo-La Maya' },
+    { id: 'tercer-frente', name: 'Tercer Frente' },
+    { id: 'guama', name: 'Guamá' },
+    { id: 'mella', name: 'Mella' },
+  ]},
+  { id: 'guantanamo', name: 'Guantánamo', coords: [-75.2092, 20.1447], municipalities: [
+    { id: 'guantanamo', name: 'Guantánamo' },
+    { id: 'baracoa', name: 'Baracoa' },
+    { id: 'el-salvador', name: 'El Salvador' },
+    { id: 'san-antonio-del-sur', name: 'San Antonio del Sur' },
+    { id: 'imias', name: 'Imías' },
+    { id: 'maisi', name: 'Maisí' },
+    { id: 'yateras', name: 'Yateras' },
+    { id: 'caimanera', name: 'Caimanera' },
+    { id: 'manuel-tames', name: 'Manuel Tames' },
+    { id: 'niceto-perez', name: 'Niceto Pérez' },
+  ]},
+  { id: 'isla-de-la-juventud', name: 'Isla de la Juventud', coords: [-82.8500, 21.7000], municipalities: [
+    { id: 'nueva-gerona', name: 'Nueva Gerona' },
+  ]},
+]
+
+// Componente del Mapa para seleccionar ubicación del Broker
+const MAPBOX_TOKEN = 'pk.eyJ1IjoibG9naXJhcGlkIiwiYSI6ImNtMnVpZHdxcjBjNncyanBzNm93OXQ3bnkifQ.sJ2wvpXvnOcGvCfsKDBYdg'
+
+interface BrokerMapPickerProps {
+  theme: string
+  province: string
+  latitude: number | null
+  longitude: number | null
+  onLocationChange: (lat: number, lng: number) => void
+}
+
+function BrokerMapPicker({ theme, province, latitude, longitude, onLocationChange }: BrokerMapPickerProps) {
+  const mapContainerRef = useRef<HTMLDivElement>(null)
+  const mapRef = useRef<mapboxgl.Map | null>(null)
+  const markerRef = useRef<mapboxgl.Marker | null>(null)
+
+  // Obtener coordenadas de la provincia
+  const provinceData = BROKER_PROVINCES.find(p => p.id === province)
+  const defaultCoords = provinceData?.coords || [-82.3666, 23.1136] // Default: La Habana
+
+  useEffect(() => {
+    if (!mapContainerRef.current) return
+
+    mapboxgl.accessToken = MAPBOX_TOKEN
+
+    const map = new mapboxgl.Map({
+      container: mapContainerRef.current,
+      style: theme === 'dark' ? 'mapbox://styles/mapbox/dark-v11' : 'mapbox://styles/mapbox/streets-v12',
+      center: [longitude || defaultCoords[0], latitude || defaultCoords[1]],
+      zoom: 12
+    })
+
+    mapRef.current = map
+
+    // Agregar controles de navegación
+    map.addControl(new mapboxgl.NavigationControl(), 'top-right')
+
+    // Si ya hay coordenadas, agregar marcador
+    if (latitude && longitude) {
+      const marker = new mapboxgl.Marker({ color: '#CC0A46', draggable: true })
+        .setLngLat([longitude, latitude])
+        .addTo(map)
+
+      marker.on('dragend', () => {
+        const lngLat = marker.getLngLat()
+        onLocationChange(lngLat.lat, lngLat.lng)
+      })
+
+      markerRef.current = marker
+    }
+
+    // Click en el mapa para colocar/mover pin
+    map.on('click', (e) => {
+      const { lng, lat } = e.lngLat
+
+      if (markerRef.current) {
+        markerRef.current.setLngLat([lng, lat])
+      } else {
+        const marker = new mapboxgl.Marker({ color: '#CC0A46', draggable: true })
+          .setLngLat([lng, lat])
+          .addTo(map)
+
+        marker.on('dragend', () => {
+          const lngLat = marker.getLngLat()
+          onLocationChange(lngLat.lat, lngLat.lng)
+        })
+
+        markerRef.current = marker
+      }
+
+      onLocationChange(lat, lng)
+    })
+
+    return () => {
+      map.remove()
+    }
+  }, [province]) // Re-crear mapa cuando cambia la provincia
+
+  // Actualizar centro del mapa cuando cambia la provincia
+  useEffect(() => {
+    if (mapRef.current && provinceData) {
+      mapRef.current.flyTo({
+        center: [provinceData.coords[0], provinceData.coords[1]],
+        zoom: 12,
+        duration: 1000
+      })
+    }
+  }, [province, provinceData])
+
+  return (
+    <div
+      ref={mapContainerRef}
+      className="w-full h-[300px] rounded-xl overflow-hidden border"
+      style={{ borderColor: theme === 'dark' ? '#374151' : '#e5e7eb' }}
+    />
+  )
+}
+
 const WALLET_CURRENCIES = [
   { code: 'USD', name: 'Dólar Americano', symbol: '$', flag: '🇺🇸' },
   { code: 'CUP', name: 'Peso Cubano', symbol: '$', flag: '🇨🇺' },
@@ -251,6 +555,12 @@ export default function CompaniesPage() {
     secondaryColor: '#0A46CC',
     latitude: null,
     longitude: null,
+    // Campos específicos para Brokers
+    broker_province: '',
+    broker_municipality: '',
+    broker_address: '',
+    broker_delivery_hours: '',
+    broker_contact_phone: '',
   })
 
   // Load companies from API on mount
@@ -347,6 +657,14 @@ export default function CompaniesPage() {
       subdomain: '',
       primaryColor: '#CC0A46',
       secondaryColor: '#0A46CC',
+      latitude: null,
+      longitude: null,
+      // Campos específicos para Brokers
+      broker_province: '',
+      broker_municipality: '',
+      broker_address: '',
+      broker_delivery_hours: '',
+      broker_contact_phone: '',
     })
     setCurrentStep(1)
   }
@@ -1037,39 +1355,202 @@ export default function CompaniesPage() {
                       </select>
                     </div>
 
-                    {/* Dirección con Mapbox Autofill */}
-                    <div className="md:col-span-2">
-                      <MapboxAddressAutofill
-                        value={{
-                          street: formData.address || '',
-                          apartment: '',
-                          city: formData.city || '',
-                          state: formData.state || '',
-                          zipCode: formData.zipCode || '',
-                          country: formData.country || ''
-                        }}
-                        onChange={(addressData) => {
-                          setFormData({
-                            ...formData,
-                            address: addressData.street,
-                            city: addressData.city,
-                            state: addressData.state,
-                            zipCode: addressData.zipCode,
-                            country: addressData.country
-                          })
-                        }}
-                        onCoordinatesChange={(coordinates) => {
-                          if (coordinates) {
+                    {/* Dirección - Condicional según tipo de empresa */}
+                    {formData.companyType === 'broker' ? (
+                      /* Dirección para Brokers - Campos manuales */
+                      <>
+                        <div className="md:col-span-2">
+                          <label className={cn(
+                            "block text-sm font-medium mb-2",
+                            theme === 'dark' ? "text-gray-300" : "text-gray-700"
+                          )}>
+                            Dirección del Broker *
+                          </label>
+                          <input
+                            type="text"
+                            value={formData.broker_address}
+                            onChange={(e) => setFormData({...formData, broker_address: e.target.value})}
+                            className={cn(
+                              "w-full px-4 py-3 rounded-xl border focus:outline-none focus:ring-2 transition-all duration-300",
+                              theme === 'dark'
+                                ? "bg-gray-800/50 border-gray-700 text-white focus:border-blue-500 focus:ring-blue-500/20"
+                                : "bg-white border-gray-300 text-black focus:border-blue-500 focus:ring-blue-500/20"
+                            )}
+                            placeholder="Ej: Calle 23 #456 entre L y M, Vedado"
+                          />
+                        </div>
+
+                        <div>
+                          <label className={cn(
+                            "block text-sm font-medium mb-2",
+                            theme === 'dark' ? "text-gray-300" : "text-gray-700"
+                          )}>
+                            Provincia *
+                          </label>
+                          <select
+                            value={formData.broker_province}
+                            onChange={(e) => {
+                              const province = BROKER_PROVINCES.find(p => p.id === e.target.value)
+                              setFormData({
+                                ...formData,
+                                broker_province: e.target.value,
+                                broker_municipality: '',
+                                // Centrar mapa en la provincia seleccionada
+                                latitude: province?.coords[1] || null,
+                                longitude: province?.coords[0] || null
+                              })
+                            }}
+                            className={cn(
+                              "w-full px-4 py-3 rounded-xl border focus:outline-none focus:ring-2 transition-all duration-300",
+                              theme === 'dark'
+                                ? "bg-gray-800/50 border-gray-700 text-white focus:border-blue-500 focus:ring-blue-500/20"
+                                : "bg-white border-gray-300 text-black focus:border-blue-500 focus:ring-blue-500/20"
+                            )}
+                          >
+                            <option value="">Seleccionar provincia</option>
+                            {BROKER_PROVINCES.map(province => (
+                              <option key={province.id} value={province.id}>{province.name}</option>
+                            ))}
+                          </select>
+                        </div>
+
+                        <div>
+                          <label className={cn(
+                            "block text-sm font-medium mb-2",
+                            theme === 'dark' ? "text-gray-300" : "text-gray-700"
+                          )}>
+                            Municipio *
+                          </label>
+                          <select
+                            value={formData.broker_municipality}
+                            onChange={(e) => setFormData({...formData, broker_municipality: e.target.value})}
+                            disabled={!formData.broker_province}
+                            className={cn(
+                              "w-full px-4 py-3 rounded-xl border focus:outline-none focus:ring-2 transition-all duration-300",
+                              theme === 'dark'
+                                ? "bg-gray-800/50 border-gray-700 text-white focus:border-blue-500 focus:ring-blue-500/20 disabled:opacity-50"
+                                : "bg-white border-gray-300 text-black focus:border-blue-500 focus:ring-blue-500/20 disabled:opacity-50"
+                            )}
+                          >
+                            <option value="">Seleccionar municipio</option>
+                            {formData.broker_province &&
+                              BROKER_PROVINCES.find(p => p.id === formData.broker_province)?.municipalities.map(muni => (
+                                <option key={muni.id} value={muni.id}>{muni.name}</option>
+                              ))
+                            }
+                          </select>
+                        </div>
+
+                        <div>
+                          <label className={cn(
+                            "block text-sm font-medium mb-2",
+                            theme === 'dark' ? "text-gray-300" : "text-gray-700"
+                          )}>
+                            Horario de Entrega
+                          </label>
+                          <input
+                            type="text"
+                            value={formData.broker_delivery_hours}
+                            onChange={(e) => setFormData({...formData, broker_delivery_hours: e.target.value})}
+                            className={cn(
+                              "w-full px-4 py-3 rounded-xl border focus:outline-none focus:ring-2 transition-all duration-300",
+                              theme === 'dark'
+                                ? "bg-gray-800/50 border-gray-700 text-white focus:border-blue-500 focus:ring-blue-500/20"
+                                : "bg-white border-gray-300 text-black focus:border-blue-500 focus:ring-blue-500/20"
+                            )}
+                            placeholder="Ej: 8:00 AM - 6:00 PM"
+                          />
+                        </div>
+
+                        <div>
+                          <label className={cn(
+                            "block text-sm font-medium mb-2",
+                            theme === 'dark' ? "text-gray-300" : "text-gray-700"
+                          )}>
+                            Teléfono de Contacto Broker
+                          </label>
+                          <input
+                            type="tel"
+                            value={formData.broker_contact_phone}
+                            onChange={(e) => setFormData({...formData, broker_contact_phone: e.target.value})}
+                            className={cn(
+                              "w-full px-4 py-3 rounded-xl border focus:outline-none focus:ring-2 transition-all duration-300",
+                              theme === 'dark'
+                                ? "bg-gray-800/50 border-gray-700 text-white focus:border-blue-500 focus:ring-blue-500/20"
+                                : "bg-white border-gray-300 text-black focus:border-blue-500 focus:ring-blue-500/20"
+                            )}
+                            placeholder="+53 5 XXX XXXX"
+                          />
+                        </div>
+
+                        {/* Mapa para seleccionar ubicación con pin */}
+                        {formData.broker_province && formData.broker_municipality && (
+                          <div className="md:col-span-2">
+                            <label className={cn(
+                              "block text-sm font-medium mb-2",
+                              theme === 'dark' ? "text-gray-300" : "text-gray-700"
+                            )}>
+                              Ubicación en el Mapa - Haz clic para colocar el pin
+                            </label>
+                            <BrokerMapPicker
+                              theme={theme}
+                              province={formData.broker_province}
+                              latitude={formData.latitude}
+                              longitude={formData.longitude}
+                              onLocationChange={(lat: number, lng: number) => {
+                                setFormData({
+                                  ...formData,
+                                  latitude: lat,
+                                  longitude: lng
+                                })
+                              }}
+                            />
+                            {formData.latitude && formData.longitude && (
+                              <p className={cn(
+                                "mt-2 text-xs",
+                                theme === 'dark' ? "text-green-400" : "text-green-600"
+                              )}>
+                                Coordenadas: {formData.latitude.toFixed(6)}, {formData.longitude.toFixed(6)}
+                              </p>
+                            )}
+                          </div>
+                        )}
+                      </>
+                    ) : (
+                      /* Dirección con Mapbox Autofill para otros tipos */
+                      <div className="md:col-span-2">
+                        <MapboxAddressAutofill
+                          value={{
+                            street: formData.address || '',
+                            apartment: '',
+                            city: formData.city || '',
+                            state: formData.state || '',
+                            zipCode: formData.zipCode || '',
+                            country: formData.country || ''
+                          }}
+                          onChange={(addressData) => {
                             setFormData({
                               ...formData,
-                              latitude: coordinates.latitude,
-                              longitude: coordinates.longitude
+                              address: addressData.street,
+                              city: addressData.city,
+                              state: addressData.state,
+                              zipCode: addressData.zipCode,
+                              country: addressData.country
                             })
-                          }
-                        }}
-                        required={true}
-                      />
-                    </div>
+                          }}
+                          onCoordinatesChange={(coordinates) => {
+                            if (coordinates) {
+                              setFormData({
+                                ...formData,
+                                latitude: coordinates.latitude,
+                                longitude: coordinates.longitude
+                              })
+                            }
+                          }}
+                          required={true}
+                        />
+                      </div>
+                    )}
                   </div>
                 </div>
               )}
