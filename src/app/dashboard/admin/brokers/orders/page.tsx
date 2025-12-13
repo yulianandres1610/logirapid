@@ -22,6 +22,9 @@ import {
   X
 } from 'lucide-react'
 import Link from 'next/link'
+import { DashboardLayout } from '@/components/layout/dashboard-layout'
+import { cn } from '@/lib/utils'
+import { useTheme } from '@/contexts/theme-context'
 
 interface Order {
   id: number
@@ -76,6 +79,7 @@ interface Pagination {
 }
 
 export default function AdminBrokerOrdersPage() {
+  const { theme } = useTheme()
   const [orders, setOrders] = useState<Order[]>([])
   const [stats, setStats] = useState<Stats | null>(null)
   const [pagination, setPagination] = useState<Pagination | null>(null)
@@ -158,25 +162,38 @@ export default function AdminBrokerOrdersPage() {
   })
 
   return (
-    <div className="p-6 space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
-            Todas las Ordenes de Remesas
-          </h1>
-          <p className="text-gray-500 dark:text-gray-400 mt-1">
-            Vista general de todas las ordenes del sistema
-          </p>
+    <DashboardLayout>
+      <div className={cn(
+        "min-h-screen p-6 space-y-6",
+        theme === 'dark' ? 'bg-gray-900' : 'bg-gray-50'
+      )}>
+        {/* Header */}
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+          <div>
+            <h1 className={cn(
+              "text-2xl font-bold",
+              theme === 'dark' ? 'text-white' : 'text-gray-900'
+            )}>
+              Todas las Órdenes de Cupones Familiares
+            </h1>
+            <p className={cn(
+              "mt-1",
+              theme === 'dark' ? 'text-gray-400' : 'text-gray-500'
+            )}>
+              Vista general de todas las órdenes del sistema
+            </p>
+          </div>
+          <Link
+            href="/dashboard/admin/brokers"
+            className={cn(
+              "flex items-center gap-2 px-4 py-2 rounded-xl transition-all",
+              theme === 'dark' ? 'bg-gray-800 hover:bg-gray-700 text-white' : 'bg-white hover:bg-gray-100 text-gray-900 border border-gray-200'
+            )}
+          >
+            <Building2 className="w-4 h-4" />
+            Ver Brokers
+          </Link>
         </div>
-        <Link
-          href="/dashboard/admin/brokers"
-          className="flex items-center gap-2 px-4 py-2 bg-gray-100 dark:bg-gray-700 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
-        >
-          <Building2 className="w-4 h-4" />
-          Ver Brokers
-        </Link>
-      </div>
 
       {/* Stats Summary */}
       {stats && (
@@ -428,11 +445,12 @@ export default function AdminBrokerOrdersPage() {
           </h3>
           <p className="text-gray-500 dark:text-gray-400">
             {searchTerm || selectedStatus
-              ? 'Intenta con otros filtros de busqueda'
-              : 'No hay ordenes de remesas en el sistema'}
+              ? 'Intenta con otros filtros de búsqueda'
+              : 'No hay órdenes de cupones familiares en el sistema'}
           </p>
         </motion.div>
       )}
-    </div>
+      </div>
+    </DashboardLayout>
   )
 }

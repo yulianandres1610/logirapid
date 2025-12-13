@@ -1,6 +1,6 @@
 /**
- * Remittance Receipt Template for 80mm Thermal Printers
- * Generates HTML for family coupon / remittance receipts
+ * Family Coupon Receipt Template for 80mm Thermal Printers
+ * Generates HTML for family coupon receipts
  */
 
 export interface RemittanceReceiptData {

@@ -18,6 +18,9 @@ import {
   Filter
 } from 'lucide-react'
 import Link from 'next/link'
+import { DashboardLayout } from '@/components/layout/dashboard-layout'
+import { cn } from '@/lib/utils'
+import { useTheme } from '@/contexts/theme-context'
 
 interface WalletBalance {
   currency: string
@@ -62,6 +65,7 @@ interface Province {
 }
 
 export default function AdminBrokersPage() {
+  const { theme } = useTheme()
   const [brokers, setBrokers] = useState<Broker[]>([])
   const [summary, setSummary] = useState<Summary | null>(null)
   const [provinces, setProvinces] = useState<Province[]>([])
@@ -110,34 +114,44 @@ export default function AdminBrokersPage() {
   })
 
   return (
-    <div className="p-6 space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
-            Gestion de Brokers
-          </h1>
-          <p className="text-gray-500 dark:text-gray-400 mt-1">
-            Administra los brokers y sus wallets
-          </p>
+    <DashboardLayout>
+      <div className={cn(
+        "min-h-screen p-6 space-y-6",
+        theme === 'dark' ? 'bg-gray-900' : 'bg-gray-50'
+      )}>
+        {/* Header */}
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+          <div>
+            <h1 className={cn(
+              "text-2xl font-bold",
+              theme === 'dark' ? 'text-white' : 'text-gray-900'
+            )}>
+              Gestión de Brokers
+            </h1>
+            <p className={cn(
+              "mt-1",
+              theme === 'dark' ? 'text-gray-400' : 'text-gray-500'
+            )}>
+              Administra los brokers y sus wallets
+            </p>
+          </div>
+          <div className="flex gap-3">
+            <Link
+              href="/dashboard/admin/brokers/orders"
+              className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-xl hover:from-blue-700 hover:to-blue-800 transition-all shadow-lg"
+            >
+              <Package className="w-4 h-4" />
+              Ver Órdenes
+            </Link>
+            <Link
+              href="/dashboard/admin/brokers/wallets"
+              className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-green-600 to-green-700 text-white rounded-xl hover:from-green-700 hover:to-green-800 transition-all shadow-lg"
+            >
+              <Wallet className="w-4 h-4" />
+              Ver Wallets
+            </Link>
+          </div>
         </div>
-        <div className="flex gap-3">
-          <Link
-            href="/dashboard/admin/brokers/orders"
-            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-          >
-            <Package className="w-4 h-4" />
-            Ver Ordenes
-          </Link>
-          <Link
-            href="/dashboard/admin/brokers/wallets"
-            className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
-          >
-            <Wallet className="w-4 h-4" />
-            Ver Wallets
-          </Link>
-        </div>
-      </div>
 
       {/* Summary Stats */}
       {summary && (
@@ -390,6 +404,7 @@ export default function AdminBrokersPage() {
           </p>
         </motion.div>
       )}
-    </div>
+      </div>
+    </DashboardLayout>
   )
 }

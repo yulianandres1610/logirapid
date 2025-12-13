@@ -282,7 +282,7 @@ export function Sidebar({ isCollapsed, onToggle }: SidebarProps) {
     if (pathname.includes('/admin/brokers')) {
       setOpenSubmenus(prev => ({
         ...prev,
-        'Brokers Cuba': true
+        'Brokers': true
       }))
     }
   }, [pathname])
@@ -340,12 +340,12 @@ export function Sidebar({ isCollapsed, onToggle }: SidebarProps) {
     { icon: Send, label: "Cupones Familiares", href: "/dashboard/admin/remittance" },
     {
       icon: Globe,
-      label: "Brokers Cuba",
+      label: "Brokers",
       href: "/dashboard/admin/brokers",
       hasSubmenu: true,
       submenuItems: [
         { icon: Building2, label: "Vista General", href: "/dashboard/admin/brokers" },
-        { icon: Package, label: "Órdenes Remesas", href: "/dashboard/admin/brokers/orders" },
+        { icon: Package, label: "Órdenes Cupones", href: "/dashboard/admin/brokers/orders" },
         { icon: Wallet, label: "Wallets", href: "/dashboard/admin/brokers/wallets" }
       ]
     },

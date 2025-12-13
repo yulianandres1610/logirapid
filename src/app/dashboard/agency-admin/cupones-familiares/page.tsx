@@ -5,7 +5,8 @@ import { motion, AnimatePresence } from 'framer-motion'
 import {
   MapPin, DollarSign, User, CreditCard, CheckCircle, Send,
   Loader2, ArrowRight, ArrowLeft, Phone, Mail, Home, Users,
-  Banknote, AlertCircle, Clock, Printer, MessageCircle
+  Banknote, AlertCircle, Clock, Printer, MessageCircle, Package,
+  TrendingUp
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -313,79 +314,159 @@ export default function CuponesFamiliaresPage() {
 
   const selectedMunicipalities = provinces.find(p => p.name === wizardData.province)?.municipalities || []
 
+  // Stats cards data
+  const statsCards = [
+    {
+      title: 'Nuevo Cupón',
+      value: 'Crear',
+      icon: Send,
+      gradient: 'from-green-400 to-green-600',
+      bgGradient: theme === 'dark' ? 'from-green-900/30' : 'from-green-50',
+      iconBg: theme === 'dark' ? 'bg-green-900/30 border-green-800/50' : 'bg-gradient-to-br from-green-50 to-green-100 border-green-200'
+    },
+    {
+      title: 'Paso Actual',
+      value: `${currentStep} de 7`,
+      icon: Package,
+      gradient: 'from-amber-400 to-amber-600',
+      bgGradient: theme === 'dark' ? 'from-amber-900/30' : 'from-amber-50',
+      iconBg: theme === 'dark' ? 'bg-amber-900/30 border-amber-800/50' : 'bg-gradient-to-br from-amber-50 to-amber-100 border-amber-200'
+    },
+    {
+      title: 'Monto',
+      value: `$${wizardData.sendAmount.toFixed(2)}`,
+      icon: DollarSign,
+      gradient: 'from-blue-400 to-blue-600',
+      bgGradient: theme === 'dark' ? 'from-blue-900/30' : 'from-blue-50',
+      iconBg: theme === 'dark' ? 'bg-blue-900/30 border-blue-800/50' : 'bg-gradient-to-br from-blue-50 to-blue-100 border-blue-200'
+    },
+    {
+      title: 'Total a Cobrar',
+      value: `$${wizardData.totalCharged.toFixed(2)}`,
+      icon: TrendingUp,
+      gradient: 'from-violet-400 to-violet-600',
+      bgGradient: theme === 'dark' ? 'from-violet-900/30' : 'from-violet-50',
+      iconBg: theme === 'dark' ? 'bg-violet-900/30 border-violet-800/50' : 'bg-gradient-to-br from-violet-50 to-violet-100 border-violet-200'
+    }
+  ]
+
   return (
     <DashboardLayout>
       <div className={cn(
         "min-h-screen p-4 sm:p-6",
         theme === 'dark' ? 'bg-gray-900' : 'bg-gray-50'
       )}>
-        {/* Header */}
-        <div className="mb-6">
-          <h1 className={cn(
-            "text-2xl font-bold",
-            theme === 'dark' ? 'text-white' : 'text-gray-900'
-          )}>
-            Cupones Familiares
-          </h1>
-          <p className={cn(
-            "text-sm mt-1",
-            theme === 'dark' ? 'text-gray-400' : 'text-gray-600'
-          )}>
-            Envía dinero a Cuba de forma rápida y segura
-          </p>
+        {/* Stats Cards */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+          {statsCards.map((stat, index) => {
+            const Icon = stat.icon
+            return (
+              <motion.div
+                key={stat.title}
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: index * 0.1 }}
+                className={cn(
+                  'relative overflow-hidden',
+                  theme === 'dark'
+                    ? 'bg-gradient-to-br from-gray-800 to-gray-900 border-gray-700'
+                    : 'bg-gradient-to-br from-slate-50 to-white border-slate-200',
+                  'rounded-2xl border shadow-xl'
+                )}
+              >
+                <div className={cn("absolute top-0 left-0 w-full h-1 bg-gradient-to-r", stat.gradient)}></div>
+                <div className="p-4 sm:p-5">
+                  <div className="flex items-start justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className={cn(
+                        'p-2.5 rounded-xl shadow-sm border',
+                        stat.iconBg
+                      )}>
+                        <Icon className={cn(
+                          "w-5 h-5",
+                          stat.gradient.includes('green') && "text-green-600",
+                          stat.gradient.includes('amber') && "text-amber-600",
+                          stat.gradient.includes('blue') && "text-blue-600",
+                          stat.gradient.includes('violet') && "text-violet-600"
+                        )} />
+                      </div>
+                      <div>
+                        <p className={cn(
+                          'text-xs sm:text-sm font-medium',
+                          theme === 'dark' ? 'text-gray-400' : 'text-gray-600'
+                        )}>{stat.title}</p>
+                        <p className={cn(
+                          'text-xl sm:text-2xl font-bold mt-0.5',
+                          theme === 'dark' ? 'text-white' : 'text-slate-900'
+                        )}>{stat.value}</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </motion.div>
+            )
+          })}
         </div>
 
-        {/* Progress Steps */}
-        <div className="mb-8 overflow-x-auto">
-          <div className="flex items-center justify-between min-w-[600px]">
-            {STEPS.map((step, index) => {
-              const Icon = step.icon
-              const isActive = currentStep === step.id
-              const isCompleted = currentStep > step.id
+        {/* Progress Steps - Sticky Header */}
+        <div className={cn(
+          "sticky top-0 z-20 py-4 mb-6 -mx-4 sm:-mx-6 px-4 sm:px-6 backdrop-blur-md",
+          theme === 'dark' ? 'bg-gray-900/90' : 'bg-gray-50/90'
+        )}>
+          <div className="overflow-x-auto scrollbar-hide">
+            <div className="flex items-center justify-between min-w-[640px] gap-2">
+              {STEPS.map((step, index) => {
+                const Icon = step.icon
+                const isActive = currentStep === step.id
+                const isCompleted = currentStep > step.id
 
-              return (
-                <div key={step.id} className="flex items-center">
-                  <div className="flex flex-col items-center">
-                    <motion.div
-                      animate={{
-                        scale: isActive ? 1.1 : 1,
-                        backgroundColor: isCompleted
-                          ? '#10B981'
-                          : isActive
-                            ? '#3B82F6'
-                            : theme === 'dark' ? '#374151' : '#E5E7EB'
-                      }}
-                      className={cn(
-                        "w-10 h-10 rounded-full flex items-center justify-center transition-colors",
-                        (isCompleted || isActive) && "text-white"
-                      )}
-                    >
-                      {isCompleted ? (
-                        <CheckCircle className="w-5 h-5" />
-                      ) : (
-                        <Icon className="w-5 h-5" />
-                      )}
-                    </motion.div>
-                    <span className={cn(
-                      "text-xs mt-1 font-medium",
-                      isActive
-                        ? theme === 'dark' ? 'text-blue-400' : 'text-blue-600'
-                        : theme === 'dark' ? 'text-gray-400' : 'text-gray-600'
-                    )}>
-                      {step.name}
-                    </span>
+                return (
+                  <div key={step.id} className="flex items-center flex-1">
+                    <div className="flex flex-col items-center flex-1">
+                      <motion.div
+                        animate={{
+                          scale: isActive ? 1.1 : 1
+                        }}
+                        className={cn(
+                          "w-10 h-10 rounded-xl flex items-center justify-center transition-all duration-300 shadow-lg",
+                          isCompleted
+                            ? 'bg-gradient-to-r from-green-500 to-green-600 text-white'
+                            : isActive
+                              ? 'bg-gradient-to-r from-blue-500 to-blue-600 text-white'
+                              : theme === 'dark'
+                                ? 'bg-gray-800 text-gray-500 border border-gray-700'
+                                : 'bg-white text-gray-400 border border-gray-200'
+                        )}
+                      >
+                        {isCompleted ? (
+                          <CheckCircle className="w-5 h-5" />
+                        ) : (
+                          <Icon className="w-5 h-5" />
+                        )}
+                      </motion.div>
+                      <span className={cn(
+                        "text-xs mt-2 font-medium text-center",
+                        isActive
+                          ? theme === 'dark' ? 'text-blue-400' : 'text-blue-600'
+                          : isCompleted
+                            ? theme === 'dark' ? 'text-green-400' : 'text-green-600'
+                            : theme === 'dark' ? 'text-gray-500' : 'text-gray-400'
+                      )}>
+                        {step.name}
+                      </span>
+                    </div>
+                    {index < STEPS.length - 1 && (
+                      <div className={cn(
+                        "h-0.5 flex-1 mx-2 rounded-full transition-colors",
+                        isCompleted
+                          ? 'bg-gradient-to-r from-green-500 to-green-400'
+                          : theme === 'dark' ? 'bg-gray-700' : 'bg-gray-200'
+                      )} />
+                    )}
                   </div>
-                  {index < STEPS.length - 1 && (
-                    <div className={cn(
-                      "w-16 h-0.5 mx-2",
-                      isCompleted
-                        ? 'bg-green-500'
-                        : theme === 'dark' ? 'bg-gray-700' : 'bg-gray-300'
-                    )} />
-                  )}
-                </div>
-              )
-            })}
+                )
+              })}
+            </div>
           </div>
         </div>
 
@@ -398,7 +479,7 @@ export default function CuponesFamiliaresPage() {
             exit={{ opacity: 0, x: -20 }}
             transition={{ duration: 0.2 }}
             className={cn(
-              "rounded-2xl border p-6 sm:p-8 max-w-2xl mx-auto",
+              "rounded-2xl border p-6 sm:p-8 max-w-2xl mx-auto shadow-xl",
               theme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'
             )}
           >
@@ -407,10 +488,10 @@ export default function CuponesFamiliaresPage() {
               <div className="space-y-6">
                 <div className="text-center mb-8">
                   <div className={cn(
-                    "w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4",
-                    theme === 'dark' ? 'bg-blue-900/30' : 'bg-blue-100'
+                    "w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-lg",
+                    theme === 'dark' ? 'bg-gradient-to-br from-blue-600 to-blue-700' : 'bg-gradient-to-br from-blue-500 to-blue-600'
                   )}>
-                    <MapPin className="w-8 h-8 text-blue-600" />
+                    <MapPin className="w-8 h-8 text-white" />
                   </div>
                   <h2 className={cn(
                     "text-xl font-bold",
@@ -438,7 +519,7 @@ export default function CuponesFamiliaresPage() {
                       value={wizardData.province}
                       onChange={(e) => updateWizardData({ province: e.target.value, municipality: '' })}
                       className={cn(
-                        "w-full px-4 py-3 rounded-xl border text-base",
+                        "w-full px-4 py-3 rounded-xl border text-base transition-all focus:ring-2 focus:ring-blue-500 focus:border-transparent",
                         theme === 'dark'
                           ? 'bg-gray-700 border-gray-600 text-white'
                           : 'bg-white border-gray-300'
@@ -466,7 +547,7 @@ export default function CuponesFamiliaresPage() {
                         value={wizardData.municipality}
                         onChange={(e) => updateWizardData({ municipality: e.target.value })}
                         className={cn(
-                          "w-full px-4 py-3 rounded-xl border text-base",
+                          "w-full px-4 py-3 rounded-xl border text-base transition-all focus:ring-2 focus:ring-blue-500 focus:border-transparent",
                           theme === 'dark'
                             ? 'bg-gray-700 border-gray-600 text-white'
                             : 'bg-white border-gray-300'
@@ -493,7 +574,7 @@ export default function CuponesFamiliaresPage() {
                     >
                       <CheckCircle className="w-5 h-5 text-green-600" />
                       <span className={cn(
-                        "text-sm",
+                        "text-sm font-medium",
                         theme === 'dark' ? 'text-green-400' : 'text-green-700'
                       )}>
                         Hay brokers disponibles en esta zona
@@ -509,10 +590,10 @@ export default function CuponesFamiliaresPage() {
               <div className="space-y-6">
                 <div className="text-center mb-8">
                   <div className={cn(
-                    "w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4",
-                    theme === 'dark' ? 'bg-green-900/30' : 'bg-green-100'
+                    "w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-lg",
+                    theme === 'dark' ? 'bg-gradient-to-br from-green-600 to-green-700' : 'bg-gradient-to-br from-green-500 to-green-600'
                   )}>
-                    <Banknote className="w-8 h-8 text-green-600" />
+                    <Banknote className="w-8 h-8 text-white" />
                   </div>
                   <h2 className={cn(
                     "text-xl font-bold",
@@ -538,10 +619,10 @@ export default function CuponesFamiliaresPage() {
                       className={cn(
                         "p-6 rounded-xl border-2 text-center transition-all",
                         wizardData.serviceType === service.id
-                          ? 'border-blue-500 bg-blue-500/10'
+                          ? 'border-blue-500 bg-blue-500/10 shadow-lg'
                           : theme === 'dark'
-                            ? 'border-gray-600 hover:border-gray-500'
-                            : 'border-gray-200 hover:border-gray-300'
+                            ? 'border-gray-600 hover:border-gray-500 hover:bg-gray-700/50'
+                            : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
                       )}
                     >
                       <span className="text-4xl block mb-3">{service.icon}</span>
@@ -562,14 +643,14 @@ export default function CuponesFamiliaresPage() {
                 </div>
 
                 <div className="pt-4">
-                  <label className="flex items-center gap-3 cursor-pointer">
+                  <label className="flex items-center gap-3 cursor-pointer group">
                     <input
                       type="checkbox"
                       checked={wizardData.deliveryFee > 0}
                       onChange={(e) => updateWizardData({ deliveryFee: e.target.checked ? 5 : 0 })}
-                      className="w-5 h-5 rounded"
+                      className="w-5 h-5 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
                     />
-                    <div>
+                    <div className="group-hover:opacity-80 transition-opacity">
                       <span className={cn(
                         "font-medium",
                         theme === 'dark' ? 'text-white' : 'text-gray-900'
@@ -577,10 +658,10 @@ export default function CuponesFamiliaresPage() {
                         Entrega a domicilio
                       </span>
                       <span className={cn(
-                        "text-sm ml-2",
-                        theme === 'dark' ? 'text-gray-400' : 'text-gray-600'
+                        "text-sm ml-2 px-2 py-0.5 rounded-full",
+                        theme === 'dark' ? 'bg-green-900/30 text-green-400' : 'bg-green-100 text-green-700'
                       )}>
-                        (+$5.00)
+                        +$5.00
                       </span>
                     </div>
                   </label>
@@ -593,10 +674,10 @@ export default function CuponesFamiliaresPage() {
               <div className="space-y-6">
                 <div className="text-center mb-8">
                   <div className={cn(
-                    "w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4",
-                    theme === 'dark' ? 'bg-yellow-900/30' : 'bg-yellow-100'
+                    "w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-lg",
+                    theme === 'dark' ? 'bg-gradient-to-br from-yellow-600 to-yellow-700' : 'bg-gradient-to-br from-yellow-500 to-yellow-600'
                   )}>
-                    <DollarSign className="w-8 h-8 text-yellow-600" />
+                    <DollarSign className="w-8 h-8 text-white" />
                   </div>
                   <h2 className={cn(
                     "text-xl font-bold",
@@ -620,8 +701,8 @@ export default function CuponesFamiliaresPage() {
                       value={wizardData.sendAmount}
                       onChange={(e) => updateWizardData({ sendAmount: parseFloat(e.target.value) || 0 })}
                       className={cn(
-                        "pl-10 text-2xl font-bold h-16 rounded-xl",
-                        theme === 'dark' ? 'bg-gray-700 text-white' : ''
+                        "pl-10 text-2xl font-bold h-16 rounded-xl border-2 focus:border-blue-500 transition-colors",
+                        theme === 'dark' ? 'bg-gray-700 text-white border-gray-600' : 'border-gray-200'
                       )}
                       placeholder="100.00"
                     />
@@ -672,33 +753,33 @@ export default function CuponesFamiliaresPage() {
 
                 {/* Price Breakdown */}
                 <div className={cn(
-                  "p-4 rounded-xl space-y-2",
-                  theme === 'dark' ? 'bg-gray-700/50' : 'bg-gray-100'
+                  "p-5 rounded-xl space-y-3",
+                  theme === 'dark' ? 'bg-gray-700/50 border border-gray-600' : 'bg-gray-50 border border-gray-200'
                 )}>
                   <div className="flex justify-between">
                     <span className={theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}>Monto a enviar:</span>
-                    <span className={theme === 'dark' ? 'text-white' : 'text-gray-900'}>${wizardData.sendAmount.toFixed(2)}</span>
+                    <span className={cn("font-medium", theme === 'dark' ? 'text-white' : 'text-gray-900')}>${wizardData.sendAmount.toFixed(2)}</span>
                   </div>
                   <div className="flex justify-between">
                     <span className={theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}>Comisión del servicio:</span>
-                    <span className={theme === 'dark' ? 'text-white' : 'text-gray-900'}>${wizardData.serviceFee.toFixed(2)}</span>
+                    <span className={cn("font-medium", theme === 'dark' ? 'text-white' : 'text-gray-900')}>${wizardData.serviceFee.toFixed(2)}</span>
                   </div>
                   {wizardData.deliveryFee > 0 && (
                     <div className="flex justify-between">
                       <span className={theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}>Entrega a domicilio:</span>
-                      <span className={theme === 'dark' ? 'text-white' : 'text-gray-900'}>${wizardData.deliveryFee.toFixed(2)}</span>
+                      <span className={cn("font-medium", theme === 'dark' ? 'text-white' : 'text-gray-900')}>${wizardData.deliveryFee.toFixed(2)}</span>
                     </div>
                   )}
                   <div className={cn(
-                    "flex justify-between pt-2 border-t font-bold",
+                    "flex justify-between pt-3 border-t font-bold text-lg",
                     theme === 'dark' ? 'border-gray-600' : 'border-gray-300'
                   )}>
                     <span>TOTAL A PAGAR:</span>
                     <span className="text-blue-600">${wizardData.totalCharged.toFixed(2)}</span>
                   </div>
                   <div className={cn(
-                    "text-center text-sm pt-2",
-                    theme === 'dark' ? 'text-gray-400' : 'text-gray-600'
+                    "text-center text-sm pt-2 pb-1 rounded-lg",
+                    theme === 'dark' ? 'bg-green-900/20 text-green-400' : 'bg-green-50 text-green-700'
                   )}>
                     El destinatario recibirá: <strong>${wizardData.sendAmount.toFixed(2)} {wizardData.receiveCurrency}</strong>
                   </div>
@@ -711,10 +792,10 @@ export default function CuponesFamiliaresPage() {
               <div className="space-y-6">
                 <div className="text-center mb-8">
                   <div className={cn(
-                    "w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4",
-                    theme === 'dark' ? 'bg-purple-900/30' : 'bg-purple-100'
+                    "w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-lg",
+                    theme === 'dark' ? 'bg-gradient-to-br from-purple-600 to-purple-700' : 'bg-gradient-to-br from-purple-500 to-purple-600'
                   )}>
-                    <User className="w-8 h-8 text-purple-600" />
+                    <User className="w-8 h-8 text-white" />
                   </div>
                   <h2 className={cn(
                     "text-xl font-bold",
@@ -735,7 +816,7 @@ export default function CuponesFamiliaresPage() {
                     placeholder="Nombre completo *"
                     value={wizardData.recipientName}
                     onChange={(e) => updateWizardData({ recipientName: e.target.value })}
-                    className={cn("rounded-xl", theme === 'dark' ? 'bg-gray-700 text-white' : '')}
+                    className={cn("rounded-xl h-12 border-2 focus:border-purple-500 transition-colors", theme === 'dark' ? 'bg-gray-700 text-white border-gray-600' : 'border-gray-200')}
                   />
 
                   <div className="grid grid-cols-2 gap-4">
@@ -743,18 +824,18 @@ export default function CuponesFamiliaresPage() {
                       placeholder="Teléfono *"
                       value={wizardData.recipientPhone}
                       onChange={(e) => updateWizardData({ recipientPhone: e.target.value })}
-                      className={cn("rounded-xl", theme === 'dark' ? 'bg-gray-700 text-white' : '')}
+                      className={cn("rounded-xl h-12 border-2 focus:border-purple-500 transition-colors", theme === 'dark' ? 'bg-gray-700 text-white border-gray-600' : 'border-gray-200')}
                     />
                     <Input
                       placeholder="Carnet de Identidad"
                       value={wizardData.recipientIdNumber}
                       onChange={(e) => updateWizardData({ recipientIdNumber: e.target.value })}
-                      className={cn("rounded-xl", theme === 'dark' ? 'bg-gray-700 text-white' : '')}
+                      className={cn("rounded-xl h-12 border-2 focus:border-purple-500 transition-colors", theme === 'dark' ? 'bg-gray-700 text-white border-gray-600' : 'border-gray-200')}
                     />
                   </div>
 
                   <div className={cn(
-                    "p-4 rounded-xl border",
+                    "p-4 rounded-xl border-2",
                     theme === 'dark' ? 'bg-gray-700/50 border-gray-600' : 'bg-gray-50 border-gray-200'
                   )}>
                     <h4 className={cn(
@@ -770,38 +851,38 @@ export default function CuponesFamiliaresPage() {
                         placeholder="Calle/Avenida con número"
                         value={wizardData.recipientAddress}
                         onChange={(e) => updateWizardData({ recipientAddress: e.target.value })}
-                        className={cn("rounded-xl", theme === 'dark' ? 'bg-gray-600 text-white' : '')}
+                        className={cn("rounded-xl h-11", theme === 'dark' ? 'bg-gray-600 text-white border-gray-500' : 'border-gray-200')}
                       />
                       <Input
                         placeholder="Reparto/Zona"
                         value={wizardData.recipientNeighborhood}
                         onChange={(e) => updateWizardData({ recipientNeighborhood: e.target.value })}
-                        className={cn("rounded-xl", theme === 'dark' ? 'bg-gray-600 text-white' : '')}
+                        className={cn("rounded-xl h-11", theme === 'dark' ? 'bg-gray-600 text-white border-gray-500' : 'border-gray-200')}
                       />
                       <div className="grid grid-cols-2 gap-3">
                         <Input
                           value={wizardData.municipality}
                           disabled
-                          className={cn("rounded-xl opacity-70", theme === 'dark' ? 'bg-gray-600 text-white' : '')}
+                          className={cn("rounded-xl h-11 opacity-70", theme === 'dark' ? 'bg-gray-600 text-white' : '')}
                         />
                         <Input
                           value={wizardData.province}
                           disabled
-                          className={cn("rounded-xl opacity-70", theme === 'dark' ? 'bg-gray-600 text-white' : '')}
+                          className={cn("rounded-xl h-11 opacity-70", theme === 'dark' ? 'bg-gray-600 text-white' : '')}
                         />
                       </div>
                       <Input
                         placeholder="Referencias (ej: frente al parque)"
                         value={wizardData.recipientAddressReferences}
                         onChange={(e) => updateWizardData({ recipientAddressReferences: e.target.value })}
-                        className={cn("rounded-xl", theme === 'dark' ? 'bg-gray-600 text-white' : '')}
+                        className={cn("rounded-xl h-11", theme === 'dark' ? 'bg-gray-600 text-white border-gray-500' : 'border-gray-200')}
                       />
                     </div>
                   </div>
 
                   {/* Alternate Contact */}
                   <div className={cn(
-                    "p-4 rounded-xl border",
+                    "p-4 rounded-xl border-2",
                     theme === 'dark' ? 'bg-gray-700/50 border-gray-600' : 'bg-gray-50 border-gray-200'
                   )}>
                     <label className="flex items-center gap-3 cursor-pointer mb-3">
@@ -809,7 +890,7 @@ export default function CuponesFamiliaresPage() {
                         type="checkbox"
                         checked={wizardData.hasAlternateContact}
                         onChange={(e) => updateWizardData({ hasAlternateContact: e.target.checked })}
-                        className="w-5 h-5 rounded"
+                        className="w-5 h-5 rounded border-gray-300 text-purple-600 focus:ring-purple-500"
                       />
                       <span className={cn(
                         "font-medium",
@@ -829,13 +910,13 @@ export default function CuponesFamiliaresPage() {
                           placeholder="Nombre del contacto"
                           value={wizardData.alternateContactName}
                           onChange={(e) => updateWizardData({ alternateContactName: e.target.value })}
-                          className={cn("rounded-xl", theme === 'dark' ? 'bg-gray-600 text-white' : '')}
+                          className={cn("rounded-xl h-11", theme === 'dark' ? 'bg-gray-600 text-white' : '')}
                         />
                         <Input
                           placeholder="Teléfono del contacto"
                           value={wizardData.alternateContactPhone}
                           onChange={(e) => updateWizardData({ alternateContactPhone: e.target.value })}
-                          className={cn("rounded-xl", theme === 'dark' ? 'bg-gray-600 text-white' : '')}
+                          className={cn("rounded-xl h-11", theme === 'dark' ? 'bg-gray-600 text-white' : '')}
                         />
                         <p className={cn(
                           "text-xs flex items-center gap-1",
@@ -856,10 +937,10 @@ export default function CuponesFamiliaresPage() {
               <div className="space-y-6">
                 <div className="text-center mb-8">
                   <div className={cn(
-                    "w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4",
-                    theme === 'dark' ? 'bg-orange-900/30' : 'bg-orange-100'
+                    "w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-lg",
+                    theme === 'dark' ? 'bg-gradient-to-br from-orange-600 to-orange-700' : 'bg-gradient-to-br from-orange-500 to-orange-600'
                   )}>
-                    <Users className="w-8 h-8 text-orange-600" />
+                    <Users className="w-8 h-8 text-white" />
                   </div>
                   <h2 className={cn(
                     "text-xl font-bold",
@@ -880,20 +961,20 @@ export default function CuponesFamiliaresPage() {
                     placeholder="Nombre completo *"
                     value={wizardData.senderName}
                     onChange={(e) => updateWizardData({ senderName: e.target.value })}
-                    className={cn("rounded-xl", theme === 'dark' ? 'bg-gray-700 text-white' : '')}
+                    className={cn("rounded-xl h-12 border-2 focus:border-orange-500 transition-colors", theme === 'dark' ? 'bg-gray-700 text-white border-gray-600' : 'border-gray-200')}
                   />
                   <Input
                     placeholder="Teléfono"
                     value={wizardData.senderPhone}
                     onChange={(e) => updateWizardData({ senderPhone: e.target.value })}
-                    className={cn("rounded-xl", theme === 'dark' ? 'bg-gray-700 text-white' : '')}
+                    className={cn("rounded-xl h-12 border-2 focus:border-orange-500 transition-colors", theme === 'dark' ? 'bg-gray-700 text-white border-gray-600' : 'border-gray-200')}
                   />
                   <Input
                     placeholder="Email (opcional)"
                     type="email"
                     value={wizardData.senderEmail}
                     onChange={(e) => updateWizardData({ senderEmail: e.target.value })}
-                    className={cn("rounded-xl", theme === 'dark' ? 'bg-gray-700 text-white' : '')}
+                    className={cn("rounded-xl h-12 border-2 focus:border-orange-500 transition-colors", theme === 'dark' ? 'bg-gray-700 text-white border-gray-600' : 'border-gray-200')}
                   />
                 </div>
               </div>
@@ -904,10 +985,10 @@ export default function CuponesFamiliaresPage() {
               <div className="space-y-6">
                 <div className="text-center mb-8">
                   <div className={cn(
-                    "w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4",
-                    theme === 'dark' ? 'bg-pink-900/30' : 'bg-pink-100'
+                    "w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-lg",
+                    theme === 'dark' ? 'bg-gradient-to-br from-pink-600 to-pink-700' : 'bg-gradient-to-br from-pink-500 to-pink-600'
                   )}>
-                    <CreditCard className="w-8 h-8 text-pink-600" />
+                    <CreditCard className="w-8 h-8 text-white" />
                   </div>
                   <h2 className={cn(
                     "text-xl font-bold",
@@ -916,8 +997,7 @@ export default function CuponesFamiliaresPage() {
                     Método de Pago
                   </h2>
                   <p className={cn(
-                    "text-2xl font-bold mt-2",
-                    'text-blue-600'
+                    "text-3xl font-bold mt-2 bg-gradient-to-r from-blue-600 to-blue-400 bg-clip-text text-transparent"
                   )}>
                     Total: ${wizardData.totalCharged.toFixed(2)}
                   </p>
@@ -933,10 +1013,10 @@ export default function CuponesFamiliaresPage() {
                       className={cn(
                         "p-4 rounded-xl border-2 text-center transition-all",
                         wizardData.paymentMethod === method.id
-                          ? 'border-blue-500 bg-blue-500/10'
+                          ? 'border-pink-500 bg-pink-500/10 shadow-lg'
                           : theme === 'dark'
-                            ? 'border-gray-600 hover:border-gray-500'
-                            : 'border-gray-200 hover:border-gray-300'
+                            ? 'border-gray-600 hover:border-gray-500 hover:bg-gray-700/50'
+                            : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
                       )}
                     >
                       <span className="text-3xl block mb-2">{method.icon}</span>
@@ -967,14 +1047,14 @@ export default function CuponesFamiliaresPage() {
                         type="number"
                         value={wizardData.cashReceived || ''}
                         onChange={(e) => updateWizardData({ cashReceived: parseFloat(e.target.value) || 0 })}
-                        className={cn("rounded-xl", theme === 'dark' ? 'bg-gray-700 text-white' : '')}
+                        className={cn("rounded-xl h-12 border-2", theme === 'dark' ? 'bg-gray-700 text-white border-gray-600' : 'border-gray-200')}
                         placeholder="0.00"
                       />
                     </div>
                     {wizardData.cashReceived >= wizardData.totalCharged && (
                       <div className={cn(
                         "p-4 rounded-xl text-center",
-                        theme === 'dark' ? 'bg-green-900/20' : 'bg-green-50'
+                        theme === 'dark' ? 'bg-green-900/20 border border-green-800' : 'bg-green-50 border border-green-200'
                       )}>
                         <span className={cn(
                           "text-lg font-bold",
@@ -1001,7 +1081,7 @@ export default function CuponesFamiliaresPage() {
                     <Input
                       value={wizardData.paymentReference}
                       onChange={(e) => updateWizardData({ paymentReference: e.target.value })}
-                      className={cn("rounded-xl", theme === 'dark' ? 'bg-gray-700 text-white' : '')}
+                      className={cn("rounded-xl h-12 border-2", theme === 'dark' ? 'bg-gray-700 text-white border-gray-600' : 'border-gray-200')}
                       placeholder={wizardData.paymentMethod === 'zelle' ? 'ZELLE-XXXXX' : 'Ref. Terminal'}
                     />
                   </motion.div>
@@ -1017,10 +1097,7 @@ export default function CuponesFamiliaresPage() {
                     initial={{ scale: 0 }}
                     animate={{ scale: 1 }}
                     transition={{ type: "spring", stiffness: 200 }}
-                    className={cn(
-                      "w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-4",
-                      "bg-green-500"
-                    )}
+                    className="w-20 h-20 rounded-2xl flex items-center justify-center mx-auto mb-4 bg-gradient-to-br from-green-500 to-green-600 shadow-xl"
                   >
                     <CheckCircle className="w-10 h-10 text-white" />
                   </motion.div>
@@ -1030,17 +1107,14 @@ export default function CuponesFamiliaresPage() {
                   )}>
                     ¡Orden Creada Exitosamente!
                   </h2>
-                  <p className={cn(
-                    "text-3xl font-bold mt-2",
-                    'text-blue-600'
-                  )}>
+                  <p className="text-3xl font-bold mt-2 bg-gradient-to-r from-blue-600 to-blue-400 bg-clip-text text-transparent">
                     {wizardData.orderNumber}
                   </p>
                 </div>
 
                 <div className={cn(
-                  "p-4 rounded-xl space-y-3",
-                  theme === 'dark' ? 'bg-gray-700/50' : 'bg-gray-100'
+                  "p-5 rounded-xl space-y-3",
+                  theme === 'dark' ? 'bg-gray-700/50 border border-gray-600' : 'bg-gray-50 border border-gray-200'
                 )}>
                   <div className="flex justify-between">
                     <span className={theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}>Destinatario:</span>
@@ -1060,13 +1134,13 @@ export default function CuponesFamiliaresPage() {
                       {wizardData.municipality}, {wizardData.province}
                     </span>
                   </div>
-                  <div className="flex justify-between items-center pt-2 border-t border-gray-600">
+                  <div className="flex justify-between items-center pt-3 border-t border-gray-600">
                     <span className={theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}>Entrega estimada:</span>
                     <span className={cn(
-                      "font-bold px-3 py-1 rounded-full",
+                      "font-bold px-3 py-1 rounded-full text-sm",
                       wizardData.estimatedDelivery === '1-24 horas'
-                        ? 'bg-green-500/20 text-green-500'
-                        : 'bg-yellow-500/20 text-yellow-500'
+                        ? 'bg-green-500/20 text-green-500 border border-green-500/30'
+                        : 'bg-yellow-500/20 text-yellow-500 border border-yellow-500/30'
                     )}>
                       {wizardData.estimatedDelivery}
                     </span>
@@ -1078,8 +1152,8 @@ export default function CuponesFamiliaresPage() {
                   <Button
                     variant="outline"
                     className={cn(
-                      "flex flex-col items-center gap-1 h-auto py-3",
-                      theme === 'dark' ? 'border-gray-600' : ''
+                      "flex flex-col items-center gap-1 h-auto py-3 rounded-xl border-2 hover:bg-blue-50 dark:hover:bg-blue-900/20 hover:border-blue-300",
+                      theme === 'dark' ? 'border-gray-600' : 'border-gray-200'
                     )}
                   >
                     <Phone className="w-5 h-5" />
@@ -1088,8 +1162,8 @@ export default function CuponesFamiliaresPage() {
                   <Button
                     variant="outline"
                     className={cn(
-                      "flex flex-col items-center gap-1 h-auto py-3",
-                      theme === 'dark' ? 'border-gray-600' : ''
+                      "flex flex-col items-center gap-1 h-auto py-3 rounded-xl border-2 hover:bg-green-50 dark:hover:bg-green-900/20 hover:border-green-300",
+                      theme === 'dark' ? 'border-gray-600' : 'border-gray-200'
                     )}
                   >
                     <MessageCircle className="w-5 h-5" />
@@ -1098,8 +1172,8 @@ export default function CuponesFamiliaresPage() {
                   <Button
                     variant="outline"
                     className={cn(
-                      "flex flex-col items-center gap-1 h-auto py-3",
-                      theme === 'dark' ? 'border-gray-600' : ''
+                      "flex flex-col items-center gap-1 h-auto py-3 rounded-xl border-2 hover:bg-purple-50 dark:hover:bg-purple-900/20 hover:border-purple-300",
+                      theme === 'dark' ? 'border-gray-600' : 'border-gray-200'
                     )}
                   >
                     <Printer className="w-5 h-5" />
@@ -1110,7 +1184,7 @@ export default function CuponesFamiliaresPage() {
                 <div className="flex gap-3 pt-4">
                   <Button
                     onClick={resetWizard}
-                    className="flex-1 bg-blue-600 hover:bg-blue-700 text-white"
+                    className="flex-1 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white rounded-xl h-12 shadow-lg"
                   >
                     <Send className="w-4 h-4 mr-2" />
                     Nueva Orden
@@ -1127,8 +1201,8 @@ export default function CuponesFamiliaresPage() {
                   onClick={handleBack}
                   disabled={currentStep === 1}
                   className={cn(
-                    "rounded-xl",
-                    theme === 'dark' ? 'border-gray-600' : ''
+                    "rounded-xl h-11 px-6",
+                    theme === 'dark' ? 'border-gray-600 hover:bg-gray-700' : 'hover:bg-gray-100'
                   )}
                 >
                   <ArrowLeft className="w-4 h-4 mr-2" />
@@ -1139,7 +1213,7 @@ export default function CuponesFamiliaresPage() {
                   <Button
                     onClick={handleNext}
                     disabled={!canProceed()}
-                    className="rounded-xl bg-blue-600 hover:bg-blue-700 text-white"
+                    className="rounded-xl h-11 px-6 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white shadow-lg disabled:opacity-50"
                   >
                     Siguiente
                     <ArrowRight className="w-4 h-4 ml-2" />
@@ -1148,7 +1222,7 @@ export default function CuponesFamiliaresPage() {
                   <Button
                     onClick={createOrder}
                     disabled={!canProceed() || loading}
-                    className="rounded-xl bg-green-600 hover:bg-green-700 text-white"
+                    className="rounded-xl h-11 px-6 bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 text-white shadow-lg disabled:opacity-50"
                   >
                     {loading ? (
                       <Loader2 className="w-4 h-4 mr-2 animate-spin" />

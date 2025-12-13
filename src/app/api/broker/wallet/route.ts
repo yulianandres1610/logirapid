@@ -13,7 +13,11 @@ interface JWTPayload {
 
 /**
  * GET /api/broker/wallet
- * Get broker's wallet balances by currency
+ * Get broker's wallet balance and transaction history
+ *
+ * Uses the existing company wallet system:
+ * - companies.walletBalance for balance
+ * - wallet_transactions for transaction history
  */
 export async function GET(request: NextRequest) {
   try {
@@ -42,118 +46,153 @@ export async function GET(request: NextRequest) {
     const includeHistory = searchParams.get('history') === 'true'
     const historyLimit = parseInt(searchParams.get('historyLimit') || '20')
 
-    // Verify company is a broker
-    const companyCheck = await db.query(`
-      SELECT companytype, legalname FROM companies WHERE id = $1
+    // Get company info and verify it's a broker
+    const companyResult = await db.query(`
+      SELECT
+        id,
+        companytype,
+        legalname,
+        tradename,
+        COALESCE("walletNumber", walletnumber) as wallet_number,
+        COALESCE("walletBalance"::numeric, walletbalance, 0) as wallet_balance,
+        currency,
+        broker_province,
+        broker_municipality,
+        COALESCE(broker_is_active, status = 'active') as is_active
+      FROM companies
+      WHERE id = $1
     `, [payload.companyId])
 
-    if (companyCheck.rows.length === 0 || companyCheck.rows[0].companytype !== 'broker') {
+    if (companyResult.rows.length === 0) {
+      return NextResponse.json({
+        success: false,
+        error: 'Empresa no encontrada'
+      }, { status: 404 })
+    }
+
+    const company = companyResult.rows[0]
+
+    if (company.companytype !== 'broker') {
       return NextResponse.json({
         success: false,
         error: 'Esta empresa no es un broker'
       }, { status: 403 })
     }
 
-    // Get balances
-    const balancesResult = await db.query(`
+    const walletBalance = parseFloat(company.wallet_balance) || 0
+    const currency = company.currency || 'USD'
+
+    // Get transaction stats
+    const statsResult = await db.query(`
       SELECT
-        currency,
-        available_balance,
-        reserved_balance,
-        total_balance,
-        low_balance_threshold,
-        last_updated
-      FROM broker_wallet_balances
-      WHERE company_id = $1
-      ORDER BY currency
+        -- Total deposits (money in)
+        (SELECT COALESCE(SUM(amount), 0) FROM wallet_transactions
+         WHERE target_company_id = $1
+         AND type IN ('recharge', 'transfer_in', 'deposit')
+         AND status = 'completed') as total_deposits,
+        -- Total withdrawals (money out)
+        (SELECT COALESCE(SUM(amount), 0) FROM wallet_transactions
+         WHERE source_company_id = $1
+         AND type IN ('transfer_out', 'withdrawal', 'debit')
+         AND status = 'completed') as total_withdrawals,
+        -- Transaction count
+        (SELECT COUNT(*) FROM wallet_transactions
+         WHERE (source_company_id = $1 OR target_company_id = $1)
+         AND status = 'completed') as total_transactions
     `, [payload.companyId])
 
-    // Get pending reservations
-    const reservationsResult = await db.query(`
-      SELECT
-        br.currency,
-        COUNT(*) as count,
-        SUM(br.amount) as total
-      FROM broker_reservations br
-      WHERE br.broker_company_id = $1 AND br.status = 'reserved'
-      GROUP BY br.currency
-    `, [payload.companyId])
+    const stats = statsResult.rows[0]
 
-    const reservationsMap: Record<string, { count: number; total: number }> = {}
-    for (const row of reservationsResult.rows) {
-      reservationsMap[row.currency] = {
-        count: parseInt(row.count),
-        total: parseFloat(row.total)
-      }
-    }
-
-    // Format balances
-    const balances = balancesResult.rows.map(row => ({
-      currency: row.currency,
-      availableBalance: parseFloat(row.available_balance) || 0,
-      reservedBalance: parseFloat(row.reserved_balance) || 0,
-      totalBalance: parseFloat(row.total_balance) || 0,
-      lowBalanceThreshold: parseFloat(row.low_balance_threshold) || 100,
-      lastUpdated: row.last_updated,
-      isLowBalance: parseFloat(row.available_balance) < parseFloat(row.low_balance_threshold),
-      pendingOrders: reservationsMap[row.currency]?.count || 0
-    }))
-
-    // Calculate totals (convert all to USD equivalent for summary)
-    const totalAvailable = balances
-      .filter(b => b.currency === 'USD')
-      .reduce((sum, b) => sum + b.availableBalance, 0)
-    const totalReserved = balances
-      .filter(b => b.currency === 'USD')
-      .reduce((sum, b) => sum + b.reservedBalance, 0)
-
+    // Get transaction history if requested
     let history: any[] = []
     if (includeHistory) {
       const historyResult = await db.query(`
         SELECT
-          id,
-          currency,
-          transaction_type,
-          amount,
-          balance_before,
-          balance_after,
-          reserved_before,
-          reserved_after,
-          reference_type,
-          reference_id,
-          notes,
-          created_at
-        FROM broker_wallet_transactions
-        WHERE broker_company_id = $1
-        ORDER BY created_at DESC
+          wt.id,
+          wt.transaction_number,
+          wt.type,
+          wt.source_type,
+          wt.source_company_id,
+          wt.source_wallet_number,
+          wt.target_type,
+          wt.target_company_id,
+          wt.target_wallet_number,
+          wt.amount,
+          wt.fee,
+          wt.net_amount,
+          wt.currency,
+          wt.payment_method,
+          wt.payment_reference,
+          wt.status,
+          wt.description,
+          wt.created_by_name,
+          wt.created_at,
+          wt.completed_at,
+          sc.legalname as source_company_name,
+          tc.legalname as target_company_name
+        FROM wallet_transactions wt
+        LEFT JOIN companies sc ON wt.source_company_id = sc.id
+        LEFT JOIN companies tc ON wt.target_company_id = tc.id
+        WHERE wt.source_company_id = $1 OR wt.target_company_id = $1
+        ORDER BY wt.created_at DESC
         LIMIT $2
       `, [payload.companyId, historyLimit])
 
-      history = historyResult.rows.map(row => ({
-        id: row.id,
-        currency: row.currency,
-        type: row.transaction_type,
-        amount: parseFloat(row.amount),
-        balanceBefore: parseFloat(row.balance_before),
-        balanceAfter: parseFloat(row.balance_after),
-        reservedBefore: parseFloat(row.reserved_before),
-        reservedAfter: parseFloat(row.reserved_after),
-        referenceType: row.reference_type,
-        referenceId: row.reference_id,
-        notes: row.notes,
-        createdAt: row.created_at
-      }))
+      const typeLabels: { [key: string]: string } = {
+        'recharge': 'Recarga',
+        'transfer_out': 'Transferencia (Salida)',
+        'transfer_in': 'Transferencia (Entrada)',
+        'debit': 'Débito',
+        'deposit': 'Depósito',
+        'withdrawal': 'Retiro',
+        'refund': 'Reembolso'
+      }
+
+      history = historyResult.rows.map(row => {
+        const isIncoming = row.target_company_id === payload.companyId
+        return {
+          id: row.id,
+          transactionNumber: row.transaction_number,
+          type: row.type,
+          typeLabel: typeLabels[row.type] || row.type,
+          direction: isIncoming ? 'in' : 'out',
+          directionLabel: isIncoming ? 'Entrada' : 'Salida',
+          amount: parseFloat(row.amount) || 0,
+          amountFormatted: `$${(parseFloat(row.amount) || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}`,
+          fee: parseFloat(row.fee) || 0,
+          netAmount: parseFloat(row.net_amount) || 0,
+          currency: row.currency || 'USD',
+          paymentMethod: row.payment_method,
+          paymentReference: row.payment_reference,
+          status: row.status,
+          description: row.description,
+          createdByName: row.created_by_name,
+          createdAt: row.created_at,
+          completedAt: row.completed_at,
+          counterparty: isIncoming ? row.source_company_name : row.target_company_name
+        }
+      })
     }
 
     return NextResponse.json({
       success: true,
       data: {
-        companyName: companyCheck.rows[0].legalname,
-        balances,
-        summary: {
-          totalAvailableUSD: totalAvailable,
-          totalReservedUSD: totalReserved,
-          currencyCount: balances.length
+        companyId: company.id,
+        companyName: company.legalname,
+        tradeName: company.tradename,
+        walletNumber: company.wallet_number,
+        walletBalance,
+        walletBalanceFormatted: `$${walletBalance.toLocaleString('en-US', { minimumFractionDigits: 2 })}`,
+        currency,
+        province: company.broker_province,
+        municipality: company.broker_municipality,
+        isActive: company.is_active,
+        stats: {
+          totalDeposits: parseFloat(stats.total_deposits) || 0,
+          totalDepositsFormatted: `$${(parseFloat(stats.total_deposits) || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}`,
+          totalWithdrawals: parseFloat(stats.total_withdrawals) || 0,
+          totalWithdrawalsFormatted: `$${(parseFloat(stats.total_withdrawals) || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}`,
+          totalTransactions: parseInt(stats.total_transactions) || 0
         },
         history: includeHistory ? history : undefined
       }
@@ -163,14 +202,19 @@ export async function GET(request: NextRequest) {
     console.error('[Broker Wallet API] GET error:', error)
     return NextResponse.json({
       success: false,
-      error: error instanceof Error ? error.message : 'Error al obtener balances'
+      error: error instanceof Error ? error.message : 'Error al obtener balance'
     }, { status: 500 })
   }
 }
 
 /**
  * POST /api/broker/wallet
- * Deposit or withdraw from broker wallet (self-service)
+ * Request deposit or withdrawal from broker wallet (self-service)
+ * Note: For security, self-service deposits/withdrawals may require approval
+ *
+ * Uses the existing company wallet system:
+ * - Updates companies.walletbalance
+ * - Records in wallet_transactions table
  */
 export async function POST(request: NextRequest) {
   try {
@@ -196,12 +240,12 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json()
-    const { currency, amount, type, notes } = body
+    const { amount, type, notes, paymentMethod = 'wire' } = body
 
-    if (!currency || !amount || !type) {
+    if (!amount || !type) {
       return NextResponse.json({
         success: false,
-        error: 'Se requiere currency, amount y type'
+        error: 'Se requiere amount y type'
       }, { status: 400 })
     }
 
@@ -220,99 +264,144 @@ export async function POST(request: NextRequest) {
       }, { status: 400 })
     }
 
-    // Verify company is a broker
-    const companyCheck = await db.query(`
-      SELECT companytype FROM companies WHERE id = $1
+    // Get company info and verify it's a broker
+    const companyResult = await db.query(`
+      SELECT
+        id,
+        companytype,
+        legalname,
+        COALESCE("walletNumber", walletnumber) as wallet_number,
+        COALESCE("walletBalance"::numeric, walletbalance, 0) as wallet_balance,
+        currency
+      FROM companies
+      WHERE id = $1
     `, [payload.companyId])
 
-    if (companyCheck.rows.length === 0 || companyCheck.rows[0].companytype !== 'broker') {
+    if (companyResult.rows.length === 0) {
+      return NextResponse.json({
+        success: false,
+        error: 'Empresa no encontrada'
+      }, { status: 404 })
+    }
+
+    const company = companyResult.rows[0]
+
+    if (company.companytype !== 'broker') {
       return NextResponse.json({
         success: false,
         error: 'Esta empresa no es un broker'
       }, { status: 403 })
     }
 
-    await db.query('BEGIN')
+    const currentBalance = parseFloat(company.wallet_balance) || 0
+    const walletNumber = company.wallet_number
+    const currency = company.currency || 'USD'
 
-    try {
-      // Get or create balance record
-      let balanceResult = await db.query(`
-        SELECT * FROM broker_wallet_balances
-        WHERE company_id = $1 AND currency = $2
-        FOR UPDATE
-      `, [payload.companyId, currency])
+    // Validate withdrawal
+    if (type === 'withdrawal' && numAmount > currentBalance) {
+      return NextResponse.json({
+        success: false,
+        error: 'Fondos insuficientes para retiro'
+      }, { status: 400 })
+    }
 
-      if (balanceResult.rows.length === 0) {
-        // Create new balance record
-        await db.query(`
-          INSERT INTO broker_wallet_balances (company_id, currency, available_balance, reserved_balance)
-          VALUES ($1, $2, 0, 0)
-        `, [payload.companyId, currency])
+    // Process transaction
+    const result = await db.transaction(async (client) => {
+      // Update company wallet balance
+      const balanceChange = type === 'deposit' ? numAmount : -numAmount
+      await client.query(`
+        UPDATE companies
+        SET walletbalance = COALESCE(walletbalance, 0) + $1
+        WHERE id = $2
+      `, [balanceChange, payload.companyId])
 
-        balanceResult = await db.query(`
-          SELECT * FROM broker_wallet_balances
-          WHERE company_id = $1 AND currency = $2
-          FOR UPDATE
-        `, [payload.companyId, currency])
-      }
+      // Determine transaction type for wallet_transactions
+      const txType = type === 'deposit' ? 'recharge' : 'debit'
+      const sourceType = type === 'deposit' ? 'external' : 'company'
+      const targetType = type === 'deposit' ? 'company' : 'external'
 
-      const currentBalance = parseFloat(balanceResult.rows[0].available_balance) || 0
-      const currentReserved = parseFloat(balanceResult.rows[0].reserved_balance) || 0
-
-      // Validate withdrawal
-      if (type === 'withdrawal' && numAmount > currentBalance) {
-        await db.query('ROLLBACK')
-        return NextResponse.json({
-          success: false,
-          error: 'Fondos insuficientes para retiro'
-        }, { status: 400 })
-      }
-
-      // Calculate new balance
-      const newBalance = type === 'deposit'
-        ? currentBalance + numAmount
-        : currentBalance - numAmount
-
-      // Update balance
-      await db.query(`
-        UPDATE broker_wallet_balances
-        SET available_balance = $1, last_updated = NOW()
-        WHERE company_id = $2 AND currency = $3
-      `, [newBalance, payload.companyId, currency])
-
-      // Record transaction
-      await db.query(`
-        INSERT INTO broker_wallet_transactions (
-          broker_company_id, currency, transaction_type, amount,
-          balance_before, balance_after, reserved_before, reserved_after,
-          reference_type, notes, created_by
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $7, $8, $9, $10)
+      // Create transaction record
+      const txResult = await client.query(`
+        INSERT INTO wallet_transactions (
+          type,
+          source_type,
+          source_company_id,
+          source_wallet_number,
+          target_type,
+          target_company_id,
+          target_wallet_number,
+          amount,
+          fee,
+          net_amount,
+          currency,
+          payment_method,
+          status,
+          requires_approval,
+          description,
+          created_by,
+          created_by_name,
+          completed_at
+        ) VALUES (
+          $1,
+          $2,
+          $3,
+          $4,
+          $5,
+          $6,
+          $7,
+          $8,
+          0,
+          $8,
+          $9,
+          $10,
+          'completed',
+          false,
+          $11,
+          $12,
+          $13,
+          NOW()
+        ) RETURNING id, transaction_number
       `, [
-        payload.companyId, currency, type, numAmount,
-        currentBalance, newBalance, currentReserved,
-        type === 'deposit' ? 'manual_deposit' : 'manual_withdrawal',
-        notes || `${type === 'deposit' ? 'Depósito' : 'Retiro'} manual`,
-        payload.userId
+        txType,
+        sourceType,
+        type === 'withdrawal' ? payload.companyId : null,
+        type === 'withdrawal' ? walletNumber : null,
+        targetType,
+        type === 'deposit' ? payload.companyId : null,
+        type === 'deposit' ? walletNumber : null,
+        numAmount,
+        currency,
+        paymentMethod,
+        notes || `${type === 'deposit' ? 'Depósito' : 'Retiro'} de broker`,
+        payload.userId,
+        payload.email
       ])
 
-      await db.query('COMMIT')
+      return {
+        transactionId: txResult.rows[0].id,
+        transactionNumber: txResult.rows[0].transaction_number
+      }
+    })
 
-      return NextResponse.json({
-        success: true,
-        message: type === 'deposit' ? 'Depósito realizado' : 'Retiro realizado',
-        data: {
-          currency,
-          previousBalance: currentBalance,
-          amount: numAmount,
-          newBalance,
-          type
-        }
-      })
+    const newBalance = type === 'deposit'
+      ? currentBalance + numAmount
+      : currentBalance - numAmount
 
-    } catch (err) {
-      await db.query('ROLLBACK')
-      throw err
-    }
+    return NextResponse.json({
+      success: true,
+      message: type === 'deposit' ? 'Depósito realizado' : 'Retiro realizado',
+      data: {
+        transactionNumber: result.transactionNumber,
+        currency,
+        previousBalance: currentBalance,
+        previousBalanceFormatted: `$${currentBalance.toLocaleString('en-US', { minimumFractionDigits: 2 })}`,
+        amount: numAmount,
+        amountFormatted: `$${numAmount.toLocaleString('en-US', { minimumFractionDigits: 2 })}`,
+        newBalance,
+        newBalanceFormatted: `$${newBalance.toLocaleString('en-US', { minimumFractionDigits: 2 })}`,
+        type
+      }
+    })
 
   } catch (error) {
     console.error('[Broker Wallet API] POST error:', error)

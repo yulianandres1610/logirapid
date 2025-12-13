@@ -14,6 +14,11 @@ interface JWTPayload {
 /**
  * GET /api/admin/brokers/wallets
  * Get all broker wallets with balances (SUPER_ADMIN only)
+ *
+ * Uses the existing company wallet system:
+ * - companies.walletBalance for balance
+ * - companies.walletNumber for wallet identifier
+ * - wallet_transactions for transaction history
  */
 export async function GET(request: NextRequest) {
   try {
@@ -47,10 +52,9 @@ export async function GET(request: NextRequest) {
     }
 
     const { searchParams } = new URL(request.url)
-    const currency = searchParams.get('currency')
     const brokerId = searchParams.get('brokerId')
 
-    // Get all balances grouped by broker
+    // Build query - filter companies by type 'broker'
     let whereClause = "WHERE c.companytype = 'broker'"
     const params: any[] = []
 
@@ -59,127 +63,202 @@ export async function GET(request: NextRequest) {
       whereClause += ` AND c.id = $${params.length}`
     }
 
+    // Get brokers with wallet info from companies table
     const result = await db.query(`
       SELECT
         c.id as broker_id,
         c.legalname as broker_name,
+        c.tradename,
+        COALESCE("walletNumber", walletnumber) as wallet_number,
+        COALESCE("walletBalance"::numeric, walletbalance, 0) as wallet_balance,
+        c.currency,
         c.broker_province,
         c.broker_municipality,
-        c.broker_is_active,
-        bwb.currency,
-        bwb.available_balance,
-        bwb.reserved_balance,
-        bwb.total_balance,
-        bwb.low_balance_threshold,
-        bwb.last_updated
+        COALESCE(c.broker_is_active, c.status = 'active') as is_active,
+        c.email,
+        c.phone,
+        c.logo,
+        c.created_at,
+        -- Get transaction counts
+        (SELECT COUNT(*) FROM wallet_transactions wt
+         WHERE (wt.source_company_id = c.id OR wt.target_company_id = c.id)
+         AND wt.status = 'completed') as total_transactions,
+        -- Total deposits (money in)
+        (SELECT COALESCE(SUM(amount), 0) FROM wallet_transactions wt
+         WHERE wt.target_company_id = c.id
+         AND wt.type IN ('recharge', 'transfer_in', 'deposit')
+         AND wt.status = 'completed') as total_deposits,
+        -- Total withdrawals (money out)
+        (SELECT COALESCE(SUM(amount), 0) FROM wallet_transactions wt
+         WHERE wt.source_company_id = c.id
+         AND wt.type IN ('transfer_out', 'withdrawal', 'debit')
+         AND wt.status = 'completed') as total_withdrawals,
+        -- Last transaction date
+        (SELECT MAX(created_at) FROM wallet_transactions wt
+         WHERE wt.source_company_id = c.id OR wt.target_company_id = c.id) as last_transaction_date
       FROM companies c
-      LEFT JOIN broker_wallet_balances bwb ON bwb.company_id = c.id
       ${whereClause}
-      ORDER BY c.legalname, bwb.currency
+      ORDER BY c.legalname
     `, params)
 
-    // Group by broker
-    const brokersMap: Record<number, {
-      id: number
-      name: string
-      province: string
-      municipality: string
-      isActive: boolean
-      balances: any[]
-    }> = {}
+    // Format brokers with their wallet info
+    const brokers = result.rows.map(row => ({
+      id: row.broker_id,
+      name: row.broker_name,
+      tradeName: row.tradename,
+      walletNumber: row.wallet_number,
+      walletBalance: parseFloat(row.wallet_balance) || 0,
+      walletBalanceFormatted: `$${(parseFloat(row.wallet_balance) || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+      currency: row.currency || 'USD',
+      province: row.broker_province,
+      municipality: row.broker_municipality,
+      isActive: row.is_active,
+      email: row.email,
+      phone: row.phone,
+      logo: row.logo,
+      createdAt: row.created_at,
+      stats: {
+        totalTransactions: parseInt(row.total_transactions) || 0,
+        totalDeposits: parseFloat(row.total_deposits) || 0,
+        totalDepositsFormatted: `$${(parseFloat(row.total_deposits) || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+        totalWithdrawals: parseFloat(row.total_withdrawals) || 0,
+        totalWithdrawalsFormatted: `$${(parseFloat(row.total_withdrawals) || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+      },
+      lastTransactionDate: row.last_transaction_date
+    }))
 
-    for (const row of result.rows) {
-      if (!brokersMap[row.broker_id]) {
-        brokersMap[row.broker_id] = {
-          id: row.broker_id,
-          name: row.broker_name,
-          province: row.broker_province,
-          municipality: row.broker_municipality,
-          isActive: row.broker_is_active,
-          balances: []
-        }
-      }
-
-      if (row.currency) {
-        if (!currency || row.currency === currency) {
-          brokersMap[row.broker_id].balances.push({
-            currency: row.currency,
-            available: parseFloat(row.available_balance) || 0,
-            reserved: parseFloat(row.reserved_balance) || 0,
-            total: parseFloat(row.total_balance) || 0,
-            lowThreshold: parseFloat(row.low_balance_threshold) || 100,
-            isLow: parseFloat(row.available_balance) < parseFloat(row.low_balance_threshold),
-            lastUpdated: row.last_updated
-          })
-        }
-      }
-    }
-
-    const brokers = Object.values(brokersMap)
-
-    // Calculate totals by currency
+    // Calculate totals
     const totalsResult = await db.query(`
       SELECT
-        currency,
-        SUM(available_balance) as total_available,
-        SUM(reserved_balance) as total_reserved,
-        SUM(total_balance) as grand_total,
-        COUNT(*) as broker_count
-      FROM broker_wallet_balances
-      GROUP BY currency
-      ORDER BY currency
+        COUNT(*) as total_brokers,
+        COUNT(*) FILTER (WHERE COALESCE(broker_is_active, status = 'active') = true) as active_brokers,
+        COALESCE(SUM(COALESCE("walletBalance"::numeric, walletbalance, 0)), 0) as total_balance
+      FROM companies
+      WHERE companytype = 'broker'
     `)
 
-    const totals = totalsResult.rows.map(row => ({
-      currency: row.currency,
-      totalAvailable: parseFloat(row.total_available) || 0,
-      totalReserved: parseFloat(row.total_reserved) || 0,
-      grandTotal: parseFloat(row.grand_total) || 0,
-      brokerCount: parseInt(row.broker_count)
-    }))
+    const totals = totalsResult.rows[0]
 
-    // Get recent transactions
-    const transactionsResult = await db.query(`
-      SELECT
-        bwt.id,
-        bwt.broker_company_id,
-        c.legalname as broker_name,
-        bwt.currency,
-        bwt.transaction_type,
-        bwt.amount,
-        bwt.balance_after,
-        bwt.reference_type,
-        bwt.reference_id,
-        bwt.notes,
-        bwt.created_at,
-        u.full_name as created_by_name
-      FROM broker_wallet_transactions bwt
-      JOIN companies c ON c.id = bwt.broker_company_id
-      LEFT JOIN users u ON u.id = bwt.created_by
-      ORDER BY bwt.created_at DESC
-      LIMIT 50
+    // Get recent transactions for all brokers
+    // Get IDs of broker companies
+    const brokerIdsResult = await db.query(`
+      SELECT id FROM companies WHERE companytype = 'broker'
     `)
+    const brokerIds = brokerIdsResult.rows.map(r => r.id)
 
-    const recentTransactions = transactionsResult.rows.map(row => ({
-      id: row.id,
-      brokerId: row.broker_company_id,
-      brokerName: row.broker_name,
-      currency: row.currency,
-      type: row.transaction_type,
-      amount: parseFloat(row.amount),
-      balanceAfter: parseFloat(row.balance_after),
-      referenceType: row.reference_type,
-      referenceId: row.reference_id,
-      notes: row.notes,
-      createdAt: row.created_at,
-      createdByName: row.created_by_name
-    }))
+    let recentTransactions: any[] = []
+    if (brokerIds.length > 0) {
+      const transactionsResult = await db.query(`
+        SELECT
+          wt.id,
+          wt.transaction_number,
+          wt.type,
+          wt.source_type,
+          wt.source_company_id,
+          wt.source_wallet_number,
+          wt.target_type,
+          wt.target_company_id,
+          wt.target_wallet_number,
+          wt.amount,
+          wt.fee,
+          wt.net_amount,
+          wt.currency,
+          wt.payment_method,
+          wt.payment_reference,
+          wt.status,
+          wt.description,
+          wt.created_by_name,
+          wt.created_at,
+          wt.completed_at,
+          sc.legalname as source_company_name,
+          tc.legalname as target_company_name
+        FROM wallet_transactions wt
+        LEFT JOIN companies sc ON wt.source_company_id = sc.id
+        LEFT JOIN companies tc ON wt.target_company_id = tc.id
+        WHERE wt.source_company_id = ANY($1)
+           OR wt.target_company_id = ANY($1)
+        ORDER BY wt.created_at DESC
+        LIMIT 50
+      `, [brokerIds])
+
+      const typeLabels: { [key: string]: string } = {
+        'recharge': 'Recarga',
+        'transfer_out': 'Transferencia (Salida)',
+        'transfer_in': 'Transferencia (Entrada)',
+        'debit': 'Débito',
+        'deposit': 'Depósito',
+        'withdrawal': 'Retiro',
+        'refund': 'Reembolso'
+      }
+
+      const methodLabels: { [key: string]: string } = {
+        'card_manual': 'Tarjeta Manual',
+        'card_stripe': 'Tarjeta',
+        'card_terminal': 'Terminal',
+        'cash': 'Efectivo',
+        'wire': 'Transferencia Bancaria',
+        'zelle': 'Zelle',
+        'credit_charge': 'Cargo de Crédito'
+      }
+
+      recentTransactions = transactionsResult.rows.map(row => {
+        // Determine if it's an incoming or outgoing transaction for the broker
+        const isIncoming = brokerIds.includes(row.target_company_id)
+        const isOutgoing = brokerIds.includes(row.source_company_id)
+
+        // Get the broker involved
+        let brokerId = null
+        let brokerName = null
+        if (isIncoming) {
+          brokerId = row.target_company_id
+          brokerName = row.target_company_name
+        } else if (isOutgoing) {
+          brokerId = row.source_company_id
+          brokerName = row.source_company_name
+        }
+
+        return {
+          id: row.id,
+          transactionNumber: row.transaction_number,
+          type: row.type,
+          typeLabel: typeLabels[row.type] || row.type,
+          direction: isIncoming ? 'in' : 'out',
+          directionLabel: isIncoming ? 'Entrada' : 'Salida',
+          brokerId,
+          brokerName,
+          sourceCompanyId: row.source_company_id,
+          sourceCompanyName: row.source_company_name,
+          sourceWalletNumber: row.source_wallet_number,
+          targetCompanyId: row.target_company_id,
+          targetCompanyName: row.target_company_name,
+          targetWalletNumber: row.target_wallet_number,
+          amount: parseFloat(row.amount) || 0,
+          amountFormatted: `$${(parseFloat(row.amount) || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+          fee: parseFloat(row.fee) || 0,
+          netAmount: parseFloat(row.net_amount) || 0,
+          currency: row.currency || 'USD',
+          paymentMethod: row.payment_method,
+          paymentMethodLabel: methodLabels[row.payment_method] || row.payment_method,
+          paymentReference: row.payment_reference,
+          status: row.status,
+          description: row.description,
+          createdByName: row.created_by_name,
+          createdAt: row.created_at,
+          completedAt: row.completed_at
+        }
+      })
+    }
 
     return NextResponse.json({
       success: true,
       data: {
         brokers,
-        totals,
+        summary: {
+          totalBrokers: parseInt(totals.total_brokers) || 0,
+          activeBrokers: parseInt(totals.active_brokers) || 0,
+          totalBalance: parseFloat(totals.total_balance) || 0,
+          totalBalanceFormatted: `$${(parseFloat(totals.total_balance) || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+        },
         recentTransactions
       }
     })

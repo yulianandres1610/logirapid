@@ -14,6 +14,10 @@ interface JWTPayload {
 /**
  * POST /api/admin/brokers/[id]/wallet/deposit
  * Deposit funds to a broker's wallet (SUPER_ADMIN only)
+ *
+ * Uses the existing company wallet system:
+ * - Updates companies.walletbalance
+ * - Records in wallet_transactions table
  */
 export async function POST(
   request: NextRequest,
@@ -60,12 +64,12 @@ export async function POST(
     }
 
     const body = await request.json()
-    const { currency, amount, notes } = body
+    const { amount, notes, paymentMethod = 'wire' } = body
 
-    if (!currency || !amount) {
+    if (!amount) {
       return NextResponse.json({
         success: false,
-        error: 'Se requiere currency y amount'
+        error: 'Se requiere amount'
       }, { status: 400 })
     }
 
@@ -77,9 +81,16 @@ export async function POST(
       }, { status: 400 })
     }
 
-    // Verify broker exists
+    // Verify broker exists and get current balance
     const brokerCheck = await db.query(`
-      SELECT id, legalname FROM companies WHERE id = $1 AND companytype = 'broker'
+      SELECT
+        id,
+        legalname,
+        COALESCE("walletNumber", walletnumber) as wallet_number,
+        COALESCE("walletBalance"::numeric, walletbalance, 0) as wallet_balance,
+        currency
+      FROM companies
+      WHERE id = $1 AND companytype = 'broker'
     `, [brokerId])
 
     if (brokerCheck.rows.length === 0) {
@@ -89,76 +100,94 @@ export async function POST(
       }, { status: 404 })
     }
 
-    const brokerName = brokerCheck.rows[0].legalname
+    const broker = brokerCheck.rows[0]
+    const brokerName = broker.legalname
+    const walletNumber = broker.wallet_number
+    const currentBalance = parseFloat(broker.wallet_balance) || 0
+    const currency = broker.currency || 'USD'
 
-    await db.query('BEGIN')
+    // Process deposit using transaction
+    const result = await db.transaction(async (client) => {
+      // Update company wallet balance
+      await client.query(`
+        UPDATE companies
+        SET walletbalance = COALESCE(walletbalance, 0) + $1
+        WHERE id = $2
+      `, [numAmount, brokerId])
 
-    try {
-      // Get or create balance record
-      let balanceResult = await db.query(`
-        SELECT * FROM broker_wallet_balances
-        WHERE company_id = $1 AND currency = $2
-        FOR UPDATE
-      `, [brokerId, currency])
-
-      if (balanceResult.rows.length === 0) {
-        // Create new balance record
-        await db.query(`
-          INSERT INTO broker_wallet_balances (company_id, currency, available_balance, reserved_balance)
-          VALUES ($1, $2, 0, 0)
-        `, [brokerId, currency])
-
-        balanceResult = await db.query(`
-          SELECT * FROM broker_wallet_balances
-          WHERE company_id = $1 AND currency = $2
-          FOR UPDATE
-        `, [brokerId, currency])
-      }
-
-      const currentBalance = parseFloat(balanceResult.rows[0].available_balance) || 0
-      const currentReserved = parseFloat(balanceResult.rows[0].reserved_balance) || 0
-      const newBalance = currentBalance + numAmount
-
-      // Update balance
-      await db.query(`
-        UPDATE broker_wallet_balances
-        SET available_balance = $1, last_updated = NOW()
-        WHERE company_id = $2 AND currency = $3
-      `, [newBalance, brokerId, currency])
-
-      // Record transaction
-      await db.query(`
-        INSERT INTO broker_wallet_transactions (
-          broker_company_id, currency, transaction_type, amount,
-          balance_before, balance_after, reserved_before, reserved_after,
-          reference_type, notes, created_by
-        ) VALUES ($1, $2, 'deposit', $3, $4, $5, $6, $6, 'admin_deposit', $7, $8)
+      // Create transaction record in wallet_transactions
+      const txResult = await client.query(`
+        INSERT INTO wallet_transactions (
+          type,
+          source_type,
+          target_type,
+          target_company_id,
+          target_wallet_number,
+          amount,
+          fee,
+          net_amount,
+          currency,
+          payment_method,
+          status,
+          requires_approval,
+          description,
+          created_by,
+          created_by_name,
+          completed_at
+        ) VALUES (
+          'recharge',
+          'external',
+          'company',
+          $1,
+          $2,
+          $3,
+          0,
+          $3,
+          $4,
+          $5,
+          'completed',
+          false,
+          $6,
+          $7,
+          $8,
+          NOW()
+        ) RETURNING id, transaction_number
       `, [
-        brokerId, currency, numAmount,
-        currentBalance, newBalance, currentReserved,
-        notes || `Depósito administrativo por SUPER_ADMIN`,
-        payload.userId
+        brokerId,
+        walletNumber,
+        numAmount,
+        currency,
+        paymentMethod,
+        notes || 'Depósito administrativo por SUPER_ADMIN',
+        payload.userId,
+        payload.email
       ])
 
-      await db.query('COMMIT')
+      return {
+        transactionId: txResult.rows[0].id,
+        transactionNumber: txResult.rows[0].transaction_number
+      }
+    })
 
-      return NextResponse.json({
-        success: true,
-        message: `Depósito de ${numAmount} ${currency} realizado a ${brokerName}`,
-        data: {
-          brokerId,
-          brokerName,
-          currency,
-          previousBalance: currentBalance,
-          depositAmount: numAmount,
-          newBalance
-        }
-      })
+    const newBalance = currentBalance + numAmount
 
-    } catch (err) {
-      await db.query('ROLLBACK')
-      throw err
-    }
+    return NextResponse.json({
+      success: true,
+      message: `Depósito de $${numAmount.toLocaleString('en-US', { minimumFractionDigits: 2 })} realizado a ${brokerName}`,
+      data: {
+        brokerId,
+        brokerName,
+        walletNumber,
+        currency,
+        previousBalance: currentBalance,
+        previousBalanceFormatted: `$${currentBalance.toLocaleString('en-US', { minimumFractionDigits: 2 })}`,
+        depositAmount: numAmount,
+        depositAmountFormatted: `$${numAmount.toLocaleString('en-US', { minimumFractionDigits: 2 })}`,
+        newBalance,
+        newBalanceFormatted: `$${newBalance.toLocaleString('en-US', { minimumFractionDigits: 2 })}`,
+        transactionNumber: result.transactionNumber
+      }
+    })
 
   } catch (error) {
     console.error('[Admin Broker Deposit API] POST error:', error)

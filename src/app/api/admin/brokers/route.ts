@@ -13,7 +13,12 @@ interface JWTPayload {
 
 /**
  * GET /api/admin/brokers
- * List all brokers with stats (SUPER_ADMIN only)
+ * List all broker companies with their wallet info (SUPER_ADMIN only)
+ *
+ * Uses the existing company wallet system:
+ * - companies.walletBalance for balance
+ * - companies.walletNumber for wallet identifier
+ * - wallet_transactions for transaction history
  */
 export async function GET(request: NextRequest) {
   try {
@@ -50,7 +55,7 @@ export async function GET(request: NextRequest) {
     const province = searchParams.get('province')
     const active = searchParams.get('active')
 
-    // Build query
+    // Build query - filter companies by type 'broker'
     let whereClause = "WHERE c.companytype = 'broker'"
     const params: any[] = []
 
@@ -59,56 +64,57 @@ export async function GET(request: NextRequest) {
       whereClause += ` AND c.broker_province = $${params.length}`
     }
 
-    if (active !== null) {
+    if (active !== null && active !== '') {
       params.push(active === 'true')
-      whereClause += ` AND c.broker_is_active = $${params.length}`
+      whereClause += ` AND COALESCE(c.broker_is_active, c.status = 'active') = $${params.length}`
     }
 
-    // Get brokers with stats
+    // Get brokers with wallet info from companies table
     const result = await db.query(`
       SELECT
         c.id,
         c.legalname,
+        c.tradename,
+        COALESCE("walletNumber", walletnumber) as wallet_number,
+        COALESCE("walletBalance"::numeric, walletbalance, 0) as wallet_balance,
+        c.currency,
         c.broker_province,
         c.broker_municipality,
         c.broker_delivery_hours,
         c.broker_contact_phone,
-        c.broker_is_active,
+        COALESCE(c.broker_is_active, c.status = 'active') as is_active,
         c.broker_max_daily_amount,
+        c.phone,
+        c.email,
+        c.logo,
         c.created_at,
-        -- Wallet balances as JSON
-        COALESCE(
-          (SELECT json_agg(json_build_object(
-            'currency', bwb.currency,
-            'available', bwb.available_balance,
-            'reserved', bwb.reserved_balance,
-            'total', bwb.total_balance
-          ))
-          FROM broker_wallet_balances bwb
-          WHERE bwb.company_id = c.id
-          ), '[]'
-        ) as wallet_balances,
-        -- Order stats
-        (SELECT COUNT(*) FROM remittance_orders ro WHERE ro.broker_company_id = c.id AND ro.status = 'pending') as pending_orders,
-        (SELECT COUNT(*) FROM remittance_orders ro WHERE ro.broker_company_id = c.id AND ro.status IN ('confirmed', 'in_delivery')) as active_orders,
-        (SELECT COUNT(*) FROM remittance_orders ro WHERE ro.broker_company_id = c.id AND ro.status = 'delivered') as delivered_orders,
-        (SELECT SUM(receive_amount) FROM remittance_orders ro WHERE ro.broker_company_id = c.id AND ro.status = 'delivered') as total_delivered_amount
+        c.status,
+        -- Get transaction stats
+        (SELECT COUNT(*) FROM wallet_transactions wt
+         WHERE (wt.source_company_id = c.id OR wt.target_company_id = c.id)
+         AND wt.status = 'completed') as total_transactions,
+        (SELECT COALESCE(SUM(amount), 0) FROM wallet_transactions wt
+         WHERE wt.target_company_id = c.id
+         AND wt.type IN ('recharge', 'transfer_in', 'deposit')
+         AND wt.status = 'completed') as total_deposits,
+        (SELECT COALESCE(SUM(amount), 0) FROM wallet_transactions wt
+         WHERE wt.source_company_id = c.id
+         AND wt.type IN ('transfer_out', 'withdrawal', 'debit')
+         AND wt.status = 'completed') as total_withdrawals
       FROM companies c
       ${whereClause}
-      ORDER BY c.broker_province, c.legalname
+      ORDER BY c.legalname
     `, params)
 
     // Get overall stats
     const statsResult = await db.query(`
       SELECT
-        COUNT(DISTINCT c.id) as total_brokers,
-        COUNT(DISTINCT c.id) FILTER (WHERE c.broker_is_active = true) as active_brokers,
-        COUNT(DISTINCT c.broker_province) as provinces_covered,
-        (SELECT COUNT(*) FROM remittance_orders WHERE status = 'pending') as total_pending_orders,
-        (SELECT SUM(available_balance) FROM broker_wallet_balances WHERE currency = 'USD') as total_usd_available,
-        (SELECT SUM(reserved_balance) FROM broker_wallet_balances WHERE currency = 'USD') as total_usd_reserved
-      FROM companies c
-      WHERE c.companytype = 'broker'
+        COUNT(*) as total_brokers,
+        COUNT(*) FILTER (WHERE COALESCE(broker_is_active, status = 'active') = true) as active_brokers,
+        COUNT(DISTINCT broker_province) FILTER (WHERE broker_province IS NOT NULL) as provinces_covered,
+        COALESCE(SUM(COALESCE("walletBalance"::numeric, walletbalance, 0)), 0) as total_balance
+      FROM companies
+      WHERE companytype = 'broker'
     `)
 
     const stats = statsResult.rows[0]
@@ -130,28 +136,33 @@ export async function GET(request: NextRequest) {
         brokers: result.rows.map(row => ({
           id: row.id,
           name: row.legalname,
+          tradeName: row.tradename,
+          walletNumber: row.wallet_number,
+          walletBalance: parseFloat(row.wallet_balance) || 0,
+          walletBalanceFormatted: `$${(parseFloat(row.wallet_balance) || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+          currency: row.currency || 'USD',
           province: row.broker_province,
           municipality: row.broker_municipality,
           deliveryHours: row.broker_delivery_hours,
-          contactPhone: row.broker_contact_phone,
-          isActive: row.broker_is_active,
+          contactPhone: row.broker_contact_phone || row.phone,
+          email: row.email,
+          logo: row.logo,
+          isActive: row.is_active,
+          status: row.status,
           maxDailyAmount: row.broker_max_daily_amount ? parseFloat(row.broker_max_daily_amount) : null,
           createdAt: row.created_at,
-          walletBalances: row.wallet_balances || [],
           stats: {
-            pendingOrders: parseInt(row.pending_orders) || 0,
-            activeOrders: parseInt(row.active_orders) || 0,
-            deliveredOrders: parseInt(row.delivered_orders) || 0,
-            totalDeliveredAmount: parseFloat(row.total_delivered_amount) || 0
+            totalTransactions: parseInt(row.total_transactions) || 0,
+            totalDeposits: parseFloat(row.total_deposits) || 0,
+            totalWithdrawals: parseFloat(row.total_withdrawals) || 0
           }
         })),
         summary: {
           totalBrokers: parseInt(stats.total_brokers) || 0,
           activeBrokers: parseInt(stats.active_brokers) || 0,
           provincesCovered: parseInt(stats.provinces_covered) || 0,
-          totalPendingOrders: parseInt(stats.total_pending_orders) || 0,
-          totalUsdAvailable: parseFloat(stats.total_usd_available) || 0,
-          totalUsdReserved: parseFloat(stats.total_usd_reserved) || 0
+          totalBalance: parseFloat(stats.total_balance) || 0,
+          totalBalanceFormatted: `$${(parseFloat(stats.total_balance) || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
         },
         provinces: provincesResult.rows.map(row => ({
           name: row.province,

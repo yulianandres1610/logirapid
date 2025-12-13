@@ -18,62 +18,72 @@ import {
   ArrowUpRight,
   History,
   X,
-  Search
+  Search,
+  Users,
+  Activity
 } from 'lucide-react'
 import Link from 'next/link'
-
-interface BrokerBalance {
-  currency: string
-  available: number
-  reserved: number
-  total: number
-  lowThreshold: number
-  isLow: boolean
-  lastUpdated: string
-}
+import { DashboardLayout } from '@/components/layout/dashboard-layout'
+import { cn } from '@/lib/utils'
+import { useTheme } from '@/contexts/theme-context'
 
 interface Broker {
   id: number
   name: string
+  tradeName: string
+  walletNumber: string
+  walletBalance: number
+  walletBalanceFormatted: string
+  currency: string
   province: string
   municipality: string
   isActive: boolean
-  balances: BrokerBalance[]
+  email: string
+  phone: string
+  logo: string | null
+  createdAt: string
+  stats: {
+    totalTransactions: number
+    totalDeposits: number
+    totalDepositsFormatted: string
+    totalWithdrawals: number
+    totalWithdrawalsFormatted: string
+  }
+  lastTransactionDate: string | null
 }
 
-interface CurrencyTotal {
-  currency: string
-  totalAvailable: number
-  totalReserved: number
-  grandTotal: number
-  brokerCount: number
+interface Summary {
+  totalBrokers: number
+  activeBrokers: number
+  totalBalance: number
+  totalBalanceFormatted: string
 }
 
 interface Transaction {
   id: number
+  transactionNumber: string
+  type: string
+  typeLabel: string
+  direction: 'in' | 'out'
+  directionLabel: string
   brokerId: number
   brokerName: string
-  currency: string
-  type: string
   amount: number
-  balanceAfter: number
-  referenceType: string
-  referenceId: number | null
-  notes: string
+  amountFormatted: string
+  currency: string
+  paymentMethod: string
+  paymentMethodLabel: string
+  status: string
+  description: string
+  createdByName: string
   createdAt: string
-  createdByName: string | null
+  completedAt: string
 }
 
-const CURRENCIES = [
-  { code: 'USD', name: 'Dolares', symbol: '$', flag: '🇺🇸' },
-  { code: 'CUP', name: 'Pesos Cubanos', symbol: '', flag: '🇨🇺' },
-  { code: 'MLC', name: 'MLC', symbol: '$', flag: '💳' },
-  { code: 'EUR', name: 'Euros', symbol: '€', flag: '🇪🇺' }
-]
-
 export default function AdminBrokerWalletsPage() {
+  const { theme } = useTheme()
   const [brokers, setBrokers] = useState<Broker[]>([])
-  const [totals, setTotals] = useState<CurrencyTotal[]>([])
+  const [summary, setSummary] = useState<Summary | null>(null)
   const [transactions, setTransactions] = useState<Transaction[]>([])
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState('')
@@ -81,7 +91,6 @@ export default function AdminBrokerWalletsPage() {
   // Deposit modal
   const [showDepositModal, setShowDepositModal] = useState(false)
   const [selectedBroker, setSelectedBroker] = useState<Broker | null>(null)
-  const [depositCurrency, setDepositCurrency] = useState('USD')
   const [depositAmount, setDepositAmount] = useState('')
   const [depositNotes, setDepositNotes] = useState('')
   const [depositLoading, setDepositLoading] = useState(false)
@@ -98,7 +107,7 @@ export default function AdminBrokerWalletsPage() {
         const data = await response.json()
         if (data.success) {
           setBrokers(data.data.brokers || [])
-          setTotals(data.data.totals || [])
+          setSummary(data.data.summary || null)
           setTransactions(data.data.recentTransactions || [])
         }
       }
@@ -121,9 +130,8 @@ export default function AdminBrokerWalletsPage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          currency: depositCurrency,
           amount: parseFloat(depositAmount),
-          notes: depositNotes || `Deposito administrativo de ${depositAmount} ${depositCurrency}`
+          notes: depositNotes || `Deposito administrativo de $${depositAmount}`
         })
       })
 
@@ -150,37 +158,11 @@ export default function AdminBrokerWalletsPage() {
     setShowDepositModal(true)
   }
 
-  const formatCurrency = (amount: number, currency: string) => {
-    if (currency === 'CUP') {
-      return `${amount.toLocaleString()} CUP`
+  const getTransactionIcon = (direction: string) => {
+    if (direction === 'in') {
+      return <ArrowDownLeft className="w-4 h-4 text-green-500" />
     }
-    const curr = CURRENCIES.find(c => c.code === currency)
-    return `${curr?.symbol || '$'}${amount.toFixed(2)} ${currency}`
-  }
-
-  const getTransactionIcon = (type: string) => {
-    switch (type) {
-      case 'deposit':
-        return <ArrowDownLeft className="w-4 h-4 text-green-500" />
-      case 'withdrawal':
-        return <ArrowUpRight className="w-4 h-4 text-red-500" />
-      case 'reservation':
-        return <Clock className="w-4 h-4 text-orange-500" />
-      case 'release':
-        return <CheckCircle className="w-4 h-4 text-blue-500" />
-      default:
-        return <History className="w-4 h-4 text-gray-500" />
-    }
-  }
-
-  const getTransactionLabel = (type: string) => {
-    const labels: Record<string, string> = {
-      deposit: 'Deposito',
-      withdrawal: 'Retiro',
-      reservation: 'Reserva',
-      release: 'Liberacion'
-    }
-    return labels[type] || type
+    return <ArrowUpRight className="w-4 h-4 text-red-500" />
   }
 
   const filteredBrokers = brokers.filter(broker => {
@@ -189,7 +171,8 @@ export default function AdminBrokerWalletsPage() {
     return (
       broker.name.toLowerCase().includes(search) ||
       broker.province?.toLowerCase().includes(search) ||
-      broker.municipality?.toLowerCase().includes(search)
+      broker.municipality?.toLowerCase().includes(search) ||
+      broker.walletNumber?.toLowerCase().includes(search)
     )
   })
 
@@ -209,69 +192,120 @@ export default function AdminBrokerWalletsPage() {
   }
 
   return (
-    <div className="p-6 space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
-            Wallets de Brokers
-          </h1>
-          <p className="text-gray-500 dark:text-gray-400 mt-1">
-            Administra los fondos de todos los brokers
-          </p>
+    <DashboardLayout>
+      <div className={cn(
+        "min-h-screen p-6 space-y-6",
+        theme === 'dark' ? 'bg-gray-900' : 'bg-gray-50'
+      )}>
+        {/* Header */}
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+          <div>
+            <h1 className={cn(
+              "text-2xl font-bold",
+              theme === 'dark' ? 'text-white' : 'text-gray-900'
+            )}>
+              Wallets de Brokers
+            </h1>
+            <p className={cn(
+              "mt-1",
+              theme === 'dark' ? 'text-gray-400' : 'text-gray-500'
+            )}>
+              Administra los fondos de todos los brokers
+            </p>
+          </div>
+          <Link
+            href="/dashboard/admin/brokers"
+            className={cn(
+              "flex items-center gap-2 px-4 py-2 rounded-xl transition-all",
+              theme === 'dark' ? 'bg-gray-800 hover:bg-gray-700 text-white' : 'bg-white hover:bg-gray-100 text-gray-900 border border-gray-200'
+            )}
+          >
+            <Building2 className="w-4 h-4" />
+            Ver Brokers
+          </Link>
         </div>
-        <Link
-          href="/dashboard/admin/brokers"
-          className="flex items-center gap-2 px-4 py-2 bg-gray-100 dark:bg-gray-700 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
-        >
-          <Building2 className="w-4 h-4" />
-          Ver Brokers
-        </Link>
-      </div>
 
-      {/* Totals by Currency */}
+      {/* Summary Stats */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        {CURRENCIES.map((currency, index) => {
-          const total = totals.find(t => t.currency === currency.code)
-          return (
-            <motion.div
-              key={currency.code}
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: index * 0.1 }}
-              className="bg-white dark:bg-gray-800 rounded-xl p-5 shadow-sm border border-gray-200 dark:border-gray-700"
-            >
-              <div className="flex items-center justify-between mb-3">
-                <span className="text-2xl">{currency.flag}</span>
-                <span className="text-xs bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded">
-                  {total?.brokerCount || 0} brokers
-                </span>
-              </div>
-              <div className="space-y-2">
-                <div>
-                  <p className="text-xs text-gray-500 dark:text-gray-400">Total Disponible</p>
-                  <p className="text-xl font-bold text-gray-900 dark:text-white">
-                    {formatCurrency(total?.totalAvailable || 0, currency.code)}
-                  </p>
-                </div>
-                <div className="grid grid-cols-2 gap-2 pt-2 border-t border-gray-100 dark:border-gray-700">
-                  <div>
-                    <p className="text-xs text-gray-500 dark:text-gray-400">Reservado</p>
-                    <p className="text-sm font-medium text-orange-600 dark:text-orange-400">
-                      {formatCurrency(total?.totalReserved || 0, currency.code)}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-gray-500 dark:text-gray-400">Total</p>
-                    <p className="text-sm font-medium text-gray-900 dark:text-white">
-                      {formatCurrency(total?.grandTotal || 0, currency.code)}
-                    </p>
-                  </div>
-                </div>
-              </div>
-            </motion.div>
-          )
-        })}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.1 }}
+          className={cn(
+            "rounded-xl p-5 shadow-sm border",
+            theme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'
+          )}
+        >
+          <div className="flex items-center justify-between mb-3">
+            <div className="p-2 rounded-lg bg-green-100 dark:bg-green-900/30">
+              <DollarSign className="w-5 h-5 text-green-600 dark:text-green-400" />
+            </div>
+          </div>
+          <p className="text-xs text-gray-500 dark:text-gray-400">Balance Total</p>
+          <p className="text-2xl font-bold text-gray-900 dark:text-white">
+            {summary?.totalBalanceFormatted || '$0.00'}
+          </p>
+        </motion.div>
+
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.2 }}
+          className={cn(
+            "rounded-xl p-5 shadow-sm border",
+            theme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'
+          )}
+        >
+          <div className="flex items-center justify-between mb-3">
+            <div className="p-2 rounded-lg bg-blue-100 dark:bg-blue-900/30">
+              <Users className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+            </div>
+          </div>
+          <p className="text-xs text-gray-500 dark:text-gray-400">Total Brokers</p>
+          <p className="text-2xl font-bold text-gray-900 dark:text-white">
+            {summary?.totalBrokers || 0}
+          </p>
+        </motion.div>
+
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.3 }}
+          className={cn(
+            "rounded-xl p-5 shadow-sm border",
+            theme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'
+          )}
+        >
+          <div className="flex items-center justify-between mb-3">
+            <div className="p-2 rounded-lg bg-emerald-100 dark:bg-emerald-900/30">
+              <CheckCircle className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
+            </div>
+          </div>
+          <p className="text-xs text-gray-500 dark:text-gray-400">Brokers Activos</p>
+          <p className="text-2xl font-bold text-gray-900 dark:text-white">
+            {summary?.activeBrokers || 0}
+          </p>
+        </motion.div>
+
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.4 }}
+          className={cn(
+            "rounded-xl p-5 shadow-sm border",
+            theme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'
+          )}
+        >
+          <div className="flex items-center justify-between mb-3">
+            <div className="p-2 rounded-lg bg-violet-100 dark:bg-violet-900/30">
+              <Activity className="w-5 h-5 text-violet-600 dark:text-violet-400" />
+            </div>
+          </div>
+          <p className="text-xs text-gray-500 dark:text-gray-400">Transacciones Recientes</p>
+          <p className="text-2xl font-bold text-gray-900 dark:text-white">
+            {transactions.length}
+          </p>
+        </motion.div>
       </div>
 
       {/* Search */}
@@ -287,25 +321,33 @@ export default function AdminBrokerWalletsPage() {
       </div>
 
       {/* Brokers Wallets Table */}
-      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
+      <div className={cn(
+        "rounded-xl shadow-sm border overflow-hidden",
+        theme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'
+      )}>
         <div className="overflow-x-auto">
           <table className="w-full">
-            <thead className="bg-gray-50 dark:bg-gray-700/50">
+            <thead className={cn(
+              theme === 'dark' ? 'bg-gray-700/50' : 'bg-gray-50'
+            )}>
               <tr>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">
                   Broker
                 </th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">
-                  USD
+                  Wallet
                 </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">
-                  CUP
+                <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">
+                  Balance
                 </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">
-                  MLC
+                <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">
+                  Depositos
                 </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">
-                  EUR
+                <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">
+                  Retiros
+                </th>
+                <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">
+                  Transacciones
                 </th>
                 <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">
                   Acciones
@@ -330,34 +372,43 @@ export default function AdminBrokerWalletsPage() {
                         <p className="font-medium text-gray-900 dark:text-white">
                           {broker.name}
                         </p>
-                        <p className="text-sm text-gray-500 dark:text-gray-400 flex items-center gap-1">
-                          <MapPin className="w-3 h-3" />
-                          {broker.municipality}, {broker.province}
-                        </p>
+                        {broker.province && (
+                          <p className="text-sm text-gray-500 dark:text-gray-400 flex items-center gap-1">
+                            <MapPin className="w-3 h-3" />
+                            {broker.municipality}, {broker.province}
+                          </p>
+                        )}
                       </div>
                     </div>
                   </td>
-                  {['USD', 'CUP', 'MLC', 'EUR'].map(currency => {
-                    const balance = broker.balances.find(b => b.currency === currency)
-                    return (
-                      <td key={currency} className="px-4 py-4">
-                        {balance ? (
-                          <div className={balance.isLow ? 'text-red-600 dark:text-red-400' : ''}>
-                            <p className="font-semibold">
-                              {formatCurrency(balance.available, currency)}
-                            </p>
-                            {balance.reserved > 0 && (
-                              <p className="text-xs text-orange-600 dark:text-orange-400">
-                                {formatCurrency(balance.reserved, currency)} res.
-                              </p>
-                            )}
-                          </div>
-                        ) : (
-                          <span className="text-gray-400">-</span>
-                        )}
-                      </td>
-                    )
-                  })}
+                  <td className="px-4 py-4">
+                    <p className="text-sm font-mono text-gray-600 dark:text-gray-400">
+                      {broker.walletNumber || '-'}
+                    </p>
+                  </td>
+                  <td className="px-4 py-4 text-right">
+                    <p className="font-semibold text-gray-900 dark:text-white">
+                      {broker.walletBalanceFormatted}
+                    </p>
+                  </td>
+                  <td className="px-4 py-4 text-right">
+                    <p className="text-sm text-green-600 dark:text-green-400">
+                      {broker.stats.totalDepositsFormatted}
+                    </p>
+                  </td>
+                  <td className="px-4 py-4 text-right">
+                    <p className="text-sm text-red-600 dark:text-red-400">
+                      {broker.stats.totalWithdrawalsFormatted}
+                    </p>
+                  </td>
+                  <td className="px-4 py-4 text-center">
+                    <span className={cn(
+                      "inline-flex items-center px-2 py-1 rounded-full text-xs font-medium",
+                      theme === 'dark' ? 'bg-gray-700 text-gray-300' : 'bg-gray-100 text-gray-700'
+                    )}>
+                      {broker.stats.totalTransactions}
+                    </span>
+                  </td>
                   <td className="px-4 py-4 text-center">
                     <button
                       onClick={() => openDepositModal(broker)}
@@ -384,8 +435,14 @@ export default function AdminBrokerWalletsPage() {
       </div>
 
       {/* Recent Transactions */}
-      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700">
-        <div className="p-5 border-b border-gray-200 dark:border-gray-700">
+      <div className={cn(
+        "rounded-xl shadow-sm border",
+        theme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'
+      )}>
+        <div className={cn(
+          "p-5 border-b",
+          theme === 'dark' ? 'border-gray-700' : 'border-gray-200'
+        )}>
           <h2 className="text-lg font-semibold text-gray-900 dark:text-white flex items-center gap-2">
             <History className="w-5 h-5" />
             Movimientos Recientes
@@ -404,26 +461,29 @@ export default function AdminBrokerWalletsPage() {
               >
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
-                    <div className="p-2 rounded-full bg-gray-100 dark:bg-gray-700">
-                      {getTransactionIcon(tx.type)}
+                    <div className={cn(
+                      "p-2 rounded-full",
+                      theme === 'dark' ? 'bg-gray-700' : 'bg-gray-100'
+                    )}>
+                      {getTransactionIcon(tx.direction)}
                     </div>
                     <div>
                       <p className="font-medium text-gray-900 dark:text-white">
-                        {getTransactionLabel(tx.type)} - {tx.brokerName}
+                        {tx.typeLabel} - {tx.brokerName}
                       </p>
                       <p className="text-sm text-gray-500 dark:text-gray-400">
-                        {tx.notes || tx.referenceType}
+                        {tx.description || tx.transactionNumber}
                       </p>
                     </div>
                   </div>
                   <div className="text-right">
                     <p className={`font-semibold ${
-                      tx.type === 'deposit' || tx.type === 'release'
+                      tx.direction === 'in'
                         ? 'text-green-600 dark:text-green-400'
                         : 'text-red-600 dark:text-red-400'
                     }`}>
-                      {tx.type === 'deposit' || tx.type === 'release' ? '+' : '-'}
-                      {formatCurrency(Math.abs(tx.amount), tx.currency)}
+                      {tx.direction === 'in' ? '+' : '-'}
+                      {tx.amountFormatted}
                     </p>
                     <p className="text-xs text-gray-500 dark:text-gray-400">
                       {new Date(tx.createdAt).toLocaleDateString('es-ES', {
@@ -463,9 +523,15 @@ export default function AdminBrokerWalletsPage() {
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.95, opacity: 0 }}
               onClick={e => e.stopPropagation()}
-              className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl w-full max-w-md"
+              className={cn(
+                "rounded-2xl shadow-xl w-full max-w-md",
+                theme === 'dark' ? 'bg-gray-800' : 'bg-white'
+              )}
             >
-              <div className="p-5 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
+              <div className={cn(
+                "p-5 border-b flex items-center justify-between",
+                theme === 'dark' ? 'border-gray-700' : 'border-gray-200'
+              )}>
                 <div>
                   <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
                     Depositar Fondos
@@ -483,31 +549,23 @@ export default function AdminBrokerWalletsPage() {
               </div>
 
               <div className="p-5 space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                    Moneda
-                  </label>
-                  <div className="grid grid-cols-4 gap-2">
-                    {CURRENCIES.map(currency => (
-                      <button
-                        key={currency.code}
-                        onClick={() => setDepositCurrency(currency.code)}
-                        className={`p-3 rounded-lg border-2 text-center transition-colors ${
-                          depositCurrency === currency.code
-                            ? 'border-green-500 bg-green-50 dark:bg-green-900/20'
-                            : 'border-gray-200 dark:border-gray-600 hover:border-gray-300'
-                        }`}
-                      >
-                        <span className="text-xl">{currency.flag}</span>
-                        <p className="text-xs font-medium mt-1">{currency.code}</p>
-                      </button>
-                    ))}
-                  </div>
+                {/* Current Balance Info */}
+                <div className={cn(
+                  "p-4 rounded-lg",
+                  theme === 'dark' ? 'bg-gray-700/50' : 'bg-gray-50'
+                )}>
+                  <p className="text-sm text-gray-500 dark:text-gray-400">Balance Actual</p>
+                  <p className="text-xl font-bold text-gray-900 dark:text-white">
+                    {selectedBroker.walletBalanceFormatted}
+                  </p>
+                  <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
+                    Wallet: {selectedBroker.walletNumber || 'Sin asignar'}
+                  </p>
                 </div>
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                    Monto
+                    Monto a Depositar
                   </label>
                   <div className="relative">
                     <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
@@ -516,10 +574,13 @@ export default function AdminBrokerWalletsPage() {
                       value={depositAmount}
                       onChange={e => setDepositAmount(e.target.value)}
                       placeholder="0.00"
-                      className="w-full pl-10 pr-16 py-3 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                      className={cn(
+                        "w-full pl-10 pr-16 py-3 border rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent",
+                        theme === 'dark' ? 'bg-gray-700 border-gray-600' : 'bg-gray-50 border-gray-200'
+                      )}
                     />
                     <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm font-medium text-gray-500">
-                      {depositCurrency}
+                      {selectedBroker.currency || 'USD'}
                     </span>
                   </div>
                 </div>
@@ -533,21 +594,43 @@ export default function AdminBrokerWalletsPage() {
                     onChange={e => setDepositNotes(e.target.value)}
                     placeholder="Referencia o descripcion del deposito..."
                     rows={2}
-                    className="w-full px-4 py-3 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent resize-none"
+                    className={cn(
+                      "w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent resize-none",
+                      theme === 'dark' ? 'bg-gray-700 border-gray-600' : 'bg-gray-50 border-gray-200'
+                    )}
                   />
                 </div>
+
+                {depositAmount && parseFloat(depositAmount) > 0 && (
+                  <div className={cn(
+                    "p-3 rounded-lg border",
+                    theme === 'dark' ? 'bg-green-900/20 border-green-800' : 'bg-green-50 border-green-200'
+                  )}>
+                    <p className="text-sm text-green-700 dark:text-green-300">
+                      Nuevo balance: <span className="font-bold">
+                        ${((selectedBroker.walletBalance || 0) + parseFloat(depositAmount)).toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                      </span>
+                    </p>
+                  </div>
+                )}
               </div>
 
-              <div className="p-5 border-t border-gray-200 dark:border-gray-700 flex gap-3">
+              <div className={cn(
+                "p-5 border-t flex gap-3",
+                theme === 'dark' ? 'border-gray-700' : 'border-gray-200'
+              )}>
                 <button
                   onClick={() => setShowDepositModal(false)}
-                  className="flex-1 px-4 py-2 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
+                  className={cn(
+                    "flex-1 px-4 py-2 rounded-lg transition-colors",
+                    theme === 'dark' ? 'bg-gray-700 text-gray-300 hover:bg-gray-600' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  )}
                 >
                   Cancelar
                 </button>
                 <button
                   onClick={handleDeposit}
-                  disabled={depositLoading || !depositAmount}
+                  disabled={depositLoading || !depositAmount || parseFloat(depositAmount) <= 0}
                   className="flex-1 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
                 >
                   {depositLoading ? (
@@ -562,6 +645,7 @@ export default function AdminBrokerWalletsPage() {
           </motion.div>
         )}
       </AnimatePresence>
-    </div>
+      </div>
+    </DashboardLayout>
   )
 }
