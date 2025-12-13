@@ -386,86 +386,122 @@ function BrokerMapPicker({ theme, province, latitude, longitude, onLocationChang
   const mapContainerRef = useRef<HTMLDivElement>(null)
   const mapRef = useRef<mapboxgl.Map | null>(null)
   const markerRef = useRef<mapboxgl.Marker | null>(null)
+  const [mapLoaded, setMapLoaded] = useState(false)
 
   // Obtener coordenadas de la provincia
   const provinceData = BROKER_PROVINCES.find(p => p.id === province)
   const defaultCoords = provinceData?.coords || [-82.3666, 23.1136] // Default: La Habana
 
+  // Callback estable para onLocationChange
+  const handleLocationChange = useCallback((lat: number, lng: number) => {
+    onLocationChange(lat, lng)
+  }, [onLocationChange])
+
+  // Inicializar mapa
   useEffect(() => {
-    if (!mapContainerRef.current) return
+    if (!mapContainerRef.current || mapRef.current) return
 
     mapboxgl.accessToken = MAPBOX_TOKEN
 
     const map = new mapboxgl.Map({
       container: mapContainerRef.current,
       style: theme === 'dark' ? 'mapbox://styles/mapbox/dark-v11' : 'mapbox://styles/mapbox/streets-v12',
-      center: [longitude || defaultCoords[0], latitude || defaultCoords[1]],
-      zoom: 12
+      center: [defaultCoords[0], defaultCoords[1]],
+      zoom: 11
     })
 
     mapRef.current = map
 
-    // Agregar controles de navegación
-    map.addControl(new mapboxgl.NavigationControl(), 'top-right')
+    map.on('load', () => {
+      setMapLoaded(true)
 
-    // Si ya hay coordenadas, agregar marcador
-    if (latitude && longitude) {
+      // Agregar controles de navegación
+      map.addControl(new mapboxgl.NavigationControl(), 'top-right')
+
+      // Click en el mapa para colocar/mover pin
+      map.on('click', (e) => {
+        const { lng, lat } = e.lngLat
+
+        if (markerRef.current) {
+          markerRef.current.setLngLat([lng, lat])
+        } else {
+          const marker = new mapboxgl.Marker({ color: '#CC0A46', draggable: true })
+            .setLngLat([lng, lat])
+            .addTo(map)
+
+          marker.on('dragend', () => {
+            const lngLat = marker.getLngLat()
+            handleLocationChange(lngLat.lat, lngLat.lng)
+          })
+
+          markerRef.current = marker
+        }
+
+        handleLocationChange(lat, lng)
+      })
+    })
+
+    return () => {
+      if (mapRef.current) {
+        mapRef.current.remove()
+        mapRef.current = null
+        markerRef.current = null
+        setMapLoaded(false)
+      }
+    }
+  }, []) // Solo inicializar una vez
+
+  // Actualizar estilo del mapa cuando cambia el tema
+  useEffect(() => {
+    if (mapRef.current && mapLoaded) {
+      const newStyle = theme === 'dark' ? 'mapbox://styles/mapbox/dark-v11' : 'mapbox://styles/mapbox/streets-v12'
+      mapRef.current.setStyle(newStyle)
+    }
+  }, [theme, mapLoaded])
+
+  // Actualizar centro del mapa cuando cambia la provincia
+  useEffect(() => {
+    if (mapRef.current && mapLoaded && provinceData) {
+      mapRef.current.flyTo({
+        center: [provinceData.coords[0], provinceData.coords[1]],
+        zoom: 11,
+        duration: 1500
+      })
+    }
+  }, [province, provinceData, mapLoaded])
+
+  // Si ya hay coordenadas guardadas, agregar marcador
+  useEffect(() => {
+    if (mapRef.current && mapLoaded && latitude && longitude && !markerRef.current) {
       const marker = new mapboxgl.Marker({ color: '#CC0A46', draggable: true })
         .setLngLat([longitude, latitude])
-        .addTo(map)
+        .addTo(mapRef.current)
 
       marker.on('dragend', () => {
         const lngLat = marker.getLngLat()
-        onLocationChange(lngLat.lat, lngLat.lng)
+        handleLocationChange(lngLat.lat, lngLat.lng)
       })
 
       markerRef.current = marker
     }
-
-    // Click en el mapa para colocar/mover pin
-    map.on('click', (e) => {
-      const { lng, lat } = e.lngLat
-
-      if (markerRef.current) {
-        markerRef.current.setLngLat([lng, lat])
-      } else {
-        const marker = new mapboxgl.Marker({ color: '#CC0A46', draggable: true })
-          .setLngLat([lng, lat])
-          .addTo(map)
-
-        marker.on('dragend', () => {
-          const lngLat = marker.getLngLat()
-          onLocationChange(lngLat.lat, lngLat.lng)
-        })
-
-        markerRef.current = marker
-      }
-
-      onLocationChange(lat, lng)
-    })
-
-    return () => {
-      map.remove()
-    }
-  }, [province]) // Re-crear mapa cuando cambia la provincia
-
-  // Actualizar centro del mapa cuando cambia la provincia
-  useEffect(() => {
-    if (mapRef.current && provinceData) {
-      mapRef.current.flyTo({
-        center: [provinceData.coords[0], provinceData.coords[1]],
-        zoom: 12,
-        duration: 1000
-      })
-    }
-  }, [province, provinceData])
+  }, [latitude, longitude, mapLoaded, handleLocationChange])
 
   return (
-    <div
-      ref={mapContainerRef}
-      className="w-full h-[300px] rounded-xl overflow-hidden border"
-      style={{ borderColor: theme === 'dark' ? '#374151' : '#e5e7eb' }}
-    />
+    <div className="relative">
+      <div
+        ref={mapContainerRef}
+        className="w-full h-[300px] rounded-xl overflow-hidden border"
+        style={{ borderColor: theme === 'dark' ? '#374151' : '#e5e7eb' }}
+      />
+      {!mapLoaded && (
+        <div className="absolute inset-0 flex items-center justify-center bg-gray-100 dark:bg-gray-800 rounded-xl">
+          <div className="flex items-center gap-2 text-gray-500">
+            <Loader2 className="w-5 h-5 animate-spin" />
+            <span>Cargando mapa...</span>
+          </div>
+        </div>
+      )}
+    </div>
   )
 }
 
@@ -559,7 +595,8 @@ export default function CompaniesPage() {
     broker_province: '',
     broker_municipality: '',
     broker_address: '',
-    broker_delivery_hours: '',
+    broker_delivery_start: '08:00',
+    broker_delivery_end: '18:00',
     broker_contact_phone: '',
   })
 
@@ -663,7 +700,8 @@ export default function CompaniesPage() {
       broker_province: '',
       broker_municipality: '',
       broker_address: '',
-      broker_delivery_hours: '',
+      broker_delivery_start: '08:00',
+      broker_delivery_end: '18:00',
       broker_contact_phone: '',
     })
     setCurrentStep(1)
@@ -1441,25 +1479,59 @@ export default function CompaniesPage() {
                           </select>
                         </div>
 
-                        <div>
+                        <div className="md:col-span-2">
                           <label className={cn(
                             "block text-sm font-medium mb-2",
                             theme === 'dark' ? "text-gray-300" : "text-gray-700"
                           )}>
                             Horario de Entrega
                           </label>
-                          <input
-                            type="text"
-                            value={formData.broker_delivery_hours}
-                            onChange={(e) => setFormData({...formData, broker_delivery_hours: e.target.value})}
-                            className={cn(
-                              "w-full px-4 py-3 rounded-xl border focus:outline-none focus:ring-2 transition-all duration-300",
-                              theme === 'dark'
-                                ? "bg-gray-800/50 border-gray-700 text-white focus:border-blue-500 focus:ring-blue-500/20"
-                                : "bg-white border-gray-300 text-black focus:border-blue-500 focus:ring-blue-500/20"
-                            )}
-                            placeholder="Ej: 8:00 AM - 6:00 PM"
-                          />
+                          <div className="flex items-center gap-4">
+                            <div className="flex-1">
+                              <label className={cn(
+                                "block text-xs mb-1",
+                                theme === 'dark' ? "text-gray-400" : "text-gray-500"
+                              )}>
+                                Desde
+                              </label>
+                              <input
+                                type="time"
+                                value={formData.broker_delivery_start}
+                                onChange={(e) => setFormData({...formData, broker_delivery_start: e.target.value})}
+                                className={cn(
+                                  "w-full px-4 py-3 rounded-xl border focus:outline-none focus:ring-2 transition-all duration-300",
+                                  theme === 'dark'
+                                    ? "bg-gray-800/50 border-gray-700 text-white focus:border-blue-500 focus:ring-blue-500/20"
+                                    : "bg-white border-gray-300 text-black focus:border-blue-500 focus:ring-blue-500/20"
+                                )}
+                              />
+                            </div>
+                            <span className={cn(
+                              "text-lg font-medium mt-5",
+                              theme === 'dark' ? "text-gray-400" : "text-gray-500"
+                            )}>
+                              -
+                            </span>
+                            <div className="flex-1">
+                              <label className={cn(
+                                "block text-xs mb-1",
+                                theme === 'dark' ? "text-gray-400" : "text-gray-500"
+                              )}>
+                                Hasta
+                              </label>
+                              <input
+                                type="time"
+                                value={formData.broker_delivery_end}
+                                onChange={(e) => setFormData({...formData, broker_delivery_end: e.target.value})}
+                                className={cn(
+                                  "w-full px-4 py-3 rounded-xl border focus:outline-none focus:ring-2 transition-all duration-300",
+                                  theme === 'dark'
+                                    ? "bg-gray-800/50 border-gray-700 text-white focus:border-blue-500 focus:ring-blue-500/20"
+                                    : "bg-white border-gray-300 text-black focus:border-blue-500 focus:ring-blue-500/20"
+                                )}
+                              />
+                            </div>
+                          </div>
                         </div>
 
                         <div>
