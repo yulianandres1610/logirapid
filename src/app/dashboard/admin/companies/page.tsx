@@ -385,107 +385,104 @@ interface BrokerMapPickerProps {
 
 function BrokerMapPicker({ theme, province, latitude, longitude, onLocationChange }: BrokerMapPickerProps) {
   const mapContainerRef = useRef<HTMLDivElement>(null)
-  const mapRef = useRef<mapboxgl.Map | null>(null)
-  const markerRef = useRef<mapboxgl.Marker | null>(null)
-  const [mapLoaded, setMapLoaded] = useState(false)
+  const mapInstanceRef = useRef<mapboxgl.Map | null>(null)
+  const markerInstanceRef = useRef<mapboxgl.Marker | null>(null)
+  const isInitializedRef = useRef(false)
+  const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading')
 
   // Obtener coordenadas de la provincia
   const provinceData = BROKER_PROVINCES.find(p => p.id === province)
-  const defaultCoords = provinceData?.coords || [-82.3666, 23.1136] // Default: La Habana
 
-  // Callback estable para onLocationChange
-  const handleLocationChange = useCallback((lat: number, lng: number) => {
-    onLocationChange(lat, lng)
-  }, [onLocationChange])
-
-  // Inicializar mapa
+  // Inicializar mapa solo una vez
   useEffect(() => {
-    if (!mapContainerRef.current || mapRef.current) return
+    if (isInitializedRef.current || !mapContainerRef.current) return
+    isInitializedRef.current = true
 
-    mapboxgl.accessToken = MAPBOX_TOKEN
+    const initMap = async () => {
+      try {
+        mapboxgl.accessToken = MAPBOX_TOKEN
 
-    const map = new mapboxgl.Map({
-      container: mapContainerRef.current,
-      style: theme === 'dark' ? 'mapbox://styles/mapbox/dark-v11' : 'mapbox://styles/mapbox/streets-v12',
-      center: [defaultCoords[0], defaultCoords[1]],
-      zoom: 11
-    })
+        const initialCenter: [number, number] = provinceData?.coords as [number, number] || [-82.3666, 23.1136]
 
-    mapRef.current = map
+        const map = new mapboxgl.Map({
+          container: mapContainerRef.current!,
+          style: theme === 'dark' ? 'mapbox://styles/mapbox/dark-v11' : 'mapbox://styles/mapbox/streets-v12',
+          center: initialCenter,
+          zoom: 10
+        })
 
-    map.on('load', () => {
-      setMapLoaded(true)
+        mapInstanceRef.current = map
 
-      // Agregar controles de navegación
-      map.addControl(new mapboxgl.NavigationControl(), 'top-right')
+        map.on('load', () => {
+          setStatus('ready')
+          map.addControl(new mapboxgl.NavigationControl(), 'top-right')
 
-      // Click en el mapa para colocar/mover pin
-      map.on('click', (e) => {
-        const { lng, lat } = e.lngLat
+          // Agregar marcador inicial si hay coordenadas
+          if (latitude && longitude) {
+            addMarker(map, longitude, latitude)
+          }
+        })
 
-        if (markerRef.current) {
-          markerRef.current.setLngLat([lng, lat])
-        } else {
-          const marker = new mapboxgl.Marker({ color: '#CC0A46', draggable: true })
-            .setLngLat([lng, lat])
-            .addTo(map)
+        map.on('click', (e) => {
+          addMarker(map, e.lngLat.lng, e.lngLat.lat)
+          onLocationChange(e.lngLat.lat, e.lngLat.lng)
+        })
 
-          marker.on('dragend', () => {
-            const lngLat = marker.getLngLat()
-            handleLocationChange(lngLat.lat, lngLat.lng)
-          })
-
-          markerRef.current = marker
-        }
-
-        handleLocationChange(lat, lng)
-      })
-    })
-
-    return () => {
-      if (mapRef.current) {
-        mapRef.current.remove()
-        mapRef.current = null
-        markerRef.current = null
-        setMapLoaded(false)
+      } catch (err) {
+        console.error('Map init error:', err)
+        setStatus('error')
       }
     }
-  }, []) // Solo inicializar una vez
 
-  // Actualizar estilo del mapa cuando cambia el tema
-  useEffect(() => {
-    if (mapRef.current && mapLoaded) {
-      const newStyle = theme === 'dark' ? 'mapbox://styles/mapbox/dark-v11' : 'mapbox://styles/mapbox/streets-v12'
-      mapRef.current.setStyle(newStyle)
+    const addMarker = (map: mapboxgl.Map, lng: number, lat: number) => {
+      if (markerInstanceRef.current) {
+        markerInstanceRef.current.setLngLat([lng, lat])
+      } else {
+        const marker = new mapboxgl.Marker({ color: '#CC0A46', draggable: true })
+          .setLngLat([lng, lat])
+          .addTo(map)
+
+        marker.on('dragend', () => {
+          const pos = marker.getLngLat()
+          onLocationChange(pos.lat, pos.lng)
+        })
+
+        markerInstanceRef.current = marker
+      }
     }
-  }, [theme, mapLoaded])
 
-  // Actualizar centro del mapa cuando cambia la provincia
+    initMap()
+
+    return () => {
+      if (mapInstanceRef.current) {
+        mapInstanceRef.current.remove()
+        mapInstanceRef.current = null
+        markerInstanceRef.current = null
+        isInitializedRef.current = false
+      }
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // Actualizar centro cuando cambia la provincia
   useEffect(() => {
-    if (mapRef.current && mapLoaded && provinceData) {
-      mapRef.current.flyTo({
-        center: [provinceData.coords[0], provinceData.coords[1]],
-        zoom: 11,
-        duration: 1500
+    if (mapInstanceRef.current && status === 'ready' && provinceData) {
+      mapInstanceRef.current.flyTo({
+        center: provinceData.coords as [number, number],
+        zoom: 10,
+        duration: 1000
       })
     }
-  }, [province, provinceData, mapLoaded])
+  }, [province, provinceData, status])
 
-  // Si ya hay coordenadas guardadas, agregar marcador
+  // Actualizar estilo cuando cambia el tema
   useEffect(() => {
-    if (mapRef.current && mapLoaded && latitude && longitude && !markerRef.current) {
-      const marker = new mapboxgl.Marker({ color: '#CC0A46', draggable: true })
-        .setLngLat([longitude, latitude])
-        .addTo(mapRef.current)
-
-      marker.on('dragend', () => {
-        const lngLat = marker.getLngLat()
-        handleLocationChange(lngLat.lat, lngLat.lng)
-      })
-
-      markerRef.current = marker
+    if (mapInstanceRef.current && status === 'ready') {
+      mapInstanceRef.current.setStyle(
+        theme === 'dark' ? 'mapbox://styles/mapbox/dark-v11' : 'mapbox://styles/mapbox/streets-v12'
+      )
     }
-  }, [latitude, longitude, mapLoaded, handleLocationChange])
+  }, [theme, status])
 
   return (
     <div className="relative">
@@ -494,12 +491,28 @@ function BrokerMapPicker({ theme, province, latitude, longitude, onLocationChang
         className="w-full h-[300px] rounded-xl overflow-hidden border"
         style={{ borderColor: theme === 'dark' ? '#374151' : '#e5e7eb' }}
       />
-      {!mapLoaded && (
+      {status === 'loading' && (
         <div className="absolute inset-0 flex items-center justify-center bg-gray-100 dark:bg-gray-800 rounded-xl">
           <div className="flex items-center gap-2 text-gray-500">
             <Loader2 className="w-5 h-5 animate-spin" />
             <span>Cargando mapa...</span>
           </div>
+        </div>
+      )}
+      {status === 'error' && (
+        <div className="absolute inset-0 flex items-center justify-center bg-red-50 dark:bg-red-900/20 rounded-xl">
+          <div className="flex items-center gap-2 text-red-500">
+            <XCircle className="w-5 h-5" />
+            <span>Error al cargar el mapa</span>
+          </div>
+        </div>
+      )}
+      {status === 'ready' && (
+        <div className={cn(
+          "absolute bottom-2 left-2 px-3 py-1 rounded-lg text-xs",
+          theme === 'dark' ? "bg-gray-800/80 text-gray-300" : "bg-white/80 text-gray-600"
+        )}>
+          Haz clic en el mapa para colocar el pin
         </div>
       )}
     </div>
