@@ -341,14 +341,76 @@ export async function DELETE(
       )
     }
 
+    // Verificar otras tablas relacionadas antes de eliminar
+    const additionalChecks = [
+      { table: 'routes', column: 'company_id', name: 'rutas' },
+      { table: 'vehicles', column: 'company_id', name: 'vehículos' },
+      { table: 'warehouses', column: 'company_id', name: 'almacenes' },
+      { table: 'transactions', column: 'companyid', name: 'transacciones' },
+      { table: 'empaques', column: 'company_id', name: 'empaques' },
+      { table: 'services', column: 'company_id', name: 'servicios' },
+      { table: 'remittance_orders', column: 'selling_company_id', name: 'órdenes de remesa' },
+      { table: 'broker_wallet_balances', column: 'company_id', name: 'balances de wallet' },
+    ]
+
+    for (const check of additionalChecks) {
+      try {
+        const result = await db.query(
+          `SELECT COUNT(*) as count FROM ${check.table} WHERE ${check.column} = $1`,
+          [companyId]
+        )
+        if (parseInt(result.rows[0].count) > 0) {
+          return NextResponse.json(
+            { success: false, error: `No se puede eliminar. Tiene ${result.rows[0].count} ${check.name} asociados` },
+            { status: 400 }
+          )
+        }
+      } catch {
+        // Table might not exist, continue
+      }
+    }
+
+    // Eliminar registros relacionados que son seguros de eliminar
+    const safeToDelete = [
+      { table: 'company_product_pricing', column: 'company_id' },
+      { table: 'company_product_services', column: 'company_id' },
+      { table: 'company_agency_configs', column: 'companyid' },
+      { table: 'agency_rates_config', column: 'companyid' },
+      { table: 'company_commission_config', column: 'company_id' },
+      { table: 'company_payment_settings', column: 'company_id' },
+      { table: 'company_service_pricing', column: 'company_id' },
+      { table: 'zones', column: 'companyid' },
+      { table: 'package_sizes', column: 'companyid' },
+      { table: 'package_content_types', column: 'company_id' },
+    ]
+
+    for (const item of safeToDelete) {
+      try {
+        await db.query(`DELETE FROM ${item.table} WHERE ${item.column} = $1`, [companyId])
+      } catch {
+        // Ignore errors if table doesn't exist
+      }
+    }
+
     await db.query('DELETE FROM companies WHERE id = $1', [companyId])
 
     return NextResponse.json({
       success: true,
       message: 'Empresa eliminada exitosamente'
     })
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error in DELETE /api/companies/[id]:', error)
+
+    // Check for foreign key violation
+    if (error.code === '23503') {
+      const match = error.detail?.match(/table "(\w+)"/)
+      const tableName = match ? match[1] : 'otra tabla'
+      return NextResponse.json(
+        { success: false, error: `No se puede eliminar. Existen registros relacionados en ${tableName}` },
+        { status: 400 }
+      )
+    }
+
     return NextResponse.json(
       { success: false, error: 'Error interno del servidor' },
       { status: 500 }
