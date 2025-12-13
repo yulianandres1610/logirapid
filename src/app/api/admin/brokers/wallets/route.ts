@@ -78,7 +78,7 @@ export async function GET(request: NextRequest) {
         c.email,
         c.phone,
         c.logo,
-        c.created_at,
+        c.createdat as created_at,
         -- Get transaction counts
         (SELECT COUNT(*) FROM wallet_transactions wt
          WHERE (wt.source_company_id = c.id OR wt.target_company_id = c.id)

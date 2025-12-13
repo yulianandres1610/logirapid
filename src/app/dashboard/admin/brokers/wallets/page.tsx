@@ -27,6 +27,27 @@ import { DashboardLayout } from '@/components/layout/dashboard-layout'
 import { cn } from '@/lib/utils'
 import { useTheme } from '@/contexts/theme-context'
 
+// Mapeo de IDs de provincias a nombres completos
+const PROVINCE_ID_TO_NAME: Record<string, string> = {
+  'pinar-del-rio': 'Pinar del Río',
+  'artemisa': 'Artemisa',
+  'la-habana': 'La Habana',
+  'mayabeque': 'Mayabeque',
+  'matanzas': 'Matanzas',
+  'cienfuegos': 'Cienfuegos',
+  'villa-clara': 'Villa Clara',
+  'sancti-spiritus': 'Sancti Spíritus',
+  'ciego-de-avila': 'Ciego de Ávila',
+  'camaguey': 'Camagüey',
+  'las-tunas': 'Las Tunas',
+  'holguin': 'Holguín',
+  'granma': 'Granma',
+  'santiago-de-cuba': 'Santiago de Cuba',
+  'santiago': 'Santiago de Cuba',
+  'guantanamo': 'Guantánamo',
+  'isla-de-la-juventud': 'Isla de la Juventud'
+}
+
 interface Broker {
   id: number
   name: string
@@ -168,10 +189,12 @@ export default function AdminBrokerWalletsPage() {
   const filteredBrokers = brokers.filter(broker => {
     if (!searchTerm) return true
     const search = searchTerm.toLowerCase()
+    const provinceName = PROVINCE_ID_TO_NAME[broker.province] || broker.province || ''
+    const municipalityName = PROVINCE_ID_TO_NAME[broker.municipality] || broker.municipality || ''
     return (
       broker.name.toLowerCase().includes(search) ||
-      broker.province?.toLowerCase().includes(search) ||
-      broker.municipality?.toLowerCase().includes(search) ||
+      provinceName.toLowerCase().includes(search) ||
+      municipalityName.toLowerCase().includes(search) ||
       broker.walletNumber?.toLowerCase().includes(search)
     )
   })
@@ -375,7 +398,7 @@ export default function AdminBrokerWalletsPage() {
                         {broker.province && (
                           <p className="text-sm text-gray-500 dark:text-gray-400 flex items-center gap-1">
                             <MapPin className="w-3 h-3" />
-                            {broker.municipality}, {broker.province}
+                            {PROVINCE_ID_TO_NAME[broker.municipality] || broker.municipality}, {PROVINCE_ID_TO_NAME[broker.province] || broker.province}
                           </p>
                         )}
                       </div>

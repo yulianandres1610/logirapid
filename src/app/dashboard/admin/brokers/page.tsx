@@ -83,6 +83,27 @@ interface RateHistory {
   baserate: number
 }
 
+// Mapeo de IDs de provincias a nombres completos
+const PROVINCE_ID_TO_NAME: Record<string, string> = {
+  'pinar-del-rio': 'Pinar del Río',
+  'artemisa': 'Artemisa',
+  'la-habana': 'La Habana',
+  'mayabeque': 'Mayabeque',
+  'matanzas': 'Matanzas',
+  'cienfuegos': 'Cienfuegos',
+  'villa-clara': 'Villa Clara',
+  'sancti-spiritus': 'Sancti Spíritus',
+  'ciego-de-avila': 'Ciego de Ávila',
+  'camaguey': 'Camagüey',
+  'las-tunas': 'Las Tunas',
+  'holguin': 'Holguín',
+  'granma': 'Granma',
+  'santiago-de-cuba': 'Santiago',
+  'santiago': 'Santiago',
+  'guantanamo': 'Guantánamo',
+  'isla-de-la-juventud': 'Isla de la Juventud'
+}
+
 // Provinces with coordinates
 const PROVINCES: Record<string, { coords: [number, number], color: string }> = {
   'Pinar del Río': { coords: [-83.6978, 22.4175], color: '#3b82f6' },
@@ -207,9 +228,11 @@ export default function AdminBrokersDashboardPage() {
     { name: 'Canceladas', value: orderStats.cancelled, color: ORDER_COLORS.cancelled },
   ].filter(d => d.value > 0) : []
 
-  // Chart data: Brokers by province
+  // Chart data: Brokers by province (convert IDs to display names)
   const provinceData = brokers.reduce((acc, broker) => {
-    const prov = broker.province || 'Sin asignar'
+    // Convertir ID de provincia a nombre completo
+    const provinceId = broker.province || ''
+    const prov = PROVINCE_ID_TO_NAME[provinceId] || broker.province || 'Sin asignar'
     if (!acc[prov]) acc[prov] = { count: 0, balance: 0, brokers: [] as Broker[] }
     acc[prov].count++
     acc[prov].balance += broker.walletBalance || 0
@@ -668,7 +691,7 @@ export default function AdminBrokersDashboardPage() {
                       </span>
                       <div>
                         <p className={cn("text-sm font-medium", theme === 'dark' ? 'text-white' : 'text-gray-900')}>{broker.name}</p>
-                        <p className="text-xs text-gray-500">{broker.province || 'Sin provincia'}</p>
+                        <p className="text-xs text-gray-500">{PROVINCE_ID_TO_NAME[broker.province] || broker.province || 'Sin provincia'}</p>
                       </div>
                     </div>
                     <span className="text-sm font-semibold text-emerald-600 dark:text-emerald-400">
