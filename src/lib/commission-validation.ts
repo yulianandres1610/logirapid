@@ -69,12 +69,14 @@ export async function calculateAvailableMargin(
   companyId: number,
   productId: number,
   client: typeof db = db
-): Promise<MarginResult> {
+): Promise<MarginResult & { isPercentagePricing?: boolean }> {
   const result = await client.query(`
     SELECT
       COALESCE(cpp.mi_costo, pc.mi_costo, 0) as mi_costo,
       COALESCE(cpp.precio_clientes, pc.precio_publico, 0) as precio_publico,
-      COALESCE(pc.max_commission_percentage, 100) as max_commission_pct
+      COALESCE(pc.max_commission_percentage, 100) as max_commission_pct,
+      pc.pricing_model,
+      pc.service_category
     FROM product_catalog pc
     LEFT JOIN company_product_pricing cpp
       ON cpp.product_id = pc.id AND cpp.company_id = $1
@@ -89,15 +91,27 @@ export async function calculateAvailableMargin(
   const miCosto = parseFloat(row.mi_costo) || 0
   const precioPublico = parseFloat(row.precio_publico) || 0
   const maxCommissionPercentage = parseFloat(row.max_commission_pct) || 100
+
+  // Check if this is a percentage-based pricing product (remesa)
+  const isPercentagePricing = row.pricing_model === 'percentage' || row.service_category === 'remesa'
+
+  // For percentage pricing (remesa), margin is in percentage points
+  // For fixed pricing, margin is in currency
   const margenBruto = precioPublico - miCosto
-  const maxComisionesPermitidas = margenBruto * (maxCommissionPercentage / 100)
+
+  // For remesa products, allow full margin as commission space
+  // (the values are percentages, not currency amounts)
+  const maxComisionesPermitidas = isPercentagePricing
+    ? margenBruto  // For remesa: margin in percentage points
+    : margenBruto * (maxCommissionPercentage / 100)
 
   return {
     miCosto,
     precioPublico,
     margenBruto,
     maxCommissionPercentage,
-    maxComisionesPermitidas: Math.max(0, maxComisionesPermitidas)
+    maxComisionesPermitidas: Math.max(0, maxComisionesPermitidas),
+    isPercentagePricing
   }
 }
 
@@ -106,26 +120,37 @@ export async function calculateAvailableMargin(
  *
  * @param config - Commission configuration
  * @param basePrice - Base price to calculate percentage from
+ * @param isPercentagePricing - If true, basePrice is a percentage (for remesa products)
  */
 export function calculateCommissionAmount(
   config: CommissionConfig,
-  basePrice: number
+  basePrice: number,
+  isPercentagePricing: boolean = false
 ): number {
   let amount: number
 
   if (config.commissionType === 'fixed') {
     amount = config.commissionValue
   } else {
-    // Percentage
-    amount = basePrice * (config.commissionValue / 100)
+    // Percentage commission
+    if (isPercentagePricing) {
+      // For remesa products: commission value is already in percentage points
+      // e.g., commission of 1% on a 5% product price means 1 percentage point
+      amount = config.commissionValue
+    } else {
+      // For fixed pricing: calculate as percentage of base price
+      amount = basePrice * (config.commissionValue / 100)
+    }
   }
 
-  // Apply min/max bounds
-  if (config.minAmount !== undefined && amount < config.minAmount) {
-    amount = config.minAmount
-  }
-  if (config.maxAmount !== undefined && amount > config.maxAmount) {
-    amount = config.maxAmount
+  // Apply min/max bounds (only for non-percentage pricing)
+  if (!isPercentagePricing) {
+    if (config.minAmount !== undefined && amount < config.minAmount) {
+      amount = config.minAmount
+    }
+    if (config.maxAmount !== undefined && amount > config.maxAmount) {
+      amount = config.maxAmount
+    }
   }
 
   return Math.max(0, amount)
@@ -158,10 +183,12 @@ export async function calculateTotalCommissions(
     serviceId?: number
     serviceName?: string
   }>
+  isPercentagePricing?: boolean
 }> {
   // Get margin for base price calculation
   const margin = await calculateAvailableMargin(companyId, productId, client)
   const basePrice = margin.precioPublico
+  const isPercentagePricing = margin.isPercentagePricing || false
 
   // Get existing commissions
   const existingQuery = `
@@ -218,7 +245,7 @@ export async function calculateTotalCommissions(
       maxAmount: row.max_amount ? parseFloat(row.max_amount) : undefined
     }
 
-    const calculatedAmount = calculateCommissionAmount(config, basePrice)
+    const calculatedAmount = calculateCommissionAmount(config, basePrice, isPercentagePricing)
     total += calculatedAmount
 
     details.push({
@@ -234,7 +261,7 @@ export async function calculateTotalCommissions(
 
   // Add new commission if provided
   if (newCommission) {
-    const newAmount = calculateCommissionAmount(newCommission, basePrice)
+    const newAmount = calculateCommissionAmount(newCommission, basePrice, isPercentagePricing)
     total += newAmount
 
     details.push({
@@ -247,7 +274,7 @@ export async function calculateTotalCommissions(
     })
   }
 
-  return { total, details }
+  return { total, details, isPercentagePricing }
 }
 
 /**
