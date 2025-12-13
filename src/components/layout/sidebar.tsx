@@ -344,7 +344,7 @@ export function Sidebar({ isCollapsed, onToggle }: SidebarProps) {
       href: "/dashboard/admin/brokers",
       hasSubmenu: true,
       submenuItems: [
-        { icon: Building2, label: "Vista General", href: "/dashboard/admin/brokers" },
+        { icon: Building2, label: "Dashboard", href: "/dashboard/admin/brokers" },
         { icon: Package, label: "Órdenes Cupones", href: "/dashboard/admin/brokers/orders" },
         { icon: Wallet, label: "Wallets", href: "/dashboard/admin/brokers/wallets" }
       ]
