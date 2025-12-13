@@ -1949,19 +1949,35 @@ export default function CatalogoEmpresaPage() {
                     {products.map(product => {
                       const catConfig = getCategoryConfig(product.category)
                       const Icon = catConfig.icon
-                      const commission = productCommissions[product.id] || { type: 'percentage' as const, value: 0, maxAmount: null }
+                      const isRemesa = product.category === 'remesa' && product.pricingModel === 'percentage'
+                      // For remesa: commission type must be percentage
+                      const commission = productCommissions[product.id] || {
+                        type: isRemesa ? 'percentage' as const : 'percentage' as const,
+                        value: 0,
+                        maxAmount: null
+                      }
 
                       // Calculate margin for this product
                       const servicesCost = getServicesCost(product.id)
-                      const totalCost = product.miCosto + servicesCost
                       const publicPrice = publicPrices[product.id] ?? 0
-                      const totalMargin = publicPrice > 0 ? publicPrice - totalCost : 0
 
-                      // Calculate commission used by OTHER roles
-                      const otherRolesUsed = getOtherRolesCommissionForProduct(product.id, publicPrice)
+                      // For remesa: margin is percentage points difference
+                      // For others: margin is dollar difference
+                      let totalMargin: number
+                      let availableMargin: number
+                      let otherRolesUsed: number
 
-                      // Available margin = total margin - commissions of other roles
-                      const availableMargin = Math.max(0, totalMargin - otherRolesUsed)
+                      if (isRemesa) {
+                        // Remesa: publicPrice and miCosto are both percentages
+                        totalMargin = publicPrice > 0 ? publicPrice - product.miCosto : 0
+                        otherRolesUsed = getOtherRolesCommissionForProduct(product.id, publicPrice)
+                        availableMargin = Math.max(0, totalMargin - otherRolesUsed)
+                      } else {
+                        const totalCost = product.miCosto + servicesCost
+                        totalMargin = publicPrice > 0 ? publicPrice - totalCost : 0
+                        otherRolesUsed = getOtherRolesCommissionForProduct(product.id, publicPrice)
+                        availableMargin = Math.max(0, totalMargin - otherRolesUsed)
+                      }
 
                       // Calculate effective commission amount for current role
                       let effectiveCommission = 0
@@ -1970,12 +1986,15 @@ export default function CatalogoEmpresaPage() {
                       } else {
                         effectiveCommission = commission.value
                       }
-                      // Apply max amount cap if set
-                      if (commission.maxAmount !== null && effectiveCommission > commission.maxAmount) {
+                      // Apply max amount cap if set (only for non-remesa)
+                      if (!isRemesa && commission.maxAmount !== null && effectiveCommission > commission.maxAmount) {
                         effectiveCommission = commission.maxAmount
                       }
 
-                      const exceedsMargin = effectiveCommission > availableMargin && availableMargin >= 0
+                      // For remesa: compare percentage points, not dollar amounts
+                      const exceedsMargin = isRemesa
+                        ? commission.value > availableMargin && availableMargin >= 0
+                        : effectiveCommission > availableMargin && availableMargin >= 0
 
                       return (
                         <tr key={product.id} className={`transition-colors ${exceedsMargin ? (isDark ? 'bg-red-900/20' : 'bg-red-50') : ''} ${isDark ? 'hover:bg-gray-700/50' : 'hover:bg-gray-50'}`}>
@@ -1998,16 +2017,16 @@ export default function CatalogoEmpresaPage() {
                             {publicPrice > 0 ? (
                               <div>
                                 <span className={`text-lg font-semibold ${availableMargin > 0 ? (isDark ? 'text-emerald-400' : 'text-emerald-600') : (isDark ? 'text-amber-400' : 'text-amber-600')}`}>
-                                  ${availableMargin.toFixed(2)}
+                                  {isRemesa ? `${availableMargin.toFixed(1)}%` : `$${availableMargin.toFixed(2)}`}
                                 </span>
                                 {otherRolesUsed > 0 && (
                                   <div className={`text-xs mt-1 ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
-                                    Otros roles: ${otherRolesUsed.toFixed(2)}
+                                    Otros roles: {isRemesa ? `${otherRolesUsed.toFixed(1)}%` : `$${otherRolesUsed.toFixed(2)}`}
                                   </div>
                                 )}
                                 {exceedsMargin && (
                                   <div className={`text-xs mt-1 ${isDark ? 'text-red-400' : 'text-red-500'}`}>
-                                    Comision: ${effectiveCommission.toFixed(2)}
+                                    Comision: {isRemesa ? `${commission.value}%` : `$${effectiveCommission.toFixed(2)}`}
                                   </div>
                                 )}
                               </div>
@@ -2019,39 +2038,52 @@ export default function CatalogoEmpresaPage() {
                           </td>
                           <td className="px-6 py-4">
                             <div className="flex justify-center">
-                              <select
-                                value={commission.type}
-                                onChange={(e) => setProductCommissions(prev => ({
-                                  ...prev,
-                                  [product.id]: { ...commission, type: e.target.value as 'percentage' | 'fixed' }
-                                }))}
-                                className={`appearance-none px-3 py-2 rounded-lg text-sm cursor-pointer ${
-                                  isDark
-                                    ? 'bg-gray-700 border-gray-600 text-white'
-                                    : 'bg-gray-50 border-gray-200 text-gray-900'
-                                } border focus:outline-none focus:ring-2 focus:ring-blue-500/20`}
-                              >
-                                <option value="percentage">Porcentaje %</option>
-                                <option value="fixed">Monto Fijo $</option>
-                              </select>
+                              {isRemesa ? (
+                                <span className={`px-3 py-2 rounded-lg text-sm font-medium ${
+                                  isDark ? 'bg-emerald-500/20 text-emerald-400' : 'bg-emerald-100 text-emerald-700'
+                                }`}>
+                                  Porcentaje %
+                                </span>
+                              ) : (
+                                <select
+                                  value={commission.type}
+                                  onChange={(e) => setProductCommissions(prev => ({
+                                    ...prev,
+                                    [product.id]: { ...commission, type: e.target.value as 'percentage' | 'fixed' }
+                                  }))}
+                                  className={`appearance-none px-3 py-2 rounded-lg text-sm cursor-pointer ${
+                                    isDark
+                                      ? 'bg-gray-700 border-gray-600 text-white'
+                                      : 'bg-gray-50 border-gray-200 text-gray-900'
+                                  } border focus:outline-none focus:ring-2 focus:ring-blue-500/20`}
+                                >
+                                  <option value="percentage">Porcentaje %</option>
+                                  <option value="fixed">Monto Fijo $</option>
+                                </select>
+                              )}
                             </div>
                           </td>
                           <td className="px-6 py-4">
                             <div className="flex justify-center">
                               <div className="relative">
                                 <span className={`absolute left-3 top-1/2 -translate-y-1/2 text-sm ${exceedsMargin ? (isDark ? 'text-red-400' : 'text-red-500') : (isDark ? 'text-blue-400' : 'text-blue-500')}`}>
-                                  {commission.type === 'percentage' ? '%' : '$'}
+                                  {isRemesa || commission.type === 'percentage' ? '%' : '$'}
                                 </span>
                                 <input
                                   type="number"
-                                  step={commission.type === 'percentage' ? '1' : '0.01'}
+                                  step={isRemesa || commission.type === 'percentage' ? '0.1' : '0.01'}
                                   min="0"
-                                  max={commission.type === 'percentage' ? '100' : undefined}
+                                  max={isRemesa ? availableMargin : (commission.type === 'percentage' ? '100' : undefined)}
                                   value={commission.value || ''}
                                   placeholder="0"
                                   onChange={(e) => setProductCommissions(prev => ({
                                     ...prev,
-                                    [product.id]: { ...commission, value: parseFloat(e.target.value) || 0 }
+                                    [product.id]: {
+                                      ...commission,
+                                      value: parseFloat(e.target.value) || 0,
+                                      // Force percentage type for remesa
+                                      type: isRemesa ? 'percentage' : commission.type
+                                    }
                                   }))}
                                   className={`w-28 pl-8 pr-3 py-2.5 text-center text-lg font-semibold rounded-xl border-2 transition-all ${
                                     exceedsMargin
@@ -2072,26 +2104,32 @@ export default function CatalogoEmpresaPage() {
                           </td>
                           <td className="px-6 py-4">
                             <div className="flex justify-center">
-                              <div className="relative">
-                                <span className={`absolute left-3 top-1/2 -translate-y-1/2 text-sm ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>$</span>
-                                <input
-                                  type="number"
-                                  step="0.01"
-                                  min="0"
-                                  max={availableMargin > 0 ? availableMargin : undefined}
-                                  value={commission.maxAmount ?? ''}
-                                  placeholder="—"
-                                  onChange={(e) => setProductCommissions(prev => ({
-                                    ...prev,
-                                    [product.id]: { ...commission, maxAmount: e.target.value ? parseFloat(e.target.value) : null }
-                                  }))}
-                                  className={`w-28 pl-8 pr-3 py-2 text-center rounded-xl border transition-all ${
-                                    isDark
-                                      ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-600 focus:border-blue-500'
-                                      : 'bg-white border-gray-200 text-gray-900 placeholder-gray-400 focus:border-blue-400'
-                                  } focus:outline-none focus:ring-2 focus:ring-blue-500/10`}
-                                />
-                              </div>
+                              {isRemesa ? (
+                                <span className={`text-sm ${isDark ? 'text-gray-600' : 'text-gray-400'}`}>
+                                  N/A
+                                </span>
+                              ) : (
+                                <div className="relative">
+                                  <span className={`absolute left-3 top-1/2 -translate-y-1/2 text-sm ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>$</span>
+                                  <input
+                                    type="number"
+                                    step="0.01"
+                                    min="0"
+                                    max={availableMargin > 0 ? availableMargin : undefined}
+                                    value={commission.maxAmount ?? ''}
+                                    placeholder="—"
+                                    onChange={(e) => setProductCommissions(prev => ({
+                                      ...prev,
+                                      [product.id]: { ...commission, maxAmount: e.target.value ? parseFloat(e.target.value) : null }
+                                    }))}
+                                    className={`w-28 pl-8 pr-3 py-2 text-center rounded-xl border transition-all ${
+                                      isDark
+                                        ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-600 focus:border-blue-500'
+                                        : 'bg-white border-gray-200 text-gray-900 placeholder-gray-400 focus:border-blue-400'
+                                    } focus:outline-none focus:ring-2 focus:ring-blue-500/10`}
+                                  />
+                                </div>
+                              )}
                             </div>
                           </td>
                         </tr>
