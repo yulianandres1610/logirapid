@@ -67,6 +67,7 @@ export async function GET(
         c.broker_address as "broker_address",
         c.broker_delivery_hours as "broker_delivery_hours",
         c.broker_contact_phone as "broker_contact_phone",
+        c.broker_alternate_phone as "broker_alternate_phone",
         c.broker_bank_accounts as "broker_bank_accounts",
         parent.legalname as "parentCompanyName"
       FROM companies c
@@ -199,6 +200,7 @@ export async function PUT(
       broker_address: 'broker_address',
       broker_delivery_hours: 'broker_delivery_hours',
       broker_contact_phone: 'broker_contact_phone',
+      broker_alternate_phone: 'broker_alternate_phone',
       broker_bank_accounts: 'broker_bank_accounts'
     }
 

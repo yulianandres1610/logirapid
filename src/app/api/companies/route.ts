@@ -141,6 +141,7 @@ export async function POST(request: NextRequest) {
       broker_delivery_start,
       broker_delivery_end,
       broker_contact_phone,
+      broker_alternate_phone,
       broker_bank_accounts
     } = body
 
@@ -259,7 +260,7 @@ export async function POST(request: NextRequest) {
         parent_company_id, is_branch,
         is_provider, provider_type, provider_categories, provider_services,
         latitude, longitude, broker_province, broker_municipality, broker_address,
-        broker_delivery_hours, broker_contact_phone, broker_bank_accounts,
+        broker_delivery_hours, broker_contact_phone, broker_alternate_phone, broker_bank_accounts,
         status, createdat, walletbalance, transactionscount, userscount
       ) VALUES (
         $1, $2, $3, $4, $5, $6, $7, $8, $9, $10,
@@ -269,7 +270,7 @@ export async function POST(request: NextRequest) {
         $27, $28,
         $29, $30, $31, $32,
         $33, $34, $35, $36, $37,
-        $38, $39, $40,
+        $38, $39, $40, $41,
         'active', NOW(), 0, 0, 0
       ) RETURNING
         id,
@@ -332,6 +333,7 @@ export async function POST(request: NextRequest) {
       broker_address || null,
       brokerDeliveryHours,
       broker_contact_phone || null,
+      broker_alternate_phone || null,
       JSON.stringify(broker_bank_accounts || [])
     ]
 

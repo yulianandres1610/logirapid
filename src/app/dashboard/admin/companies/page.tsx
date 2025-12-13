@@ -585,6 +585,7 @@ export default function CompaniesPage() {
 
   // Create company form state
   const [currentStep, setCurrentStep] = useState(1)
+  const [formErrors, setFormErrors] = useState<Record<string, boolean>>({})
   const [formData, setFormData] = useState<any>({
     legalName: '',
     phone: '',
@@ -625,6 +626,7 @@ export default function CompaniesPage() {
     broker_delivery_start: '08:00',
     broker_delivery_end: '18:00',
     broker_contact_phone: '',
+    broker_alternate_phone: '',
     // Cuentas bancarias del broker
     broker_bank_accounts: [] as Array<{
       id: string
@@ -737,6 +739,7 @@ export default function CompaniesPage() {
       broker_delivery_start: '08:00',
       broker_delivery_end: '18:00',
       broker_contact_phone: '',
+      broker_alternate_phone: '',
       broker_bank_accounts: [],
     })
     setCurrentStep(1)
@@ -1167,6 +1170,7 @@ export default function CompaniesPage() {
         broker_delivery_start: brokerDeliveryStart,
         broker_delivery_end: brokerDeliveryEnd,
         broker_contact_phone: company.broker_contact_phone || '',
+        broker_alternate_phone: company.broker_alternate_phone || '',
         broker_bank_accounts: Array.isArray(company.broker_bank_accounts) ? company.broker_bank_accounts : [],
         editMode: true,
         editId: companyId
@@ -1387,15 +1391,23 @@ export default function CompaniesPage() {
                       <input
                         type="text"
                         value={formData.legalName}
-                        onChange={(e) => setFormData({...formData, legalName: e.target.value})}
+                        onChange={(e) => {
+                          setFormData({...formData, legalName: e.target.value})
+                          if (formErrors.legalName) setFormErrors({...formErrors, legalName: false})
+                        }}
                         className={cn(
                           "w-full px-4 py-3 rounded-xl border focus:outline-none focus:ring-2 transition-all duration-300",
-                          theme === 'dark'
-                            ? "bg-gray-800/50 border-gray-700 text-white focus:border-blue-500 focus:ring-blue-500/20"
-                            : "bg-white border-gray-300 text-black focus:border-blue-500 focus:ring-blue-500/20"
+                          formErrors.legalName
+                            ? "border-red-500 bg-red-500/10 focus:border-red-500 focus:ring-red-500/20"
+                            : theme === 'dark'
+                              ? "bg-gray-800/50 border-gray-700 text-white focus:border-blue-500 focus:ring-blue-500/20"
+                              : "bg-white border-gray-300 text-black focus:border-blue-500 focus:ring-blue-500/20"
                         )}
                         placeholder={formData.companyType === 'broker' ? "Ej: Juan Pérez García" : "Ej: CubaExpress S.A."}
                       />
+                      {formErrors.legalName && (
+                        <p className="text-red-500 text-xs mt-1">Este campo es obligatorio</p>
+                      )}
                     </div>
 
                     <div>
@@ -1408,20 +1420,28 @@ export default function CompaniesPage() {
                       <input
                         type="tel"
                         value={formData.companyType === 'broker' ? formData.broker_contact_phone : formData.phone}
-                        onChange={(e) => setFormData({
-                          ...formData,
-                          ...(formData.companyType === 'broker'
-                            ? { broker_contact_phone: e.target.value, phone: e.target.value }
-                            : { phone: e.target.value })
-                        })}
+                        onChange={(e) => {
+                          setFormData({
+                            ...formData,
+                            ...(formData.companyType === 'broker'
+                              ? { broker_contact_phone: e.target.value, phone: e.target.value }
+                              : { phone: e.target.value })
+                          })
+                          if (formErrors.phone) setFormErrors({...formErrors, phone: false})
+                        }}
                         className={cn(
                           "w-full px-4 py-3 rounded-xl border focus:outline-none focus:ring-2 transition-all duration-300",
-                          theme === 'dark'
-                            ? "bg-gray-800/50 border-gray-700 text-white focus:border-blue-500 focus:ring-blue-500/20"
-                            : "bg-white border-gray-300 text-black focus:border-blue-500 focus:ring-blue-500/20"
+                          formErrors.phone
+                            ? "border-red-500 bg-red-500/10 focus:border-red-500 focus:ring-red-500/20"
+                            : theme === 'dark'
+                              ? "bg-gray-800/50 border-gray-700 text-white focus:border-blue-500 focus:ring-blue-500/20"
+                              : "bg-white border-gray-300 text-black focus:border-blue-500 focus:ring-blue-500/20"
                         )}
                         placeholder={formData.companyType === 'broker' ? "+53 52 123 4567" : "+53 7 832 4567"}
                       />
+                      {formErrors.phone && (
+                        <p className="text-red-500 text-xs mt-1">Este campo es obligatorio</p>
+                      )}
                     </div>
 
                     {/* Teléfono de Soporte - Solo para NO brokers */}
@@ -1515,15 +1535,23 @@ export default function CompaniesPage() {
                       <input
                         type="text"
                         value={formData.einNumber}
-                        onChange={(e) => setFormData({...formData, einNumber: e.target.value})}
+                        onChange={(e) => {
+                          setFormData({...formData, einNumber: e.target.value})
+                          if (formErrors.einNumber) setFormErrors({...formErrors, einNumber: false})
+                        }}
                         className={cn(
                           "w-full px-4 py-3 rounded-xl border focus:outline-none focus:ring-2 transition-all duration-300",
-                          theme === 'dark'
-                            ? "bg-gray-800/50 border-gray-700 text-white focus:border-blue-500 focus:ring-blue-500/20"
-                            : "bg-white border-gray-300 text-black focus:border-blue-500 focus:ring-blue-500/20"
+                          formErrors.einNumber
+                            ? "border-red-500 bg-red-500/10 focus:border-red-500 focus:ring-red-500/20"
+                            : theme === 'dark'
+                              ? "bg-gray-800/50 border-gray-700 text-white focus:border-blue-500 focus:ring-blue-500/20"
+                              : "bg-white border-gray-300 text-black focus:border-blue-500 focus:ring-blue-500/20"
                         )}
                         placeholder={formData.companyType === 'broker' ? "85010112345" : "CU-12345678"}
                       />
+                      {formErrors.einNumber && (
+                        <p className="text-red-500 text-xs mt-1">Este campo es obligatorio</p>
+                      )}
                     </div>
 
                     <div>
@@ -1535,12 +1563,17 @@ export default function CompaniesPage() {
                       </label>
                       <select
                         value={formData.companyType}
-                        onChange={(e) => setFormData({...formData, companyType: e.target.value})}
+                        onChange={(e) => {
+                          setFormData({...formData, companyType: e.target.value})
+                          if (formErrors.companyType) setFormErrors({...formErrors, companyType: false})
+                        }}
                         className={cn(
                           "w-full px-4 py-3 rounded-xl border focus:outline-none focus:ring-2 transition-all duration-300",
-                          theme === 'dark'
-                            ? "bg-gray-800/50 border-gray-700 text-white focus:border-blue-500 focus:ring-blue-500/20"
-                            : "bg-white border-gray-300 text-black focus:border-blue-500 focus:ring-blue-500/20"
+                          formErrors.companyType
+                            ? "border-red-500 bg-red-500/10 focus:border-red-500 focus:ring-red-500/20"
+                            : theme === 'dark'
+                              ? "bg-gray-800/50 border-gray-700 text-white focus:border-blue-500 focus:ring-blue-500/20"
+                              : "bg-white border-gray-300 text-black focus:border-blue-500 focus:ring-blue-500/20"
                         )}
                       >
                         <option value="">Seleccionar tipo</option>
@@ -1548,6 +1581,30 @@ export default function CompaniesPage() {
                           <option key={type.id} value={type.id}>{type.name}</option>
                         ))}
                       </select>
+                      {formErrors.companyType && (
+                        <p className="text-red-500 text-xs mt-1">Selecciona un tipo de empresa</p>
+                      )}
+                    </div>
+
+                    <div>
+                      <label className={cn(
+                        "block text-sm font-medium mb-2",
+                        theme === 'dark' ? "text-gray-300" : "text-gray-700"
+                      )}>
+                        Teléfono Alternativo
+                      </label>
+                      <input
+                        type="tel"
+                        value={formData.broker_alternate_phone}
+                        onChange={(e) => setFormData({...formData, broker_alternate_phone: e.target.value})}
+                        className={cn(
+                          "w-full px-4 py-3 rounded-xl border focus:outline-none focus:ring-2 transition-all duration-300",
+                          theme === 'dark'
+                            ? "bg-gray-800/50 border-gray-700 text-white focus:border-blue-500 focus:ring-blue-500/20"
+                            : "bg-white border-gray-300 text-black focus:border-blue-500 focus:ring-blue-500/20"
+                        )}
+                        placeholder="+53 5 XXX XXXX"
+                      />
                     </div>
 
                     {/* Dirección - Condicional según tipo de empresa */}
@@ -1594,12 +1651,15 @@ export default function CompaniesPage() {
                                 latitude: province?.coords[1] || null,
                                 longitude: province?.coords[0] || null
                               })
+                              if (formErrors.broker_province) setFormErrors({...formErrors, broker_province: false})
                             }}
                             className={cn(
                               "w-full px-4 py-3 rounded-xl border focus:outline-none focus:ring-2 transition-all duration-300",
-                              theme === 'dark'
-                                ? "bg-gray-800/50 border-gray-700 text-white focus:border-blue-500 focus:ring-blue-500/20"
-                                : "bg-white border-gray-300 text-black focus:border-blue-500 focus:ring-blue-500/20"
+                              formErrors.broker_province
+                                ? "border-red-500 bg-red-500/10 focus:border-red-500 focus:ring-red-500/20"
+                                : theme === 'dark'
+                                  ? "bg-gray-800/50 border-gray-700 text-white focus:border-blue-500 focus:ring-blue-500/20"
+                                  : "bg-white border-gray-300 text-black focus:border-blue-500 focus:ring-blue-500/20"
                             )}
                           >
                             <option value="">Seleccionar provincia</option>
@@ -1607,6 +1667,9 @@ export default function CompaniesPage() {
                               <option key={province.id} value={province.id}>{province.name}</option>
                             ))}
                           </select>
+                          {formErrors.broker_province && (
+                            <p className="text-red-500 text-xs mt-1">Selecciona una provincia</p>
+                          )}
                         </div>
 
                         <div>
@@ -1628,13 +1691,16 @@ export default function CompaniesPage() {
                                 latitude: municipality?.coords?.[1] || formData.latitude,
                                 longitude: municipality?.coords?.[0] || formData.longitude
                               })
+                              if (formErrors.broker_municipality) setFormErrors({...formErrors, broker_municipality: false})
                             }}
                             disabled={!formData.broker_province}
                             className={cn(
                               "w-full px-4 py-3 rounded-xl border focus:outline-none focus:ring-2 transition-all duration-300",
-                              theme === 'dark'
-                                ? "bg-gray-800/50 border-gray-700 text-white focus:border-blue-500 focus:ring-blue-500/20 disabled:opacity-50"
-                                : "bg-white border-gray-300 text-black focus:border-blue-500 focus:ring-blue-500/20 disabled:opacity-50"
+                              formErrors.broker_municipality
+                                ? "border-red-500 bg-red-500/10 focus:border-red-500 focus:ring-red-500/20"
+                                : theme === 'dark'
+                                  ? "bg-gray-800/50 border-gray-700 text-white focus:border-blue-500 focus:ring-blue-500/20 disabled:opacity-50"
+                                  : "bg-white border-gray-300 text-black focus:border-blue-500 focus:ring-blue-500/20 disabled:opacity-50"
                             )}
                           >
                             <option value="">Seleccionar municipio</option>
@@ -1644,6 +1710,9 @@ export default function CompaniesPage() {
                               ))
                             }
                           </select>
+                          {formErrors.broker_municipality && (
+                            <p className="text-red-500 text-xs mt-1">Selecciona un municipio</p>
+                          )}
                         </div>
 
                         <div className="md:col-span-2">
@@ -3467,18 +3536,52 @@ export default function CompaniesPage() {
               <motion.button
                 onClick={() => {
                   const maxSteps = formData.companyType === 'broker' ? BROKER_STEPS.length : STEPS.length
-                  if (currentStep === 1 && !formData.walletNumber) {
-                    generateWalletNumber()
-                    if (formData.country && !formData.currency) {
-                      const defaultCurrency = getPrimaryCurrencyForCountry(formData.country)
-                      setFormData((prev: any) => ({
-                        ...prev,
-                        currency: defaultCurrency,
-                        dailyLimit: '1000',
-                        monthlyLimit: '10000'
-                      }))
+
+                  // Validación del paso 1
+                  if (currentStep === 1) {
+                    const errors: Record<string, boolean> = {}
+
+                    // Campos obligatorios para todos
+                    if (!formData.legalName?.trim()) errors.legalName = true
+                    if (!formData.companyType) errors.companyType = true
+
+                    if (formData.companyType === 'broker') {
+                      // Campos obligatorios para brokers
+                      if (!formData.phone?.trim() && !formData.broker_contact_phone?.trim()) errors.phone = true
+                      if (!formData.einNumber?.trim()) errors.einNumber = true
+                      if (!formData.broker_province) errors.broker_province = true
+                      if (!formData.broker_municipality) errors.broker_municipality = true
+                    } else {
+                      // Campos obligatorios para otras empresas
+                      if (!formData.phone?.trim()) errors.phone = true
+                      if (!formData.einNumber?.trim()) errors.einNumber = true
+                      if (!formData.address?.trim()) errors.address = true
+                      if (!formData.city?.trim()) errors.city = true
+                      if (!formData.country?.trim()) errors.country = true
+                    }
+
+                    if (Object.keys(errors).length > 0) {
+                      setFormErrors(errors)
+                      showNotification('warning', 'Campos Requeridos', 'Por favor completa todos los campos obligatorios marcados en rojo')
+                      return
+                    }
+
+                    setFormErrors({})
+
+                    if (!formData.walletNumber) {
+                      generateWalletNumber()
+                      if (formData.country && !formData.currency) {
+                        const defaultCurrency = getPrimaryCurrencyForCountry(formData.country)
+                        setFormData((prev: any) => ({
+                          ...prev,
+                          currency: defaultCurrency,
+                          dailyLimit: '1000',
+                          monthlyLimit: '10000'
+                        }))
+                      }
                     }
                   }
+
                   setCurrentStep(Math.min(maxSteps, currentStep + 1))
                 }}
                 whileHover={{ scale: 1.02 }}
