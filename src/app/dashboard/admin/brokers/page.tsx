@@ -11,7 +11,6 @@ import {
   Package,
   TrendingUp,
   Building2,
-  Wallet,
   Clock,
   CheckCircle,
   ChevronRight,
@@ -23,7 +22,9 @@ import {
   Globe,
   Layers,
   Map as MapIcon,
-  Satellite
+  Satellite,
+  ArrowUpRight,
+  Sparkles
 } from 'lucide-react'
 import Link from 'next/link'
 import { DashboardLayout } from '@/components/layout/dashboard-layout'
@@ -90,6 +91,16 @@ const CUBA_PROVINCES: Record<string, { coords: [number, number], color: string }
   'Guantánamo': { coords: [-75.2092, 20.1447], color: '#84cc16' },
   'Isla de la Juventud': { coords: [-82.8500, 21.7000], color: '#10b981' }
 }
+
+// Stat card configurations
+const statCards = [
+  { key: 'totalBrokers', label: 'Total Brokers', icon: Users, gradient: 'from-blue-500 to-blue-600', bg: 'bg-blue-500/10' },
+  { key: 'activeBrokers', label: 'Activos', icon: Zap, gradient: 'from-emerald-500 to-green-600', bg: 'bg-emerald-500/10' },
+  { key: 'provinces', label: 'Provincias', icon: MapPin, gradient: 'from-purple-500 to-indigo-600', bg: 'bg-purple-500/10' },
+  { key: 'balance', label: 'Balance Total', icon: DollarSign, gradient: 'from-amber-500 to-orange-600', bg: 'bg-amber-500/10' },
+  { key: 'orders', label: 'Órdenes', icon: Package, gradient: 'from-pink-500 to-rose-600', bg: 'bg-pink-500/10' },
+  { key: 'volume', label: 'Volumen', icon: TrendingUp, gradient: 'from-cyan-500 to-teal-600', bg: 'bg-cyan-500/10' },
+]
 
 export default function AdminBrokersDashboardPage() {
   const { theme } = useTheme()
@@ -242,8 +253,8 @@ export default function AdminBrokersDashboardPage() {
     map.current = new mapboxgl.Map({
       container: mapContainer.current,
       style: 'mapbox://styles/mapbox/streets-v12',
-      center: [-79.5, 22.0],
-      zoom: 6,
+      center: [-79.5, 21.8],
+      zoom: 6.8,
       attributionControl: false
     })
 
@@ -298,23 +309,32 @@ export default function AdminBrokersDashboardPage() {
     ? (orderStats.delivered / orderStats.total) * 100
     : 0
 
+  const getStatValue = (key: string) => {
+    switch (key) {
+      case 'totalBrokers': return summary?.totalBrokers || 0
+      case 'activeBrokers': return summary?.activeBrokers || 0
+      case 'provinces': return `${summary?.provincesCovered || 0}/16`
+      case 'balance': return summary?.totalBalanceFormatted || '$0'
+      case 'orders': return orderStats?.total || 0
+      case 'volume': return `$${(orderStats?.totalAmount || 0).toLocaleString('en-US', { maximumFractionDigits: 0 })}`
+      default: return 0
+    }
+  }
+
   if (loading) {
     return (
       <DashboardLayout>
-        <div className={cn(
-          "min-h-screen p-4",
-          theme === 'dark' ? 'bg-gray-900' : 'bg-gray-50'
-        )}>
+        <div className={cn("min-h-screen p-4", theme === 'dark' ? 'bg-gray-900' : 'bg-gray-50')}>
           <div className="animate-pulse space-y-4">
-            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
               {[...Array(6)].map((_, i) => (
-                <div key={i} className="h-20 bg-gray-200 dark:bg-gray-700 rounded-xl"></div>
+                <div key={i} className="h-24 bg-gray-200 dark:bg-gray-700 rounded-2xl"></div>
               ))}
             </div>
-            <div className="h-[400px] bg-gray-200 dark:bg-gray-700 rounded-xl"></div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="h-64 bg-gray-200 dark:bg-gray-700 rounded-xl"></div>
-              <div className="h-64 bg-gray-200 dark:bg-gray-700 rounded-xl"></div>
+            <div className="h-[420px] bg-gray-200 dark:bg-gray-700 rounded-2xl"></div>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              <div className="h-80 bg-gray-200 dark:bg-gray-700 rounded-2xl"></div>
+              <div className="h-80 bg-gray-200 dark:bg-gray-700 rounded-2xl"></div>
             </div>
           </div>
         </div>
@@ -324,152 +344,70 @@ export default function AdminBrokersDashboardPage() {
 
   return (
     <DashboardLayout>
-      <div className={cn(
-        "min-h-screen",
-        theme === 'dark' ? 'bg-gray-900' : 'bg-gray-50'
-      )}>
-        {/* Top Stats Row */}
-        <div className="p-4 pb-0">
-          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
-            {/* Total Brokers */}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              className={cn(
-                "rounded-xl p-4 border",
-                theme === 'dark' ? 'bg-gray-800/50 border-gray-700' : 'bg-white border-gray-200'
-              )}
-            >
-              <div className="flex items-center gap-3">
-                <div className="p-2 rounded-lg bg-blue-500/10">
-                  <Users className="w-5 h-5 text-blue-500" />
-                </div>
-                <div>
-                  <p className="text-xl font-bold text-gray-900 dark:text-white">{summary?.totalBrokers || 0}</p>
-                  <p className="text-xs text-gray-500 dark:text-gray-400">Total Brokers</p>
-                </div>
-              </div>
-            </motion.div>
+      <div className={cn("min-h-screen", theme === 'dark' ? 'bg-gray-900' : 'bg-slate-50')}>
 
-            {/* Active */}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.05 }}
-              className={cn(
-                "rounded-xl p-4 border",
-                theme === 'dark' ? 'bg-gray-800/50 border-gray-700' : 'bg-white border-gray-200'
-              )}
-            >
-              <div className="flex items-center gap-3">
-                <div className="p-2 rounded-lg bg-green-500/10">
-                  <Zap className="w-5 h-5 text-green-500" />
-                </div>
-                <div>
-                  <p className="text-xl font-bold text-gray-900 dark:text-white">{summary?.activeBrokers || 0}</p>
-                  <p className="text-xs text-gray-500 dark:text-gray-400">Activos</p>
-                </div>
-              </div>
-            </motion.div>
+        {/* Top Stats Row - Modern Cards */}
+        <div className="p-4 pb-3">
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+            {statCards.map((card, i) => (
+              <motion.div
+                key={card.key}
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: i * 0.05 }}
+                whileHover={{ y: -2, transition: { duration: 0.2 } }}
+                className="group relative"
+              >
+                {/* Gradient glow on hover */}
+                <div className={cn(
+                  "absolute inset-0 rounded-2xl bg-gradient-to-br opacity-0 group-hover:opacity-20 transition-opacity duration-300 blur-xl",
+                  card.gradient
+                )} />
 
-            {/* Provinces */}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.1 }}
-              className={cn(
-                "rounded-xl p-4 border",
-                theme === 'dark' ? 'bg-gray-800/50 border-gray-700' : 'bg-white border-gray-200'
-              )}
-            >
-              <div className="flex items-center gap-3">
-                <div className="p-2 rounded-lg bg-purple-500/10">
-                  <MapPin className="w-5 h-5 text-purple-500" />
+                <div className={cn(
+                  "relative rounded-2xl p-4 border backdrop-blur-sm transition-all duration-300",
+                  theme === 'dark'
+                    ? 'bg-gray-800/60 border-gray-700/50 hover:border-gray-600'
+                    : 'bg-white/80 border-gray-200/60 hover:border-gray-300 hover:shadow-lg'
+                )}>
+                  <div className="flex items-start justify-between">
+                    <div className={cn("p-2.5 rounded-xl bg-gradient-to-br", card.gradient)}>
+                      <card.icon className="w-4 h-4 text-white" />
+                    </div>
+                    <motion.div
+                      initial={{ scale: 0 }}
+                      animate={{ scale: 1 }}
+                      transition={{ delay: 0.3 + i * 0.05, type: "spring" }}
+                      className="opacity-0 group-hover:opacity-100 transition-opacity"
+                    >
+                      <ArrowUpRight className="w-4 h-4 text-gray-400" />
+                    </motion.div>
+                  </div>
+                  <div className="mt-3">
+                    <p className={cn(
+                      "text-2xl font-bold tracking-tight",
+                      theme === 'dark' ? 'text-white' : 'text-gray-900'
+                    )}>
+                      {getStatValue(card.key)}
+                    </p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5 font-medium">
+                      {card.label}
+                    </p>
+                  </div>
                 </div>
-                <div>
-                  <p className="text-xl font-bold text-gray-900 dark:text-white">
-                    {summary?.provincesCovered || 0}<span className="text-sm text-gray-400">/16</span>
-                  </p>
-                  <p className="text-xs text-gray-500 dark:text-gray-400">Provincias</p>
-                </div>
-              </div>
-            </motion.div>
-
-            {/* Balance */}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.15 }}
-              className={cn(
-                "rounded-xl p-4 border",
-                theme === 'dark' ? 'bg-gray-800/50 border-gray-700' : 'bg-white border-gray-200'
-              )}
-            >
-              <div className="flex items-center gap-3">
-                <div className="p-2 rounded-lg bg-emerald-500/10">
-                  <DollarSign className="w-5 h-5 text-emerald-500" />
-                </div>
-                <div>
-                  <p className="text-lg font-bold text-gray-900 dark:text-white">{summary?.totalBalanceFormatted || '$0'}</p>
-                  <p className="text-xs text-gray-500 dark:text-gray-400">Balance Total</p>
-                </div>
-              </div>
-            </motion.div>
-
-            {/* Orders */}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.2 }}
-              className={cn(
-                "rounded-xl p-4 border",
-                theme === 'dark' ? 'bg-gray-800/50 border-gray-700' : 'bg-white border-gray-200'
-              )}
-            >
-              <div className="flex items-center gap-3">
-                <div className="p-2 rounded-lg bg-orange-500/10">
-                  <Package className="w-5 h-5 text-orange-500" />
-                </div>
-                <div>
-                  <p className="text-xl font-bold text-gray-900 dark:text-white">{orderStats?.total || 0}</p>
-                  <p className="text-xs text-gray-500 dark:text-gray-400">Órdenes</p>
-                </div>
-              </div>
-            </motion.div>
-
-            {/* Volume */}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.25 }}
-              className={cn(
-                "rounded-xl p-4 border",
-                theme === 'dark' ? 'bg-gray-800/50 border-gray-700' : 'bg-white border-gray-200'
-              )}
-            >
-              <div className="flex items-center gap-3">
-                <div className="p-2 rounded-lg bg-cyan-500/10">
-                  <TrendingUp className="w-5 h-5 text-cyan-500" />
-                </div>
-                <div>
-                  <p className="text-lg font-bold text-gray-900 dark:text-white">
-                    ${(orderStats?.totalAmount || 0).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
-                  </p>
-                  <p className="text-xs text-gray-500 dark:text-gray-400">Volumen</p>
-                </div>
-              </div>
-            </motion.div>
+              </motion.div>
+            ))}
           </div>
         </div>
 
-        {/* Map Section - Full Width */}
-        <div className="p-4">
+        {/* Map Section */}
+        <div className="px-4 pb-3">
           <motion.div
             initial={{ opacity: 0, scale: 0.98 }}
             animate={{ opacity: 1, scale: 1 }}
             transition={{ delay: 0.3 }}
             className={cn(
-              "relative rounded-xl overflow-hidden border",
+              "relative rounded-2xl overflow-hidden border shadow-sm",
               theme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'
             )}
           >
@@ -494,21 +432,26 @@ export default function AdminBrokersDashboardPage() {
             )}
 
             {/* Map Container */}
-            <div ref={mapContainer} className="w-full h-[400px]" />
+            <div ref={mapContainer} className="w-full h-[420px]" />
 
-            {/* Map Controls */}
-            <div className="absolute top-4 left-4 z-10 flex items-center gap-2">
+            {/* Map Controls - Top Left */}
+            <div className="absolute top-4 left-4 z-10">
               <div className={cn(
-                "px-3 py-2 rounded-lg shadow-lg flex items-center gap-2",
-                theme === 'dark' ? 'bg-gray-800/95 backdrop-blur-sm' : 'bg-white/95 backdrop-blur-sm'
+                "px-4 py-2.5 rounded-xl shadow-lg backdrop-blur-md flex items-center gap-3",
+                theme === 'dark' ? 'bg-gray-900/90 border border-gray-700' : 'bg-white/90 border border-gray-200'
               )}>
-                <Globe className={cn("w-4 h-4", theme === 'dark' ? 'text-blue-400' : 'text-blue-600')} />
-                <span className={cn("text-sm font-medium", theme === 'dark' ? 'text-white' : 'text-gray-900')}>
-                  Cuba
-                </span>
-                <span className={cn("text-xs", theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}>
-                  {Object.keys(provinceData).filter(k => k !== 'Sin asignar').length} provincias con brokers
-                </span>
+                <div className="flex items-center gap-2">
+                  <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                  <Globe className={cn("w-4 h-4", theme === 'dark' ? 'text-blue-400' : 'text-blue-600')} />
+                </div>
+                <div>
+                  <span className={cn("text-sm font-semibold", theme === 'dark' ? 'text-white' : 'text-gray-900')}>
+                    Cuba
+                  </span>
+                  <span className={cn("text-xs ml-2", theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}>
+                    {Object.keys(provinceData).filter(k => k !== 'Sin asignar').length} provincias activas
+                  </span>
+                </div>
               </div>
             </div>
 
@@ -518,8 +461,10 @@ export default function AdminBrokersDashboardPage() {
               whileTap={{ scale: 0.95 }}
               onClick={toggleMapStyle}
               className={cn(
-                "absolute bottom-4 right-4 z-10 px-3 py-2 rounded-lg shadow-lg flex items-center gap-2 transition-colors",
-                theme === 'dark' ? 'bg-gray-800 hover:bg-gray-700 text-white' : 'bg-white hover:bg-gray-50 text-gray-900'
+                "absolute bottom-4 right-4 z-10 px-4 py-2.5 rounded-xl shadow-lg backdrop-blur-md flex items-center gap-2 transition-all",
+                theme === 'dark'
+                  ? 'bg-gray-900/90 hover:bg-gray-800 text-white border border-gray-700'
+                  : 'bg-white/90 hover:bg-white text-gray-900 border border-gray-200'
               )}
             >
               {mapStyle === 'streets' ? (
@@ -542,8 +487,10 @@ export default function AdminBrokersDashboardPage() {
               onClick={handleRefresh}
               disabled={refreshing}
               className={cn(
-                "absolute bottom-4 left-4 z-10 p-2 rounded-lg shadow-lg transition-colors",
-                theme === 'dark' ? 'bg-gray-800 hover:bg-gray-700 text-white' : 'bg-white hover:bg-gray-50 text-gray-900'
+                "absolute bottom-4 left-4 z-10 p-2.5 rounded-xl shadow-lg backdrop-blur-md transition-all",
+                theme === 'dark'
+                  ? 'bg-gray-900/90 hover:bg-gray-800 text-white border border-gray-700'
+                  : 'bg-white/90 hover:bg-white text-gray-900 border border-gray-200'
               )}
             >
               <RefreshCw className={cn("w-4 h-4", refreshing && "animate-spin")} />
@@ -551,125 +498,127 @@ export default function AdminBrokersDashboardPage() {
           </motion.div>
         </div>
 
-        {/* Order Status Row */}
-        <div className="px-4">
+        {/* Order Status Row - Modern Design */}
+        <div className="px-4 pb-3">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.35 }}
             className={cn(
-              "rounded-xl p-4 border",
-              theme === 'dark' ? 'bg-gray-800/50 border-gray-700' : 'bg-white border-gray-200'
+              "rounded-2xl p-5 border backdrop-blur-sm",
+              theme === 'dark' ? 'bg-gray-800/60 border-gray-700/50' : 'bg-white/80 border-gray-200/60 shadow-sm'
             )}
           >
             <div className="flex items-center justify-between mb-4">
-              <div className="flex items-center gap-2">
-                <Activity className="w-5 h-5 text-blue-500" />
-                <span className={cn("font-semibold", theme === 'dark' ? 'text-white' : 'text-gray-900')}>
-                  Estado de Órdenes
-                </span>
+              <div className="flex items-center gap-3">
+                <div className="p-2 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600">
+                  <Activity className="w-4 h-4 text-white" />
+                </div>
+                <div>
+                  <span className={cn("font-semibold", theme === 'dark' ? 'text-white' : 'text-gray-900')}>
+                    Estado de Órdenes
+                  </span>
+                  <p className="text-xs text-gray-500">Resumen en tiempo real</p>
+                </div>
               </div>
-              <div className="flex items-center gap-4">
-                <Link href="/dashboard/admin/brokers/orders" className="text-sm text-blue-500 hover:text-blue-600 flex items-center gap-1">
-                  Ver todas <ChevronRight className="w-4 h-4" />
+              <div className="flex items-center gap-3">
+                <Link href="/dashboard/admin/brokers/orders">
+                  <motion.div
+                    whileHover={{ x: 2 }}
+                    className="text-sm text-blue-500 hover:text-blue-600 flex items-center gap-1 font-medium"
+                  >
+                    Ver todas <ChevronRight className="w-4 h-4" />
+                  </motion.div>
                 </Link>
-                <Link href="/dashboard/admin/brokers/wallets" className="text-sm text-emerald-500 hover:text-emerald-600 flex items-center gap-1">
-                  Wallets <ChevronRight className="w-4 h-4" />
+                <Link href="/dashboard/admin/brokers/wallets">
+                  <motion.div
+                    whileHover={{ x: 2 }}
+                    className="text-sm text-emerald-500 hover:text-emerald-600 flex items-center gap-1 font-medium"
+                  >
+                    Wallets <ChevronRight className="w-4 h-4" />
+                  </motion.div>
                 </Link>
               </div>
             </div>
 
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
-              <div className={cn(
-                "flex items-center gap-3 p-3 rounded-xl",
-                theme === 'dark' ? 'bg-yellow-900/20' : 'bg-yellow-50'
-              )}>
-                <Clock className="w-5 h-5 text-yellow-600 dark:text-yellow-400" />
-                <div>
-                  <p className="text-xl font-bold text-yellow-700 dark:text-yellow-300">{orderStats?.pending || 0}</p>
-                  <p className="text-xs text-yellow-600 dark:text-yellow-400">Pendientes</p>
-                </div>
-              </div>
-
-              <div className={cn(
-                "flex items-center gap-3 p-3 rounded-xl",
-                theme === 'dark' ? 'bg-blue-900/20' : 'bg-blue-50'
-              )}>
-                <CheckCircle className="w-5 h-5 text-blue-600 dark:text-blue-400" />
-                <div>
-                  <p className="text-xl font-bold text-blue-700 dark:text-blue-300">{orderStats?.confirmed || 0}</p>
-                  <p className="text-xs text-blue-600 dark:text-blue-400">Confirmadas</p>
-                </div>
-              </div>
-
-              <div className={cn(
-                "flex items-center gap-3 p-3 rounded-xl",
-                theme === 'dark' ? 'bg-purple-900/20' : 'bg-purple-50'
-              )}>
-                <Truck className="w-5 h-5 text-purple-600 dark:text-purple-400" />
-                <div>
-                  <p className="text-xl font-bold text-purple-700 dark:text-purple-300">{orderStats?.inDelivery || 0}</p>
-                  <p className="text-xs text-purple-600 dark:text-purple-400">En Entrega</p>
-                </div>
-              </div>
-
-              <div className={cn(
-                "flex items-center gap-3 p-3 rounded-xl",
-                theme === 'dark' ? 'bg-green-900/20' : 'bg-green-50'
-              )}>
-                <CheckCircle className="w-5 h-5 text-green-600 dark:text-green-400" />
-                <div>
-                  <p className="text-xl font-bold text-green-700 dark:text-green-300">{orderStats?.delivered || 0}</p>
-                  <p className="text-xs text-green-600 dark:text-green-400">Entregadas</p>
-                </div>
-              </div>
-
-              <div className={cn(
-                "flex items-center gap-3 p-3 rounded-xl",
-                theme === 'dark' ? 'bg-red-900/20' : 'bg-red-50'
-              )}>
-                <XCircle className="w-5 h-5 text-red-600 dark:text-red-400" />
-                <div>
-                  <p className="text-xl font-bold text-red-700 dark:text-red-300">{orderStats?.cancelled || 0}</p>
-                  <p className="text-xs text-red-600 dark:text-red-400">Canceladas</p>
-                </div>
-              </div>
-
-              <div className={cn(
-                "flex items-center gap-3 p-3 rounded-xl",
-                theme === 'dark' ? 'bg-emerald-900/20' : 'bg-emerald-50'
-              )}>
-                <TrendingUp className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
-                <div>
-                  <p className="text-xl font-bold text-emerald-700 dark:text-emerald-300">{successRate.toFixed(0)}%</p>
-                  <p className="text-xs text-emerald-600 dark:text-emerald-400">Tasa Éxito</p>
-                </div>
-              </div>
+              {[
+                { icon: Clock, label: 'Pendientes', value: orderStats?.pending || 0, color: 'amber', gradient: 'from-amber-500 to-yellow-600' },
+                { icon: CheckCircle, label: 'Confirmadas', value: orderStats?.confirmed || 0, color: 'blue', gradient: 'from-blue-500 to-cyan-600' },
+                { icon: Truck, label: 'En Entrega', value: orderStats?.inDelivery || 0, color: 'purple', gradient: 'from-purple-500 to-pink-600' },
+                { icon: CheckCircle, label: 'Entregadas', value: orderStats?.delivered || 0, color: 'emerald', gradient: 'from-emerald-500 to-green-600' },
+                { icon: XCircle, label: 'Canceladas', value: orderStats?.cancelled || 0, color: 'red', gradient: 'from-red-500 to-rose-600' },
+                { icon: TrendingUp, label: 'Tasa Éxito', value: `${successRate.toFixed(0)}%`, color: 'teal', gradient: 'from-teal-500 to-cyan-600' },
+              ].map((item, i) => (
+                <motion.div
+                  key={item.label}
+                  initial={{ opacity: 0, scale: 0.9 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  transition={{ delay: 0.4 + i * 0.05 }}
+                  whileHover={{ scale: 1.02 }}
+                  className={cn(
+                    "relative overflow-hidden rounded-xl p-4 transition-all cursor-pointer group",
+                    theme === 'dark'
+                      ? `bg-${item.color}-900/20 hover:bg-${item.color}-900/30`
+                      : `bg-${item.color}-50 hover:bg-${item.color}-100/80`
+                  )}
+                >
+                  <div className={cn(
+                    "absolute top-0 right-0 w-20 h-20 rounded-full opacity-10 -mr-6 -mt-6 bg-gradient-to-br",
+                    item.gradient
+                  )} />
+                  <div className="relative">
+                    <div className={cn("p-2 rounded-lg w-fit bg-gradient-to-br mb-2", item.gradient)}>
+                      <item.icon className="w-4 h-4 text-white" />
+                    </div>
+                    <p className={cn(
+                      "text-2xl font-bold",
+                      theme === 'dark' ? `text-${item.color}-300` : `text-${item.color}-700`
+                    )}>
+                      {item.value}
+                    </p>
+                    <p className={cn(
+                      "text-xs font-medium",
+                      theme === 'dark' ? `text-${item.color}-400` : `text-${item.color}-600`
+                    )}>
+                      {item.label}
+                    </p>
+                  </div>
+                </motion.div>
+              ))}
             </div>
           </motion.div>
         </div>
 
         {/* Bottom Section - Top Brokers & All Brokers */}
-        <div className="p-4 grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <div className="px-4 pb-4 grid grid-cols-1 lg:grid-cols-2 gap-4">
+
           {/* Top Brokers */}
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.4 }}
+            transition={{ delay: 0.5 }}
             className={cn(
-              "rounded-xl p-4 border",
-              theme === 'dark' ? 'bg-gray-800/50 border-gray-700' : 'bg-white border-gray-200'
+              "rounded-2xl p-5 border backdrop-blur-sm",
+              theme === 'dark' ? 'bg-gray-800/60 border-gray-700/50' : 'bg-white/80 border-gray-200/60 shadow-sm'
             )}
           >
             <div className="flex items-center justify-between mb-4">
-              <div className="flex items-center gap-2">
-                <TrendingUp className="w-5 h-5 text-amber-500" />
-                <span className={cn("font-semibold", theme === 'dark' ? 'text-white' : 'text-gray-900')}>
-                  Top Brokers
-                </span>
+              <div className="flex items-center gap-3">
+                <div className="p-2 rounded-xl bg-gradient-to-br from-amber-500 to-orange-600">
+                  <Sparkles className="w-4 h-4 text-white" />
+                </div>
+                <div>
+                  <span className={cn("font-semibold", theme === 'dark' ? 'text-white' : 'text-gray-900')}>
+                    Top Brokers
+                  </span>
+                  <p className="text-xs text-gray-500">Por balance</p>
+                </div>
               </div>
-              <Link href="/dashboard/admin/brokers/wallets" className="text-xs text-blue-500 hover:text-blue-600 flex items-center gap-1">
-                Ver todos <ChevronRight className="w-3 h-3" />
+              <Link href="/dashboard/admin/brokers/wallets">
+                <motion.span whileHover={{ x: 2 }} className="text-xs text-blue-500 hover:text-blue-600 flex items-center gap-1 font-medium">
+                  Ver todos <ChevronRight className="w-3 h-3" />
+                </motion.span>
               </Link>
             </div>
 
@@ -679,24 +628,28 @@ export default function AdminBrokersDashboardPage() {
                   key={broker.id}
                   initial={{ opacity: 0, x: -20 }}
                   animate={{ opacity: 1, x: 0 }}
-                  transition={{ delay: 0.45 + i * 0.05 }}
+                  transition={{ delay: 0.55 + i * 0.05 }}
+                  whileHover={{ x: 4 }}
                   className={cn(
-                    "flex items-center gap-3 p-3 rounded-xl transition-colors",
+                    "flex items-center gap-3 p-3 rounded-xl transition-all cursor-pointer",
                     theme === 'dark' ? 'hover:bg-gray-700/50' : 'hover:bg-gray-50'
                   )}
                 >
                   <div className={cn(
-                    "w-8 h-8 rounded-lg flex items-center justify-center font-bold text-sm",
-                    i === 0 && "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400",
-                    i === 1 && "bg-gray-200 text-gray-700 dark:bg-gray-600 dark:text-gray-300",
-                    i === 2 && "bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400",
-                    i > 2 && "bg-gray-100 text-gray-500 dark:bg-gray-700 dark:text-gray-400"
+                    "w-9 h-9 rounded-xl flex items-center justify-center font-bold text-sm shadow-sm",
+                    i === 0 && "bg-gradient-to-br from-yellow-400 to-amber-500 text-white",
+                    i === 1 && "bg-gradient-to-br from-gray-300 to-gray-400 text-gray-700",
+                    i === 2 && "bg-gradient-to-br from-amber-600 to-orange-700 text-white",
+                    i > 2 && (theme === 'dark' ? "bg-gray-700 text-gray-400" : "bg-gray-100 text-gray-500")
                   )}>
                     #{i + 1}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="font-medium text-gray-900 dark:text-white text-sm truncate">{broker.name}</p>
-                    <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
+                    <p className={cn("font-medium text-sm truncate", theme === 'dark' ? 'text-white' : 'text-gray-900')}>
+                      {broker.name}
+                    </p>
+                    <p className="text-xs text-gray-500 truncate flex items-center gap-1">
+                      <MapPin className="w-3 h-3" />
                       {broker.province || 'Sin provincia'}
                     </p>
                   </div>
@@ -704,7 +657,7 @@ export default function AdminBrokersDashboardPage() {
                     <p className="font-semibold text-emerald-600 dark:text-emerald-400 text-sm">
                       {broker.walletBalanceFormatted}
                     </p>
-                    <p className="text-xs text-gray-500 dark:text-gray-400">
+                    <p className="text-xs text-gray-500">
                       {broker.stats?.totalTransactions || 0} tx
                     </p>
                   </div>
@@ -713,7 +666,7 @@ export default function AdminBrokersDashboardPage() {
               {topBrokers.length === 0 && (
                 <div className="text-center py-8">
                   <Building2 className="w-10 h-10 mx-auto text-gray-300 dark:text-gray-600 mb-2" />
-                  <p className="text-sm text-gray-500 dark:text-gray-400">No hay brokers</p>
+                  <p className="text-sm text-gray-500">No hay brokers</p>
                 </div>
               )}
             </div>
@@ -723,60 +676,70 @@ export default function AdminBrokersDashboardPage() {
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.45 }}
+            transition={{ delay: 0.55 }}
             className={cn(
-              "rounded-xl p-4 border",
-              theme === 'dark' ? 'bg-gray-800/50 border-gray-700' : 'bg-white border-gray-200'
+              "rounded-2xl p-5 border backdrop-blur-sm",
+              theme === 'dark' ? 'bg-gray-800/60 border-gray-700/50' : 'bg-white/80 border-gray-200/60 shadow-sm'
             )}
           >
             <div className="flex items-center justify-between mb-4">
-              <div className="flex items-center gap-2">
-                <Building2 className="w-5 h-5 text-blue-500" />
-                <span className={cn("font-semibold", theme === 'dark' ? 'text-white' : 'text-gray-900')}>
-                  Todos los Brokers
-                </span>
+              <div className="flex items-center gap-3">
+                <div className="p-2 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600">
+                  <Building2 className="w-4 h-4 text-white" />
+                </div>
+                <div>
+                  <span className={cn("font-semibold", theme === 'dark' ? 'text-white' : 'text-gray-900')}>
+                    Todos los Brokers
+                  </span>
+                  <p className="text-xs text-gray-500">Lista completa</p>
+                </div>
               </div>
               <span className={cn(
-                "text-xs px-2 py-1 rounded-full",
-                theme === 'dark' ? 'bg-gray-700 text-gray-300' : 'bg-gray-100 text-gray-600'
+                "text-xs px-3 py-1.5 rounded-full font-medium",
+                theme === 'dark' ? 'bg-blue-900/30 text-blue-400' : 'bg-blue-100 text-blue-600'
               )}>
-                {brokers.length}
+                {brokers.length} total
               </span>
             </div>
 
-            <div className="space-y-1 max-h-[280px] overflow-y-auto scrollbar-thin pr-1">
+            <div className="space-y-1 max-h-[300px] overflow-y-auto scrollbar-thin pr-1">
               {brokers.map((broker, i) => (
                 <motion.div
                   key={broker.id}
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
-                  transition={{ delay: 0.5 + i * 0.02 }}
+                  transition={{ delay: 0.6 + i * 0.02 }}
+                  whileHover={{ x: 4 }}
                   className={cn(
-                    "flex items-center justify-between p-2 rounded-lg transition-colors cursor-pointer",
+                    "flex items-center justify-between p-3 rounded-xl transition-all cursor-pointer",
                     theme === 'dark' ? 'hover:bg-gray-700/50' : 'hover:bg-gray-50'
                   )}
                 >
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-3">
                     <div className={cn(
-                      "w-2 h-2 rounded-full",
-                      broker.isActive ? "bg-green-500" : "bg-gray-400"
+                      "w-2.5 h-2.5 rounded-full ring-2",
+                      broker.isActive
+                        ? "bg-emerald-500 ring-emerald-500/30"
+                        : "bg-gray-400 ring-gray-400/30"
                     )} />
                     <div>
-                      <p className="font-medium text-gray-900 dark:text-white text-sm">{broker.name}</p>
-                      <p className="text-xs text-gray-500 dark:text-gray-400">
+                      <p className={cn("font-medium text-sm", theme === 'dark' ? 'text-white' : 'text-gray-900')}>
+                        {broker.name}
+                      </p>
+                      <p className="text-xs text-gray-500">
                         {broker.municipality ? `${broker.municipality}, ` : ''}{broker.province || 'Sin ubicación'}
                       </p>
                     </div>
                   </div>
-                  <p className="font-medium text-emerald-600 dark:text-emerald-400 text-sm">
+                  <p className="font-semibold text-emerald-600 dark:text-emerald-400 text-sm">
                     {broker.walletBalanceFormatted}
                   </p>
                 </motion.div>
               ))}
               {brokers.length === 0 && (
-                <div className="text-center py-8">
+                <div className="text-center py-12">
                   <Building2 className="w-12 h-12 mx-auto text-gray-200 dark:text-gray-700 mb-3" />
-                  <p className="text-sm text-gray-500 dark:text-gray-400">No hay brokers registrados</p>
+                  <p className="text-sm text-gray-500">No hay brokers registrados</p>
                 </div>
               )}
             </div>
