@@ -290,11 +290,13 @@ export default function AdminBrokersDashboardPage() {
     }
 
     // Crear marcador para cada broker con coordenadas válidas
+    // Color rojo de la marca
+    const markerColor = '#CC0A46'
+
     brokers.forEach((broker, index) => {
       if (!broker.latitude || !broker.longitude) return
 
       const provinceName = PROVINCE_ID_TO_NAME[broker.province] || broker.province || ''
-      const markerColor = PROVINCES[provinceName]?.color || '#3b82f6'
 
       const el = document.createElement('div')
       el.className = 'broker-marker'
@@ -386,7 +388,7 @@ export default function AdminBrokersDashboardPage() {
           bounds.extend([broker.longitude, broker.latitude])
         }
       })
-      map.current.fitBounds(bounds, { padding: 50, maxZoom: 10 })
+      map.current.fitBounds(bounds, { padding: 50, maxZoom: 14 })
     }
   }, [brokers])
 
@@ -399,7 +401,7 @@ export default function AdminBrokersDashboardPage() {
       center: [-79.0, 22.0],
       zoom: 6,
       minZoom: 5.5,
-      maxZoom: 10,
+      maxZoom: 18,
       attributionControl: false
     })
 
