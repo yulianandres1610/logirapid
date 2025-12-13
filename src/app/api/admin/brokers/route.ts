@@ -130,6 +130,45 @@ export async function GET(request: NextRequest) {
       ORDER BY broker_province
     `)
 
+    // Try to get remittance order stats (may not exist yet)
+    let orderStats = {
+      total: 0,
+      pending: 0,
+      confirmed: 0,
+      inDelivery: 0,
+      delivered: 0,
+      cancelled: 0,
+      totalAmount: 0
+    }
+
+    try {
+      const orderStatsResult = await db.query(`
+        SELECT
+          COUNT(*) as total,
+          COUNT(*) FILTER (WHERE status = 'pending') as pending,
+          COUNT(*) FILTER (WHERE status = 'confirmed') as confirmed,
+          COUNT(*) FILTER (WHERE status = 'in_delivery') as in_delivery,
+          COUNT(*) FILTER (WHERE status = 'delivered') as delivered,
+          COUNT(*) FILTER (WHERE status = 'cancelled') as cancelled,
+          COALESCE(SUM(total_charged), 0) as total_amount
+        FROM remittance_orders
+      `)
+      if (orderStatsResult.rows.length > 0) {
+        const os = orderStatsResult.rows[0]
+        orderStats = {
+          total: parseInt(os.total) || 0,
+          pending: parseInt(os.pending) || 0,
+          confirmed: parseInt(os.confirmed) || 0,
+          inDelivery: parseInt(os.in_delivery) || 0,
+          delivered: parseInt(os.delivered) || 0,
+          cancelled: parseInt(os.cancelled) || 0,
+          totalAmount: parseFloat(os.total_amount) || 0
+        }
+      }
+    } catch {
+      // Table may not exist yet, use defaults
+    }
+
     return NextResponse.json({
       success: true,
       data: {
@@ -167,7 +206,8 @@ export async function GET(request: NextRequest) {
         provinces: provincesResult.rows.map(row => ({
           name: row.province,
           brokerCount: parseInt(row.broker_count)
-        }))
+        })),
+        orderStats
       }
     })
 
