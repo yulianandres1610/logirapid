@@ -645,10 +645,19 @@ export default function CatalogoEmpresaPage() {
       const commission = productCommissions[product.id]
       if (!commission || commission.value === 0) continue
 
+      const isRemesa = product.category === 'remesa' && product.pricingModel === 'percentage'
       const servicesCost = getServicesCost(product.id)
-      const totalCost = product.miCosto + servicesCost
       const productPublicPrice = publicPrices[product.id] ?? 0
-      const totalMargin = productPublicPrice > 0 ? productPublicPrice - totalCost : 0
+
+      // For remesa: margin is percentage points difference
+      // For others: margin is dollar difference
+      let totalMargin: number
+      if (isRemesa) {
+        totalMargin = productPublicPrice > 0 ? productPublicPrice - product.miCosto : 0
+      } else {
+        const totalCost = product.miCosto + servicesCost
+        totalMargin = productPublicPrice > 0 ? productPublicPrice - totalCost : 0
+      }
 
       // Consider commissions from other roles
       const otherRolesUsed = getOtherRolesCommissionForProduct(product.id, productPublicPrice)
@@ -656,11 +665,16 @@ export default function CatalogoEmpresaPage() {
 
       let effectiveCommission = 0
       if (commission.type === 'percentage') {
-        effectiveCommission = productPublicPrice > 0 ? (productPublicPrice * commission.value / 100) : 0
+        // For remesa: commission value is already in percentage points
+        if (isRemesa) {
+          effectiveCommission = commission.value
+        } else {
+          effectiveCommission = productPublicPrice > 0 ? (productPublicPrice * commission.value / 100) : 0
+        }
       } else {
         effectiveCommission = commission.value
       }
-      if (commission.maxAmount !== null && effectiveCommission > commission.maxAmount) {
+      if (!isRemesa && commission.maxAmount !== null && effectiveCommission > commission.maxAmount) {
         effectiveCommission = commission.maxAmount
       }
 
@@ -768,6 +782,9 @@ export default function CatalogoEmpresaPage() {
 
   // Helper: Calculate commission amount used by OTHER roles (not selected role) for a product
   const getOtherRolesCommissionForProduct = (productId: number, productPublicPrice: number) => {
+    const product = products.find(p => p.id === productId)
+    const isRemesa = product?.category === 'remesa' && product?.pricingModel === 'percentage'
+
     const otherRolesCommissions = allRolesCommissions.filter(
       c => c.productId === productId && c.role !== selectedRole
     )
@@ -775,7 +792,10 @@ export default function CatalogoEmpresaPage() {
       if (c.commissionType === 'fixed') {
         return sum + c.commissionValue
       } else {
-        // percentage
+        // percentage - for remesa, value is already in percentage points
+        if (isRemesa) {
+          return sum + c.commissionValue
+        }
         return sum + (productPublicPrice * c.commissionValue / 100)
       }
     }, 0)
@@ -1982,7 +2002,12 @@ export default function CatalogoEmpresaPage() {
                       // Calculate effective commission amount for current role
                       let effectiveCommission = 0
                       if (commission.type === 'percentage') {
-                        effectiveCommission = publicPrice > 0 ? (publicPrice * commission.value / 100) : 0
+                        // For remesa: commission value is already in percentage points
+                        if (isRemesa) {
+                          effectiveCommission = commission.value
+                        } else {
+                          effectiveCommission = publicPrice > 0 ? (publicPrice * commission.value / 100) : 0
+                        }
                       } else {
                         effectiveCommission = commission.value
                       }
