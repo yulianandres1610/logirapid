@@ -68,7 +68,6 @@ export async function GET(request: NextRequest) {
       SELECT
         c.id as broker_id,
         c.legalname as broker_name,
-        c.tradename,
         COALESCE("walletNumber", walletnumber) as wallet_number,
         COALESCE("walletBalance"::numeric, walletbalance, 0) as wallet_balance,
         c.currency,
@@ -105,7 +104,7 @@ export async function GET(request: NextRequest) {
     const brokers = result.rows.map(row => ({
       id: row.broker_id,
       name: row.broker_name,
-      tradeName: row.tradename,
+      tradeName: row.broker_name,
       walletNumber: row.wallet_number,
       walletBalance: parseFloat(row.wallet_balance) || 0,
       walletBalanceFormatted: `$${(parseFloat(row.wallet_balance) || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
