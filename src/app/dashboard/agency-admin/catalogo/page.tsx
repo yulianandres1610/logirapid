@@ -2191,26 +2191,48 @@ export default function CatalogoEmpresaPage() {
           {activeTab === 'reporte' && (
             <div className="space-y-6">
               {/* Main Bar Chart - Full Width */}
-              <div className={`rounded-3xl p-8 ${isDark ? 'bg-gradient-to-br from-gray-800/90 to-gray-900/90 border border-gray-700/50' : 'bg-gradient-to-br from-white to-gray-50 border border-gray-200/50 shadow-xl'}`}>
+              <motion.div
+                initial={{ opacity: 0, y: 30 }}
+                animate={{ opacity: 1, y: 0 }}
+                whileHover={{ scale: 1.005, transition: { duration: 0.2 } }}
+                transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
+                className={`rounded-3xl p-8 cursor-default ${isDark ? 'bg-gradient-to-br from-gray-800/90 to-gray-900/90 border border-gray-700/50 hover:border-gray-600/70' : 'bg-gradient-to-br from-white to-gray-50 border border-gray-200/50 shadow-xl hover:shadow-2xl'} transition-all duration-300`}>
                 <div className="flex items-center justify-between mb-6">
-                  <div>
+                  <motion.div
+                    initial={{ opacity: 0, x: -20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ duration: 0.5, delay: 0.2 }}
+                  >
                     <h3 className={`text-xl font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>
                       Análisis de Utilidad por Producto
                     </h3>
                     <p className={`text-sm mt-1 ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
                       Comparativa de márgenes entre canales de venta
                     </p>
-                  </div>
-                  <div className="flex items-center gap-4">
+                  </motion.div>
+                  <motion.div
+                    initial={{ opacity: 0, x: 20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ duration: 0.5, delay: 0.3 }}
+                    className="flex items-center gap-4"
+                  >
                     <div className="flex items-center gap-2">
-                      <div className="w-3 h-3 rounded-full bg-gradient-to-r from-blue-500 to-blue-600" />
+                      <motion.div
+                        animate={{ scale: [1, 1.2, 1] }}
+                        transition={{ duration: 2, repeat: Infinity, repeatDelay: 3 }}
+                        className="w-3 h-3 rounded-full bg-gradient-to-r from-blue-500 to-blue-600"
+                      />
                       <span className={`text-sm ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>Público</span>
                     </div>
                     <div className="flex items-center gap-2">
-                      <div className="w-3 h-3 rounded-full bg-gradient-to-r from-violet-500 to-purple-600" />
+                      <motion.div
+                        animate={{ scale: [1, 1.2, 1] }}
+                        transition={{ duration: 2, delay: 0.5, repeat: Infinity, repeatDelay: 3 }}
+                        className="w-3 h-3 rounded-full bg-gradient-to-r from-violet-500 to-purple-600"
+                      />
                       <span className={`text-sm ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>Sucursales</span>
                     </div>
-                  </div>
+                  </motion.div>
                 </div>
                 <div className="h-96">
                   <ResponsiveContainer width="100%" height="100%">
@@ -2279,25 +2301,53 @@ export default function CatalogoEmpresaPage() {
                           name === 'publico' ? 'Venta Público' : 'Venta Sucursales'
                         ]}
                       />
-                      <Bar dataKey="publico" name="Venta Público" fill="url(#colorPublico)" radius={[8, 8, 0, 0]} maxBarSize={50} />
-                      <Bar dataKey="sucursales" name="Venta Sucursales" fill="url(#colorSucursales)" radius={[8, 8, 0, 0]} maxBarSize={50} />
+                      <Bar
+                        dataKey="publico"
+                        name="Venta Público"
+                        fill="url(#colorPublico)"
+                        radius={[8, 8, 0, 0]}
+                        maxBarSize={50}
+                        animationBegin={0}
+                        animationDuration={1200}
+                        animationEasing="ease-out"
+                      />
+                      <Bar
+                        dataKey="sucursales"
+                        name="Venta Sucursales"
+                        fill="url(#colorSucursales)"
+                        radius={[8, 8, 0, 0]}
+                        maxBarSize={50}
+                        animationBegin={300}
+                        animationDuration={1200}
+                        animationEasing="ease-out"
+                      />
                     </BarChart>
                   </ResponsiveContainer>
                 </div>
-              </div>
+              </motion.div>
 
               {/* Two Charts Row */}
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 {/* Donut Chart - Distribution */}
-                <div className={`rounded-3xl p-8 ${isDark ? 'bg-gradient-to-br from-gray-800/90 to-gray-900/90 border border-gray-700/50' : 'bg-gradient-to-br from-white to-gray-50 border border-gray-200/50 shadow-xl'}`}>
-                  <div className="mb-6">
+                <motion.div
+                  initial={{ opacity: 0, x: -30 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  whileHover={{ scale: 1.01, transition: { duration: 0.2 } }}
+                  transition={{ duration: 0.6, delay: 0.2, ease: [0.22, 1, 0.36, 1] }}
+                  className={`rounded-3xl p-8 cursor-default ${isDark ? 'bg-gradient-to-br from-gray-800/90 to-gray-900/90 border border-gray-700/50 hover:border-gray-600/70' : 'bg-gradient-to-br from-white to-gray-50 border border-gray-200/50 shadow-xl hover:shadow-2xl'} transition-all duration-300`}>
+                  <motion.div
+                    initial={{ opacity: 0, y: -10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.4, delay: 0.4 }}
+                    className="mb-6"
+                  >
                     <h3 className={`text-lg font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>
                       Distribución de Ingresos
                     </h3>
                     <p className={`text-sm mt-1 ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
                       Desglose porcentual por concepto
                     </p>
-                  </div>
+                  </motion.div>
                   <div className="h-80 relative">
                     <ResponsiveContainer width="100%" height="100%">
                       <RechartsPieChart>
@@ -2366,6 +2416,9 @@ export default function CatalogoEmpresaPage() {
                           paddingAngle={4}
                           dataKey="value"
                           strokeWidth={0}
+                          animationBegin={200}
+                          animationDuration={1400}
+                          animationEasing="ease-out"
                         >
                           {(() => {
                             const fills = ['url(#gradUtilPublic)', 'url(#gradUtilBranch)', 'url(#gradCommissions)', 'url(#gradCosts)']
@@ -2387,9 +2440,19 @@ export default function CatalogoEmpresaPage() {
                       </RechartsPieChart>
                     </ResponsiveContainer>
                     {/* Center Label */}
-                    <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                    <motion.div
+                      initial={{ opacity: 0, scale: 0.5 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      transition={{ duration: 0.6, delay: 0.8, ease: [0.22, 1, 0.36, 1] }}
+                      className="absolute inset-0 flex items-center justify-center pointer-events-none"
+                    >
                       <div className="text-center">
-                        <p className={`text-2xl font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>
+                        <motion.p
+                          initial={{ opacity: 0 }}
+                          animate={{ opacity: 1 }}
+                          transition={{ duration: 0.4, delay: 1.2 }}
+                          className={`text-2xl font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}
+                        >
                           ${(() => {
                             let total = 0
                             products.forEach(p => {
@@ -2412,42 +2475,79 @@ export default function CatalogoEmpresaPage() {
                             })
                             return total.toFixed(0)
                           })()}
-                        </p>
-                        <p className={`text-xs ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>Total</p>
+                        </motion.p>
+                        <motion.p
+                          initial={{ opacity: 0, y: 5 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          transition={{ duration: 0.3, delay: 1.4 }}
+                          className={`text-xs ${isDark ? 'text-gray-400' : 'text-gray-500'}`}
+                        >
+                          Total
+                        </motion.p>
                       </div>
-                    </div>
+                    </motion.div>
                   </div>
                   {/* Legend */}
                   <div className="grid grid-cols-2 gap-3 mt-4">
-                    <div className="flex items-center gap-2">
+                    <motion.div
+                      initial={{ opacity: 0, x: -10 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ duration: 0.4, delay: 0.9 }}
+                      className="flex items-center gap-2"
+                    >
                       <div className="w-3 h-3 rounded-full bg-gradient-to-r from-blue-500 to-blue-600" />
                       <span className={`text-sm ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>Utilidad Público</span>
-                    </div>
-                    <div className="flex items-center gap-2">
+                    </motion.div>
+                    <motion.div
+                      initial={{ opacity: 0, x: 10 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ duration: 0.4, delay: 1.0 }}
+                      className="flex items-center gap-2"
+                    >
                       <div className="w-3 h-3 rounded-full bg-gradient-to-r from-violet-500 to-purple-600" />
                       <span className={`text-sm ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>Utilidad Sucursales</span>
-                    </div>
-                    <div className="flex items-center gap-2">
+                    </motion.div>
+                    <motion.div
+                      initial={{ opacity: 0, x: -10 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ duration: 0.4, delay: 1.1 }}
+                      className="flex items-center gap-2"
+                    >
                       <div className="w-3 h-3 rounded-full bg-gradient-to-r from-amber-500 to-amber-600" />
                       <span className={`text-sm ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>Comisiones</span>
-                    </div>
-                    <div className="flex items-center gap-2">
+                    </motion.div>
+                    <motion.div
+                      initial={{ opacity: 0, x: 10 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ duration: 0.4, delay: 1.2 }}
+                      className="flex items-center gap-2"
+                    >
                       <div className="w-3 h-3 rounded-full bg-gradient-to-r from-red-500 to-red-600" />
                       <span className={`text-sm ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>Costos</span>
-                    </div>
+                    </motion.div>
                   </div>
-                </div>
+                </motion.div>
 
                 {/* Category Breakdown Chart */}
-                <div className={`rounded-3xl p-8 ${isDark ? 'bg-gradient-to-br from-gray-800/90 to-gray-900/90 border border-gray-700/50' : 'bg-gradient-to-br from-white to-gray-50 border border-gray-200/50 shadow-xl'}`}>
-                  <div className="mb-6">
+                <motion.div
+                  initial={{ opacity: 0, x: 30 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  whileHover={{ scale: 1.01, transition: { duration: 0.2 } }}
+                  transition={{ duration: 0.6, delay: 0.3, ease: [0.22, 1, 0.36, 1] }}
+                  className={`rounded-3xl p-8 cursor-default ${isDark ? 'bg-gradient-to-br from-gray-800/90 to-gray-900/90 border border-gray-700/50 hover:border-gray-600/70' : 'bg-gradient-to-br from-white to-gray-50 border border-gray-200/50 shadow-xl hover:shadow-2xl'} transition-all duration-300`}>
+                  <motion.div
+                    initial={{ opacity: 0, y: -10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.4, delay: 0.5 }}
+                    className="mb-6"
+                  >
                     <h3 className={`text-lg font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>
                       Utilidad por Categoría
                     </h3>
                     <p className={`text-sm mt-1 ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
                       Rendimiento de cada línea de servicio
                     </p>
-                  </div>
+                  </motion.div>
                   <div className="h-80">
                     <ResponsiveContainer width="100%" height="100%">
                       <BarChart
@@ -2537,6 +2637,9 @@ export default function CatalogoEmpresaPage() {
                           dataKey="utility"
                           radius={[0, 8, 8, 0]}
                           maxBarSize={40}
+                          animationBegin={400}
+                          animationDuration={1000}
+                          animationEasing="ease-out"
                         >
                           {(() => {
                             const gradients: Record<string, string> = {
@@ -2581,17 +2684,31 @@ export default function CatalogoEmpresaPage() {
                       </BarChart>
                     </ResponsiveContainer>
                   </div>
-                </div>
+                </motion.div>
               </div>
 
               {/* Detailed Table */}
-              <div className={`rounded-2xl overflow-hidden border ${isDark ? 'bg-gray-800/50 border-gray-800' : 'bg-white border-gray-200'}`}>
-                <div className={`px-6 py-4 border-b ${isDark ? 'border-gray-800' : 'border-gray-200'}`}>
+              <motion.div
+                initial={{ opacity: 0, y: 30 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.6, delay: 0.4, ease: [0.22, 1, 0.36, 1] }}
+                className={`rounded-2xl overflow-hidden border ${isDark ? 'bg-gray-800/50 border-gray-800 hover:border-gray-700' : 'bg-white border-gray-200 hover:border-gray-300 hover:shadow-lg'} transition-all duration-300`}>
+                <motion.div
+                  initial={{ opacity: 0, x: -10 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ duration: 0.4, delay: 0.5 }}
+                  className={`px-6 py-4 border-b ${isDark ? 'border-gray-800' : 'border-gray-200'}`}
+                >
                   <h3 className={`font-semibold flex items-center gap-2 ${isDark ? 'text-white' : 'text-gray-900'}`}>
-                    <DollarSign className="w-5 h-5" />
+                    <motion.div
+                      animate={{ rotate: [0, 10, -10, 0] }}
+                      transition={{ duration: 0.5, delay: 0.8 }}
+                    >
+                      <DollarSign className="w-5 h-5" />
+                    </motion.div>
                     Detalle de Utilidades por Producto
                   </h3>
-                </div>
+                </motion.div>
                 <table className="w-full">
                   <thead>
                     <tr className={isDark ? 'bg-gray-800' : 'bg-gray-50'}>
@@ -2683,7 +2800,7 @@ export default function CatalogoEmpresaPage() {
                     })}
                   </tbody>
                 </table>
-              </div>
+              </motion.div>
 
               {/* Empty state */}
               {products.length === 0 && (
