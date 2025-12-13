@@ -1,8 +1,8 @@
 'use client'
 
-import React, { useState, useEffect, useCallback } from 'react'
+import React, { useState, useEffect, useCallback, useRef } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
-import { motion, AnimatePresence } from 'framer-motion'
+import { motion, AnimatePresence, useInView, useSpring, useTransform } from 'framer-motion'
 import { cn } from '@/lib/utils'
 import { DashboardLayout } from '@/components/layout/dashboard-layout'
 import { useTheme } from '@/contexts/theme-context'
@@ -130,6 +130,75 @@ const formatPrice = (product: Product, priceField: 'miCosto' | 'precioMayorista'
   // Normal fixed price
   const price = priceField === 'miCosto' ? product.miCosto : product.precioMayorista
   return `$${price.toFixed(2)}`
+}
+
+// Animated Counter Component
+function AnimatedCounter({ value, prefix = '', suffix = '', duration = 2, decimals = 0 }: {
+  value: number
+  prefix?: string
+  suffix?: string
+  duration?: number
+  decimals?: number
+}) {
+  const ref = useRef<HTMLSpanElement>(null)
+  const isInView = useInView(ref, { once: true, margin: "-50px" })
+  const spring = useSpring(0, { duration: duration * 1000, bounce: 0 })
+  const display = useTransform(spring, (current) =>
+    `${prefix}${current.toFixed(decimals)}${suffix}`
+  )
+
+  useEffect(() => {
+    if (isInView) {
+      spring.set(value)
+    }
+  }, [isInView, spring, value])
+
+  return (
+    <motion.span ref={ref}>
+      {isInView ? <motion.span>{display}</motion.span> : `${prefix}0${suffix}`}
+    </motion.span>
+  )
+}
+
+// Animated Bar for custom chart effects
+function AnimatedBar({
+  delay = 0,
+  color,
+  percentage,
+  label,
+  value,
+  isDark
+}: {
+  delay: number
+  color: string
+  percentage: number
+  label: string
+  value: string
+  isDark: boolean
+}) {
+  const ref = useRef<HTMLDivElement>(null)
+  const isInView = useInView(ref, { once: true, margin: "-20px" })
+
+  return (
+    <div ref={ref} className="space-y-2">
+      <div className="flex justify-between items-center">
+        <span className={`text-sm font-medium ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>{label}</span>
+        <span className={`text-sm font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>{value}</span>
+      </div>
+      <div className={`h-3 rounded-full overflow-hidden ${isDark ? 'bg-gray-700' : 'bg-gray-200'}`}>
+        <motion.div
+          initial={{ width: 0 }}
+          animate={isInView ? { width: `${percentage}%` } : { width: 0 }}
+          transition={{ duration: 1.2, delay: delay, ease: [0.22, 1, 0.36, 1] }}
+          className={`h-full rounded-full ${color}`}
+          style={{
+            background: `linear-gradient(90deg, ${color} 0%, ${color}dd 100%)`,
+            boxShadow: `0 0 20px ${color}40`
+          }}
+        />
+      </div>
+    </div>
+  )
 }
 
 export default function CatalogoEmpresaPage() {
@@ -2190,6 +2259,131 @@ export default function CatalogoEmpresaPage() {
           {/* Tab 5: Reporte */}
           {activeTab === 'reporte' && (
             <div className="space-y-6">
+              {/* Animated Stats Summary */}
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                {/* Total Productos */}
+                <motion.div
+                  initial={{ opacity: 0, y: 20, scale: 0.95 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  transition={{ duration: 0.5, delay: 0, ease: [0.22, 1, 0.36, 1] }}
+                  className={`rounded-2xl p-5 ${isDark ? 'bg-gradient-to-br from-blue-600/20 to-blue-800/20 border border-blue-500/30' : 'bg-gradient-to-br from-blue-50 to-blue-100 border border-blue-200'}`}
+                >
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className={`text-sm font-medium ${isDark ? 'text-blue-300' : 'text-blue-600'}`}>Total Productos</p>
+                      <p className={`text-3xl font-bold mt-1 ${isDark ? 'text-white' : 'text-gray-900'}`}>
+                        <AnimatedCounter value={products.length} duration={1.5} />
+                      </p>
+                    </div>
+                    <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${isDark ? 'bg-blue-500/30' : 'bg-blue-500/20'}`}>
+                      <Package className={`w-6 h-6 ${isDark ? 'text-blue-400' : 'text-blue-600'}`} />
+                    </div>
+                  </div>
+                </motion.div>
+
+                {/* Utilidad Total Público */}
+                <motion.div
+                  initial={{ opacity: 0, y: 20, scale: 0.95 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  transition={{ duration: 0.5, delay: 0.1, ease: [0.22, 1, 0.36, 1] }}
+                  className={`rounded-2xl p-5 ${isDark ? 'bg-gradient-to-br from-emerald-600/20 to-emerald-800/20 border border-emerald-500/30' : 'bg-gradient-to-br from-emerald-50 to-emerald-100 border border-emerald-200'}`}
+                >
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className={`text-sm font-medium ${isDark ? 'text-emerald-300' : 'text-emerald-600'}`}>Utilidad Público</p>
+                      <p className={`text-3xl font-bold mt-1 ${isDark ? 'text-white' : 'text-gray-900'}`}>
+                        <AnimatedCounter
+                          value={products.reduce((sum, p) => {
+                            const isRemesa = p.category === 'remesa' && p.pricingModel === 'percentage'
+                            if (isRemesa) return sum
+                            const publicPrice = publicPrices[p.id] ?? 0
+                            const servicesCost = allServices.filter(s => s.productId === p.id).reduce((s, srv) => s + srv.costPrice, 0)
+                            const totalCost = p.miCosto + servicesCost
+                            let totalComm = 0
+                            allRolesCommissions.filter(c => c.productId === p.id).forEach(c => {
+                              totalComm += c.commissionType === 'percentage' ? (publicPrice * c.commissionValue / 100) : c.commissionValue
+                            })
+                            return sum + Math.max(0, publicPrice - totalCost - totalComm)
+                          }, 0)}
+                          prefix="$"
+                          duration={2}
+                          decimals={0}
+                        />
+                      </p>
+                    </div>
+                    <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${isDark ? 'bg-emerald-500/30' : 'bg-emerald-500/20'}`}>
+                      <TrendingUp className={`w-6 h-6 ${isDark ? 'text-emerald-400' : 'text-emerald-600'}`} />
+                    </div>
+                  </div>
+                </motion.div>
+
+                {/* Utilidad Sucursales */}
+                <motion.div
+                  initial={{ opacity: 0, y: 20, scale: 0.95 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  transition={{ duration: 0.5, delay: 0.2, ease: [0.22, 1, 0.36, 1] }}
+                  className={`rounded-2xl p-5 ${isDark ? 'bg-gradient-to-br from-violet-600/20 to-violet-800/20 border border-violet-500/30' : 'bg-gradient-to-br from-violet-50 to-violet-100 border border-violet-200'}`}
+                >
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className={`text-sm font-medium ${isDark ? 'text-violet-300' : 'text-violet-600'}`}>Utilidad Sucursales</p>
+                      <p className={`text-3xl font-bold mt-1 ${isDark ? 'text-white' : 'text-gray-900'}`}>
+                        <AnimatedCounter
+                          value={products.reduce((sum, p) => {
+                            const isRemesa = p.category === 'remesa' && p.pricingModel === 'percentage'
+                            if (isRemesa) return sum
+                            const branchPrice = branchSalePrices[p.id] ?? 0
+                            const servicesCost = allServices.filter(s => s.productId === p.id).reduce((s, srv) => s + srv.costPrice, 0)
+                            const totalCost = p.miCosto + servicesCost
+                            return sum + Math.max(0, branchPrice - totalCost)
+                          }, 0)}
+                          prefix="$"
+                          duration={2}
+                          decimals={0}
+                        />
+                      </p>
+                    </div>
+                    <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${isDark ? 'bg-violet-500/30' : 'bg-violet-500/20'}`}>
+                      <Store className={`w-6 h-6 ${isDark ? 'text-violet-400' : 'text-violet-600'}`} />
+                    </div>
+                  </div>
+                </motion.div>
+
+                {/* Total Comisiones */}
+                <motion.div
+                  initial={{ opacity: 0, y: 20, scale: 0.95 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  transition={{ duration: 0.5, delay: 0.3, ease: [0.22, 1, 0.36, 1] }}
+                  className={`rounded-2xl p-5 ${isDark ? 'bg-gradient-to-br from-amber-600/20 to-amber-800/20 border border-amber-500/30' : 'bg-gradient-to-br from-amber-50 to-amber-100 border border-amber-200'}`}
+                >
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className={`text-sm font-medium ${isDark ? 'text-amber-300' : 'text-amber-600'}`}>Total Comisiones</p>
+                      <p className={`text-3xl font-bold mt-1 ${isDark ? 'text-white' : 'text-gray-900'}`}>
+                        <AnimatedCounter
+                          value={products.reduce((sum, p) => {
+                            const isRemesa = p.category === 'remesa' && p.pricingModel === 'percentage'
+                            if (isRemesa) return sum
+                            const publicPrice = publicPrices[p.id] ?? 0
+                            let totalComm = 0
+                            allRolesCommissions.filter(c => c.productId === p.id).forEach(c => {
+                              totalComm += c.commissionType === 'percentage' ? (publicPrice * c.commissionValue / 100) : c.commissionValue
+                            })
+                            return sum + totalComm
+                          }, 0)}
+                          prefix="$"
+                          duration={2}
+                          decimals={0}
+                        />
+                      </p>
+                    </div>
+                    <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${isDark ? 'bg-amber-500/30' : 'bg-amber-500/20'}`}>
+                      <Users className={`w-6 h-6 ${isDark ? 'text-amber-400' : 'text-amber-600'}`} />
+                    </div>
+                  </div>
+                </motion.div>
+              </div>
+
               {/* Main Bar Chart - Full Width */}
               <motion.div
                 initial={{ opacity: 0, y: 30 }}
@@ -2307,8 +2501,9 @@ export default function CatalogoEmpresaPage() {
                         fill="url(#colorPublico)"
                         radius={[8, 8, 0, 0]}
                         maxBarSize={50}
-                        animationBegin={0}
-                        animationDuration={1200}
+                        isAnimationActive={true}
+                        animationBegin={200}
+                        animationDuration={1800}
                         animationEasing="ease-out"
                       />
                       <Bar
@@ -2317,8 +2512,9 @@ export default function CatalogoEmpresaPage() {
                         fill="url(#colorSucursales)"
                         radius={[8, 8, 0, 0]}
                         maxBarSize={50}
-                        animationBegin={300}
-                        animationDuration={1200}
+                        isAnimationActive={true}
+                        animationBegin={600}
+                        animationDuration={1800}
                         animationEasing="ease-out"
                       />
                     </BarChart>
@@ -2416,8 +2612,9 @@ export default function CatalogoEmpresaPage() {
                           paddingAngle={4}
                           dataKey="value"
                           strokeWidth={0}
-                          animationBegin={200}
-                          animationDuration={1400}
+                          isAnimationActive={true}
+                          animationBegin={400}
+                          animationDuration={2000}
                           animationEasing="ease-out"
                         >
                           {(() => {
@@ -2439,50 +2636,50 @@ export default function CatalogoEmpresaPage() {
                         />
                       </RechartsPieChart>
                     </ResponsiveContainer>
-                    {/* Center Label */}
+                    {/* Center Label with Animated Counter */}
                     <motion.div
                       initial={{ opacity: 0, scale: 0.5 }}
                       animate={{ opacity: 1, scale: 1 }}
-                      transition={{ duration: 0.6, delay: 0.8, ease: [0.22, 1, 0.36, 1] }}
+                      transition={{ duration: 0.8, delay: 1.2, ease: [0.22, 1, 0.36, 1] }}
                       className="absolute inset-0 flex items-center justify-center pointer-events-none"
                     >
                       <div className="text-center">
-                        <motion.p
-                          initial={{ opacity: 0 }}
-                          animate={{ opacity: 1 }}
-                          transition={{ duration: 0.4, delay: 1.2 }}
-                          className={`text-2xl font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}
-                        >
-                          ${(() => {
-                            let total = 0
-                            products.forEach(p => {
-                              const isRemesa = p.category === 'remesa' && p.pricingModel === 'percentage'
-                              if (isRemesa) return
-                              const publicPrice = publicPrices[p.id] ?? 0
-                              const branchPrice = branchSalePrices[p.id] ?? 0
-                              const servicesCost = allServices.filter(s => s.productId === p.id).reduce((sum, s) => sum + s.costPrice, 0)
-                              const totalCost = p.miCosto + servicesCost
-                              let totalCommissions = 0
-                              allRolesCommissions.filter(c => c.productId === p.id).forEach(c => {
-                                if (c.commissionType === 'percentage') {
-                                  totalCommissions += (publicPrice * c.commissionValue / 100)
-                                } else {
-                                  totalCommissions += c.commissionValue
-                                }
+                        <p className={`text-2xl font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>
+                          <AnimatedCounter
+                            value={(() => {
+                              let total = 0
+                              products.forEach(p => {
+                                const isRemesa = p.category === 'remesa' && p.pricingModel === 'percentage'
+                                if (isRemesa) return
+                                const publicPrice = publicPrices[p.id] ?? 0
+                                const branchPrice = branchSalePrices[p.id] ?? 0
+                                const servicesCost = allServices.filter(s => s.productId === p.id).reduce((sum, s) => sum + s.costPrice, 0)
+                                const totalCost = p.miCosto + servicesCost
+                                let totalCommissions = 0
+                                allRolesCommissions.filter(c => c.productId === p.id).forEach(c => {
+                                  if (c.commissionType === 'percentage') {
+                                    totalCommissions += (publicPrice * c.commissionValue / 100)
+                                  } else {
+                                    totalCommissions += c.commissionValue
+                                  }
+                                })
+                                total += Math.max(0, publicPrice - totalCost - totalCommissions)
+                                total += Math.max(0, branchPrice - totalCost)
                               })
-                              total += Math.max(0, publicPrice - totalCost - totalCommissions)
-                              total += Math.max(0, branchPrice - totalCost)
-                            })
-                            return total.toFixed(0)
-                          })()}
-                        </motion.p>
+                              return total
+                            })()}
+                            prefix="$"
+                            duration={2.5}
+                            decimals={0}
+                          />
+                        </p>
                         <motion.p
                           initial={{ opacity: 0, y: 5 }}
                           animate={{ opacity: 1, y: 0 }}
-                          transition={{ duration: 0.3, delay: 1.4 }}
+                          transition={{ duration: 0.4, delay: 2.0 }}
                           className={`text-xs ${isDark ? 'text-gray-400' : 'text-gray-500'}`}
                         >
-                          Total
+                          Total Utilidad
                         </motion.p>
                       </div>
                     </motion.div>
@@ -2637,8 +2834,9 @@ export default function CatalogoEmpresaPage() {
                           dataKey="utility"
                           radius={[0, 8, 8, 0]}
                           maxBarSize={40}
-                          animationBegin={400}
-                          animationDuration={1000}
+                          isAnimationActive={true}
+                          animationBegin={600}
+                          animationDuration={1600}
                           animationEasing="ease-out"
                         >
                           {(() => {
