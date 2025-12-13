@@ -670,15 +670,23 @@ export default function ProductConfigPage() {
                           <div className="flex items-center justify-between">
                             <span className={`text-xs ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>Mi Costo:</span>
                             <span className={`text-sm ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
-                              ${product.miCosto.toFixed(2)}
+                              {product.pricingModel === 'percentage' ? `${product.miCosto}%` : `$${product.miCosto.toFixed(2)}`}
                             </span>
                           </div>
                           <div className="flex items-center justify-between">
                             <span className={`text-xs ${isDark ? 'text-emerald-500' : 'text-emerald-600'}`}>Venta:</span>
                             <span className={`text-lg font-bold ${isDark ? 'text-emerald-400' : 'text-emerald-600'}`}>
-                              ${product.precioMayorista.toFixed(2)}
+                              {product.pricingModel === 'percentage' ? `${product.precioMayorista}%` : `$${product.precioMayorista.toFixed(2)}`}
                             </span>
                           </div>
+                          {product.currency && (
+                            <div className="flex items-center justify-between">
+                              <span className={`text-xs ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>Moneda:</span>
+                              <span className={`text-xs font-medium px-2 py-0.5 rounded ${isDark ? 'bg-emerald-500/20 text-emerald-400' : 'bg-emerald-100 text-emerald-700'}`}>
+                                {product.currency}
+                              </span>
+                            </div>
+                          )}
                         </div>
                         <p className={`text-xs mt-2 ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
                           {product.providerName || 'Sin proveedor'}
@@ -780,13 +788,20 @@ export default function ProductConfigPage() {
                             </td>
                             <td className={`px-6 py-4 text-right`}>
                               <span className={`text-base font-semibold ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
-                                ${product.miCosto.toFixed(2)}
+                                {product.pricingModel === 'percentage' ? `${product.miCosto}%` : `$${product.miCosto.toFixed(2)}`}
                               </span>
                             </td>
                             <td className={`px-6 py-4 text-right`}>
-                              <span className={`text-lg font-bold ${isDark ? 'text-emerald-400' : 'text-emerald-600'}`}>
-                                ${product.precioMayorista.toFixed(2)}
-                              </span>
+                              <div className="flex flex-col items-end">
+                                <span className={`text-lg font-bold ${isDark ? 'text-emerald-400' : 'text-emerald-600'}`}>
+                                  {product.pricingModel === 'percentage' ? `${product.precioMayorista}%` : `$${product.precioMayorista.toFixed(2)}`}
+                                </span>
+                                {product.currency && (
+                                  <span className={`text-xs ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
+                                    {product.currency}
+                                  </span>
+                                )}
+                              </div>
                             </td>
                             <td className={`px-6 py-4 ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
                               {product.providerName || (
@@ -903,6 +918,9 @@ export default function ProductConfigPage() {
                     <div className={`px-6 py-3 border-b ${isDark ? 'bg-blue-500/10 border-gray-800' : 'bg-blue-50 border-gray-200'}`}>
                       <p className={`text-sm ${isDark ? 'text-blue-300' : 'text-blue-700'}`}>
                         <strong>Precio Global:</strong> Precio base para todas las empresas. <strong>Precio Especial:</strong> Sobrescribe el precio global solo para esta empresa.
+                        <span className={`ml-2 ${isDark ? 'text-emerald-400' : 'text-emerald-600'}`}>
+                          Los productos de <strong>Remesa</strong> usan porcentajes (%).
+                        </span>
                       </p>
                     </div>
                     <table className="w-full">
@@ -927,6 +945,8 @@ export default function ProductConfigPage() {
                           const catConfig = getCategoryConfig(product.category)
                           const Icon = catConfig.icon
                           const customPrice = companyPrices[product.id]
+                          const isPercentage = product.pricingModel === 'percentage'
+                          const symbol = isPercentage ? '%' : '$'
                           // El descuento es la diferencia entre el precio global y el precio especial
                           const discount = customPrice !== null && customPrice < product.precioMayorista
                             ? product.precioMayorista - customPrice
@@ -958,9 +978,16 @@ export default function ProductConfigPage() {
                                 </div>
                               </td>
                               <td className={`px-6 py-4 text-right`}>
-                                <span className={`text-lg font-semibold ${isDark ? 'text-emerald-400' : 'text-emerald-600'}`}>
-                                  ${product.precioMayorista.toFixed(2)}
-                                </span>
+                                <div className="flex flex-col items-end">
+                                  <span className={`text-lg font-semibold ${isDark ? 'text-emerald-400' : 'text-emerald-600'}`}>
+                                    {isPercentage ? `${product.precioMayorista}%` : `$${product.precioMayorista.toFixed(2)}`}
+                                  </span>
+                                  {isPercentage && product.currency && (
+                                    <span className={`text-xs ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
+                                      {product.currency}
+                                    </span>
+                                  )}
+                                </div>
                               </td>
                               <td className="px-6 py-4">
                                 <div className="flex flex-col items-center gap-1">
@@ -969,13 +996,14 @@ export default function ProductConfigPage() {
                                       isPriceInvalid
                                         ? 'text-red-500'
                                         : isDark ? 'text-blue-400' : 'text-blue-500'
-                                    }`}>$</span>
+                                    }`}>{symbol}</span>
                                     <input
                                       type="number"
-                                      step="0.01"
+                                      step={isPercentage ? '0.1' : '0.01'}
                                       min={product.miCosto}
+                                      max={isPercentage ? 100 : undefined}
                                       value={customPrice ?? ''}
-                                      placeholder={product.precioMayorista.toFixed(2)}
+                                      placeholder={isPercentage ? String(product.precioMayorista) : product.precioMayorista.toFixed(2)}
                                       onChange={(e) => {
                                         const value = e.target.value ? parseFloat(e.target.value) : null
                                         setCompanyPrices(prev => ({
@@ -1000,7 +1028,7 @@ export default function ProductConfigPage() {
                                   </div>
                                   {isPriceInvalid && (
                                     <span className={`text-xs ${isDark ? 'text-red-400' : 'text-red-500'}`}>
-                                      Min: ${product.miCosto.toFixed(2)}
+                                      Min: {isPercentage ? `${product.miCosto}%` : `$${product.miCosto.toFixed(2)}`}
                                     </span>
                                   )}
                                 </div>
@@ -1009,9 +1037,9 @@ export default function ProductConfigPage() {
                                 {discount !== null ? (
                                   <div className="flex flex-col items-end">
                                     <span className={`text-lg font-bold ${isDark ? 'text-green-400' : 'text-green-600'}`}>
-                                      -${discount.toFixed(2)}
+                                      {isPercentage ? `-${discount.toFixed(1)}%` : `-$${discount.toFixed(2)}`}
                                     </span>
-                                    {discountPercent !== null && (
+                                    {!isPercentage && discountPercent !== null && (
                                       <span className={`text-sm font-medium ${isDark ? 'text-green-400/70' : 'text-green-600/70'}`}>
                                         -{discountPercent.toFixed(1)}%
                                       </span>
