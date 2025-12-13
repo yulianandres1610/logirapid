@@ -78,6 +78,7 @@ export async function GET(request: NextRequest) {
         pc.precio_mayorista,
         pc.precio_publico,
         pc.pricing_model,
+        pc.currency,
         pc.provider_company_id,
         c.legalname as provider_company_name,
         pc.is_active,
@@ -163,7 +164,9 @@ export async function POST(request: NextRequest) {
       platform_min_b2c,
       pricing_model,
       provider_company_id,
-      display_order
+      display_order,
+      // Currency for remesa products
+      currency
     } = body
 
     // Validate required fields
@@ -193,8 +196,8 @@ export async function POST(request: NextRequest) {
         code, name, description, service_category, product_type,
         dimensions, weight_capacity, unit_type,
         mi_costo, precio_mayorista, precio_publico,
-        pricing_model, provider_company_id, display_order
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+        pricing_model, provider_company_id, display_order, currency
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
       RETURNING *
     `, [
       code,
@@ -204,13 +207,14 @@ export async function POST(request: NextRequest) {
       product_type,
       dimensions || null,
       weight_capacity || null,
-      unit_type || 'unit',
+      unit_type || (service_category === 'remesa' ? 'usd' : 'unit'),
       finalMiCosto,
       finalPrecioMayorista,
       finalPrecioPublico,
-      pricing_model || 'fixed',
+      pricing_model || (service_category === 'remesa' ? 'percentage' : 'fixed'),
       provider_company_id || null,
-      display_order || 0
+      display_order || 0,
+      currency || null
     ])
 
     // Log history
