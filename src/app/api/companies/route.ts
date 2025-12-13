@@ -131,8 +131,31 @@ export async function POST(request: NextRequest) {
       isProvider,
       providerType,
       providerCategories,
-      providerServices
+      providerServices,
+      // Campos para Brokers y coordenadas
+      latitude,
+      longitude,
+      broker_province,
+      broker_municipality,
+      broker_address,
+      broker_delivery_start,
+      broker_delivery_end,
+      broker_contact_phone,
+      broker_bank_accounts
     } = body
+
+    // Log para depurar datos de broker
+    console.log('[Companies API] Datos de broker recibidos:', {
+      companyType,
+      latitude,
+      longitude,
+      broker_province,
+      broker_municipality,
+      broker_address,
+      broker_delivery_start,
+      broker_delivery_end,
+      broker_contact_phone
+    })
 
     // Validaciones básicas
     if (!legalName || !phone || !address || !city || !country || !einNumber) {
@@ -224,6 +247,8 @@ export async function POST(request: NextRequest) {
         service_fees, logo_url, label_logo_url, subdomain, primary_color, secondary_color,
         parent_company_id, is_branch,
         is_provider, provider_type, provider_categories, provider_services,
+        latitude, longitude, broker_province, broker_municipality, broker_address,
+        broker_delivery_hours, broker_contact_phone, broker_bank_accounts,
         status, createdat, walletbalance, transactionscount, userscount
       ) VALUES (
         $1, $2, $3, $4, $5, $6, $7, $8, $9, $10,
@@ -232,6 +257,8 @@ export async function POST(request: NextRequest) {
         $21, $22, $23, $24, $25, $26,
         $27, $28,
         $29, $30, $31, $32,
+        $33, $34, $35, $36, $37,
+        $38, $39, $40,
         'active', NOW(), 0, 0, 0
       ) RETURNING
         id,
@@ -242,6 +269,11 @@ export async function POST(request: NextRequest) {
         is_branch as "isBranch",
         createdat as "createdAt"
     `
+
+    // Combinar horarios de entrega si están definidos
+    const brokerDeliveryHours = broker_delivery_start && broker_delivery_end
+      ? `${broker_delivery_start} - ${broker_delivery_end}`
+      : null
 
     const values = [
       legalName,
@@ -275,8 +307,28 @@ export async function POST(request: NextRequest) {
       isProvider || false,
       providerType || null,
       JSON.stringify(providerCategories || []),
-      JSON.stringify(providerServices || [])
+      JSON.stringify(providerServices || []),
+      // Campos para Brokers y coordenadas
+      latitude || null,
+      longitude || null,
+      broker_province || null,
+      broker_municipality || null,
+      broker_address || null,
+      brokerDeliveryHours,
+      broker_contact_phone || null,
+      JSON.stringify(broker_bank_accounts || [])
     ]
+
+    // Log para depurar valores de broker que se van a insertar
+    console.log('[Companies API] Valores de broker a insertar:', {
+      latitude: values[32],
+      longitude: values[33],
+      broker_province: values[34],
+      broker_municipality: values[35],
+      broker_address: values[36],
+      brokerDeliveryHours: values[37],
+      broker_contact_phone: values[38]
+    })
 
     const result = await db.query(query, values)
 

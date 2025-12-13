@@ -137,6 +137,14 @@ const STEPS = [
   { id: 7, title: 'Revisión', icon: Check }
 ]
 
+// Pasos simplificados para Brokers
+const BROKER_STEPS = [
+  { id: 1, title: 'Información del Broker', icon: Building2 },
+  { id: 2, title: 'Wallet', icon: CreditCard },
+  { id: 3, title: 'Documentos', icon: FileText },
+  { id: 4, title: 'Revisión', icon: Check }
+]
+
 const SERVICES = [
   { id: 'wallet', name: 'Wallet', description: 'Gestión de billeteras digitales' },
   { id: 'recharge', name: 'Recarga', description: 'Recargas móviles y servicios' },
@@ -168,207 +176,207 @@ const COMPANY_TYPES = [
   { id: 'all', name: 'Todos', description: 'Todos los servicios disponibles' },
 ]
 
-// Provincias y Municipios para Brokers
+// Provincias y Municipios para Brokers (con coordenadas de municipios)
 const BROKER_PROVINCES = [
   { id: 'pinar-del-rio', name: 'Pinar del Río', coords: [-83.6978, 22.4175], municipalities: [
-    { id: 'pinar-del-rio', name: 'Pinar del Río' },
-    { id: 'consolacion-del-sur', name: 'Consolación del Sur' },
-    { id: 'sandino', name: 'Sandino' },
-    { id: 'san-juan-y-martinez', name: 'San Juan y Martínez' },
-    { id: 'guane', name: 'Guane' },
-    { id: 'los-palacios', name: 'Los Palacios' },
-    { id: 'vinales', name: 'Viñales' },
-    { id: 'la-palma', name: 'La Palma' },
-    { id: 'minas-de-matahambre', name: 'Minas de Matahambre' },
-    { id: 'san-luis', name: 'San Luis' },
-    { id: 'mantua', name: 'Mantua' },
+    { id: 'pinar-del-rio', name: 'Pinar del Río', coords: [-83.6978, 22.4175] },
+    { id: 'consolacion-del-sur', name: 'Consolación del Sur', coords: [-83.5178, 22.5056] },
+    { id: 'sandino', name: 'Sandino', coords: [-84.0217, 22.0794] },
+    { id: 'san-juan-y-martinez', name: 'San Juan y Martínez', coords: [-83.8353, 22.2667] },
+    { id: 'guane', name: 'Guane', coords: [-84.0833, 22.2000] },
+    { id: 'los-palacios', name: 'Los Palacios', coords: [-83.2500, 22.5833] },
+    { id: 'vinales', name: 'Viñales', coords: [-83.7139, 22.6169] },
+    { id: 'la-palma', name: 'La Palma', coords: [-83.5553, 22.7569] },
+    { id: 'minas-de-matahambre', name: 'Minas de Matahambre', coords: [-83.9500, 22.5833] },
+    { id: 'san-luis', name: 'San Luis', coords: [-83.7667, 22.2833] },
+    { id: 'mantua', name: 'Mantua', coords: [-84.2833, 22.2833] },
   ]},
   { id: 'artemisa', name: 'Artemisa', coords: [-82.7617, 22.8136], municipalities: [
-    { id: 'artemisa', name: 'Artemisa' },
-    { id: 'bahia-honda', name: 'Bahía Honda' },
-    { id: 'candelaria', name: 'Candelaria' },
-    { id: 'guanajay', name: 'Guanajay' },
-    { id: 'mariel', name: 'Mariel' },
-    { id: 'san-antonio-de-los-banos', name: 'San Antonio de los Baños' },
-    { id: 'san-cristobal', name: 'San Cristóbal' },
-    { id: 'bauta', name: 'Bauta' },
-    { id: 'caimito', name: 'Caimito' },
-    { id: 'guira-de-melena', name: 'Güira de Melena' },
-    { id: 'alquizar', name: 'Alquízar' },
+    { id: 'artemisa', name: 'Artemisa', coords: [-82.7617, 22.8136] },
+    { id: 'bahia-honda', name: 'Bahía Honda', coords: [-83.1639, 22.9033] },
+    { id: 'candelaria', name: 'Candelaria', coords: [-82.9583, 22.7500] },
+    { id: 'guanajay', name: 'Guanajay', coords: [-82.6875, 22.9292] },
+    { id: 'mariel', name: 'Mariel', coords: [-82.7528, 22.9944] },
+    { id: 'san-antonio-de-los-banos', name: 'San Antonio de los Baños', coords: [-82.4992, 22.8911] },
+    { id: 'san-cristobal', name: 'San Cristóbal', coords: [-83.0500, 22.7167] },
+    { id: 'bauta', name: 'Bauta', coords: [-82.5489, 22.9883] },
+    { id: 'caimito', name: 'Caimito', coords: [-82.5917, 22.9583] },
+    { id: 'guira-de-melena', name: 'Güira de Melena', coords: [-82.5083, 22.8000] },
+    { id: 'alquizar', name: 'Alquízar', coords: [-82.5833, 22.8000] },
   ]},
   { id: 'la-habana', name: 'La Habana', coords: [-82.3666, 23.1136], municipalities: [
-    { id: 'playa', name: 'Playa' },
-    { id: 'plaza-de-la-revolucion', name: 'Plaza de la Revolución' },
-    { id: 'centro-habana', name: 'Centro Habana' },
-    { id: 'habana-vieja', name: 'La Habana Vieja' },
-    { id: 'regla', name: 'Regla' },
-    { id: 'habana-del-este', name: 'Habana del Este' },
-    { id: 'guanabacoa', name: 'Guanabacoa' },
-    { id: 'san-miguel-del-padron', name: 'San Miguel del Padrón' },
-    { id: 'diez-de-octubre', name: 'Diez de Octubre' },
-    { id: 'cerro', name: 'Cerro' },
-    { id: 'marianao', name: 'Marianao' },
-    { id: 'la-lisa', name: 'La Lisa' },
-    { id: 'boyeros', name: 'Boyeros' },
-    { id: 'arroyo-naranjo', name: 'Arroyo Naranjo' },
-    { id: 'cotorro', name: 'Cotorro' },
+    { id: 'playa', name: 'Playa', coords: [-82.4208, 23.1147] },
+    { id: 'plaza-de-la-revolucion', name: 'Plaza de la Revolución', coords: [-82.3917, 23.1200] },
+    { id: 'centro-habana', name: 'Centro Habana', coords: [-82.3667, 23.1367] },
+    { id: 'habana-vieja', name: 'La Habana Vieja', coords: [-82.3500, 23.1350] },
+    { id: 'regla', name: 'Regla', coords: [-82.3333, 23.1250] },
+    { id: 'habana-del-este', name: 'Habana del Este', coords: [-82.2833, 23.1583] },
+    { id: 'guanabacoa', name: 'Guanabacoa', coords: [-82.3000, 23.1167] },
+    { id: 'san-miguel-del-padron', name: 'San Miguel del Padrón', coords: [-82.3333, 23.0833] },
+    { id: 'diez-de-octubre', name: 'Diez de Octubre', coords: [-82.3667, 23.0917] },
+    { id: 'cerro', name: 'Cerro', coords: [-82.3833, 23.1000] },
+    { id: 'marianao', name: 'Marianao', coords: [-82.4333, 23.0833] },
+    { id: 'la-lisa', name: 'La Lisa', coords: [-82.4667, 23.0333] },
+    { id: 'boyeros', name: 'Boyeros', coords: [-82.4000, 22.9833] },
+    { id: 'arroyo-naranjo', name: 'Arroyo Naranjo', coords: [-82.3500, 23.0333] },
+    { id: 'cotorro', name: 'Cotorro', coords: [-82.2667, 23.0333] },
   ]},
   { id: 'mayabeque', name: 'Mayabeque', coords: [-81.9300, 22.9200], municipalities: [
-    { id: 'bejucal', name: 'Bejucal' },
-    { id: 'san-jose-de-las-lajas', name: 'San José de las Lajas' },
-    { id: 'jaruco', name: 'Jaruco' },
-    { id: 'santa-cruz-del-norte', name: 'Santa Cruz del Norte' },
-    { id: 'madruga', name: 'Madruga' },
-    { id: 'nueva-paz', name: 'Nueva Paz' },
-    { id: 'san-nicolas-de-bari', name: 'San Nicolás de Bari' },
-    { id: 'guines', name: 'Güines' },
-    { id: 'melena-del-sur', name: 'Melena del Sur' },
-    { id: 'batabano', name: 'Batabanó' },
-    { id: 'quivican', name: 'Quivicán' },
+    { id: 'bejucal', name: 'Bejucal', coords: [-82.3833, 22.9333] },
+    { id: 'san-jose-de-las-lajas', name: 'San José de las Lajas', coords: [-82.1500, 22.9667] },
+    { id: 'jaruco', name: 'Jaruco', coords: [-82.0167, 23.0500] },
+    { id: 'santa-cruz-del-norte', name: 'Santa Cruz del Norte', coords: [-81.9167, 23.1500] },
+    { id: 'madruga', name: 'Madruga', coords: [-81.8500, 22.9167] },
+    { id: 'nueva-paz', name: 'Nueva Paz', coords: [-81.7500, 22.7667] },
+    { id: 'san-nicolas-de-bari', name: 'San Nicolás de Bari', coords: [-81.9000, 22.7833] },
+    { id: 'guines', name: 'Güines', coords: [-82.0333, 22.8333] },
+    { id: 'melena-del-sur', name: 'Melena del Sur', coords: [-82.1500, 22.7833] },
+    { id: 'batabano', name: 'Batabanó', coords: [-82.2833, 22.7167] },
+    { id: 'quivican', name: 'Quivicán', coords: [-82.3500, 22.8167] },
   ]},
   { id: 'matanzas', name: 'Matanzas', coords: [-81.5775, 22.4117], municipalities: [
-    { id: 'matanzas', name: 'Matanzas' },
-    { id: 'cardenas', name: 'Cárdenas' },
-    { id: 'varadero', name: 'Varadero' },
-    { id: 'colon', name: 'Colón' },
-    { id: 'jovellanos', name: 'Jovellanos' },
-    { id: 'pedro-betancourt', name: 'Pedro Betancourt' },
-    { id: 'limonar', name: 'Limonar' },
-    { id: 'union-de-reyes', name: 'Unión de Reyes' },
-    { id: 'los-arabos', name: 'Los Arabos' },
-    { id: 'perico', name: 'Perico' },
-    { id: 'marti', name: 'Martí' },
-    { id: 'jaguey-grande', name: 'Jagüey Grande' },
-    { id: 'cienaga-de-zapata', name: 'Ciénaga de Zapata' },
+    { id: 'matanzas', name: 'Matanzas', coords: [-81.5775, 22.4117] },
+    { id: 'cardenas', name: 'Cárdenas', coords: [-81.2000, 23.0333] },
+    { id: 'varadero', name: 'Varadero', coords: [-81.2500, 23.1500] },
+    { id: 'colon', name: 'Colón', coords: [-80.9000, 22.7167] },
+    { id: 'jovellanos', name: 'Jovellanos', coords: [-81.1833, 22.8000] },
+    { id: 'pedro-betancourt', name: 'Pedro Betancourt', coords: [-81.2833, 22.7000] },
+    { id: 'limonar', name: 'Limonar', coords: [-81.4167, 22.9500] },
+    { id: 'union-de-reyes', name: 'Unión de Reyes', coords: [-81.5333, 22.7833] },
+    { id: 'los-arabos', name: 'Los Arabos', coords: [-80.7167, 22.7333] },
+    { id: 'perico', name: 'Perico', coords: [-81.0167, 22.7667] },
+    { id: 'marti', name: 'Martí', coords: [-80.9333, 22.9500] },
+    { id: 'jaguey-grande', name: 'Jagüey Grande', coords: [-81.1333, 22.5333] },
+    { id: 'cienaga-de-zapata', name: 'Ciénaga de Zapata', coords: [-81.0667, 22.3667] },
   ]},
   { id: 'cienfuegos', name: 'Cienfuegos', coords: [-80.4536, 22.1456], municipalities: [
-    { id: 'cienfuegos', name: 'Cienfuegos' },
-    { id: 'palmira', name: 'Palmira' },
-    { id: 'rodas', name: 'Rodas' },
-    { id: 'lajas', name: 'Lajas' },
-    { id: 'cruces', name: 'Cruces' },
-    { id: 'cumanayagua', name: 'Cumanayagua' },
-    { id: 'aguada-de-pasajeros', name: 'Aguada de Pasajeros' },
-    { id: 'abreus', name: 'Abreus' },
+    { id: 'cienfuegos', name: 'Cienfuegos', coords: [-80.4536, 22.1456] },
+    { id: 'palmira', name: 'Palmira', coords: [-80.3833, 22.2333] },
+    { id: 'rodas', name: 'Rodas', coords: [-80.5500, 22.3333] },
+    { id: 'lajas', name: 'Lajas', coords: [-80.2833, 22.4167] },
+    { id: 'cruces', name: 'Cruces', coords: [-80.2667, 22.3500] },
+    { id: 'cumanayagua', name: 'Cumanayagua', coords: [-80.2000, 22.1500] },
+    { id: 'aguada-de-pasajeros', name: 'Aguada de Pasajeros', coords: [-80.8500, 22.3833] },
+    { id: 'abreus', name: 'Abreus', coords: [-80.5667, 22.2833] },
   ]},
   { id: 'villa-clara', name: 'Villa Clara', coords: [-79.9658, 22.4058], municipalities: [
-    { id: 'santa-clara', name: 'Santa Clara' },
-    { id: 'remedios', name: 'Remedios' },
-    { id: 'caibarien', name: 'Caibarién' },
-    { id: 'camajuani', name: 'Camajuaní' },
-    { id: 'placetas', name: 'Placetas' },
-    { id: 'sancti-spiritus', name: 'Sancti Spíritus' },
-    { id: 'sagua-la-grande', name: 'Sagua la Grande' },
-    { id: 'cifuentes', name: 'Cifuentes' },
-    { id: 'santo-domingo', name: 'Santo Domingo' },
-    { id: 'ranchuelo', name: 'Ranchuelo' },
-    { id: 'manicaragua', name: 'Manicaragua' },
-    { id: 'encrucijada', name: 'Encrucijada' },
-    { id: 'quemado-de-guines', name: 'Quemado de Güines' },
+    { id: 'santa-clara', name: 'Santa Clara', coords: [-79.9658, 22.4058] },
+    { id: 'remedios', name: 'Remedios', coords: [-79.5458, 22.4917] },
+    { id: 'caibarien', name: 'Caibarién', coords: [-79.4667, 22.5167] },
+    { id: 'camajuani', name: 'Camajuaní', coords: [-79.7333, 22.4667] },
+    { id: 'placetas', name: 'Placetas', coords: [-79.6500, 22.3167] },
+    { id: 'sancti-spiritus', name: 'Sancti Spíritus', coords: [-79.4428, 21.9303] },
+    { id: 'sagua-la-grande', name: 'Sagua la Grande', coords: [-80.0833, 22.8000] },
+    { id: 'cifuentes', name: 'Cifuentes', coords: [-80.0500, 22.6167] },
+    { id: 'santo-domingo', name: 'Santo Domingo', coords: [-80.2333, 22.5833] },
+    { id: 'ranchuelo', name: 'Ranchuelo', coords: [-80.1500, 22.3833] },
+    { id: 'manicaragua', name: 'Manicaragua', coords: [-79.9667, 22.1500] },
+    { id: 'encrucijada', name: 'Encrucijada', coords: [-79.8667, 22.6167] },
+    { id: 'quemado-de-guines', name: 'Quemado de Güines', coords: [-80.2500, 22.8000] },
   ]},
   { id: 'sancti-spiritus', name: 'Sancti Spíritus', coords: [-79.4428, 21.9303], municipalities: [
-    { id: 'sancti-spiritus', name: 'Sancti Spíritus' },
-    { id: 'trinidad', name: 'Trinidad' },
-    { id: 'fomento', name: 'Fomento' },
-    { id: 'cabaiguan', name: 'Cabaiguán' },
-    { id: 'jatibonico', name: 'Jatibonico' },
-    { id: 'taguasco', name: 'Taguasco' },
-    { id: 'yaguajay', name: 'Yaguajay' },
-    { id: 'la-sierpe', name: 'La Sierpe' },
+    { id: 'sancti-spiritus', name: 'Sancti Spíritus', coords: [-79.4428, 21.9303] },
+    { id: 'trinidad', name: 'Trinidad', coords: [-79.9844, 21.8022] },
+    { id: 'fomento', name: 'Fomento', coords: [-79.7167, 22.1000] },
+    { id: 'cabaiguan', name: 'Cabaiguán', coords: [-79.5000, 22.0833] },
+    { id: 'jatibonico', name: 'Jatibonico', coords: [-79.1667, 21.9500] },
+    { id: 'taguasco', name: 'Taguasco', coords: [-79.2667, 22.0333] },
+    { id: 'yaguajay', name: 'Yaguajay', coords: [-79.2333, 22.3333] },
+    { id: 'la-sierpe', name: 'La Sierpe', coords: [-79.2500, 21.7500] },
   ]},
   { id: 'ciego-de-avila', name: 'Ciego de Ávila', coords: [-78.7619, 21.8403], municipalities: [
-    { id: 'ciego-de-avila', name: 'Ciego de Ávila' },
-    { id: 'moron', name: 'Morón' },
-    { id: 'chambas', name: 'Chambas' },
-    { id: 'ciro-redondo', name: 'Ciro Redondo' },
-    { id: 'majagua', name: 'Majagua' },
-    { id: 'florencia', name: 'Florencia' },
-    { id: 'venezuela', name: 'Venezuela' },
-    { id: 'baraguá', name: 'Baraguá' },
-    { id: 'primero-de-enero', name: 'Primero de Enero' },
-    { id: 'bolivia', name: 'Bolivia' },
+    { id: 'ciego-de-avila', name: 'Ciego de Ávila', coords: [-78.7619, 21.8403] },
+    { id: 'moron', name: 'Morón', coords: [-78.6275, 22.1078] },
+    { id: 'chambas', name: 'Chambas', coords: [-78.9167, 22.2000] },
+    { id: 'ciro-redondo', name: 'Ciro Redondo', coords: [-78.7000, 22.0167] },
+    { id: 'majagua', name: 'Majagua', coords: [-78.9833, 21.9167] },
+    { id: 'florencia', name: 'Florencia', coords: [-78.9667, 22.1500] },
+    { id: 'venezuela', name: 'Venezuela', coords: [-78.7833, 21.7500] },
+    { id: 'baragua', name: 'Baraguá', coords: [-78.6333, 21.6833] },
+    { id: 'primero-de-enero', name: 'Primero de Enero', coords: [-78.4333, 21.9500] },
+    { id: 'bolivia', name: 'Bolivia', coords: [-78.4500, 21.8500] },
   ]},
   { id: 'camaguey', name: 'Camagüey', coords: [-77.9169, 21.3808], municipalities: [
-    { id: 'camaguey', name: 'Camagüey' },
-    { id: 'florida', name: 'Florida' },
-    { id: 'vertientes', name: 'Vertientes' },
-    { id: 'guaimaro', name: 'Guáimaro' },
-    { id: 'sibanicu', name: 'Sibanicú' },
-    { id: 'nuevitas', name: 'Nuevitas' },
-    { id: 'esmeralda', name: 'Esmeralda' },
-    { id: 'minas', name: 'Minas' },
-    { id: 'jimaguayu', name: 'Jimaguayú' },
-    { id: 'santa-cruz-del-sur', name: 'Santa Cruz del Sur' },
-    { id: 'najasa', name: 'Najasa' },
-    { id: 'sierra-de-cubitas', name: 'Sierra de Cubitas' },
-    { id: 'cespedes', name: 'Céspedes' },
+    { id: 'camaguey', name: 'Camagüey', coords: [-77.9169, 21.3808] },
+    { id: 'florida', name: 'Florida', coords: [-78.2167, 21.5333] },
+    { id: 'vertientes', name: 'Vertientes', coords: [-78.1500, 21.2500] },
+    { id: 'guaimaro', name: 'Guáimaro', coords: [-77.3500, 21.4667] },
+    { id: 'sibanicu', name: 'Sibanicú', coords: [-77.5333, 21.2333] },
+    { id: 'nuevitas', name: 'Nuevitas', coords: [-77.2642, 21.5456] },
+    { id: 'esmeralda', name: 'Esmeralda', coords: [-78.1167, 21.8500] },
+    { id: 'minas', name: 'Minas', coords: [-77.6167, 21.5000] },
+    { id: 'jimaguayu', name: 'Jimaguayú', coords: [-77.8333, 21.2500] },
+    { id: 'santa-cruz-del-sur', name: 'Santa Cruz del Sur', coords: [-77.9833, 20.7167] },
+    { id: 'najasa', name: 'Najasa', coords: [-77.7500, 21.0833] },
+    { id: 'sierra-de-cubitas', name: 'Sierra de Cubitas', coords: [-77.7833, 21.6333] },
+    { id: 'cespedes', name: 'Céspedes', coords: [-78.0167, 21.1500] },
   ]},
   { id: 'las-tunas', name: 'Las Tunas', coords: [-76.9514, 20.9597], municipalities: [
-    { id: 'las-tunas', name: 'Las Tunas' },
-    { id: 'puerto-padre', name: 'Puerto Padre' },
-    { id: 'jesus-menendez', name: 'Jesús Menéndez' },
-    { id: 'manati', name: 'Manatí' },
-    { id: 'majibacoa', name: 'Majibacoa' },
-    { id: 'jobabo', name: 'Jobabo' },
-    { id: 'colombia', name: 'Colombia' },
-    { id: 'amancio', name: 'Amancio' },
+    { id: 'las-tunas', name: 'Las Tunas', coords: [-76.9514, 20.9597] },
+    { id: 'puerto-padre', name: 'Puerto Padre', coords: [-76.6036, 21.1958] },
+    { id: 'jesus-menendez', name: 'Jesús Menéndez', coords: [-76.4833, 21.1667] },
+    { id: 'manati', name: 'Manatí', coords: [-76.9333, 21.3167] },
+    { id: 'majibacoa', name: 'Majibacoa', coords: [-76.7500, 20.9167] },
+    { id: 'jobabo', name: 'Jobabo', coords: [-77.2833, 20.9167] },
+    { id: 'colombia', name: 'Colombia', coords: [-77.4167, 20.9833] },
+    { id: 'amancio', name: 'Amancio', coords: [-77.5833, 20.8167] },
   ]},
   { id: 'holguin', name: 'Holguín', coords: [-76.2633, 20.7869], municipalities: [
-    { id: 'holguin', name: 'Holguín' },
-    { id: 'gibara', name: 'Gibara' },
-    { id: 'banes', name: 'Banes' },
-    { id: 'moa', name: 'Moa' },
-    { id: 'mayari', name: 'Mayarí' },
-    { id: 'sagua-de-tanamo', name: 'Sagua de Tánamo' },
-    { id: 'antilla', name: 'Antilla' },
-    { id: 'baráguano', name: 'Báguano' },
-    { id: 'calixto-garcia', name: 'Calixto García' },
-    { id: 'cacocum', name: 'Cacocum' },
-    { id: 'cueto', name: 'Cueto' },
-    { id: 'frank-pais', name: 'Frank País' },
-    { id: 'rafael-freyre', name: 'Rafael Freyre' },
-    { id: 'urbano-noris', name: 'Urbano Noris' },
+    { id: 'holguin', name: 'Holguín', coords: [-76.2633, 20.7869] },
+    { id: 'gibara', name: 'Gibara', coords: [-76.1333, 21.1167] },
+    { id: 'banes', name: 'Banes', coords: [-75.7167, 20.9667] },
+    { id: 'moa', name: 'Moa', coords: [-74.9333, 20.6500] },
+    { id: 'mayari', name: 'Mayarí', coords: [-75.6833, 20.6500] },
+    { id: 'sagua-de-tanamo', name: 'Sagua de Tánamo', coords: [-75.2500, 20.5833] },
+    { id: 'antilla', name: 'Antilla', coords: [-75.7500, 20.8333] },
+    { id: 'baguano', name: 'Báguano', coords: [-76.0167, 20.7667] },
+    { id: 'calixto-garcia', name: 'Calixto García', coords: [-76.5833, 20.8667] },
+    { id: 'cacocum', name: 'Cacocum', coords: [-76.3333, 20.7333] },
+    { id: 'cueto', name: 'Cueto', coords: [-75.9333, 20.6500] },
+    { id: 'frank-pais', name: 'Frank País', coords: [-75.5833, 20.5167] },
+    { id: 'rafael-freyre', name: 'Rafael Freyre', coords: [-75.9833, 21.0167] },
+    { id: 'urbano-noris', name: 'Urbano Noris', coords: [-76.0500, 20.6167] },
   ]},
   { id: 'granma', name: 'Granma', coords: [-76.6431, 20.3847], municipalities: [
-    { id: 'bayamo', name: 'Bayamo' },
-    { id: 'manzanillo', name: 'Manzanillo' },
-    { id: 'jiguani', name: 'Jiguaní' },
-    { id: 'rio-cauto', name: 'Río Cauto' },
-    { id: 'yara', name: 'Yara' },
-    { id: 'campechuela', name: 'Campechuela' },
-    { id: 'media-luna', name: 'Media Luna' },
-    { id: 'niquero', name: 'Niquero' },
-    { id: 'pilon', name: 'Pilón' },
-    { id: 'bartolome-maso', name: 'Bartolomé Masó' },
-    { id: 'buey-arriba', name: 'Buey Arriba' },
-    { id: 'guisa', name: 'Guisa' },
-    { id: 'cauto-cristo', name: 'Cauto Cristo' },
+    { id: 'bayamo', name: 'Bayamo', coords: [-76.6431, 20.3847] },
+    { id: 'manzanillo', name: 'Manzanillo', coords: [-77.1167, 20.3500] },
+    { id: 'jiguani', name: 'Jiguaní', coords: [-76.4167, 20.3667] },
+    { id: 'rio-cauto', name: 'Río Cauto', coords: [-76.9167, 20.5500] },
+    { id: 'yara', name: 'Yara', coords: [-76.9500, 20.2833] },
+    { id: 'campechuela', name: 'Campechuela', coords: [-77.2833, 20.2333] },
+    { id: 'media-luna', name: 'Media Luna', coords: [-77.4333, 20.1500] },
+    { id: 'niquero', name: 'Niquero', coords: [-77.5833, 20.0500] },
+    { id: 'pilon', name: 'Pilón', coords: [-77.3167, 19.9000] },
+    { id: 'bartolome-maso', name: 'Bartolomé Masó', coords: [-76.9500, 20.1667] },
+    { id: 'buey-arriba', name: 'Buey Arriba', coords: [-76.7500, 20.1833] },
+    { id: 'guisa', name: 'Guisa', coords: [-76.5333, 20.2500] },
+    { id: 'cauto-cristo', name: 'Cauto Cristo', coords: [-76.4333, 20.5500] },
   ]},
-  { id: 'santiago-de-cuba', name: 'Santiago', coords: [-75.8219, 20.0247], municipalities: [
-    { id: 'santiago-de-cuba', name: 'Santiago de Cuba' },
-    { id: 'palma-soriano', name: 'Palma Soriano' },
-    { id: 'contramaestre', name: 'Contramaestre' },
-    { id: 'san-luis', name: 'San Luis' },
-    { id: 'segundo-frente', name: 'Segundo Frente' },
-    { id: 'songo-la-maya', name: 'Songo-La Maya' },
-    { id: 'tercer-frente', name: 'Tercer Frente' },
-    { id: 'guama', name: 'Guamá' },
-    { id: 'mella', name: 'Mella' },
+  { id: 'santiago-de-cuba', name: 'Santiago de Cuba', coords: [-75.8219, 20.0247], municipalities: [
+    { id: 'santiago-de-cuba', name: 'Santiago de Cuba', coords: [-75.8219, 20.0247] },
+    { id: 'palma-soriano', name: 'Palma Soriano', coords: [-75.9833, 20.2167] },
+    { id: 'contramaestre', name: 'Contramaestre', coords: [-76.2500, 20.3000] },
+    { id: 'san-luis', name: 'San Luis', coords: [-75.8500, 20.1833] },
+    { id: 'segundo-frente', name: 'Segundo Frente', coords: [-75.5167, 20.3333] },
+    { id: 'songo-la-maya', name: 'Songo-La Maya', coords: [-75.6667, 20.1833] },
+    { id: 'tercer-frente', name: 'Tercer Frente', coords: [-76.3333, 20.1833] },
+    { id: 'guama', name: 'Guamá', coords: [-76.5833, 19.9667] },
+    { id: 'mella', name: 'Mella', coords: [-76.3000, 20.3667] },
   ]},
   { id: 'guantanamo', name: 'Guantánamo', coords: [-75.2092, 20.1447], municipalities: [
-    { id: 'guantanamo', name: 'Guantánamo' },
-    { id: 'baracoa', name: 'Baracoa' },
-    { id: 'el-salvador', name: 'El Salvador' },
-    { id: 'san-antonio-del-sur', name: 'San Antonio del Sur' },
-    { id: 'imias', name: 'Imías' },
-    { id: 'maisi', name: 'Maisí' },
-    { id: 'yateras', name: 'Yateras' },
-    { id: 'caimanera', name: 'Caimanera' },
-    { id: 'manuel-tames', name: 'Manuel Tames' },
-    { id: 'niceto-perez', name: 'Niceto Pérez' },
+    { id: 'guantanamo', name: 'Guantánamo', coords: [-75.2092, 20.1447] },
+    { id: 'baracoa', name: 'Baracoa', coords: [-74.4964, 20.3467] },
+    { id: 'el-salvador', name: 'El Salvador', coords: [-75.2333, 20.3167] },
+    { id: 'san-antonio-del-sur', name: 'San Antonio del Sur', coords: [-74.8167, 20.0500] },
+    { id: 'imias', name: 'Imías', coords: [-74.6333, 20.0833] },
+    { id: 'maisi', name: 'Maisí', coords: [-74.1500, 20.2500] },
+    { id: 'yateras', name: 'Yateras', coords: [-75.0333, 20.2833] },
+    { id: 'caimanera', name: 'Caimanera', coords: [-75.1500, 19.9667] },
+    { id: 'manuel-tames', name: 'Manuel Tames', coords: [-75.1333, 20.3000] },
+    { id: 'niceto-perez', name: 'Niceto Pérez', coords: [-75.0833, 20.1000] },
   ]},
   { id: 'isla-de-la-juventud', name: 'Isla de la Juventud', coords: [-82.8500, 21.7000], municipalities: [
-    { id: 'nueva-gerona', name: 'Nueva Gerona' },
+    { id: 'nueva-gerona', name: 'Nueva Gerona', coords: [-82.8000, 21.8833] },
   ]},
 ]
 
@@ -378,20 +386,33 @@ const MAPBOX_TOKEN = process.env.NEXT_PUBLIC_MAPBOX_TOKEN || 'pk.eyJ1IjoieXVsaWF
 interface BrokerMapPickerProps {
   theme: string
   province: string
+  municipality: string
   latitude: number | null
   longitude: number | null
   onLocationChange: (lat: number, lng: number) => void
 }
 
-function BrokerMapPicker({ theme, province, latitude, longitude, onLocationChange }: BrokerMapPickerProps) {
+function BrokerMapPicker({ theme, province, municipality, latitude, longitude, onLocationChange }: BrokerMapPickerProps) {
   const mapContainerRef = useRef<HTMLDivElement>(null)
   const mapInstanceRef = useRef<mapboxgl.Map | null>(null)
   const markerInstanceRef = useRef<mapboxgl.Marker | null>(null)
   const isInitializedRef = useRef(false)
   const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading')
 
-  // Obtener coordenadas de la provincia
+  // Obtener coordenadas del municipio (prioridad) o provincia
   const provinceData = BROKER_PROVINCES.find(p => p.id === province)
+  const municipalityData = provinceData?.municipalities.find(m => m.id === municipality)
+
+  // Usar coordenadas del municipio si están disponibles, sino de la provincia
+  const getTargetCoords = useCallback((): [number, number] => {
+    if (municipalityData?.coords) {
+      return municipalityData.coords as [number, number]
+    }
+    if (provinceData?.coords) {
+      return provinceData.coords as [number, number]
+    }
+    return [-82.3666, 23.1136] // Centro de Cuba por defecto
+  }, [municipalityData, provinceData])
 
   // Inicializar mapa solo una vez
   useEffect(() => {
@@ -402,13 +423,13 @@ function BrokerMapPicker({ theme, province, latitude, longitude, onLocationChang
       try {
         mapboxgl.accessToken = MAPBOX_TOKEN
 
-        const initialCenter: [number, number] = provinceData?.coords as [number, number] || [-82.3666, 23.1136]
+        const initialCenter = getTargetCoords()
 
         const map = new mapboxgl.Map({
           container: mapContainerRef.current!,
-          style: theme === 'dark' ? 'mapbox://styles/mapbox/dark-v11' : 'mapbox://styles/mapbox/streets-v12',
+          style: 'mapbox://styles/mapbox/streets-v12', // Siempre estilo claro
           center: initialCenter,
-          zoom: 10
+          zoom: 12
         })
 
         mapInstanceRef.current = map
@@ -464,25 +485,17 @@ function BrokerMapPicker({ theme, province, latitude, longitude, onLocationChang
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // Actualizar centro cuando cambia la provincia
+  // Actualizar centro cuando cambia el municipio o provincia
   useEffect(() => {
-    if (mapInstanceRef.current && status === 'ready' && provinceData) {
+    if (mapInstanceRef.current && status === 'ready') {
+      const targetCoords = getTargetCoords()
       mapInstanceRef.current.flyTo({
-        center: provinceData.coords as [number, number],
-        zoom: 10,
+        center: targetCoords,
+        zoom: 13, // Zoom más cercano para municipio
         duration: 1000
       })
     }
-  }, [province, provinceData, status])
-
-  // Actualizar estilo cuando cambia el tema
-  useEffect(() => {
-    if (mapInstanceRef.current && status === 'ready') {
-      mapInstanceRef.current.setStyle(
-        theme === 'dark' ? 'mapbox://styles/mapbox/dark-v11' : 'mapbox://styles/mapbox/streets-v12'
-      )
-    }
-  }, [theme, status])
+  }, [municipality, province, status, getTargetCoords])
 
   return (
     <div className="relative">
@@ -612,6 +625,13 @@ export default function CompaniesPage() {
     broker_delivery_start: '08:00',
     broker_delivery_end: '18:00',
     broker_contact_phone: '',
+    // Cuentas bancarias del broker
+    broker_bank_accounts: [] as Array<{
+      id: string
+      bankName: string
+      accountNumber: string
+      currency: string
+    }>,
   })
 
   // Load companies from API on mount
@@ -717,6 +737,7 @@ export default function CompaniesPage() {
       broker_delivery_start: '08:00',
       broker_delivery_end: '18:00',
       broker_contact_phone: '',
+      broker_bank_accounts: [],
     })
     setCurrentStep(1)
   }
@@ -1088,6 +1109,17 @@ export default function CompaniesPage() {
         }))
       }
 
+      // Parsear horarios de entrega si existen (formato "08:00 - 18:00")
+      let brokerDeliveryStart = '08:00'
+      let brokerDeliveryEnd = '18:00'
+      if (company.broker_delivery_hours) {
+        const parts = company.broker_delivery_hours.split(' - ')
+        if (parts.length === 2) {
+          brokerDeliveryStart = parts[0].trim()
+          brokerDeliveryEnd = parts[1].trim()
+        }
+      }
+
       // Cargar datos en el formulario
       setFormData({
         legalName: company.legalName || '',
@@ -1126,6 +1158,16 @@ export default function CompaniesPage() {
         providerCategories: Array.isArray(company.providerCategories) ? company.providerCategories : [],
         providerServices: Array.isArray(company.providerServices) ? company.providerServices : [],
         productPrices: productPrices,
+        // Campos de broker
+        latitude: company.latitude || null,
+        longitude: company.longitude || null,
+        broker_province: company.broker_province || '',
+        broker_municipality: company.broker_municipality || '',
+        broker_address: company.broker_address || '',
+        broker_delivery_start: brokerDeliveryStart,
+        broker_delivery_end: brokerDeliveryEnd,
+        broker_contact_phone: company.broker_contact_phone || '',
+        broker_bank_accounts: Array.isArray(company.broker_bank_accounts) ? company.broker_bank_accounts : [],
         editMode: true,
         editId: companyId
       })
@@ -1146,12 +1188,20 @@ export default function CompaniesPage() {
     try {
       setLoading(true)
 
+      // Combinar horarios de entrega para brokers
+      const dataToSend = {
+        ...formData,
+        broker_delivery_hours: formData.broker_delivery_start && formData.broker_delivery_end
+          ? `${formData.broker_delivery_start} - ${formData.broker_delivery_end}`
+          : null
+      }
+
       const response = await fetch(`/api/companies/${formData.editId}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(formData)
+        body: JSON.stringify(dataToSend)
       })
 
       const data = await response.json()
@@ -1256,47 +1306,50 @@ export default function CompaniesPage() {
             {/* Progress Steps */}
             <div className="mb-8">
               <div className="flex items-center justify-between">
-                {STEPS.map((step, index) => (
-                  <div key={step.id} className="flex items-center flex-1">
-                    <div className="flex items-center">
-                      <motion.div
-                        className={cn(
-                          "w-10 h-10 rounded-full flex items-center justify-center text-sm font-semibold transition-all duration-300",
-                          currentStep === step.id
-                            ? theme === 'dark' ? "bg-blue-600 text-white" : "bg-exa-primary text-white"
-                            : currentStep > step.id
-                              ? theme === 'dark' ? "bg-green-500 text-white" : "bg-green-500 text-white"
-                              : theme === 'dark' ? "bg-gray-700 text-gray-400" : "bg-gray-200 text-gray-500"
-                        )}
-                        whileHover={{ scale: 1.1 }}
-                      >
-                        {currentStep > step.id ? (
-                          <Check className="w-5 h-5" />
-                        ) : (
-                          <step.icon className="w-5 h-5" />
-                        )}
-                      </motion.div>
-                      <div className="ml-3 hidden sm:block">
-                        <p className={cn(
-                          "text-xs font-medium",
-                          currentStep === step.id
-                            ? theme === 'dark' ? "text-white" : "text-black"
-                            : theme === 'dark' ? "text-gray-400" : "text-gray-500"
-                        )}>
-                          {step.title}
-                        </p>
+                {(formData.companyType === 'broker' ? BROKER_STEPS : STEPS).map((step, index) => {
+                  const activeSteps = formData.companyType === 'broker' ? BROKER_STEPS : STEPS
+                  return (
+                    <div key={step.id} className="flex items-center flex-1">
+                      <div className="flex items-center">
+                        <motion.div
+                          className={cn(
+                            "w-10 h-10 rounded-full flex items-center justify-center text-sm font-semibold transition-all duration-300",
+                            currentStep === step.id
+                              ? theme === 'dark' ? "bg-blue-600 text-white" : "bg-exa-primary text-white"
+                              : currentStep > step.id
+                                ? theme === 'dark' ? "bg-green-500 text-white" : "bg-green-500 text-white"
+                                : theme === 'dark' ? "bg-gray-700 text-gray-400" : "bg-gray-200 text-gray-500"
+                          )}
+                          whileHover={{ scale: 1.1 }}
+                        >
+                          {currentStep > step.id ? (
+                            <Check className="w-5 h-5" />
+                          ) : (
+                            <step.icon className="w-5 h-5" />
+                          )}
+                        </motion.div>
+                        <div className="ml-3 hidden sm:block">
+                          <p className={cn(
+                            "text-xs font-medium",
+                            currentStep === step.id
+                              ? theme === 'dark' ? "text-white" : "text-black"
+                              : theme === 'dark' ? "text-gray-400" : "text-gray-500"
+                          )}>
+                            {step.title}
+                          </p>
+                        </div>
                       </div>
+                      {index < activeSteps.length - 1 && (
+                        <div className={cn(
+                          "flex-1 h-1 mx-4",
+                          currentStep > step.id
+                            ? theme === 'dark' ? "bg-exa-secondary" : "bg-exa-primary"
+                            : theme === 'dark' ? "bg-gray-700" : "bg-gray-200"
+                        )} />
+                      )}
                     </div>
-                    {index < STEPS.length - 1 && (
-                      <div className={cn(
-                        "flex-1 h-1 mx-4",
-                        currentStep > step.id
-                          ? theme === 'dark' ? "bg-exa-secondary" : "bg-exa-primary"
-                          : theme === 'dark' ? "bg-gray-700" : "bg-gray-200"
-                      )} />
-                    )}
-                  </div>
-                ))}
+                  )
+                })}
               </div>
             </div>
           </motion.div>
@@ -1320,7 +1373,7 @@ export default function CompaniesPage() {
                     "text-xl font-bold mb-6",
                     theme === 'dark' ? "text-white" : "text-black"
                   )}>
-                    Información Básica de la Empresa
+                    {formData.companyType === 'broker' ? 'Información del Broker' : 'Información Básica de la Empresa'}
                   </h2>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -1329,7 +1382,7 @@ export default function CompaniesPage() {
                         "block text-sm font-medium mb-2",
                         theme === 'dark' ? "text-gray-300" : "text-gray-700"
                       )}>
-                        Nombre Legal *
+                        {formData.companyType === 'broker' ? 'Nombre del Broker *' : 'Nombre Legal *'}
                       </label>
                       <input
                         type="text"
@@ -1341,7 +1394,7 @@ export default function CompaniesPage() {
                             ? "bg-gray-800/50 border-gray-700 text-white focus:border-blue-500 focus:ring-blue-500/20"
                             : "bg-white border-gray-300 text-black focus:border-blue-500 focus:ring-blue-500/20"
                         )}
-                        placeholder="Ej: CubaExpress S.A."
+                        placeholder={formData.companyType === 'broker' ? "Ej: Juan Pérez García" : "Ej: CubaExpress S.A."}
                       />
                     </div>
 
@@ -1350,103 +1403,114 @@ export default function CompaniesPage() {
                         "block text-sm font-medium mb-2",
                         theme === 'dark' ? "text-gray-300" : "text-gray-700"
                       )}>
-                        Teléfono *
+                        {formData.companyType === 'broker' ? 'Teléfono del Broker *' : 'Teléfono *'}
                       </label>
                       <input
                         type="tel"
-                        value={formData.phone}
-                        onChange={(e) => setFormData({...formData, phone: e.target.value})}
+                        value={formData.companyType === 'broker' ? formData.broker_contact_phone : formData.phone}
+                        onChange={(e) => setFormData({
+                          ...formData,
+                          ...(formData.companyType === 'broker'
+                            ? { broker_contact_phone: e.target.value, phone: e.target.value }
+                            : { phone: e.target.value })
+                        })}
                         className={cn(
                           "w-full px-4 py-3 rounded-xl border focus:outline-none focus:ring-2 transition-all duration-300",
                           theme === 'dark'
                             ? "bg-gray-800/50 border-gray-700 text-white focus:border-blue-500 focus:ring-blue-500/20"
                             : "bg-white border-gray-300 text-black focus:border-blue-500 focus:ring-blue-500/20"
                         )}
-                        placeholder="+53 7 832 4567"
+                        placeholder={formData.companyType === 'broker' ? "+53 52 123 4567" : "+53 7 832 4567"}
                       />
                     </div>
+
+                    {/* Teléfono de Soporte - Solo para NO brokers */}
+                    {formData.companyType !== 'broker' && (
+                      <div>
+                        <label className={cn(
+                          "block text-sm font-medium mb-2",
+                          theme === 'dark' ? "text-gray-300" : "text-gray-700"
+                        )}>
+                          Teléfono de Soporte
+                        </label>
+                        <input
+                          type="tel"
+                          value={formData.customerServicePhone}
+                          onChange={(e) => setFormData({...formData, customerServicePhone: e.target.value})}
+                          className={cn(
+                            "w-full px-4 py-3 rounded-xl border focus:outline-none focus:ring-2 transition-all duration-300",
+                            theme === 'dark'
+                              ? "bg-gray-800/50 border-gray-700 text-white focus:border-blue-500 focus:ring-blue-500/20"
+                              : "bg-white border-gray-300 text-black focus:border-blue-500 focus:ring-blue-500/20"
+                          )}
+                          placeholder="+53 7 800 0000"
+                        />
+                        <p className={cn(
+                          "mt-1 text-xs",
+                          theme === 'dark' ? "text-gray-400" : "text-gray-500"
+                        )}>
+                          Número de contacto para soporte al cliente (opcional)
+                        </p>
+                      </div>
+                    )}
 
                     <div>
                       <label className={cn(
                         "block text-sm font-medium mb-2",
                         theme === 'dark' ? "text-gray-300" : "text-gray-700"
                       )}>
-                        Teléfono de Soporte
+                        Email {formData.companyType !== 'broker' ? '*' : ''}
                       </label>
                       <input
-                        type="tel"
-                        value={formData.customerServicePhone}
-                        onChange={(e) => setFormData({...formData, customerServicePhone: e.target.value})}
-                        className={cn(
-                          "w-full px-4 py-3 rounded-xl border focus:outline-none focus:ring-2 transition-all duration-300",
-                          theme === 'dark'
-                            ? "bg-gray-800/50 border-gray-700 text-white focus:border-blue-500 focus:ring-blue-500/20"
-                            : "bg-white border-gray-300 text-black focus:border-blue-500 focus:ring-blue-500/20"
-                        )}
-                        placeholder="+53 7 800 0000"
-                      />
-                      <p className={cn(
-                        "mt-1 text-xs",
-                        theme === 'dark' ? "text-gray-400" : "text-gray-500"
-                      )}>
-                        Número de contacto para soporte al cliente (opcional)
-                      </p>
-                    </div>
-
-                    <div>
-                      <label className={cn(
-                        "block text-sm font-medium mb-2",
-                        theme === 'dark' ? "text-gray-300" : "text-gray-700"
-                      )}>
-                    Email *
-                  </label>
-                  <input
-                    type="email"
-                    value={formData.email}
+                        type="email"
+                        value={formData.email}
                         onChange={(e) => setFormData({...formData, email: e.target.value})}
                         className={cn(
                           "w-full px-4 py-3 rounded-xl border focus:outline-none focus:ring-2 transition-all duration-300",
                           theme === 'dark'
                             ? "bg-gray-800/50 border-gray-700 text-white focus:border-blue-500 focus:ring-blue-500/20"
                             : "bg-white border-gray-300 text-black focus:border-blue-500 focus:ring-blue-500/20"
-                    )}
-                    placeholder="contacto@empresa.com"
-                  />
-                </div>
+                        )}
+                        placeholder="contacto@empresa.com"
+                      />
+                    </div>
 
-                <div>
-                  <label className={cn(
-                    "block text-sm font-medium mb-2",
-                    theme === 'dark' ? "text-gray-300" : "text-gray-700"
-                  )}>
-                    Website
-                  </label>
-                  <input
-                    type="url"
-                    value={formData.website}
-                    onChange={(e) => setFormData({...formData, website: e.target.value})}
-                    className={cn(
-                      "w-full px-4 py-3 rounded-xl border focus:outline-none focus:ring-2 transition-all duration-300",
-                      theme === 'dark'
-                        ? "bg-gray-800/50 border-gray-700 text-white focus:border-blue-500 focus:ring-blue-500/20"
-                        : "bg-white border-gray-300 text-black focus:border-blue-500 focus:ring-blue-500/20"
+                    {/* Website - Solo para NO brokers */}
+                    {formData.companyType !== 'broker' && (
+                      <div>
+                        <label className={cn(
+                          "block text-sm font-medium mb-2",
+                          theme === 'dark' ? "text-gray-300" : "text-gray-700"
+                        )}>
+                          Website
+                        </label>
+                        <input
+                          type="url"
+                          value={formData.website}
+                          onChange={(e) => setFormData({...formData, website: e.target.value})}
+                          className={cn(
+                            "w-full px-4 py-3 rounded-xl border focus:outline-none focus:ring-2 transition-all duration-300",
+                            theme === 'dark'
+                              ? "bg-gray-800/50 border-gray-700 text-white focus:border-blue-500 focus:ring-blue-500/20"
+                              : "bg-white border-gray-300 text-black focus:border-blue-500 focus:ring-blue-500/20"
+                          )}
+                          placeholder="https://empresa.com"
+                        />
+                        <p className={cn(
+                          "mt-1 text-xs",
+                          theme === 'dark' ? "text-gray-400" : "text-gray-500"
+                        )}>
+                          Se mostrará en las etiquetas y comunicación al cliente.
+                        </p>
+                      </div>
                     )}
-                    placeholder="https://empresa.com"
-                  />
-                  <p className={cn(
-                    "mt-1 text-xs",
-                    theme === 'dark' ? "text-gray-400" : "text-gray-500"
-                  )}>
-                    Se mostrará en las etiquetas y comunicación al cliente.
-                  </p>
-                </div>
 
-                <div>
-                  <label className={cn(
-                    "block text-sm font-medium mb-2",
-                    theme === 'dark' ? "text-gray-300" : "text-gray-700"
-                  )}>
-                        EIN / Número de Identificación *
+                    <div>
+                      <label className={cn(
+                        "block text-sm font-medium mb-2",
+                        theme === 'dark' ? "text-gray-300" : "text-gray-700"
+                      )}>
+                        {formData.companyType === 'broker' ? 'Carnet de Identidad *' : 'EIN / Número de Identificación *'}
                       </label>
                       <input
                         type="text"
@@ -1458,7 +1522,7 @@ export default function CompaniesPage() {
                             ? "bg-gray-800/50 border-gray-700 text-white focus:border-blue-500 focus:ring-blue-500/20"
                             : "bg-white border-gray-300 text-black focus:border-blue-500 focus:ring-blue-500/20"
                         )}
-                        placeholder="CU-12345678"
+                        placeholder={formData.companyType === 'broker' ? "85010112345" : "CU-12345678"}
                       />
                     </div>
 
@@ -1554,7 +1618,17 @@ export default function CompaniesPage() {
                           </label>
                           <select
                             value={formData.broker_municipality}
-                            onChange={(e) => setFormData({...formData, broker_municipality: e.target.value})}
+                            onChange={(e) => {
+                              const province = BROKER_PROVINCES.find(p => p.id === formData.broker_province)
+                              const municipality = province?.municipalities.find(m => m.id === e.target.value)
+                              setFormData({
+                                ...formData,
+                                broker_municipality: e.target.value,
+                                // Actualizar coordenadas con las del municipio
+                                latitude: municipality?.coords?.[1] || formData.latitude,
+                                longitude: municipality?.coords?.[0] || formData.longitude
+                              })
+                            }}
                             disabled={!formData.broker_province}
                             className={cn(
                               "w-full px-4 py-3 rounded-xl border focus:outline-none focus:ring-2 transition-all duration-300",
@@ -1660,6 +1734,7 @@ export default function CompaniesPage() {
                             <BrokerMapPicker
                               theme={theme}
                               province={formData.broker_province}
+                              municipality={formData.broker_municipality}
                               latitude={formData.latitude}
                               longitude={formData.longitude}
                               onLocationChange={(lat: number, lng: number) => {
@@ -1938,11 +2013,229 @@ export default function CompaniesPage() {
                       </div>
                     </div>
                   </div>
+
+                  {/* Cuentas Bancarias - Solo para Brokers */}
+                  {formData.companyType === 'broker' && (
+                    <div className="mt-8">
+                      <div className="flex items-center justify-between mb-4">
+                        <div>
+                          <h3 className={cn(
+                            "text-lg font-semibold",
+                            theme === 'dark' ? "text-white" : "text-black"
+                          )}>
+                            Cuentas Bancarias del Broker
+                          </h3>
+                          <p className={cn(
+                            "text-sm",
+                            theme === 'dark' ? "text-gray-400" : "text-gray-600"
+                          )}>
+                            Registra las cuentas bancarias para recibir pagos
+                          </p>
+                        </div>
+                        <button
+                          onClick={() => {
+                            const newAccount = {
+                              id: Date.now().toString(),
+                              bankName: '',
+                              accountNumber: '',
+                              currency: 'USD'
+                            }
+                            setFormData({
+                              ...formData,
+                              broker_bank_accounts: [...(formData.broker_bank_accounts || []), newAccount]
+                            })
+                          }}
+                          className={cn(
+                            "flex items-center gap-2 px-4 py-2 rounded-xl font-medium transition-all duration-300",
+                            theme === 'dark'
+                              ? "bg-exa-secondary text-white hover:bg-exa-secondary/80"
+                              : "bg-exa-primary text-white hover:bg-exa-primary/80"
+                          )}
+                        >
+                          <Plus className="w-4 h-4" />
+                          Agregar Cuenta
+                        </button>
+                      </div>
+
+                      {(!formData.broker_bank_accounts || formData.broker_bank_accounts.length === 0) ? (
+                        <div className={cn(
+                          "text-center py-8 rounded-xl border-2 border-dashed",
+                          theme === 'dark' ? "border-gray-700" : "border-gray-300"
+                        )}>
+                          <CreditCard className={cn(
+                            "w-12 h-12 mx-auto mb-3",
+                            theme === 'dark' ? "text-gray-500" : "text-gray-400"
+                          )} />
+                          <p className={cn(
+                            "text-sm",
+                            theme === 'dark' ? "text-gray-400" : "text-gray-600"
+                          )}>
+                            No hay cuentas bancarias registradas
+                          </p>
+                          <p className={cn(
+                            "text-xs mt-1",
+                            theme === 'dark' ? "text-gray-500" : "text-gray-500"
+                          )}>
+                            Haz clic en "Agregar Cuenta" para registrar una cuenta bancaria
+                          </p>
+                        </div>
+                      ) : (
+                        <div className="space-y-4">
+                          {formData.broker_bank_accounts.map((account: { id: string; bankName: string; accountNumber: string; currency: string }, index: number) => (
+                            <div
+                              key={account.id}
+                              className={cn(
+                                "p-4 rounded-xl border",
+                                theme === 'dark' ? "bg-gray-800/50 border-gray-700" : "bg-gray-50 border-gray-200"
+                              )}
+                            >
+                              <div className="flex items-start justify-between mb-4">
+                                <div className="flex items-center gap-2">
+                                  <div className={cn(
+                                    "w-8 h-8 rounded-lg flex items-center justify-center",
+                                    theme === 'dark' ? "bg-blue-500/20" : "bg-blue-100"
+                                  )}>
+                                    <CreditCard className={cn(
+                                      "w-4 h-4",
+                                      theme === 'dark' ? "text-blue-400" : "text-blue-600"
+                                    )} />
+                                  </div>
+                                  <span className={cn(
+                                    "font-medium",
+                                    theme === 'dark' ? "text-white" : "text-gray-900"
+                                  )}>
+                                    Cuenta #{index + 1}
+                                  </span>
+                                </div>
+                                <button
+                                  onClick={() => {
+                                    const updatedAccounts = formData.broker_bank_accounts.filter(
+                                      (acc: { id: string }) => acc.id !== account.id
+                                    )
+                                    setFormData({
+                                      ...formData,
+                                      broker_bank_accounts: updatedAccounts
+                                    })
+                                  }}
+                                  className={cn(
+                                    "p-2 rounded-lg transition-colors",
+                                    theme === 'dark'
+                                      ? "text-red-400 hover:bg-red-500/20"
+                                      : "text-red-500 hover:bg-red-50"
+                                  )}
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </button>
+                              </div>
+
+                              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                {/* Nombre del Banco */}
+                                <div>
+                                  <label className={cn(
+                                    "block text-sm font-medium mb-2",
+                                    theme === 'dark' ? "text-gray-300" : "text-gray-700"
+                                  )}>
+                                    Nombre del Banco
+                                  </label>
+                                  <input
+                                    type="text"
+                                    value={account.bankName}
+                                    onChange={(e) => {
+                                      const updatedAccounts = formData.broker_bank_accounts.map(
+                                        (acc: { id: string; bankName: string; accountNumber: string; currency: string }) =>
+                                          acc.id === account.id ? { ...acc, bankName: e.target.value } : acc
+                                      )
+                                      setFormData({
+                                        ...formData,
+                                        broker_bank_accounts: updatedAccounts
+                                      })
+                                    }}
+                                    className={cn(
+                                      "w-full px-4 py-2.5 rounded-xl border focus:outline-none focus:ring-2 transition-all duration-300",
+                                      theme === 'dark'
+                                        ? "bg-gray-700/50 border-gray-600 text-white focus:border-blue-500 focus:ring-blue-500/20"
+                                        : "bg-white border-gray-300 text-black focus:border-blue-500 focus:ring-blue-500/20"
+                                    )}
+                                    placeholder="Ej: Banco de Cuba"
+                                  />
+                                </div>
+
+                                {/* Número de Cuenta */}
+                                <div>
+                                  <label className={cn(
+                                    "block text-sm font-medium mb-2",
+                                    theme === 'dark' ? "text-gray-300" : "text-gray-700"
+                                  )}>
+                                    Número de Cuenta/Tarjeta
+                                  </label>
+                                  <input
+                                    type="text"
+                                    value={account.accountNumber}
+                                    onChange={(e) => {
+                                      const updatedAccounts = formData.broker_bank_accounts.map(
+                                        (acc: { id: string; bankName: string; accountNumber: string; currency: string }) =>
+                                          acc.id === account.id ? { ...acc, accountNumber: e.target.value } : acc
+                                      )
+                                      setFormData({
+                                        ...formData,
+                                        broker_bank_accounts: updatedAccounts
+                                      })
+                                    }}
+                                    className={cn(
+                                      "w-full px-4 py-2.5 rounded-xl border focus:outline-none focus:ring-2 transition-all duration-300",
+                                      theme === 'dark'
+                                        ? "bg-gray-700/50 border-gray-600 text-white focus:border-blue-500 focus:ring-blue-500/20"
+                                        : "bg-white border-gray-300 text-black focus:border-blue-500 focus:ring-blue-500/20"
+                                    )}
+                                    placeholder="Ej: 9204 **** **** 1234"
+                                  />
+                                </div>
+
+                                {/* Moneda */}
+                                <div>
+                                  <label className={cn(
+                                    "block text-sm font-medium mb-2",
+                                    theme === 'dark' ? "text-gray-300" : "text-gray-700"
+                                  )}>
+                                    Moneda
+                                  </label>
+                                  <select
+                                    value={account.currency}
+                                    onChange={(e) => {
+                                      const updatedAccounts = formData.broker_bank_accounts.map(
+                                        (acc: { id: string; bankName: string; accountNumber: string; currency: string }) =>
+                                          acc.id === account.id ? { ...acc, currency: e.target.value } : acc
+                                      )
+                                      setFormData({
+                                        ...formData,
+                                        broker_bank_accounts: updatedAccounts
+                                      })
+                                    }}
+                                    className={cn(
+                                      "w-full px-4 py-2.5 rounded-xl border focus:outline-none focus:ring-2 transition-all duration-300",
+                                      theme === 'dark'
+                                        ? "bg-gray-700/50 border-gray-600 text-white focus:border-blue-500 focus:ring-blue-500/20"
+                                        : "bg-white border-gray-300 text-black focus:border-blue-500 focus:ring-blue-500/20"
+                                    )}
+                                  >
+                                    <option value="USD">USD - Dólar Estadounidense</option>
+                                    <option value="CUP">CUP - Peso Cubano</option>
+                                    <option value="MLC">MLC - Moneda Libremente Convertible</option>
+                                    <option value="EUR">EUR - Euro</option>
+                                  </select>
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               )}
 
-              {/* Step 3: Services */}
-              {currentStep === 3 && (
+              {/* Step 3: Services - Solo para NO brokers */}
+              {currentStep === 3 && formData.companyType !== 'broker' && (
                 <div className={cn(
                   "backdrop-blur-sm border rounded-2xl p-8",
                   theme === 'dark' ? "bg-white/5 border-white/10" : "bg-white/90 border-gray-200"
@@ -2126,8 +2419,8 @@ export default function CompaniesPage() {
                 </div>
               )}
 
-              {/* Step 4: Platform Fees */}
-              {currentStep === 4 && (
+              {/* Step 4: Platform Fees - Solo para NO brokers */}
+              {currentStep === 4 && formData.companyType !== 'broker' && (
                 <div className={cn(
                   "backdrop-blur-sm border rounded-2xl p-8",
                   theme === 'dark' ? "bg-white/5 border-white/10" : "bg-white/90 border-gray-200"
@@ -2414,8 +2707,8 @@ export default function CompaniesPage() {
                 </div>
               )}
 
-              {/* Step 5: Branding */}
-              {currentStep === 5 && (
+              {/* Step 5: Branding - Solo para NO brokers */}
+              {currentStep === 5 && formData.companyType !== 'broker' && (
                 <div className={cn(
                   "backdrop-blur-sm border rounded-2xl p-8",
                   theme === 'dark' ? "bg-white/5 border-white/10" : "bg-white/90 border-gray-200"
@@ -2736,8 +3029,8 @@ export default function CompaniesPage() {
                 </div>
               )}
 
-              {/* Step 6: Documents */}
-              {currentStep === 6 && (
+              {/* Step 6/3: Documents (Paso 6 para otros, Paso 3 para brokers) */}
+              {((currentStep === 6 && formData.companyType !== 'broker') || (currentStep === 3 && formData.companyType === 'broker')) && (
                 <div className={cn(
                   "backdrop-blur-sm border rounded-2xl p-8",
                   theme === 'dark' ? "bg-white/5 border-white/10" : "bg-white/90 border-gray-200"
@@ -2933,8 +3226,8 @@ export default function CompaniesPage() {
                 </div>
               )}
 
-              {/* Step 7: Review */}
-              {currentStep === 7 && (
+              {/* Step 7/4: Review (Paso 7 para otros, Paso 4 para brokers) */}
+              {((currentStep === 7 && formData.companyType !== 'broker') || (currentStep === 4 && formData.companyType === 'broker')) && (
                 <div className={cn(
                   "backdrop-blur-sm border rounded-2xl p-8",
                   theme === 'dark' ? "bg-white/5 border-white/10" : "bg-white/90 border-gray-200"
@@ -3154,7 +3447,7 @@ export default function CompaniesPage() {
               Guardar
             </motion.button>
 
-            {currentStep === STEPS.length ? (
+            {currentStep === (formData.companyType === 'broker' ? BROKER_STEPS.length : STEPS.length) ? (
               <motion.button
                 onClick={formData.editMode ? handleUpdateCompany : handleCreateCompany}
                 whileHover={{ scale: 1.02 }}
@@ -3173,6 +3466,7 @@ export default function CompaniesPage() {
             ) : (
               <motion.button
                 onClick={() => {
+                  const maxSteps = formData.companyType === 'broker' ? BROKER_STEPS.length : STEPS.length
                   if (currentStep === 1 && !formData.walletNumber) {
                     generateWalletNumber()
                     if (formData.country && !formData.currency) {
@@ -3185,7 +3479,7 @@ export default function CompaniesPage() {
                       }))
                     }
                   }
-                  setCurrentStep(Math.min(STEPS.length, currentStep + 1))
+                  setCurrentStep(Math.min(maxSteps, currentStep + 1))
                 }}
                 whileHover={{ scale: 1.02 }}
                 whileTap={{ scale: 0.98 }}

@@ -60,6 +60,14 @@ export async function GET(
         c.provider_type as "providerType",
         c.provider_categories as "providerCategories",
         c.provider_services as "providerServices",
+        c.latitude,
+        c.longitude,
+        c.broker_province as "broker_province",
+        c.broker_municipality as "broker_municipality",
+        c.broker_address as "broker_address",
+        c.broker_delivery_hours as "broker_delivery_hours",
+        c.broker_contact_phone as "broker_contact_phone",
+        c.broker_bank_accounts as "broker_bank_accounts",
         parent.legalname as "parentCompanyName"
       FROM companies c
       LEFT JOIN companies parent ON c.parent_company_id = parent.id
@@ -182,7 +190,16 @@ export async function PUT(
       providerType: 'provider_type',
       providerCategories: 'provider_categories',
       providerServices: 'provider_services',
-      status: 'status'
+      status: 'status',
+      // Campos de broker
+      latitude: 'latitude',
+      longitude: 'longitude',
+      broker_province: 'broker_province',
+      broker_municipality: 'broker_municipality',
+      broker_address: 'broker_address',
+      broker_delivery_hours: 'broker_delivery_hours',
+      broker_contact_phone: 'broker_contact_phone',
+      broker_bank_accounts: 'broker_bank_accounts'
     }
 
     // Construir query dinámicamente
@@ -194,7 +211,7 @@ export async function PUT(
         let value = body[frontendKey]
 
         // Convertir arrays y objetos a JSON para PostgreSQL
-        if (['secondaryCurrencies', 'enabledServices', 'serviceFees', 'prices', 'providerCategories', 'providerServices'].includes(frontendKey)) {
+        if (['secondaryCurrencies', 'enabledServices', 'serviceFees', 'prices', 'providerCategories', 'providerServices', 'broker_bank_accounts'].includes(frontendKey)) {
           value = JSON.stringify(value)
         }
 
