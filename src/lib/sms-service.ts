@@ -523,3 +523,157 @@ export async function sendWhatsAppOrderConfirmation(
     }
   }
 }
+
+// ==========================================
+// OTP SYSTEM FOR CASH DELIVERY VERIFICATION
+// ==========================================
+
+/**
+ * Generates a 6-digit OTP code
+ */
+export function generateOTP(): string {
+  return Math.floor(100000 + Math.random() * 900000).toString()
+}
+
+/**
+ * OTP expiration time in minutes
+ */
+export const OTP_EXPIRATION_MINUTES = 5
+
+/**
+ * Maximum OTP attempts before blocking
+ */
+export const OTP_MAX_ATTEMPTS = 3
+
+/**
+ * Maximum OTP resends per order
+ */
+export const OTP_MAX_RESENDS = 3
+
+/**
+ * Generates OTP message for cash delivery verification
+ */
+export function generateCashDeliveryOTPMessage(
+  otpCode: string,
+  amount: string,
+  currency: string,
+  brokerName: string
+): string {
+  return `LogiRapid: Tu codigo de verificacion es ${otpCode}. Entregalo al broker "${brokerName}" para confirmar la recepcion de ${currency} ${amount}. Valido por ${OTP_EXPIRATION_MINUTES} minutos. Para ayuda: HELP | Cancelar SMS: STOP`
+}
+
+/**
+ * Generates message when cash delivery order is created (for delivery person)
+ */
+export function generateCashDeliveryAssignedMessage(
+  orderNumber: string,
+  amount: string,
+  currency: string,
+  brokerName: string,
+  brokerProvince: string,
+  deadlineDate: string
+): string {
+  return `LogiRapid: Se te ha asignado la entrega ${orderNumber}. Monto: ${currency} ${amount} para broker "${brokerName}" en ${brokerProvince}. Fecha limite: ${deadlineDate}. Para ayuda: HELP | Cancelar SMS: STOP`
+}
+
+/**
+ * Generates message when cash delivery order is created (for broker)
+ */
+export function generateCashDeliveryPendingMessage(
+  orderNumber: string,
+  amount: string,
+  currency: string,
+  deliveryPersonName: string,
+  deadlineDate: string
+): string {
+  return `LogiRapid: Tienes una entrega de efectivo pendiente (${orderNumber}). Monto: ${currency} ${amount}. Repartidor: ${deliveryPersonName}. Fecha limite: ${deadlineDate}. Para ayuda: HELP | Cancelar SMS: STOP`
+}
+
+/**
+ * Generates message when cash is received successfully
+ */
+export function generateCashReceivedConfirmationMessage(
+  orderNumber: string,
+  amount: string,
+  currency: string,
+  newBalance: string
+): string {
+  return `LogiRapid: Efectivo recibido exitosamente (${orderNumber}). ${currency} ${amount} ha sido acreditado a tu wallet. Nuevo balance: ${currency} ${newBalance}. Para ayuda: HELP | Cancelar SMS: STOP`
+}
+
+/**
+ * Sends OTP SMS for cash delivery verification
+ */
+export async function sendCashDeliveryOTP(
+  deliveryPersonPhone: string,
+  otpCode: string,
+  amount: string,
+  currency: string,
+  brokerName: string
+): Promise<SMSResult> {
+  const message = generateCashDeliveryOTPMessage(otpCode, amount, currency, brokerName)
+  return sendSMS(deliveryPersonPhone, message)
+}
+
+/**
+ * Sends notification to delivery person when cash delivery order is assigned
+ */
+export async function sendCashDeliveryAssignedSMS(
+  deliveryPersonPhone: string,
+  orderNumber: string,
+  amount: string,
+  currency: string,
+  brokerName: string,
+  brokerProvince: string,
+  deadlineDate: string
+): Promise<SMSResult> {
+  const message = generateCashDeliveryAssignedMessage(
+    orderNumber, amount, currency, brokerName, brokerProvince, deadlineDate
+  )
+  return sendSMS(deliveryPersonPhone, message)
+}
+
+/**
+ * Sends notification to broker when cash delivery order is pending
+ */
+export async function sendCashDeliveryPendingSMS(
+  brokerPhone: string,
+  orderNumber: string,
+  amount: string,
+  currency: string,
+  deliveryPersonName: string,
+  deadlineDate: string
+): Promise<SMSResult> {
+  const message = generateCashDeliveryPendingMessage(
+    orderNumber, amount, currency, deliveryPersonName, deadlineDate
+  )
+  return sendSMS(brokerPhone, message)
+}
+
+/**
+ * Sends confirmation to broker when cash is received
+ */
+export async function sendCashReceivedConfirmationSMS(
+  brokerPhone: string,
+  orderNumber: string,
+  amount: string,
+  currency: string,
+  newBalance: string
+): Promise<SMSResult> {
+  const message = generateCashReceivedConfirmationMessage(orderNumber, amount, currency, newBalance)
+  return sendSMS(brokerPhone, message)
+}
+
+/**
+ * Masks a phone number for display (shows first 4 and last 3 digits)
+ * Example: +17861234567 -> +1786***567
+ */
+export function maskPhoneNumber(phone: string): string {
+  const formatted = formatPhoneNumber(phone)
+  if (formatted.length < 10) return formatted
+
+  // Keep first 5 chars (+1786) and last 3 chars (567)
+  const start = formatted.substring(0, 5)
+  const end = formatted.substring(formatted.length - 3)
+  return `${start}***${end}`
+}

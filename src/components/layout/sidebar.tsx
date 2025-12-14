@@ -346,7 +346,8 @@ export function Sidebar({ isCollapsed, onToggle }: SidebarProps) {
       submenuItems: [
         { icon: Building2, label: "Dashboard", href: "/dashboard/admin/brokers" },
         { icon: Package, label: "Órdenes Cupones", href: "/dashboard/admin/brokers/orders" },
-        { icon: Wallet, label: "Wallets", href: "/dashboard/admin/brokers/wallets" }
+        { icon: Wallet, label: "Wallets", href: "/dashboard/admin/brokers/wallets" },
+        { icon: Banknote, label: "Entregas Efectivo", href: "/dashboard/admin/brokers/cash-delivery/list" }
       ]
     },
     { icon: Smartphone, label: "Recarga", href: "/dashboard/admin/recharge" },
