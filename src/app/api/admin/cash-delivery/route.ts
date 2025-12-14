@@ -185,7 +185,7 @@ export async function POST(request: NextRequest) {
 
     // Get broker info
     const brokerResult = await db.query(`
-      SELECT id, legalname as name, tradename, broker_province, broker_municipality, broker_contact_phone
+      SELECT id, legalname as name, broker_province, broker_municipality, broker_contact_phone
       FROM companies
       WHERE id = $1 AND companytype = 'broker'
     `, [brokerCompanyId])
@@ -256,7 +256,7 @@ export async function POST(request: NextRequest) {
     `, [
       orderNumber,
       brokerCompanyId,
-      broker.name || broker.tradename,
+      broker.name,
       deliveryUserId,
       deliveryUser.name,
       deliveryUser.phone,
@@ -293,7 +293,8 @@ export async function POST(request: NextRequest) {
     console.error('[Cash Delivery API] Error creating order:', error)
     return NextResponse.json({
       success: false,
-      error: 'Error al crear la orden de entrega'
+      error: 'Error al crear la orden de entrega',
+      debug: process.env.NODE_ENV === 'development' ? error.message : undefined
     }, { status: 500 })
   }
 }
