@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useRef, useCallback } from 'react'
 import Link from 'next/link'
-import { motion } from 'framer-motion'
+import { motion, AnimatePresence, useSpring, useTransform, useMotionValue } from 'framer-motion'
 import mapboxgl from 'mapbox-gl'
 import 'mapbox-gl/dist/mapbox-gl.css'
 import {
@@ -184,6 +184,113 @@ const CASH_DELIVERY_STATUS_CONFIG: Record<string, { label: string; color: string
   validating: { label: 'Validando OTP', color: 'text-orange-500', bgColor: 'bg-orange-500/10', icon: AlertCircle },
   completed: { label: 'Completado', color: 'text-green-500', bgColor: 'bg-green-500/10', icon: CheckCircle },
   cancelled: { label: 'Cancelado', color: 'text-red-500', bgColor: 'bg-red-500/10', icon: XCircle }
+}
+
+// Animation variants
+const containerVariants = {
+  hidden: { opacity: 0 },
+  visible: {
+    opacity: 1,
+    transition: {
+      staggerChildren: 0.1,
+      delayChildren: 0.1
+    }
+  }
+}
+
+const cardVariants = {
+  hidden: { opacity: 0, y: 20, scale: 0.95 },
+  visible: {
+    opacity: 1,
+    y: 0,
+    scale: 1,
+    transition: {
+      type: "spring",
+      stiffness: 100,
+      damping: 15
+    }
+  },
+  hover: {
+    y: -4,
+    scale: 1.02,
+    transition: { type: "spring", stiffness: 400, damping: 10 }
+  }
+}
+
+const chartCardVariants = {
+  hidden: { opacity: 0, scale: 0.9, rotateX: -10 },
+  visible: {
+    opacity: 1,
+    scale: 1,
+    rotateX: 0,
+    transition: {
+      type: "spring",
+      stiffness: 80,
+      damping: 20,
+      duration: 0.6
+    }
+  }
+}
+
+const listItemVariants = {
+  hidden: { opacity: 0, x: -20 },
+  visible: (i: number) => ({
+    opacity: 1,
+    x: 0,
+    transition: {
+      delay: i * 0.08,
+      type: "spring",
+      stiffness: 100
+    }
+  }),
+  hover: {
+    x: 8,
+    backgroundColor: "rgba(59, 130, 246, 0.1)",
+    transition: { duration: 0.2 }
+  }
+}
+
+const iconPulseVariants = {
+  initial: { scale: 1 },
+  animate: {
+    scale: [1, 1.1, 1],
+    transition: {
+      duration: 2,
+      repeat: Infinity,
+      ease: "easeInOut"
+    }
+  }
+}
+
+const glowVariants = {
+  initial: { opacity: 0.5 },
+  animate: {
+    opacity: [0.5, 0.8, 0.5],
+    transition: {
+      duration: 3,
+      repeat: Infinity,
+      ease: "easeInOut"
+    }
+  }
+}
+
+// Animated Number Counter Component
+function AnimatedNumber({ value, duration = 1, prefix = '', suffix = '' }: { value: number | string, duration?: number, prefix?: string, suffix?: string }) {
+  const numValue = typeof value === 'string' ? parseFloat(value.replace(/[^0-9.-]/g, '')) || 0 : value
+  const motionValue = useMotionValue(0)
+  const springValue = useSpring(motionValue, { duration: duration * 1000, bounce: 0.2 })
+  const displayValue = useTransform(springValue, (latest) => {
+    if (typeof value === 'string' && value.includes('$')) {
+      return `${prefix}$${latest.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}${suffix}`
+    }
+    return `${prefix}${Math.round(latest).toLocaleString()}${suffix}`
+  })
+
+  useEffect(() => {
+    motionValue.set(numValue)
+  }, [numValue, motionValue])
+
+  return <motion.span>{displayValue}</motion.span>
 }
 
 export default function AdminBrokersDashboardPage() {
@@ -549,56 +656,101 @@ export default function AdminBrokersDashboardPage() {
     <DashboardLayout>
       <div className="min-h-full space-y-4">
 
-        {/* Header Stats - Compact */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        {/* Header Stats - Compact with Enhanced Animations */}
+        <motion.div
+          className="grid grid-cols-2 lg:grid-cols-4 gap-4"
+          variants={containerVariants}
+          initial="hidden"
+          animate="visible"
+        >
           {[
-            { icon: Users, label: 'Brokers', value: summary?.totalBrokers || 0, sub: `${summary?.activeBrokers || 0} activos`, color: 'blue', gradient: 'from-blue-500 to-blue-400' },
-            { icon: MapPin, label: 'Provincias', value: summary?.provincesCovered || 0, sub: 'con cobertura', color: 'purple', gradient: 'from-purple-500 to-purple-400' },
-            { icon: Wallet, label: 'Balance Total', value: summary?.totalBalanceFormatted || '$0', sub: 'en wallets', color: 'emerald', gradient: 'from-emerald-500 to-emerald-400' },
-            { icon: Package, label: 'Órdenes', value: orderStats?.total || 0, sub: `$${(orderStats?.totalAmount || 0).toLocaleString()}`, color: 'amber', gradient: 'from-amber-500 to-amber-400' },
+            { icon: Users, label: 'Brokers', value: summary?.totalBrokers || 0, sub: `${summary?.activeBrokers || 0} activos`, color: 'blue', gradient: 'from-blue-500 to-blue-400', glowColor: 'shadow-blue-500/20' },
+            { icon: MapPin, label: 'Provincias', value: summary?.provincesCovered || 0, sub: 'con cobertura', color: 'purple', gradient: 'from-purple-500 to-purple-400', glowColor: 'shadow-purple-500/20' },
+            { icon: Wallet, label: 'Balance Total', value: summary?.totalBalanceFormatted || '$0', sub: 'en wallets', color: 'emerald', gradient: 'from-emerald-500 to-emerald-400', glowColor: 'shadow-emerald-500/20' },
+            { icon: Package, label: 'Órdenes', value: orderStats?.total || 0, sub: `$${(orderStats?.totalAmount || 0).toLocaleString()}`, color: 'amber', gradient: 'from-amber-500 to-amber-400', glowColor: 'shadow-amber-500/20' },
           ].map((stat, i) => (
             <motion.div
               key={stat.label}
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: i * 0.05 }}
+              variants={cardVariants}
+              whileHover="hover"
               className={cn(
-                "relative overflow-hidden rounded-2xl p-5",
-                theme === 'dark' ? 'bg-white/5 border border-white/10' : 'bg-white border border-gray-100 shadow-sm'
+                "relative overflow-hidden rounded-2xl p-5 cursor-pointer group",
+                "transition-shadow duration-300",
+                theme === 'dark' ? 'bg-white/5 border border-white/10' : 'bg-white border border-gray-100 shadow-sm',
+                `hover:shadow-xl hover:${stat.glowColor}`
               )}
             >
-              <div className="flex items-start justify-between">
+              {/* Animated glow background */}
+              <motion.div
+                className={cn(
+                  "absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500",
+                  `bg-gradient-to-br ${stat.gradient}`
+                )}
+                style={{ opacity: 0.05 }}
+                variants={glowVariants}
+                initial="initial"
+                animate="animate"
+              />
+
+              <div className="relative flex items-start justify-between">
                 <div>
-                  <p className={cn("text-sm font-medium", theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}>
+                  <motion.p
+                    className={cn("text-sm font-medium", theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}
+                    initial={{ opacity: 0, x: -10 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: 0.2 + i * 0.1 }}
+                  >
                     {stat.label}
-                  </p>
+                  </motion.p>
                   <p className={cn("text-3xl font-bold mt-1", theme === 'dark' ? 'text-white' : 'text-gray-900')}>
-                    {stat.value}
+                    <AnimatedNumber value={stat.value} duration={1.5} />
                   </p>
-                  <p className={cn("text-xs mt-2", theme === 'dark' ? 'text-gray-500' : 'text-gray-400')}>
+                  <motion.p
+                    className={cn("text-xs mt-2", theme === 'dark' ? 'text-gray-500' : 'text-gray-400')}
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    transition={{ delay: 0.4 + i * 0.1 }}
+                  >
                     {stat.sub}
-                  </p>
+                  </motion.p>
                 </div>
-                <div className={cn(
-                  "p-3 rounded-xl",
-                  stat.color === 'blue' && (theme === 'dark' ? 'bg-blue-500/20' : 'bg-blue-50'),
-                  stat.color === 'purple' && (theme === 'dark' ? 'bg-purple-500/20' : 'bg-purple-50'),
-                  stat.color === 'emerald' && (theme === 'dark' ? 'bg-emerald-500/20' : 'bg-emerald-50'),
-                  stat.color === 'amber' && (theme === 'dark' ? 'bg-amber-500/20' : 'bg-amber-50')
-                )}>
+                <motion.div
+                  className={cn(
+                    "p-3 rounded-xl relative",
+                    stat.color === 'blue' && (theme === 'dark' ? 'bg-blue-500/20' : 'bg-blue-50'),
+                    stat.color === 'purple' && (theme === 'dark' ? 'bg-purple-500/20' : 'bg-purple-50'),
+                    stat.color === 'emerald' && (theme === 'dark' ? 'bg-emerald-500/20' : 'bg-emerald-50'),
+                    stat.color === 'amber' && (theme === 'dark' ? 'bg-amber-500/20' : 'bg-amber-50')
+                  )}
+                  variants={iconPulseVariants}
+                  initial="initial"
+                  animate="animate"
+                >
                   <stat.icon className={cn(
-                    "w-6 h-6",
+                    "w-6 h-6 transition-transform group-hover:scale-110",
                     stat.color === 'blue' && 'text-blue-500',
                     stat.color === 'purple' && 'text-purple-500',
                     stat.color === 'emerald' && 'text-emerald-500',
                     stat.color === 'amber' && 'text-amber-500'
                   )} />
-                </div>
+                </motion.div>
               </div>
-              <div className={`absolute bottom-0 left-0 right-0 h-1 bg-gradient-to-r ${stat.gradient}`} />
+
+              {/* Animated gradient bar */}
+              <motion.div
+                className={`absolute bottom-0 left-0 right-0 h-1 bg-gradient-to-r ${stat.gradient}`}
+                initial={{ scaleX: 0, originX: 0 }}
+                animate={{ scaleX: 1 }}
+                transition={{ delay: 0.3 + i * 0.1, duration: 0.5, ease: "easeOut" }}
+              />
+
+              {/* Shimmer effect on hover */}
+              <motion.div
+                className="absolute inset-0 -translate-x-full group-hover:translate-x-full transition-transform duration-1000 bg-gradient-to-r from-transparent via-white/10 to-transparent"
+              />
             </motion.div>
           ))}
-        </div>
+        </motion.div>
 
         {/* Main Content - Map + Rate Chart */}
         <div className={cn("grid gap-4", mapFullscreen ? "" : "grid-cols-1 xl:grid-cols-3")}>
@@ -748,23 +900,49 @@ export default function AdminBrokersDashboardPage() {
         {/* Charts Row - oculto en fullscreen */}
         {!mapFullscreen && (
         <>
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-4">
+        <motion.div
+          className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-4"
+          variants={containerVariants}
+          initial="hidden"
+          animate="visible"
+        >
           {/* Cash Delivery Orders Chart */}
           <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ delay: 0.15 }}
-            className={cn("rounded-2xl p-4", theme === 'dark' ? 'bg-white/5 border border-white/10' : 'bg-white border border-gray-100 shadow-sm')}
+            variants={chartCardVariants}
+            whileHover={{ scale: 1.02, y: -4 }}
+            className={cn(
+              "rounded-2xl p-4 group cursor-pointer",
+              "transition-shadow duration-300 hover:shadow-xl",
+              theme === 'dark' ? 'bg-white/5 border border-white/10 hover:shadow-emerald-500/10' : 'bg-white border border-gray-100 shadow-sm hover:shadow-emerald-500/20'
+            )}
           >
             <div className="flex items-center justify-between mb-3">
-              <h3 className={cn("font-semibold text-sm", theme === 'dark' ? 'text-white' : 'text-gray-900')}>Entregas de Efectivo</h3>
+              <motion.h3
+                className={cn("font-semibold text-sm", theme === 'dark' ? 'text-white' : 'text-gray-900')}
+                initial={{ opacity: 0, x: -10 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ delay: 0.2 }}
+              >
+                Entregas de Efectivo
+              </motion.h3>
               {cashDeliveryStats && (
-                <span className={cn("text-xs px-2 py-1 rounded-full", theme === 'dark' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-emerald-100 text-emerald-700')}>
-                  ${cashDeliveryStats.totalAmount.toLocaleString()}
-                </span>
+                <motion.span
+                  className={cn("text-xs px-2 py-1 rounded-full", theme === 'dark' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-emerald-100 text-emerald-700')}
+                  initial={{ scale: 0 }}
+                  animate={{ scale: 1 }}
+                  transition={{ type: "spring", delay: 0.4 }}
+                  whileHover={{ scale: 1.1 }}
+                >
+                  $<AnimatedNumber value={cashDeliveryStats.totalAmount} />
+                </motion.span>
               )}
             </div>
-            <div className="h-[220px]">
+            <motion.div
+              className="h-[220px]"
+              initial={{ opacity: 0, scale: 0.8 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ delay: 0.3, duration: 0.5 }}
+            >
               {cashDeliveryChartData.length > 0 ? (
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
@@ -776,13 +954,16 @@ export default function AdminBrokersDashboardPage() {
                       outerRadius={80}
                       paddingAngle={2}
                       dataKey="value"
+                      animationBegin={200}
+                      animationDuration={1200}
+                      animationEasing="ease-out"
                     >
                       {cashDeliveryChartData.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={entry.color} />
+                        <Cell key={`cell-${index}`} fill={entry.color} className="transition-all duration-300 hover:opacity-80" />
                       ))}
                     </Pie>
                     <Tooltip
-                      contentStyle={{ backgroundColor: theme === 'dark' ? '#1f2937' : '#fff', border: 'none', borderRadius: '8px' }}
+                      contentStyle={{ backgroundColor: theme === 'dark' ? '#1f2937' : '#fff', border: 'none', borderRadius: '12px', boxShadow: '0 10px 40px rgba(0,0,0,0.2)' }}
                       formatter={(value: number) => [value, 'Órdenes']}
                     />
                     <Legend
@@ -793,20 +974,41 @@ export default function AdminBrokersDashboardPage() {
                   </PieChart>
                 </ResponsiveContainer>
               ) : (
-                <div className="h-full flex items-center justify-center text-gray-500 text-sm">Sin entregas</div>
+                <motion.div
+                  className="h-full flex items-center justify-center text-gray-500 text-sm"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                >
+                  Sin entregas
+                </motion.div>
               )}
-            </div>
+            </motion.div>
           </motion.div>
 
           {/* Orders by Status Chart */}
           <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ delay: 0.2 }}
-            className={cn("rounded-2xl p-4", theme === 'dark' ? 'bg-white/5 border border-white/10' : 'bg-white border border-gray-100 shadow-sm')}
+            variants={chartCardVariants}
+            whileHover={{ scale: 1.02, y: -4 }}
+            className={cn(
+              "rounded-2xl p-4 group cursor-pointer",
+              "transition-shadow duration-300 hover:shadow-xl",
+              theme === 'dark' ? 'bg-white/5 border border-white/10 hover:shadow-blue-500/10' : 'bg-white border border-gray-100 shadow-sm hover:shadow-blue-500/20'
+            )}
           >
-            <h3 className={cn("font-semibold text-sm mb-3", theme === 'dark' ? 'text-white' : 'text-gray-900')}>Órdenes por Estado</h3>
-            <div className="h-[220px]">
+            <motion.h3
+              className={cn("font-semibold text-sm mb-3", theme === 'dark' ? 'text-white' : 'text-gray-900')}
+              initial={{ opacity: 0, x: -10 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ delay: 0.25 }}
+            >
+              Órdenes por Estado
+            </motion.h3>
+            <motion.div
+              className="h-[220px]"
+              initial={{ opacity: 0, scale: 0.8 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ delay: 0.35, duration: 0.5 }}
+            >
               {orderChartData.length > 0 ? (
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
@@ -818,13 +1020,16 @@ export default function AdminBrokersDashboardPage() {
                       outerRadius={80}
                       paddingAngle={2}
                       dataKey="value"
+                      animationBegin={300}
+                      animationDuration={1200}
+                      animationEasing="ease-out"
                     >
                       {orderChartData.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={entry.color} />
+                        <Cell key={`cell-${index}`} fill={entry.color} className="transition-all duration-300 hover:opacity-80" />
                       ))}
                     </Pie>
                     <Tooltip
-                      contentStyle={{ backgroundColor: theme === 'dark' ? '#1f2937' : '#fff', border: 'none', borderRadius: '8px' }}
+                      contentStyle={{ backgroundColor: theme === 'dark' ? '#1f2937' : '#fff', border: 'none', borderRadius: '12px', boxShadow: '0 10px 40px rgba(0,0,0,0.2)' }}
                       formatter={(value: number) => [value, 'Órdenes']}
                     />
                     <Legend
@@ -835,20 +1040,41 @@ export default function AdminBrokersDashboardPage() {
                   </PieChart>
                 </ResponsiveContainer>
               ) : (
-                <div className="h-full flex items-center justify-center text-gray-500 text-sm">Sin órdenes</div>
+                <motion.div
+                  className="h-full flex items-center justify-center text-gray-500 text-sm"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                >
+                  Sin órdenes
+                </motion.div>
               )}
-            </div>
+            </motion.div>
           </motion.div>
 
           {/* Currency Rates Chart */}
           <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ delay: 0.25 }}
-            className={cn("rounded-2xl p-4", theme === 'dark' ? 'bg-white/5 border border-white/10' : 'bg-white border border-gray-100 shadow-sm')}
+            variants={chartCardVariants}
+            whileHover={{ scale: 1.02, y: -4 }}
+            className={cn(
+              "rounded-2xl p-4 group cursor-pointer",
+              "transition-shadow duration-300 hover:shadow-xl",
+              theme === 'dark' ? 'bg-white/5 border border-white/10 hover:shadow-purple-500/10' : 'bg-white border border-gray-100 shadow-sm hover:shadow-purple-500/20'
+            )}
           >
-            <h3 className={cn("font-semibold text-sm mb-3", theme === 'dark' ? 'text-white' : 'text-gray-900')}>Tasas por Moneda</h3>
-            <div className="h-[220px]">
+            <motion.h3
+              className={cn("font-semibold text-sm mb-3", theme === 'dark' ? 'text-white' : 'text-gray-900')}
+              initial={{ opacity: 0, x: -10 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ delay: 0.3 }}
+            >
+              Tasas por Moneda
+            </motion.h3>
+            <motion.div
+              className="h-[220px]"
+              initial={{ opacity: 0, scale: 0.8 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ delay: 0.4, duration: 0.5 }}
+            >
               {currencyBalanceData.length > 0 ? (
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={currencyBalanceData} margin={{ top: 0, right: 10, left: -10, bottom: 0 }}>
@@ -856,34 +1082,60 @@ export default function AdminBrokersDashboardPage() {
                     <XAxis dataKey="currency" tick={{ fontSize: 10, fill: theme === 'dark' ? '#9ca3af' : '#6b7280' }} axisLine={false} tickLine={false} />
                     <YAxis tick={{ fontSize: 10, fill: theme === 'dark' ? '#9ca3af' : '#6b7280' }} axisLine={false} tickLine={false} />
                     <Tooltip
-                      contentStyle={{ backgroundColor: theme === 'dark' ? '#1f2937' : '#fff', border: 'none', borderRadius: '8px' }}
+                      contentStyle={{ backgroundColor: theme === 'dark' ? '#1f2937' : '#fff', border: 'none', borderRadius: '12px', boxShadow: '0 10px 40px rgba(0,0,0,0.2)' }}
                       formatter={(value: number) => [`${value.toFixed(2)} CUP`, 'Tasa']}
                     />
-                    <Bar dataKey="rate" radius={[4, 4, 0, 0]}>
+                    <Bar dataKey="rate" radius={[4, 4, 0, 0]} animationBegin={400} animationDuration={1000}>
                       {currencyBalanceData.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={entry.variacion >= 0 ? '#10b981' : '#ef4444'} />
+                        <Cell key={`cell-${index}`} fill={entry.variacion >= 0 ? '#10b981' : '#ef4444'} className="transition-all duration-300 hover:opacity-80" />
                       ))}
                     </Bar>
                   </BarChart>
                 </ResponsiveContainer>
               ) : (
-                <div className="h-full flex items-center justify-center text-gray-500 text-sm">Sin datos</div>
+                <motion.div
+                  className="h-full flex items-center justify-center text-gray-500 text-sm"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                >
+                  Sin datos
+                </motion.div>
               )}
-            </div>
+            </motion.div>
           </motion.div>
-        </div>
+        </motion.div>
 
         {/* Bottom: Balance by Province + Top Brokers List */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <motion.div
+          className="grid grid-cols-1 lg:grid-cols-2 gap-4"
+          variants={containerVariants}
+          initial="hidden"
+          animate="visible"
+        >
           {/* Balance by Province */}
           <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ delay: 0.3 }}
-            className={cn("rounded-2xl p-4", theme === 'dark' ? 'bg-white/5 border border-white/10' : 'bg-white border border-gray-100 shadow-sm')}
+            variants={chartCardVariants}
+            whileHover={{ scale: 1.01, y: -2 }}
+            className={cn(
+              "rounded-2xl p-4 group cursor-pointer",
+              "transition-shadow duration-300 hover:shadow-xl",
+              theme === 'dark' ? 'bg-white/5 border border-white/10 hover:shadow-emerald-500/10' : 'bg-white border border-gray-100 shadow-sm hover:shadow-emerald-500/20'
+            )}
           >
-            <h3 className={cn("font-semibold text-sm mb-3", theme === 'dark' ? 'text-white' : 'text-gray-900')}>Balance por Provincia</h3>
-            <div className="h-[200px]">
+            <motion.h3
+              className={cn("font-semibold text-sm mb-3", theme === 'dark' ? 'text-white' : 'text-gray-900')}
+              initial={{ opacity: 0, x: -10 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ delay: 0.35 }}
+            >
+              Balance por Provincia
+            </motion.h3>
+            <motion.div
+              className="h-[200px]"
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ delay: 0.45, duration: 0.5 }}
+            >
               {provinceChartData.length > 0 ? (
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={provinceChartData} margin={{ top: 0, right: 10, left: -10, bottom: 0 }}>
@@ -891,70 +1143,108 @@ export default function AdminBrokersDashboardPage() {
                     <XAxis dataKey="name" tick={{ fontSize: 9, fill: theme === 'dark' ? '#9ca3af' : '#6b7280' }} axisLine={false} tickLine={false} />
                     <YAxis tick={{ fontSize: 10, fill: theme === 'dark' ? '#9ca3af' : '#6b7280' }} axisLine={false} tickLine={false} tickFormatter={(v) => `$${(v/1000).toFixed(0)}k`} />
                     <Tooltip
-                      contentStyle={{ backgroundColor: theme === 'dark' ? '#1f2937' : '#fff', border: 'none', borderRadius: '8px' }}
+                      contentStyle={{ backgroundColor: theme === 'dark' ? '#1f2937' : '#fff', border: 'none', borderRadius: '12px', boxShadow: '0 10px 40px rgba(0,0,0,0.2)' }}
                       formatter={(value: number) => [`$${value.toLocaleString('en-US', { minimumFractionDigits: 2 })}`, 'Balance']}
                       labelFormatter={(label, payload) => payload?.[0]?.payload?.fullName || label}
                     />
-                    <Bar dataKey="balance" fill="#10b981" radius={[4, 4, 0, 0]} />
+                    <Bar dataKey="balance" fill="#10b981" radius={[4, 4, 0, 0]} animationBegin={500} animationDuration={1000} />
                   </BarChart>
                 </ResponsiveContainer>
               ) : (
-                <div className="h-full flex items-center justify-center text-gray-500 text-sm">Sin datos</div>
+                <motion.div
+                  className="h-full flex items-center justify-center text-gray-500 text-sm"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                >
+                  Sin datos
+                </motion.div>
               )}
-            </div>
+            </motion.div>
           </motion.div>
 
           {/* Top Brokers List */}
           <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ delay: 0.35 }}
-            className={cn("rounded-2xl p-4", theme === 'dark' ? 'bg-white/5 border border-white/10' : 'bg-white border border-gray-100 shadow-sm')}
+            variants={chartCardVariants}
+            className={cn(
+              "rounded-2xl p-4",
+              "transition-shadow duration-300 hover:shadow-xl",
+              theme === 'dark' ? 'bg-white/5 border border-white/10 hover:shadow-amber-500/10' : 'bg-white border border-gray-100 shadow-sm hover:shadow-amber-500/20'
+            )}
           >
             <div className="flex items-center justify-between mb-3">
-              <h3 className={cn("font-semibold text-sm", theme === 'dark' ? 'text-white' : 'text-gray-900')}>Top Brokers</h3>
-              <span className={cn("text-xs px-2 py-1 rounded-full", theme === 'dark' ? 'bg-gray-700 text-gray-400' : 'bg-gray-100 text-gray-600')}>
+              <motion.h3
+                className={cn("font-semibold text-sm", theme === 'dark' ? 'text-white' : 'text-gray-900')}
+                initial={{ opacity: 0, x: -10 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ delay: 0.4 }}
+              >
+                Top Brokers
+              </motion.h3>
+              <motion.span
+                className={cn("text-xs px-2 py-1 rounded-full", theme === 'dark' ? 'bg-gray-700 text-gray-400' : 'bg-gray-100 text-gray-600')}
+                initial={{ scale: 0 }}
+                animate={{ scale: 1 }}
+                transition={{ type: "spring", delay: 0.5 }}
+              >
                 {brokers.length} total
-              </span>
+              </motion.span>
             </div>
             <div className="space-y-2 max-h-[200px] overflow-y-auto">
-              {brokers
-                .sort((a, b) => b.walletBalance - a.walletBalance)
-                .slice(0, 6)
-                .map((broker, i) => (
-                  <div
-                    key={broker.id}
-                    className={cn(
-                      "flex items-center justify-between p-2.5 rounded-lg",
-                      theme === 'dark' ? 'bg-white/5' : 'bg-gray-50'
-                    )}
-                  >
-                    <div className="flex items-center gap-3">
-                      <span className={cn(
-                        "w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold",
-                        i < 3 ? "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400" : "bg-gray-200 text-gray-600 dark:bg-gray-600 dark:text-gray-400"
-                      )}>
-                        {i + 1}
-                      </span>
-                      <div>
-                        <p className={cn("text-sm font-medium", theme === 'dark' ? 'text-white' : 'text-gray-900')}>{broker.name}</p>
-                        <p className="text-xs text-gray-500">{PROVINCE_ID_TO_NAME[broker.province] || broker.province || 'Sin provincia'}</p>
+              <AnimatePresence>
+                {brokers
+                  .sort((a, b) => b.walletBalance - a.walletBalance)
+                  .slice(0, 6)
+                  .map((broker, i) => (
+                    <motion.div
+                      key={broker.id}
+                      custom={i}
+                      variants={listItemVariants}
+                      initial="hidden"
+                      animate="visible"
+                      whileHover="hover"
+                      className={cn(
+                        "flex items-center justify-between p-2.5 rounded-lg cursor-pointer",
+                        theme === 'dark' ? 'bg-white/5 hover:bg-white/10' : 'bg-gray-50 hover:bg-gray-100'
+                      )}
+                    >
+                      <div className="flex items-center gap-3">
+                        <motion.span
+                          className={cn(
+                            "w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold",
+                            i < 3 ? "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400" : "bg-gray-200 text-gray-600 dark:bg-gray-600 dark:text-gray-400"
+                          )}
+                          whileHover={{ scale: 1.2, rotate: 360 }}
+                          transition={{ type: "spring", stiffness: 260, damping: 20 }}
+                        >
+                          {i + 1}
+                        </motion.span>
+                        <div>
+                          <p className={cn("text-sm font-medium", theme === 'dark' ? 'text-white' : 'text-gray-900')}>{broker.name}</p>
+                          <p className="text-xs text-gray-500">{PROVINCE_ID_TO_NAME[broker.province] || broker.province || 'Sin provincia'}</p>
+                        </div>
                       </div>
-                    </div>
-                    <span className="text-sm font-semibold text-emerald-600 dark:text-emerald-400">
-                      {broker.walletBalanceFormatted}
-                    </span>
-                  </div>
-                ))}
+                      <motion.span
+                        className="text-sm font-semibold text-emerald-600 dark:text-emerald-400"
+                        whileHover={{ scale: 1.1 }}
+                      >
+                        {broker.walletBalanceFormatted}
+                      </motion.span>
+                    </motion.div>
+                  ))}
+              </AnimatePresence>
               {brokers.length === 0 && (
-                <div className="text-center py-8 text-gray-500 text-sm">
+                <motion.div
+                  className="text-center py-8 text-gray-500 text-sm"
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                >
                   <Building2 className="w-8 h-8 mx-auto mb-2 opacity-50" />
                   No hay brokers
-                </div>
+                </motion.div>
               )}
             </div>
           </motion.div>
-        </div>
+        </motion.div>
 
         {/* Movimientos Recientes - Cash Delivery Orders */}
         <motion.div
