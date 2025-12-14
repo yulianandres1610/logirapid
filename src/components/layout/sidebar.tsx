@@ -655,10 +655,16 @@ export function Sidebar({ isCollapsed, onToggle }: SidebarProps) {
         </div>
 
         {/* Navigation */}
-        <nav className={cn(
-          "flex-1 space-y-2 overflow-y-auto",
-          isCollapsed ? "px-3 py-2" : "px-4 py-4"
-        )}>
+        <nav
+          className={cn(
+            "flex-1 space-y-2",
+            isCollapsed ? "px-3 py-2 overflow-hidden" : "px-4 py-4 overflow-y-auto"
+          )}
+          style={!isCollapsed ? {
+            scrollbarWidth: 'thin',
+            scrollbarColor: theme === 'dark' ? '#374151 transparent' : '#d1d5db transparent'
+          } : undefined}
+        >
           {menuItems.map((item, index) => (
             <motion.div
               key={item.href || item.label}
