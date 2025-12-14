@@ -56,7 +56,8 @@ export async function POST(request: NextRequest) {
         u.createdat as "createdAt",
         u.lastlogin as "lastLogin",
         uc.companyid as "companyId",
-        c.legalname as "companyName"
+        c.legalname as "companyName",
+        c.companytype as "companyType"
       FROM users u
       LEFT JOIN user_companies uc ON u.id = uc.userid
       LEFT JOIN companies c ON uc.companyid = c.id
@@ -128,6 +129,7 @@ export async function POST(request: NextRequest) {
       role: user.role,
       companyId: user.companyId,
       companyName: user.companyName,
+      companyType: user.companyType,
       createdAt: user.createdAt,
       updatedAt: user.createdAt, // Use createdAt as fallback
     }
@@ -143,6 +145,7 @@ export async function POST(request: NextRequest) {
         role: user.role,
         companyId: user.companyId,
         companyName: user.companyName,
+        companyType: user.companyType,
       },
       jwtSecret,
       { expiresIn: '7d' }
@@ -193,7 +196,11 @@ export async function POST(request: NextRequest) {
       response.cookies.set('user-company-name', encodeURIComponent(user.companyName), cookieOptions)
     }
 
-    console.log('[LOGIN] Login exitoso para:', user.email)
+    if (user.companyType) {
+      response.cookies.set('user-company-type', user.companyType, cookieOptions)
+    }
+
+    console.log('[LOGIN] Login exitoso para:', user.email, '- Company type:', user.companyType)
     return response
 
   } catch (error) {

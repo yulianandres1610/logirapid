@@ -142,6 +142,52 @@ export async function middleware(request: NextRequest) {
   const userRole = decodedToken.role || request.cookies.get('user-role')?.value
   const companyId = decodedToken.companyId?.toString() || request.cookies.get('user-company-id')?.value
   const companyName = decodedToken.companyName || request.cookies.get('user-company-name')?.value
+  const companyType = decodedToken.companyType || request.cookies.get('user-company-type')?.value
+  const isBrokerCompany = companyType === 'broker'
+
+  console.log('[MIDDLEWARE] User info:', { userRole, companyId, companyType, isBrokerCompany, pathname })
+
+  // ============================================================
+  // BROKER COMPANY HANDLING - Usuarios de empresas tipo broker
+  // ============================================================
+
+  // Si es usuario de empresa broker, permitir acceso a /dashboard/broker
+  if (isBrokerCompany && pathname.startsWith('/dashboard/broker')) {
+    console.log('✅ BROKER COMPANY user accessing broker dashboard, companyId:', companyId)
+    const response = NextResponse.next()
+    if (userRole) response.headers.set('x-user-role', userRole)
+    if (companyId) response.headers.set('x-user-company-id', companyId)
+    if (companyName) response.headers.set('x-user-company-name', companyName)
+    if (companyType) response.headers.set('x-user-company-type', companyType)
+    return response
+  }
+
+  // Redirigir usuarios de empresa broker a su dashboard si intentan acceder a otros dashboards
+  if (isBrokerCompany && pathname.startsWith('/dashboard/admin')) {
+    console.log('🔄 Redirecting BROKER COMPANY user from admin to broker dashboard')
+    const brokerDashboardUrl = new URL('/dashboard/broker', request.url)
+    return NextResponse.redirect(brokerDashboardUrl)
+  }
+
+  if (isBrokerCompany && pathname.startsWith('/dashboard/agency-admin')) {
+    console.log('🔄 Redirecting BROKER COMPANY user from agency-admin to broker dashboard')
+    const brokerDashboardUrl = new URL('/dashboard/broker', request.url)
+    return NextResponse.redirect(brokerDashboardUrl)
+  }
+
+  if (isBrokerCompany && pathname.startsWith('/dashboard/manager')) {
+    console.log('🔄 Redirecting BROKER COMPANY user from manager to broker dashboard')
+    const brokerDashboardUrl = new URL('/dashboard/broker', request.url)
+    return NextResponse.redirect(brokerDashboardUrl)
+  }
+
+  if (isBrokerCompany && pathname.startsWith('/dashboard/user')) {
+    console.log('🔄 Redirecting BROKER COMPANY user from user to broker dashboard')
+    const brokerDashboardUrl = new URL('/dashboard/broker', request.url)
+    return NextResponse.redirect(brokerDashboardUrl)
+  }
+
+  // ============================================================
 
   // Validación de servicios habilitados (solo para usuarios de empresa, no SUPER_ADMIN)
   // NOTA: La validación de servicios se hace en el cliente (Sidebar) y en las API routes

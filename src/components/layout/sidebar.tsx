@@ -501,8 +501,12 @@ export function Sidebar({ isCollapsed, onToggle }: SidebarProps) {
       .filter(Boolean) // Eliminar items null (menús padres sin submódulos visibles)
   }
 
-  // Seleccionar el menú adecuado según el rol del usuario
+  // Seleccionar el menú adecuado según el rol del usuario y tipo de empresa
+  // Si la empresa es de tipo 'broker', mostrar menú de broker sin importar el rol
+  const isBrokerCompany = user?.companyType === 'broker'
+
   let baseMenuItems = user?.role === 'SUPER_ADMIN' ? superAdminMenuItems :
+                      isBrokerCompany ? brokerMenuItems :  // Priorizar tipo de empresa broker
                       user?.role === 'ADMIN' ? adminMenuItems :
                       user?.role === 'MANAGER' ? managerMenuItems :
                       user?.role === 'BROKER' ? brokerMenuItems :

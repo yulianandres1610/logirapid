@@ -4,6 +4,7 @@ export interface User {
   name: string
   role: UserRole
   companyId?: string
+  companyType?: string
   branchId?: string
   avatar?: string
   createdAt: Date

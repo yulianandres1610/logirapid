@@ -68,6 +68,11 @@ export function useAuth(): UseAuthReturn {
           .find(row => row.startsWith('user-company-name='))
           ?.split('=')[1]
 
+        const companyType = document.cookie
+          .split('; ')
+          .find(row => row.startsWith('user-company-type='))
+          ?.split('=')[1]
+
         // Validate JWT token presence (basic check - full validation in middleware)
         if (authToken && userId && userName && userEmail && userRole) {
           const user: User = {
@@ -76,6 +81,7 @@ export function useAuth(): UseAuthReturn {
             email: decodeURIComponent(userEmail),
             role: userRole as any,
             companyId: companyId || undefined,
+            companyType: companyType || undefined,
             createdAt: new Date(),
             updatedAt: new Date(),
           }
@@ -128,6 +134,7 @@ export function useAuth(): UseAuthReturn {
           email: data.user.email,
           role: data.user.role,
           companyId: data.user.companyId?.toString(),
+          companyType: data.user.companyType,
           createdAt: new Date(data.user.createdAt),
           updatedAt: new Date(data.user.updatedAt),
         }
@@ -154,24 +161,29 @@ export function useAuth(): UseAuthReturn {
         if (typeof window !== 'undefined') {
           let redirectPath = '/dashboard/admin'
 
-          switch (user.role) {
-            case 'SUPER_ADMIN':
-              redirectPath = '/dashboard/admin'
-              break
-            case 'ADMIN':
-              redirectPath = '/dashboard/agency-admin'
-              break
-            case 'MANAGER':
-              redirectPath = '/dashboard/manager'
-              break
-            case 'USER':
-              redirectPath = '/dashboard/user'
-              break
-            case 'DRIVER':
-              redirectPath = '/dashboard/agency-admin'  // Drivers use agency-admin dashboard
-              break
-            default:
-              redirectPath = '/dashboard/agency-admin'
+          // Si la empresa es de tipo broker, redirigir al dashboard de broker
+          if (user.companyType === 'broker') {
+            redirectPath = '/dashboard/broker'
+          } else {
+            switch (user.role) {
+              case 'SUPER_ADMIN':
+                redirectPath = '/dashboard/admin'
+                break
+              case 'ADMIN':
+                redirectPath = '/dashboard/agency-admin'
+                break
+              case 'MANAGER':
+                redirectPath = '/dashboard/manager'
+                break
+              case 'USER':
+                redirectPath = '/dashboard/user'
+                break
+              case 'DRIVER':
+                redirectPath = '/dashboard/agency-admin'  // Drivers use agency-admin dashboard
+                break
+              default:
+                redirectPath = '/dashboard/agency-admin'
+            }
           }
 
           // Cookie polling: Wait until auth-token is available in document.cookie
@@ -266,6 +278,7 @@ export function useAuth(): UseAuthReturn {
         'user-role',
         'user-company-id',
         'user-company-name',
+        'user-company-type',
       ]
       const cookieDomain = window.location.hostname.includes('logirapid.com')
         ? '.logirapid.com'
