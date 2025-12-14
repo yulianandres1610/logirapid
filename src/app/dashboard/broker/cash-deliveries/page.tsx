@@ -238,7 +238,7 @@ export default function BrokerCashDeliveriesPage() {
                                 <div className="flex items-center gap-1.5">
                                   <Calendar className={`h-4 w-4 ${textSecondary}`} />
                                   <span className={textSecondary}>
-                                    Límite: {new Date(delivery.deadline_date + 'T00:00:00').toLocaleDateString('es-ES')}
+                                    Límite: {new Date(delivery.deadline_date).toLocaleDateString('es-ES')}
                                   </span>
                                 </div>
                               </div>

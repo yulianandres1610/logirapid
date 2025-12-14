@@ -457,7 +457,7 @@ export default function CashDeliveryListPage() {
                             <div className="flex items-center gap-2">
                               <Calendar className={cn('h-4 w-4', theme === 'dark' ? 'text-gray-500' : 'text-gray-400')} />
                               <span className={theme === 'dark' ? 'text-white' : 'text-gray-900'}>
-                                {new Date(order.deadline_date + 'T00:00:00').toLocaleDateString('es-ES')}
+                                {new Date(order.deadline_date).toLocaleDateString('es-ES')}
                               </span>
                             </div>
                           </td>
