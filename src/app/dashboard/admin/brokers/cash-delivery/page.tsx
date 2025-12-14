@@ -102,10 +102,21 @@ export default function CashDeliveryWizardPage() {
   useEffect(() => {
     const loadUsers = async () => {
       try {
-        const res = await fetch('/api/users?role=USER,DRIVER')
+        const res = await fetch('/api/users')
         const data = await res.json()
         if (data.success) {
-          setUsers(data.data || data.users || [])
+          // Filter only USER and DRIVER roles and map to correct format
+          const rawUsers = data.data?.users || data.users || []
+          const mappedUsers = rawUsers
+            .filter((u: any) => ['USER', 'DRIVER'].includes(u.role?.toUpperCase()))
+            .map((u: any) => ({
+              id: u.id,
+              name: `${u.firstName || ''} ${u.lastName || ''}`.trim() || u.email,
+              email: u.email,
+              phone: u.phone || '',
+              role: u.role
+            }))
+          setUsers(mappedUsers)
         }
       } catch (error) {
         console.error('Error loading users:', error)

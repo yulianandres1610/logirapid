@@ -81,11 +81,11 @@ export async function GET(request: NextRequest) {
     const ordersResult = await db.query(`
       SELECT
         cdo.*,
-        bc.name as broker_name,
+        bc.legalname as broker_name,
         bc.broker_province,
         bc.broker_municipality,
-        du.name as delivery_user_display_name,
-        cu.name as created_by_name
+        CONCAT(du.firstname, ' ', du.lastname) as delivery_user_display_name,
+        CONCAT(cu.firstname, ' ', cu.lastname) as created_by_name
       FROM cash_delivery_orders cdo
       LEFT JOIN companies bc ON cdo.broker_company_id = bc.id
       LEFT JOIN users du ON cdo.delivery_user_id = du.id
@@ -185,7 +185,7 @@ export async function POST(request: NextRequest) {
 
     // Get broker info
     const brokerResult = await db.query(`
-      SELECT id, name, broker_province, broker_municipality, broker_contact_phone
+      SELECT id, legalname as name, tradename, broker_province, broker_municipality, broker_contact_phone
       FROM companies
       WHERE id = $1 AND companytype = 'broker'
     `, [brokerCompanyId])
@@ -201,7 +201,7 @@ export async function POST(request: NextRequest) {
 
     // Get delivery user info
     const userResult = await db.query(`
-      SELECT id, name, phone
+      SELECT id, CONCAT(firstname, ' ', lastname) as name, phone
       FROM users
       WHERE id = $1
     `, [deliveryUserId])
