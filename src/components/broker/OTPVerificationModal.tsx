@@ -2,15 +2,15 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { useTheme } from '@/contexts/theme-context'
-import { useNotification } from '@/contexts/notification-context'
+import { useNotifications } from '@/contexts/NotificationContext'
 import {
   X,
   Smartphone,
   Loader2,
   CheckCircle,
   RefreshCw,
-  DollarSign,
-  AlertCircle
+  AlertCircle,
+  MessageSquare
 } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 
@@ -21,11 +21,14 @@ interface CashDelivery {
   total_amount: string | number
 }
 
+type OTPChannel = 'sms' | 'whatsapp'
+
 interface OTPVerificationModalProps {
   isOpen: boolean
   onClose: () => void
   delivery: CashDelivery | null
   maskedPhone: string
+  initialChannel?: OTPChannel
   onSuccess: (result: any) => void
 }
 
@@ -34,10 +37,11 @@ export default function OTPVerificationModal({
   onClose,
   delivery,
   maskedPhone,
+  initialChannel = 'sms',
   onSuccess
 }: OTPVerificationModalProps) {
   const { theme } = useTheme()
-  const { showNotification } = useNotification()
+  const { showNotification } = useNotifications()
 
   const [otp, setOtp] = useState(['', '', '', '', '', ''])
   const [isVerifying, setIsVerifying] = useState(false)
@@ -46,6 +50,8 @@ export default function OTPVerificationModal({
   const [remainingResends, setRemainingResends] = useState(3)
   const [isSuccess, setIsSuccess] = useState(false)
   const [successData, setSuccessData] = useState<any>(null)
+  const [currentChannel, setCurrentChannel] = useState<OTPChannel>(initialChannel)
+  const [resendChannel, setResendChannel] = useState<OTPChannel>(initialChannel)
 
   const inputRefs = useRef<(HTMLInputElement | null)[]>([])
 
@@ -56,9 +62,11 @@ export default function OTPVerificationModal({
       setTimeLeft(300)
       setIsSuccess(false)
       setSuccessData(null)
+      setCurrentChannel(initialChannel)
+      setResendChannel(initialChannel)
       setTimeout(() => inputRefs.current[0]?.focus(), 100)
     }
-  }, [isOpen])
+  }, [isOpen, initialChannel])
 
   // Countdown timer
   useEffect(() => {
@@ -149,7 +157,7 @@ export default function OTPVerificationModal({
     }
   }
 
-  const handleResend = async () => {
+  const handleResend = async (channel: OTPChannel) => {
     if (remainingResends <= 0) {
       showNotification('error', 'Error', 'Se alcanzó el límite de reenvíos')
       return
@@ -158,7 +166,9 @@ export default function OTPVerificationModal({
     setIsResending(true)
     try {
       const res = await fetch(`/api/broker/cash-deliveries/${delivery.id}/resend-otp`, {
-        method: 'POST'
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ channel })
       })
       const data = await res.json()
 
@@ -166,7 +176,9 @@ export default function OTPVerificationModal({
         setTimeLeft(300)
         setOtp(['', '', '', '', '', ''])
         setRemainingResends(data.data.remainingResends)
-        showNotification('success', 'OTP reenviado', 'Nuevo código enviado al repartidor')
+        setCurrentChannel(channel)
+        const channelLabel = channel === 'whatsapp' ? 'WhatsApp' : 'SMS'
+        showNotification('success', 'OTP reenviado', `Nuevo código enviado por ${channelLabel}`)
         inputRefs.current[0]?.focus()
       } else {
         showNotification('error', 'Error', data.error)
@@ -275,11 +287,23 @@ export default function OTPVerificationModal({
                 /* OTP Input State */
                 <>
                   <div className="text-center mb-6">
-                    <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-gradient-to-r from-exa-primary/20 to-exa-secondary/20 flex items-center justify-center">
-                      <Smartphone className="h-8 w-8 text-exa-primary" />
+                    <div className={`w-16 h-16 mx-auto mb-4 rounded-full flex items-center justify-center ${
+                      currentChannel === 'whatsapp'
+                        ? 'bg-green-500/20'
+                        : 'bg-gradient-to-r from-exa-primary/20 to-exa-secondary/20'
+                    }`}>
+                      {currentChannel === 'whatsapp' ? (
+                        <MessageSquare className="h-8 w-8 text-green-500" />
+                      ) : (
+                        <Smartphone className="h-8 w-8 text-exa-primary" />
+                      )}
                     </div>
                     <p className={textSecondary}>
-                      Se ha enviado un código de 6 dígitos al teléfono del repartidor:
+                      Se ha enviado un código de 6 dígitos por{' '}
+                      <span className={`font-semibold ${currentChannel === 'whatsapp' ? 'text-green-500' : 'text-exa-primary'}`}>
+                        {currentChannel === 'whatsapp' ? 'WhatsApp' : 'SMS'}
+                      </span>
+                      {' '}al teléfono del repartidor:
                     </p>
                     <p className={`font-semibold ${textPrimary} mt-1`}>{maskedPhone}</p>
                   </div>
@@ -327,23 +351,54 @@ export default function OTPVerificationModal({
                     )}
                   </div>
 
-                  {/* Resend */}
-                  <div className="text-center mb-6">
-                    <button
-                      onClick={handleResend}
-                      disabled={isResending || remainingResends <= 0}
-                      className={`text-sm ${textSecondary} hover:text-exa-primary transition-colors disabled:opacity-50 flex items-center gap-2 mx-auto`}
-                    >
-                      {isResending ? (
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                      ) : (
-                        <RefreshCw className="h-4 w-4" />
-                      )}
-                      {remainingResends > 0
-                        ? `Reenviar SMS (${remainingResends} restantes)`
-                        : 'Sin reenvíos disponibles'
-                      }
-                    </button>
+                  {/* Resend Options */}
+                  <div className="mb-6">
+                    {remainingResends > 0 ? (
+                      <>
+                        <p className={`text-sm text-center mb-3 ${textSecondary}`}>
+                          <RefreshCw className="h-4 w-4 inline mr-1" />
+                          Reenviar código ({remainingResends} restantes):
+                        </p>
+                        <div className="flex gap-2 justify-center">
+                          <button
+                            onClick={() => handleResend('sms')}
+                            disabled={isResending}
+                            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                              isResending
+                                ? 'opacity-50 cursor-not-allowed'
+                                : `${theme === 'dark' ? 'bg-white/10 hover:bg-white/20' : 'bg-gray-100 hover:bg-gray-200'} ${textPrimary}`
+                            }`}
+                          >
+                            {isResending ? (
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : (
+                              <Smartphone className="h-4 w-4" />
+                            )}
+                            SMS
+                          </button>
+                          <button
+                            onClick={() => handleResend('whatsapp')}
+                            disabled={isResending}
+                            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                              isResending
+                                ? 'opacity-50 cursor-not-allowed'
+                                : 'bg-green-500/10 hover:bg-green-500/20 text-green-500'
+                            }`}
+                          >
+                            {isResending ? (
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : (
+                              <MessageSquare className="h-4 w-4" />
+                            )}
+                            WhatsApp
+                          </button>
+                        </div>
+                      </>
+                    ) : (
+                      <p className={`text-sm text-center ${textSecondary}`}>
+                        Sin reenvíos disponibles
+                      </p>
+                    )}
                   </div>
 
                   {/* Buttons */}

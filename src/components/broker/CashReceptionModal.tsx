@@ -2,15 +2,16 @@
 
 import { useState, useEffect } from 'react'
 import { useTheme } from '@/contexts/theme-context'
-import { useNotification } from '@/contexts/notification-context'
+import { useNotifications } from '@/contexts/NotificationContext'
 import {
   X,
   DollarSign,
   User,
-  Phone,
   Loader2,
   AlertCircle,
-  CheckCircle
+  CheckCircle,
+  MessageSquare,
+  Smartphone
 } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 
@@ -33,12 +34,14 @@ interface CashDelivery {
   bill_denominations?: { [key: string]: number }
 }
 
+type OTPChannel = 'sms' | 'whatsapp'
+
 interface CashReceptionModalProps {
   isOpen: boolean
   onClose: () => void
   delivery: CashDelivery | null
   onSuccess: () => void
-  onProceedToOTP: (delivery: CashDelivery, maskedPhone: string) => void
+  onProceedToOTP: (delivery: CashDelivery, maskedPhone: string, channel: OTPChannel) => void
 }
 
 export default function CashReceptionModal({
@@ -49,18 +52,20 @@ export default function CashReceptionModal({
   onProceedToOTP
 }: CashReceptionModalProps) {
   const { theme } = useTheme()
-  const { showNotification } = useNotification()
+  const { showNotification } = useNotifications()
 
   const [receivedDenominations, setReceivedDenominations] = useState<{ [key: string]: number }>({})
   const [isValidating, setIsValidating] = useState(false)
   const [isStarting, setIsStarting] = useState(false)
   const [receptionStarted, setReceptionStarted] = useState(false)
+  const [otpChannel, setOtpChannel] = useState<OTPChannel>('sms')
 
   // Reset state when modal opens
   useEffect(() => {
     if (isOpen && delivery) {
       setReceivedDenominations({})
       setReceptionStarted(false)
+      setOtpChannel('sms')
     }
   }, [isOpen, delivery])
 
@@ -126,13 +131,17 @@ export default function CashReceptionModal({
       const res = await fetch(`/api/broker/cash-deliveries/${delivery.id}/validate`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ receivedBillDenominations: receivedDenominations })
+        body: JSON.stringify({
+          receivedBillDenominations: receivedDenominations,
+          channel: otpChannel
+        })
       })
       const data = await res.json()
 
       if (data.success) {
-        showNotification('success', 'Montos validados', 'OTP enviado al repartidor')
-        onProceedToOTP(delivery, data.data.otpSentTo)
+        const channelLabel = otpChannel === 'whatsapp' ? 'WhatsApp' : 'SMS'
+        showNotification('success', 'Montos validados', `OTP enviado por ${channelLabel}`)
+        onProceedToOTP(delivery, data.data.otpSentTo, otpChannel)
         onClose()
       } else {
         showNotification('error', 'Error', data.error)
@@ -299,6 +308,41 @@ export default function CashReceptionModal({
                       </div>
                     )}
                   </div>
+
+                  {/* Channel Selector */}
+                  {amountsMatch && (
+                    <div className="mt-4">
+                      <p className={`text-sm mb-2 ${textSecondary}`}>
+                        Enviar código OTP por:
+                      </p>
+                      <div className="flex gap-3">
+                        <button
+                          type="button"
+                          onClick={() => setOtpChannel('sms')}
+                          className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-xl border-2 transition-all ${
+                            otpChannel === 'sms'
+                              ? 'border-exa-primary bg-exa-primary/10 text-exa-primary'
+                              : `${theme === 'dark' ? 'border-white/10 hover:border-white/30' : 'border-gray-200 hover:border-gray-300'} ${textPrimary}`
+                          }`}
+                        >
+                          <Smartphone className="h-5 w-5" />
+                          <span className="font-medium">SMS</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setOtpChannel('whatsapp')}
+                          className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-xl border-2 transition-all ${
+                            otpChannel === 'whatsapp'
+                              ? 'border-green-500 bg-green-500/10 text-green-500'
+                              : `${theme === 'dark' ? 'border-white/10 hover:border-white/30' : 'border-gray-200 hover:border-gray-300'} ${textPrimary}`
+                          }`}
+                        >
+                          <MessageSquare className="h-5 w-5" />
+                          <span className="font-medium">WhatsApp</span>
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </>
               )}
             </div>

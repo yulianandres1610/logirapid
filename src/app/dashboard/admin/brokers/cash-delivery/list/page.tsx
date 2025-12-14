@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { useTheme } from '@/contexts/theme-context'
-import { useNotification } from '@/contexts/notification-context'
+import { useNotifications } from '@/contexts/NotificationContext'
 import {
   Plus,
   Search,
@@ -54,7 +54,7 @@ const STATUS_CONFIG: { [key: string]: { label: string; color: string; bgColor: s
 export default function CashDeliveryListPage() {
   const router = useRouter()
   const { theme } = useTheme()
-  const { showNotification } = useNotification()
+  const { showNotification } = useNotifications()
 
   const [orders, setOrders] = useState<CashDeliveryOrder[]>([])
   const [isLoading, setIsLoading] = useState(true)

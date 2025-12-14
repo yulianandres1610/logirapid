@@ -456,6 +456,15 @@ export function Sidebar({ isCollapsed, onToggle }: SidebarProps) {
     },
   ]
 
+  // Menu items para BROKER (gestión de entregas y wallet)
+  const brokerMenuItems = [
+    { icon: Home, label: "Dashboard", href: "/dashboard/broker" },
+    { icon: Package, label: "Órdenes Cupones", href: "/dashboard/broker/orders" },
+    { icon: Banknote, label: "Entregas Efectivo", href: "/dashboard/broker/cash-deliveries" },
+    { icon: Wallet, label: "Mi Wallet", href: "/dashboard/broker/wallet" },
+    { icon: Settings, label: "Configuración", href: "/dashboard/broker/settings" },
+  ]
+
   // Hook para verificar servicios habilitados
   const { hasService, hasSubmodule } = useEnabledServices()
 
@@ -496,6 +505,7 @@ export function Sidebar({ isCollapsed, onToggle }: SidebarProps) {
   let baseMenuItems = user?.role === 'SUPER_ADMIN' ? superAdminMenuItems :
                       user?.role === 'ADMIN' ? adminMenuItems :
                       user?.role === 'MANAGER' ? managerMenuItems :
+                      user?.role === 'BROKER' ? brokerMenuItems :
                       user?.role === 'USER' ? userMenuItems :
                       []
 

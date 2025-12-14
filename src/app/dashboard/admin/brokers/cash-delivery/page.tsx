@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { useTheme } from '@/contexts/theme-context'
-import { useNotification } from '@/contexts/notification-context'
+import { useNotifications } from '@/contexts/NotificationContext'
 import {
   ArrowLeft,
   ArrowRight,
@@ -62,7 +62,7 @@ const STEPS = [
 export default function CashDeliveryWizardPage() {
   const router = useRouter()
   const { theme } = useTheme()
-  const { showNotification } = useNotification()
+  const { showNotification } = useNotifications()
 
   const [currentStep, setCurrentStep] = useState(1)
   const [isLoading, setIsLoading] = useState(false)

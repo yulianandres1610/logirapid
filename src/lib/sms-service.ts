@@ -677,3 +677,126 @@ export function maskPhoneNumber(phone: string): string {
   const end = formatted.substring(formatted.length - 3)
   return `${start}***${end}`
 }
+
+// ==========================================
+// WHATSAPP MESSAGE SUPPORT
+// ==========================================
+
+/**
+ * Sends a WhatsApp message using Twilio
+ * Uses free-form messages (session messages) - not templates
+ */
+export async function sendWhatsApp(to: string, message: string): Promise<SMSResult> {
+  try {
+    const twilioPhone = process.env.TWILIO_PHONE_NUMBER
+    const whatsappNumber = process.env.TWILIO_WHATSAPP_NUMBER ||
+      (twilioPhone ? `whatsapp:${twilioPhone}` : null)
+
+    if (!whatsappNumber) {
+      console.error('[WhatsApp Service] WhatsApp number not configured')
+      return {
+        success: false,
+        error: 'WhatsApp service not configured'
+      }
+    }
+
+    // Formatear y validar número destino
+    const formattedTo = formatPhoneNumber(to)
+
+    if (!isValidPhoneNumber(formattedTo)) {
+      console.warn(`[WhatsApp Service] Invalid phone number: ${to}`)
+      return {
+        success: false,
+        error: `Invalid phone number: ${to}`,
+        to: formattedTo
+      }
+    }
+
+    // Obtener cliente de Twilio
+    const client = await getClient()
+
+    console.log(`[WhatsApp Service] Sending WhatsApp to ${formattedTo}`)
+
+    // Enviar mensaje WhatsApp
+    const result = await client.messages.create({
+      body: message,
+      from: whatsappNumber.startsWith('whatsapp:') ? whatsappNumber : `whatsapp:${whatsappNumber}`,
+      to: `whatsapp:${formattedTo}`
+    })
+
+    console.log(`[WhatsApp Service] WhatsApp sent successfully. SID: ${result.sid}`)
+
+    return {
+      success: true,
+      messageId: result.sid,
+      to: formattedTo
+    }
+
+  } catch (error: any) {
+    console.error('[WhatsApp Service] Error sending WhatsApp:', error)
+
+    return {
+      success: false,
+      error: error.message || 'Unknown error sending WhatsApp',
+      to
+    }
+  }
+}
+
+/**
+ * Generates OTP message for WhatsApp (with emojis and formatting)
+ */
+export function generateCashDeliveryOTPWhatsAppMessage(
+  otpCode: string,
+  amount: string,
+  currency: string,
+  brokerName: string
+): string {
+  return `🔐 *LogiRapid - Código de Verificación*
+
+Tu código OTP es: *${otpCode}*
+
+📦 Entrega de efectivo:
+💵 Monto: ${currency} ${amount}
+🏢 Broker: ${brokerName}
+
+⏰ Este código expira en ${OTP_EXPIRATION_MINUTES} minutos.
+
+_Entrega este código al broker para confirmar la recepción del efectivo._`
+}
+
+/**
+ * Sends OTP via WhatsApp for cash delivery verification
+ */
+export async function sendCashDeliveryOTPWhatsApp(
+  deliveryPersonPhone: string,
+  otpCode: string,
+  amount: string,
+  currency: string,
+  brokerName: string
+): Promise<SMSResult> {
+  const message = generateCashDeliveryOTPWhatsAppMessage(otpCode, amount, currency, brokerName)
+  return sendWhatsApp(deliveryPersonPhone, message)
+}
+
+/**
+ * Type for OTP delivery channel
+ */
+export type OTPChannel = 'sms' | 'whatsapp'
+
+/**
+ * Sends OTP via specified channel (SMS or WhatsApp)
+ */
+export async function sendCashDeliveryOTPByChannel(
+  deliveryPersonPhone: string,
+  otpCode: string,
+  amount: string,
+  currency: string,
+  brokerName: string,
+  channel: OTPChannel = 'sms'
+): Promise<SMSResult> {
+  if (channel === 'whatsapp') {
+    return sendCashDeliveryOTPWhatsApp(deliveryPersonPhone, otpCode, amount, currency, brokerName)
+  }
+  return sendCashDeliveryOTP(deliveryPersonPhone, otpCode, amount, currency, brokerName)
+}

@@ -3,10 +3,11 @@ import { db } from '@/lib/database'
 import { cookies } from 'next/headers'
 import {
   generateOTP,
-  sendCashDeliveryOTP,
+  sendCashDeliveryOTPByChannel,
   maskPhoneNumber,
   OTP_EXPIRATION_MINUTES,
-  OTP_MAX_ATTEMPTS
+  OTP_MAX_ATTEMPTS,
+  OTPChannel
 } from '@/lib/sms-service'
 
 // Calculate total from bill denominations
@@ -43,7 +44,8 @@ export async function POST(
     }
 
     const body = await request.json()
-    const { receivedBillDenominations } = body
+    const { receivedBillDenominations, channel = 'sms' } = body
+    const otpChannel: OTPChannel = channel === 'whatsapp' ? 'whatsapp' : 'sms'
 
     if (!receivedBillDenominations || typeof receivedBillDenominations !== 'object') {
       return NextResponse.json({
@@ -135,29 +137,33 @@ export async function POST(
       WHERE id = $3
     `, [otpCode, otpExpiresAt, orderId])
 
-    // Send OTP via SMS
-    const smsResult = await sendCashDeliveryOTP(
+    // Send OTP via selected channel (SMS or WhatsApp)
+    const otpResult = await sendCashDeliveryOTPByChannel(
       order.delivery_user_phone,
       otpCode,
       expectedTotal.toFixed(2),
       order.currency,
-      order.broker_name || 'Broker'
+      order.broker_name || 'Broker',
+      otpChannel
     )
 
-    if (!smsResult.success) {
-      console.error('[Validate API] Failed to send OTP SMS:', smsResult.error)
-      // Even if SMS fails, we continue - OTP is stored in DB
+    if (!otpResult.success) {
+      console.error(`[Validate API] Failed to send OTP via ${otpChannel}:`, otpResult.error)
+      // Even if message fails, we continue - OTP is stored in DB
       // In production, you might want to handle this differently
     }
 
+    const channelLabel = otpChannel === 'whatsapp' ? 'WhatsApp' : 'SMS'
+
     return NextResponse.json({
       success: true,
-      message: 'Montos coinciden. OTP enviado al repartidor.',
+      message: `Montos coinciden. OTP enviado al repartidor por ${channelLabel}.`,
       data: {
         status: 'validating',
         otpSentTo: maskPhoneNumber(order.delivery_user_phone),
         expiresIn: OTP_EXPIRATION_MINUTES * 60, // seconds
-        smsSent: smsResult.success
+        messageSent: otpResult.success,
+        channel: otpChannel
       }
     })
 

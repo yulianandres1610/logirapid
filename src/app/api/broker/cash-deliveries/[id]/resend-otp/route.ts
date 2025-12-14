@@ -3,10 +3,11 @@ import { db } from '@/lib/database'
 import { cookies } from 'next/headers'
 import {
   generateOTP,
-  sendCashDeliveryOTP,
+  sendCashDeliveryOTPByChannel,
   maskPhoneNumber,
   OTP_EXPIRATION_MINUTES,
-  OTP_MAX_RESENDS
+  OTP_MAX_RESENDS,
+  OTPChannel
 } from '@/lib/sms-service'
 
 // POST - Resend OTP
@@ -31,6 +32,15 @@ export async function POST(
         success: false,
         error: 'ID de orden inválido'
       }, { status: 400 })
+    }
+
+    // Get channel from request body
+    let otpChannel: OTPChannel = 'sms'
+    try {
+      const body = await request.json()
+      otpChannel = body.channel === 'whatsapp' ? 'whatsapp' : 'sms'
+    } catch {
+      // If no body, default to SMS
     }
 
     // Get order
@@ -84,27 +94,31 @@ export async function POST(
       WHERE id = $4
     `, [otpCode, otpExpiresAt, newResendCount, orderId])
 
-    // Send OTP via SMS
-    const smsResult = await sendCashDeliveryOTP(
+    // Send OTP via selected channel (SMS or WhatsApp)
+    const otpResult = await sendCashDeliveryOTPByChannel(
       order.delivery_user_phone,
       otpCode,
       parseFloat(order.total_amount).toFixed(2),
       order.currency,
-      order.broker_name || 'Broker'
+      order.broker_name || 'Broker',
+      otpChannel
     )
 
-    if (!smsResult.success) {
-      console.error('[Resend OTP API] Failed to send SMS:', smsResult.error)
+    if (!otpResult.success) {
+      console.error(`[Resend OTP API] Failed to send via ${otpChannel}:`, otpResult.error)
     }
+
+    const channelLabel = otpChannel === 'whatsapp' ? 'WhatsApp' : 'SMS'
 
     return NextResponse.json({
       success: true,
-      message: 'Nuevo código OTP enviado',
+      message: `Nuevo código OTP enviado por ${channelLabel}`,
       data: {
         otpSentTo: maskPhoneNumber(order.delivery_user_phone),
         expiresIn: OTP_EXPIRATION_MINUTES * 60, // seconds
         remainingResends: OTP_MAX_RESENDS - newResendCount,
-        smsSent: smsResult.success
+        messageSent: otpResult.success,
+        channel: otpChannel
       }
     })
 
