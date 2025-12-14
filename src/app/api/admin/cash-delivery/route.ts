@@ -225,6 +225,15 @@ export async function POST(request: NextRequest) {
     // Generate order number
     const orderNumber = await generateOrderNumber()
 
+    // Validate created_by_user_id if provided
+    let createdByUserId = null
+    if (userId) {
+      const creatorCheck = await db.query('SELECT id FROM users WHERE id = $1', [parseInt(userId)])
+      if (creatorCheck.rows.length > 0) {
+        createdByUserId = parseInt(userId)
+      }
+    }
+
     // Create the order
     const insertResult = await db.query(`
       INSERT INTO cash_delivery_orders (
@@ -247,7 +256,7 @@ export async function POST(request: NextRequest) {
     `, [
       orderNumber,
       brokerCompanyId,
-      broker.name,
+      broker.name || broker.tradename,
       deliveryUserId,
       deliveryUser.name,
       deliveryUser.phone,
@@ -257,7 +266,7 @@ export async function POST(request: NextRequest) {
       totalBills,
       deadlineDate,
       notes || null,
-      userId ? parseInt(userId) : null
+      createdByUserId
     ])
 
     const newOrder = insertResult.rows[0]
