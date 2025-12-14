@@ -656,101 +656,91 @@ export default function AdminBrokersDashboardPage() {
     <DashboardLayout>
       <div className="min-h-full space-y-4">
 
-        {/* Header Stats - Compact with Enhanced Animations */}
-        <motion.div
-          className="grid grid-cols-2 lg:grid-cols-4 gap-4"
-          variants={containerVariants}
-          initial="hidden"
-          animate="visible"
-        >
+        {/* Header Stats - Same design as Pickup Orders */}
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-5 mt-2">
           {[
-            { icon: Users, label: 'Brokers', value: summary?.totalBrokers || 0, sub: `${summary?.activeBrokers || 0} activos`, color: 'blue', gradient: 'from-blue-500 to-blue-400', glowColor: 'shadow-blue-500/20' },
-            { icon: MapPin, label: 'Provincias', value: summary?.provincesCovered || 0, sub: 'con cobertura', color: 'purple', gradient: 'from-purple-500 to-purple-400', glowColor: 'shadow-purple-500/20' },
-            { icon: Wallet, label: 'Balance Total', value: summary?.totalBalanceFormatted || '$0', sub: 'en wallets', color: 'emerald', gradient: 'from-emerald-500 to-emerald-400', glowColor: 'shadow-emerald-500/20' },
-            { icon: Package, label: 'Órdenes', value: orderStats?.total || 0, sub: `$${(orderStats?.totalAmount || 0).toLocaleString()}`, color: 'amber', gradient: 'from-amber-500 to-amber-400', glowColor: 'shadow-amber-500/20' },
+            { icon: Users, label: 'Brokers', value: summary?.totalBrokers || 0, sub: `${summary?.activeBrokers || 0} activos`, gradient: 'from-blue-400 to-blue-600', iconBg: theme === 'dark' ? 'bg-blue-900/30 border-blue-800/50' : 'bg-gradient-to-br from-blue-50 to-blue-100 border-blue-200', iconColor: 'text-blue-600', dotColor: 'bg-blue-400' },
+            { icon: MapPin, label: 'Provincias', value: summary?.provincesCovered || 0, sub: 'con cobertura', gradient: 'from-purple-400 to-purple-600', iconBg: theme === 'dark' ? 'bg-purple-900/30 border-purple-800/50' : 'bg-gradient-to-br from-purple-50 to-purple-100 border-purple-200', iconColor: 'text-purple-600', dotColor: 'bg-purple-400' },
+            { icon: Wallet, label: 'Balance Total', value: summary?.totalBalanceFormatted || '$0', sub: 'en wallets', gradient: 'from-emerald-400 to-green-600', iconBg: theme === 'dark' ? 'bg-emerald-900/30 border-emerald-800/50' : 'bg-gradient-to-br from-emerald-50 to-green-100 border-emerald-200', iconColor: 'text-emerald-600', dotColor: 'bg-emerald-400' },
+            { icon: Package, label: 'Órdenes', value: orderStats?.total || 0, sub: `$${(orderStats?.totalAmount || 0).toLocaleString()}`, gradient: 'from-amber-400 to-orange-600', iconBg: theme === 'dark' ? 'bg-amber-900/30 border-amber-800/50' : 'bg-gradient-to-br from-amber-50 to-orange-100 border-amber-200', iconColor: 'text-amber-600', dotColor: 'bg-amber-400' },
           ].map((stat, i) => (
             <motion.div
               key={stat.label}
-              variants={cardVariants}
-              whileHover="hover"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.1 + i * 0.1 }}
+              whileHover={{ y: -4, transition: { duration: 0.2 } }}
               className={cn(
-                "relative overflow-hidden rounded-2xl p-5 cursor-pointer group",
-                "transition-shadow duration-300",
-                theme === 'dark' ? 'bg-white/5 border border-white/10' : 'bg-white border border-gray-100 shadow-sm',
-                `hover:shadow-xl hover:${stat.glowColor}`
+                'relative overflow-hidden cursor-pointer group',
+                theme === 'dark'
+                  ? 'bg-gradient-to-br from-gray-800 to-gray-900 border-gray-700'
+                  : 'bg-gradient-to-br from-slate-50 to-white border-slate-200',
+                'rounded-2xl border shadow-xl hover:shadow-2xl transition-shadow duration-300'
               )}
             >
-              {/* Animated glow background */}
+              {/* Top gradient bar */}
               <motion.div
-                className={cn(
-                  "absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500",
-                  `bg-gradient-to-br ${stat.gradient}`
-                )}
-                style={{ opacity: 0.05 }}
-                variants={glowVariants}
-                initial="initial"
-                animate="animate"
-              />
-
-              <div className="relative flex items-start justify-between">
-                <div>
-                  <motion.p
-                    className={cn("text-sm font-medium", theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}
-                    initial={{ opacity: 0, x: -10 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ delay: 0.2 + i * 0.1 }}
-                  >
-                    {stat.label}
-                  </motion.p>
-                  <p className={cn("text-3xl font-bold mt-1", theme === 'dark' ? 'text-white' : 'text-gray-900')}>
-                    <AnimatedNumber value={stat.value} duration={1.5} />
-                  </p>
-                  <motion.p
-                    className={cn("text-xs mt-2", theme === 'dark' ? 'text-gray-500' : 'text-gray-400')}
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    transition={{ delay: 0.4 + i * 0.1 }}
-                  >
-                    {stat.sub}
-                  </motion.p>
-                </div>
-                <motion.div
-                  className={cn(
-                    "p-3 rounded-xl relative",
-                    stat.color === 'blue' && (theme === 'dark' ? 'bg-blue-500/20' : 'bg-blue-50'),
-                    stat.color === 'purple' && (theme === 'dark' ? 'bg-purple-500/20' : 'bg-purple-50'),
-                    stat.color === 'emerald' && (theme === 'dark' ? 'bg-emerald-500/20' : 'bg-emerald-50'),
-                    stat.color === 'amber' && (theme === 'dark' ? 'bg-amber-500/20' : 'bg-amber-50')
-                  )}
-                  variants={iconPulseVariants}
-                  initial="initial"
-                  animate="animate"
-                >
-                  <stat.icon className={cn(
-                    "w-6 h-6 transition-transform group-hover:scale-110",
-                    stat.color === 'blue' && 'text-blue-500',
-                    stat.color === 'purple' && 'text-purple-500',
-                    stat.color === 'emerald' && 'text-emerald-500',
-                    stat.color === 'amber' && 'text-amber-500'
-                  )} />
-                </motion.div>
-              </div>
-
-              {/* Animated gradient bar */}
-              <motion.div
-                className={`absolute bottom-0 left-0 right-0 h-1 bg-gradient-to-r ${stat.gradient}`}
+                className={`absolute top-0 left-0 w-full h-1 bg-gradient-to-r ${stat.gradient}`}
                 initial={{ scaleX: 0, originX: 0 }}
                 animate={{ scaleX: 1 }}
                 transition={{ delay: 0.3 + i * 0.1, duration: 0.5, ease: "easeOut" }}
               />
 
+              <div className="p-6">
+                <div className="flex items-start justify-between mb-4">
+                  <div className="flex items-center gap-3">
+                    <motion.div
+                      className={cn(
+                        'p-3 rounded-xl shadow-sm border',
+                        stat.iconBg
+                      )}
+                      variants={iconPulseVariants}
+                      initial="initial"
+                      animate="animate"
+                    >
+                      <stat.icon className={cn("w-6 h-6 transition-transform group-hover:scale-110", stat.iconColor)} />
+                    </motion.div>
+                    <div>
+                      <motion.p
+                        className={cn(
+                          'text-sm font-medium',
+                          theme === 'dark' ? 'text-gray-400' : 'text-black'
+                        )}
+                        initial={{ opacity: 0, x: -10 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        transition={{ delay: 0.2 + i * 0.1 }}
+                      >
+                        {stat.label}
+                      </motion.p>
+                      <p className={cn(
+                        'text-3xl font-bold mt-1',
+                        theme === 'dark' ? 'text-white' : 'text-slate-900'
+                      )}>
+                        <AnimatedNumber value={stat.value} duration={1.5} />
+                      </p>
+                    </div>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-1">
+                    <motion.div
+                      className={cn("w-2 h-2 rounded-full", stat.dotColor)}
+                      animate={{ scale: [1, 1.2, 1], opacity: [1, 0.7, 1] }}
+                      transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
+                    />
+                    <span className={cn(
+                      'text-xs font-medium',
+                      theme === 'dark' ? 'text-gray-500' : 'text-black'
+                    )}>{stat.sub}</span>
+                  </div>
+                </div>
+              </div>
+
               {/* Shimmer effect on hover */}
-              <motion.div
-                className="absolute inset-0 -translate-x-full group-hover:translate-x-full transition-transform duration-1000 bg-gradient-to-r from-transparent via-white/10 to-transparent"
-              />
+              <div className="absolute inset-0 -translate-x-full group-hover:translate-x-full transition-transform duration-1000 bg-gradient-to-r from-transparent via-white/5 to-transparent pointer-events-none" />
             </motion.div>
           ))}
-        </motion.div>
+        </div>
 
         {/* Main Content - Map + Rate Chart */}
         <div className={cn("grid gap-4", mapFullscreen ? "" : "grid-cols-1 xl:grid-cols-3")}>

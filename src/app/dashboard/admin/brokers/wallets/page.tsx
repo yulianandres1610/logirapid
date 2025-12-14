@@ -368,118 +368,206 @@ export default function AdminBrokerWalletsPage() {
           </Link>
         </div>
 
-      {/* Summary Stats */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      {/* Summary Stats - Same design as Pickup Orders */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-5 mt-2">
+        {/* Balance Total */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.1 }}
+          whileHover={{ y: -4, transition: { duration: 0.2 } }}
           className={cn(
-            "relative overflow-hidden rounded-2xl p-5",
-            theme === 'dark' ? 'bg-white/5 border border-white/10' : 'bg-white border border-gray-100 shadow-sm'
+            'relative overflow-hidden cursor-pointer group',
+            theme === 'dark'
+              ? 'bg-gradient-to-br from-gray-800 to-gray-900 border-gray-700'
+              : 'bg-gradient-to-br from-slate-50 to-white border-slate-200',
+            'rounded-2xl border shadow-xl hover:shadow-2xl transition-shadow duration-300'
           )}
         >
-          <div className="flex items-start justify-between">
-            <div>
-              <p className={cn("text-sm font-medium", theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}>
-                Balance Total
-              </p>
-              <p className={cn("text-3xl font-bold mt-1", theme === 'dark' ? 'text-white' : 'text-gray-900')}>
-                {summary?.totalBalanceFormatted || '$0.00'}
-              </p>
-              <p className={cn("text-xs mt-2", theme === 'dark' ? 'text-gray-500' : 'text-gray-400')}>
-                Fondos disponibles
-              </p>
+          <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-emerald-400 to-green-600"></div>
+          <div className="p-6">
+            <div className="flex items-start justify-between mb-4">
+              <div className="flex items-center gap-3">
+                <div className={cn(
+                  'p-3 rounded-xl shadow-sm border',
+                  theme === 'dark'
+                    ? 'bg-emerald-900/30 border-emerald-800/50'
+                    : 'bg-gradient-to-br from-emerald-50 to-green-100 border-emerald-200'
+                )}>
+                  <DollarSign className="w-6 h-6 text-emerald-600 transition-transform group-hover:scale-110" />
+                </div>
+                <div>
+                  <p className={cn(
+                    'text-sm font-medium',
+                    theme === 'dark' ? 'text-gray-400' : 'text-black'
+                  )}>Balance Total</p>
+                  <p className={cn(
+                    'text-3xl font-bold mt-1',
+                    theme === 'dark' ? 'text-white' : 'text-slate-900'
+                  )}>{summary?.totalBalanceFormatted || '$0.00'}</p>
+                </div>
+              </div>
             </div>
-            <div className={cn("p-3 rounded-xl", theme === 'dark' ? 'bg-green-500/20' : 'bg-green-50')}>
-              <DollarSign className="w-6 h-6 text-green-500" />
+            <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1">
+                <div className="w-2 h-2 bg-emerald-400 rounded-full animate-pulse"></div>
+                <span className={cn(
+                  'text-xs font-medium',
+                  theme === 'dark' ? 'text-gray-500' : 'text-black'
+                )}>Fondos disponibles</span>
+              </div>
             </div>
           </div>
-          <div className="absolute bottom-0 left-0 right-0 h-1 bg-gradient-to-r from-green-500 to-green-400" />
         </motion.div>
 
+        {/* Total Brokers */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.2 }}
+          whileHover={{ y: -4, transition: { duration: 0.2 } }}
           className={cn(
-            "relative overflow-hidden rounded-2xl p-5",
-            theme === 'dark' ? 'bg-white/5 border border-white/10' : 'bg-white border border-gray-100 shadow-sm'
+            'relative overflow-hidden cursor-pointer group',
+            theme === 'dark'
+              ? 'bg-gradient-to-br from-gray-800 to-gray-900 border-gray-700'
+              : 'bg-gradient-to-br from-slate-50 to-white border-slate-200',
+            'rounded-2xl border shadow-xl hover:shadow-2xl transition-shadow duration-300'
           )}
         >
-          <div className="flex items-start justify-between">
-            <div>
-              <p className={cn("text-sm font-medium", theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}>
-                Total Brokers
-              </p>
-              <p className={cn("text-3xl font-bold mt-1", theme === 'dark' ? 'text-white' : 'text-gray-900')}>
-                {summary?.totalBrokers || 0}
-              </p>
-              <p className={cn("text-xs mt-2", theme === 'dark' ? 'text-gray-500' : 'text-gray-400')}>
-                Registrados
-              </p>
+          <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-400 to-blue-600"></div>
+          <div className="p-6">
+            <div className="flex items-start justify-between mb-4">
+              <div className="flex items-center gap-3">
+                <div className={cn(
+                  'p-3 rounded-xl shadow-sm border',
+                  theme === 'dark'
+                    ? 'bg-blue-900/30 border-blue-800/50'
+                    : 'bg-gradient-to-br from-blue-50 to-blue-100 border-blue-200'
+                )}>
+                  <Users className="w-6 h-6 text-blue-600 transition-transform group-hover:scale-110" />
+                </div>
+                <div>
+                  <p className={cn(
+                    'text-sm font-medium',
+                    theme === 'dark' ? 'text-gray-400' : 'text-black'
+                  )}>Total Brokers</p>
+                  <p className={cn(
+                    'text-3xl font-bold mt-1',
+                    theme === 'dark' ? 'text-white' : 'text-slate-900'
+                  )}>{summary?.totalBrokers || 0}</p>
+                </div>
+              </div>
             </div>
-            <div className={cn("p-3 rounded-xl", theme === 'dark' ? 'bg-blue-500/20' : 'bg-blue-50')}>
-              <Users className="w-6 h-6 text-blue-500" />
+            <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1">
+                <div className="w-2 h-2 bg-blue-400 rounded-full animate-pulse"></div>
+                <span className={cn(
+                  'text-xs font-medium',
+                  theme === 'dark' ? 'text-gray-500' : 'text-black'
+                )}>Registrados</span>
+              </div>
             </div>
           </div>
-          <div className="absolute bottom-0 left-0 right-0 h-1 bg-gradient-to-r from-blue-500 to-blue-400" />
         </motion.div>
 
+        {/* Brokers Activos */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.3 }}
+          whileHover={{ y: -4, transition: { duration: 0.2 } }}
           className={cn(
-            "relative overflow-hidden rounded-2xl p-5",
-            theme === 'dark' ? 'bg-white/5 border border-white/10' : 'bg-white border border-gray-100 shadow-sm'
+            'relative overflow-hidden cursor-pointer group',
+            theme === 'dark'
+              ? 'bg-gradient-to-br from-gray-800 to-gray-900 border-gray-700'
+              : 'bg-gradient-to-br from-slate-50 to-white border-slate-200',
+            'rounded-2xl border shadow-xl hover:shadow-2xl transition-shadow duration-300'
           )}
         >
-          <div className="flex items-start justify-between">
-            <div>
-              <p className={cn("text-sm font-medium", theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}>
-                Brokers Activos
-              </p>
-              <p className={cn("text-3xl font-bold mt-1", theme === 'dark' ? 'text-white' : 'text-gray-900')}>
-                {summary?.activeBrokers || 0}
-              </p>
-              <p className={cn("text-xs mt-2", theme === 'dark' ? 'text-gray-500' : 'text-gray-400')}>
-                Operando
-              </p>
+          <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-amber-400 to-orange-600"></div>
+          <div className="p-6">
+            <div className="flex items-start justify-between mb-4">
+              <div className="flex items-center gap-3">
+                <div className={cn(
+                  'p-3 rounded-xl shadow-sm border',
+                  theme === 'dark'
+                    ? 'bg-amber-900/30 border-amber-800/50'
+                    : 'bg-gradient-to-br from-amber-50 to-orange-100 border-amber-200'
+                )}>
+                  <CheckCircle className="w-6 h-6 text-amber-600 transition-transform group-hover:scale-110" />
+                </div>
+                <div>
+                  <p className={cn(
+                    'text-sm font-medium',
+                    theme === 'dark' ? 'text-gray-400' : 'text-black'
+                  )}>Brokers Activos</p>
+                  <p className={cn(
+                    'text-3xl font-bold mt-1',
+                    theme === 'dark' ? 'text-white' : 'text-slate-900'
+                  )}>{summary?.activeBrokers || 0}</p>
+                </div>
+              </div>
             </div>
-            <div className={cn("p-3 rounded-xl", theme === 'dark' ? 'bg-emerald-500/20' : 'bg-emerald-50')}>
-              <CheckCircle className="w-6 h-6 text-emerald-500" />
+            <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1">
+                <div className="w-2 h-2 bg-amber-400 rounded-full animate-pulse"></div>
+                <span className={cn(
+                  'text-xs font-medium',
+                  theme === 'dark' ? 'text-gray-500' : 'text-black'
+                )}>Operando</span>
+              </div>
             </div>
           </div>
-          <div className="absolute bottom-0 left-0 right-0 h-1 bg-gradient-to-r from-emerald-500 to-emerald-400" />
         </motion.div>
 
+        {/* Transacciones */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.4 }}
+          whileHover={{ y: -4, transition: { duration: 0.2 } }}
           className={cn(
-            "relative overflow-hidden rounded-2xl p-5",
-            theme === 'dark' ? 'bg-white/5 border border-white/10' : 'bg-white border border-gray-100 shadow-sm'
+            'relative overflow-hidden cursor-pointer group',
+            theme === 'dark'
+              ? 'bg-gradient-to-br from-gray-800 to-gray-900 border-gray-700'
+              : 'bg-gradient-to-br from-slate-50 to-white border-slate-200',
+            'rounded-2xl border shadow-xl hover:shadow-2xl transition-shadow duration-300'
           )}
         >
-          <div className="flex items-start justify-between">
-            <div>
-              <p className={cn("text-sm font-medium", theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}>
-                Transacciones
-              </p>
-              <p className={cn("text-3xl font-bold mt-1", theme === 'dark' ? 'text-white' : 'text-gray-900')}>
-                {transactions.length}
-              </p>
-              <p className={cn("text-xs mt-2", theme === 'dark' ? 'text-gray-500' : 'text-gray-400')}>
-                Recientes
-              </p>
+          <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-violet-400 to-purple-600"></div>
+          <div className="p-6">
+            <div className="flex items-start justify-between mb-4">
+              <div className="flex items-center gap-3">
+                <div className={cn(
+                  'p-3 rounded-xl shadow-sm border',
+                  theme === 'dark'
+                    ? 'bg-violet-900/30 border-violet-800/50'
+                    : 'bg-gradient-to-br from-violet-50 to-purple-100 border-violet-200'
+                )}>
+                  <Activity className="w-6 h-6 text-violet-600 transition-transform group-hover:scale-110" />
+                </div>
+                <div>
+                  <p className={cn(
+                    'text-sm font-medium',
+                    theme === 'dark' ? 'text-gray-400' : 'text-black'
+                  )}>Transacciones</p>
+                  <p className={cn(
+                    'text-3xl font-bold mt-1',
+                    theme === 'dark' ? 'text-white' : 'text-slate-900'
+                  )}>{transactions.length}</p>
+                </div>
+              </div>
             </div>
-            <div className={cn("p-3 rounded-xl", theme === 'dark' ? 'bg-violet-500/20' : 'bg-violet-50')}>
-              <Activity className="w-6 h-6 text-violet-500" />
+            <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1">
+                <div className="w-2 h-2 bg-violet-400 rounded-full animate-pulse"></div>
+                <span className={cn(
+                  'text-xs font-medium',
+                  theme === 'dark' ? 'text-gray-500' : 'text-black'
+                )}>Recientes</span>
+              </div>
             </div>
           </div>
-          <div className="absolute bottom-0 left-0 right-0 h-1 bg-gradient-to-r from-violet-500 to-violet-400" />
         </motion.div>
       </div>
 
