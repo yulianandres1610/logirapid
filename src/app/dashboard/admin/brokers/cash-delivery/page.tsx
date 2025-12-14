@@ -18,6 +18,7 @@ import {
   DollarSign
 } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
+import { DashboardLayout } from '@/components/layout/dashboard-layout'
 
 // Bill denominations by currency
 const BILL_DENOMINATIONS: { [key: string]: number[] } = {
@@ -211,26 +212,27 @@ export default function CashDeliveryWizardPage() {
   const textSecondary = theme === 'dark' ? 'text-gray-400' : 'text-gray-600'
 
   return (
-    <div className="min-h-full p-6 space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-4">
-          <button
-            onClick={() => router.back()}
-            className={`p-2 rounded-lg hover:bg-white/10 ${textSecondary}`}
-          >
-            <ArrowLeft className="h-5 w-5" />
-          </button>
-          <div>
-            <h1 className={`text-2xl font-bold ${textPrimary}`}>
-              Nueva Entrega de Efectivo
-            </h1>
-            <p className={textSecondary}>
-              Crear orden de entrega de efectivo a broker
-            </p>
+    <DashboardLayout>
+      <div className="min-h-full space-y-6">
+        {/* Header */}
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <button
+              onClick={() => router.back()}
+              className={`p-2 rounded-lg hover:bg-white/10 ${textSecondary}`}
+            >
+              <ArrowLeft className="h-5 w-5" />
+            </button>
+            <div>
+              <h1 className={`text-2xl font-bold ${textPrimary}`}>
+                Nueva Entrega de Efectivo
+              </h1>
+              <p className={textSecondary}>
+                Crear orden de entrega de efectivo a broker
+              </p>
+            </div>
           </div>
         </div>
-      </div>
 
       {/* Steps indicator */}
       <div className={`${cardBg} rounded-2xl p-4`}>
@@ -644,7 +646,8 @@ export default function CashDeliveryWizardPage() {
             )}
           </button>
         )}
+        </div>
       </div>
-    </div>
+    </DashboardLayout>
   )
 }
