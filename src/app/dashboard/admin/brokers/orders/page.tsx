@@ -163,10 +163,7 @@ export default function AdminBrokerOrdersPage() {
 
   return (
     <DashboardLayout>
-      <div className={cn(
-        "min-h-screen p-6 space-y-6",
-        theme === 'dark' ? 'bg-gray-900' : 'bg-gray-50'
-      )}>
+      <div className="min-h-full space-y-6">
         {/* Header */}
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <div>
@@ -187,7 +184,7 @@ export default function AdminBrokerOrdersPage() {
             href="/dashboard/admin/brokers"
             className={cn(
               "flex items-center gap-2 px-4 py-2 rounded-xl transition-all",
-              theme === 'dark' ? 'bg-gray-800 hover:bg-gray-700 text-white' : 'bg-white hover:bg-gray-100 text-gray-900 border border-gray-200'
+              theme === 'dark' ? 'bg-white/10 hover:bg-white/20 text-white' : 'bg-white hover:bg-gray-50 text-gray-900 border border-gray-100 shadow-sm'
             )}
           >
             <Building2 className="w-4 h-4" />
@@ -197,50 +194,98 @@ export default function AdminBrokerOrdersPage() {
 
       {/* Stats Summary */}
       {stats && (
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            className="bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl p-4 text-white"
+            className={cn(
+              "relative overflow-hidden rounded-2xl p-5",
+              theme === 'dark' ? 'bg-white/5 border border-white/10' : 'bg-white border border-gray-100 shadow-sm'
+            )}
           >
-            <p className="text-blue-100 text-sm">Total Ordenes</p>
-            <p className="text-3xl font-bold">{stats.total}</p>
+            <div className="flex items-start justify-between">
+              <div>
+                <p className={cn("text-sm font-medium", theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}>Total Órdenes</p>
+                <p className={cn("text-3xl font-bold mt-1", theme === 'dark' ? 'text-white' : 'text-gray-900')}>{stats.total}</p>
+                <p className={cn("text-xs mt-2", theme === 'dark' ? 'text-gray-500' : 'text-gray-400')}>Registradas</p>
+              </div>
+              <div className={cn("p-3 rounded-xl", theme === 'dark' ? 'bg-blue-500/20' : 'bg-blue-50')}>
+                <Package className="w-6 h-6 text-blue-500" />
+              </div>
+            </div>
+            <div className="absolute bottom-0 left-0 right-0 h-1 bg-gradient-to-r from-blue-500 to-blue-400" />
           </motion.div>
 
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.1 }}
-            className="bg-gradient-to-br from-yellow-500 to-yellow-600 rounded-xl p-4 text-white"
+            className={cn(
+              "relative overflow-hidden rounded-2xl p-5",
+              theme === 'dark' ? 'bg-white/5 border border-white/10' : 'bg-white border border-gray-100 shadow-sm'
+            )}
           >
-            <p className="text-yellow-100 text-sm">Pendientes</p>
-            <p className="text-3xl font-bold">{stats.pending}</p>
+            <div className="flex items-start justify-between">
+              <div>
+                <p className={cn("text-sm font-medium", theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}>Pendientes</p>
+                <p className={cn("text-3xl font-bold mt-1", theme === 'dark' ? 'text-white' : 'text-gray-900')}>{stats.pending}</p>
+                <p className={cn("text-xs mt-2", theme === 'dark' ? 'text-gray-500' : 'text-gray-400')}>Por procesar</p>
+              </div>
+              <div className={cn("p-3 rounded-xl", theme === 'dark' ? 'bg-amber-500/20' : 'bg-amber-50')}>
+                <Clock className="w-6 h-6 text-amber-500" />
+              </div>
+            </div>
+            <div className="absolute bottom-0 left-0 right-0 h-1 bg-gradient-to-r from-amber-500 to-amber-400" />
           </motion.div>
 
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.2 }}
-            className="bg-gradient-to-br from-green-500 to-green-600 rounded-xl p-4 text-white"
+            className={cn(
+              "relative overflow-hidden rounded-2xl p-5",
+              theme === 'dark' ? 'bg-white/5 border border-white/10' : 'bg-white border border-gray-100 shadow-sm'
+            )}
           >
-            <p className="text-green-100 text-sm">Entregadas</p>
-            <p className="text-3xl font-bold">{stats.delivered}</p>
+            <div className="flex items-start justify-between">
+              <div>
+                <p className={cn("text-sm font-medium", theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}>Entregadas</p>
+                <p className={cn("text-3xl font-bold mt-1", theme === 'dark' ? 'text-white' : 'text-gray-900')}>{stats.delivered}</p>
+                <p className={cn("text-xs mt-2", theme === 'dark' ? 'text-gray-500' : 'text-gray-400')}>Completadas</p>
+              </div>
+              <div className={cn("p-3 rounded-xl", theme === 'dark' ? 'bg-emerald-500/20' : 'bg-emerald-50')}>
+                <CheckCircle className="w-6 h-6 text-emerald-500" />
+              </div>
+            </div>
+            <div className="absolute bottom-0 left-0 right-0 h-1 bg-gradient-to-r from-emerald-500 to-emerald-400" />
           </motion.div>
 
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.3 }}
-            className="bg-gradient-to-br from-purple-500 to-purple-600 rounded-xl p-4 text-white"
+            className={cn(
+              "relative overflow-hidden rounded-2xl p-5",
+              theme === 'dark' ? 'bg-white/5 border border-white/10' : 'bg-white border border-gray-100 shadow-sm'
+            )}
           >
-            <p className="text-purple-100 text-sm">Total Entregado</p>
-            <p className="text-3xl font-bold">{formatCurrency(stats.totalDelivered)}</p>
+            <div className="flex items-start justify-between">
+              <div>
+                <p className={cn("text-sm font-medium", theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}>Total Entregado</p>
+                <p className={cn("text-3xl font-bold mt-1", theme === 'dark' ? 'text-white' : 'text-gray-900')}>{formatCurrency(stats.totalDelivered)}</p>
+                <p className={cn("text-xs mt-2", theme === 'dark' ? 'text-gray-500' : 'text-gray-400')}>En remesas</p>
+              </div>
+              <div className={cn("p-3 rounded-xl", theme === 'dark' ? 'bg-purple-500/20' : 'bg-purple-50')}>
+                <DollarSign className="w-6 h-6 text-purple-500" />
+              </div>
+            </div>
+            <div className="absolute bottom-0 left-0 right-0 h-1 bg-gradient-to-r from-purple-500 to-purple-400" />
           </motion.div>
         </div>
       )}
 
       {/* Status Tabs */}
-      <div className="flex gap-2 overflow-x-auto pb-2">
+      <div className={cn("flex p-1 rounded-xl", theme === 'dark' ? 'bg-white/5' : 'bg-gray-100')}>
         {statusTabs.map(tab => (
           <button
             key={tab.value}
@@ -248,18 +293,20 @@ export default function AdminBrokerOrdersPage() {
               setSelectedStatus(tab.value)
               setCurrentPage(1)
             }}
-            className={`px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-colors ${
+            className={cn(
+              "px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-all",
               selectedStatus === tab.value
-                ? 'bg-blue-600 text-white'
-                : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
-            }`}
+                ? 'bg-blue-600 text-white shadow-sm'
+                : theme === 'dark' ? 'text-gray-400 hover:text-white' : 'text-gray-600 hover:text-gray-900'
+            )}
           >
             {tab.label}
-            <span className={`ml-2 px-2 py-0.5 rounded-full text-xs ${
+            <span className={cn(
+              "ml-2 px-2 py-0.5 rounded-full text-xs",
               selectedStatus === tab.value
                 ? 'bg-blue-500 text-white'
-                : 'bg-gray-200 dark:bg-gray-600'
-            }`}>
+                : theme === 'dark' ? 'bg-white/10' : 'bg-gray-200'
+            )}>
               {tab.count}
             </span>
           </button>
@@ -276,7 +323,12 @@ export default function AdminBrokerOrdersPage() {
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
-            className="w-full pl-10 pr-4 py-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            className={cn(
+              "w-full pl-10 pr-4 py-3 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors",
+              theme === 'dark'
+                ? 'bg-white/5 border border-white/10 text-white placeholder-gray-500'
+                : 'bg-white border border-gray-200 text-gray-900 placeholder-gray-400'
+            )}
           />
         </div>
         <button
@@ -287,7 +339,10 @@ export default function AdminBrokerOrdersPage() {
         </button>
         <button
           onClick={fetchOrders}
-          className="px-4 py-3 bg-gray-100 dark:bg-gray-700 rounded-xl hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
+          className={cn(
+            "px-4 py-3 rounded-xl transition-colors",
+            theme === 'dark' ? 'bg-white/10 hover:bg-white/20 text-white' : 'bg-gray-100 hover:bg-gray-200'
+          )}
         >
           <RefreshCw className={`w-5 h-5 ${loading ? 'animate-spin' : ''}`} />
         </button>
@@ -297,14 +352,17 @@ export default function AdminBrokerOrdersPage() {
       {loading ? (
         <div className="space-y-4">
           {[1, 2, 3, 4, 5].map(i => (
-            <div key={i} className="animate-pulse bg-gray-200 dark:bg-gray-700 h-24 rounded-xl"></div>
+            <div key={i} className={cn("animate-pulse h-24 rounded-xl", theme === 'dark' ? 'bg-white/5' : 'bg-gray-200')}></div>
           ))}
         </div>
       ) : filteredOrders.length > 0 ? (
-        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
+        <div className={cn(
+          "rounded-2xl overflow-hidden",
+          theme === 'dark' ? 'bg-white/5 border border-white/10' : 'bg-white border border-gray-100 shadow-sm'
+        )}>
           <div className="overflow-x-auto">
             <table className="w-full">
-              <thead className="bg-gray-50 dark:bg-gray-700/50">
+              <thead className={cn(theme === 'dark' ? 'bg-white/5' : 'bg-gray-50')}>
                 <tr>
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">
                     Orden
@@ -329,7 +387,7 @@ export default function AdminBrokerOrdersPage() {
                   </th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
+              <tbody className={cn("divide-y", theme === 'dark' ? 'divide-white/10' : 'divide-gray-100')}>
                 {filteredOrders.map((order, index) => {
                   const statusConfig = getStatusConfig(order.status)
                   const StatusIcon = statusConfig.icon
@@ -340,7 +398,7 @@ export default function AdminBrokerOrdersPage() {
                       initial={{ opacity: 0 }}
                       animate={{ opacity: 1 }}
                       transition={{ delay: index * 0.02 }}
-                      className="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
+                      className={cn("transition-colors", theme === 'dark' ? 'hover:bg-white/5' : 'hover:bg-gray-50')}
                     >
                       <td className="px-4 py-4">
                         <span className="font-medium text-gray-900 dark:text-white">
@@ -407,25 +465,25 @@ export default function AdminBrokerOrdersPage() {
 
           {/* Pagination */}
           {pagination && pagination.totalPages > 1 && (
-            <div className="p-4 border-t border-gray-100 dark:border-gray-700 flex items-center justify-between">
-              <p className="text-sm text-gray-500 dark:text-gray-400">
+            <div className={cn("p-4 border-t flex items-center justify-between", theme === 'dark' ? 'border-white/10' : 'border-gray-100')}>
+              <p className={cn("text-sm", theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}>
                 Mostrando {((currentPage - 1) * pagination.limit) + 1} - {Math.min(currentPage * pagination.limit, pagination.total)} de {pagination.total}
               </p>
               <div className="flex gap-2">
                 <button
                   onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
                   disabled={currentPage === 1}
-                  className="px-3 py-1 bg-gray-100 dark:bg-gray-700 rounded-lg disabled:opacity-50"
+                  className={cn("px-3 py-1 rounded-lg disabled:opacity-50", theme === 'dark' ? 'bg-white/10 text-white' : 'bg-gray-100')}
                 >
                   Anterior
                 </button>
-                <span className="px-3 py-1 text-gray-700 dark:text-gray-300">
+                <span className={cn("px-3 py-1", theme === 'dark' ? 'text-gray-300' : 'text-gray-700')}>
                   {currentPage} / {pagination.totalPages}
                 </span>
                 <button
                   onClick={() => setCurrentPage(p => Math.min(pagination.totalPages, p + 1))}
                   disabled={currentPage === pagination.totalPages}
-                  className="px-3 py-1 bg-gray-100 dark:bg-gray-700 rounded-lg disabled:opacity-50"
+                  className={cn("px-3 py-1 rounded-lg disabled:opacity-50", theme === 'dark' ? 'bg-white/10 text-white' : 'bg-gray-100')}
                 >
                   Siguiente
                 </button>
@@ -437,7 +495,7 @@ export default function AdminBrokerOrdersPage() {
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
-          className="bg-gray-50 dark:bg-gray-800/50 rounded-xl p-12 text-center"
+          className={cn("rounded-2xl p-12 text-center", theme === 'dark' ? 'bg-white/5 border border-white/10' : 'bg-white border border-gray-100 shadow-sm')}
         >
           <Package className="w-16 h-16 text-gray-400 mx-auto mb-4" />
           <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">
