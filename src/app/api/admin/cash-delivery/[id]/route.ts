@@ -28,15 +28,15 @@ export async function GET(
     const result = await db.query(`
       SELECT
         cdo.*,
-        bc.name as broker_name,
+        bc.legalname as broker_name,
         bc.broker_province,
         bc.broker_municipality,
         bc.broker_contact_phone,
-        du.name as delivery_user_display_name,
+        CONCAT(du.firstname, ' ', du.lastname) as delivery_user_display_name,
         du.email as delivery_user_email,
-        cu.name as created_by_name,
+        CONCAT(cu.firstname, ' ', cu.lastname) as created_by_name,
         cu.email as created_by_email,
-        comp.name as completed_by_name
+        CONCAT(comp.firstname, ' ', comp.lastname) as completed_by_name
       FROM cash_delivery_orders cdo
       LEFT JOIN companies bc ON cdo.broker_company_id = bc.id
       LEFT JOIN users du ON cdo.delivery_user_id = du.id
