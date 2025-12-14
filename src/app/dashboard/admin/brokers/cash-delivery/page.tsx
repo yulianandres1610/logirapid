@@ -646,7 +646,7 @@ export default function CashDeliveryWizardPage() {
             )}
           </button>
         )}
-        </div>
+      </div>
       </div>
     </DashboardLayout>
   )
