@@ -657,13 +657,13 @@ export function Sidebar({ isCollapsed, onToggle }: SidebarProps) {
         {/* Navigation */}
         <nav
           className={cn(
-            "flex-1 space-y-2",
-            isCollapsed ? "px-3 py-2 overflow-hidden" : "px-4 py-4 overflow-y-auto"
+            "flex-1 space-y-2 overflow-y-auto sidebar-scroll",
+            isCollapsed ? "px-3 py-2" : "px-4 py-4"
           )}
-          style={!isCollapsed ? {
-            scrollbarWidth: 'thin',
-            scrollbarColor: theme === 'dark' ? '#374151 transparent' : '#d1d5db transparent'
-          } : undefined}
+          style={{
+            scrollbarWidth: 'none', // Firefox
+            msOverflowStyle: 'none' // IE/Edge
+          } as React.CSSProperties}
         >
           {menuItems.map((item, index) => (
             <motion.div

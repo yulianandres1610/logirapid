@@ -1078,6 +1078,20 @@ export default function CompaniesPage() {
     }
   }
 
+  // Helper to safely parse JSON arrays from database (may come as string)
+  const parseJsonArray = (value: any, defaultValue: any[] = []): any[] => {
+    if (Array.isArray(value)) return value
+    if (typeof value === 'string') {
+      try {
+        const parsed = JSON.parse(value)
+        return Array.isArray(parsed) ? parsed : defaultValue
+      } catch {
+        return defaultValue
+      }
+    }
+    return defaultValue
+  }
+
   const handleEditCompany = async (companyId: number) => {
     try {
       setLoading(true)
@@ -1138,13 +1152,13 @@ export default function CompaniesPage() {
         walletNumber: company.walletNumber || '',
         currency: company.currency || 'USD',
         isMultiCurrency: company.isMultiCurrency || false,
-        secondaryCurrencies: company.secondaryCurrencies || [],
+        secondaryCurrencies: parseJsonArray(company.secondaryCurrencies),
         hasLimits: company.hasLimits || false,
         dailyLimit: company.dailyLimit || '',
         monthlyLimit: company.monthlyLimit || '',
         rechargeLimits: { daily: '', monthly: '' },
         transferLimits: { daily: '', monthly: '' },
-        enabledServices: Array.isArray(company.enabledServices) ? company.enabledServices : [],
+        enabledServices: parseJsonArray(company.enabledServices),
         companyType: company.companyType || '',
         serviceFees: company.serviceFees || {},
         servicePrices: company.servicePrices || {},
@@ -1158,8 +1172,8 @@ export default function CompaniesPage() {
         secondaryColor: company.secondaryColor || '#0A46CC',
         isProvider: company.isProvider || false,
         providerType: company.providerType || null,
-        providerCategories: Array.isArray(company.providerCategories) ? company.providerCategories : [],
-        providerServices: Array.isArray(company.providerServices) ? company.providerServices : [],
+        providerCategories: parseJsonArray(company.providerCategories),
+        providerServices: parseJsonArray(company.providerServices),
         productPrices: productPrices,
         // Campos de broker
         latitude: company.latitude || null,
@@ -1171,7 +1185,7 @@ export default function CompaniesPage() {
         broker_delivery_end: brokerDeliveryEnd,
         broker_contact_phone: company.broker_contact_phone || '',
         broker_alternate_phone: company.broker_alternate_phone || '',
-        broker_bank_accounts: Array.isArray(company.broker_bank_accounts) ? company.broker_bank_accounts : [],
+        broker_bank_accounts: parseJsonArray(company.broker_bank_accounts),
         editMode: true,
         editId: companyId
       })
@@ -2126,7 +2140,7 @@ export default function CompaniesPage() {
                         </button>
                       </div>
 
-                      {(!formData.broker_bank_accounts || formData.broker_bank_accounts.length === 0) ? (
+                      {(!Array.isArray(formData.broker_bank_accounts) || formData.broker_bank_accounts.length === 0) ? (
                         <div className={cn(
                           "text-center py-8 rounded-xl border-2 border-dashed",
                           theme === 'dark' ? "border-gray-700" : "border-gray-300"

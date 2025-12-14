@@ -439,16 +439,16 @@ export default function AdminBrokersDashboardPage() {
   if (loading) {
     return (
       <DashboardLayout>
-        <div className={cn("min-h-screen p-4", theme === 'dark' ? 'bg-gray-900' : 'bg-gray-50')}>
+        <div className="min-h-full">
           <div className="animate-pulse space-y-4">
             <div className="grid grid-cols-4 gap-4">
               {[...Array(4)].map((_, i) => (
-                <div key={i} className="h-20 bg-gray-200 dark:bg-gray-700 rounded-xl" />
+                <div key={i} className={cn("h-20 rounded-xl", theme === 'dark' ? 'bg-white/5' : 'bg-gray-200')} />
               ))}
             </div>
             <div className="grid grid-cols-2 gap-4">
-              <div className="h-[350px] bg-gray-200 dark:bg-gray-700 rounded-xl" />
-              <div className="h-[350px] bg-gray-200 dark:bg-gray-700 rounded-xl" />
+              <div className={cn("h-[350px] rounded-xl", theme === 'dark' ? 'bg-white/5' : 'bg-gray-200')} />
+              <div className={cn("h-[350px] rounded-xl", theme === 'dark' ? 'bg-white/5' : 'bg-gray-200')} />
             </div>
           </div>
         </div>
@@ -458,15 +458,15 @@ export default function AdminBrokersDashboardPage() {
 
   return (
     <DashboardLayout>
-      <div className={cn("min-h-screen p-4", theme === 'dark' ? 'bg-gray-900' : 'bg-slate-50')}>
+      <div className="min-h-full space-y-4">
 
         {/* Header Stats - Compact */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           {[
-            { icon: Users, label: 'Brokers', value: summary?.totalBrokers || 0, sub: `${summary?.activeBrokers || 0} activos`, color: 'blue' },
-            { icon: MapPin, label: 'Provincias', value: summary?.provincesCovered || 0, sub: 'con cobertura', color: 'purple' },
-            { icon: Wallet, label: 'Balance Total', value: summary?.totalBalanceFormatted || '$0', sub: 'en wallets', color: 'emerald' },
-            { icon: Package, label: 'Órdenes', value: orderStats?.total || 0, sub: `$${(orderStats?.totalAmount || 0).toLocaleString()}`, color: 'amber' },
+            { icon: Users, label: 'Brokers', value: summary?.totalBrokers || 0, sub: `${summary?.activeBrokers || 0} activos`, color: 'blue', gradient: 'from-blue-500 to-blue-400' },
+            { icon: MapPin, label: 'Provincias', value: summary?.provincesCovered || 0, sub: 'con cobertura', color: 'purple', gradient: 'from-purple-500 to-purple-400' },
+            { icon: Wallet, label: 'Balance Total', value: summary?.totalBalanceFormatted || '$0', sub: 'en wallets', color: 'emerald', gradient: 'from-emerald-500 to-emerald-400' },
+            { icon: Package, label: 'Órdenes', value: orderStats?.total || 0, sub: `$${(orderStats?.totalAmount || 0).toLocaleString()}`, color: 'amber', gradient: 'from-amber-500 to-amber-400' },
           ].map((stat, i) => (
             <motion.div
               key={stat.label}
@@ -474,47 +474,55 @@ export default function AdminBrokersDashboardPage() {
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: i * 0.05 }}
               className={cn(
-                "p-4 rounded-xl border",
-                theme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'
+                "relative overflow-hidden rounded-2xl p-5",
+                theme === 'dark' ? 'bg-white/5 border border-white/10' : 'bg-white border border-gray-100 shadow-sm'
               )}
             >
-              <div className="flex items-center gap-3">
+              <div className="flex items-start justify-between">
+                <div>
+                  <p className={cn("text-sm font-medium", theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}>
+                    {stat.label}
+                  </p>
+                  <p className={cn("text-3xl font-bold mt-1", theme === 'dark' ? 'text-white' : 'text-gray-900')}>
+                    {stat.value}
+                  </p>
+                  <p className={cn("text-xs mt-2", theme === 'dark' ? 'text-gray-500' : 'text-gray-400')}>
+                    {stat.sub}
+                  </p>
+                </div>
                 <div className={cn(
-                  "p-2 rounded-lg",
-                  stat.color === 'blue' && 'bg-blue-100 dark:bg-blue-900/30',
-                  stat.color === 'purple' && 'bg-purple-100 dark:bg-purple-900/30',
-                  stat.color === 'emerald' && 'bg-emerald-100 dark:bg-emerald-900/30',
-                  stat.color === 'amber' && 'bg-amber-100 dark:bg-amber-900/30'
+                  "p-3 rounded-xl",
+                  stat.color === 'blue' && (theme === 'dark' ? 'bg-blue-500/20' : 'bg-blue-50'),
+                  stat.color === 'purple' && (theme === 'dark' ? 'bg-purple-500/20' : 'bg-purple-50'),
+                  stat.color === 'emerald' && (theme === 'dark' ? 'bg-emerald-500/20' : 'bg-emerald-50'),
+                  stat.color === 'amber' && (theme === 'dark' ? 'bg-amber-500/20' : 'bg-amber-50')
                 )}>
                   <stat.icon className={cn(
-                    "w-5 h-5",
-                    stat.color === 'blue' && 'text-blue-600 dark:text-blue-400',
-                    stat.color === 'purple' && 'text-purple-600 dark:text-purple-400',
-                    stat.color === 'emerald' && 'text-emerald-600 dark:text-emerald-400',
-                    stat.color === 'amber' && 'text-amber-600 dark:text-amber-400'
+                    "w-6 h-6",
+                    stat.color === 'blue' && 'text-blue-500',
+                    stat.color === 'purple' && 'text-purple-500',
+                    stat.color === 'emerald' && 'text-emerald-500',
+                    stat.color === 'amber' && 'text-amber-500'
                   )} />
                 </div>
-                <div>
-                  <p className={cn("text-xl font-bold", theme === 'dark' ? 'text-white' : 'text-gray-900')}>{stat.value}</p>
-                  <p className="text-xs text-gray-500">{stat.sub}</p>
-                </div>
               </div>
+              <div className={`absolute bottom-0 left-0 right-0 h-1 bg-gradient-to-r ${stat.gradient}`} />
             </motion.div>
           ))}
         </div>
 
         {/* Main Content - Map + Rate Chart */}
-        <div className={cn("grid gap-4 mb-4", mapFullscreen ? "" : "grid-cols-1 xl:grid-cols-3")}>
+        <div className={cn("grid gap-4", mapFullscreen ? "" : "grid-cols-1 xl:grid-cols-3")}>
           {/* Map */}
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             className={cn(
-              "relative rounded-xl overflow-hidden border transition-all duration-300",
+              "relative rounded-2xl overflow-hidden transition-all duration-300",
               mapFullscreen
                 ? "fixed inset-4 z-50"
                 : "xl:col-span-2",
-              theme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'
+              theme === 'dark' ? 'bg-white/5 border border-white/10' : 'bg-white border border-gray-100 shadow-sm'
             )}
           >
             {/* Overlay de fondo en fullscreen */}
@@ -589,7 +597,7 @@ export default function AdminBrokersDashboardPage() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ delay: 0.1 }}
-            className={cn("rounded-xl border p-4", theme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200')}
+            className={cn("rounded-2xl p-4", theme === 'dark' ? 'bg-white/5 border border-white/10' : 'bg-white border border-gray-100 shadow-sm')}
           >
             <div className="flex items-center justify-between mb-3">
               <div>
@@ -657,7 +665,7 @@ export default function AdminBrokersDashboardPage() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ delay: 0.15 }}
-            className={cn("rounded-xl border p-4", theme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200')}
+            className={cn("rounded-2xl p-4", theme === 'dark' ? 'bg-white/5 border border-white/10' : 'bg-white border border-gray-100 shadow-sm')}
           >
             <h3 className={cn("font-semibold text-sm mb-3", theme === 'dark' ? 'text-white' : 'text-gray-900')}>Brokers por Provincia</h3>
             <div className="h-[220px]">
@@ -686,7 +694,7 @@ export default function AdminBrokersDashboardPage() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ delay: 0.2 }}
-            className={cn("rounded-xl border p-4", theme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200')}
+            className={cn("rounded-2xl p-4", theme === 'dark' ? 'bg-white/5 border border-white/10' : 'bg-white border border-gray-100 shadow-sm')}
           >
             <h3 className={cn("font-semibold text-sm mb-3", theme === 'dark' ? 'text-white' : 'text-gray-900')}>Órdenes por Estado</h3>
             <div className="h-[220px]">
@@ -728,7 +736,7 @@ export default function AdminBrokersDashboardPage() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ delay: 0.25 }}
-            className={cn("rounded-xl border p-4", theme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200')}
+            className={cn("rounded-2xl p-4", theme === 'dark' ? 'bg-white/5 border border-white/10' : 'bg-white border border-gray-100 shadow-sm')}
           >
             <h3 className={cn("font-semibold text-sm mb-3", theme === 'dark' ? 'text-white' : 'text-gray-900')}>Tasas por Moneda</h3>
             <div className="h-[220px]">
@@ -763,7 +771,7 @@ export default function AdminBrokersDashboardPage() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ delay: 0.3 }}
-            className={cn("rounded-xl border p-4", theme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200')}
+            className={cn("rounded-2xl p-4", theme === 'dark' ? 'bg-white/5 border border-white/10' : 'bg-white border border-gray-100 shadow-sm')}
           >
             <h3 className={cn("font-semibold text-sm mb-3", theme === 'dark' ? 'text-white' : 'text-gray-900')}>Balance por Provincia</h3>
             <div className="h-[200px]">
@@ -792,7 +800,7 @@ export default function AdminBrokersDashboardPage() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ delay: 0.35 }}
-            className={cn("rounded-xl border p-4", theme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200')}
+            className={cn("rounded-2xl p-4", theme === 'dark' ? 'bg-white/5 border border-white/10' : 'bg-white border border-gray-100 shadow-sm')}
           >
             <div className="flex items-center justify-between mb-3">
               <h3 className={cn("font-semibold text-sm", theme === 'dark' ? 'text-white' : 'text-gray-900')}>Top Brokers</h3>
@@ -809,7 +817,7 @@ export default function AdminBrokersDashboardPage() {
                     key={broker.id}
                     className={cn(
                       "flex items-center justify-between p-2.5 rounded-lg",
-                      theme === 'dark' ? 'bg-gray-700/50' : 'bg-gray-50'
+                      theme === 'dark' ? 'bg-white/5' : 'bg-gray-50'
                     )}
                   >
                     <div className="flex items-center gap-3">

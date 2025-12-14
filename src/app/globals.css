@@ -272,3 +272,9 @@ a {
 .dark .scrollbar-thin::-webkit-scrollbar-thumb:hover {
   background: #6b7280;
 }
+
+/* Sidebar invisible scrollbar - functional but hidden */
+.sidebar-scroll::-webkit-scrollbar {
+  width: 0;
+  display: none;
+}

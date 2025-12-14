@@ -216,10 +216,7 @@ export default function AdminBrokerWalletsPage() {
 
   return (
     <DashboardLayout>
-      <div className={cn(
-        "min-h-screen p-6 space-y-6",
-        theme === 'dark' ? 'bg-gray-900' : 'bg-gray-50'
-      )}>
+      <div className="min-h-full space-y-6">
         {/* Header */}
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <div>
@@ -249,25 +246,33 @@ export default function AdminBrokerWalletsPage() {
         </div>
 
       {/* Summary Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.1 }}
           className={cn(
-            "rounded-xl p-5 shadow-sm border",
-            theme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'
+            "relative overflow-hidden rounded-2xl p-5",
+            theme === 'dark' ? 'bg-white/5 border border-white/10' : 'bg-white border border-gray-100 shadow-sm'
           )}
         >
-          <div className="flex items-center justify-between mb-3">
-            <div className="p-2 rounded-lg bg-green-100 dark:bg-green-900/30">
-              <DollarSign className="w-5 h-5 text-green-600 dark:text-green-400" />
+          <div className="flex items-start justify-between">
+            <div>
+              <p className={cn("text-sm font-medium", theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}>
+                Balance Total
+              </p>
+              <p className={cn("text-3xl font-bold mt-1", theme === 'dark' ? 'text-white' : 'text-gray-900')}>
+                {summary?.totalBalanceFormatted || '$0.00'}
+              </p>
+              <p className={cn("text-xs mt-2", theme === 'dark' ? 'text-gray-500' : 'text-gray-400')}>
+                Fondos disponibles
+              </p>
+            </div>
+            <div className={cn("p-3 rounded-xl", theme === 'dark' ? 'bg-green-500/20' : 'bg-green-50')}>
+              <DollarSign className="w-6 h-6 text-green-500" />
             </div>
           </div>
-          <p className="text-xs text-gray-500 dark:text-gray-400">Balance Total</p>
-          <p className="text-2xl font-bold text-gray-900 dark:text-white">
-            {summary?.totalBalanceFormatted || '$0.00'}
-          </p>
+          <div className="absolute bottom-0 left-0 right-0 h-1 bg-gradient-to-r from-green-500 to-green-400" />
         </motion.div>
 
         <motion.div
@@ -275,19 +280,27 @@ export default function AdminBrokerWalletsPage() {
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.2 }}
           className={cn(
-            "rounded-xl p-5 shadow-sm border",
-            theme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'
+            "relative overflow-hidden rounded-2xl p-5",
+            theme === 'dark' ? 'bg-white/5 border border-white/10' : 'bg-white border border-gray-100 shadow-sm'
           )}
         >
-          <div className="flex items-center justify-between mb-3">
-            <div className="p-2 rounded-lg bg-blue-100 dark:bg-blue-900/30">
-              <Users className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+          <div className="flex items-start justify-between">
+            <div>
+              <p className={cn("text-sm font-medium", theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}>
+                Total Brokers
+              </p>
+              <p className={cn("text-3xl font-bold mt-1", theme === 'dark' ? 'text-white' : 'text-gray-900')}>
+                {summary?.totalBrokers || 0}
+              </p>
+              <p className={cn("text-xs mt-2", theme === 'dark' ? 'text-gray-500' : 'text-gray-400')}>
+                Registrados
+              </p>
+            </div>
+            <div className={cn("p-3 rounded-xl", theme === 'dark' ? 'bg-blue-500/20' : 'bg-blue-50')}>
+              <Users className="w-6 h-6 text-blue-500" />
             </div>
           </div>
-          <p className="text-xs text-gray-500 dark:text-gray-400">Total Brokers</p>
-          <p className="text-2xl font-bold text-gray-900 dark:text-white">
-            {summary?.totalBrokers || 0}
-          </p>
+          <div className="absolute bottom-0 left-0 right-0 h-1 bg-gradient-to-r from-blue-500 to-blue-400" />
         </motion.div>
 
         <motion.div
@@ -295,19 +308,27 @@ export default function AdminBrokerWalletsPage() {
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.3 }}
           className={cn(
-            "rounded-xl p-5 shadow-sm border",
-            theme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'
+            "relative overflow-hidden rounded-2xl p-5",
+            theme === 'dark' ? 'bg-white/5 border border-white/10' : 'bg-white border border-gray-100 shadow-sm'
           )}
         >
-          <div className="flex items-center justify-between mb-3">
-            <div className="p-2 rounded-lg bg-emerald-100 dark:bg-emerald-900/30">
-              <CheckCircle className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
+          <div className="flex items-start justify-between">
+            <div>
+              <p className={cn("text-sm font-medium", theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}>
+                Brokers Activos
+              </p>
+              <p className={cn("text-3xl font-bold mt-1", theme === 'dark' ? 'text-white' : 'text-gray-900')}>
+                {summary?.activeBrokers || 0}
+              </p>
+              <p className={cn("text-xs mt-2", theme === 'dark' ? 'text-gray-500' : 'text-gray-400')}>
+                Operando
+              </p>
+            </div>
+            <div className={cn("p-3 rounded-xl", theme === 'dark' ? 'bg-emerald-500/20' : 'bg-emerald-50')}>
+              <CheckCircle className="w-6 h-6 text-emerald-500" />
             </div>
           </div>
-          <p className="text-xs text-gray-500 dark:text-gray-400">Brokers Activos</p>
-          <p className="text-2xl font-bold text-gray-900 dark:text-white">
-            {summary?.activeBrokers || 0}
-          </p>
+          <div className="absolute bottom-0 left-0 right-0 h-1 bg-gradient-to-r from-emerald-500 to-emerald-400" />
         </motion.div>
 
         <motion.div
@@ -315,19 +336,27 @@ export default function AdminBrokerWalletsPage() {
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.4 }}
           className={cn(
-            "rounded-xl p-5 shadow-sm border",
-            theme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'
+            "relative overflow-hidden rounded-2xl p-5",
+            theme === 'dark' ? 'bg-white/5 border border-white/10' : 'bg-white border border-gray-100 shadow-sm'
           )}
         >
-          <div className="flex items-center justify-between mb-3">
-            <div className="p-2 rounded-lg bg-violet-100 dark:bg-violet-900/30">
-              <Activity className="w-5 h-5 text-violet-600 dark:text-violet-400" />
+          <div className="flex items-start justify-between">
+            <div>
+              <p className={cn("text-sm font-medium", theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}>
+                Transacciones
+              </p>
+              <p className={cn("text-3xl font-bold mt-1", theme === 'dark' ? 'text-white' : 'text-gray-900')}>
+                {transactions.length}
+              </p>
+              <p className={cn("text-xs mt-2", theme === 'dark' ? 'text-gray-500' : 'text-gray-400')}>
+                Recientes
+              </p>
+            </div>
+            <div className={cn("p-3 rounded-xl", theme === 'dark' ? 'bg-violet-500/20' : 'bg-violet-50')}>
+              <Activity className="w-6 h-6 text-violet-500" />
             </div>
           </div>
-          <p className="text-xs text-gray-500 dark:text-gray-400">Transacciones Recientes</p>
-          <p className="text-2xl font-bold text-gray-900 dark:text-white">
-            {transactions.length}
-          </p>
+          <div className="absolute bottom-0 left-0 right-0 h-1 bg-gradient-to-r from-violet-500 to-violet-400" />
         </motion.div>
       </div>
 
@@ -339,19 +368,24 @@ export default function AdminBrokerWalletsPage() {
           placeholder="Buscar broker por nombre o ubicacion..."
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
-          className="w-full pl-10 pr-4 py-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+          className={cn(
+            "w-full pl-10 pr-4 py-3 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors",
+            theme === 'dark'
+              ? 'bg-white/5 border border-white/10 text-white placeholder-gray-500'
+              : 'bg-white border border-gray-200 text-gray-900 placeholder-gray-400'
+          )}
         />
       </div>
 
       {/* Brokers Wallets Table */}
       <div className={cn(
-        "rounded-xl shadow-sm border overflow-hidden",
-        theme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'
+        "rounded-2xl overflow-hidden",
+        theme === 'dark' ? 'bg-white/5 border border-white/10' : 'bg-white border border-gray-100 shadow-sm'
       )}>
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead className={cn(
-              theme === 'dark' ? 'bg-gray-700/50' : 'bg-gray-50'
+              theme === 'dark' ? 'bg-white/5' : 'bg-gray-50'
             )}>
               <tr>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">
@@ -459,34 +493,34 @@ export default function AdminBrokerWalletsPage() {
 
       {/* Recent Transactions */}
       <div className={cn(
-        "rounded-xl shadow-sm border",
-        theme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'
+        "rounded-2xl overflow-hidden",
+        theme === 'dark' ? 'bg-white/5 border border-white/10' : 'bg-white border border-gray-100 shadow-sm'
       )}>
         <div className={cn(
           "p-5 border-b",
-          theme === 'dark' ? 'border-gray-700' : 'border-gray-200'
+          theme === 'dark' ? 'border-white/10' : 'border-gray-100'
         )}>
-          <h2 className="text-lg font-semibold text-gray-900 dark:text-white flex items-center gap-2">
+          <h2 className={cn("text-lg font-semibold flex items-center gap-2", theme === 'dark' ? 'text-white' : 'text-gray-900')}>
             <History className="w-5 h-5" />
             Movimientos Recientes
           </h2>
         </div>
 
         {transactions.length > 0 ? (
-          <div className="divide-y divide-gray-100 dark:divide-gray-700 max-h-96 overflow-y-auto">
+          <div className={cn("divide-y max-h-96 overflow-y-auto", theme === 'dark' ? 'divide-white/10' : 'divide-gray-100')}>
             {transactions.map((tx, index) => (
               <motion.div
                 key={tx.id}
                 initial={{ opacity: 0, x: -20 }}
                 animate={{ opacity: 1, x: 0 }}
                 transition={{ delay: index * 0.02 }}
-                className="p-4 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
+                className={cn("p-4 transition-colors", theme === 'dark' ? 'hover:bg-white/5' : 'hover:bg-gray-50')}
               >
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
                     <div className={cn(
                       "p-2 rounded-full",
-                      theme === 'dark' ? 'bg-gray-700' : 'bg-gray-100'
+                      theme === 'dark' ? 'bg-white/10' : 'bg-gray-100'
                     )}>
                       {getTransactionIcon(tx.direction)}
                     </div>
