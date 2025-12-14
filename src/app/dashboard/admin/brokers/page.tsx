@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState, useRef, useCallback } from 'react'
+import Link from 'next/link'
 import { motion } from 'framer-motion'
 import mapboxgl from 'mapbox-gl'
 import 'mapbox-gl/dist/mapbox-gl.css'
@@ -37,7 +38,14 @@ import {
   Wallet,
   Maximize2,
   Minimize2,
-  X
+  X,
+  Clock,
+  Truck,
+  CheckCircle,
+  XCircle,
+  AlertCircle,
+  Banknote,
+  ChevronRight
 } from 'lucide-react'
 import { DashboardLayout } from '@/components/layout/dashboard-layout'
 import { cn } from '@/lib/utils'
@@ -82,6 +90,28 @@ interface ExchangeRate {
   formatted: string
   lastUpdate: string
   variacion: number
+}
+
+interface CashDeliveryStats {
+  total: number
+  pending: number
+  in_transit: number
+  pending_reception: number
+  validating: number
+  completed: number
+  cancelled: number
+  totalAmount: number
+}
+
+interface CashDeliveryOrder {
+  id: number
+  order_number: string
+  broker_name: string
+  delivery_user_name: string
+  currency: string
+  total_amount: string
+  status: string
+  created_at: string
 }
 
 interface RateHistory {
@@ -138,6 +168,24 @@ const ORDER_COLORS = {
   cancelled: '#ef4444'
 }
 
+const CASH_DELIVERY_COLORS = {
+  pending: '#f59e0b',
+  in_transit: '#3b82f6',
+  pending_reception: '#8b5cf6',
+  validating: '#f97316',
+  completed: '#10b981',
+  cancelled: '#ef4444'
+}
+
+const CASH_DELIVERY_STATUS_CONFIG: Record<string, { label: string; color: string; bgColor: string; icon: any }> = {
+  pending: { label: 'Pendiente', color: 'text-yellow-500', bgColor: 'bg-yellow-500/10', icon: Clock },
+  in_transit: { label: 'En Tránsito', color: 'text-blue-500', bgColor: 'bg-blue-500/10', icon: Truck },
+  pending_reception: { label: 'Recibiendo', color: 'text-purple-500', bgColor: 'bg-purple-500/10', icon: DollarSign },
+  validating: { label: 'Validando OTP', color: 'text-orange-500', bgColor: 'bg-orange-500/10', icon: AlertCircle },
+  completed: { label: 'Completado', color: 'text-green-500', bgColor: 'bg-green-500/10', icon: CheckCircle },
+  cancelled: { label: 'Cancelado', color: 'text-red-500', bgColor: 'bg-red-500/10', icon: XCircle }
+}
+
 export default function AdminBrokersDashboardPage() {
   const { theme } = useTheme()
   const mapContainer = useRef<HTMLDivElement>(null)
@@ -156,6 +204,8 @@ export default function AdminBrokersDashboardPage() {
   const [exchangeRates, setExchangeRates] = useState<Record<string, ExchangeRate>>({})
   const [rateHistory, setRateHistory] = useState<RateHistory[]>([])
   const [selectedCurrency, setSelectedCurrency] = useState<'USD' | 'EUR' | 'MLC'>('USD')
+  const [cashDeliveryStats, setCashDeliveryStats] = useState<CashDeliveryStats | null>(null)
+  const [recentCashDeliveries, setRecentCashDeliveries] = useState<CashDeliveryOrder[]>([])
 
   const fetchData = useCallback(async () => {
     try {
@@ -204,10 +254,38 @@ export default function AdminBrokersDashboardPage() {
     }
   }, [selectedCurrency])
 
+  const fetchCashDeliveryStats = useCallback(async () => {
+    try {
+      const res = await fetch('/api/admin/cash-delivery')
+      if (res.ok) {
+        const data = await res.json()
+        if (data.success && data.data?.orders) {
+          const orders = data.data.orders
+          const stats: CashDeliveryStats = {
+            total: orders.length,
+            pending: orders.filter((o: any) => o.status === 'pending').length,
+            in_transit: orders.filter((o: any) => o.status === 'in_transit').length,
+            pending_reception: orders.filter((o: any) => o.status === 'pending_reception').length,
+            validating: orders.filter((o: any) => o.status === 'validating').length,
+            completed: orders.filter((o: any) => o.status === 'completed').length,
+            cancelled: orders.filter((o: any) => o.status === 'cancelled').length,
+            totalAmount: orders.reduce((sum: number, o: any) => sum + parseFloat(o.total_amount || 0), 0)
+          }
+          setCashDeliveryStats(stats)
+          // Store recent orders (last 5)
+          setRecentCashDeliveries(orders.slice(0, 5))
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching cash delivery stats:', error)
+    }
+  }, [])
+
   useEffect(() => {
     fetchData()
     fetchExchangeRates()
-  }, [fetchData, fetchExchangeRates])
+    fetchCashDeliveryStats()
+  }, [fetchData, fetchExchangeRates, fetchCashDeliveryStats])
 
   useEffect(() => {
     fetchRateHistory()
@@ -218,6 +296,7 @@ export default function AdminBrokersDashboardPage() {
     fetchData()
     fetchExchangeRates()
     fetchRateHistory()
+    fetchCashDeliveryStats()
   }
 
   // Chart data: Rate history
@@ -233,6 +312,16 @@ export default function AdminBrokersDashboardPage() {
     { name: 'En Entrega', value: orderStats.inDelivery, color: ORDER_COLORS.inDelivery },
     { name: 'Entregadas', value: orderStats.delivered, color: ORDER_COLORS.delivered },
     { name: 'Canceladas', value: orderStats.cancelled, color: ORDER_COLORS.cancelled },
+  ].filter(d => d.value > 0) : []
+
+  // Chart data: Cash Delivery Orders by status
+  const cashDeliveryChartData = cashDeliveryStats ? [
+    { name: 'Pendientes', value: cashDeliveryStats.pending, color: CASH_DELIVERY_COLORS.pending },
+    { name: 'En Tránsito', value: cashDeliveryStats.in_transit, color: CASH_DELIVERY_COLORS.in_transit },
+    { name: 'Recibiendo', value: cashDeliveryStats.pending_reception, color: CASH_DELIVERY_COLORS.pending_reception },
+    { name: 'Validando', value: cashDeliveryStats.validating, color: CASH_DELIVERY_COLORS.validating },
+    { name: 'Completadas', value: cashDeliveryStats.completed, color: CASH_DELIVERY_COLORS.completed },
+    { name: 'Canceladas', value: cashDeliveryStats.cancelled, color: CASH_DELIVERY_COLORS.cancelled },
   ].filter(d => d.value > 0) : []
 
   // Chart data: Brokers by province (convert IDs to display names)
@@ -660,31 +749,51 @@ export default function AdminBrokersDashboardPage() {
         {!mapFullscreen && (
         <>
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-4">
-          {/* Brokers by Province Chart */}
+          {/* Cash Delivery Orders Chart */}
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ delay: 0.15 }}
             className={cn("rounded-2xl p-4", theme === 'dark' ? 'bg-white/5 border border-white/10' : 'bg-white border border-gray-100 shadow-sm')}
           >
-            <h3 className={cn("font-semibold text-sm mb-3", theme === 'dark' ? 'text-white' : 'text-gray-900')}>Brokers por Provincia</h3>
+            <div className="flex items-center justify-between mb-3">
+              <h3 className={cn("font-semibold text-sm", theme === 'dark' ? 'text-white' : 'text-gray-900')}>Entregas de Efectivo</h3>
+              {cashDeliveryStats && (
+                <span className={cn("text-xs px-2 py-1 rounded-full", theme === 'dark' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-emerald-100 text-emerald-700')}>
+                  ${cashDeliveryStats.totalAmount.toLocaleString()}
+                </span>
+              )}
+            </div>
             <div className="h-[220px]">
-              {provinceChartData.length > 0 ? (
+              {cashDeliveryChartData.length > 0 ? (
                 <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={provinceChartData} layout="vertical" margin={{ top: 0, right: 10, left: 0, bottom: 0 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke={theme === 'dark' ? '#374151' : '#e5e7eb'} horizontal={false} />
-                    <XAxis type="number" tick={{ fontSize: 10, fill: theme === 'dark' ? '#9ca3af' : '#6b7280' }} axisLine={false} tickLine={false} />
-                    <YAxis dataKey="name" type="category" tick={{ fontSize: 10, fill: theme === 'dark' ? '#9ca3af' : '#6b7280' }} axisLine={false} tickLine={false} width={80} />
+                  <PieChart>
+                    <Pie
+                      data={cashDeliveryChartData}
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={50}
+                      outerRadius={80}
+                      paddingAngle={2}
+                      dataKey="value"
+                    >
+                      {cashDeliveryChartData.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={entry.color} />
+                      ))}
+                    </Pie>
                     <Tooltip
                       contentStyle={{ backgroundColor: theme === 'dark' ? '#1f2937' : '#fff', border: 'none', borderRadius: '8px' }}
-                      formatter={(value: number, name: string) => [value, name === 'brokers' ? 'Brokers' : 'Balance']}
-                      labelFormatter={(label, payload) => payload?.[0]?.payload?.fullName || label}
+                      formatter={(value: number) => [value, 'Órdenes']}
                     />
-                    <Bar dataKey="brokers" fill="#3b82f6" radius={[0, 4, 4, 0]} />
-                  </BarChart>
+                    <Legend
+                      verticalAlign="bottom"
+                      height={36}
+                      formatter={(value) => <span className={cn("text-xs", theme === 'dark' ? 'text-gray-400' : 'text-gray-600')}>{value}</span>}
+                    />
+                  </PieChart>
                 </ResponsiveContainer>
               ) : (
-                <div className="h-full flex items-center justify-center text-gray-500 text-sm">Sin datos</div>
+                <div className="h-full flex items-center justify-center text-gray-500 text-sm">Sin entregas</div>
               )}
             </div>
           </motion.div>
@@ -846,6 +955,93 @@ export default function AdminBrokersDashboardPage() {
             </div>
           </motion.div>
         </div>
+
+        {/* Movimientos Recientes - Cash Delivery Orders */}
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 0.4 }}
+          className={cn("rounded-2xl p-4", theme === 'dark' ? 'bg-white/5 border border-white/10' : 'bg-white border border-gray-100 shadow-sm')}
+        >
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <div className={cn("p-2 rounded-lg", theme === 'dark' ? 'bg-emerald-500/20' : 'bg-emerald-50')}>
+                <Banknote className="w-5 h-5 text-emerald-500" />
+              </div>
+              <h3 className={cn("font-semibold", theme === 'dark' ? 'text-white' : 'text-gray-900')}>Movimientos Recientes</h3>
+            </div>
+            <Link
+              href="/dashboard/admin/brokers/cash-delivery/list"
+              className={cn(
+                "flex items-center gap-1 text-sm font-medium transition-colors",
+                "text-blue-500 hover:text-blue-600"
+              )}
+            >
+              Ver todos
+              <ChevronRight className="w-4 h-4" />
+            </Link>
+          </div>
+
+          {recentCashDeliveries.length > 0 ? (
+            <div className="space-y-3">
+              {recentCashDeliveries.map((order) => {
+                const statusConfig = CASH_DELIVERY_STATUS_CONFIG[order.status] || CASH_DELIVERY_STATUS_CONFIG.pending
+                const StatusIcon = statusConfig.icon
+
+                return (
+                  <Link
+                    key={order.id}
+                    href={`/dashboard/admin/brokers/cash-delivery/${order.id}`}
+                    className={cn(
+                      "flex items-center justify-between p-3 rounded-xl transition-all",
+                      theme === 'dark' ? 'bg-white/5 hover:bg-white/10' : 'bg-gray-50 hover:bg-gray-100'
+                    )}
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className={cn("p-2 rounded-lg", statusConfig.bgColor)}>
+                        <StatusIcon className={cn("w-4 h-4", statusConfig.color)} />
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className={cn("font-medium text-sm", theme === 'dark' ? 'text-white' : 'text-gray-900')}>
+                            {order.order_number}
+                          </span>
+                          <span className={cn("text-xs px-2 py-0.5 rounded-full font-medium", statusConfig.bgColor, statusConfig.color)}>
+                            {statusConfig.label}
+                          </span>
+                        </div>
+                        <p className={cn("text-xs mt-0.5", theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}>
+                          {order.broker_name} • {order.delivery_user_name}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <p className={cn("font-semibold text-sm", theme === 'dark' ? 'text-white' : 'text-gray-900')}>
+                        {order.currency} ${parseFloat(order.total_amount).toLocaleString()}
+                      </p>
+                      <p className={cn("text-xs", theme === 'dark' ? 'text-gray-500' : 'text-gray-400')}>
+                        {new Date(order.created_at).toLocaleDateString('es-ES', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                      </p>
+                    </div>
+                  </Link>
+                )
+              })}
+            </div>
+          ) : (
+            <div className="text-center py-8">
+              <Banknote className={cn("w-12 h-12 mx-auto mb-3", theme === 'dark' ? 'text-gray-600' : 'text-gray-300')} />
+              <p className={cn("text-sm", theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}>
+                No hay entregas de efectivo recientes
+              </p>
+              <Link
+                href="/dashboard/admin/brokers/cash-delivery"
+                className="text-sm text-blue-500 hover:text-blue-600 font-medium mt-2 inline-block"
+              >
+                Crear nueva entrega
+              </Link>
+            </div>
+          )}
+        </motion.div>
         </>
         )}
       </div>
