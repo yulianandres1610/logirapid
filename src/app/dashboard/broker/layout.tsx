@@ -18,13 +18,15 @@ export default function BrokerLayout({
       try {
         const response = await fetch('/api/broker/wallet')
         if (!response.ok) {
-          // Not authorized as broker
-          router.push('/dashboard')
+          // Not authorized as broker - redirect to login
+          console.error('[Broker Layout] Not authorized, status:', response.status)
+          router.push('/login')
           return
         }
         setIsAuthorized(true)
-      } catch {
-        router.push('/dashboard')
+      } catch (error) {
+        console.error('[Broker Layout] Error checking access:', error)
+        router.push('/login')
       } finally {
         setIsLoading(false)
       }

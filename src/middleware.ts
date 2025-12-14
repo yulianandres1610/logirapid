@@ -152,6 +152,17 @@ export async function middleware(request: NextRequest) {
   // NOTA: SUPER_ADMIN siempre puede acceder a cualquier ruta
   // ============================================================
 
+  // SUPER_ADMIN puede acceder a /dashboard/broker (para administrar brokers)
+  if (userRole === 'SUPER_ADMIN' && pathname.startsWith('/dashboard/broker')) {
+    console.log('✅ SUPER_ADMIN accessing broker dashboard')
+    const response = NextResponse.next()
+    response.headers.set('x-user-role', userRole)
+    if (companyId) response.headers.set('x-user-company-id', companyId)
+    if (companyName) response.headers.set('x-user-company-name', companyName)
+    if (companyType) response.headers.set('x-user-company-type', companyType || '')
+    return response
+  }
+
   // Si es usuario de empresa broker (pero NO SUPER_ADMIN), permitir acceso a /dashboard/broker
   if (isBrokerCompany && userRole !== 'SUPER_ADMIN' && pathname.startsWith('/dashboard/broker')) {
     console.log('✅ BROKER COMPANY user accessing broker dashboard, companyId:', companyId)
@@ -161,6 +172,28 @@ export async function middleware(request: NextRequest) {
     if (companyName) response.headers.set('x-user-company-name', companyName)
     if (companyType) response.headers.set('x-user-company-type', companyType)
     return response
+  }
+
+  // Redirigir usuarios NO-broker que intentan acceder a /dashboard/broker a su dashboard correcto
+  if (!isBrokerCompany && userRole !== 'SUPER_ADMIN' && pathname.startsWith('/dashboard/broker')) {
+    console.log('🔄 Redirecting NON-BROKER user from broker dashboard, role:', userRole)
+    let redirectPath = '/dashboard/agency-admin'
+    switch (userRole) {
+      case 'ADMIN':
+        redirectPath = '/dashboard/agency-admin'
+        break
+      case 'MANAGER':
+        redirectPath = '/dashboard/manager'
+        break
+      case 'USER':
+        redirectPath = '/dashboard/user'
+        break
+      case 'DRIVER':
+        redirectPath = '/dashboard/agency-admin'
+        break
+    }
+    const redirectUrl = new URL(redirectPath, request.url)
+    return NextResponse.redirect(redirectUrl)
   }
 
   // Redirigir usuarios de empresa broker (pero NO SUPER_ADMIN) a su dashboard si intentan acceder a otros dashboards

@@ -52,7 +52,6 @@ export async function GET(request: NextRequest) {
         id,
         companytype,
         legalname,
-        tradename,
         COALESCE("walletNumber", walletnumber) as wallet_number,
         COALESCE("walletBalance"::numeric, walletbalance, 0) as wallet_balance,
         currency,
@@ -179,7 +178,7 @@ export async function GET(request: NextRequest) {
       data: {
         companyId: company.id,
         companyName: company.legalname,
-        tradeName: company.tradename,
+        tradeName: company.legalname,
         walletNumber: company.wallet_number,
         walletBalance,
         walletBalanceFormatted: `$${walletBalance.toLocaleString('en-US', { minimumFractionDigits: 2 })}`,
