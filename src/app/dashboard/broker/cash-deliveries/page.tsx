@@ -56,7 +56,8 @@ export default function BrokerCashDeliveriesPage() {
       const data = await res.json()
 
       if (data.success) {
-        setDeliveries(data.data || [])
+        // API returns { deliveries: [...], summary: {...} }
+        setDeliveries(data.data?.deliveries || data.data || [])
       } else {
         setError(data.error || 'Error al cargar las entregas')
       }

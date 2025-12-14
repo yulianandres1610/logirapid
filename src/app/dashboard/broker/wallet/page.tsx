@@ -64,12 +64,35 @@ export default function BrokerWalletPage() {
   const fetchWalletData = async () => {
     setLoading(true)
     try {
-      const response = await fetch('/api/broker/wallet')
+      const response = await fetch('/api/broker/wallet?history=true')
       if (response.ok) {
         const data = await response.json()
-        if (data.success) {
-          setBalances(data.data.balances || [])
-          setTransactions(data.data.recentTransactions || [])
+        if (data.success && data.data) {
+          // API returns a single wallet, convert to array format for display
+          const walletData = data.data
+          const walletBalance: WalletBalance = {
+            currency: walletData.currency || 'USD',
+            available: walletData.walletBalance || 0,
+            reserved: 0,
+            total: walletData.walletBalance || 0,
+            lowThreshold: 100,
+            isLow: (walletData.walletBalance || 0) < 100
+          }
+          setBalances([walletBalance])
+
+          // Map history transactions to expected format
+          const txHistory = (walletData.history || []).map((tx: any) => ({
+            id: tx.id,
+            currency: tx.currency || 'USD',
+            type: tx.direction === 'in' ? 'deposit' : 'withdrawal',
+            amount: tx.amount || 0,
+            balanceAfter: 0,
+            referenceType: tx.typeLabel || tx.type,
+            referenceId: null,
+            notes: tx.description || '',
+            createdAt: tx.createdAt
+          }))
+          setTransactions(txHistory)
         }
       }
     } catch (error) {
@@ -91,10 +114,10 @@ export default function BrokerWalletPage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          action: 'deposit',
-          currency: depositCurrency,
+          type: 'deposit',
           amount: parseFloat(depositAmount),
-          notes: depositNotes || `Deposito de ${depositAmount} ${depositCurrency}`
+          notes: depositNotes || `Deposito de ${depositAmount} ${depositCurrency}`,
+          paymentMethod: 'wire'
         })
       })
 
