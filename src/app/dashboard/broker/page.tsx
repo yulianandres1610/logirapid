@@ -15,6 +15,9 @@ import {
   ArrowRight
 } from 'lucide-react'
 import Link from 'next/link'
+import { DashboardLayout } from '@/components/layout/dashboard-layout'
+import { ProtectedRoute } from '@/components/protected-route'
+import { useAuth } from '@/hooks/useAuth'
 
 interface WalletBalance {
   currency: string
@@ -44,6 +47,7 @@ interface RecentOrder {
 }
 
 export default function BrokerDashboardPage() {
+  const { user, logout } = useAuth()
   const [wallets, setWallets] = useState<WalletBalance[]>([])
   const [stats, setStats] = useState<OrderStats | null>(null)
   const [recentOrders, setRecentOrders] = useState<RecentOrder[]>([])
@@ -105,26 +109,32 @@ export default function BrokerDashboardPage() {
     )
   }
 
-  if (loading) {
-    return (
-      <div className="p-6">
-        <div className="animate-pulse space-y-6">
-          <div className="h-8 bg-gray-200 dark:bg-gray-700 rounded w-1/3"></div>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            {[1, 2, 3].map(i => (
-              <div key={i} className="h-32 bg-gray-200 dark:bg-gray-700 rounded-xl"></div>
-            ))}
-          </div>
-        </div>
-      </div>
-    )
-  }
-
   const pendingCount = stats?.pending || 0
   const activeCount = (stats?.confirmed || 0) + (stats?.inDelivery || 0)
 
+  if (loading) {
+    return (
+      <ProtectedRoute>
+        <DashboardLayout>
+          <div className="p-6">
+            <div className="animate-pulse space-y-6">
+              <div className="h-8 bg-gray-200 dark:bg-gray-700 rounded w-1/3"></div>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {[1, 2, 3].map(i => (
+                  <div key={i} className="h-32 bg-gray-200 dark:bg-gray-700 rounded-xl"></div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </DashboardLayout>
+      </ProtectedRoute>
+    )
+  }
+
   return (
-    <div className="p-6 space-y-6">
+    <ProtectedRoute>
+      <DashboardLayout>
+        <div className="p-6 space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
@@ -374,6 +384,8 @@ export default function BrokerDashboardPage() {
           </motion.div>
         </Link>
       </div>
-    </div>
+        </div>
+      </DashboardLayout>
+    </ProtectedRoute>
   )
 }
