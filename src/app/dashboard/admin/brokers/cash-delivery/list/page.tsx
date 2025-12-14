@@ -23,6 +23,7 @@ import {
   Building2,
   Calendar
 } from 'lucide-react'
+import { DashboardLayout } from '@/components/layout/dashboard-layout'
 
 interface CashDeliveryOrder {
   id: number
@@ -127,26 +128,27 @@ export default function CashDeliveryListPage() {
   const textSecondary = theme === 'dark' ? 'text-gray-400' : 'text-gray-600'
 
   return (
-    <div className="min-h-full p-6 space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className={`text-2xl font-bold ${textPrimary}`}>
-            Entregas de Efectivo
-          </h1>
-          <p className={textSecondary}>
-            Gestión de entregas de efectivo a brokers
-          </p>
-        </div>
+    <DashboardLayout>
+      <div className="min-h-full space-y-6">
+        {/* Header */}
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className={`text-2xl font-bold ${textPrimary}`}>
+              Entregas de Efectivo
+            </h1>
+            <p className={textSecondary}>
+              Gestión de entregas de efectivo a brokers
+            </p>
+          </div>
 
-        <button
-          onClick={() => router.push('/dashboard/admin/brokers/cash-delivery')}
-          className="flex items-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-r from-exa-primary to-exa-secondary text-white font-medium hover:opacity-90 transition-opacity"
-        >
-          <Plus className="h-4 w-4" />
-          Nueva Entrega
-        </button>
-      </div>
+          <button
+            onClick={() => router.push('/dashboard/admin/brokers/cash-delivery')}
+            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-r from-exa-primary to-exa-secondary text-white font-medium hover:opacity-90 transition-opacity"
+          >
+            <Plus className="h-4 w-4" />
+            Nueva Entrega
+          </button>
+        </div>
 
       {/* Stats */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -319,7 +321,8 @@ export default function CashDeliveryListPage() {
             </div>
           </div>
         )}
+        </div>
       </div>
-    </div>
+    </DashboardLayout>
   )
 }
