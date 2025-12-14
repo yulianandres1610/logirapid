@@ -149,10 +149,11 @@ export async function middleware(request: NextRequest) {
 
   // ============================================================
   // BROKER COMPANY HANDLING - Usuarios de empresas tipo broker
+  // NOTA: SUPER_ADMIN siempre puede acceder a cualquier ruta
   // ============================================================
 
-  // Si es usuario de empresa broker, permitir acceso a /dashboard/broker
-  if (isBrokerCompany && pathname.startsWith('/dashboard/broker')) {
+  // Si es usuario de empresa broker (pero NO SUPER_ADMIN), permitir acceso a /dashboard/broker
+  if (isBrokerCompany && userRole !== 'SUPER_ADMIN' && pathname.startsWith('/dashboard/broker')) {
     console.log('✅ BROKER COMPANY user accessing broker dashboard, companyId:', companyId)
     const response = NextResponse.next()
     if (userRole) response.headers.set('x-user-role', userRole)
@@ -162,26 +163,26 @@ export async function middleware(request: NextRequest) {
     return response
   }
 
-  // Redirigir usuarios de empresa broker a su dashboard si intentan acceder a otros dashboards
-  if (isBrokerCompany && pathname.startsWith('/dashboard/admin')) {
+  // Redirigir usuarios de empresa broker (pero NO SUPER_ADMIN) a su dashboard si intentan acceder a otros dashboards
+  if (isBrokerCompany && userRole !== 'SUPER_ADMIN' && pathname.startsWith('/dashboard/admin')) {
     console.log('🔄 Redirecting BROKER COMPANY user from admin to broker dashboard')
     const brokerDashboardUrl = new URL('/dashboard/broker', request.url)
     return NextResponse.redirect(brokerDashboardUrl)
   }
 
-  if (isBrokerCompany && pathname.startsWith('/dashboard/agency-admin')) {
+  if (isBrokerCompany && userRole !== 'SUPER_ADMIN' && pathname.startsWith('/dashboard/agency-admin')) {
     console.log('🔄 Redirecting BROKER COMPANY user from agency-admin to broker dashboard')
     const brokerDashboardUrl = new URL('/dashboard/broker', request.url)
     return NextResponse.redirect(brokerDashboardUrl)
   }
 
-  if (isBrokerCompany && pathname.startsWith('/dashboard/manager')) {
+  if (isBrokerCompany && userRole !== 'SUPER_ADMIN' && pathname.startsWith('/dashboard/manager')) {
     console.log('🔄 Redirecting BROKER COMPANY user from manager to broker dashboard')
     const brokerDashboardUrl = new URL('/dashboard/broker', request.url)
     return NextResponse.redirect(brokerDashboardUrl)
   }
 
-  if (isBrokerCompany && pathname.startsWith('/dashboard/user')) {
+  if (isBrokerCompany && userRole !== 'SUPER_ADMIN' && pathname.startsWith('/dashboard/user')) {
     console.log('🔄 Redirecting BROKER COMPANY user from user to broker dashboard')
     const brokerDashboardUrl = new URL('/dashboard/broker', request.url)
     return NextResponse.redirect(brokerDashboardUrl)
