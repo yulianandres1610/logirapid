@@ -438,9 +438,11 @@ export default function CashDeliveryWizardPage() {
                                   <p className={cn("font-medium", theme === 'dark' ? 'text-white' : 'text-gray-900')}>
                                     {broker.name}
                                   </p>
-                                  <p className={cn("text-sm", theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}>
-                                    {broker.broker_province}, {broker.broker_municipality}
-                                  </p>
+                                  {(broker.broker_province || broker.broker_municipality) && (
+                                    <p className={cn("text-sm", theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}>
+                                      {[broker.broker_province, broker.broker_municipality].filter(Boolean).join(', ')}
+                                    </p>
+                                  )}
                                 </div>
                               </div>
                               {formData.selectedBroker?.id === broker.id && (
@@ -699,9 +701,11 @@ export default function CashDeliveryWizardPage() {
                         <p className={cn("font-semibold", theme === 'dark' ? 'text-white' : 'text-gray-900')}>
                           {formData.selectedBroker?.name}
                         </p>
-                        <p className={cn("text-sm", theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}>
-                          {formData.selectedBroker?.broker_province}, {formData.selectedBroker?.broker_municipality}
-                        </p>
+                        {(formData.selectedBroker?.broker_province || formData.selectedBroker?.broker_municipality) && (
+                          <p className={cn("text-sm", theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}>
+                            {[formData.selectedBroker?.broker_province, formData.selectedBroker?.broker_municipality].filter(Boolean).join(', ')}
+                          </p>
+                        )}
                       </div>
 
                       <div className={cn("p-4 rounded-xl", theme === 'dark' ? 'bg-gray-700/50' : 'bg-gray-50')}>
