@@ -23,6 +23,8 @@ import {
   AlertCircle,
   RefreshCw
 } from 'lucide-react'
+import { DashboardLayout } from '@/components/layout/dashboard-layout'
+import { ProtectedRoute } from '@/components/protected-route'
 
 interface Order {
   id: number
@@ -170,13 +172,15 @@ export default function BrokerOrdersPage() {
   ]
 
   return (
-    <div className="p-6 space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
-            Ordenes de Remesas
-          </h1>
+    <ProtectedRoute>
+      <DashboardLayout>
+        <div className="p-6 space-y-6">
+          {/* Header */}
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
+                Ordenes de Remesas
+              </h1>
           <p className="text-gray-500 dark:text-gray-400 mt-1">
             Gestiona las entregas asignadas a tu zona
           </p>
@@ -370,6 +374,8 @@ export default function BrokerOrdersPage() {
           </p>
         </motion.div>
       )}
-    </div>
+        </div>
+      </DashboardLayout>
+    </ProtectedRoute>
   )
 }
