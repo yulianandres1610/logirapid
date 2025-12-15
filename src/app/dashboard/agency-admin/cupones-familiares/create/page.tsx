@@ -22,7 +22,9 @@ import {
   Clock,
   Send,
   Printer,
-  MessageCircle
+  MessageCircle,
+  Search,
+  UserCheck
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useTheme } from '@/contexts/theme-context'
@@ -84,6 +86,12 @@ export default function CreateRemittancePage() {
   const [remittanceProducts, setRemittanceProducts] = useState<RemittanceProduct[]>([])
   const [loadingProducts, setLoadingProducts] = useState(true)
   const [exchangeRates, setExchangeRates] = useState<Record<string, number>>({ USD: 1, CUP: 1 })
+
+  // Customer search state
+  const [searchPhone, setSearchPhone] = useState('')
+  const [searchingCustomer, setSearchingCustomer] = useState(false)
+  const [foundCustomers, setFoundCustomers] = useState<any[]>([])
+  const [selectedRecipient, setSelectedRecipient] = useState<any>(null)
 
   // Ref to always have latest exchange rates available in callbacks
   const exchangeRatesRef = React.useRef(exchangeRates)
@@ -237,6 +245,66 @@ export default function CreateRemittancePage() {
     } finally {
       setLoadingProducts(false)
     }
+  }
+
+  // Search for customer by phone
+  const searchCustomerByPhone = async () => {
+    if (!searchPhone.trim()) return
+
+    setSearchingCustomer(true)
+    setFoundCustomers([])
+    try {
+      const res = await fetch(`/api/customers?search=${encodeURIComponent(searchPhone)}`)
+      const data = await res.json()
+      if (data.success) {
+        const results = data.data || []
+        setFoundCustomers(results)
+      }
+    } catch (error) {
+      console.error('Error searching customer:', error)
+    } finally {
+      setSearchingCustomer(false)
+    }
+  }
+
+  // Select a found customer and fill in the form
+  const selectRecipientFromSearch = (customer: any) => {
+    setSelectedRecipient(customer)
+    setFoundCustomers([])
+    setSearchPhone('')
+
+    // Fill in the wizard data with customer info
+    // Parse name (assuming firstName lastName format)
+    const fullName = `${customer.firstName || ''} ${customer.lastName || ''}`.trim()
+
+    updateWizardData({
+      recipientName: fullName || customer.name || '',
+      recipientPhone: customer.phone || '',
+      recipientIdNumber: customer.idNumber || '',
+      recipientAddress: customer.street || customer.address || '',
+      recipientNeighborhood: customer.neighborhood || customer.city || '',
+      recipientAddressReferences: customer.notes || '',
+      hasAlternateContact: customer.hasAlternateContact || false,
+      alternateContactName: customer.alternateContactName || '',
+      alternateContactPhone: customer.alternateContactPhone || ''
+    })
+  }
+
+  // Clear selected recipient and allow new search
+  const clearSelectedRecipient = () => {
+    setSelectedRecipient(null)
+    setSearchPhone('')
+    updateWizardData({
+      recipientName: '',
+      recipientPhone: '',
+      recipientIdNumber: '',
+      recipientAddress: '',
+      recipientNeighborhood: '',
+      recipientAddressReferences: '',
+      hasAlternateContact: false,
+      alternateContactName: '',
+      alternateContactPhone: ''
+    })
   }
 
   // Check availability when on step 3
@@ -782,10 +850,130 @@ export default function CreateRemittancePage() {
                 Datos del Destinatario
               </h2>
               <p className={cn("text-sm mt-1", theme === 'dark' ? 'text-gray-400' : 'text-gray-600')}>
-                Informacion del beneficiario en Cuba
+                Busca un cliente existente o ingresa los datos manualmente
               </p>
             </div>
 
+            {/* Customer Search Section */}
+            <div className={cn("p-4 rounded-xl border", theme === 'dark' ? 'bg-gray-700/50 border-gray-600' : 'bg-blue-50 border-blue-200')}>
+              <h4 className={cn("text-sm font-semibold mb-3 flex items-center gap-2", theme === 'dark' ? 'text-gray-300' : 'text-blue-700')}>
+                <Search className="w-4 h-4" />
+                Buscar Cliente Existente
+              </h4>
+
+              {selectedRecipient ? (
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.95 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  className={cn(
+                    "p-4 rounded-xl flex items-center justify-between",
+                    theme === 'dark' ? 'bg-green-900/20 border border-green-700' : 'bg-green-50 border border-green-200'
+                  )}
+                >
+                  <div className="flex items-center gap-3">
+                    <div className={cn(
+                      "w-10 h-10 rounded-full flex items-center justify-center",
+                      theme === 'dark' ? 'bg-green-900/30' : 'bg-green-100'
+                    )}>
+                      <UserCheck className="w-5 h-5 text-green-600" />
+                    </div>
+                    <div>
+                      <p className={cn("font-semibold", theme === 'dark' ? 'text-white' : 'text-gray-900')}>
+                        {selectedRecipient.firstName} {selectedRecipient.lastName}
+                      </p>
+                      <p className={cn("text-sm", theme === 'dark' ? 'text-gray-400' : 'text-gray-600')}>
+                        {selectedRecipient.phone}
+                      </p>
+                    </div>
+                  </div>
+                  <Button
+                    onClick={clearSelectedRecipient}
+                    variant="outline"
+                    size="sm"
+                    className={cn("rounded-lg", theme === 'dark' ? 'border-gray-600' : '')}
+                  >
+                    Cambiar
+                  </Button>
+                </motion.div>
+              ) : (
+                <div className="flex gap-2">
+                  <div className="flex-1 relative">
+                    <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                    <Input
+                      placeholder="Buscar por telefono..."
+                      value={searchPhone}
+                      onChange={(e) => setSearchPhone(e.target.value)}
+                      onKeyDown={(e) => e.key === 'Enter' && searchCustomerByPhone()}
+                      className={cn(
+                        "pl-10 rounded-xl h-11",
+                        theme === 'dark' ? 'bg-gray-600 text-white border-gray-500' : 'bg-white text-gray-900 border-gray-300'
+                      )}
+                    />
+                  </div>
+                  <Button
+                    onClick={searchCustomerByPhone}
+                    disabled={searchingCustomer || !searchPhone.trim()}
+                    className={cn(
+                      "rounded-xl h-11 px-4",
+                      theme === 'dark' ? 'bg-blue-600 hover:bg-blue-700' : 'bg-blue-500 hover:bg-blue-600',
+                      'text-white'
+                    )}
+                  >
+                    {searchingCustomer ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
+                  </Button>
+                </div>
+              )}
+
+              {/* Search Results */}
+              <AnimatePresence>
+                {foundCustomers.length > 0 && (
+                  <motion.div
+                    initial={{ opacity: 0, y: -10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -10 }}
+                    className="mt-3 space-y-2"
+                  >
+                    {foundCustomers.map((customer) => (
+                      <motion.button
+                        key={customer.id}
+                        whileHover={{ scale: 1.01 }}
+                        whileTap={{ scale: 0.99 }}
+                        onClick={() => selectRecipientFromSearch(customer)}
+                        className={cn(
+                          "w-full p-3 rounded-xl border text-left transition-all flex items-center gap-3",
+                          theme === 'dark'
+                            ? 'bg-gray-600 border-gray-500 hover:bg-gray-500'
+                            : 'bg-white border-gray-200 hover:bg-gray-50'
+                        )}
+                      >
+                        <div className={cn(
+                          "w-10 h-10 rounded-full flex items-center justify-center",
+                          theme === 'dark' ? 'bg-blue-900/30' : 'bg-blue-100'
+                        )}>
+                          <User className="w-5 h-5 text-blue-600" />
+                        </div>
+                        <div className="flex-1">
+                          <p className={cn("font-semibold", theme === 'dark' ? 'text-white' : 'text-gray-900')}>
+                            {customer.firstName} {customer.lastName}
+                          </p>
+                          <p className={cn("text-sm", theme === 'dark' ? 'text-gray-400' : 'text-gray-600')}>
+                            {customer.phone}
+                          </p>
+                        </div>
+                      </motion.button>
+                    ))}
+                  </motion.div>
+                )}
+              </AnimatePresence>
+
+              {foundCustomers.length === 0 && searchPhone && !searchingCustomer && (
+                <p className={cn("text-sm mt-2", theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}>
+                  No se encontraron clientes. Ingresa los datos manualmente abajo.
+                </p>
+              )}
+            </div>
+
+            {/* Manual Entry Form */}
             <div className="space-y-4">
               <Input
                 placeholder="Nombre completo *"
@@ -812,7 +1000,7 @@ export default function CreateRemittancePage() {
               <div className={cn("p-4 rounded-xl border", theme === 'dark' ? 'bg-gray-700/50 border-gray-600' : 'bg-gray-50 border-gray-200')}>
                 <h4 className={cn("text-sm font-semibold mb-3 flex items-center gap-2", theme === 'dark' ? 'text-gray-300' : 'text-gray-700')}>
                   <Home className="w-4 h-4" />
-                  Direccion de Entrega
+                  Direccion de Entrega en {wizardData.municipality}, {wizardData.province}
                 </h4>
                 <div className="space-y-3">
                   <Input
