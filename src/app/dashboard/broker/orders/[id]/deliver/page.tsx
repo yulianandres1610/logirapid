@@ -343,7 +343,7 @@ export default function DeliveryWizardPage() {
         return order ? !insufficientFunds : false
       case 2:
         const total = calculateTotal()
-        return total > 0 && order && Math.abs(total - order.receiveAmount) < 0.01
+        return total > 0 && order && Math.abs(total - (order.receiveAmount || 0)) < 0.01
       case 3:
         return hasSignature && signerName.trim().length > 0
       case 4:
@@ -675,7 +675,7 @@ export default function DeliveryWizardPage() {
                           <div className="flex justify-between text-sm mt-1">
                             <span>Monto requerido:</span>
                             <span className="font-bold">
-                              {order.receiveAmount.toLocaleString()} {order.receiveCurrency}
+                              {(order.receiveAmount || 0).toLocaleString()} {order.receiveCurrency || 'CUP'}
                             </span>
                           </div>
                           <div className={cn(
@@ -684,7 +684,7 @@ export default function DeliveryWizardPage() {
                           )}>
                             <span>Faltante:</span>
                             <span className="font-bold text-red-500">
-                              {(order.receiveAmount - getAvailableBalance(order.receiveCurrency)).toLocaleString()} {order.receiveCurrency}
+                              {((order.receiveAmount || 0) - getAvailableBalance(order.receiveCurrency || 'CUP')).toLocaleString()} {order.receiveCurrency || 'CUP'}
                             </span>
                           </div>
                         </div>
@@ -753,7 +753,7 @@ export default function DeliveryWizardPage() {
                             Monto Enviado
                           </p>
                           <p className={cn('text-xl font-bold', theme === 'dark' ? 'text-white' : 'text-gray-900')}>
-                            ${order.sendAmount.toFixed(2)} {order.sendCurrency}
+                            ${(order.sendAmount || 0).toFixed(2)} {order.sendCurrency || 'USD'}
                           </p>
                         </div>
                       </div>
@@ -782,7 +782,7 @@ export default function DeliveryWizardPage() {
                             Monto a Entregar
                           </p>
                           <p className={cn('text-xl font-bold', theme === 'dark' ? 'text-white' : 'text-gray-900')}>
-                            {order.receiveAmount.toLocaleString()} {order.receiveCurrency}
+                            {(order.receiveAmount || 0).toLocaleString()} {order.receiveCurrency || 'CUP'}
                           </p>
                         </div>
                       </div>
@@ -982,14 +982,14 @@ export default function DeliveryWizardPage() {
                       Monto a Entregar
                     </p>
                     <p className={cn('text-3xl font-bold', theme === 'dark' ? 'text-white' : 'text-gray-900')}>
-                      {order.receiveAmount.toLocaleString()} {order.receiveCurrency}
+                      {(order.receiveAmount || 0).toLocaleString()} {order.receiveCurrency || 'CUP'}
                     </p>
                   </motion.div>
 
                   {/* Denomination Grid */}
                   <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
-                    {BILL_DENOMINATIONS[order.receiveCurrency]?.map((denom, index) => {
-                      const count = billDenominations[order.receiveCurrency as keyof BillDenominations]?.[denom.toString()] || 0
+                    {BILL_DENOMINATIONS[order.receiveCurrency || 'CUP']?.map((denom, index) => {
+                      const count = billDenominations[(order.receiveCurrency || 'CUP') as keyof BillDenominations]?.[denom.toString()] || 0
                       return (
                         <motion.div
                           key={denom}
@@ -1011,7 +1011,7 @@ export default function DeliveryWizardPage() {
                             'text-lg font-bold mb-3',
                             theme === 'dark' ? 'text-white' : 'text-gray-900'
                           )}>
-                            {denom.toLocaleString()} {order.receiveCurrency}
+                            {denom.toLocaleString()} {order.receiveCurrency || 'CUP'}
                           </div>
                           <div className="flex items-center justify-center gap-3">
                             <motion.button
@@ -1063,7 +1063,7 @@ export default function DeliveryWizardPage() {
                     animate={{ opacity: 1 }}
                     className={cn(
                       'rounded-xl p-5 border',
-                      calculateTotal() === order.receiveAmount
+                      calculateTotal() === (order.receiveAmount || 0)
                         ? theme === 'dark'
                           ? 'bg-gradient-to-br from-green-900/50 to-green-800/30 border-green-700/50'
                           : 'bg-gradient-to-br from-green-50 to-green-100 border-green-200'
@@ -1076,17 +1076,17 @@ export default function DeliveryWizardPage() {
                       <span className={theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}>Total seleccionado:</span>
                       <span className={cn(
                         'text-2xl font-bold',
-                        calculateTotal() === order.receiveAmount ? 'text-green-500' : 'text-red-500'
+                        calculateTotal() === (order.receiveAmount || 0) ? 'text-green-500' : 'text-red-500'
                       )}>
-                        {calculateTotal().toLocaleString()} {order.receiveCurrency}
+                        {calculateTotal().toLocaleString()} {order.receiveCurrency || 'CUP'}
                       </span>
                     </div>
-                    {calculateTotal() !== order.receiveAmount && (
+                    {calculateTotal() !== (order.receiveAmount || 0) && (
                       <p className={cn('text-sm mt-2', theme === 'dark' ? 'text-red-400' : 'text-red-600')}>
-                        Diferencia: {(calculateTotal() - order.receiveAmount).toLocaleString()} {order.receiveCurrency}
+                        Diferencia: {(calculateTotal() - (order.receiveAmount || 0)).toLocaleString()} {order.receiveCurrency || 'CUP'}
                       </p>
                     )}
-                    {calculateTotal() === order.receiveAmount && (
+                    {calculateTotal() === (order.receiveAmount || 0) && (
                       <div className="flex items-center gap-2 mt-2">
                         <Check className="w-5 h-5 text-green-500" />
                         <span className={cn('text-sm', theme === 'dark' ? 'text-green-400' : 'text-green-600')}>

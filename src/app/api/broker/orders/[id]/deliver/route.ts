@@ -413,17 +413,36 @@ export async function GET(
           id: order.id,
           orderNumber: order.order_number,
           status: order.status,
-          receiveAmount: parseFloat(order.receive_amount),
-          receiveCurrency: order.receive_currency,
+          // Amounts
+          sendAmount: parseFloat(order.send_amount) || 0,
+          sendCurrency: order.send_currency || 'USD',
+          receiveAmount: parseFloat(order.receive_amount) || 0,
+          receiveCurrency: order.receive_currency || 'CUP',
+          exchangeRate: parseFloat(order.exchange_rate) || 1,
+          totalCharged: parseFloat(order.total_charged) || 0,
+          serviceFee: parseFloat(order.service_fee) || 0,
+          // Recipient
           recipientName: order.recipient_name,
           recipientPhone: order.recipient_phone,
+          recipientIdNumber: order.recipient_id_number,
           recipientAddress: order.recipient_address,
+          recipientNeighborhood: order.recipient_neighborhood,
           recipientProvince: order.recipient_province,
           recipientMunicipality: order.recipient_municipality,
+          recipientAddressReferences: order.recipient_address_references,
+          // Alternate contact
           hasAlternateContact: order.has_alternate_contact,
           alternateContactName: order.alternate_contact_name,
           alternateContactPhone: order.alternate_contact_phone,
+          // Sender
+          senderName: order.sender_name,
+          senderPhone: order.sender_phone,
+          senderEmail: order.sender_email,
+          // Companies
           sellingCompanyName: order.selling_company_name,
+          brokerCompanyName: order.broker_name,
+          // Timing
+          estimatedDelivery: order.estimated_delivery,
           createdAt: order.created_at
         },
         denominations: BILL_DENOMINATIONS,
