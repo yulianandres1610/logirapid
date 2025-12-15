@@ -608,15 +608,27 @@ export default function CreateRemittancePage() {
       if (mapRef.current) {
         mapRef.current.remove()
         mapRef.current = null
+        markerRef.current = null
       }
     }
   }, [])
 
-  // Initialize map when showMap becomes true
+  // Initialize/destroy map when showMap changes
   useEffect(() => {
-    if (showMap && mapContainerRef.current && !mapRef.current) {
+    if (showMap && mapContainerRef.current) {
+      // Destroy existing map first if any
+      if (mapRef.current) {
+        mapRef.current.remove()
+        mapRef.current = null
+        markerRef.current = null
+      }
       // Small delay to ensure container is rendered
       setTimeout(initializeMap, 100)
+    } else if (!showMap && mapRef.current) {
+      // Destroy map when hiding
+      mapRef.current.remove()
+      mapRef.current = null
+      markerRef.current = null
     }
   }, [showMap, initializeMap])
 
