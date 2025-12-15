@@ -212,28 +212,19 @@ export async function POST(
 
       const deliveryProof = proofResult.rows[0]
 
-      // Update order status to delivered (without delivery_proof_id to avoid column issues)
+      // Update order status to delivered with all fields
       await db.query(`
         UPDATE remittance_orders
         SET
           status = 'delivered',
           delivered_at = NOW(),
           delivered_by_user_id = $2,
+          delivery_proof_id = $3,
+          delivery_signature = $4,
+          delivery_notes = $5,
           updated_at = NOW()
         WHERE id = $1
-      `, [orderId, payload.userId])
-
-      // Try to update delivery_proof_id separately if column exists
-      try {
-        await db.query(`
-          UPDATE remittance_orders
-          SET delivery_proof_id = $2
-          WHERE id = $1
-        `, [orderId, deliveryProof.id])
-      } catch (e) {
-        // Column might not exist, ignore
-        console.log('[Deliver] Could not set delivery_proof_id:', (e as Error).message)
-      }
+      `, [orderId, payload.userId, deliveryProof.id, signatureStoragePath, notes || null])
 
       // Complete the fund delivery (deduct from reserved)
       const deliveryResult = await db.query(`
@@ -416,7 +407,7 @@ function calculateTotalFromDenominations(
 /**
  * Upload signature to Supabase Storage
  * Returns storagePath on success, null on failure
- * Note: If upload fails, the signature will still be saved as base64 in the database
+ * Creates bucket automatically if it doesn't exist
  */
 async function uploadSignature(
   signatureData: string,
@@ -446,7 +437,25 @@ async function uploadSignature(
 
     const supabase = getSupabaseClient()
 
-    // Try to upload
+    // Ensure bucket exists
+    const { data: buckets } = await supabase.storage.listBuckets()
+    const bucketExists = buckets?.some(b => b.name === BUCKET_NAME)
+
+    if (!bucketExists) {
+      console.log(`[Upload Signature] Creating bucket ${BUCKET_NAME}...`)
+      const { error: createError } = await supabase.storage.createBucket(BUCKET_NAME, {
+        public: false,
+        fileSizeLimit: 52428800, // 50MB
+        allowedMimeTypes: ['image/png', 'image/jpeg', 'image/webp', 'application/pdf']
+      })
+      if (createError && !createError.message.includes('already exists')) {
+        console.error('[Upload Signature] Error creating bucket:', createError.message)
+        return null
+      }
+      console.log(`[Upload Signature] Bucket ${BUCKET_NAME} created`)
+    }
+
+    // Upload file
     const { error } = await supabase.storage
       .from(BUCKET_NAME)
       .upload(storagePath, buffer, {
@@ -456,10 +465,6 @@ async function uploadSignature(
 
     if (error) {
       console.error('[Upload Signature] Storage error:', error.message)
-      // Check if bucket doesn't exist
-      if (error.message.includes('Bucket not found') || error.message.includes('not found')) {
-        console.log('[Upload Signature] Bucket does not exist. Run setup-private-documents-storage.js to create it.')
-      }
       return null
     }
 
