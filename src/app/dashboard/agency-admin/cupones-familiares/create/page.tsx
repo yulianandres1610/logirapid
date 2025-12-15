@@ -468,8 +468,8 @@ export default function CreateRemittancePage() {
       'Lajas': [-80.2833, 22.4167], 'Cruces': [-80.2667, 22.3500], 'Cumanayagua': [-80.2000, 22.1500],
       'Aguada de Pasajeros': [-80.8500, 22.3833], 'Abreus': [-80.5667, 22.2833]
     }},
-    'Villa Clara': { coords: [-79.9658, 22.4058], municipalities: {
-      'Santa Clara': [-79.9658, 22.4058], 'Remedios': [-79.5458, 22.4917], 'Caibarién': [-79.4667, 22.5167],
+    'Villa Clara': { coords: [-79.965287, 22.402030], municipalities: {
+      'Santa Clara': [-79.965287, 22.402030], 'Remedios': [-79.5458, 22.4917], 'Caibarién': [-79.4667, 22.5167],
       'Camajuaní': [-79.7333, 22.4667], 'Placetas': [-79.6500, 22.3167], 'Sagua la Grande': [-80.0833, 22.8000],
       'Cifuentes': [-80.0500, 22.6167], 'Santo Domingo': [-80.2333, 22.5833], 'Ranchuelo': [-80.1500, 22.3833],
       'Manicaragua': [-79.9667, 22.1500], 'Encrucijada': [-79.8667, 22.6167], 'Quemado de Güines': [-80.2500, 22.8000]

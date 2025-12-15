@@ -114,7 +114,7 @@ export default function RemittanceOrderDetailsPage({ params }: PageProps) {
 
     // Cuba municipality coordinates fallback
     const CUBA_LOCATIONS: Record<string, Record<string, [number, number]>> = {
-      'Villa Clara': { 'Santa Clara': [-79.9658, 22.4058], 'Remedios': [-79.5458, 22.4917] },
+      'Villa Clara': { 'Santa Clara': [-79.965287, 22.402030], 'Remedios': [-79.5458, 22.4917] },
       'La Habana': { 'Playa': [-82.4208, 23.1147], 'Centro Habana': [-82.3667, 23.1367] },
       'Santiago de Cuba': { 'Santiago de Cuba': [-75.8219, 20.0247] },
       'Camagüey': { 'Camagüey': [-77.9169, 21.3808] }
