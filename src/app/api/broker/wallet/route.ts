@@ -105,6 +105,7 @@ export async function GET(request: NextRequest) {
     // Get transaction history if requested
     let history: any[] = []
     if (includeHistory) {
+      // Get transactions with cash delivery order info if applicable
       const historyResult = await db.query(`
         SELECT
           wt.id,
@@ -124,14 +125,22 @@ export async function GET(request: NextRequest) {
           wt.payment_reference,
           wt.status,
           wt.description,
+          wt.notes,
           wt.created_by_name,
           wt.created_at,
           wt.completed_at,
           sc.legalname as source_company_name,
-          tc.legalname as target_company_name
+          tc.legalname as target_company_name,
+          -- Cash delivery order info
+          cdo.order_number as cash_order_number,
+          cdo.delivery_user_name,
+          cdo.delivery_user_phone,
+          cdo.total_bills,
+          cdo.completed_at as delivery_completed_at
         FROM wallet_transactions wt
         LEFT JOIN companies sc ON wt.source_company_id = sc.id
         LEFT JOIN companies tc ON wt.target_company_id = tc.id
+        LEFT JOIN cash_delivery_orders cdo ON wt.source_type = 'cash_delivery' AND cdo.wallet_transaction_id = wt.id
         WHERE wt.source_company_id = $1 OR wt.target_company_id = $1
         ORDER BY wt.created_at DESC
         LIMIT $2
@@ -149,11 +158,13 @@ export async function GET(request: NextRequest) {
 
       history = historyResult.rows.map(row => {
         const isIncoming = row.target_company_id === payload.companyId
+        const isCashDelivery = row.source_type === 'cash_delivery'
+
         return {
           id: row.id,
           transactionNumber: row.transaction_number,
           type: row.type,
-          typeLabel: typeLabels[row.type] || row.type,
+          typeLabel: isCashDelivery ? 'Entrega de Efectivo' : (typeLabels[row.type] || row.type),
           direction: isIncoming ? 'in' : 'out',
           directionLabel: isIncoming ? 'Entrada' : 'Salida',
           amount: parseFloat(row.amount) || 0,
@@ -165,10 +176,20 @@ export async function GET(request: NextRequest) {
           paymentReference: row.payment_reference,
           status: row.status,
           description: row.description,
+          notes: row.notes,
           createdByName: row.created_by_name,
           createdAt: row.created_at,
           completedAt: row.completed_at,
-          counterparty: isIncoming ? row.source_company_name : row.target_company_name
+          counterparty: isIncoming ? row.source_company_name : row.target_company_name,
+          // Cash delivery specific info
+          isCashDelivery,
+          cashDelivery: isCashDelivery ? {
+            orderNumber: row.cash_order_number,
+            deliveryUserName: row.delivery_user_name,
+            deliveryUserPhone: row.delivery_user_phone,
+            totalBills: row.total_bills,
+            completedAt: row.delivery_completed_at
+          } : null
         }
       })
     }
