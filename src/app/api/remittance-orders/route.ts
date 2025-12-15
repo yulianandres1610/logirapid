@@ -322,7 +322,8 @@ export async function POST(request: NextRequest) {
     if (!brokerCompanyId) {
       // Find broker with most available funds in this location
       // Use LOWER() for case-insensitive matching since frontend sends formatted names
-      const brokerResult = await db.query(`
+      // First try exact municipality match
+      let brokerResult = await db.query(`
         SELECT
           c.id,
           c.legalname,
@@ -339,6 +340,45 @@ export async function POST(request: NextRequest) {
         LIMIT 1
       `, [province, municipality, finalReceiveCurrency])
 
+      // If no exact match, try to find any broker in the same province
+      if (brokerResult.rows.length === 0) {
+        console.log(`[Remittance Orders] No broker found for exact municipality ${municipality}, searching province ${province}...`)
+        brokerResult = await db.query(`
+          SELECT
+            c.id,
+            c.legalname,
+            bwb.available_balance,
+            bwb.currency
+          FROM companies c
+          LEFT JOIN broker_wallet_balances bwb
+            ON bwb.company_id = c.id AND bwb.currency = $2
+          WHERE c.companytype = 'broker'
+            AND c.broker_is_active = true
+            AND LOWER(c.broker_province) = LOWER($1)
+          ORDER BY COALESCE(bwb.available_balance, 0) DESC
+          LIMIT 1
+        `, [province, finalReceiveCurrency])
+      }
+
+      // If still no match, try to find ANY active broker
+      if (brokerResult.rows.length === 0) {
+        console.log(`[Remittance Orders] No broker found in province ${province}, searching any active broker...`)
+        brokerResult = await db.query(`
+          SELECT
+            c.id,
+            c.legalname,
+            bwb.available_balance,
+            bwb.currency
+          FROM companies c
+          LEFT JOIN broker_wallet_balances bwb
+            ON bwb.company_id = c.id AND bwb.currency = $1
+          WHERE c.companytype = 'broker'
+            AND c.broker_is_active = true
+          ORDER BY COALESCE(bwb.available_balance, 0) DESC
+          LIMIT 1
+        `, [finalReceiveCurrency])
+      }
+
       if (brokerResult.rows.length > 0) {
         brokerCompanyId = brokerResult.rows[0].id
         const availableBalance = parseFloat(brokerResult.rows[0].available_balance) || 0
@@ -354,7 +394,7 @@ export async function POST(request: NextRequest) {
           console.log(`[Remittance Orders] Broker does NOT have sufficient ${finalReceiveCurrency} balance (need ${receiveAmount}, has ${availableBalance} ${brokerCurrency || 'none'})`)
         }
       } else {
-        console.log(`[Remittance Orders] No broker found in ${province}/${municipality}`)
+        console.log(`[Remittance Orders] No active broker found in the system`)
       }
     } else {
       // Check provided broker's availability

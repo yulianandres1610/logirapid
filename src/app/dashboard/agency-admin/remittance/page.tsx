@@ -18,7 +18,11 @@ import {
   Building2,
   MapPin,
   Wallet,
-  Globe
+  Globe,
+  Search,
+  UserCheck,
+  Loader2,
+  Save
 } from 'lucide-react'
 import { DashboardLayout } from '@/components/layout/dashboard-layout'
 import { ProtectedRoute } from '@/components/protected-route'
@@ -42,6 +46,23 @@ interface RemesaData {
   recipientMunicipality: string
   calculatedAmount: number
   exchangeRate: number
+}
+
+interface SavedRecipient {
+  id: number
+  fullName: string
+  phone: string
+  idNumber: string | null
+  address: string | null
+  province: string
+  municipality: string
+  neighborhood: string | null
+  addressReferences: string | null
+  latitude: number | null
+  longitude: number | null
+  hasAlternateContact: boolean
+  alternateContactName: string | null
+  alternateContactPhone: string | null
 }
 
 // Provincias de Cuba con sus municipios
@@ -93,6 +114,82 @@ export default function RemesaPage() {
   const availableMunicipalities = remesaData.recipientProvince
     ? CUBA_LOCATIONS[remesaData.recipientProvince] || []
     : []
+
+  // Recipient search state
+  const [recipientSearch, setRecipientSearch] = useState('')
+  const [searchingRecipient, setSearchingRecipient] = useState(false)
+  const [foundRecipients, setFoundRecipients] = useState<SavedRecipient[]>([])
+  const [selectedRecipient, setSelectedRecipient] = useState<SavedRecipient | null>(null)
+  const [showRecipientResults, setShowRecipientResults] = useState(false)
+
+  // Search for recipients
+  const searchRecipients = async (query: string) => {
+    if (!query || query.length < 2) {
+      setFoundRecipients([])
+      setShowRecipientResults(false)
+      return
+    }
+
+    setSearchingRecipient(true)
+    try {
+      const response = await fetch(`/api/remittance-recipients?search=${encodeURIComponent(query)}`)
+      const data = await response.json()
+      if (data.success && data.data) {
+        setFoundRecipients(data.data)
+        setShowRecipientResults(true)
+      }
+    } catch (error) {
+      console.error('Error searching recipients:', error)
+    } finally {
+      setSearchingRecipient(false)
+    }
+  }
+
+  // Debounced search
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (recipientSearch) {
+        searchRecipients(recipientSearch)
+      }
+    }, 300)
+    return () => clearTimeout(timer)
+  }, [recipientSearch])
+
+  // Select a found recipient
+  const selectRecipient = (recipient: SavedRecipient) => {
+    setSelectedRecipient(recipient)
+    setRemesaData(prev => ({
+      ...prev,
+      recipientName: recipient.fullName,
+      recipientId: recipient.idNumber || '',
+      recipientPhone: recipient.phone,
+      recipientAddress: recipient.address || '',
+      recipientProvince: recipient.province,
+      recipientMunicipality: recipient.municipality
+    }))
+    setShowRecipientResults(false)
+    setRecipientSearch('')
+  }
+
+  // Save recipient after order creation
+  const saveRecipient = async () => {
+    try {
+      await fetch('/api/remittance-recipients', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          fullName: remesaData.recipientName,
+          phone: remesaData.recipientPhone,
+          idNumber: remesaData.recipientId || null,
+          address: remesaData.recipientAddress || null,
+          province: remesaData.recipientProvince,
+          municipality: remesaData.recipientMunicipality
+        })
+      })
+    } catch (error) {
+      console.error('Error saving recipient:', error)
+    }
+  }
 
   // Efecto para convertir tasas de agencia al formato existente para compatibilidad
   useEffect(() => {
@@ -281,6 +378,9 @@ export default function RemesaPage() {
       }
 
       console.log('[Remesa Form] Order created successfully:', data.data)
+
+      // Save recipient for future use
+      await saveRecipient()
 
       // Redirect with order number for success page
       router.push(`/dashboard/agency-admin/remittance?success=true&orderNumber=${data.data.orderNumber}`)
@@ -558,15 +658,97 @@ export default function RemesaPage() {
           "text-lg",
           theme === 'dark' ? "text-gray-400" : "text-gray-600"
         )}>
-          Ingresa los datos de quien recibirá el dinero
+          Busca un destinatario guardado o ingresa uno nuevo
         </p>
       </div>
 
       <div className="max-w-md mx-auto space-y-4">
+        {/* Recipient Search */}
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+          <input
+            type="text"
+            value={recipientSearch}
+            onChange={(e) => setRecipientSearch(e.target.value)}
+            placeholder="Buscar por nombre o teléfono..."
+            className={cn(
+              "w-full pl-12 pr-4 py-3 border-2 rounded-xl focus:outline-none focus:ring-2 focus:ring-exa-primary focus:border-transparent",
+              theme === 'dark'
+                ? "bg-gray-800 border-gray-700 text-white placeholder-gray-500"
+                : "bg-white border-gray-300 text-gray-900 placeholder-gray-400"
+            )}
+          />
+          {searchingRecipient && (
+            <Loader2 className="absolute right-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-exa-primary animate-spin" />
+          )}
+
+          {/* Search Results Dropdown */}
+          {showRecipientResults && foundRecipients.length > 0 && (
+            <div className={cn(
+              "absolute z-10 w-full mt-1 rounded-xl shadow-lg border max-h-60 overflow-y-auto",
+              theme === 'dark' ? "bg-gray-800 border-gray-700" : "bg-white border-gray-200"
+            )}>
+              {foundRecipients.map((recipient) => (
+                <button
+                  key={recipient.id}
+                  onClick={() => selectRecipient(recipient)}
+                  className={cn(
+                    "w-full px-4 py-3 text-left flex items-center gap-3 transition-colors",
+                    theme === 'dark'
+                      ? "hover:bg-gray-700 border-b border-gray-700 last:border-0"
+                      : "hover:bg-gray-50 border-b border-gray-100 last:border-0"
+                  )}
+                >
+                  <UserCheck className="w-5 h-5 text-exa-primary flex-shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <p className="font-medium truncate">{recipient.fullName}</p>
+                    <p className={cn(
+                      "text-sm truncate",
+                      theme === 'dark' ? "text-gray-400" : "text-gray-500"
+                    )}>
+                      {recipient.phone} - {recipient.municipality}, {recipient.province}
+                    </p>
+                  </div>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Selected Recipient Indicator */}
+        {selectedRecipient && (
+          <motion.div
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className={cn(
+              "p-3 rounded-xl border-2 border-green-500/50 bg-green-50 dark:bg-green-900/20"
+            )}
+          >
+            <div className="flex items-center gap-2">
+              <UserCheck className="w-5 h-5 text-green-600" />
+              <span className="text-green-700 dark:text-green-400 font-medium">
+                Destinatario seleccionado: {selectedRecipient.fullName}
+              </span>
+            </div>
+          </motion.div>
+        )}
+
+        <div className={cn(
+          "relative flex items-center gap-4 my-4",
+          theme === 'dark' ? "text-gray-500" : "text-gray-400"
+        )}>
+          <div className="flex-1 h-px bg-current opacity-30"></div>
+          <span className="text-sm">o ingresa manualmente</span>
+          <div className="flex-1 h-px bg-current opacity-30"></div>
+        </div>
+
         <input
           type="text"
           value={remesaData.recipientName}
-          onChange={(e) => updateData('recipientName', e.target.value)}
+          onChange={(e) => {
+            updateData('recipientName', e.target.value)
+            if (selectedRecipient) setSelectedRecipient(null)
+          }}
           placeholder="Nombre completo del destinatario"
           className={cn(
             "w-full px-4 py-4 text-lg border-2 rounded-xl focus:outline-none focus:ring-2 focus:ring-exa-primary focus:border-transparent",
