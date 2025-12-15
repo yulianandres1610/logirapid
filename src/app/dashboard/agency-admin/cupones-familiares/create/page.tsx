@@ -172,10 +172,23 @@ export default function CreateRemittancePage() {
       const res = await fetch('/api/published-rates')
       const data = await res.json()
       if (data.success && data.rates) {
-        const rates: Record<string, number> = { USD: 1 } // USD is always 1:1
+        // Build rates object
+        // The API returns rates relative to CUP (e.g., USD: 424.6 means 1 USD = 424.6 CUP)
+        const rates: Record<string, number> = {}
+
         data.rates.forEach((r: { currency: string; rate: number }) => {
           rates[r.currency] = r.rate
         })
+
+        // For CUP delivery: use the USD rate (which is CUP per USD)
+        // If the product currency is CUP, we multiply sendAmount by USD rate
+        if (rates['USD']) {
+          rates['CUP'] = rates['USD'] // CUP rate = how many CUP per 1 USD
+        }
+
+        // For USD delivery: rate is 1 (1 USD = 1 USD, no conversion)
+        rates['USD_DELIVERY'] = 1
+
         setExchangeRates(rates)
         console.log('[Remittance Wizard] Loaded exchange rates:', rates)
       }
@@ -236,7 +249,16 @@ export default function CreateRemittancePage() {
   // Recalculate receive amount when exchange rates change
   useEffect(() => {
     if (wizardData.productId && wizardData.receiveCurrency) {
-      const rate = exchangeRates[wizardData.receiveCurrency] || 1
+      // Determine the rate based on receive currency
+      let rate = 1
+      if (wizardData.receiveCurrency === 'USD') {
+        rate = 1 // No conversion for USD
+      } else if (wizardData.receiveCurrency === 'CUP') {
+        rate = exchangeRates['CUP'] || exchangeRates['USD'] || 1 // CUP per USD
+      } else {
+        rate = exchangeRates[wizardData.receiveCurrency] || 1
+      }
+
       if (rate !== wizardData.exchangeRate) {
         console.log('[Remittance Wizard] Recalculating with new rate:', rate, 'for', wizardData.receiveCurrency)
         setWizardData(prev => ({
@@ -298,11 +320,21 @@ export default function CreateRemittancePage() {
           const receiveCurrency = product.currency || 'USD'
           // Use ref to get latest exchange rates (avoid stale closure)
           const currentRates = exchangeRatesRef.current
-          const rate = currentRates[receiveCurrency] || 1
+
+          // Determine the rate based on receive currency
+          // USD: 1:1 (family receives USD, no conversion needed)
+          // CUP: use the CUP rate (which is CUP per USD from published-rates)
+          // MLC/EUR: use their respective rates
+          let rate = 1
+          if (receiveCurrency === 'USD') {
+            rate = 1 // No conversion for USD
+          } else if (receiveCurrency === 'CUP') {
+            rate = currentRates['CUP'] || currentRates['USD'] || 1 // CUP per USD
+          } else {
+            rate = currentRates[receiveCurrency] || 1
+          }
 
           // Calculate receive amount based on currency
-          // USD: 1:1 (no conversion)
-          // CUP/MLC/EUR: multiply by exchange rate
           const receiveAmount = amount * rate
           console.log(`[Remittance Wizard] Calculating: ${amount} USD × ${rate} = ${receiveAmount} ${receiveCurrency}`)
 
