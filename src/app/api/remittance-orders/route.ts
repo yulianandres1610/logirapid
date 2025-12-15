@@ -131,12 +131,15 @@ export async function GET(request: NextRequest) {
     // Ensure companyId is properly cast to integer for comparison
     const userCompanyId = parseInt(String(payload.companyId), 10)
 
-    if (payload.role !== 'SUPER_ADMIN') {
+    // DEBUG: Check if showAll parameter is present (temporary for debugging)
+    const showAll = searchParams.get('showAll') === 'true'
+
+    if (payload.role !== 'SUPER_ADMIN' && !showAll) {
       params.push(userCompanyId)
       whereClause += ` AND ro.selling_company_id = $${params.length}::integer`
       console.log(`[Remittance Orders GET] Filtering by selling_company_id = ${userCompanyId} (type: ${typeof userCompanyId})`)
     } else {
-      console.log(`[Remittance Orders GET] SUPER_ADMIN - showing all orders`)
+      console.log(`[Remittance Orders GET] SUPER_ADMIN or showAll - showing all orders`)
     }
 
     if (status) {
