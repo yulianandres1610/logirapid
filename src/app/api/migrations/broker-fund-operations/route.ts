@@ -158,10 +158,10 @@ export async function POST() {
 
         -- Also log to main wallet_transactions
         INSERT INTO wallet_transactions (
-          type, source_type, source_company_id, amount, currency,
+          type, source_type, source_company_id, amount, fee, net_amount, currency,
           status, description, created_by
         ) VALUES (
-          'reserve', 'company', p_broker_id, p_amount, p_currency,
+          'reserve', 'company', p_broker_id, p_amount, 0, p_amount, p_currency,
           'completed', 'Reserva para orden de remesa #' || p_order_id, p_user_id
         );
 
@@ -226,10 +226,10 @@ export async function POST() {
 
         -- Log to main wallet_transactions
         INSERT INTO wallet_transactions (
-          type, source_type, source_company_id, amount, currency,
+          type, source_type, source_company_id, amount, fee, net_amount, currency,
           status, description, created_by
         ) VALUES (
-          'debit', 'company', v_reservation.broker_company_id, v_reservation.amount, v_reservation.currency,
+          'debit', 'company', v_reservation.broker_company_id, v_reservation.amount, 0, v_reservation.amount, v_reservation.currency,
           'completed', 'Entrega remesa orden #' || p_order_id, p_user_id
         );
 
@@ -299,10 +299,10 @@ export async function POST() {
 
         -- Log to main wallet_transactions
         INSERT INTO wallet_transactions (
-          type, source_type, source_company_id, amount, currency,
+          type, source_type, source_company_id, amount, fee, net_amount, currency,
           status, description, created_by
         ) VALUES (
-          'refund', 'company', v_reservation.broker_company_id, v_reservation.amount, v_reservation.currency,
+          'refund', 'company', v_reservation.broker_company_id, v_reservation.amount, 0, v_reservation.amount, v_reservation.currency,
           'completed', 'Liberación fondos - Orden cancelada #' || p_order_id, p_user_id
         );
 
