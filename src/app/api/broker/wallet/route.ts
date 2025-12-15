@@ -83,7 +83,18 @@ export async function GET(request: NextRequest) {
 
     // Get multi-currency balances from broker_wallet_balances
     let currencyBalances: any[] = []
+    const supportedCurrencies = ['USD', 'CUP', 'EUR', 'MLC']
+
     try {
+      // First, ensure broker has entries for all supported currencies
+      for (const curr of supportedCurrencies) {
+        await db.query(`
+          INSERT INTO broker_wallet_balances (company_id, currency, available_balance, reserved_balance, total_deposits, total_withdrawals)
+          VALUES ($1, $2, 0, 0, 0, 0)
+          ON CONFLICT (company_id, currency) DO NOTHING
+        `, [payload.companyId, curr])
+      }
+
       const balancesResult = await db.query(`
         SELECT
           currency,
@@ -93,7 +104,14 @@ export async function GET(request: NextRequest) {
           total_withdrawals
         FROM broker_wallet_balances
         WHERE company_id = $1
-        ORDER BY currency
+        ORDER BY
+          CASE currency
+            WHEN 'USD' THEN 1
+            WHEN 'CUP' THEN 2
+            WHEN 'EUR' THEN 3
+            WHEN 'MLC' THEN 4
+            ELSE 5
+          END
       `, [payload.companyId])
       currencyBalances = balancesResult.rows.map(row => ({
         currency: row.currency,
@@ -103,8 +121,15 @@ export async function GET(request: NextRequest) {
         totalWithdrawals: parseFloat(row.total_withdrawals) || 0
       }))
     } catch (e) {
-      // Table might not exist yet
+      // Table might not exist yet - create fallback from legacy balance
       console.log('[Broker Wallet] broker_wallet_balances table not found, using legacy balance')
+      currencyBalances = [{
+        currency: currency,
+        available: walletBalance,
+        reserved: 0,
+        totalDeposits: 0,
+        totalWithdrawals: 0
+      }]
     }
 
     // Get transaction stats

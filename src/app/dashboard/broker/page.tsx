@@ -36,6 +36,7 @@ interface CurrencyBalance {
 
 interface WalletData {
   companyName: string
+  walletNumber: string
   walletBalance: number
   currency: string
   province: string
@@ -71,34 +72,46 @@ interface DeliveryStats {
   amount: number
 }
 
-const CURRENCY_CONFIG: Record<string, { name: string; symbol: string; flag: string; gradient: string; pattern: string }> = {
+// Credit card style colors (American Express inspired)
+const CURRENCY_CONFIG: Record<string, {
+  name: string
+  symbol: string
+  flag: string
+  bgColor: string
+  textColor: string
+  accentColor: string
+}> = {
   USD: {
-    name: 'Dólar',
+    name: 'Dólar Americano',
     symbol: '$',
     flag: '🇺🇸',
-    gradient: 'from-blue-600 via-blue-500 to-cyan-500',
-    pattern: 'radial-gradient(circle at 100% 0%, rgba(255,255,255,0.15) 0%, transparent 50%)'
+    bgColor: '#006FCF', // Amex Blue
+    textColor: '#FFFFFF',
+    accentColor: '#004A8F'
   },
   CUP: {
     name: 'Peso Cubano',
-    symbol: '',
+    symbol: '$',
     flag: '🇨🇺',
-    gradient: 'from-red-600 via-red-500 to-orange-500',
-    pattern: 'radial-gradient(circle at 0% 100%, rgba(255,255,255,0.15) 0%, transparent 50%)'
+    bgColor: '#8B0000', // Dark Red
+    textColor: '#FFFFFF',
+    accentColor: '#5C0000'
   },
   EUR: {
     name: 'Euro',
     symbol: '€',
     flag: '🇪🇺',
-    gradient: 'from-indigo-600 via-purple-500 to-pink-500',
-    pattern: 'radial-gradient(circle at 100% 100%, rgba(255,255,255,0.15) 0%, transparent 50%)'
+    bgColor: '#B4B4B4', // Platinum
+    textColor: '#1A1A1A',
+    accentColor: '#8A8A8A'
   },
   MLC: {
-    name: 'MLC',
+    name: 'Moneda Libremente Convertible',
     symbol: '$',
     flag: '💳',
-    gradient: 'from-emerald-600 via-teal-500 to-cyan-500',
-    pattern: 'radial-gradient(circle at 0% 0%, rgba(255,255,255,0.15) 0%, transparent 50%)'
+    bgColor: '#1A1A1A', // Black
+    textColor: '#FFFFFF',
+    accentColor: '#333333'
   }
 }
 
@@ -138,89 +151,157 @@ function AnimatedCounter({ value, decimals = 0 }: { value: number; decimals?: nu
   return <span className="tabular-nums">{Math.round(displayValue).toLocaleString()}</span>
 }
 
-// Currency Card Component
+// Credit Card Component (American Express style)
 function CurrencyCard({
   currency,
   balance,
+  walletNumber,
+  companyName,
   index
 }: {
   currency: string
   balance: CurrencyBalance
+  walletNumber?: string
+  companyName?: string
   index: number
 }) {
   const config = CURRENCY_CONFIG[currency] || CURRENCY_CONFIG.USD
   const [isHovered, setIsHovered] = useState(false)
 
+  // Format wallet number like a credit card (4 groups of 4)
+  const formatWalletNumber = (num: string = '') => {
+    const clean = num.replace(/\D/g, '').padEnd(16, '0').slice(0, 16)
+    return `${clean.slice(0, 4)} ${clean.slice(4, 8)} ${clean.slice(8, 12)} ${clean.slice(12, 16)}`
+  }
+
+  const formattedNumber = formatWalletNumber(walletNumber)
+
   return (
     <motion.div
-      initial={{ opacity: 0, y: 30, rotateX: -15 }}
-      animate={{ opacity: 1, y: 0, rotateX: 0 }}
-      transition={{ delay: index * 0.1, duration: 0.5 }}
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ delay: index * 0.1, duration: 0.4 }}
       onHoverStart={() => setIsHovered(true)}
       onHoverEnd={() => setIsHovered(false)}
-      className="relative group cursor-pointer"
+      className="relative cursor-pointer"
       style={{ perspective: '1000px' }}
     >
       <motion.div
         animate={{
-          rotateY: isHovered ? 5 : 0,
-          scale: isHovered ? 1.02 : 1
+          rotateY: isHovered ? 3 : 0,
+          scale: isHovered ? 1.02 : 1,
+          boxShadow: isHovered
+            ? '0 25px 50px -12px rgba(0, 0, 0, 0.35)'
+            : '0 10px 30px -10px rgba(0, 0, 0, 0.25)'
         }}
         transition={{ duration: 0.3 }}
-        className={`relative overflow-hidden rounded-2xl bg-gradient-to-br ${config.gradient} p-5 h-44 shadow-lg`}
-        style={{ transformStyle: 'preserve-3d' }}
+        className="relative overflow-hidden rounded-xl"
+        style={{
+          backgroundColor: config.bgColor,
+          aspectRatio: '1.586',
+          transformStyle: 'preserve-3d'
+        }}
       >
-        {/* Background Pattern */}
+        {/* Card texture overlay */}
         <div
-          className="absolute inset-0 opacity-30"
-          style={{ background: config.pattern }}
+          className="absolute inset-0 opacity-10"
+          style={{
+            backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E")`,
+            mixBlendMode: 'overlay'
+          }}
         />
-        <div className="absolute -right-8 -top-8 w-32 h-32 rounded-full bg-white/10 blur-2xl" />
-        <div className="absolute -left-8 -bottom-8 w-24 h-24 rounded-full bg-white/5 blur-xl" />
 
-        {/* Chip */}
-        <div className="absolute top-5 left-5">
-          <div className="w-10 h-7 rounded-md bg-gradient-to-br from-yellow-300 to-yellow-500 shadow-lg flex items-center justify-center">
-            <div className="w-6 h-4 rounded-sm bg-yellow-600/30" />
+        {/* Subtle diagonal lines pattern */}
+        <div
+          className="absolute inset-0 opacity-5"
+          style={{
+            backgroundImage: `repeating-linear-gradient(
+              135deg,
+              transparent,
+              transparent 2px,
+              ${config.textColor} 2px,
+              ${config.textColor} 4px
+            )`
+          }}
+        />
+
+        <div className="relative h-full p-4 flex flex-col justify-between" style={{ color: config.textColor }}>
+          {/* Top row - Logo and Currency */}
+          <div className="flex justify-between items-start">
+            {/* Brand logo area */}
+            <div className="flex items-center gap-2">
+              <div
+                className="w-8 h-8 rounded-full flex items-center justify-center text-lg font-bold"
+                style={{ backgroundColor: config.accentColor }}
+              >
+                {config.flag}
+              </div>
+              <div>
+                <p className="text-[10px] font-bold tracking-widest opacity-80">CUBARAPID</p>
+                <p className="text-[8px] opacity-60 tracking-wide">{config.name}</p>
+              </div>
+            </div>
+
+            {/* Currency badge */}
+            <div
+              className="px-2 py-0.5 rounded text-xs font-bold tracking-wider"
+              style={{ backgroundColor: config.accentColor }}
+            >
+              {currency}
+            </div>
+          </div>
+
+          {/* EMV Chip */}
+          <div className="absolute top-12 left-4">
+            <div className="w-9 h-7 rounded-md overflow-hidden" style={{ backgroundColor: '#D4AF37' }}>
+              <div className="w-full h-full grid grid-cols-3 grid-rows-3 gap-[1px] p-[2px]">
+                {[...Array(9)].map((_, i) => (
+                  <div
+                    key={i}
+                    className="rounded-[1px]"
+                    style={{ backgroundColor: i === 4 ? '#B8860B' : '#C5A028' }}
+                  />
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* Card Number */}
+          <div className="mt-auto mb-1">
+            <p
+              className="font-mono text-base tracking-[0.15em] font-medium"
+              style={{ textShadow: '0 1px 2px rgba(0,0,0,0.2)' }}
+            >
+              {formattedNumber}
+            </p>
+          </div>
+
+          {/* Bottom row - Balance and Member info */}
+          <div className="flex justify-between items-end">
+            <div>
+              <p className="text-[8px] uppercase tracking-wider opacity-60 mb-0.5">Balance Disponible</p>
+              <p className="text-xl font-bold tracking-tight">
+                {config.symbol}<AnimatedCounter value={balance.available} decimals={currency === 'CUP' ? 0 : 2} />
+              </p>
+            </div>
+
+            <div className="text-right">
+              <p className="text-[8px] uppercase tracking-wider opacity-60 mb-0.5">Titular</p>
+              <p className="text-[10px] font-medium tracking-wide truncate max-w-[100px]">
+                {(companyName || 'BROKER').toUpperCase()}
+              </p>
+            </div>
           </div>
         </div>
 
-        {/* Flag & Currency */}
-        <div className="absolute top-5 right-5 flex items-center gap-2">
-          <span className="text-2xl">{config.flag}</span>
-          <span className="text-white/80 font-medium text-sm">{currency}</span>
+        {/* Contactless icon */}
+        <div className="absolute top-12 right-4 opacity-60">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <path d="M6.5 6.5c3.5-3.5 9-3.5 12.5 0" />
+            <path d="M8.5 10.5c2-2 5-2 7 0" />
+            <path d="M10.5 14.5c.5-.5 1.5-.5 2 0" />
+          </svg>
         </div>
-
-        {/* Balance */}
-        <div className="absolute bottom-5 left-5 right-5">
-          <p className="text-white/60 text-xs mb-1 uppercase tracking-wider">Balance Disponible</p>
-          <p className="text-white text-2xl font-bold">
-            {config.symbol}<AnimatedCounter value={balance.available} decimals={currency === 'CUP' ? 0 : 2} />
-          </p>
-
-          {/* Mini Stats */}
-          <div className="flex items-center gap-4 mt-3">
-            <div className="flex items-center gap-1">
-              <TrendingUp className="w-3 h-3 text-green-300" />
-              <span className="text-white/70 text-xs">
-                {config.symbol}{(balance.totalDeposits || 0).toLocaleString()}
-              </span>
-            </div>
-            <div className="flex items-center gap-1">
-              <TrendingDown className="w-3 h-3 text-red-300" />
-              <span className="text-white/70 text-xs">
-                {config.symbol}{(balance.totalWithdrawals || 0).toLocaleString()}
-              </span>
-            </div>
-          </div>
-        </div>
-
-        {/* Hover Overlay */}
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: isHovered ? 1 : 0 }}
-          className="absolute inset-0 bg-white/10 backdrop-blur-[1px]"
-        />
       </motion.div>
     </motion.div>
   )
@@ -280,7 +361,10 @@ function ExchangeRateCard({ rate, index }: { rate: ExchangeRate; index: number }
       className="flex items-center justify-between p-4 rounded-xl bg-gray-50 dark:bg-gray-700/50 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
     >
       <div className="flex items-center gap-3">
-        <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${config.gradient} flex items-center justify-center text-lg`}>
+        <div
+          className="w-10 h-10 rounded-xl flex items-center justify-center text-lg"
+          style={{ backgroundColor: config.bgColor, color: config.textColor }}
+        >
           {config.flag}
         </div>
         <div>
@@ -502,6 +586,8 @@ export default function BrokerDashboardPage() {
                 key={balance.currency}
                 currency={balance.currency}
                 balance={balance}
+                walletNumber={walletData?.walletNumber}
+                companyName={walletData?.companyName}
                 index={index}
               />
             ))}

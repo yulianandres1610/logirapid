@@ -349,10 +349,29 @@ export async function POST(request: NextRequest) {
     })
 
     const result = await db.query(query, values)
+    const newCompany = result.rows[0]
+
+    // Si es un broker, inicializar los balances multi-moneda
+    if (companyType === 'broker' && newCompany.id) {
+      const supportedCurrencies = ['USD', 'CUP', 'EUR', 'MLC']
+      for (const curr of supportedCurrencies) {
+        try {
+          await db.query(`
+            INSERT INTO broker_wallet_balances (company_id, currency, available_balance, reserved_balance, total_deposits, total_withdrawals)
+            VALUES ($1, $2, 0, 0, 0, 0)
+            ON CONFLICT (company_id, currency) DO NOTHING
+          `, [newCompany.id, curr])
+        } catch (e) {
+          // Ignore if table doesn't exist yet
+          console.log(`[Companies API] Could not initialize ${curr} balance for broker ${newCompany.id}:`, e)
+        }
+      }
+      console.log(`[Companies API] Initialized multi-currency balances for broker ${newCompany.id}`)
+    }
 
     return NextResponse.json({
       success: true,
-      data: result.rows[0]
+      data: newCompany
     })
 
   } catch (error: any) {
