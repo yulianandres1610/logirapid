@@ -33,6 +33,11 @@ import { useAuth } from '@/hooks/useAuth'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { DashboardLayout } from '@/components/layout/dashboard-layout'
+import mapboxgl from 'mapbox-gl'
+import 'mapbox-gl/dist/mapbox-gl.css'
+
+// Mapbox token
+mapboxgl.accessToken = 'pk.eyJ1IjoieXVsaWFuYW5kcmVzMTYxMCIsImEiOiJjbWgycTlsZGsxM200YnNvbnN2d2wwcHJ5In0.wlU7-bazAs2eYjknx7H97Q'
 
 // Force dynamic rendering
 export const dynamic = 'force-dynamic'
@@ -87,11 +92,24 @@ export default function CreateRemittancePage() {
   const [loadingProducts, setLoadingProducts] = useState(true)
   const [exchangeRates, setExchangeRates] = useState<Record<string, number>>({ USD: 1, CUP: 1 })
 
-  // Customer search state
+  // Customer search state - Recipient
   const [searchPhone, setSearchPhone] = useState('')
   const [searchingCustomer, setSearchingCustomer] = useState(false)
   const [foundCustomers, setFoundCustomers] = useState<any[]>([])
   const [selectedRecipient, setSelectedRecipient] = useState<any>(null)
+  const [recipientAddresses, setRecipientAddresses] = useState<any[]>([])
+
+  // Customer search state - Sender
+  const [senderSearchPhone, setSenderSearchPhone] = useState('')
+  const [searchingSender, setSearchingSender] = useState(false)
+  const [foundSenders, setFoundSenders] = useState<any[]>([])
+  const [selectedSender, setSelectedSender] = useState<any>(null)
+
+  // Map state for recipient address
+  const [showMap, setShowMap] = useState(false)
+  const mapContainerRef = React.useRef<HTMLDivElement>(null)
+  const mapRef = React.useRef<any>(null)
+  const markerRef = React.useRef<any>(null)
 
   // Ref to always have latest exchange rates available in callbacks
   const exchangeRatesRef = React.useRef(exchangeRates)
@@ -124,6 +142,10 @@ export default function CreateRemittancePage() {
     recipientAddress: '',
     recipientNeighborhood: '',
     recipientAddressReferences: '',
+    recipientLatitude: null as number | null,
+    recipientLongitude: null as number | null,
+    recipientCustomerId: null as number | null,
+    recipientAddressId: null as number | null,
     hasAlternateContact: false,
     alternateContactName: '',
     alternateContactPhone: '',
@@ -281,18 +303,28 @@ export default function CreateRemittancePage() {
       recipientName: fullName || customer.name || '',
       recipientPhone: customer.phone || '',
       recipientIdNumber: customer.idNumber || '',
-      recipientAddress: customer.street || customer.address || '',
-      recipientNeighborhood: customer.neighborhood || customer.city || '',
-      recipientAddressReferences: customer.notes || '',
+      recipientAddress: '',
+      recipientNeighborhood: '',
+      recipientAddressReferences: '',
+      recipientLatitude: null,
+      recipientLongitude: null,
+      recipientCustomerId: customer.id,
+      recipientAddressId: null,
       hasAlternateContact: customer.hasAlternateContact || false,
       alternateContactName: customer.alternateContactName || '',
       alternateContactPhone: customer.alternateContactPhone || ''
     })
+
+    // Load Cuba addresses for this customer
+    if (customer.id) {
+      loadRecipientAddresses(customer.id)
+    }
   }
 
   // Clear selected recipient and allow new search
   const clearSelectedRecipient = () => {
     setSelectedRecipient(null)
+    setRecipientAddresses([])
     setSearchPhone('')
     updateWizardData({
       recipientName: '',
@@ -301,11 +333,215 @@ export default function CreateRemittancePage() {
       recipientAddress: '',
       recipientNeighborhood: '',
       recipientAddressReferences: '',
+      recipientLatitude: null,
+      recipientLongitude: null,
+      recipientCustomerId: null,
+      recipientAddressId: null,
       hasAlternateContact: false,
       alternateContactName: '',
       alternateContactPhone: ''
     })
   }
+
+  // Load customer addresses for Cuba when a recipient is selected
+  const loadRecipientAddresses = async (customerId: number) => {
+    try {
+      const res = await fetch(`/api/customer-addresses?customerId=${customerId}`)
+      const data = await res.json()
+      if (data.success && data.data) {
+        // Filter only Cuba addresses (country = 'Cuba' or province matches Cuban provinces)
+        const cubaAddresses = data.data.filter((addr: any) =>
+          addr.country === 'Cuba' ||
+          addr.country === 'CU' ||
+          ['La Habana', 'Pinar del Río', 'Artemisa', 'Mayabeque', 'Matanzas', 'Cienfuegos', 'Villa Clara', 'Sancti Spíritus', 'Ciego de Ávila', 'Camagüey', 'Las Tunas', 'Holguín', 'Granma', 'Santiago de Cuba', 'Guantánamo', 'Isla de la Juventud'].some(p =>
+            addr.state?.toLowerCase().includes(p.toLowerCase())
+          )
+        )
+        setRecipientAddresses(cubaAddresses)
+      }
+    } catch (error) {
+      console.error('Error loading recipient addresses:', error)
+    }
+  }
+
+  // Select an address from the list
+  const selectRecipientAddress = (address: any) => {
+    updateWizardData({
+      recipientAddress: address.street || '',
+      recipientNeighborhood: address.city || '',
+      recipientAddressReferences: address.notes || '',
+      recipientLatitude: address.latitude || null,
+      recipientLongitude: address.longitude || null,
+      recipientAddressId: address.id
+    })
+
+    // Update map marker if map is visible
+    if (address.latitude && address.longitude && mapRef.current && markerRef.current) {
+      markerRef.current.setLngLat([address.longitude, address.latitude])
+      mapRef.current.flyTo({ center: [address.longitude, address.latitude], zoom: 15 })
+    }
+  }
+
+  // Search for sender by phone
+  const searchSenderByPhone = async () => {
+    if (!senderSearchPhone.trim()) return
+
+    setSearchingSender(true)
+    setFoundSenders([])
+    try {
+      const res = await fetch(`/api/customers?search=${encodeURIComponent(senderSearchPhone)}`)
+      const data = await res.json()
+      if (data.success) {
+        const results = data.data || []
+        setFoundSenders(results)
+      }
+    } catch (error) {
+      console.error('Error searching sender:', error)
+    } finally {
+      setSearchingSender(false)
+    }
+  }
+
+  // Select a found sender and fill in the form
+  const selectSenderFromSearch = (customer: any) => {
+    setSelectedSender(customer)
+    setFoundSenders([])
+    setSenderSearchPhone('')
+
+    // Fill in the wizard data with customer info
+    const fullName = `${customer.firstName || ''} ${customer.lastName || ''}`.trim()
+
+    updateWizardData({
+      senderName: fullName || customer.name || '',
+      senderPhone: customer.phone || '',
+      senderEmail: customer.email || ''
+    })
+  }
+
+  // Clear selected sender and allow new search
+  const clearSelectedSender = () => {
+    setSelectedSender(null)
+    setSenderSearchPhone('')
+    updateWizardData({
+      senderName: '',
+      senderPhone: '',
+      senderEmail: ''
+    })
+  }
+
+  // Initialize map for Cuba pin placement
+  const initializeMap = () => {
+    if (!mapContainerRef.current || mapRef.current) return
+
+    // Cuba center coordinates
+    const cubaCenterLng = -79.5
+    const cubaCenterLat = 22.0
+
+    // If province is selected, try to center on it
+    let initialCenter: [number, number] = [cubaCenterLng, cubaCenterLat]
+    let initialZoom = 6
+
+    // Province centers for Cuba
+    const provinceCenters: Record<string, [number, number]> = {
+      'La Habana': [-82.3666, 23.1136],
+      'Pinar del Río': [-83.6978, 22.4175],
+      'Artemisa': [-82.7614, 22.8136],
+      'Mayabeque': [-82.0259, 22.9259],
+      'Matanzas': [-81.5775, 22.4128],
+      'Cienfuegos': [-80.4536, 22.1456],
+      'Villa Clara': [-79.9658, 22.4061],
+      'Sancti Spíritus': [-79.4425, 21.9300],
+      'Ciego de Ávila': [-78.7619, 21.8403],
+      'Camagüey': [-77.9181, 21.3808],
+      'Las Tunas': [-76.9514, 20.9619],
+      'Holguín': [-76.2633, 20.7872],
+      'Granma': [-76.6436, 20.3844],
+      'Santiago de Cuba': [-75.8219, 20.0247],
+      'Guantánamo': [-75.2092, 20.1417],
+      'Isla de la Juventud': [-82.8019, 21.7047]
+    }
+
+    if (wizardData.province && provinceCenters[wizardData.province]) {
+      initialCenter = provinceCenters[wizardData.province]
+      initialZoom = 11
+    }
+
+    // Use existing coordinates if available
+    if (wizardData.recipientLatitude && wizardData.recipientLongitude) {
+      initialCenter = [wizardData.recipientLongitude, wizardData.recipientLatitude]
+      initialZoom = 15
+    }
+
+    mapRef.current = new mapboxgl.Map({
+      container: mapContainerRef.current,
+      style: 'mapbox://styles/mapbox/streets-v12',
+      center: initialCenter,
+      zoom: initialZoom
+    })
+
+    // Add navigation controls
+    mapRef.current.addControl(new mapboxgl.NavigationControl(), 'top-right')
+
+    // Create draggable marker
+    const el = document.createElement('div')
+    el.innerHTML = `
+      <div style="
+        width: 40px;
+        height: 40px;
+        background: #EF4444;
+        border-radius: 50% 50% 50% 0;
+        transform: rotate(-45deg);
+        border: 3px solid white;
+        box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+        cursor: grab;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      ">
+        <span style="transform: rotate(45deg); color: white; font-size: 16px;">📍</span>
+      </div>
+    `
+
+    markerRef.current = new mapboxgl.Marker({ element: el, draggable: true })
+      .setLngLat(initialCenter)
+      .addTo(mapRef.current)
+
+    // Update coordinates when marker is dragged
+    markerRef.current.on('dragend', () => {
+      const lngLat = markerRef.current.getLngLat()
+      updateWizardData({
+        recipientLatitude: lngLat.lat,
+        recipientLongitude: lngLat.lng
+      })
+    })
+
+    // Allow clicking on map to move marker
+    mapRef.current.on('click', (e: any) => {
+      markerRef.current.setLngLat(e.lngLat)
+      updateWizardData({
+        recipientLatitude: e.lngLat.lat,
+        recipientLongitude: e.lngLat.lng
+      })
+    })
+  }
+
+  // Cleanup map on unmount
+  useEffect(() => {
+    return () => {
+      if (mapRef.current) {
+        mapRef.current.remove()
+        mapRef.current = null
+      }
+    }
+  }, [])
+
+  // Initialize map when showMap becomes true
+  useEffect(() => {
+    if (showMap && mapContainerRef.current && !mapRef.current) {
+      // Small delay to ensure container is rendered
+      setTimeout(initializeMap, 100)
+    }
+  }, [showMap])
 
   // Check availability when on step 3
   useEffect(() => {
@@ -1004,6 +1240,54 @@ export default function CreateRemittancePage() {
                   <Home className="w-4 h-4" />
                   Direccion de Entrega en {wizardData.municipality}, {wizardData.province}
                 </h4>
+
+                {/* Show saved Cuba addresses if customer selected */}
+                {selectedRecipient && recipientAddresses.length > 0 && (
+                  <div className="mb-4">
+                    <p className={cn("text-xs font-medium mb-2", theme === 'dark' ? 'text-gray-400' : 'text-gray-600')}>
+                      Direcciones guardadas en Cuba:
+                    </p>
+                    <div className="space-y-2">
+                      {recipientAddresses.map((addr) => (
+                        <motion.button
+                          key={addr.id}
+                          whileHover={{ scale: 1.01 }}
+                          whileTap={{ scale: 0.99 }}
+                          onClick={() => selectRecipientAddress(addr)}
+                          className={cn(
+                            "w-full p-3 rounded-lg border text-left text-sm transition-all",
+                            wizardData.recipientAddressId === addr.id
+                              ? theme === 'dark' ? 'bg-blue-900/30 border-blue-600' : 'bg-blue-50 border-blue-400'
+                              : theme === 'dark' ? 'bg-gray-600 border-gray-500 hover:bg-gray-500' : 'bg-white border-gray-200 hover:bg-gray-50'
+                          )}
+                        >
+                          <p className={cn("font-medium", theme === 'dark' ? 'text-white' : 'text-gray-900')}>
+                            {addr.street}
+                          </p>
+                          <p className={cn("text-xs", theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}>
+                            {addr.city}, {addr.state} {addr.latitude ? '📍' : ''}
+                          </p>
+                        </motion.button>
+                      ))}
+                    </div>
+                    <div className="mt-2 text-center">
+                      <button
+                        onClick={() => {
+                          updateWizardData({
+                            recipientAddress: '',
+                            recipientNeighborhood: '',
+                            recipientAddressReferences: '',
+                            recipientAddressId: null
+                          })
+                        }}
+                        className={cn("text-xs", theme === 'dark' ? 'text-blue-400 hover:text-blue-300' : 'text-blue-600 hover:text-blue-500')}
+                      >
+                        + Agregar nueva direccion
+                      </button>
+                    </div>
+                  </div>
+                )}
+
                 <div className="space-y-3">
                   <Input
                     placeholder="Calle/Avenida con numero"
@@ -1027,6 +1311,53 @@ export default function CreateRemittancePage() {
                     onChange={(e) => updateWizardData({ recipientAddressReferences: e.target.value })}
                     className={cn("rounded-xl h-11", theme === 'dark' ? 'bg-gray-600 text-white border-gray-500' : 'bg-white text-gray-900 border-gray-300')}
                   />
+
+                  {/* Map Pin Placement */}
+                  <div className="pt-2">
+                    <button
+                      type="button"
+                      onClick={() => setShowMap(!showMap)}
+                      className={cn(
+                        "w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl border transition-all",
+                        showMap
+                          ? theme === 'dark' ? 'bg-blue-900/30 border-blue-600 text-blue-400' : 'bg-blue-50 border-blue-400 text-blue-600'
+                          : theme === 'dark' ? 'bg-gray-600 border-gray-500 text-gray-300 hover:bg-gray-500' : 'bg-white border-gray-300 text-gray-700 hover:bg-gray-50'
+                      )}
+                    >
+                      <MapPin className="w-4 h-4" />
+                      {showMap ? 'Ocultar mapa' : 'Colocar pin en el mapa'}
+                      {wizardData.recipientLatitude && wizardData.recipientLongitude && (
+                        <span className="text-green-500 ml-1">✓</span>
+                      )}
+                    </button>
+
+                    <AnimatePresence>
+                      {showMap && (
+                        <motion.div
+                          initial={{ opacity: 0, height: 0 }}
+                          animate={{ opacity: 1, height: 'auto' }}
+                          exit={{ opacity: 0, height: 0 }}
+                          className="overflow-hidden"
+                        >
+                          <div className="pt-3">
+                            <p className={cn("text-xs mb-2", theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}>
+                              Arrastra el pin rojo o haz clic en el mapa para marcar la ubicacion exacta de entrega
+                            </p>
+                            <div
+                              ref={mapContainerRef}
+                              className="w-full h-64 rounded-xl overflow-hidden border"
+                              style={{ minHeight: '256px' }}
+                            />
+                            {wizardData.recipientLatitude && wizardData.recipientLongitude && (
+                              <p className={cn("text-xs mt-2 text-center", theme === 'dark' ? 'text-green-400' : 'text-green-600')}>
+                                📍 Ubicacion: {wizardData.recipientLatitude.toFixed(6)}, {wizardData.recipientLongitude.toFixed(6)}
+                              </p>
+                            )}
+                          </div>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </div>
                 </div>
               </div>
 
@@ -1070,10 +1401,130 @@ export default function CreateRemittancePage() {
                 Datos del Remitente
               </h2>
               <p className={cn("text-sm mt-1", theme === 'dark' ? 'text-gray-400' : 'text-gray-600')}>
-                Informacion de quien envia el dinero
+                Busca un cliente existente o ingresa los datos manualmente
               </p>
             </div>
 
+            {/* Sender Search Section */}
+            <div className={cn("p-4 rounded-xl border", theme === 'dark' ? 'bg-gray-700/50 border-gray-600' : 'bg-blue-50 border-blue-200')}>
+              <h4 className={cn("text-sm font-semibold mb-3 flex items-center gap-2", theme === 'dark' ? 'text-gray-300' : 'text-blue-700')}>
+                <Search className="w-4 h-4" />
+                Buscar Cliente Existente
+              </h4>
+
+              {selectedSender ? (
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.95 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  className={cn(
+                    "p-4 rounded-xl flex items-center justify-between",
+                    theme === 'dark' ? 'bg-green-900/20 border border-green-700' : 'bg-green-50 border border-green-200'
+                  )}
+                >
+                  <div className="flex items-center gap-3">
+                    <div className={cn(
+                      "w-10 h-10 rounded-full flex items-center justify-center",
+                      theme === 'dark' ? 'bg-green-900/30' : 'bg-green-100'
+                    )}>
+                      <UserCheck className="w-5 h-5 text-green-600" />
+                    </div>
+                    <div>
+                      <p className={cn("font-semibold", theme === 'dark' ? 'text-white' : 'text-gray-900')}>
+                        {selectedSender.firstName} {selectedSender.lastName}
+                      </p>
+                      <p className={cn("text-sm", theme === 'dark' ? 'text-gray-400' : 'text-gray-600')}>
+                        {selectedSender.phone}
+                      </p>
+                    </div>
+                  </div>
+                  <Button
+                    onClick={clearSelectedSender}
+                    variant="outline"
+                    size="sm"
+                    className={cn("rounded-lg", theme === 'dark' ? 'border-gray-600' : '')}
+                  >
+                    Cambiar
+                  </Button>
+                </motion.div>
+              ) : (
+                <div className="flex gap-2">
+                  <div className="flex-1 relative">
+                    <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                    <Input
+                      placeholder="Buscar por telefono..."
+                      value={senderSearchPhone}
+                      onChange={(e) => setSenderSearchPhone(e.target.value)}
+                      onKeyDown={(e) => e.key === 'Enter' && searchSenderByPhone()}
+                      className={cn(
+                        "pl-10 rounded-xl h-11",
+                        theme === 'dark' ? 'bg-gray-600 text-white border-gray-500' : 'bg-white text-gray-900 border-gray-300'
+                      )}
+                    />
+                  </div>
+                  <Button
+                    onClick={searchSenderByPhone}
+                    disabled={searchingSender || !senderSearchPhone.trim()}
+                    className={cn(
+                      "rounded-xl h-11 px-4",
+                      theme === 'dark' ? 'bg-blue-600 hover:bg-blue-700' : 'bg-blue-500 hover:bg-blue-600',
+                      'text-white'
+                    )}
+                  >
+                    {searchingSender ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
+                  </Button>
+                </div>
+              )}
+
+              {/* Search Results */}
+              <AnimatePresence>
+                {foundSenders.length > 0 && (
+                  <motion.div
+                    initial={{ opacity: 0, y: -10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -10 }}
+                    className="mt-3 space-y-2"
+                  >
+                    {foundSenders.map((customer) => (
+                      <motion.button
+                        key={customer.id}
+                        whileHover={{ scale: 1.01 }}
+                        whileTap={{ scale: 0.99 }}
+                        onClick={() => selectSenderFromSearch(customer)}
+                        className={cn(
+                          "w-full p-3 rounded-xl border text-left transition-all flex items-center gap-3",
+                          theme === 'dark'
+                            ? 'bg-gray-600 border-gray-500 hover:bg-gray-500'
+                            : 'bg-white border-gray-200 hover:bg-gray-50'
+                        )}
+                      >
+                        <div className={cn(
+                          "w-10 h-10 rounded-full flex items-center justify-center",
+                          theme === 'dark' ? 'bg-blue-900/30' : 'bg-blue-100'
+                        )}>
+                          <User className="w-5 h-5 text-blue-600" />
+                        </div>
+                        <div className="flex-1">
+                          <p className={cn("font-semibold", theme === 'dark' ? 'text-white' : 'text-gray-900')}>
+                            {customer.firstName} {customer.lastName}
+                          </p>
+                          <p className={cn("text-sm", theme === 'dark' ? 'text-gray-400' : 'text-gray-600')}>
+                            {customer.phone}
+                          </p>
+                        </div>
+                      </motion.button>
+                    ))}
+                  </motion.div>
+                )}
+              </AnimatePresence>
+
+              {foundSenders.length === 0 && senderSearchPhone && !searchingSender && (
+                <p className={cn("text-sm mt-2", theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}>
+                  No se encontraron clientes. Ingresa los datos manualmente abajo.
+                </p>
+              )}
+            </div>
+
+            {/* Manual Entry Form */}
             <div className="space-y-4">
               <Input
                 placeholder="Nombre completo *"
