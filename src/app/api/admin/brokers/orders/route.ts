@@ -107,8 +107,8 @@ export async function GET(request: NextRequest) {
         ro.*,
         sc.legalname as selling_company_name,
         bc.legalname as broker_company_name,
-        su.full_name as sold_by_name,
-        du.full_name as delivered_by_name
+        COALESCE(su.firstname || ' ' || su.lastname, su.firstname, su.lastname, '') as sold_by_name,
+        COALESCE(du.firstname || ' ' || du.lastname, du.firstname, du.lastname, '') as delivered_by_name
       FROM remittance_orders ro
       LEFT JOIN companies sc ON ro.selling_company_id = sc.id
       LEFT JOIN companies bc ON ro.broker_company_id = bc.id
