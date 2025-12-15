@@ -212,35 +212,27 @@ export async function POST(
 
       const deliveryProof = proofResult.rows[0]
 
-      // Update order status to delivered
-      // First try with delivery_proof_id, if column doesn't exist, update without it
+      // Update order status to delivered (without delivery_proof_id to avoid column issues)
+      await db.query(`
+        UPDATE remittance_orders
+        SET
+          status = 'delivered',
+          delivered_at = NOW(),
+          delivered_by_user_id = $2,
+          updated_at = NOW()
+        WHERE id = $1
+      `, [orderId, payload.userId])
+
+      // Try to update delivery_proof_id separately if column exists
       try {
         await db.query(`
           UPDATE remittance_orders
-          SET
-            status = 'delivered',
-            delivered_at = NOW(),
-            delivered_by_user_id = $2,
-            delivery_proof_id = $3,
-            updated_at = NOW()
+          SET delivery_proof_id = $2
           WHERE id = $1
-        `, [orderId, payload.userId, deliveryProof.id])
-      } catch (updateErr: any) {
-        if (updateErr.message.includes('delivery_proof_id')) {
-          // Column doesn't exist, update without it
-          console.log('[Deliver] delivery_proof_id column does not exist, updating without it')
-          await db.query(`
-            UPDATE remittance_orders
-            SET
-              status = 'delivered',
-              delivered_at = NOW(),
-              delivered_by_user_id = $2,
-              updated_at = NOW()
-            WHERE id = $1
-          `, [orderId, payload.userId])
-        } else {
-          throw updateErr
-        }
+        `, [orderId, deliveryProof.id])
+      } catch (e) {
+        // Column might not exist, ignore
+        console.log('[Deliver] Could not set delivery_proof_id:', (e as Error).message)
       }
 
       // Complete the fund delivery (deduct from reserved)
