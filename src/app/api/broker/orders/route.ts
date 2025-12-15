@@ -99,11 +99,15 @@ export async function GET(request: NextRequest) {
     // Get stats
     const statsResult = await db.query(`
       SELECT
+        COUNT(*) as total_count,
         COUNT(*) FILTER (WHERE status = 'pending') as pending_count,
         COUNT(*) FILTER (WHERE status = 'confirmed') as confirmed_count,
         COUNT(*) FILTER (WHERE status = 'in_delivery') as in_delivery_count,
         COUNT(*) FILTER (WHERE status = 'delivered') as delivered_count,
-        SUM(receive_amount) FILTER (WHERE status IN ('pending', 'confirmed', 'in_delivery')) as pending_amount
+        COUNT(*) FILTER (WHERE status = 'cancelled') as cancelled_count,
+        COUNT(*) FILTER (WHERE status = 'rejected') as rejected_count,
+        SUM(receive_amount) FILTER (WHERE status IN ('pending', 'confirmed', 'in_delivery')) as pending_amount,
+        SUM(receive_amount) FILTER (WHERE status = 'delivered') as delivered_amount
       FROM remittance_orders
       WHERE broker_company_id = $1
     `, [payload.companyId])
@@ -145,11 +149,17 @@ export async function GET(request: NextRequest) {
           sellingCompanyName: row.selling_company_name
         })),
         stats: {
-          pendingCount: parseInt(stats.pending_count) || 0,
-          confirmedCount: parseInt(stats.confirmed_count) || 0,
-          inDeliveryCount: parseInt(stats.in_delivery_count) || 0,
-          deliveredCount: parseInt(stats.delivered_count) || 0,
-          pendingAmount: parseFloat(stats.pending_amount) || 0
+          // Names expected by dashboard
+          pending: parseInt(stats.pending_count) || 0,
+          confirmed: parseInt(stats.confirmed_count) || 0,
+          inDelivery: parseInt(stats.in_delivery_count) || 0,
+          delivered: parseInt(stats.delivered_count) || 0,
+          cancelled: parseInt(stats.cancelled_count) || 0,
+          rejected: parseInt(stats.rejected_count) || 0,
+          total: parseInt(stats.total_count) || 0,
+          // Additional useful stats
+          pendingAmount: parseFloat(stats.pending_amount) || 0,
+          deliveredAmount: parseFloat(stats.delivered_amount) || 0
         },
         pagination: {
           page,

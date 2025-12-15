@@ -409,9 +409,9 @@ export default function BrokerDashboardPage() {
     else setRefreshing(true)
 
     try {
-      const [walletRes, ordersRes, ratesRes] = await Promise.all([
+      const [walletRes, dashboardRes, ratesRes] = await Promise.all([
         fetch('/api/broker/wallet?history=false'),
-        fetch('/api/broker/orders?limit=5'),
+        fetch('/api/broker/dashboard'),
         fetch('/api/exchange-rates')
       ])
 
@@ -422,14 +422,16 @@ export default function BrokerDashboardPage() {
         }
       }
 
-      if (ordersRes.ok) {
-        const ordersData = await ordersRes.json()
-        if (ordersData.success) {
-          setStats(ordersData.data.stats)
+      if (dashboardRes.ok) {
+        const dashboardData = await dashboardRes.json()
+        if (dashboardData.success) {
+          // Set order stats
+          setStats(dashboardData.data.orderStats)
 
-          // Generate last 7 days delivery stats from real data if available
-          const last7Days = generateLast7DaysStats(ordersData.data.stats)
-          setDeliveryStats(last7Days)
+          // Set real daily delivery stats from database
+          if (dashboardData.data.dailyDeliveries && dashboardData.data.dailyDeliveries.length > 0) {
+            setDeliveryStats(dashboardData.data.dailyDeliveries)
+          }
         }
       }
 
@@ -470,32 +472,6 @@ export default function BrokerDashboardPage() {
       setLoading(false)
       setRefreshing(false)
     }
-  }
-
-  const generateLast7DaysStats = (orderStats: OrderStats | null) => {
-    const days = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb']
-    const result: DeliveryStats[] = []
-    const delivered = orderStats?.delivered || 0
-    const total = orderStats?.total || 0
-
-    for (let i = 6; i >= 0; i--) {
-      const date = new Date()
-      date.setDate(date.getDate() - i)
-      const dayName = days[date.getDay()]
-
-      // Distribute deliveries across the week (simulated distribution)
-      const baseCount = Math.floor(delivered / 7)
-      const variance = Math.floor(Math.random() * 3) - 1
-      const count = Math.max(0, baseCount + variance + (i === 0 ? 2 : 0))
-
-      result.push({
-        date: dayName,
-        count: i === 0 ? Math.min(count + 3, total) : count,
-        amount: count * 150
-      })
-    }
-
-    return result
   }
 
   // Prepare currency balances for display
