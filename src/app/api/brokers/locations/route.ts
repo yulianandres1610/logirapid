@@ -12,6 +12,56 @@ interface JWTPayload {
 }
 
 /**
+ * Capitaliza correctamente nombres de lugares
+ * Ej: "LA HABANA" -> "La Habana", "PINAR DEL RIO" -> "Pinar del Río"
+ */
+function formatLocationName(name: string): string {
+  if (!name) return name
+
+  // Palabras que deben permanecer en minúsculas (excepto al inicio)
+  const lowercaseWords = ['de', 'del', 'la', 'las', 'los', 'el', 'y', 'e']
+
+  // Reemplazos especiales para acentos y nombres correctos
+  const specialReplacements: Record<string, string> = {
+    'rio': 'Río',
+    'holguin': 'Holguín',
+    'sancti spiritus': 'Sancti Spíritus',
+    'camaguey': 'Camagüey',
+    'guantanamo': 'Guantánamo',
+    'mayabeque': 'Mayabeque',
+    'ciego de avila': 'Ciego de Ávila',
+    'isla de la juventud': 'Isla de la Juventud',
+    'artemisa': 'Artemisa'
+  }
+
+  // Primero convertir a minúsculas
+  const lowerName = name.toLowerCase().trim()
+
+  // Verificar si hay un reemplazo especial para el nombre completo
+  if (specialReplacements[lowerName]) {
+    return specialReplacements[lowerName]
+  }
+
+  // Dividir en palabras y capitalizar
+  const words = lowerName.split(/\s+/)
+  const capitalizedWords = words.map((word, index) => {
+    // Verificar reemplazos especiales para palabras individuales
+    if (specialReplacements[word]) {
+      return specialReplacements[word]
+    }
+
+    // Primera palabra siempre capitalizada, otras solo si no están en lowercaseWords
+    if (index === 0 || !lowercaseWords.includes(word)) {
+      return word.charAt(0).toUpperCase() + word.slice(1)
+    }
+
+    return word
+  })
+
+  return capitalizedWords.join(' ')
+}
+
+/**
  * GET /api/brokers/locations
  * Returns provinces and municipalities where there are active brokers
  * Used by the wizard to populate location dropdowns
@@ -95,17 +145,19 @@ export async function GET(request: NextRequest) {
     for (const row of result.rows) {
       const prov = row.broker_province
       const muni = row.broker_municipality
+      const formattedProv = formatLocationName(prov)
+      const formattedMuni = formatLocationName(muni)
 
       if (!provincesMap[prov]) {
         provincesMap[prov] = {
-          name: prov,
+          name: formattedProv,
           municipalities: {}
         }
       }
 
       if (!provincesMap[prov].municipalities[muni]) {
         provincesMap[prov].municipalities[muni] = {
-          name: muni,
+          name: formattedMuni,
           brokerCount: 0,
           brokers: [],
           currencies: []
