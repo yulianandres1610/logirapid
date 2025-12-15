@@ -38,6 +38,15 @@ export async function GET(request: NextRequest) {
       }, { status: 401 })
     }
 
+    // Fallback: get companyId from cookie if not in JWT
+    if (!payload.companyId) {
+      const companyIdCookie = cookieStore.get('user-company-id')?.value
+      if (companyIdCookie) {
+        payload.companyId = parseInt(companyIdCookie, 10)
+        console.log(`[Remittance Orders GET] Using companyId from cookie: ${payload.companyId}`)
+      }
+    }
+
     // Handle debug parameter to check specific order
     const { searchParams } = new URL(request.url)
     const debugOrder = searchParams.get('debugOrder')
@@ -119,10 +128,13 @@ export async function GET(request: NextRequest) {
     }
 
     // SUPER_ADMIN can see all, others see their company's orders
+    // Ensure companyId is properly cast to integer for comparison
+    const userCompanyId = parseInt(String(payload.companyId), 10)
+
     if (payload.role !== 'SUPER_ADMIN') {
-      params.push(payload.companyId)
-      whereClause += ` AND ro.selling_company_id = $${params.length}`
-      console.log(`[Remittance Orders GET] Filtering by selling_company_id = ${payload.companyId}`)
+      params.push(userCompanyId)
+      whereClause += ` AND ro.selling_company_id = $${params.length}::integer`
+      console.log(`[Remittance Orders GET] Filtering by selling_company_id = ${userCompanyId} (type: ${typeof userCompanyId})`)
     } else {
       console.log(`[Remittance Orders GET] SUPER_ADMIN - showing all orders`)
     }
@@ -181,11 +193,17 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({
       success: true,
       data: {
+        _debug: {
+          userCompanyId: userCompanyId,
+          userRole: payload.role,
+          totalFound: total
+        },
         orders: result.rows.map(row => ({
           id: row.id,
           orderNumber: row.order_number,
           status: row.status,
           paymentStatus: row.payment_status,
+          _sellingCompanyId: row.selling_company_id,
           // Amounts
           sendAmount: parseFloat(row.send_amount),
           sendCurrency: row.send_currency,
@@ -259,6 +277,15 @@ export async function POST(request: NextRequest) {
         success: false,
         error: 'Token inválido'
       }, { status: 401 })
+    }
+
+    // Fallback: get companyId from cookie if not in JWT
+    if (!payload.companyId) {
+      const companyIdCookie = cookieStore.get('user-company-id')?.value
+      if (companyIdCookie) {
+        payload.companyId = parseInt(companyIdCookie, 10)
+        console.log(`[Remittance Orders POST] Using companyId from cookie: ${payload.companyId}`)
+      }
     }
 
     const body = await request.json()
