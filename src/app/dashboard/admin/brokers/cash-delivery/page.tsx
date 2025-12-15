@@ -36,6 +36,10 @@ interface Broker {
   name: string
   broker_province: string
   broker_municipality: string
+  wallet_number: string
+  phone: string
+  broker_contact_phone: string
+  is_active: boolean
 }
 
 interface User {
@@ -90,7 +94,18 @@ export default function CashDeliveryWizardPage() {
         const res = await fetch('/api/admin/brokers')
         const data = await res.json()
         if (data.success) {
-          setBrokers(data.data.brokers || data.data || [])
+          const rawBrokers = data.data.brokers || data.data || []
+          const mappedBrokers = rawBrokers.map((b: any) => ({
+            id: b.id,
+            name: b.legalname || b.name || '',
+            broker_province: b.broker_province || '',
+            broker_municipality: b.broker_municipality || '',
+            wallet_number: b.wallet_number || '',
+            phone: b.broker_contact_phone || b.phone || '',
+            broker_contact_phone: b.broker_contact_phone || '',
+            is_active: b.is_active
+          }))
+          setBrokers(mappedBrokers)
         }
       } catch (error) {
         console.error('Error loading brokers:', error)
@@ -203,10 +218,17 @@ export default function CashDeliveryWizardPage() {
   }
 
   // Filters
-  const filteredBrokers = brokers.filter(broker =>
-    broker.name?.toLowerCase().includes(brokerSearch.toLowerCase()) ||
-    broker.broker_province?.toLowerCase().includes(brokerSearch.toLowerCase())
-  )
+  const filteredBrokers = brokers.filter(broker => {
+    const search = brokerSearch.toLowerCase()
+    return (
+      broker.name?.toLowerCase().includes(search) ||
+      broker.broker_province?.toLowerCase().includes(search) ||
+      broker.broker_municipality?.toLowerCase().includes(search) ||
+      broker.wallet_number?.toLowerCase().includes(search) ||
+      broker.phone?.includes(brokerSearch) ||
+      broker.broker_contact_phone?.includes(brokerSearch)
+    )
+  })
 
   const filteredUsers = users.filter(user =>
     user.name?.toLowerCase().includes(userSearch.toLowerCase()) ||
@@ -400,7 +422,7 @@ export default function CashDeliveryWizardPage() {
                       <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
                       <input
                         type="text"
-                        placeholder="Buscar broker..."
+                        placeholder="Buscar por nombre, teléfono, wallet o ubicación..."
                         value={brokerSearch}
                         onChange={(e) => setBrokerSearch(e.target.value)}
                         className={cn(
@@ -412,51 +434,91 @@ export default function CashDeliveryWizardPage() {
                       />
                     </div>
 
+                    {/* Stats */}
+                    <div className="flex gap-4 text-sm">
+                      <span className={cn("px-3 py-1 rounded-full", theme === 'dark' ? 'bg-green-900/30 text-green-400' : 'bg-green-100 text-green-700')}>
+                        {brokers.filter(b => b.is_active).length} activos
+                      </span>
+                      <span className={cn("px-3 py-1 rounded-full", theme === 'dark' ? 'bg-gray-700 text-gray-400' : 'bg-gray-100 text-gray-600')}>
+                        {brokers.length} total
+                      </span>
+                    </div>
+
                     <div className="space-y-2 max-h-80 overflow-y-auto">
                       {filteredBrokers.length === 0 ? (
                         <p className={cn("text-center py-8", theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}>
                           No se encontraron brokers
                         </p>
                       ) : (
-                        filteredBrokers.map(broker => (
-                          <button
-                            key={broker.id}
-                            onClick={() => setFormData(prev => ({ ...prev, selectedBroker: broker }))}
-                            className={cn(
-                              "w-full p-4 rounded-xl border-2 transition-all text-left",
-                              formData.selectedBroker?.id === broker.id
-                                ? 'border-blue-500 bg-blue-500/10'
-                                : cn(
-                                    'border-transparent',
-                                    theme === 'dark' ? 'bg-gray-700/50 hover:bg-gray-700' : 'bg-gray-50 hover:bg-gray-100'
-                                  )
-                            )}
-                          >
-                            <div className="flex items-center justify-between">
-                              <div className="flex items-center gap-3">
-                                <div className={cn(
-                                  "w-10 h-10 rounded-full flex items-center justify-center",
-                                  theme === 'dark' ? 'bg-gray-600' : 'bg-gray-200'
-                                )}>
-                                  <Building2 className={cn("w-5 h-5", theme === 'dark' ? 'text-gray-300' : 'text-gray-600')} />
-                                </div>
-                                <div>
-                                  <p className={cn("font-medium", theme === 'dark' ? 'text-white' : 'text-gray-900')}>
-                                    {broker.name}
-                                  </p>
-                                  {(broker.broker_province || broker.broker_municipality) && (
-                                    <p className={cn("text-sm", theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}>
-                                      {[broker.broker_province, broker.broker_municipality].filter(Boolean).join(', ')}
-                                    </p>
-                                  )}
-                                </div>
-                              </div>
-                              {formData.selectedBroker?.id === broker.id && (
-                                <CheckCircle className="h-5 w-5 text-blue-500" />
+                        filteredBrokers.map(broker => {
+                          const isSelected = formData.selectedBroker?.id === broker.id
+
+                          return (
+                            <button
+                              key={broker.id}
+                              onClick={() => setFormData(prev => ({ ...prev, selectedBroker: broker }))}
+                              className={cn(
+                                "w-full p-4 rounded-xl border-2 transition-all text-left",
+                                isSelected
+                                  ? 'border-blue-500 bg-blue-500/10'
+                                  : cn(
+                                      'border-transparent',
+                                      theme === 'dark' ? 'bg-gray-700/50 hover:bg-gray-700' : 'bg-gray-50 hover:bg-gray-100'
+                                    )
                               )}
-                            </div>
-                          </button>
-                        ))
+                            >
+                              <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-3">
+                                  <div className={cn(
+                                    "w-10 h-10 rounded-full flex items-center justify-center",
+                                    broker.is_active
+                                      ? theme === 'dark' ? 'bg-green-900/50' : 'bg-green-100'
+                                      : theme === 'dark' ? 'bg-gray-700' : 'bg-gray-200'
+                                  )}>
+                                    <Building2 className={cn(
+                                      "w-5 h-5",
+                                      broker.is_active
+                                        ? theme === 'dark' ? 'text-green-400' : 'text-green-600'
+                                        : theme === 'dark' ? 'text-gray-500' : 'text-gray-400'
+                                    )} />
+                                  </div>
+                                  <div className="flex-1 min-w-0">
+                                    <div className="flex items-center gap-2">
+                                      <p className={cn("font-medium truncate", theme === 'dark' ? 'text-white' : 'text-gray-900')}>
+                                        {broker.name}
+                                      </p>
+                                      {!broker.is_active && (
+                                        <span className={cn("px-2 py-0.5 rounded text-xs", theme === 'dark' ? 'bg-red-900/30 text-red-400' : 'bg-red-100 text-red-600')}>
+                                          Inactivo
+                                        </span>
+                                      )}
+                                    </div>
+                                    {(broker.broker_province || broker.broker_municipality) && (
+                                      <p className={cn("text-sm", theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}>
+                                        📍 {[broker.broker_municipality, broker.broker_province].filter(Boolean).join(', ')}
+                                      </p>
+                                    )}
+                                    <div className="flex flex-wrap gap-x-4 gap-y-1 mt-1">
+                                      {broker.phone && (
+                                        <p className={cn("text-sm", theme === 'dark' ? 'text-blue-400' : 'text-blue-600')}>
+                                          📱 {broker.phone}
+                                        </p>
+                                      )}
+                                      {broker.wallet_number && (
+                                        <p className={cn("text-sm font-mono", theme === 'dark' ? 'text-purple-400' : 'text-purple-600')}>
+                                          💳 {broker.wallet_number}
+                                        </p>
+                                      )}
+                                    </div>
+                                  </div>
+                                </div>
+                                {isSelected && (
+                                  <CheckCircle className="h-5 w-5 text-blue-500 shrink-0" />
+                                )}
+                              </div>
+                            </button>
+                          )
+                        })
                       )}
                     </div>
                   </div>
