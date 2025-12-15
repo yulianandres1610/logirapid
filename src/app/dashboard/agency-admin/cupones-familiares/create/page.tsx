@@ -341,7 +341,7 @@ export default function CreateRemittancePage() {
                     <option value="">Seleccionar municipio...</option>
                     {selectedMunicipalities.map(m => (
                       <option key={m.name} value={m.name}>
-                        {m.name} ({m.brokerCount} broker{m.brokerCount !== 1 && 's'})
+                        {m.name}
                       </option>
                     ))}
                   </select>
