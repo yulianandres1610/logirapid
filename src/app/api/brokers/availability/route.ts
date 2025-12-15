@@ -75,6 +75,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Get brokers in this location with their wallet balances
+    // Use ILIKE for case-insensitive matching since frontend sends formatted names
     const result = await db.query(`
       SELECT
         c.id,
@@ -91,8 +92,8 @@ export async function GET(request: NextRequest) {
         ON bwb.company_id = c.id AND bwb.currency = $3
       WHERE c.companytype = 'broker'
         AND c.broker_is_active = true
-        AND c.broker_province = $1
-        AND (c.broker_municipality = $2
+        AND LOWER(c.broker_province) = LOWER($1)
+        AND (LOWER(c.broker_municipality) = LOWER($2)
           OR c.broker_coverage_area::jsonb ? $2)
       ORDER BY COALESCE(bwb.available_balance, 0) DESC
     `, [province, municipality, currency])
@@ -103,7 +104,7 @@ export async function GET(request: NextRequest) {
         data: {
           hasAvailability: false,
           hasBrokers: false,
-          estimatedDelivery: '3-5 días',
+          estimatedDelivery: '1-3 días',
           message: 'No hay brokers disponibles en esta zona',
           brokers: [],
           totalAvailable: 0,
@@ -127,20 +128,18 @@ export async function GET(request: NextRequest) {
     const canFulfillBrokers = brokers.filter(b => b.canFulfill)
     const hasAvailability = totalAvailable >= amount
 
-    // Determine estimated delivery
+    // Determine estimated delivery based on availability
+    // - 1-24 horas: When there's enough balance to fulfill the order
+    // - 1-3 días: When there's no balance or insufficient funds
     let estimatedDelivery: string
     let deliveryMessage: string
 
     if (canFulfillBrokers.length > 0) {
-      // At least one broker can fulfill completely
+      // At least one broker can fulfill completely with available balance
       estimatedDelivery = '1-24 horas'
       deliveryMessage = 'Entrega rápida disponible'
-    } else if (hasAvailability) {
-      // Multiple brokers needed or partial availability
-      estimatedDelivery = '24-48 horas'
-      deliveryMessage = 'Entrega disponible con coordinación'
     } else {
-      // Not enough funds, need to wait for deposits
+      // No broker has enough funds, will need to wait for deposits
       estimatedDelivery = '1-3 días'
       deliveryMessage = 'Fondos insuficientes - se procesará cuando haya disponibilidad'
     }

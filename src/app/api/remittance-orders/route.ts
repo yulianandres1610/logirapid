@@ -290,6 +290,7 @@ export async function POST(request: NextRequest) {
 
     if (!brokerCompanyId) {
       // Find broker with most available funds in this location
+      // Use LOWER() for case-insensitive matching since frontend sends formatted names
       const brokerResult = await db.query(`
         SELECT
           c.id,
@@ -300,8 +301,8 @@ export async function POST(request: NextRequest) {
           ON bwb.company_id = c.id AND bwb.currency = $3
         WHERE c.companytype = 'broker'
           AND c.broker_is_active = true
-          AND c.broker_province = $1
-          AND (c.broker_municipality = $2 OR c.broker_coverage_area::jsonb ? $2)
+          AND LOWER(c.broker_province) = LOWER($1)
+          AND (LOWER(c.broker_municipality) = LOWER($2) OR c.broker_coverage_area::jsonb ? $2)
         ORDER BY COALESCE(bwb.available_balance, 0) DESC
         LIMIT 1
       `, [province, municipality, finalReceiveCurrency])
@@ -310,11 +311,11 @@ export async function POST(request: NextRequest) {
         brokerCompanyId = brokerResult.rows[0].id
         const availableBalance = parseFloat(brokerResult.rows[0].available_balance) || 0
 
+        // 1-24 horas when broker has enough balance, otherwise 1-3 días
         if (availableBalance >= receiveAmount) {
           estimatedDelivery = '1-24 horas'
-        } else if (availableBalance > 0) {
-          estimatedDelivery = '24-48 horas'
         }
+        // Otherwise stays at default '1-3 días'
       }
     } else {
       // Check provided broker's availability
