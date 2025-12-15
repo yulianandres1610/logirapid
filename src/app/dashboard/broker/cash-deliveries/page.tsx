@@ -50,8 +50,13 @@ const STATUS_CONFIG: { [key: string]: { label: string; color: string; bgColor: s
   blocked: { label: 'Bloqueado', color: 'text-red-600 dark:text-red-400', bgColor: 'bg-red-100 dark:bg-red-900/30', icon: AlertCircle }
 }
 
-// Bill denominations for USD
-const USD_DENOMINATIONS = ['1', '5', '10', '20', '50', '100']
+// Bill denominations by currency
+const BILL_DENOMINATIONS: { [key: string]: string[] } = {
+  USD: ['1', '5', '10', '20', '50', '100'],
+  EUR: ['5', '10', '20', '50', '100', '200', '500'],
+  CUP: ['1', '5', '10', '20', '50', '100', '200', '500', '1000'],
+  MLC: ['1', '5', '10', '20', '50', '100']
+}
 
 export default function BrokerCashDeliveriesPage() {
   const [deliveries, setDeliveries] = useState<CashDelivery[]>([])
@@ -624,7 +629,7 @@ export default function BrokerCashDeliveriesPage() {
                           Cuenta los billetes recibidos:
                         </p>
                         <div className="grid grid-cols-2 gap-3">
-                          {USD_DENOMINATIONS.map((denom) => (
+                          {(BILL_DENOMINATIONS[selectedDelivery.currency] || BILL_DENOMINATIONS.USD).map((denom) => (
                             <div
                               key={denom}
                               className="flex items-center gap-3 p-3 rounded-xl bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600"
