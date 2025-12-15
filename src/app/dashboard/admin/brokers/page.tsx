@@ -352,11 +352,22 @@ export default function AdminBrokersDashboardPage() {
 
   const fetchExchangeRates = useCallback(async () => {
     try {
-      const res = await fetch('/api/exchange-rates')
+      // Usar agency-rates que tiene las tasas configuradas por el superadmin
+      const res = await fetch('/api/agency-rates')
       if (res.ok) {
         const data = await res.json()
-        if (data.success && data.data) {
-          setExchangeRates(data.data)
+        if (data.success && data.data?.rates) {
+          // Transformar el formato de agency-rates al formato esperado por el componente
+          const formattedRates: Record<string, ExchangeRate> = {}
+          Object.entries(data.data.rates).forEach(([currency, rateData]: [string, any]) => {
+            formattedRates[currency] = {
+              rate: rateData.agencyRate || rateData.rate || 0,
+              formatted: `${(rateData.agencyRate || rateData.rate || 0).toFixed(2)} CUP`,
+              lastUpdate: data.data.timestamp || new Date().toISOString(),
+              variacion: rateData.variacion || 0
+            }
+          })
+          setExchangeRates(formattedRates)
         }
       }
     } catch (error) {
