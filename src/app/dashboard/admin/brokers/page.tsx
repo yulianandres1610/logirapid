@@ -53,12 +53,18 @@ import { useTheme } from '@/contexts/theme-context'
 
 mapboxgl.accessToken = 'pk.eyJ1IjoieXVsaWFuYW5kcmVzMTYxMCIsImEiOiJjbWgycTlsZGsxM200YnNvbnN2d2wwcHJ5In0.wlU7-bazAs2eYjknx7H97Q'
 
+interface CurrencyBalance {
+  currency: string
+  balance: number
+}
+
 interface Broker {
   id: number
   name: string
   walletBalance: number
   walletBalanceFormatted: string
   currency: string
+  currencyBalances: CurrencyBalance[]
   province: string
   municipality: string
   latitude: number | null
@@ -67,12 +73,23 @@ interface Broker {
   isActive: boolean
 }
 
+interface CurrencyTotal {
+  balance: number
+  formatted: string
+}
+
 interface Summary {
   totalBrokers: number
   activeBrokers: number
   provincesCovered: number
   totalBalance: number
   totalBalanceFormatted: string
+  currencyTotals?: {
+    USD: CurrencyTotal
+    CUP: CurrencyTotal
+    EUR: CurrencyTotal
+    MLC: CurrencyTotal
+  }
 }
 
 interface OrderStats {
@@ -463,6 +480,23 @@ export default function AdminBrokersDashboardPage() {
       variacion: rate.variacion || 0
     }))
 
+  // Chart data: Total balance by currency from brokers
+  const CURRENCY_COLORS: Record<string, string> = {
+    USD: '#059669',
+    CUP: '#2563eb',
+    EUR: '#7c3aed',
+    MLC: '#dc2626'
+  }
+
+  const brokerCurrencyBalanceData = summary?.currencyTotals
+    ? [
+        { currency: 'USD', balance: summary.currencyTotals.USD.balance, formatted: summary.currencyTotals.USD.formatted, color: CURRENCY_COLORS.USD },
+        { currency: 'CUP', balance: summary.currencyTotals.CUP.balance, formatted: summary.currencyTotals.CUP.formatted, color: CURRENCY_COLORS.CUP },
+        { currency: 'EUR', balance: summary.currencyTotals.EUR.balance, formatted: summary.currencyTotals.EUR.formatted, color: CURRENCY_COLORS.EUR },
+        { currency: 'MLC', balance: summary.currencyTotals.MLC.balance, formatted: summary.currencyTotals.MLC.formatted, color: CURRENCY_COLORS.MLC }
+      ].filter(d => d.balance > 0)
+    : []
+
   const currentRate = exchangeRates[selectedCurrency]
   const isPositive = (currentRate?.variacion || 0) >= 0
 
@@ -547,17 +581,33 @@ export default function AdminBrokersDashboardPage() {
       `
 
       const municipalityName = PROVINCE_ID_TO_NAME[broker.municipality] || broker.municipality || ''
+
+      // Generate currency balances HTML
+      const currencyColors: Record<string, string> = {
+        USD: '#059669',
+        CUP: '#2563eb',
+        EUR: '#7c3aed',
+        MLC: '#dc2626'
+      }
+      const currencyBalancesHtml = (broker.currencyBalances || [])
+        .map(cb => `
+          <div style="display: flex; justify-content: space-between; margin-bottom: 3px; padding: 4px 6px; background: ${currencyColors[cb.currency]}10; border-radius: 4px;">
+            <span style="color: #6b7280; font-size: 11px; font-weight: 500;">${cb.currency}:</span>
+            <span style="font-weight: 600; color: ${currencyColors[cb.currency]}; font-size: 11px;">$${cb.balance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+          </div>
+        `).join('')
+
       const popup = new mapboxgl.Popup({ offset: 25, closeButton: false })
         .setHTML(`
-          <div style="padding: 12px; min-width: 180px;">
+          <div style="padding: 12px; min-width: 200px;">
             <h4 style="font-weight: 700; margin: 0 0 8px 0; color: #1f2937; font-size: 14px;">${broker.name}</h4>
-            <div style="display: flex; align-items: center; gap: 4px; margin-bottom: 6px;">
+            <div style="display: flex; align-items: center; gap: 4px; margin-bottom: 8px;">
               <span style="color: #6b7280; font-size: 11px;">📍</span>
               <span style="color: #374151; font-size: 12px;">${municipalityName}, ${provinceName}</span>
             </div>
-            <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
-              <span style="color: #6b7280; font-size: 12px;">Balance:</span>
-              <span style="font-weight: 600; color: #059669;">${broker.walletBalanceFormatted}</span>
+            <div style="margin-bottom: 8px;">
+              <div style="font-size: 10px; color: #9ca3af; margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.5px;">Balances por Moneda</div>
+              ${currencyBalancesHtml || '<span style="color: #9ca3af; font-size: 11px;">Sin balances</span>'}
             </div>
             ${broker.contactPhone ? `
             <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
@@ -1041,7 +1091,7 @@ export default function AdminBrokersDashboardPage() {
             </motion.div>
           </motion.div>
 
-          {/* Currency Rates Chart */}
+          {/* Balance by Currency Chart */}
           <motion.div
             variants={chartCardVariants}
             whileHover={{ scale: 1.02, y: -4 }}
@@ -1051,44 +1101,80 @@ export default function AdminBrokersDashboardPage() {
               theme === 'dark' ? 'bg-white/5 border border-white/10 hover:shadow-purple-500/10' : 'bg-white border border-gray-100 shadow-sm hover:shadow-purple-500/20'
             )}
           >
-            <motion.h3
-              className={cn("font-semibold text-sm mb-3", theme === 'dark' ? 'text-white' : 'text-gray-900')}
-              initial={{ opacity: 0, x: -10 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ delay: 0.3 }}
-            >
-              Tasas por Moneda
-            </motion.h3>
+            <div className="flex items-center justify-between mb-3">
+              <motion.h3
+                className={cn("font-semibold text-sm", theme === 'dark' ? 'text-white' : 'text-gray-900')}
+                initial={{ opacity: 0, x: -10 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ delay: 0.3 }}
+              >
+                Balance por Moneda
+              </motion.h3>
+              <motion.div
+                className="flex gap-1 flex-wrap"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ delay: 0.4 }}
+              >
+                {brokerCurrencyBalanceData.map(d => (
+                  <span
+                    key={d.currency}
+                    className="text-xs px-1.5 py-0.5 rounded"
+                    style={{ backgroundColor: `${d.color}20`, color: d.color }}
+                  >
+                    {d.currency}
+                  </span>
+                ))}
+              </motion.div>
+            </div>
             <motion.div
               className="h-[220px]"
               initial={{ opacity: 0, scale: 0.8 }}
               animate={{ opacity: 1, scale: 1 }}
               transition={{ delay: 0.4, duration: 0.5 }}
             >
-              {currencyBalanceData.length > 0 ? (
+              {brokerCurrencyBalanceData.length > 0 ? (
                 <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={currencyBalanceData} margin={{ top: 0, right: 10, left: -10, bottom: 0 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke={theme === 'dark' ? '#374151' : '#e5e7eb'} vertical={false} />
-                    <XAxis dataKey="currency" tick={{ fontSize: 10, fill: theme === 'dark' ? '#9ca3af' : '#6b7280' }} axisLine={false} tickLine={false} />
-                    <YAxis tick={{ fontSize: 10, fill: theme === 'dark' ? '#9ca3af' : '#6b7280' }} axisLine={false} tickLine={false} />
+                  <PieChart>
+                    <Pie
+                      data={brokerCurrencyBalanceData}
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={50}
+                      outerRadius={80}
+                      paddingAngle={2}
+                      dataKey="balance"
+                      animationBegin={400}
+                      animationDuration={1200}
+                      animationEasing="ease-out"
+                    >
+                      {brokerCurrencyBalanceData.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={entry.color} className="transition-all duration-300 hover:opacity-80" />
+                      ))}
+                    </Pie>
                     <Tooltip
                       contentStyle={{ backgroundColor: theme === 'dark' ? '#1f2937' : '#fff', border: 'none', borderRadius: '12px', boxShadow: '0 10px 40px rgba(0,0,0,0.2)' }}
-                      formatter={(value: number) => [`${value.toFixed(2)} CUP`, 'Tasa']}
+                      formatter={(value: number, name: string, props: any) => [props.payload.formatted, props.payload.currency]}
                     />
-                    <Bar dataKey="rate" radius={[4, 4, 0, 0]} animationBegin={400} animationDuration={1000}>
-                      {currencyBalanceData.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={entry.variacion >= 0 ? '#10b981' : '#ef4444'} className="transition-all duration-300 hover:opacity-80" />
-                      ))}
-                    </Bar>
-                  </BarChart>
+                    <Legend
+                      verticalAlign="bottom"
+                      height={36}
+                      formatter={(value, entry: any) => (
+                        <span className={cn("text-xs", theme === 'dark' ? 'text-gray-400' : 'text-gray-600')}>
+                          {entry.payload?.currency}: {entry.payload?.formatted}
+                        </span>
+                      )}
+                    />
+                  </PieChart>
                 </ResponsiveContainer>
               ) : (
                 <motion.div
-                  className="h-full flex items-center justify-center text-gray-500 text-sm"
+                  className="h-full flex flex-col items-center justify-center text-gray-500 text-sm"
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
                 >
-                  Sin datos
+                  <Wallet className="w-8 h-8 mb-2 opacity-50" />
+                  Sin balances registrados
                 </motion.div>
               )}
             </motion.div>
@@ -1213,12 +1299,26 @@ export default function AdminBrokersDashboardPage() {
                           <p className="text-xs text-gray-500">{PROVINCE_ID_TO_NAME[broker.province] || broker.province || 'Sin provincia'}</p>
                         </div>
                       </div>
-                      <motion.span
-                        className="text-sm font-semibold text-emerald-600 dark:text-emerald-400"
-                        whileHover={{ scale: 1.1 }}
-                      >
-                        {broker.walletBalanceFormatted}
-                      </motion.span>
+                      <div className="flex flex-col items-end gap-0.5">
+                        {(broker.currencyBalances || []).filter(cb => cb.balance > 0).length > 0 ? (
+                          (broker.currencyBalances || [])
+                            .filter(cb => cb.balance > 0)
+                            .slice(0, 2)
+                            .map(cb => (
+                              <span
+                                key={cb.currency}
+                                className="text-xs font-medium"
+                                style={{ color: CURRENCY_COLORS[cb.currency] || '#059669' }}
+                              >
+                                {cb.currency}: ${cb.balance.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+                              </span>
+                            ))
+                        ) : (
+                          <span className="text-sm font-semibold text-emerald-600 dark:text-emerald-400">
+                            {broker.walletBalanceFormatted}
+                          </span>
+                        )}
+                      </div>
                     </motion.div>
                   ))}
               </AnimatePresence>

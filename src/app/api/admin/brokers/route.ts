@@ -107,6 +107,45 @@ export async function GET(request: NextRequest) {
       ORDER BY c.legalname
     `, params)
 
+    // Get multi-currency balances for all brokers
+    const brokerIds = result.rows.map(r => r.id)
+    let currencyBalancesMap: Map<number, any[]> = new Map()
+
+    if (brokerIds.length > 0) {
+      try {
+        const balancesResult = await db.query(`
+          SELECT
+            company_id,
+            currency,
+            COALESCE(available_balance, 0) as available_balance
+          FROM broker_wallet_balances
+          WHERE company_id = ANY($1)
+          ORDER BY company_id,
+            CASE currency
+              WHEN 'USD' THEN 1
+              WHEN 'CUP' THEN 2
+              WHEN 'EUR' THEN 3
+              WHEN 'MLC' THEN 4
+              ELSE 5
+            END
+        `, [brokerIds])
+
+        // Group balances by company_id
+        for (const row of balancesResult.rows) {
+          const companyId = row.company_id
+          if (!currencyBalancesMap.has(companyId)) {
+            currencyBalancesMap.set(companyId, [])
+          }
+          currencyBalancesMap.get(companyId)!.push({
+            currency: row.currency,
+            balance: parseFloat(row.available_balance) || 0
+          })
+        }
+      } catch (e) {
+        console.log('[Admin Brokers API] Could not fetch multi-currency balances:', e)
+      }
+    }
+
     // Get overall stats
     const statsResult = await db.query(`
       SELECT
@@ -170,41 +209,68 @@ export async function GET(request: NextRequest) {
       // Table may not exist yet, use defaults
     }
 
+    // Calculate totals by currency
+    const currencyTotals: Record<string, number> = { USD: 0, CUP: 0, EUR: 0, MLC: 0 }
+    currencyBalancesMap.forEach((balances) => {
+      for (const b of balances) {
+        if (currencyTotals.hasOwnProperty(b.currency)) {
+          currencyTotals[b.currency] += b.balance
+        }
+      }
+    })
+
     return NextResponse.json({
       success: true,
       data: {
-        brokers: result.rows.map(row => ({
-          id: row.id,
-          name: row.legalname,
-          tradeName: row.legalname,
-          walletNumber: row.wallet_number,
-          walletBalance: parseFloat(row.wallet_balance) || 0,
-          walletBalanceFormatted: `$${(parseFloat(row.wallet_balance) || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
-          currency: row.currency || 'USD',
-          province: row.broker_province,
-          municipality: row.broker_municipality,
-          deliveryHours: row.broker_delivery_hours,
-          contactPhone: row.broker_contact_phone || row.phone,
-          email: row.email,
-          logo: row.logo,
-          latitude: row.latitude ? parseFloat(row.latitude) : null,
-          longitude: row.longitude ? parseFloat(row.longitude) : null,
-          isActive: row.is_active,
-          status: row.status,
-          maxDailyAmount: row.broker_max_daily_amount ? parseFloat(row.broker_max_daily_amount) : null,
-          createdAt: row.created_at,
-          stats: {
-            totalTransactions: parseInt(row.total_transactions) || 0,
-            totalDeposits: parseFloat(row.total_deposits) || 0,
-            totalWithdrawals: parseFloat(row.total_withdrawals) || 0
+        brokers: result.rows.map(row => {
+          const currencyBalances = currencyBalancesMap.get(row.id) || []
+          return {
+            id: row.id,
+            name: row.legalname,
+            tradeName: row.legalname,
+            walletNumber: row.wallet_number,
+            walletBalance: parseFloat(row.wallet_balance) || 0,
+            walletBalanceFormatted: `$${(parseFloat(row.wallet_balance) || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+            currency: row.currency || 'USD',
+            // Multi-currency balances
+            currencyBalances: currencyBalances.length > 0 ? currencyBalances : [
+              { currency: 'USD', balance: parseFloat(row.wallet_balance) || 0 },
+              { currency: 'CUP', balance: 0 },
+              { currency: 'EUR', balance: 0 },
+              { currency: 'MLC', balance: 0 }
+            ],
+            province: row.broker_province,
+            municipality: row.broker_municipality,
+            deliveryHours: row.broker_delivery_hours,
+            contactPhone: row.broker_contact_phone || row.phone,
+            email: row.email,
+            logo: row.logo,
+            latitude: row.latitude ? parseFloat(row.latitude) : null,
+            longitude: row.longitude ? parseFloat(row.longitude) : null,
+            isActive: row.is_active,
+            status: row.status,
+            maxDailyAmount: row.broker_max_daily_amount ? parseFloat(row.broker_max_daily_amount) : null,
+            createdAt: row.created_at,
+            stats: {
+              totalTransactions: parseInt(row.total_transactions) || 0,
+              totalDeposits: parseFloat(row.total_deposits) || 0,
+              totalWithdrawals: parseFloat(row.total_withdrawals) || 0
+            }
           }
-        })),
+        }),
         summary: {
           totalBrokers: parseInt(stats.total_brokers) || 0,
           activeBrokers: parseInt(stats.active_brokers) || 0,
           provincesCovered: parseInt(stats.provinces_covered) || 0,
           totalBalance: parseFloat(stats.total_balance) || 0,
-          totalBalanceFormatted: `$${(parseFloat(stats.total_balance) || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+          totalBalanceFormatted: `$${(parseFloat(stats.total_balance) || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+          // Multi-currency totals
+          currencyTotals: {
+            USD: { balance: currencyTotals.USD, formatted: `$${currencyTotals.USD.toLocaleString('en-US', { minimumFractionDigits: 2 })}` },
+            CUP: { balance: currencyTotals.CUP, formatted: `$${currencyTotals.CUP.toLocaleString('en-US', { minimumFractionDigits: 0 })}` },
+            EUR: { balance: currencyTotals.EUR, formatted: `€${currencyTotals.EUR.toLocaleString('en-US', { minimumFractionDigits: 2 })}` },
+            MLC: { balance: currencyTotals.MLC, formatted: `$${currencyTotals.MLC.toLocaleString('en-US', { minimumFractionDigits: 2 })}` }
+          }
         },
         provinces: provincesResult.rows.map(row => ({
           name: row.province,

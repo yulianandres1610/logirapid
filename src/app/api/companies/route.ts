@@ -292,6 +292,12 @@ export async function POST(request: NextRequest) {
     const finalCity = companyType === 'broker' ? (city || broker_municipality || '') : city
     const finalCountry = companyType === 'broker' ? (country || 'Cuba') : country
 
+    // Para brokers: multi-moneda activada por defecto con USD principal y CUP, EUR, MLC secundarias
+    const finalIsMultiCurrency = companyType === 'broker' ? true : (isMultiCurrency || false)
+    const finalSecondaryCurrencies = companyType === 'broker'
+      ? ['CUP', 'EUR', 'MLC']
+      : (secondaryCurrencies || [])
+
     const values = [
       legalName,
       einNumber,
@@ -306,8 +312,8 @@ export async function POST(request: NextRequest) {
       zipCode || '',
       walletNumber || '',
       currency || 'USD',
-      isMultiCurrency || false,
-      JSON.stringify(secondaryCurrencies || []),
+      finalIsMultiCurrency,
+      JSON.stringify(finalSecondaryCurrencies),
       hasLimits || false,
       dailyLimit || 0,
       monthlyLimit || 0,
