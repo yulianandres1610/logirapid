@@ -272,30 +272,41 @@ export default function BrokerOrdersPage() {
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.1 }}
                 className={cn(
-                  'relative overflow-hidden rounded-2xl border shadow-xl',
+                  'relative overflow-hidden',
                   theme === 'dark'
                     ? 'bg-gradient-to-br from-gray-800 to-gray-900 border-gray-700'
-                    : 'bg-gradient-to-br from-slate-50 to-white border-slate-200'
+                    : 'bg-gradient-to-br from-slate-50 to-white border-slate-200',
+                  'rounded-2xl border shadow-xl'
                 )}
               >
                 <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-amber-400 to-orange-600"></div>
                 <div className="p-6">
-                  <div className="flex items-center gap-3">
-                    <div className={cn(
-                      'p-3 rounded-xl shadow-sm',
-                      theme === 'dark'
-                        ? 'bg-amber-900/30 border border-amber-800/50'
-                        : 'bg-gradient-to-br from-amber-50 to-orange-100 border border-amber-200'
-                    )}>
-                      <Clock className="w-6 h-6 text-amber-600" />
+                  <div className="flex items-start justify-between mb-4">
+                    <div className="flex items-center gap-3">
+                      <div className={cn(
+                        'p-3 rounded-xl shadow-sm',
+                        theme === 'dark'
+                          ? 'bg-amber-900/30 border border-amber-800/50'
+                          : 'bg-gradient-to-br from-amber-50 to-orange-100 border border-amber-200'
+                      )}>
+                        <Clock className="w-6 h-6 text-amber-600" />
+                      </div>
+                      <div>
+                        <p className={cn('text-sm font-medium', theme === 'dark' ? 'text-gray-400' : 'text-black')}>
+                          Pendientes
+                        </p>
+                        <p className={cn('text-3xl font-bold mt-1', theme === 'dark' ? 'text-white' : 'text-slate-900')}>
+                          {stats?.pendingCount || 0}
+                        </p>
+                      </div>
                     </div>
-                    <div>
-                      <p className={cn('text-sm font-medium', theme === 'dark' ? 'text-gray-400' : 'text-gray-600')}>
-                        Pendientes
-                      </p>
-                      <p className={cn('text-3xl font-bold mt-1', theme === 'dark' ? 'text-white' : 'text-slate-900')}>
-                        {stats?.pendingCount || 0}
-                      </p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-1">
+                      <div className="w-2 h-2 bg-amber-400 rounded-full animate-pulse"></div>
+                      <span className={cn('text-xs font-medium', theme === 'dark' ? 'text-gray-500' : 'text-black')}>
+                        Por aceptar
+                      </span>
                     </div>
                   </div>
                 </div>
@@ -307,30 +318,41 @@ export default function BrokerOrdersPage() {
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.2 }}
                 className={cn(
-                  'relative overflow-hidden rounded-2xl border shadow-xl',
+                  'relative overflow-hidden',
                   theme === 'dark'
                     ? 'bg-gradient-to-br from-gray-800 to-gray-900 border-gray-700'
-                    : 'bg-gradient-to-br from-slate-50 to-white border-slate-200'
+                    : 'bg-gradient-to-br from-slate-50 to-white border-slate-200',
+                  'rounded-2xl border shadow-xl'
                 )}
               >
                 <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-400 to-blue-600"></div>
                 <div className="p-6">
-                  <div className="flex items-center gap-3">
-                    <div className={cn(
-                      'p-3 rounded-xl shadow-sm',
-                      theme === 'dark'
-                        ? 'bg-blue-900/30 border border-blue-800/50'
-                        : 'bg-gradient-to-br from-blue-50 to-blue-100 border border-blue-200'
-                    )}>
-                      <CheckCircle className="w-6 h-6 text-blue-600" />
+                  <div className="flex items-start justify-between mb-4">
+                    <div className="flex items-center gap-3">
+                      <div className={cn(
+                        'p-3 rounded-xl shadow-sm',
+                        theme === 'dark'
+                          ? 'bg-blue-900/30 border border-blue-800/50'
+                          : 'bg-gradient-to-br from-blue-50 to-blue-100 border border-blue-200'
+                      )}>
+                        <CheckCircle className="w-6 h-6 text-blue-600" />
+                      </div>
+                      <div>
+                        <p className={cn('text-sm font-medium', theme === 'dark' ? 'text-gray-400' : 'text-black')}>
+                          Confirmadas
+                        </p>
+                        <p className={cn('text-3xl font-bold mt-1', theme === 'dark' ? 'text-white' : 'text-slate-900')}>
+                          {stats?.confirmedCount || 0}
+                        </p>
+                      </div>
                     </div>
-                    <div>
-                      <p className={cn('text-sm font-medium', theme === 'dark' ? 'text-gray-400' : 'text-gray-600')}>
-                        Confirmadas
-                      </p>
-                      <p className={cn('text-3xl font-bold mt-1', theme === 'dark' ? 'text-white' : 'text-slate-900')}>
-                        {stats?.confirmedCount || 0}
-                      </p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-1">
+                      <div className="w-2 h-2 bg-blue-400 rounded-full"></div>
+                      <span className={cn('text-xs font-medium', theme === 'dark' ? 'text-gray-500' : 'text-black')}>
+                        Listas para entregar
+                      </span>
                     </div>
                   </div>
                 </div>
@@ -342,30 +364,41 @@ export default function BrokerOrdersPage() {
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.3 }}
                 className={cn(
-                  'relative overflow-hidden rounded-2xl border shadow-xl',
+                  'relative overflow-hidden',
                   theme === 'dark'
                     ? 'bg-gradient-to-br from-gray-800 to-gray-900 border-gray-700'
-                    : 'bg-gradient-to-br from-slate-50 to-white border-slate-200'
+                    : 'bg-gradient-to-br from-slate-50 to-white border-slate-200',
+                  'rounded-2xl border shadow-xl'
                 )}
               >
                 <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-purple-400 to-purple-600"></div>
                 <div className="p-6">
-                  <div className="flex items-center gap-3">
-                    <div className={cn(
-                      'p-3 rounded-xl shadow-sm',
-                      theme === 'dark'
-                        ? 'bg-purple-900/30 border border-purple-800/50'
-                        : 'bg-gradient-to-br from-purple-50 to-purple-100 border border-purple-200'
-                    )}>
-                      <Truck className="w-6 h-6 text-purple-600" />
+                  <div className="flex items-start justify-between mb-4">
+                    <div className="flex items-center gap-3">
+                      <div className={cn(
+                        'p-3 rounded-xl shadow-sm',
+                        theme === 'dark'
+                          ? 'bg-purple-900/30 border border-purple-800/50'
+                          : 'bg-gradient-to-br from-purple-50 to-purple-100 border border-purple-200'
+                      )}>
+                        <Truck className="w-6 h-6 text-purple-600" />
+                      </div>
+                      <div>
+                        <p className={cn('text-sm font-medium', theme === 'dark' ? 'text-gray-400' : 'text-black')}>
+                          En Entrega
+                        </p>
+                        <p className={cn('text-3xl font-bold mt-1', theme === 'dark' ? 'text-white' : 'text-slate-900')}>
+                          {stats?.inDeliveryCount || 0}
+                        </p>
+                      </div>
                     </div>
-                    <div>
-                      <p className={cn('text-sm font-medium', theme === 'dark' ? 'text-gray-400' : 'text-gray-600')}>
-                        En Entrega
-                      </p>
-                      <p className={cn('text-3xl font-bold mt-1', theme === 'dark' ? 'text-white' : 'text-slate-900')}>
-                        {stats?.inDeliveryCount || 0}
-                      </p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-1">
+                      <div className="w-2 h-2 bg-purple-400 rounded-full animate-pulse"></div>
+                      <span className={cn('text-xs font-medium', theme === 'dark' ? 'text-gray-500' : 'text-black')}>
+                        En proceso
+                      </span>
                     </div>
                   </div>
                 </div>
@@ -377,30 +410,41 @@ export default function BrokerOrdersPage() {
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.4 }}
                 className={cn(
-                  'relative overflow-hidden rounded-2xl border shadow-xl',
+                  'relative overflow-hidden',
                   theme === 'dark'
                     ? 'bg-gradient-to-br from-gray-800 to-gray-900 border-gray-700'
-                    : 'bg-gradient-to-br from-slate-50 to-white border-slate-200'
+                    : 'bg-gradient-to-br from-slate-50 to-white border-slate-200',
+                  'rounded-2xl border shadow-xl'
                 )}
               >
                 <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-emerald-400 to-green-600"></div>
                 <div className="p-6">
-                  <div className="flex items-center gap-3">
-                    <div className={cn(
-                      'p-3 rounded-xl shadow-sm',
-                      theme === 'dark'
-                        ? 'bg-emerald-900/30 border border-emerald-800/50'
-                        : 'bg-gradient-to-br from-emerald-50 to-green-100 border border-emerald-200'
-                    )}>
-                      <DollarSign className="w-6 h-6 text-emerald-600" />
+                  <div className="flex items-start justify-between mb-4">
+                    <div className="flex items-center gap-3">
+                      <div className={cn(
+                        'p-3 rounded-xl shadow-sm',
+                        theme === 'dark'
+                          ? 'bg-emerald-900/30 border border-emerald-800/50'
+                          : 'bg-gradient-to-br from-emerald-50 to-green-100 border border-emerald-200'
+                      )}>
+                        <DollarSign className="w-6 h-6 text-emerald-600" />
+                      </div>
+                      <div>
+                        <p className={cn('text-sm font-medium', theme === 'dark' ? 'text-gray-400' : 'text-black')}>
+                          Por Entregar
+                        </p>
+                        <p className={cn('text-3xl font-bold mt-1', theme === 'dark' ? 'text-white' : 'text-slate-900')}>
+                          ${(stats?.pendingAmount || 0).toLocaleString()}
+                        </p>
+                      </div>
                     </div>
-                    <div>
-                      <p className={cn('text-sm font-medium', theme === 'dark' ? 'text-gray-400' : 'text-gray-600')}>
-                        Por Entregar
-                      </p>
-                      <p className={cn('text-2xl font-bold mt-1', theme === 'dark' ? 'text-white' : 'text-slate-900')}>
-                        {(stats?.pendingAmount || 0).toLocaleString()}
-                      </p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-1">
+                      <div className="w-2 h-2 bg-emerald-400 rounded-full"></div>
+                      <span className={cn('text-xs font-medium', theme === 'dark' ? 'text-gray-500' : 'text-black')}>
+                        Monto total activo
+                      </span>
                     </div>
                   </div>
                 </div>

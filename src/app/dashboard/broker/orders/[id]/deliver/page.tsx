@@ -4,6 +4,8 @@ import { useEffect, useState, useRef, useCallback } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { DashboardLayout } from '@/components/layout/dashboard-layout'
 import { ProtectedRoute } from '@/components/protected-route'
+import { useTheme } from '@/contexts/theme-context'
+import { cn } from '@/lib/utils'
 import {
   ArrowLeft,
   ArrowRight,
@@ -75,6 +77,7 @@ const STEPS = [
 export default function DeliveryWizardPage() {
   const params = useParams()
   const router = useRouter()
+  const { theme } = useTheme()
   const orderId = params.id as string
 
   // State
@@ -144,17 +147,15 @@ export default function DeliveryWizardPage() {
     const ctx = canvas.getContext('2d')
     if (!ctx) return
 
-    // Set canvas size
     const rect = canvas.getBoundingClientRect()
     canvas.width = rect.width
     canvas.height = rect.height
 
-    // Set drawing style
-    ctx.strokeStyle = '#000'
+    ctx.strokeStyle = theme === 'dark' ? '#fff' : '#000'
     ctx.lineWidth = 2
     ctx.lineCap = 'round'
     ctx.lineJoin = 'round'
-  }, [])
+  }, [theme])
 
   useEffect(() => {
     if (currentStep === 2) {
@@ -289,7 +290,7 @@ export default function DeliveryWizardPage() {
       case 2:
         return hasSignature && signerName.trim().length > 0
       case 3:
-        return true // Photos are optional
+        return true
       case 4:
         return true
       default:
@@ -305,19 +306,16 @@ export default function DeliveryWizardPage() {
     setError(null)
 
     try {
-      // 1. Save signature
       const signature = saveSignature()
       if (!signature) {
         throw new Error('Error al guardar firma')
       }
 
-      // 2. Upload photos if any
       let uploadedPhotos: PhotoData[] = []
       if (photos.length > 0) {
         uploadedPhotos = await uploadPhotos()
       }
 
-      // 3. Submit delivery
       const res = await fetch(`/api/broker/orders/${orderId}/deliver`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -340,7 +338,6 @@ export default function DeliveryWizardPage() {
         throw new Error(data.error || 'Error al completar entrega')
       }
 
-      // Success - redirect to orders page
       router.push('/dashboard/broker/orders?success=delivery')
 
     } catch (err) {
@@ -401,13 +398,19 @@ export default function DeliveryWizardPage() {
       <ProtectedRoute>
         <DashboardLayout>
           <div className="p-6">
-            <div className="bg-red-50 border border-red-200 rounded-lg p-4 flex items-center gap-3">
+            <div className={cn(
+              'rounded-lg p-4 flex items-center gap-3',
+              theme === 'dark' ? 'bg-red-900/30 border border-red-800' : 'bg-red-50 border border-red-200'
+            )}>
               <AlertCircle className="w-5 h-5 text-red-500" />
-              <span className="text-red-700">{error}</span>
+              <span className={theme === 'dark' ? 'text-red-300' : 'text-red-700'}>{error}</span>
             </div>
             <button
               onClick={() => router.back()}
-              className="mt-4 px-4 py-2 text-gray-600 hover:text-gray-800"
+              className={cn(
+                'mt-4 px-4 py-2',
+                theme === 'dark' ? 'text-gray-400 hover:text-gray-200' : 'text-gray-600 hover:text-gray-800'
+              )}
             >
               <ArrowLeft className="w-4 h-4 inline mr-2" />
               Volver
@@ -426,15 +429,21 @@ export default function DeliveryWizardPage() {
           <div className="mb-6">
             <button
               onClick={() => router.back()}
-              className="flex items-center gap-2 text-gray-600 hover:text-gray-800 mb-4"
+              className={cn(
+                'flex items-center gap-2 mb-4 transition-colors',
+                theme === 'dark' ? 'text-gray-400 hover:text-gray-200' : 'text-gray-600 hover:text-gray-800'
+              )}
             >
               <ArrowLeft className="w-4 h-4" />
-              Volver a Órdenes
+              Volver a Ordenes
             </button>
-            <h1 className="text-2xl font-bold text-gray-900">
+            <h1 className={cn(
+              'text-2xl font-bold',
+              theme === 'dark' ? 'text-white' : 'text-gray-900'
+            )}>
               Completar Entrega
             </h1>
-            <p className="text-gray-500">
+            <p className={theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}>
               Orden #{order?.orderNumber} - {order?.recipientName}
             </p>
           </div>
@@ -444,27 +453,32 @@ export default function DeliveryWizardPage() {
             <div className="flex items-center justify-between">
               {STEPS.map((step, index) => (
                 <div key={step.id} className="flex items-center">
-                  <div className={`
-                    flex items-center justify-center w-10 h-10 rounded-full
-                    ${currentStep > step.id ? 'bg-green-500 text-white' :
-                      currentStep === step.id ? 'bg-blue-600 text-white' :
-                      'bg-gray-200 text-gray-500'}
-                  `}>
+                  <div className={cn(
+                    'flex items-center justify-center w-10 h-10 rounded-full',
+                    currentStep > step.id ? 'bg-green-500 text-white' :
+                    currentStep === step.id ? 'bg-blue-600 text-white' :
+                    theme === 'dark' ? 'bg-gray-700 text-gray-400' : 'bg-gray-200 text-gray-500'
+                  )}>
                     {currentStep > step.id ? (
                       <Check className="w-5 h-5" />
                     ) : (
                       <step.icon className="w-5 h-5" />
                     )}
                   </div>
-                  <span className={`ml-2 text-sm font-medium hidden sm:block
-                    ${currentStep >= step.id ? 'text-gray-900' : 'text-gray-500'}
-                  `}>
+                  <span className={cn(
+                    'ml-2 text-sm font-medium hidden sm:block',
+                    currentStep >= step.id
+                      ? theme === 'dark' ? 'text-white' : 'text-gray-900'
+                      : theme === 'dark' ? 'text-gray-500' : 'text-gray-500'
+                  )}>
                     {step.name}
                   </span>
                   {index < STEPS.length - 1 && (
-                    <div className={`w-12 sm:w-24 h-1 mx-2 rounded
-                      ${currentStep > step.id ? 'bg-green-500' : 'bg-gray-200'}
-                    `} />
+                    <div className={cn(
+                      'w-12 sm:w-24 h-1 mx-2 rounded',
+                      currentStep > step.id ? 'bg-green-500' :
+                      theme === 'dark' ? 'bg-gray-700' : 'bg-gray-200'
+                    )} />
                   )}
                 </div>
               ))}
@@ -473,9 +487,12 @@ export default function DeliveryWizardPage() {
 
           {/* Error Display */}
           {error && (
-            <div className="mb-4 bg-red-50 border border-red-200 rounded-lg p-4 flex items-center gap-3">
+            <div className={cn(
+              'mb-4 rounded-lg p-4 flex items-center gap-3',
+              theme === 'dark' ? 'bg-red-900/30 border border-red-800' : 'bg-red-50 border border-red-200'
+            )}>
               <AlertCircle className="w-5 h-5 text-red-500 flex-shrink-0" />
-              <span className="text-red-700">{error}</span>
+              <span className={theme === 'dark' ? 'text-red-300' : 'text-red-700'}>{error}</span>
               <button onClick={() => setError(null)} className="ml-auto">
                 <X className="w-4 h-4 text-red-500" />
               </button>
@@ -483,15 +500,23 @@ export default function DeliveryWizardPage() {
           )}
 
           {/* Step Content */}
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+          <div className={cn(
+            'rounded-xl shadow-sm border p-6',
+            theme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'
+          )}>
             {/* Step 1: Denominaciones */}
             {currentStep === 1 && (
               <div>
-                <h2 className="text-lg font-semibold mb-4">
+                <h2 className={cn(
+                  'text-lg font-semibold mb-4',
+                  theme === 'dark' ? 'text-white' : 'text-gray-900'
+                )}>
                   Seleccionar Denominaciones
                 </h2>
-                <p className="text-gray-500 mb-6">
-                  Monto a entregar: <strong>{order?.receiveAmount.toLocaleString()} {order?.receiveCurrency}</strong>
+                <p className={cn('mb-6', theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}>
+                  Monto a entregar: <strong className={theme === 'dark' ? 'text-white' : 'text-gray-900'}>
+                    {order?.receiveAmount.toLocaleString()} {order?.receiveCurrency}
+                  </strong>
                 </p>
 
                 {/* Currency Tabs */}
@@ -500,11 +525,14 @@ export default function DeliveryWizardPage() {
                     <button
                       key={currency}
                       onClick={() => setSelectedCurrency(currency)}
-                      className={`px-4 py-2 rounded-lg font-medium transition-colors
-                        ${selectedCurrency === currency
+                      className={cn(
+                        'px-4 py-2 rounded-lg font-medium transition-colors',
+                        selectedCurrency === currency
                           ? 'bg-blue-600 text-white'
-                          : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}
-                      `}
+                          : theme === 'dark'
+                            ? 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                            : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                      )}
                     >
                       {currency}
                     </button>
@@ -516,32 +544,42 @@ export default function DeliveryWizardPage() {
                   {BILL_DENOMINATIONS[selectedCurrency]?.map(denom => {
                     const count = billDenominations[selectedCurrency as keyof BillDenominations]?.[denom.toString()] || 0
                     return (
-                      <div key={denom} className="bg-gray-50 rounded-lg p-4 text-center">
-                        <div className="text-lg font-bold text-gray-900 mb-2">
+                      <div key={denom} className={cn(
+                        'rounded-lg p-4 text-center',
+                        theme === 'dark' ? 'bg-gray-700' : 'bg-gray-50'
+                      )}>
+                        <div className={cn(
+                          'text-lg font-bold mb-2',
+                          theme === 'dark' ? 'text-white' : 'text-gray-900'
+                        )}>
                           {denom.toLocaleString()} {selectedCurrency}
                         </div>
                         <div className="flex items-center justify-center gap-2">
                           <button
                             onClick={() => updateDenomination(selectedCurrency, denom, -1)}
                             disabled={count === 0}
-                            className="w-8 h-8 rounded-full bg-gray-200 hover:bg-gray-300
-                              disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
+                            className={cn(
+                              'w-8 h-8 rounded-full flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed',
+                              theme === 'dark' ? 'bg-gray-600 hover:bg-gray-500 text-white' : 'bg-gray-200 hover:bg-gray-300'
+                            )}
                           >
                             -
                           </button>
-                          <span className="w-12 text-center font-semibold text-lg">
+                          <span className={cn(
+                            'w-12 text-center font-semibold text-lg',
+                            theme === 'dark' ? 'text-white' : 'text-gray-900'
+                          )}>
                             {count}
                           </span>
                           <button
                             onClick={() => updateDenomination(selectedCurrency, denom, 1)}
-                            className="w-8 h-8 rounded-full bg-blue-600 hover:bg-blue-700
-                              text-white flex items-center justify-center"
+                            className="w-8 h-8 rounded-full bg-blue-600 hover:bg-blue-700 text-white flex items-center justify-center"
                           >
                             +
                           </button>
                         </div>
                         {count > 0 && (
-                          <div className="mt-2 text-sm text-gray-500">
+                          <div className={cn('mt-2 text-sm', theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}>
                             = {(denom * count).toLocaleString()}
                           </div>
                         )}
@@ -551,19 +589,21 @@ export default function DeliveryWizardPage() {
                 </div>
 
                 {/* Total */}
-                <div className="mt-6 p-4 bg-blue-50 rounded-lg">
+                <div className={cn(
+                  'mt-6 p-4 rounded-lg',
+                  theme === 'dark' ? 'bg-blue-900/30 border border-blue-800' : 'bg-blue-50'
+                )}>
                   <div className="flex justify-between items-center">
-                    <span className="text-gray-700">Total a entregar:</span>
-                    <span className={`text-xl font-bold ${
-                      calculateTotal() === order?.receiveAmount
-                        ? 'text-green-600'
-                        : 'text-red-600'
-                    }`}>
+                    <span className={theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}>Total a entregar:</span>
+                    <span className={cn(
+                      'text-xl font-bold',
+                      calculateTotal() === order?.receiveAmount ? 'text-green-500' : 'text-red-500'
+                    )}>
                       {calculateTotal().toLocaleString()} {selectedCurrency}
                     </span>
                   </div>
                   {calculateTotal() !== order?.receiveAmount && (
-                    <p className="text-sm text-red-600 mt-2">
+                    <p className="text-sm text-red-500 mt-2">
                       Diferencia: {(calculateTotal() - (order?.receiveAmount || 0)).toLocaleString()} {selectedCurrency}
                     </p>
                   )}
@@ -574,33 +614,52 @@ export default function DeliveryWizardPage() {
             {/* Step 2: Firma */}
             {currentStep === 2 && (
               <div>
-                <h2 className="text-lg font-semibold mb-4">
+                <h2 className={cn(
+                  'text-lg font-semibold mb-4',
+                  theme === 'dark' ? 'text-white' : 'text-gray-900'
+                )}>
                   Firma del Cliente
                 </h2>
 
                 {/* Signer Info */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                    <label className={cn(
+                      'block text-sm font-medium mb-1',
+                      theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
+                    )}>
                       Nombre del Firmante *
                     </label>
                     <input
                       type="text"
                       value={signerName}
                       onChange={(e) => setSignerName(e.target.value)}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                      className={cn(
+                        'w-full px-3 py-2 rounded-lg border focus:ring-2 focus:ring-blue-500',
+                        theme === 'dark'
+                          ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-400'
+                          : 'bg-white border-gray-300 text-gray-900'
+                      )}
                       placeholder="Nombre completo"
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      No. Identificación (opcional)
+                    <label className={cn(
+                      'block text-sm font-medium mb-1',
+                      theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
+                    )}>
+                      No. Identificacion (opcional)
                     </label>
                     <input
                       type="text"
                       value={signerIdNumber}
                       onChange={(e) => setSignerIdNumber(e.target.value)}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                      className={cn(
+                        'w-full px-3 py-2 rounded-lg border focus:ring-2 focus:ring-blue-500',
+                        theme === 'dark'
+                          ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-400'
+                          : 'bg-white border-gray-300 text-gray-900'
+                      )}
                       placeholder="Carnet de identidad"
                     />
                   </div>
@@ -608,8 +667,11 @@ export default function DeliveryWizardPage() {
 
                 {/* Relation */}
                 <div className="mb-6">
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Relación con el destinatario
+                  <label className={cn(
+                    'block text-sm font-medium mb-2',
+                    theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
+                  )}>
+                    Relacion con el destinatario
                   </label>
                   <div className="flex gap-4">
                     {[
@@ -626,7 +688,7 @@ export default function DeliveryWizardPage() {
                           onChange={(e) => setSignerRelation(e.target.value as any)}
                           className="w-4 h-4 text-blue-600"
                         />
-                        <span className="text-gray-700">{option.label}</span>
+                        <span className={theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}>{option.label}</span>
                       </label>
                     ))}
                   </div>
@@ -634,10 +696,16 @@ export default function DeliveryWizardPage() {
 
                 {/* Signature Canvas */}
                 <div className="mb-4">
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <label className={cn(
+                    'block text-sm font-medium mb-2',
+                    theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
+                  )}>
                     Firma *
                   </label>
-                  <div className="border-2 border-dashed border-gray-300 rounded-lg bg-white relative">
+                  <div className={cn(
+                    'border-2 border-dashed rounded-lg relative',
+                    theme === 'dark' ? 'border-gray-600 bg-gray-700' : 'border-gray-300 bg-white'
+                  )}>
                     <canvas
                       ref={canvasRef}
                       className="w-full h-48 touch-none cursor-crosshair"
@@ -651,14 +719,17 @@ export default function DeliveryWizardPage() {
                     />
                     {!hasSignature && (
                       <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                        <span className="text-gray-400">Firme aquí</span>
+                        <span className={theme === 'dark' ? 'text-gray-500' : 'text-gray-400'}>Firme aqui</span>
                       </div>
                     )}
                   </div>
                   <div className="flex justify-end mt-2">
                     <button
                       onClick={clearSignature}
-                      className="flex items-center gap-1 text-sm text-gray-500 hover:text-gray-700"
+                      className={cn(
+                        'flex items-center gap-1 text-sm',
+                        theme === 'dark' ? 'text-gray-400 hover:text-gray-200' : 'text-gray-500 hover:text-gray-700'
+                      )}
                     >
                       <RotateCcw className="w-4 h-4" />
                       Limpiar
@@ -671,17 +742,23 @@ export default function DeliveryWizardPage() {
             {/* Step 3: Foto */}
             {currentStep === 3 && (
               <div>
-                <h2 className="text-lg font-semibold mb-4">
+                <h2 className={cn(
+                  'text-lg font-semibold mb-4',
+                  theme === 'dark' ? 'text-white' : 'text-gray-900'
+                )}>
                   Foto de Entrega (Opcional)
                 </h2>
-                <p className="text-gray-500 mb-6">
+                <p className={cn('mb-6', theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}>
                   Puede agregar hasta 5 fotos como prueba de entrega.
                 </p>
 
                 {/* Photo Grid */}
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 mb-4">
                   {photos.map((photo, index) => (
-                    <div key={index} className="relative aspect-square bg-gray-100 rounded-lg overflow-hidden">
+                    <div key={index} className={cn(
+                      'relative aspect-square rounded-lg overflow-hidden',
+                      theme === 'dark' ? 'bg-gray-700' : 'bg-gray-100'
+                    )}>
                       <img
                         src={photo.preview}
                         alt={`Foto ${index + 1}`}
@@ -697,11 +774,14 @@ export default function DeliveryWizardPage() {
                   ))}
 
                   {photos.length < 5 && (
-                    <label className="aspect-square border-2 border-dashed border-gray-300 rounded-lg
-                      flex flex-col items-center justify-center cursor-pointer hover:border-blue-500
-                      hover:bg-blue-50 transition-colors">
-                      <Upload className="w-8 h-8 text-gray-400 mb-2" />
-                      <span className="text-sm text-gray-500">Agregar Foto</span>
+                    <label className={cn(
+                      'aspect-square border-2 border-dashed rounded-lg flex flex-col items-center justify-center cursor-pointer transition-colors',
+                      theme === 'dark'
+                        ? 'border-gray-600 hover:border-blue-500 hover:bg-gray-700'
+                        : 'border-gray-300 hover:border-blue-500 hover:bg-blue-50'
+                    )}>
+                      <Upload className={cn('w-8 h-8 mb-2', theme === 'dark' ? 'text-gray-500' : 'text-gray-400')} />
+                      <span className={cn('text-sm', theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}>Agregar Foto</span>
                       <input
                         type="file"
                         accept="image/jpeg,image/png,image/webp"
@@ -715,57 +795,92 @@ export default function DeliveryWizardPage() {
 
                 {/* Notes */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label className={cn(
+                    'block text-sm font-medium mb-1',
+                    theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
+                  )}>
                     Notas de Entrega (Opcional)
                   </label>
                   <textarea
                     value={deliveryNotes}
                     onChange={(e) => setDeliveryNotes(e.target.value)}
                     rows={3}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                    className={cn(
+                      'w-full px-3 py-2 rounded-lg border focus:ring-2 focus:ring-blue-500',
+                      theme === 'dark'
+                        ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-400'
+                        : 'bg-white border-gray-300 text-gray-900'
+                    )}
                     placeholder="Observaciones sobre la entrega..."
                   />
                 </div>
               </div>
             )}
 
-            {/* Step 4: Confirmación */}
+            {/* Step 4: Confirmacion */}
             {currentStep === 4 && (
               <div>
-                <h2 className="text-lg font-semibold mb-4">
+                <h2 className={cn(
+                  'text-lg font-semibold mb-4',
+                  theme === 'dark' ? 'text-white' : 'text-gray-900'
+                )}>
                   Confirmar Entrega
                 </h2>
 
                 {/* Summary */}
                 <div className="space-y-4 mb-6">
-                  <div className="bg-gray-50 rounded-lg p-4">
-                    <h3 className="font-medium text-gray-900 mb-2">Detalles de la Orden</h3>
+                  <div className={cn(
+                    'rounded-lg p-4',
+                    theme === 'dark' ? 'bg-gray-700' : 'bg-gray-50'
+                  )}>
+                    <h3 className={cn(
+                      'font-medium mb-2',
+                      theme === 'dark' ? 'text-white' : 'text-gray-900'
+                    )}>Detalles de la Orden</h3>
                     <div className="grid grid-cols-2 gap-2 text-sm">
-                      <div className="text-gray-500">Número:</div>
-                      <div className="font-medium">{order?.orderNumber}</div>
-                      <div className="text-gray-500">Destinatario:</div>
-                      <div className="font-medium">{order?.recipientName}</div>
-                      <div className="text-gray-500">Teléfono:</div>
-                      <div className="font-medium">{order?.recipientPhone}</div>
-                      <div className="text-gray-500">Ubicación:</div>
-                      <div className="font-medium">{order?.recipientMunicipality}, {order?.recipientProvince}</div>
+                      <div className={theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}>Numero:</div>
+                      <div className={cn('font-medium', theme === 'dark' ? 'text-white' : 'text-gray-900')}>{order?.orderNumber}</div>
+                      <div className={theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}>Destinatario:</div>
+                      <div className={cn('font-medium', theme === 'dark' ? 'text-white' : 'text-gray-900')}>{order?.recipientName}</div>
+                      <div className={theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}>Telefono:</div>
+                      <div className={cn('font-medium', theme === 'dark' ? 'text-white' : 'text-gray-900')}>{order?.recipientPhone}</div>
+                      <div className={theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}>Ubicacion:</div>
+                      <div className={cn('font-medium', theme === 'dark' ? 'text-white' : 'text-gray-900')}>{order?.recipientMunicipality}, {order?.recipientProvince}</div>
                     </div>
                   </div>
 
-                  <div className="bg-green-50 rounded-lg p-4">
-                    <h3 className="font-medium text-green-900 mb-2">Monto Entregado</h3>
-                    <div className="text-2xl font-bold text-green-700">
+                  <div className={cn(
+                    'rounded-lg p-4',
+                    theme === 'dark' ? 'bg-emerald-900/30 border border-emerald-800' : 'bg-green-50'
+                  )}>
+                    <h3 className={cn(
+                      'font-medium mb-2',
+                      theme === 'dark' ? 'text-emerald-300' : 'text-green-900'
+                    )}>Monto Entregado</h3>
+                    <div className={cn(
+                      'text-2xl font-bold',
+                      theme === 'dark' ? 'text-emerald-400' : 'text-green-700'
+                    )}>
                       {calculateTotal().toLocaleString()} {selectedCurrency}
                     </div>
-                    <div className="text-sm text-green-600 mt-1">
+                    <div className={cn(
+                      'text-sm mt-1',
+                      theme === 'dark' ? 'text-emerald-400' : 'text-green-600'
+                    )}>
                       Recibido por: {signerName}
                       {signerRelation !== 'recipient' && ` (${signerRelation === 'family' ? 'Familiar' : 'Otro'})`}
                     </div>
                   </div>
 
                   {/* Receipt Options */}
-                  <div className="bg-blue-50 rounded-lg p-4">
-                    <h3 className="font-medium text-blue-900 mb-3">Enviar Recibo</h3>
+                  <div className={cn(
+                    'rounded-lg p-4',
+                    theme === 'dark' ? 'bg-blue-900/30 border border-blue-800' : 'bg-blue-50'
+                  )}>
+                    <h3 className={cn(
+                      'font-medium mb-3',
+                      theme === 'dark' ? 'text-blue-300' : 'text-blue-900'
+                    )}>Enviar Recibo</h3>
                     <div className="grid grid-cols-2 gap-2">
                       {[
                         { value: 'none', label: 'No enviar', icon: X },
@@ -776,11 +891,14 @@ export default function DeliveryWizardPage() {
                         <button
                           key={option.value}
                           onClick={() => setSendReceiptVia(option.value as any)}
-                          className={`flex items-center justify-center gap-2 p-3 rounded-lg border-2 transition-colors
-                            ${sendReceiptVia === option.value
-                              ? 'border-blue-500 bg-blue-100 text-blue-700'
-                              : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300'}
-                          `}
+                          className={cn(
+                            'flex items-center justify-center gap-2 p-3 rounded-lg border-2 transition-colors',
+                            sendReceiptVia === option.value
+                              ? 'border-blue-500 bg-blue-600 text-white'
+                              : theme === 'dark'
+                                ? 'border-gray-600 bg-gray-700 text-gray-300 hover:border-gray-500'
+                                : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300'
+                          )}
                         >
                           <option.icon className="w-4 h-4" />
                           <span className="text-sm font-medium">{option.label}</span>
@@ -788,8 +906,11 @@ export default function DeliveryWizardPage() {
                       ))}
                     </div>
                     {sendReceiptVia !== 'none' && order?.recipientPhone && (
-                      <p className="text-sm text-blue-600 mt-2">
-                        Se enviará a: {order.recipientPhone}
+                      <p className={cn(
+                        'text-sm mt-2',
+                        theme === 'dark' ? 'text-blue-400' : 'text-blue-600'
+                      )}>
+                        Se enviara a: {order.recipientPhone}
                       </p>
                     )}
                   </div>
@@ -798,12 +919,17 @@ export default function DeliveryWizardPage() {
             )}
 
             {/* Navigation Buttons */}
-            <div className="flex justify-between mt-8 pt-6 border-t border-gray-200">
+            <div className={cn(
+              'flex justify-between mt-8 pt-6 border-t',
+              theme === 'dark' ? 'border-gray-700' : 'border-gray-200'
+            )}>
               <button
                 onClick={prevStep}
                 disabled={currentStep === 1}
-                className="flex items-center gap-2 px-4 py-2 text-gray-600 hover:text-gray-800
-                  disabled:opacity-50 disabled:cursor-not-allowed"
+                className={cn(
+                  'flex items-center gap-2 px-4 py-2 disabled:opacity-50 disabled:cursor-not-allowed',
+                  theme === 'dark' ? 'text-gray-400 hover:text-gray-200' : 'text-gray-600 hover:text-gray-800'
+                )}
               >
                 <ArrowLeft className="w-4 h-4" />
                 Anterior
@@ -813,8 +939,7 @@ export default function DeliveryWizardPage() {
                 <button
                   onClick={nextStep}
                   disabled={!canProceed()}
-                  className="flex items-center gap-2 px-6 py-2 bg-blue-600 text-white rounded-lg
-                    hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="flex items-center gap-2 px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   Siguiente
                   <ArrowRight className="w-4 h-4" />
@@ -823,8 +948,7 @@ export default function DeliveryWizardPage() {
                 <button
                   onClick={submitDelivery}
                   disabled={submitting}
-                  className="flex items-center gap-2 px-6 py-2 bg-green-600 text-white rounded-lg
-                    hover:bg-green-700 disabled:opacity-50"
+                  className="flex items-center gap-2 px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50"
                 >
                   {submitting ? (
                     <>
