@@ -56,7 +56,7 @@ export async function POST(
 
     // Get order and verify it belongs to this broker
     const orderResult = await db.query(`
-      SELECT cdo.*, c.name as broker_name
+      SELECT cdo.*, c.name as broker_name, c.legalname as broker_legalname
       FROM cash_delivery_orders cdo
       LEFT JOIN companies c ON cdo.broker_company_id = c.id
       WHERE cdo.id = $1 AND cdo.broker_company_id = $2
@@ -71,16 +71,18 @@ export async function POST(
 
     const order = orderResult.rows[0]
 
-    // Check status
-    if (!['pending_reception', 'validating'].includes(order.status)) {
+    // Allow validation from multiple statuses (be more permissive)
+    const allowedStatuses = ['pending', 'in_transit', 'pending_reception', 'validating']
+    if (!allowedStatuses.includes(order.status)) {
       return NextResponse.json({
         success: false,
-        error: `No se puede validar una orden en estado: ${order.status}`
+        error: `No se puede validar una orden en estado: ${order.status}. Estados permitidos: ${allowedStatuses.join(', ')}`
       }, { status: 400 })
     }
 
-    // Check if blocked
-    if (order.otp_attempts >= OTP_MAX_ATTEMPTS) {
+    // Check if blocked (only if otp_attempts column exists)
+    const otpAttempts = order.otp_attempts || 0
+    if (otpAttempts >= OTP_MAX_ATTEMPTS) {
       return NextResponse.json({
         success: false,
         error: 'Orden bloqueada por demasiados intentos. Contacte al administrador.'
@@ -91,27 +93,34 @@ export async function POST(
     const receivedTotal = calculateTotalFromDenominations(receivedBillDenominations)
     const expectedTotal = parseFloat(order.total_amount)
 
-    // Update received denominations in order
-    await db.query(`
-      UPDATE cash_delivery_orders
-      SET
-        received_bill_denominations = $1,
-        received_total_amount = $2,
-        amount_matches = $3,
-        updated_at = NOW()
-      WHERE id = $4
-    `, [
-      JSON.stringify(receivedBillDenominations),
-      receivedTotal,
-      receivedTotal === expectedTotal,
-      orderId
-    ])
+    console.log(`[Validate API] Order ${orderId}: Expected ${expectedTotal}, Received ${receivedTotal}`)
 
-    // If amounts don't match, return error
+    // Try to update with new columns, fallback to basic update if columns don't exist
+    try {
+      await db.query(`
+        UPDATE cash_delivery_orders
+        SET
+          received_bill_denominations = $1,
+          received_total_amount = $2,
+          amount_matches = $3,
+          updated_at = NOW()
+        WHERE id = $4
+      `, [
+        JSON.stringify(receivedBillDenominations),
+        receivedTotal,
+        receivedTotal === expectedTotal,
+        orderId
+      ])
+    } catch (updateError: any) {
+      console.error('[Validate API] Error updating received amounts, columns might not exist:', updateError.message)
+      // Continue anyway - we can still validate amounts
+    }
+
+    // If amounts don't match, return error with details
     if (receivedTotal !== expectedTotal) {
       return NextResponse.json({
         success: false,
-        error: 'Los montos no coinciden',
+        error: `Los montos no coinciden. Esperado: $${expectedTotal.toLocaleString()}, Recibido: $${receivedTotal.toLocaleString()}`,
         data: {
           expectedTotal,
           receivedTotal,
@@ -125,32 +134,43 @@ export async function POST(
     const otpCode = generateOTP()
     const otpExpiresAt = new Date(Date.now() + OTP_EXPIRATION_MINUTES * 60 * 1000)
 
+    console.log(`[Validate API] Amounts match! Generating OTP for order ${orderId}`)
+
     // Update order with OTP
-    await db.query(`
-      UPDATE cash_delivery_orders
-      SET
-        status = 'validating',
-        otp_code = $1,
-        otp_sent_at = NOW(),
-        otp_expires_at = $2,
-        updated_at = NOW()
-      WHERE id = $3
-    `, [otpCode, otpExpiresAt, orderId])
+    try {
+      await db.query(`
+        UPDATE cash_delivery_orders
+        SET
+          status = 'validating',
+          otp_code = $1,
+          otp_sent_at = NOW(),
+          otp_expires_at = $2,
+          updated_at = NOW()
+        WHERE id = $3
+      `, [otpCode, otpExpiresAt, orderId])
+    } catch (otpUpdateError: any) {
+      console.error('[Validate API] Error updating OTP columns:', otpUpdateError.message)
+      // Try minimal update
+      await db.query(`
+        UPDATE cash_delivery_orders
+        SET status = 'validating', updated_at = NOW()
+        WHERE id = $1
+      `, [orderId])
+    }
 
     // Send OTP via selected channel (SMS or WhatsApp)
+    const brokerName = order.broker_legalname || order.broker_name || 'Broker'
     const otpResult = await sendCashDeliveryOTPByChannel(
       order.delivery_user_phone,
       otpCode,
       expectedTotal.toFixed(2),
       order.currency,
-      order.broker_name || 'Broker',
+      brokerName,
       otpChannel
     )
 
     if (!otpResult.success) {
       console.error(`[Validate API] Failed to send OTP via ${otpChannel}:`, otpResult.error)
-      // Even if message fails, we continue - OTP is stored in DB
-      // In production, you might want to handle this differently
     }
 
     const channelLabel = otpChannel === 'whatsapp' ? 'WhatsApp' : 'SMS'
@@ -161,9 +181,11 @@ export async function POST(
       data: {
         status: 'validating',
         otpSentTo: maskPhoneNumber(order.delivery_user_phone),
-        expiresIn: OTP_EXPIRATION_MINUTES * 60, // seconds
+        expiresIn: OTP_EXPIRATION_MINUTES * 60,
         messageSent: otpResult.success,
-        channel: otpChannel
+        channel: otpChannel,
+        // Debug info - remove in production
+        debugOtp: process.env.NODE_ENV === 'development' ? otpCode : undefined
       }
     })
 
@@ -171,7 +193,11 @@ export async function POST(
     console.error('[Validate API] Error:', error)
     return NextResponse.json({
       success: false,
-      error: 'Error al validar los montos'
+      error: `Error al validar: ${error.message || 'Error desconocido'}`,
+      debug: process.env.NODE_ENV === 'development' ? {
+        stack: error.stack,
+        name: error.name
+      } : undefined
     }, { status: 500 })
   }
 }

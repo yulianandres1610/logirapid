@@ -99,7 +99,7 @@ export default function CashDeliveryWizardPage() {
     loadBrokers()
   }, [])
 
-  // Load users (delivery personnel)
+  // Load all users from the system
   useEffect(() => {
     const loadUsers = async () => {
       try {
@@ -108,14 +108,19 @@ export default function CashDeliveryWizardPage() {
         if (data.success) {
           const rawUsers = data.data?.users || data.users || []
           const mappedUsers = rawUsers
-            .filter((u: any) => ['USER', 'DRIVER'].includes(u.role?.toUpperCase()))
             .map((u: any) => ({
               id: u.id,
-              name: `${u.firstName || ''} ${u.lastName || ''}`.trim() || u.email,
+              name: `${u.firstName || u.firstname || ''} ${u.lastName || u.lastname || ''}`.trim() || u.email,
               email: u.email,
               phone: u.phone || '',
               role: u.role
             }))
+            // Sort: users with phone first, then alphabetically
+            .sort((a: User, b: User) => {
+              if (a.phone && !b.phone) return -1
+              if (!a.phone && b.phone) return 1
+              return a.name.localeCompare(b.name)
+            })
           setUsers(mappedUsers)
         }
       } catch (error) {
@@ -205,7 +210,8 @@ export default function CashDeliveryWizardPage() {
 
   const filteredUsers = users.filter(user =>
     user.name?.toLowerCase().includes(userSearch.toLowerCase()) ||
-    user.email?.toLowerCase().includes(userSearch.toLowerCase())
+    user.email?.toLowerCase().includes(userSearch.toLowerCase()) ||
+    user.phone?.includes(userSearch)
   )
 
   const handleNext = () => {
@@ -464,7 +470,7 @@ export default function CashDeliveryWizardPage() {
                         Asignar Repartidor
                       </h2>
                       <p className={cn("text-sm", theme === 'dark' ? 'text-gray-400' : 'text-gray-600')}>
-                        Seleccione el repartidor que llevará el efectivo
+                        Seleccione el usuario que llevará el efectivo (debe tener teléfono para recibir OTP)
                       </p>
                     </div>
 
@@ -472,7 +478,7 @@ export default function CashDeliveryWizardPage() {
                       <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
                       <input
                         type="text"
-                        placeholder="Buscar repartidor..."
+                        placeholder="Buscar por nombre, email o teléfono..."
                         value={userSearch}
                         onChange={(e) => setUserSearch(e.target.value)}
                         className={cn(
@@ -484,55 +490,96 @@ export default function CashDeliveryWizardPage() {
                       />
                     </div>
 
+                    {/* Stats */}
+                    <div className="flex gap-4 text-sm">
+                      <span className={cn("px-3 py-1 rounded-full", theme === 'dark' ? 'bg-green-900/30 text-green-400' : 'bg-green-100 text-green-700')}>
+                        {users.filter(u => u.phone).length} con teléfono
+                      </span>
+                      <span className={cn("px-3 py-1 rounded-full", theme === 'dark' ? 'bg-gray-700 text-gray-400' : 'bg-gray-100 text-gray-600')}>
+                        {users.filter(u => !u.phone).length} sin teléfono
+                      </span>
+                    </div>
+
                     <div className="space-y-2 max-h-80 overflow-y-auto">
                       {filteredUsers.length === 0 ? (
                         <p className={cn("text-center py-8", theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}>
-                          No se encontraron repartidores
+                          No se encontraron usuarios
                         </p>
                       ) : (
-                        filteredUsers.map(user => (
-                          <button
-                            key={user.id}
-                            onClick={() => setFormData(prev => ({ ...prev, selectedUser: user }))}
-                            className={cn(
-                              "w-full p-4 rounded-xl border-2 transition-all text-left",
-                              formData.selectedUser?.id === user.id
-                                ? 'border-blue-500 bg-blue-500/10'
-                                : cn(
-                                    'border-transparent',
-                                    theme === 'dark' ? 'bg-gray-700/50 hover:bg-gray-700' : 'bg-gray-50 hover:bg-gray-100'
-                                  )
-                            )}
-                          >
-                            <div className="flex items-center justify-between">
-                              <div className="flex items-center gap-3">
-                                <div className={cn(
-                                  "w-10 h-10 rounded-full flex items-center justify-center",
-                                  theme === 'dark' ? 'bg-gray-600' : 'bg-gray-200'
-                                )}>
-                                  <Users className={cn("w-5 h-5", theme === 'dark' ? 'text-gray-300' : 'text-gray-600')} />
-                                </div>
-                                <div>
-                                  <p className={cn("font-medium", theme === 'dark' ? 'text-white' : 'text-gray-900')}>
-                                    {user.name}
-                                  </p>
-                                  <p className={cn("text-sm", theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}>
-                                    {user.phone || 'Sin teléfono'}
-                                  </p>
-                                </div>
-                              </div>
-                              {formData.selectedUser?.id === user.id && (
-                                <CheckCircle className="h-5 w-5 text-blue-500" />
+                        filteredUsers.map(user => {
+                          const hasPhone = !!user.phone
+                          const isSelected = formData.selectedUser?.id === user.id
+
+                          return (
+                            <button
+                              key={user.id}
+                              onClick={() => hasPhone && setFormData(prev => ({ ...prev, selectedUser: user }))}
+                              disabled={!hasPhone}
+                              className={cn(
+                                "w-full p-4 rounded-xl border-2 transition-all text-left",
+                                !hasPhone && "opacity-50 cursor-not-allowed",
+                                isSelected
+                                  ? 'border-blue-500 bg-blue-500/10'
+                                  : cn(
+                                      'border-transparent',
+                                      hasPhone
+                                        ? theme === 'dark' ? 'bg-gray-700/50 hover:bg-gray-700' : 'bg-gray-50 hover:bg-gray-100'
+                                        : theme === 'dark' ? 'bg-gray-800/50' : 'bg-gray-100/50'
+                                    )
                               )}
-                            </div>
-                            {!user.phone && (
-                              <p className="text-xs text-amber-500 mt-2 flex items-center gap-1 ml-13">
-                                <AlertCircle className="h-3 w-3" />
-                                Usuario necesita teléfono para OTP
-                              </p>
-                            )}
-                          </button>
-                        ))
+                            >
+                              <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-3">
+                                  <div className={cn(
+                                    "w-10 h-10 rounded-full flex items-center justify-center",
+                                    hasPhone
+                                      ? theme === 'dark' ? 'bg-green-900/50' : 'bg-green-100'
+                                      : theme === 'dark' ? 'bg-gray-700' : 'bg-gray-200'
+                                  )}>
+                                    <Users className={cn(
+                                      "w-5 h-5",
+                                      hasPhone
+                                        ? theme === 'dark' ? 'text-green-400' : 'text-green-600'
+                                        : theme === 'dark' ? 'text-gray-500' : 'text-gray-400'
+                                    )} />
+                                  </div>
+                                  <div className="flex-1 min-w-0">
+                                    <div className="flex items-center gap-2">
+                                      <p className={cn(
+                                        "font-medium truncate",
+                                        theme === 'dark' ? 'text-white' : 'text-gray-900'
+                                      )}>
+                                        {user.name}
+                                      </p>
+                                      <span className={cn(
+                                        "px-2 py-0.5 rounded text-xs font-medium shrink-0",
+                                        theme === 'dark' ? 'bg-gray-600 text-gray-300' : 'bg-gray-200 text-gray-600'
+                                      )}>
+                                        {user.role}
+                                      </span>
+                                    </div>
+                                    <p className={cn("text-sm truncate", theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}>
+                                      {user.email}
+                                    </p>
+                                    {hasPhone ? (
+                                      <p className={cn("text-sm font-medium", theme === 'dark' ? 'text-green-400' : 'text-green-600')}>
+                                        📱 {user.phone}
+                                      </p>
+                                    ) : (
+                                      <p className="text-xs text-red-500 mt-1 flex items-center gap-1">
+                                        <AlertCircle className="h-3 w-3" />
+                                        Sin teléfono - No puede recibir OTP
+                                      </p>
+                                    )}
+                                  </div>
+                                </div>
+                                {isSelected && (
+                                  <CheckCircle className="h-5 w-5 text-blue-500 shrink-0" />
+                                )}
+                              </div>
+                            </button>
+                          )
+                        })
                       )}
                     </div>
                   </div>
