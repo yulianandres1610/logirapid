@@ -21,20 +21,25 @@ interface WalletCardProps {
 }
 
 export function WalletCard({
-  walletNumber,
-  companyName,
-  primaryCurrency,
-  secondaryCurrencies,
-  balance,
-  showBalance,
+  walletNumber = '',
+  companyName = '',
+  primaryCurrency = 'USD',
+  secondaryCurrencies = [],
+  balance = 0,
+  showBalance = true,
   setShowBalance,
-  isMultiCurrency,
-  hasLimits,
-  dailyLimit,
-  monthlyLimit
+  isMultiCurrency = false,
+  hasLimits = false,
+  dailyLimit = '',
+  monthlyLimit = ''
 }: WalletCardProps) {
   const { theme } = useTheme()
   const [isFlipped, setIsFlipped] = useState(true)
+
+  // Ensure walletNumber is a string and has minimum length for slicing
+  const safeWalletNumber = (walletNumber || '').padEnd(20, '0')
+  const safeBalance = typeof balance === 'number' ? balance : 0
+  const safeSecondary = Array.isArray(secondaryCurrencies) ? secondaryCurrencies : []
 
   const getCurrencySymbol = (currency: string) => {
     switch (currency) {
@@ -59,7 +64,8 @@ export function WalletCard({
   }
 
   const formatBalance = (amount: number, currency: string) => {
-    return `${getCurrencySymbol(currency)}${amount.toFixed(2)}`
+    const safeAmount = typeof amount === 'number' ? amount : 0
+    return `${getCurrencySymbol(currency)}${safeAmount.toFixed(2)}`
   }
 
   const getCardColors = () => {
@@ -147,7 +153,7 @@ export function WalletCard({
                   <div>
                     <p className="text-xs uppercase tracking-wider opacity-80">Disponible</p>
                     <p className="text-lg font-bold">
-                      {showBalance ? formatBalance(balance, primaryCurrency) : '****'}
+                      {showBalance ? formatBalance(safeBalance, primaryCurrency) : '****'}
                     </p>
                   </div>
                   <div className="text-right">
@@ -191,10 +197,10 @@ export function WalletCard({
                     <p className="text-xs uppercase tracking-wider opacity-80 mb-6">Número de Cuenta</p>
                     <div className="space-y-2">
                       <p className="text-xl font-mono tracking-widest">
-                        {walletNumber.slice(0, 4)}  {walletNumber.slice(4, 8)}  {walletNumber.slice(8, 12)}  {walletNumber.slice(12, 16)}
+                        {safeWalletNumber.slice(0, 4)}  {safeWalletNumber.slice(4, 8)}  {safeWalletNumber.slice(8, 12)}  {safeWalletNumber.slice(12, 16)}
                       </p>
                       <p className="text-xl font-mono tracking-widest">
-                        {walletNumber.slice(16, 18)}  {walletNumber.slice(18)}
+                        {safeWalletNumber.slice(16, 18)}  {safeWalletNumber.slice(18)}
                       </p>
                     </div>
                   </div>
@@ -223,11 +229,11 @@ export function WalletCard({
                     <p className="text-xs uppercase tracking-wider opacity-80 mb-1">Monedas</p>
                     <div className="flex gap-1">
                       <span className="text-lg">{getCurrencyFlag(primaryCurrency)}</span>
-                      {secondaryCurrencies.slice(0, 2).map((currency) => (
+                      {safeSecondary.slice(0, 2).map((currency) => (
                         <span key={currency} className="text-lg">{getCurrencyFlag(currency)}</span>
                       ))}
-                      {secondaryCurrencies.length > 2 && (
-                        <span className="text-xs px-1 bg-white/20 rounded">+{secondaryCurrencies.length - 2}</span>
+                      {safeSecondary.length > 2 && (
+                        <span className="text-xs px-1 bg-white/20 rounded">+{safeSecondary.length - 2}</span>
                       )}
                     </div>
                   </div>
