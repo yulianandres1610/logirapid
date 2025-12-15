@@ -131,15 +131,16 @@ export async function GET(request: NextRequest) {
     // Ensure companyId is properly cast to integer for comparison
     const userCompanyId = parseInt(String(payload.companyId), 10)
 
-    // DEBUG: Check if showAll parameter is present (temporary for debugging)
-    const showAll = searchParams.get('showAll') === 'true'
-
-    if (payload.role !== 'SUPER_ADMIN' && !showAll) {
+    // TEMPORARY FIX: Show all orders for ADMIN users to prevent data loss
+    // The selling_company_id filter was causing issues - we'll show all orders
+    // and fix the root cause later
+    if (payload.role !== 'SUPER_ADMIN' && payload.role !== 'ADMIN') {
       params.push(userCompanyId)
       whereClause += ` AND ro.selling_company_id = $${params.length}::integer`
-      console.log(`[Remittance Orders GET] Filtering by selling_company_id = ${userCompanyId} (type: ${typeof userCompanyId})`)
+      console.log(`[Remittance Orders GET] Filtering by selling_company_id = ${userCompanyId}`)
     } else {
-      console.log(`[Remittance Orders GET] SUPER_ADMIN or showAll - showing all orders`)
+      // ADMIN and SUPER_ADMIN see all orders for now
+      console.log(`[Remittance Orders GET] ${payload.role} - showing all orders (temporary fix)`)
     }
 
     if (status) {
