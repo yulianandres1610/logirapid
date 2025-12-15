@@ -306,14 +306,25 @@ export default function DeliveryWizardPage() {
     setError(null)
 
     try {
-      const signature = saveSignature()
+      // Use saved signature data from state (saved when leaving step 2)
+      // If not saved yet, try to get it from canvas (user might be on step 2)
+      let signature = signatureData
+      if (!signature && canvasRef.current) {
+        signature = canvasRef.current.toDataURL('image/png')
+      }
+
       if (!signature) {
-        throw new Error('Error al guardar firma')
+        throw new Error('No se encontró la firma. Por favor, vuelva al paso 2 y firme nuevamente.')
       }
 
       let uploadedPhotos: PhotoData[] = []
       if (photos.length > 0) {
-        uploadedPhotos = await uploadPhotos()
+        try {
+          uploadedPhotos = await uploadPhotos()
+        } catch (photoErr) {
+          console.error('Error uploading photos:', photoErr)
+          // Continue without photos if upload fails
+        }
       }
 
       const res = await fetch(`/api/broker/orders/${orderId}/deliver`, {
@@ -341,6 +352,7 @@ export default function DeliveryWizardPage() {
       router.push('/dashboard/broker/orders?success=delivery')
 
     } catch (err) {
+      console.error('Submit delivery error:', err)
       setError(err instanceof Error ? err.message : 'Error al completar entrega')
     } finally {
       setSubmitting(false)
@@ -350,6 +362,14 @@ export default function DeliveryWizardPage() {
   // Navigation
   const nextStep = () => {
     if (currentStep < 4 && canProceed()) {
+      // Save signature data when leaving step 2
+      if (currentStep === 2 && hasSignature) {
+        const canvas = canvasRef.current
+        if (canvas) {
+          const data = canvas.toDataURL('image/png')
+          setSignatureData(data)
+        }
+      }
       setCurrentStep(currentStep + 1)
     }
   }

@@ -404,6 +404,8 @@ function calculateTotalFromDenominations(
 
 /**
  * Upload signature to Supabase Storage
+ * Returns storagePath on success, null on failure
+ * Note: If upload fails, the signature will still be saved as base64 in the database
  */
 async function uploadSignature(
   signatureData: string,
@@ -411,6 +413,15 @@ async function uploadSignature(
   orderId: number
 ): Promise<string | null> {
   try {
+    // Verify Supabase credentials exist
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+    const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+
+    if (!supabaseUrl || !supabaseKey) {
+      console.log('[Upload Signature] Supabase not configured, skipping storage upload')
+      return null
+    }
+
     // Remove data URL prefix if present
     let base64Data = signatureData
     if (signatureData.startsWith('data:')) {
@@ -422,7 +433,10 @@ async function uploadSignature(
     const randomSuffix = Math.random().toString(36).substring(2, 10)
     const storagePath = `company-${companyId}/remittance-proofs/order-${orderId}/signature-${timestamp}-${randomSuffix}.png`
 
-    const { error } = await getSupabaseClient().storage
+    const supabase = getSupabaseClient()
+
+    // Try to upload
+    const { error } = await supabase.storage
       .from(BUCKET_NAME)
       .upload(storagePath, buffer, {
         contentType: 'image/png',
@@ -430,10 +444,15 @@ async function uploadSignature(
       })
 
     if (error) {
-      console.error('[Upload Signature] Error:', error)
+      console.error('[Upload Signature] Storage error:', error.message)
+      // Check if bucket doesn't exist
+      if (error.message.includes('Bucket not found') || error.message.includes('not found')) {
+        console.log('[Upload Signature] Bucket does not exist. Run setup-private-documents-storage.js to create it.')
+      }
       return null
     }
 
+    console.log(`[Upload Signature] Successfully uploaded to ${storagePath}`)
     return storagePath
   } catch (error) {
     console.error('[Upload Signature] Error:', error)
