@@ -101,10 +101,10 @@ export default function CreateRemittancePage() {
     serviceType: '',
     deliveryFee: 5,
     // Step 3: Amount
-    sendAmount: 100,
+    sendAmount: 0,
     sendCurrency: 'USD',
     receiveCurrency: 'USD',
-    receiveAmount: 100,
+    receiveAmount: 0,
     exchangeRate: 1,
     serviceFee: 0,
     totalCharged: 0,
