@@ -23,6 +23,28 @@ export async function POST() {
 
     console.log('[Migration] Created broker_wallet_balances table')
 
+    // Add missing columns if they don't exist (for tables created with old schema)
+    const missingColumns = [
+      { name: 'total_deposits', type: 'DECIMAL(15,2) DEFAULT 0' },
+      { name: 'total_withdrawals', type: 'DECIMAL(15,2) DEFAULT 0' },
+      { name: 'updated_at', type: 'TIMESTAMP DEFAULT NOW()' }
+    ]
+
+    for (const col of missingColumns) {
+      try {
+        await db.query(`
+          ALTER TABLE broker_wallet_balances
+          ADD COLUMN IF NOT EXISTS ${col.name} ${col.type}
+        `)
+        console.log(`[Migration] Added column ${col.name}`)
+      } catch (e: any) {
+        // Column might already exist
+        if (!e.message.includes('already exists')) {
+          console.log(`[Migration] Note: ${col.name} - ${e.message}`)
+        }
+      }
+    }
+
     // Create index for faster lookups
     await db.query(`
       CREATE INDEX IF NOT EXISTS idx_broker_wallet_company_currency
@@ -37,26 +59,31 @@ export async function POST() {
       WHERE companytype = 'broker'
     `)
 
+    const supportedCurrencies = ['USD', 'CUP', 'EUR', 'MLC']
     let initialized = 0
+
     for (const broker of brokers.rows) {
-      const currency = broker.currency || 'USD'
+      const primaryCurrency = broker.currency || 'USD'
       const currentBalance = parseFloat(broker.current_balance) || 0
 
-      // Check if balance exists
-      const existing = await db.query(`
-        SELECT id FROM broker_wallet_balances
-        WHERE company_id = $1 AND currency = $2
-      `, [broker.id, currency])
+      // Initialize all supported currencies for each broker
+      for (const currency of supportedCurrencies) {
+        try {
+          // Use the legacy balance for the primary currency
+          const initialBalance = currency === primaryCurrency ? currentBalance : 0
 
-      if (existing.rows.length === 0) {
-        // Create balance entry
-        await db.query(`
-          INSERT INTO broker_wallet_balances (company_id, currency, available_balance)
-          VALUES ($1, $2, $3)
-        `, [broker.id, currency, currentBalance])
-        initialized++
-        console.log(`[Migration] Initialized ${currency} balance for broker ${broker.legalname}: ${currentBalance}`)
+          await db.query(`
+            INSERT INTO broker_wallet_balances (company_id, currency, available_balance, total_deposits, total_withdrawals)
+            VALUES ($1, $2, $3, 0, 0)
+            ON CONFLICT (company_id, currency) DO NOTHING
+          `, [broker.id, currency, initialBalance])
+
+          initialized++
+        } catch (e) {
+          // Ignore duplicates
+        }
       }
+      console.log(`[Migration] Initialized balances for broker ${broker.legalname}`)
     }
 
     // Get current table structure
