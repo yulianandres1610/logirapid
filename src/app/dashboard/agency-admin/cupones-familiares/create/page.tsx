@@ -27,6 +27,7 @@ import {
 import { cn } from '@/lib/utils'
 import { useTheme } from '@/contexts/theme-context'
 import { useNotifications } from '@/contexts/NotificationContext'
+import { useAuth } from '@/hooks/useAuth'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { DashboardLayout } from '@/components/layout/dashboard-layout'
@@ -50,11 +51,18 @@ interface WizardStep {
   icon: any
 }
 
-const SERVICE_TYPES = [
-  { id: 'usd_cash', name: 'USD Efectivo', icon: '$', currency: 'USD', fee: 5, fixedFee: 3 },
-  { id: 'cup_cash', name: 'CUP Efectivo', icon: 'CUP', currency: 'CUP', fee: 4, fixedFee: 2 },
-  { id: 'mlc_card', name: 'MLC Tarjeta', icon: 'MLC', currency: 'MLC', fee: 3, fixedFee: 5 }
-]
+interface RemittanceProduct {
+  productId: number
+  code: string
+  name: string
+  description: string
+  pricingModel: 'percentage' | 'fixed'
+  currency: string | null
+  precioClientes: number | null  // Company's sale price (percentage or fixed)
+  catalogPrecioPublico: number   // Default price if no company pricing
+  catalogMiCostoFijo: number     // Fixed fee component
+  catalogPrecioMayoristaFijo: number
+}
 
 const PAYMENT_METHODS = [
   { id: 'cash', name: 'Efectivo', icon: '$' },
@@ -65,6 +73,7 @@ const PAYMENT_METHODS = [
 export default function CreateRemittancePage() {
   const { theme } = useTheme()
   const { showNotification } = useNotifications()
+  const { user } = useAuth()
   const router = useRouter()
   const [currentStep, setCurrentStep] = useState(1)
   const [canProceed, setCanProceed] = useState(false)
@@ -72,6 +81,8 @@ export default function CreateRemittancePage() {
   const [loading, setLoading] = useState(false)
   const [provinces, setProvinces] = useState<Province[]>([])
   const [availability, setAvailability] = useState<any>(null)
+  const [remittanceProducts, setRemittanceProducts] = useState<RemittanceProduct[]>([])
+  const [loadingProducts, setLoadingProducts] = useState(true)
 
   // Wizard data state
   const [wizardData, setWizardData] = useState({
@@ -79,6 +90,7 @@ export default function CreateRemittancePage() {
     province: '',
     municipality: '',
     // Step 2: Service
+    productId: null as number | null,
     serviceType: '',
     deliveryFee: 5,
     // Step 3: Amount
@@ -126,6 +138,13 @@ export default function CreateRemittancePage() {
     loadProvinces()
   }, [])
 
+  // Load remittance products on mount
+  useEffect(() => {
+    if (user?.companyId) {
+      loadRemittanceProducts()
+    }
+  }, [user?.companyId])
+
   const loadProvinces = async () => {
     try {
       const res = await fetch('/api/brokers/locations')
@@ -135,6 +154,48 @@ export default function CreateRemittancePage() {
       }
     } catch (error) {
       console.error('Error loading provinces:', error)
+    }
+  }
+
+  const loadRemittanceProducts = async () => {
+    setLoadingProducts(true)
+    try {
+      const res = await fetch(`/api/companies/${user?.companyId}/products/pricing`)
+      const data = await res.json()
+      if (data.success && data.data) {
+        // Filter only remittance products (service_category = 'remesa')
+        const allProducts = data.data.products || []
+        const remesaProducts = allProducts.filter((p: any) => p.serviceCategory === 'remesa')
+
+        const products: RemittanceProduct[] = remesaProducts.map((p: any) => ({
+          productId: p.productId,
+          code: p.code,
+          name: p.name,
+          description: p.description || '',
+          pricingModel: p.pricingModel,
+          currency: p.currency,
+          precioClientes: p.precioClientes,
+          catalogPrecioPublico: p.catalogPrecioPublico || 0,
+          catalogMiCostoFijo: p.catalogMiCostoFijo || 0,
+          catalogPrecioMayoristaFijo: p.catalogPrecioMayoristaFijo || 0
+        }))
+        setRemittanceProducts(products)
+
+        // Auto-select first product if available
+        if (products.length > 0 && !wizardData.productId) {
+          const firstProduct = products[0]
+          setWizardData(prev => ({
+            ...prev,
+            productId: firstProduct.productId,
+            serviceType: firstProduct.code,
+            receiveCurrency: firstProduct.currency || 'USD'
+          }))
+        }
+      }
+    } catch (error) {
+      console.error('Error loading remittance products:', error)
+    } finally {
+      setLoadingProducts(false)
     }
   }
 
@@ -172,14 +233,30 @@ export default function CreateRemittancePage() {
       const newData = { ...prev, ...updates }
 
       // Calculate totals when relevant fields change
-      if ('sendAmount' in updates || 'serviceType' in updates || 'deliveryFee' in updates) {
-        const service = SERVICE_TYPES.find(s => s.id === (updates.serviceType || prev.serviceType))
-        if (service) {
+      if ('sendAmount' in updates || 'productId' in updates || 'serviceType' in updates || 'deliveryFee' in updates) {
+        // Find product by productId or serviceType
+        const productId = updates.productId ?? prev.productId
+        const product = remittanceProducts.find(p => p.productId === productId)
+
+        if (product) {
           const amount = updates.sendAmount ?? prev.sendAmount
-          const fee = (amount * service.fee / 100) + service.fixedFee
+          // Use company's configured price (precioClientes) or fallback to catalog default
+          const feePercentage = product.precioClientes ?? product.catalogPrecioPublico ?? 0
+          const fixedFee = product.catalogMiCostoFijo || 0
+
+          let fee = 0
+          if (product.pricingModel === 'percentage') {
+            fee = (amount * feePercentage / 100) + fixedFee
+          } else {
+            // Fixed pricing model
+            fee = feePercentage + fixedFee
+          }
+
           newData.serviceFee = fee
           newData.totalCharged = amount + fee + (updates.deliveryFee ?? prev.deliveryFee)
-          newData.receiveCurrency = service.currency
+          newData.receiveCurrency = product.currency || 'USD'
+          newData.productId = product.productId
+          newData.serviceType = product.code
         }
       }
 
@@ -195,7 +272,7 @@ export default function CreateRemittancePage() {
         valid = !!wizardData.province && !!wizardData.municipality
         break
       case 2:
-        valid = !!wizardData.serviceType
+        valid = !!wizardData.productId
         break
       case 3:
         valid = wizardData.sendAmount > 0
@@ -240,6 +317,7 @@ export default function CreateRemittancePage() {
         body: JSON.stringify({
           province: wizardData.province,
           municipality: wizardData.municipality,
+          productId: wizardData.productId,
           serviceType: wizardData.serviceType,
           sendAmount: wizardData.sendAmount,
           sendCurrency: wizardData.sendCurrency,
@@ -368,6 +446,17 @@ export default function CreateRemittancePage() {
         )
 
       case 2:
+        // Get icon for currency
+        const getCurrencyIcon = (currency: string | null) => {
+          switch (currency) {
+            case 'USD': return '$'
+            case 'EUR': return '€'
+            case 'CUP': return '₱'
+            case 'MLC': return 'M'
+            default: return '$'
+          }
+        }
+
         return (
           <div className="space-y-6">
             <div className="text-center mb-6">
@@ -379,34 +468,80 @@ export default function CreateRemittancePage() {
               </p>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-              {SERVICE_TYPES.map(service => (
-                <motion.button
-                  key={service.id}
-                  whileHover={{ scale: 1.02 }}
-                  whileTap={{ scale: 0.98 }}
-                  onClick={() => updateWizardData({ serviceType: service.id })}
-                  className={cn(
-                    "p-6 rounded-xl border-2 text-center transition-all",
-                    wizardData.serviceType === service.id
-                      ? 'border-blue-500 bg-blue-500/10 shadow-lg'
-                      : theme === 'dark'
-                        ? 'border-gray-600 hover:border-gray-500 hover:bg-gray-700/50'
-                        : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
-                  )}
-                >
-                  <span className={cn("text-3xl font-bold block mb-2", theme === 'dark' ? 'text-white' : 'text-gray-900')}>
-                    {service.icon}
-                  </span>
-                  <h3 className={cn("font-bold", theme === 'dark' ? 'text-white' : 'text-gray-900')}>
-                    {service.name}
-                  </h3>
-                  <p className={cn("text-sm mt-1", theme === 'dark' ? 'text-gray-400' : 'text-gray-600')}>
-                    {service.fee}% + ${service.fixedFee}
-                  </p>
-                </motion.button>
-              ))}
-            </div>
+            {loadingProducts ? (
+              <div className="flex items-center justify-center py-12">
+                <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
+                <span className={cn("ml-3", theme === 'dark' ? 'text-gray-400' : 'text-gray-600')}>
+                  Cargando productos...
+                </span>
+              </div>
+            ) : remittanceProducts.length === 0 ? (
+              <div className={cn(
+                "p-6 rounded-xl border-2 border-dashed text-center",
+                theme === 'dark' ? 'border-gray-600' : 'border-gray-300'
+              )}>
+                <AlertCircle className={cn("w-12 h-12 mx-auto mb-3", theme === 'dark' ? 'text-gray-500' : 'text-gray-400')} />
+                <p className={cn("font-medium", theme === 'dark' ? 'text-gray-400' : 'text-gray-600')}>
+                  No hay productos de remesa configurados
+                </p>
+                <p className={cn("text-sm mt-1", theme === 'dark' ? 'text-gray-500' : 'text-gray-500')}>
+                  Contacta al administrador para configurar los productos
+                </p>
+              </div>
+            ) : (
+              <div className={cn(
+                "grid gap-4",
+                remittanceProducts.length <= 2 ? 'grid-cols-1 sm:grid-cols-2' :
+                remittanceProducts.length === 3 ? 'grid-cols-1 sm:grid-cols-3' :
+                'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3'
+              )}>
+                {remittanceProducts.map(product => {
+                  const price = product.precioClientes ?? product.catalogPrecioPublico ?? 0
+                  const fixedFee = product.catalogMiCostoFijo || 0
+                  const isSelected = wizardData.productId === product.productId
+
+                  return (
+                    <motion.button
+                      key={product.productId}
+                      whileHover={{ scale: 1.02 }}
+                      whileTap={{ scale: 0.98 }}
+                      onClick={() => updateWizardData({ productId: product.productId })}
+                      className={cn(
+                        "p-6 rounded-xl border-2 text-center transition-all",
+                        isSelected
+                          ? 'border-blue-500 bg-blue-500/10 shadow-lg'
+                          : theme === 'dark'
+                            ? 'border-gray-600 hover:border-gray-500 hover:bg-gray-700/50'
+                            : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
+                      )}
+                    >
+                      <span className={cn("text-3xl font-bold block mb-2", theme === 'dark' ? 'text-white' : 'text-gray-900')}>
+                        {getCurrencyIcon(product.currency)}
+                      </span>
+                      <h3 className={cn("font-bold", theme === 'dark' ? 'text-white' : 'text-gray-900')}>
+                        {product.name}
+                      </h3>
+                      <p className={cn("text-sm mt-1", theme === 'dark' ? 'text-gray-400' : 'text-gray-600')}>
+                        {product.pricingModel === 'percentage' ? (
+                          <>
+                            {price}%{fixedFee > 0 ? ` + $${fixedFee.toFixed(2)}` : ''}
+                          </>
+                        ) : (
+                          <>
+                            ${price.toFixed(2)}{fixedFee > 0 ? ` + $${fixedFee.toFixed(2)}` : ''}
+                          </>
+                        )}
+                      </p>
+                      {product.description && (
+                        <p className={cn("text-xs mt-2", theme === 'dark' ? 'text-gray-500' : 'text-gray-500')}>
+                          {product.description}
+                        </p>
+                      )}
+                    </motion.button>
+                  )
+                })}
+              </div>
+            )}
 
             <div className="pt-4">
               <label className="flex items-center gap-3 cursor-pointer">
