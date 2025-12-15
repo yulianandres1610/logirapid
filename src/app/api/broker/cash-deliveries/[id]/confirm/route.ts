@@ -12,6 +12,7 @@ export async function POST(
     const cookieStore = await cookies()
     const companyId = cookieStore.get('user-company-id')?.value
     const userId = cookieStore.get('user-id')?.value
+    const userEmail = cookieStore.get('user-email')?.value
 
     if (!companyId) {
       return NextResponse.json({ success: false, error: 'No autenticado' }, { status: 401 })
@@ -38,11 +39,10 @@ export async function POST(
       }, { status: 400 })
     }
 
-    // Get order with lock to prevent race conditions
+    // Get order
     const orderResult = await db.query(`
       SELECT * FROM cash_delivery_orders
       WHERE id = $1 AND broker_company_id = $2
-      FOR UPDATE
     `, [orderId, brokerCompanyId])
 
     if (orderResult.rows.length === 0) {
@@ -117,66 +117,111 @@ export async function POST(
     }
 
     // OTP is correct - complete the delivery and credit wallet
-    // Get or create wallet balance for broker
-    await db.query(`
-      INSERT INTO broker_wallet_balances (company_id, currency, available_balance, reserved_balance)
-      VALUES ($1, $2, 0, 0)
-      ON CONFLICT (company_id, currency) DO NOTHING
-    `, [brokerCompanyId, order.currency])
-
-    // Get current balance
-    const balanceResult = await db.query(`
-      SELECT available_balance, reserved_balance
-      FROM broker_wallet_balances
-      WHERE company_id = $1 AND currency = $2
-      FOR UPDATE
-    `, [brokerCompanyId, order.currency])
-
-    const balanceBefore = parseFloat(balanceResult.rows[0].available_balance) || 0
     const amountToAdd = parseFloat(order.total_amount)
-    const balanceAfter = balanceBefore + amountToAdd
+    const currency = order.currency || 'USD'
 
-    // Update wallet balance
-    await db.query(`
-      UPDATE broker_wallet_balances
-      SET
-        available_balance = $1,
-        last_updated = NOW()
-      WHERE company_id = $2 AND currency = $3
-    `, [balanceAfter, brokerCompanyId, order.currency])
+    // Use transaction to ensure atomicity
+    const result = await db.transaction(async (client) => {
+      // Get current broker wallet balance
+      const balanceResult = await client.query(`
+        SELECT
+          id,
+          legalname,
+          COALESCE("walletNumber", walletnumber) as wallet_number,
+          COALESCE("walletBalance"::numeric, walletbalance, 0) as wallet_balance
+        FROM companies
+        WHERE id = $1
+        FOR UPDATE
+      `, [brokerCompanyId])
 
-    // Create transaction record
-    const transactionResult = await db.query(`
-      INSERT INTO broker_wallet_transactions (
-        broker_company_id, currency, transaction_type, amount,
-        balance_before, balance_after, reserved_before, reserved_after,
-        reference_type, reference_id, notes, created_by
-      ) VALUES ($1, $2, 'deposit', $3, $4, $5, $6, $6, 'cash_delivery', $7, $8, $9)
-      RETURNING id
-    `, [
-      brokerCompanyId,
-      order.currency,
-      amountToAdd,
-      balanceBefore,
-      balanceAfter,
-      parseFloat(balanceResult.rows[0].reserved_balance) || 0,
-      orderId,
-      `Depósito de efectivo - Orden ${order.order_number}`,
-      userId ? parseInt(userId) : null
-    ])
+      if (balanceResult.rows.length === 0) {
+        throw new Error('Broker no encontrado')
+      }
 
-    // Update order as completed
-    await db.query(`
-      UPDATE cash_delivery_orders
-      SET
-        status = 'completed',
-        completed_at = NOW(),
-        completed_by_user_id = $1,
-        wallet_transaction_id = $2,
-        otp_code = NULL,
-        updated_at = NOW()
-      WHERE id = $3
-    `, [userId ? parseInt(userId) : null, transactionResult.rows[0].id, orderId])
+      const broker = balanceResult.rows[0]
+      const balanceBefore = parseFloat(broker.wallet_balance) || 0
+      const balanceAfter = balanceBefore + amountToAdd
+      const walletNumber = broker.wallet_number
+
+      // Update company wallet balance
+      await client.query(`
+        UPDATE companies
+        SET walletbalance = $1
+        WHERE id = $2
+      `, [balanceAfter, brokerCompanyId])
+
+      // Create transaction record in wallet_transactions
+      const transactionResult = await client.query(`
+        INSERT INTO wallet_transactions (
+          type,
+          source_type,
+          target_type,
+          target_company_id,
+          target_wallet_number,
+          amount,
+          fee,
+          net_amount,
+          currency,
+          payment_method,
+          status,
+          requires_approval,
+          description,
+          notes,
+          created_by,
+          created_by_name,
+          completed_at
+        ) VALUES (
+          'deposit',
+          'cash_delivery',
+          'company',
+          $1,
+          $2,
+          $3,
+          0,
+          $3,
+          $4,
+          'cash',
+          'completed',
+          false,
+          $5,
+          $6,
+          $7,
+          $8,
+          NOW()
+        ) RETURNING id, transaction_number
+      `, [
+        brokerCompanyId,
+        walletNumber,
+        amountToAdd,
+        currency,
+        `Depósito de efectivo - Orden ${order.order_number}`,
+        `Entrega de efectivo recibida del repartidor`,
+        userId ? parseInt(userId) : null,
+        userEmail || 'Sistema'
+      ])
+
+      // Update order as completed
+      await client.query(`
+        UPDATE cash_delivery_orders
+        SET
+          status = 'completed',
+          completed_at = NOW(),
+          completed_by_user_id = $1,
+          wallet_transaction_id = $2,
+          otp_code = NULL,
+          updated_at = NOW()
+        WHERE id = $3
+      `, [userId ? parseInt(userId) : null, transactionResult.rows[0].id, orderId])
+
+      return {
+        balanceBefore,
+        balanceAfter,
+        transactionId: transactionResult.rows[0].id,
+        transactionNumber: transactionResult.rows[0].transaction_number
+      }
+    })
+
+    console.log(`[Confirm API] Cash delivery ${orderId} completed. Balance: ${result.balanceBefore} -> ${result.balanceAfter}`)
 
     return NextResponse.json({
       success: true,
@@ -184,11 +229,13 @@ export async function POST(
       data: {
         status: 'completed',
         orderNumber: order.order_number,
+        transactionNumber: result.transactionNumber,
         walletBalance: {
-          currency: order.currency,
-          balanceBefore,
+          currency,
+          balanceBefore: result.balanceBefore,
           amountAdded: amountToAdd,
-          newBalance: balanceAfter
+          newBalance: result.balanceAfter,
+          newBalanceFormatted: `$${result.balanceAfter.toLocaleString('en-US', { minimumFractionDigits: 2 })}`
         }
       }
     })
@@ -197,7 +244,7 @@ export async function POST(
     console.error('[Confirm API] Error:', error)
     return NextResponse.json({
       success: false,
-      error: 'Error al confirmar la recepción'
+      error: error.message || 'Error al confirmar la recepción'
     }, { status: 500 })
   }
 }
