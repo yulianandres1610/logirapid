@@ -16,6 +16,7 @@ import { useAuth } from '@/hooks/useAuth'
 import { useNotifications } from '@/contexts/NotificationContext'
 import { DashboardLayout } from '@/components/layout/dashboard-layout'
 import LoadingBox from '@/components/ui/LoadingBox'
+import { ProtectedRoute } from '@/components/protected-route'
 
 interface RemittanceOrder {
   id: number
@@ -87,14 +88,23 @@ export default function CuponesFamiliaresPage() {
         ...(statusFilter && statusFilter !== 'all' && { status: statusFilter })
       })
 
+      console.log('[Cupones Familiares] Fetching orders with params:', params.toString())
+
       const response = await fetch(`/api/remittance-orders?${params}`)
-      if (response.ok) {
-        const data = await response.json()
+      const data = await response.json()
+
+      console.log('[Cupones Familiares] API Response:', data)
+
+      if (response.ok && data.success) {
         setOrders(data.data?.orders || [])
         setTotalOrders(data.data?.pagination?.total || 0)
+        console.log('[Cupones Familiares] Orders loaded:', data.data?.orders?.length || 0)
+      } else {
+        console.error('[Cupones Familiares] API Error:', data.error)
+        showNotification('error', 'Error', data.error || 'No se pudieron cargar las remesas')
       }
     } catch (error) {
-      console.error('Error fetching orders:', error)
+      console.error('[Cupones Familiares] Error fetching orders:', error)
       showNotification('error', 'Error', 'No se pudieron cargar las remesas')
     } finally {
       setLoading(false)
@@ -123,8 +133,9 @@ export default function CuponesFamiliaresPage() {
   }
 
   return (
-    <DashboardLayout>
-      <div className="min-h-screen p-6">
+    <ProtectedRoute requiredRole="ADMIN">
+      <DashboardLayout>
+        <div className="min-h-screen p-6">
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -673,7 +684,8 @@ export default function CuponesFamiliaresPage() {
             )}
           </div>
         </motion.div>
-      </div>
-    </DashboardLayout>
+        </div>
+      </DashboardLayout>
+    </ProtectedRoute>
   )
 }

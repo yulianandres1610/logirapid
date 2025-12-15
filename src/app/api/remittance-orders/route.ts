@@ -78,10 +78,15 @@ export async function GET(request: NextRequest) {
     // Build WHERE clause based on role
     let whereClause = 'WHERE 1=1'
 
+    console.log(`[Remittance Orders GET] User role: ${payload.role}, companyId: ${payload.companyId}`)
+
     // SUPER_ADMIN can see all, others see their company's orders
     if (payload.role !== 'SUPER_ADMIN') {
       params.push(payload.companyId)
       whereClause += ` AND ro.selling_company_id = $${params.length}`
+      console.log(`[Remittance Orders GET] Filtering by selling_company_id = ${payload.companyId}`)
+    } else {
+      console.log(`[Remittance Orders GET] SUPER_ADMIN - showing all orders`)
     }
 
     if (status) {
@@ -106,10 +111,15 @@ export async function GET(request: NextRequest) {
     }
 
     // Count total
+    console.log(`[Remittance Orders GET] Query WHERE clause: ${whereClause}`)
+    console.log(`[Remittance Orders GET] Query params:`, params)
+
     const countResult = await db.query(`
       SELECT COUNT(*) as total FROM remittance_orders ro ${whereClause}
     `, params)
     const total = parseInt(countResult.rows[0].total)
+
+    console.log(`[Remittance Orders GET] Total orders found: ${total}`)
 
     // Get orders
     const query = `
