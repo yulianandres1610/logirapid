@@ -38,6 +38,33 @@ export async function GET(request: NextRequest) {
       }, { status: 401 })
     }
 
+    // Check if table exists
+    const tableCheck = await db.query(`
+      SELECT EXISTS (
+        SELECT FROM information_schema.tables
+        WHERE table_schema = 'public'
+        AND table_name = 'remittance_orders'
+      ) as exists
+    `)
+
+    if (!tableCheck.rows[0].exists) {
+      // Table doesn't exist - return empty data with setup message
+      return NextResponse.json({
+        success: true,
+        data: {
+          orders: [],
+          pagination: {
+            page: 1,
+            limit: 20,
+            total: 0,
+            totalPages: 0
+          }
+        },
+        needsSetup: true,
+        message: 'La tabla de órdenes de remesas no existe. Ejecute la migración en /api/migrations/remittance-orders-setup'
+      })
+    }
+
     const { searchParams } = new URL(request.url)
     const page = parseInt(searchParams.get('page') || '1')
     const limit = parseInt(searchParams.get('limit') || '20')
