@@ -43,12 +43,10 @@ export async function POST(
       // If no body, default to SMS
     }
 
-    // Get order
+    // Get order (broker_company_name is already stored in cash_delivery_orders)
     const orderResult = await db.query(`
-      SELECT cdo.*, c.legalname as broker_name
-      FROM cash_delivery_orders cdo
-      LEFT JOIN companies c ON cdo.broker_company_id = c.id
-      WHERE cdo.id = $1 AND cdo.broker_company_id = $2
+      SELECT * FROM cash_delivery_orders
+      WHERE id = $1 AND broker_company_id = $2
     `, [orderId, brokerCompanyId])
 
     if (orderResult.rows.length === 0) {
@@ -100,7 +98,7 @@ export async function POST(
       otpCode,
       parseFloat(order.total_amount).toFixed(2),
       order.currency,
-      order.broker_name || 'Broker',
+      order.broker_company_name || 'Broker',
       otpChannel
     )
 
