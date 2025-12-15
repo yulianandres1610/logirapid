@@ -1834,7 +1834,7 @@ export default function CompaniesPage() {
                                 "mt-2 text-xs",
                                 theme === 'dark' ? "text-green-400" : "text-green-600"
                               )}>
-                                Coordenadas: {formData.latitude.toFixed(6)}, {formData.longitude.toFixed(6)}
+                                Coordenadas: {Number(formData.latitude).toFixed(6)}, {Number(formData.longitude).toFixed(6)}
                               </p>
                             )}
                           </div>
