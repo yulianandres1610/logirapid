@@ -288,6 +288,19 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // CRITICAL: Validate that we have a companyId
+    if (!payload.companyId) {
+      console.error(`[Remittance Orders POST] ERROR: No companyId found for user ${payload.email}`)
+      return NextResponse.json({
+        success: false,
+        error: 'No se pudo determinar la empresa del usuario. Por favor, cierre sesión e inicie nuevamente.'
+      }, { status: 400 })
+    }
+
+    // Ensure companyId is a number
+    const sellingCompanyId = parseInt(String(payload.companyId), 10)
+    console.log(`[Remittance Orders POST] Using sellingCompanyId: ${sellingCompanyId}`)
+
     const body = await request.json()
     const {
       // Location
@@ -529,7 +542,7 @@ export async function POST(request: NextRequest) {
         RETURNING *
       `, [
         orderNumber,
-        payload.companyId, payload.userId,
+        sellingCompanyId, payload.userId,
         brokerCompanyId, province, municipality,
         productId, productName, serviceType,
         sendAmount, sendCurrency, receiveAmount, finalReceiveCurrency, exchangeRate,
@@ -605,6 +618,7 @@ export async function POST(request: NextRequest) {
           recipientName: order.recipient_name,
           recipientProvince: order.recipient_province,
           recipientMunicipality: order.recipient_municipality,
+          sellingCompanyId: order.selling_company_id,
           brokerCompanyId: order.broker_company_id,
           fundsReserved,
           createdAt: order.created_at
