@@ -226,10 +226,13 @@ export async function POST(
         WHERE id = $1
       `, [orderId, payload.userId, deliveryProof.id, signatureStoragePath, notes || null])
 
-      // Complete the fund delivery (deduct from reserved) - inline instead of using SQL function
+      // Complete the fund delivery - deduct from wallet
       let fundsDeducted = false
+      const deliveryAmount = parseFloat(order.receive_amount)
+      const deliveryCurrencyFromOrder = order.receive_currency || deliveryCurrency
+
       try {
-        // Get reservation
+        // First, check if there's a reservation
         const reservationResult = await db.query(`
           SELECT * FROM broker_reservations
           WHERE remittance_order_id = $1 AND status = 'reserved'
@@ -237,6 +240,7 @@ export async function POST(
         `, [orderId])
 
         if (reservationResult.rows.length > 0) {
+          // Has reservation - deduct from reserved balance
           const reservation = reservationResult.rows[0]
 
           // Get current balances
@@ -252,7 +256,7 @@ export async function POST(
           // Reduce reserved balance (money was delivered)
           await db.query(`
             UPDATE broker_wallet_balances
-            SET reserved_balance = reserved_balance - $1, updated_at = NOW()
+            SET reserved_balance = GREATEST(reserved_balance - $1, 0), updated_at = NOW()
             WHERE company_id = $2 AND currency = $3
           `, [reservation.amount, reservation.broker_company_id, reservation.currency])
 
@@ -272,11 +276,11 @@ export async function POST(
             ) VALUES ($1, $2, 'delivery', $3, $4, $4, $5, $6, 'remittance_order', $7, $8, $9)
           `, [
             reservation.broker_company_id, reservation.currency, reservation.amount,
-            availableBefore, reservedBefore, reservedBefore - parseFloat(reservation.amount),
+            availableBefore, reservedBefore, Math.max(0, reservedBefore - parseFloat(reservation.amount)),
             orderId, payload.userId, `Entrega completada - Orden #${orderId}`
           ])
 
-          // Log to main wallet_transactions with all required fields
+          // Log to main wallet_transactions
           await db.query(`
             INSERT INTO wallet_transactions (
               type, source_type, source_company_id, amount, fee, net_amount, currency,
@@ -288,6 +292,59 @@ export async function POST(
           ])
 
           fundsDeducted = true
+        } else {
+          // No reservation - deduct directly from available balance
+          console.log(`[Deliver] No reservation found for order ${orderId}, deducting from available balance`)
+
+          // Get current balance
+          const balanceResult = await db.query(`
+            SELECT available_balance, reserved_balance
+            FROM broker_wallet_balances
+            WHERE company_id = $1 AND currency = $2
+            FOR UPDATE
+          `, [payload.companyId, deliveryCurrencyFromOrder])
+
+          if (balanceResult.rows.length > 0) {
+            const availableBefore = parseFloat(balanceResult.rows[0].available_balance || '0')
+            const reservedBefore = parseFloat(balanceResult.rows[0].reserved_balance || '0')
+
+            // Deduct from available balance
+            await db.query(`
+              UPDATE broker_wallet_balances
+              SET available_balance = GREATEST(available_balance - $1, 0), updated_at = NOW()
+              WHERE company_id = $2 AND currency = $3
+            `, [deliveryAmount, payload.companyId, deliveryCurrencyFromOrder])
+
+            // Log to broker_wallet_transactions
+            await db.query(`
+              INSERT INTO broker_wallet_transactions (
+                broker_company_id, currency, transaction_type, amount,
+                balance_before, balance_after, reserved_before, reserved_after,
+                reference_type, reference_id, created_by, notes
+              ) VALUES ($1, $2, 'delivery', $3, $4, $5, $6, $6, 'remittance_order', $7, $8, $9)
+            `, [
+              payload.companyId, deliveryCurrencyFromOrder, deliveryAmount,
+              availableBefore, Math.max(0, availableBefore - deliveryAmount),
+              reservedBefore, orderId, payload.userId,
+              `Entrega completada - Orden #${orderId} (sin reserva previa)`
+            ])
+
+            // Log to main wallet_transactions
+            await db.query(`
+              INSERT INTO wallet_transactions (
+                type, source_type, source_company_id, amount, fee, net_amount, currency,
+                status, description, created_by
+              ) VALUES ('debit', 'company', $1, $2, 0, $2, $3, 'completed', $4, $5)
+            `, [
+              payload.companyId, deliveryAmount, deliveryCurrencyFromOrder,
+              `Entrega remesa orden #${orderId}`, payload.userId
+            ])
+
+            fundsDeducted = true
+            console.log(`[Deliver] Deducted ${deliveryAmount} ${deliveryCurrencyFromOrder} from available balance`)
+          } else {
+            console.log(`[Deliver] No wallet balance found for ${deliveryCurrencyFromOrder}, skipping deduction`)
+          }
         }
       } catch (fundErr) {
         console.error('[Deliver] Error processing funds:', fundErr)
