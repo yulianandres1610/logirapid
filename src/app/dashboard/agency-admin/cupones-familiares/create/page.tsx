@@ -83,6 +83,7 @@ export default function CreateRemittancePage() {
   const [availability, setAvailability] = useState<any>(null)
   const [remittanceProducts, setRemittanceProducts] = useState<RemittanceProduct[]>([])
   const [loadingProducts, setLoadingProducts] = useState(true)
+  const [exchangeRates, setExchangeRates] = useState<Record<string, number>>({ USD: 1, CUP: 1 })
 
   // Wizard data state
   const [wizardData, setWizardData] = useState({
@@ -97,6 +98,8 @@ export default function CreateRemittancePage() {
     sendAmount: 100,
     sendCurrency: 'USD',
     receiveCurrency: 'USD',
+    receiveAmount: 100,
+    exchangeRate: 1,
     serviceFee: 0,
     totalCharged: 0,
     estimatedDelivery: '',
@@ -133,9 +136,10 @@ export default function CreateRemittancePage() {
     { id: 7, title: 'Confirmacion', description: 'Completar orden', icon: FileCheck }
   ]
 
-  // Load provinces on mount
+  // Load provinces and exchange rates on mount
   useEffect(() => {
     loadProvinces()
+    loadExchangeRates()
   }, [])
 
   // Load remittance products on mount
@@ -154,6 +158,23 @@ export default function CreateRemittancePage() {
       }
     } catch (error) {
       console.error('Error loading provinces:', error)
+    }
+  }
+
+  const loadExchangeRates = async () => {
+    try {
+      const res = await fetch('/api/published-rates')
+      const data = await res.json()
+      if (data.success && data.rates) {
+        const rates: Record<string, number> = { USD: 1 } // USD is always 1:1
+        data.rates.forEach((r: { currency: string; rate: number }) => {
+          rates[r.currency] = r.rate
+        })
+        setExchangeRates(rates)
+        console.log('[Remittance Wizard] Loaded exchange rates:', rates)
+      }
+    } catch (error) {
+      console.error('Error loading exchange rates:', error)
     }
   }
 
@@ -252,9 +273,20 @@ export default function CreateRemittancePage() {
             fee = feePercentage + fixedFee
           }
 
+          // Get receive currency and calculate exchange rate
+          const receiveCurrency = product.currency || 'USD'
+          const rate = exchangeRates[receiveCurrency] || 1
+
+          // Calculate receive amount based on currency
+          // USD: 1:1 (no conversion)
+          // CUP: multiply by exchange rate
+          const receiveAmount = amount * rate
+
           newData.serviceFee = fee
           newData.totalCharged = amount + fee + (updates.deliveryFee ?? prev.deliveryFee)
-          newData.receiveCurrency = product.currency || 'USD'
+          newData.receiveCurrency = receiveCurrency
+          newData.exchangeRate = rate
+          newData.receiveAmount = receiveAmount
           newData.productId = product.productId
           newData.serviceType = product.code
         }
@@ -322,6 +354,7 @@ export default function CreateRemittancePage() {
           sendAmount: wizardData.sendAmount,
           sendCurrency: wizardData.sendCurrency,
           receiveCurrency: wizardData.receiveCurrency,
+          exchangeRate: wizardData.exchangeRate,
           deliveryFee: wizardData.deliveryFee,
           recipient: {
             name: wizardData.recipientName,
@@ -623,14 +656,44 @@ export default function CreateRemittancePage() {
               </motion.div>
             )}
 
+            {/* Show receive amount prominently when CUP */}
+            {wizardData.receiveCurrency === 'CUP' && wizardData.exchangeRate > 1 && (
+              <motion.div
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                className={cn(
+                  "p-5 rounded-xl text-center",
+                  theme === 'dark' ? 'bg-blue-900/20 border border-blue-800' : 'bg-blue-50 border border-blue-200'
+                )}
+              >
+                <p className={cn("text-sm mb-1", theme === 'dark' ? 'text-blue-400' : 'text-blue-600')}>
+                  Tu familiar recibira en Cuba:
+                </p>
+                <p className={cn("text-3xl font-bold", theme === 'dark' ? 'text-white' : 'text-gray-900')}>
+                  {wizardData.receiveAmount.toLocaleString('es-CU')} <span className="text-xl">CUP</span>
+                </p>
+                <p className={cn("text-xs mt-2", theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}>
+                  Tasa: 1 USD = {wizardData.exchangeRate.toLocaleString('es-CU')} CUP
+                </p>
+              </motion.div>
+            )}
+
             <div className={cn(
               "p-5 rounded-xl space-y-3",
               theme === 'dark' ? 'bg-gray-700/50 border border-gray-600' : 'bg-gray-50 border border-gray-200'
             )}>
               <div className="flex justify-between">
                 <span className={theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}>Monto a enviar:</span>
-                <span className={cn("font-medium", theme === 'dark' ? 'text-white' : 'text-gray-900')}>${wizardData.sendAmount.toFixed(2)}</span>
+                <span className={cn("font-medium", theme === 'dark' ? 'text-white' : 'text-gray-900')}>${wizardData.sendAmount.toFixed(2)} USD</span>
               </div>
+              {wizardData.receiveCurrency !== 'USD' && (
+                <div className="flex justify-between">
+                  <span className={theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}>Recibe en Cuba:</span>
+                  <span className={cn("font-medium", theme === 'dark' ? 'text-blue-400' : 'text-blue-600')}>
+                    {wizardData.receiveAmount.toLocaleString('es-CU')} {wizardData.receiveCurrency}
+                  </span>
+                </div>
+              )}
               <div className="flex justify-between">
                 <span className={theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}>Comision:</span>
                 <span className={cn("font-medium", theme === 'dark' ? 'text-white' : 'text-gray-900')}>${wizardData.serviceFee.toFixed(2)}</span>
@@ -886,9 +949,17 @@ export default function CreateRemittancePage() {
                 <span className={cn("font-medium", theme === 'dark' ? 'text-white' : 'text-gray-900')}>{wizardData.recipientName}</span>
               </div>
               <div className="flex justify-between">
-                <span className={theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}>Monto:</span>
-                <span className={cn("font-medium", theme === 'dark' ? 'text-white' : 'text-gray-900')}>${wizardData.sendAmount.toFixed(2)} {wizardData.receiveCurrency}</span>
+                <span className={theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}>Monto enviado:</span>
+                <span className={cn("font-medium", theme === 'dark' ? 'text-white' : 'text-gray-900')}>${wizardData.sendAmount.toFixed(2)} USD</span>
               </div>
+              {wizardData.receiveCurrency !== 'USD' && (
+                <div className="flex justify-between">
+                  <span className={theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}>Recibe en Cuba:</span>
+                  <span className={cn("font-bold text-lg", theme === 'dark' ? 'text-blue-400' : 'text-blue-600')}>
+                    {wizardData.receiveAmount.toLocaleString('es-CU')} {wizardData.receiveCurrency}
+                  </span>
+                </div>
+              )}
               <div className="flex justify-between">
                 <span className={theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}>Ubicacion:</span>
                 <span className={cn("font-medium", theme === 'dark' ? 'text-white' : 'text-gray-900')}>{wizardData.municipality}, {wizardData.province}</span>
