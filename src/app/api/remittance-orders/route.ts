@@ -38,6 +38,31 @@ export async function GET(request: NextRequest) {
       }, { status: 401 })
     }
 
+    // Handle debug parameter to check specific order
+    const { searchParams } = new URL(request.url)
+    const debugOrder = searchParams.get('debugOrder')
+    if (debugOrder) {
+      console.log(`[Remittance Orders GET] DEBUG MODE for order: ${debugOrder}`)
+      const debugResult = await db.query(`
+        SELECT id, order_number, selling_company_id, sold_by_user_id, status, created_at
+        FROM remittance_orders
+        WHERE order_number = $1
+      `, [debugOrder])
+
+      console.log(`[Remittance Orders GET] Found order:`, debugResult.rows[0])
+      console.log(`[Remittance Orders GET] User companyId: ${payload.companyId}`)
+
+      return NextResponse.json({
+        success: true,
+        debug: {
+          order: debugResult.rows[0],
+          userCompanyId: payload.companyId,
+          userRole: payload.role,
+          match: debugResult.rows[0]?.selling_company_id === payload.companyId
+        }
+      })
+    }
+
     // Check if table exists
     const tableCheck = await db.query(`
       SELECT EXISTS (
@@ -65,7 +90,6 @@ export async function GET(request: NextRequest) {
       })
     }
 
-    const { searchParams } = new URL(request.url)
     const page = parseInt(searchParams.get('page') || '1')
     const limit = parseInt(searchParams.get('limit') || '20')
     const status = searchParams.get('status')
@@ -78,7 +102,21 @@ export async function GET(request: NextRequest) {
     // Build WHERE clause based on role
     let whereClause = 'WHERE 1=1'
 
-    console.log(`[Remittance Orders GET] User role: ${payload.role}, companyId: ${payload.companyId}`)
+    console.log(`[Remittance Orders GET] ====== DEBUGGING ======`)
+    console.log(`[Remittance Orders GET] User: ${payload.email}, role: ${payload.role}, companyId: ${payload.companyId}`)
+
+    // First, let's check what orders exist in the database for debugging
+    try {
+      const debugQuery = await db.query(`
+        SELECT id, order_number, selling_company_id, created_at
+        FROM remittance_orders
+        ORDER BY created_at DESC
+        LIMIT 5
+      `)
+      console.log(`[Remittance Orders GET] Latest 5 orders in DB:`, debugQuery.rows)
+    } catch (dbErr) {
+      console.log(`[Remittance Orders GET] Debug query error:`, dbErr)
+    }
 
     // SUPER_ADMIN can see all, others see their company's orders
     if (payload.role !== 'SUPER_ADMIN') {
@@ -427,10 +465,16 @@ export async function POST(request: NextRequest) {
     // Begin transaction
     await db.query('BEGIN')
 
+    console.log(`[Remittance Orders POST] ====== CREATING ORDER ======`)
+    console.log(`[Remittance Orders POST] User: ${payload.email}, companyId: ${payload.companyId}, userId: ${payload.userId}`)
+    console.log(`[Remittance Orders POST] Province: ${province}, Municipality: ${municipality}`)
+    console.log(`[Remittance Orders POST] Broker assigned: ${brokerCompanyId}`)
+
     try {
       // Generate order number
       const orderNumResult = await db.query('SELECT generate_remittance_order_number() as order_number')
       const orderNumber = orderNumResult.rows[0].order_number
+      console.log(`[Remittance Orders POST] Generated order number: ${orderNumber}`)
 
       // Create the order
       const insertResult = await db.query(`
@@ -476,6 +520,11 @@ export async function POST(request: NextRequest) {
       ])
 
       const order = insertResult.rows[0]
+      console.log(`[Remittance Orders POST] Order created successfully:`)
+      console.log(`[Remittance Orders POST] - ID: ${order.id}`)
+      console.log(`[Remittance Orders POST] - Order Number: ${order.order_number}`)
+      console.log(`[Remittance Orders POST] - selling_company_id: ${order.selling_company_id}`)
+      console.log(`[Remittance Orders POST] - sold_by_user_id: ${order.sold_by_user_id}`)
 
       // ALWAYS reserve funds in broker's wallet if broker was assigned
       let fundsReserved = false
