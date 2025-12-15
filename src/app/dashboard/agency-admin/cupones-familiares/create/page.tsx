@@ -429,81 +429,146 @@ export default function CreateRemittancePage() {
     })
   }
 
+  // Cuba municipality coordinates (same as broker form)
+  const CUBA_LOCATIONS: Record<string, { coords: [number, number], municipalities: Record<string, [number, number]> }> = {
+    'Pinar del Río': { coords: [-83.6978, 22.4175], municipalities: {
+      'Pinar del Río': [-83.6978, 22.4175], 'Consolación del Sur': [-83.5178, 22.5056], 'Sandino': [-84.0217, 22.0794],
+      'San Juan y Martínez': [-83.8353, 22.2667], 'Guane': [-84.0833, 22.2000], 'Los Palacios': [-83.2500, 22.5833],
+      'Viñales': [-83.7139, 22.6169], 'La Palma': [-83.5553, 22.7569], 'Minas de Matahambre': [-83.9500, 22.5833],
+      'San Luis': [-83.7667, 22.2833], 'Mantua': [-84.2833, 22.2833]
+    }},
+    'Artemisa': { coords: [-82.7617, 22.8136], municipalities: {
+      'Artemisa': [-82.7617, 22.8136], 'Bahía Honda': [-83.1639, 22.9033], 'Candelaria': [-82.9583, 22.7500],
+      'Guanajay': [-82.6875, 22.9292], 'Mariel': [-82.7528, 22.9944], 'San Antonio de los Baños': [-82.4992, 22.8911],
+      'San Cristóbal': [-83.0500, 22.7167], 'Bauta': [-82.5489, 22.9883], 'Caimito': [-82.5917, 22.9583],
+      'Güira de Melena': [-82.5083, 22.8000], 'Alquízar': [-82.5833, 22.8000]
+    }},
+    'La Habana': { coords: [-82.3666, 23.1136], municipalities: {
+      'Playa': [-82.4208, 23.1147], 'Plaza de la Revolución': [-82.3917, 23.1200], 'Centro Habana': [-82.3667, 23.1367],
+      'La Habana Vieja': [-82.3500, 23.1350], 'Regla': [-82.3333, 23.1250], 'Habana del Este': [-82.2833, 23.1583],
+      'Guanabacoa': [-82.3000, 23.1167], 'San Miguel del Padrón': [-82.3333, 23.0833], 'Diez de Octubre': [-82.3667, 23.0917],
+      'Cerro': [-82.3833, 23.1000], 'Marianao': [-82.4333, 23.0833], 'La Lisa': [-82.4667, 23.0333],
+      'Boyeros': [-82.4000, 22.9833], 'Arroyo Naranjo': [-82.3500, 23.0333], 'Cotorro': [-82.2667, 23.0333]
+    }},
+    'Mayabeque': { coords: [-81.9300, 22.9200], municipalities: {
+      'Bejucal': [-82.3833, 22.9333], 'San José de las Lajas': [-82.1500, 22.9667], 'Jaruco': [-82.0167, 23.0500],
+      'Santa Cruz del Norte': [-81.9167, 23.1500], 'Madruga': [-81.8500, 22.9167], 'Nueva Paz': [-81.7500, 22.7667],
+      'San Nicolás de Bari': [-81.9000, 22.7833], 'Güines': [-82.0333, 22.8333], 'Melena del Sur': [-82.1500, 22.7833],
+      'Batabanó': [-82.2833, 22.7167], 'Quivicán': [-82.3500, 22.8167]
+    }},
+    'Matanzas': { coords: [-81.5775, 22.4117], municipalities: {
+      'Matanzas': [-81.5775, 22.4117], 'Cárdenas': [-81.2000, 23.0333], 'Varadero': [-81.2500, 23.1500],
+      'Colón': [-80.9000, 22.7167], 'Jovellanos': [-81.1833, 22.8000], 'Pedro Betancourt': [-81.2833, 22.7000],
+      'Limonar': [-81.4167, 22.9500], 'Unión de Reyes': [-81.5333, 22.7833], 'Los Arabos': [-80.7167, 22.7333],
+      'Perico': [-81.0167, 22.7667], 'Martí': [-80.9333, 22.9500], 'Jagüey Grande': [-81.1333, 22.5333],
+      'Ciénaga de Zapata': [-81.0667, 22.3667]
+    }},
+    'Cienfuegos': { coords: [-80.4536, 22.1456], municipalities: {
+      'Cienfuegos': [-80.4536, 22.1456], 'Palmira': [-80.3833, 22.2333], 'Rodas': [-80.5500, 22.3333],
+      'Lajas': [-80.2833, 22.4167], 'Cruces': [-80.2667, 22.3500], 'Cumanayagua': [-80.2000, 22.1500],
+      'Aguada de Pasajeros': [-80.8500, 22.3833], 'Abreus': [-80.5667, 22.2833]
+    }},
+    'Villa Clara': { coords: [-79.9658, 22.4058], municipalities: {
+      'Santa Clara': [-79.9658, 22.4058], 'Remedios': [-79.5458, 22.4917], 'Caibarién': [-79.4667, 22.5167],
+      'Camajuaní': [-79.7333, 22.4667], 'Placetas': [-79.6500, 22.3167], 'Sagua la Grande': [-80.0833, 22.8000],
+      'Cifuentes': [-80.0500, 22.6167], 'Santo Domingo': [-80.2333, 22.5833], 'Ranchuelo': [-80.1500, 22.3833],
+      'Manicaragua': [-79.9667, 22.1500], 'Encrucijada': [-79.8667, 22.6167], 'Quemado de Güines': [-80.2500, 22.8000]
+    }},
+    'Sancti Spíritus': { coords: [-79.4428, 21.9303], municipalities: {
+      'Sancti Spíritus': [-79.4428, 21.9303], 'Trinidad': [-79.9844, 21.8022], 'Fomento': [-79.7167, 22.1000],
+      'Cabaiguán': [-79.5000, 22.0833], 'Jatibonico': [-79.1667, 21.9500], 'Taguasco': [-79.2667, 22.0333],
+      'Yaguajay': [-79.2333, 22.3333], 'La Sierpe': [-79.2500, 21.7500]
+    }},
+    'Ciego de Ávila': { coords: [-78.7619, 21.8403], municipalities: {
+      'Ciego de Ávila': [-78.7619, 21.8403], 'Morón': [-78.6275, 22.1078], 'Chambas': [-78.9167, 22.2000],
+      'Ciro Redondo': [-78.7000, 22.0167], 'Majagua': [-78.9833, 21.9167], 'Florencia': [-78.9667, 22.1500],
+      'Venezuela': [-78.7833, 21.7500], 'Baraguá': [-78.6333, 21.6833], 'Primero de Enero': [-78.4333, 21.9500],
+      'Bolivia': [-78.4500, 21.8500]
+    }},
+    'Camagüey': { coords: [-77.9169, 21.3808], municipalities: {
+      'Camagüey': [-77.9169, 21.3808], 'Florida': [-78.2167, 21.5333], 'Vertientes': [-78.1500, 21.2500],
+      'Guáimaro': [-77.3500, 21.4667], 'Sibanicú': [-77.5333, 21.2333], 'Nuevitas': [-77.2642, 21.5456],
+      'Esmeralda': [-78.1167, 21.8500], 'Minas': [-77.6167, 21.5000], 'Jimaguayú': [-77.8333, 21.2500],
+      'Santa Cruz del Sur': [-77.9833, 20.7167], 'Najasa': [-77.7500, 21.0833], 'Sierra de Cubitas': [-77.7833, 21.6333],
+      'Céspedes': [-78.0167, 21.1500]
+    }},
+    'Las Tunas': { coords: [-76.9514, 20.9597], municipalities: {
+      'Las Tunas': [-76.9514, 20.9597], 'Puerto Padre': [-76.6036, 21.1958], 'Jesús Menéndez': [-76.4833, 21.1667],
+      'Manatí': [-76.9333, 21.3167], 'Majibacoa': [-76.7500, 20.9167], 'Jobabo': [-77.2833, 20.9167],
+      'Colombia': [-77.4167, 20.9833], 'Amancio': [-77.5833, 20.8167]
+    }},
+    'Holguín': { coords: [-76.2633, 20.7869], municipalities: {
+      'Holguín': [-76.2633, 20.7869], 'Gibara': [-76.1333, 21.1167], 'Banes': [-75.7167, 20.9667],
+      'Moa': [-74.9333, 20.6500], 'Mayarí': [-75.6833, 20.6500], 'Sagua de Tánamo': [-75.2500, 20.5833],
+      'Antilla': [-75.7500, 20.8333], 'Báguano': [-76.0167, 20.7667], 'Calixto García': [-76.5833, 20.8667],
+      'Cacocum': [-76.3333, 20.7333], 'Cueto': [-75.9333, 20.6500], 'Frank País': [-75.5833, 20.5167],
+      'Rafael Freyre': [-75.9833, 21.0167], 'Urbano Noris': [-76.0500, 20.6167]
+    }},
+    'Granma': { coords: [-76.6431, 20.3847], municipalities: {
+      'Bayamo': [-76.6431, 20.3847], 'Manzanillo': [-77.1167, 20.3500], 'Jiguaní': [-76.4167, 20.3667],
+      'Río Cauto': [-76.9167, 20.5500], 'Yara': [-76.9500, 20.2833], 'Campechuela': [-77.2833, 20.2333],
+      'Media Luna': [-77.4333, 20.1500], 'Niquero': [-77.5833, 20.0500], 'Pilón': [-77.3167, 19.9000],
+      'Bartolomé Masó': [-76.9500, 20.1667], 'Buey Arriba': [-76.7500, 20.1833], 'Guisa': [-76.5333, 20.2500],
+      'Cauto Cristo': [-76.4333, 20.5500]
+    }},
+    'Santiago de Cuba': { coords: [-75.8219, 20.0247], municipalities: {
+      'Santiago de Cuba': [-75.8219, 20.0247], 'Palma Soriano': [-75.9833, 20.2167], 'Contramaestre': [-76.2500, 20.3000],
+      'San Luis': [-75.8500, 20.1833], 'Segundo Frente': [-75.5167, 20.3333], 'Songo-La Maya': [-75.6667, 20.1833],
+      'Tercer Frente': [-76.3333, 20.1833], 'Guamá': [-76.5833, 19.9667], 'Mella': [-76.3000, 20.3667]
+    }},
+    'Guantánamo': { coords: [-75.2092, 20.1447], municipalities: {
+      'Guantánamo': [-75.2092, 20.1447], 'Baracoa': [-74.4964, 20.3467], 'El Salvador': [-75.2333, 20.3167],
+      'San Antonio del Sur': [-74.8167, 20.0500], 'Imías': [-74.6333, 20.0833], 'Maisí': [-74.1500, 20.2500],
+      'Yateras': [-75.0333, 20.2833], 'Caimanera': [-75.1500, 19.9667], 'Manuel Tames': [-75.1333, 20.3000],
+      'Niceto Pérez': [-75.0833, 20.1000]
+    }},
+    'Isla de la Juventud': { coords: [-82.8500, 21.7000], municipalities: {
+      'Nueva Gerona': [-82.8000, 21.8833]
+    }}
+  }
+
+  // Get target coordinates (municipality priority, then province)
+  const getTargetCoords = React.useCallback((): [number, number] => {
+    const provinceData = CUBA_LOCATIONS[wizardData.province]
+    if (provinceData) {
+      // Try municipality first
+      const municipalityCoords = provinceData.municipalities[wizardData.municipality]
+      if (municipalityCoords) {
+        return municipalityCoords
+      }
+      // Fallback to province center
+      return provinceData.coords
+    }
+    // Default Cuba center
+    return [-79.5, 22.0]
+  }, [wizardData.province, wizardData.municipality])
+
   // Initialize map for Cuba pin placement
   const initializeMap = () => {
     if (!mapContainerRef.current || mapRef.current) return
 
-    // Cuba center coordinates
-    const cubaCenterLng = -79.5
-    const cubaCenterLat = 22.0
-
-    // If province is selected, try to center on it
-    let initialCenter: [number, number] = [cubaCenterLng, cubaCenterLat]
-    let initialZoom = 6
-
-    // Province centers for Cuba
-    const provinceCenters: Record<string, [number, number]> = {
-      'La Habana': [-82.3666, 23.1136],
-      'Pinar del Río': [-83.6978, 22.4175],
-      'Artemisa': [-82.7614, 22.8136],
-      'Mayabeque': [-82.0259, 22.9259],
-      'Matanzas': [-81.5775, 22.4128],
-      'Cienfuegos': [-80.4536, 22.1456],
-      'Villa Clara': [-79.9658, 22.4061],
-      'Sancti Spíritus': [-79.4425, 21.9300],
-      'Ciego de Ávila': [-78.7619, 21.8403],
-      'Camagüey': [-77.9181, 21.3808],
-      'Las Tunas': [-76.9514, 20.9619],
-      'Holguín': [-76.2633, 20.7872],
-      'Granma': [-76.6436, 20.3844],
-      'Santiago de Cuba': [-75.8219, 20.0247],
-      'Guantánamo': [-75.2092, 20.1417],
-      'Isla de la Juventud': [-82.8019, 21.7047]
-    }
-
-    if (wizardData.province && provinceCenters[wizardData.province]) {
-      initialCenter = provinceCenters[wizardData.province]
-      initialZoom = 11
-    }
+    const initialCenter = getTargetCoords()
+    const initialZoom = wizardData.municipality ? 13 : wizardData.province ? 11 : 6
 
     // Use existing coordinates if available
-    if (wizardData.recipientLatitude && wizardData.recipientLongitude) {
-      initialCenter = [wizardData.recipientLongitude, wizardData.recipientLatitude]
-      initialZoom = 15
-    }
+    const center = (wizardData.recipientLatitude && wizardData.recipientLongitude)
+      ? [wizardData.recipientLongitude, wizardData.recipientLatitude] as [number, number]
+      : initialCenter
+    const zoom = (wizardData.recipientLatitude && wizardData.recipientLongitude) ? 15 : initialZoom
 
     mapRef.current = new mapboxgl.Map({
       container: mapContainerRef.current,
       style: 'mapbox://styles/mapbox/streets-v12',
-      center: initialCenter,
-      zoom: initialZoom
+      center: center,
+      zoom: zoom
     })
 
     // Add navigation controls
     mapRef.current.addControl(new mapboxgl.NavigationControl(), 'top-right')
 
-    // Create draggable marker
-    const el = document.createElement('div')
-    el.innerHTML = `
-      <div style="
-        width: 40px;
-        height: 40px;
-        background: #EF4444;
-        border-radius: 50% 50% 50% 0;
-        transform: rotate(-45deg);
-        border: 3px solid white;
-        box-shadow: 0 4px 8px rgba(0,0,0,0.3);
-        cursor: grab;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-      ">
-        <span style="transform: rotate(45deg); color: white; font-size: 16px;">📍</span>
-      </div>
-    `
-
-    markerRef.current = new mapboxgl.Marker({ element: el, draggable: true })
-      .setLngLat(initialCenter)
+    // Create draggable marker (same style as broker form)
+    markerRef.current = new mapboxgl.Marker({ color: '#CC0A46', draggable: true })
+      .setLngLat(center)
       .addTo(mapRef.current)
 
     // Update coordinates when marker is dragged
@@ -542,6 +607,26 @@ export default function CreateRemittancePage() {
       setTimeout(initializeMap, 100)
     }
   }, [showMap])
+
+  // FlyTo when municipality changes (like broker form)
+  useEffect(() => {
+    if (mapRef.current && showMap && wizardData.municipality) {
+      const targetCoords = getTargetCoords()
+      mapRef.current.flyTo({
+        center: targetCoords,
+        zoom: 13,
+        duration: 1000
+      })
+      // Move marker to new location
+      if (markerRef.current) {
+        markerRef.current.setLngLat(targetCoords)
+        updateWizardData({
+          recipientLatitude: targetCoords[1],
+          recipientLongitude: targetCoords[0]
+        })
+      }
+    }
+  }, [wizardData.municipality, showMap, getTargetCoords])
 
   // Check availability when on step 3
   useEffect(() => {
