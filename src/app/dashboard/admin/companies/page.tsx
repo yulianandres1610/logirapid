@@ -691,9 +691,10 @@ export default function CompaniesPage() {
   }
 
   const filteredCompanies = companies.filter(company => {
-    const matchesSearch = company.legalName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         company.city.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         company.country.toLowerCase().includes(searchTerm.toLowerCase())
+    const searchLower = searchTerm.toLowerCase()
+    const matchesSearch = (company.legalName || '').toLowerCase().includes(searchLower) ||
+                         (company.city || '').toLowerCase().includes(searchLower) ||
+                         (company.country || '').toLowerCase().includes(searchLower)
     const matchesFilter = selectedFilter === 'all' || company.companyType === selectedFilter
     return matchesSearch && matchesFilter
   })
@@ -4256,7 +4257,7 @@ export default function CompaniesPage() {
                               "text-sm",
                               theme === 'dark' ? "text-gray-300" : "text-gray-700"
                             )}>
-                              contact@{selectedCompany.legalName.toLowerCase().replace(/\s+/g, '')}.com
+                              contact@{(selectedCompany.legalName || 'empresa').toLowerCase().replace(/\s+/g, '')}.com
                             </span>
                           </div>
 
@@ -4290,7 +4291,7 @@ export default function CompaniesPage() {
                           "text-xl font-bold",
                           theme === 'dark' ? "text-white" : "text-black"
                         )}>
-                          ${selectedCompany.walletBalance.toLocaleString()}
+                          ${(selectedCompany.walletBalance || 0).toLocaleString()}
                         </p>
                         <p className={cn(
                           "text-xs",
