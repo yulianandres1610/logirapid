@@ -73,8 +73,8 @@ export async function POST() {
           const initialBalance = currency === primaryCurrency ? currentBalance : 0
 
           await db.query(`
-            INSERT INTO broker_wallet_balances (company_id, currency, available_balance, total_deposits, total_withdrawals)
-            VALUES ($1, $2, $3, 0, 0)
+            INSERT INTO broker_wallet_balances (company_id, currency, available_balance, reserved_balance)
+            VALUES ($1, $2, $3, 0)
             ON CONFLICT (company_id, currency) DO NOTHING
           `, [broker.id, currency, initialBalance])
 
@@ -137,10 +137,8 @@ export async function GET() {
         bwb.company_id,
         c.legalname as company_name,
         bwb.currency,
-        bwb.available_balance,
-        bwb.reserved_balance,
-        bwb.total_deposits,
-        bwb.total_withdrawals
+        COALESCE(bwb.available_balance, 0) as available_balance,
+        COALESCE(bwb.reserved_balance, 0) as reserved_balance
       FROM broker_wallet_balances bwb
       JOIN companies c ON c.id = bwb.company_id
       ORDER BY c.legalname, bwb.currency

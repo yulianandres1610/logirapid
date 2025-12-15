@@ -357,8 +357,8 @@ export async function POST(request: NextRequest) {
       for (const curr of supportedCurrencies) {
         try {
           await db.query(`
-            INSERT INTO broker_wallet_balances (company_id, currency, available_balance, reserved_balance, total_deposits, total_withdrawals)
-            VALUES ($1, $2, 0, 0, 0, 0)
+            INSERT INTO broker_wallet_balances (company_id, currency, available_balance, reserved_balance)
+            VALUES ($1, $2, 0, 0)
             ON CONFLICT (company_id, currency) DO NOTHING
           `, [newCompany.id, curr])
         } catch (e) {

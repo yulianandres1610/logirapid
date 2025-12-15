@@ -142,7 +142,7 @@ export async function POST(
 
       // Get or create currency-specific balance in broker_wallet_balances
       let currencyBalanceResult = await client.query(`
-        SELECT id, available_balance, total_deposits
+        SELECT id, available_balance
         FROM broker_wallet_balances
         WHERE company_id = $1 AND currency = $2
         FOR UPDATE
@@ -153,10 +153,9 @@ export async function POST(
 
       if (currencyBalanceResult.rows.length === 0) {
         // Create new currency balance entry
-        const insertResult = await client.query(`
-          INSERT INTO broker_wallet_balances (company_id, currency, available_balance, total_deposits)
-          VALUES ($1, $2, $3, $3)
-          RETURNING available_balance
+        await client.query(`
+          INSERT INTO broker_wallet_balances (company_id, currency, available_balance, reserved_balance)
+          VALUES ($1, $2, $3, 0)
         `, [brokerCompanyId, currency, amountToAdd])
         balanceBefore = 0
         balanceAfter = amountToAdd
@@ -167,10 +166,7 @@ export async function POST(
 
         await client.query(`
           UPDATE broker_wallet_balances
-          SET
-            available_balance = available_balance + $1,
-            total_deposits = COALESCE(total_deposits, 0) + $1,
-            updated_at = NOW()
+          SET available_balance = available_balance + $1
           WHERE company_id = $2 AND currency = $3
         `, [amountToAdd, brokerCompanyId, currency])
       }

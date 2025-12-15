@@ -89,19 +89,18 @@ export async function GET(request: NextRequest) {
       // First, ensure broker has entries for all supported currencies
       for (const curr of supportedCurrencies) {
         await db.query(`
-          INSERT INTO broker_wallet_balances (company_id, currency, available_balance, reserved_balance, total_deposits, total_withdrawals)
-          VALUES ($1, $2, 0, 0, 0, 0)
+          INSERT INTO broker_wallet_balances (company_id, currency, available_balance, reserved_balance)
+          VALUES ($1, $2, 0, 0)
           ON CONFLICT (company_id, currency) DO NOTHING
         `, [payload.companyId, curr])
       }
 
+      // Query with flexible column handling (some tables may have different schemas)
       const balancesResult = await db.query(`
         SELECT
           currency,
-          available_balance,
-          reserved_balance,
-          total_deposits,
-          total_withdrawals
+          COALESCE(available_balance, 0) as available_balance,
+          COALESCE(reserved_balance, 0) as reserved_balance
         FROM broker_wallet_balances
         WHERE company_id = $1
         ORDER BY
@@ -113,16 +112,43 @@ export async function GET(request: NextRequest) {
             ELSE 5
           END
       `, [payload.companyId])
+
+      // Calculate totals from wallet_transactions per currency
+      const depositsResult = await db.query(`
+        SELECT
+          COALESCE(currency, 'USD') as currency,
+          COALESCE(SUM(amount), 0) as total
+        FROM wallet_transactions
+        WHERE target_company_id = $1
+          AND type IN ('recharge', 'transfer_in', 'deposit')
+          AND status = 'completed'
+        GROUP BY currency
+      `, [payload.companyId])
+
+      const withdrawalsResult = await db.query(`
+        SELECT
+          COALESCE(currency, 'USD') as currency,
+          COALESCE(SUM(amount), 0) as total
+        FROM wallet_transactions
+        WHERE source_company_id = $1
+          AND type IN ('transfer_out', 'withdrawal', 'debit')
+          AND status = 'completed'
+        GROUP BY currency
+      `, [payload.companyId])
+
+      const depositsMap = new Map(depositsResult.rows.map(r => [r.currency, parseFloat(r.total) || 0]))
+      const withdrawalsMap = new Map(withdrawalsResult.rows.map(r => [r.currency, parseFloat(r.total) || 0]))
+
       currencyBalances = balancesResult.rows.map(row => ({
         currency: row.currency,
         available: parseFloat(row.available_balance) || 0,
         reserved: parseFloat(row.reserved_balance) || 0,
-        totalDeposits: parseFloat(row.total_deposits) || 0,
-        totalWithdrawals: parseFloat(row.total_withdrawals) || 0
+        totalDeposits: depositsMap.get(row.currency) || 0,
+        totalWithdrawals: withdrawalsMap.get(row.currency) || 0
       }))
     } catch (e) {
       // Table might not exist yet - create fallback from legacy balance
-      console.log('[Broker Wallet] broker_wallet_balances table not found, using legacy balance')
+      console.log('[Broker Wallet] broker_wallet_balances error:', e)
       currencyBalances = [{
         currency: currency,
         available: walletBalance,
