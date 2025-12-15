@@ -528,11 +528,11 @@ export default function CreateRemittancePage() {
   }
 
   // Get target coordinates (municipality priority, then province)
-  const getTargetCoords = React.useCallback((): [number, number] => {
-    const provinceData = CUBA_LOCATIONS[wizardData.province]
+  const getTargetCoords = React.useCallback((province: string, municipality: string): [number, number] => {
+    const provinceData = CUBA_LOCATIONS[province]
     if (provinceData) {
       // Try municipality first
-      const municipalityCoords = provinceData.municipalities[wizardData.municipality]
+      const municipalityCoords = provinceData.municipalities[municipality]
       if (municipalityCoords) {
         return municipalityCoords
       }
@@ -541,20 +541,24 @@ export default function CreateRemittancePage() {
     }
     // Default Cuba center
     return [-79.5, 22.0]
-  }, [wizardData.province, wizardData.municipality])
+  }, [])
 
   // Initialize map for Cuba pin placement
-  const initializeMap = () => {
+  const initializeMap = React.useCallback(() => {
     if (!mapContainerRef.current || mapRef.current) return
 
-    const initialCenter = getTargetCoords()
+    // Get coordinates based on current province/municipality
+    const initialCenter = getTargetCoords(wizardData.province, wizardData.municipality)
     const initialZoom = wizardData.municipality ? 13 : wizardData.province ? 11 : 6
 
-    // Use existing coordinates if available
+    // Use existing coordinates if available, otherwise use municipality/province center
     const center = (wizardData.recipientLatitude && wizardData.recipientLongitude)
       ? [wizardData.recipientLongitude, wizardData.recipientLatitude] as [number, number]
       : initialCenter
     const zoom = (wizardData.recipientLatitude && wizardData.recipientLongitude) ? 15 : initialZoom
+
+    console.log('[Map Init] Province:', wizardData.province, 'Municipality:', wizardData.municipality)
+    console.log('[Map Init] Center:', center, 'Zoom:', zoom)
 
     mapRef.current = new mapboxgl.Map({
       container: mapContainerRef.current,
@@ -570,6 +574,14 @@ export default function CreateRemittancePage() {
     markerRef.current = new mapboxgl.Marker({ color: '#CC0A46', draggable: true })
       .setLngLat(center)
       .addTo(mapRef.current)
+
+    // Set initial coordinates if municipality was selected
+    if (!wizardData.recipientLatitude && !wizardData.recipientLongitude && wizardData.municipality) {
+      updateWizardData({
+        recipientLatitude: center[1],
+        recipientLongitude: center[0]
+      })
+    }
 
     // Update coordinates when marker is dragged
     markerRef.current.on('dragend', () => {
@@ -588,7 +600,7 @@ export default function CreateRemittancePage() {
         recipientLongitude: e.lngLat.lng
       })
     })
-  }
+  }, [wizardData.province, wizardData.municipality, wizardData.recipientLatitude, wizardData.recipientLongitude, getTargetCoords])
 
   // Cleanup map on unmount
   useEffect(() => {
@@ -606,12 +618,13 @@ export default function CreateRemittancePage() {
       // Small delay to ensure container is rendered
       setTimeout(initializeMap, 100)
     }
-  }, [showMap])
+  }, [showMap, initializeMap])
 
   // FlyTo when municipality changes (like broker form)
   useEffect(() => {
     if (mapRef.current && showMap && wizardData.municipality) {
-      const targetCoords = getTargetCoords()
+      const targetCoords = getTargetCoords(wizardData.province, wizardData.municipality)
+      console.log('[Map FlyTo] Municipality:', wizardData.municipality, 'Coords:', targetCoords)
       mapRef.current.flyTo({
         center: targetCoords,
         zoom: 13,
@@ -626,7 +639,7 @@ export default function CreateRemittancePage() {
         })
       }
     }
-  }, [wizardData.municipality, showMap, getTargetCoords])
+  }, [wizardData.municipality, wizardData.province, showMap, getTargetCoords])
 
   // Check availability when on step 3
   useEffect(() => {
