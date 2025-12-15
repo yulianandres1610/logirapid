@@ -341,8 +341,10 @@ export default function CreateRemittancePage() {
   const checkAvailability = async () => {
     setLoading(true)
     try {
+      // Use receiveAmount (the amount in destination currency) for availability check
+      // e.g., if sending 100 USD to receive 42,460 CUP, check for 42,460 CUP availability
       const res = await fetch(
-        `/api/brokers/availability?province=${encodeURIComponent(wizardData.province)}&municipality=${encodeURIComponent(wizardData.municipality)}&currency=${wizardData.receiveCurrency}&amount=${wizardData.sendAmount}`
+        `/api/brokers/availability?province=${encodeURIComponent(wizardData.province)}&municipality=${encodeURIComponent(wizardData.municipality)}&currency=${wizardData.receiveCurrency}&amount=${wizardData.receiveAmount}`
       )
       const data = await res.json()
       if (data.success) {

@@ -313,7 +313,11 @@ export async function POST(request: NextRequest) {
 
     // Find best broker or use provided one
     let brokerCompanyId = brokerId
+    // ALWAYS start with '1-3 días' - only change to '1-24 horas' AFTER successful fund reservation
     let estimatedDelivery = '1-3 días'
+    let potentialFastDelivery = false
+
+    console.log(`[Remittance Orders] Looking for broker in ${province}/${municipality} with ${finalReceiveCurrency} balance >= ${receiveAmount}`)
 
     if (!brokerCompanyId) {
       // Find broker with most available funds in this location
@@ -322,7 +326,8 @@ export async function POST(request: NextRequest) {
         SELECT
           c.id,
           c.legalname,
-          bwb.available_balance
+          bwb.available_balance,
+          bwb.currency
         FROM companies c
         LEFT JOIN broker_wallet_balances bwb
           ON bwb.company_id = c.id AND bwb.currency = $3
@@ -337,25 +342,35 @@ export async function POST(request: NextRequest) {
       if (brokerResult.rows.length > 0) {
         brokerCompanyId = brokerResult.rows[0].id
         const availableBalance = parseFloat(brokerResult.rows[0].available_balance) || 0
+        const brokerCurrency = brokerResult.rows[0].currency
 
-        // 1-24 horas when broker has enough balance, otherwise 1-3 días
-        if (availableBalance >= receiveAmount) {
-          estimatedDelivery = '1-24 horas'
+        console.log(`[Remittance Orders] Found broker ${brokerResult.rows[0].legalname} (ID: ${brokerCompanyId}) with ${availableBalance} ${brokerCurrency || 'N/A'} available`)
+
+        // Only mark as potential fast delivery if broker has enough balance in the correct currency
+        if (brokerCurrency === finalReceiveCurrency && availableBalance >= receiveAmount) {
+          potentialFastDelivery = true
+          console.log(`[Remittance Orders] Broker has sufficient ${finalReceiveCurrency} balance for fast delivery`)
+        } else {
+          console.log(`[Remittance Orders] Broker does NOT have sufficient ${finalReceiveCurrency} balance (need ${receiveAmount}, has ${availableBalance} ${brokerCurrency || 'none'})`)
         }
-        // Otherwise stays at default '1-3 días'
+      } else {
+        console.log(`[Remittance Orders] No broker found in ${province}/${municipality}`)
       }
     } else {
       // Check provided broker's availability
       const brokerBalance = await db.query(`
-        SELECT available_balance FROM broker_wallet_balances
+        SELECT available_balance, currency FROM broker_wallet_balances
         WHERE company_id = $1 AND currency = $2
       `, [brokerCompanyId, finalReceiveCurrency])
 
       if (brokerBalance.rows.length > 0) {
         const available = parseFloat(brokerBalance.rows[0].available_balance) || 0
+        console.log(`[Remittance Orders] Provided broker ${brokerCompanyId} has ${available} ${finalReceiveCurrency} available`)
         if (available >= receiveAmount) {
-          estimatedDelivery = '1-24 horas'
+          potentialFastDelivery = true
         }
+      } else {
+        console.log(`[Remittance Orders] Provided broker ${brokerCompanyId} has no ${finalReceiveCurrency} wallet`)
       }
     }
 
