@@ -12,12 +12,17 @@ interface JWTPayload {
   companyName: string
 }
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL || '',
-  process.env.SUPABASE_SERVICE_ROLE_KEY || ''
-)
-
 const BUCKET_NAME = 'company-private-documents'
+
+// Lazy Supabase client getter
+function getSupabaseClient() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY
+  if (!url || !key) {
+    throw new Error('Supabase configuration missing')
+  }
+  return createClient(url, key)
+}
 const MAX_SIGNATURE_SIZE = 2 * 1024 * 1024 // 2MB
 
 /**
@@ -116,7 +121,7 @@ export async function POST(
     const storagePath = `company-${payload.companyId}/remittance-proofs/order-${orderId}/signature-${timestamp}-${randomSuffix}.${extension}`
 
     // Upload to Supabase Storage
-    const { data, error } = await supabase.storage
+    const { data, error } = await getSupabaseClient().storage
       .from(BUCKET_NAME)
       .upload(storagePath, buffer, {
         contentType,

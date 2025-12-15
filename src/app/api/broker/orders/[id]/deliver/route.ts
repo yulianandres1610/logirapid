@@ -12,13 +12,17 @@ interface JWTPayload {
   companyName: string
 }
 
-// Supabase client for storage
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL || '',
-  process.env.SUPABASE_SERVICE_ROLE_KEY || ''
-)
-
 const BUCKET_NAME = 'company-private-documents'
+
+// Lazy Supabase client getter
+function getSupabaseClient() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY
+  if (!url || !key) {
+    throw new Error('Supabase configuration missing')
+  }
+  return createClient(url, key)
+}
 
 // Bill denominations by currency
 const BILL_DENOMINATIONS: Record<string, number[]> = {
@@ -418,7 +422,7 @@ async function uploadSignature(
     const randomSuffix = Math.random().toString(36).substring(2, 10)
     const storagePath = `company-${companyId}/remittance-proofs/order-${orderId}/signature-${timestamp}-${randomSuffix}.png`
 
-    const { error } = await supabase.storage
+    const { error } = await getSupabaseClient().storage
       .from(BUCKET_NAME)
       .upload(storagePath, buffer, {
         contentType: 'image/png',
