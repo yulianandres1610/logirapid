@@ -1,7 +1,8 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { motion } from 'framer-motion'
+import { useRouter, useSearchParams } from 'next/navigation'
+import { motion, AnimatePresence } from 'framer-motion'
 import {
   Package,
   Clock,
@@ -15,10 +16,27 @@ import {
   Search,
   Check,
   X,
-  RefreshCw
+  RefreshCw,
+  AlertTriangle,
+  Banknote,
+  MapPinOff,
+  UserX,
+  FileWarning,
+  CalendarX,
+  HelpCircle
 } from 'lucide-react'
 import { DashboardLayout } from '@/components/layout/dashboard-layout'
 import { ProtectedRoute } from '@/components/protected-route'
+
+// Rejection reasons
+const REJECTION_REASONS = [
+  { value: 'insufficient_funds', label: 'Sin fondos suficientes', icon: Banknote, description: 'No tiene saldo disponible para completar esta entrega' },
+  { value: 'out_of_coverage', label: 'Fuera de cobertura', icon: MapPinOff, description: 'La direccion esta fuera de su zona de cobertura' },
+  { value: 'recipient_unreachable', label: 'Destinatario no localizable', icon: UserX, description: 'No se puede contactar al destinatario' },
+  { value: 'invalid_information', label: 'Informacion incorrecta', icon: FileWarning, description: 'Los datos de la orden son incorrectos o incompletos' },
+  { value: 'schedule_conflict', label: 'Conflicto de horario', icon: CalendarX, description: 'No puede completar la entrega en el tiempo estimado' },
+  { value: 'other', label: 'Otro motivo', icon: HelpCircle, description: 'Especifique el motivo en las notas' }
+]
 
 interface Order {
   id: number
@@ -50,12 +68,36 @@ interface Stats {
 }
 
 export default function BrokerOrdersPage() {
+  const router = useRouter()
+  const searchParams = useSearchParams()
+
   const [orders, setOrders] = useState<Order[]>([])
   const [stats, setStats] = useState<Stats | null>(null)
   const [loading, setLoading] = useState(true)
   const [actionLoading, setActionLoading] = useState<number | null>(null)
   const [selectedStatus, setSelectedStatus] = useState<string>('')
   const [searchTerm, setSearchTerm] = useState('')
+
+  // Reject modal state
+  const [rejectModalOpen, setRejectModalOpen] = useState(false)
+  const [rejectingOrder, setRejectingOrder] = useState<Order | null>(null)
+  const [selectedReason, setSelectedReason] = useState<string>('')
+  const [rejectNotes, setRejectNotes] = useState('')
+  const [rejectLoading, setRejectLoading] = useState(false)
+
+  // Success message
+  const [successMessage, setSuccessMessage] = useState<string | null>(null)
+
+  // Check for success param from delivery wizard
+  useEffect(() => {
+    const success = searchParams.get('success')
+    if (success === 'delivery') {
+      setSuccessMessage('Entrega completada exitosamente')
+      // Clear the param from URL
+      router.replace('/dashboard/broker/orders')
+      setTimeout(() => setSuccessMessage(null), 5000)
+    }
+  }, [searchParams, router])
 
   useEffect(() => {
     fetchOrders()
@@ -127,21 +169,82 @@ export default function BrokerOrdersPage() {
   }
 
   const getAvailableActions = (status: string) => {
-    const actions: Record<string, { action: string, label: string, icon: any, color: string }[]> = {
+    const actions: Record<string, { action: string, label: string, icon: any, color: string, isSpecial?: string }[]> = {
       pending: [
         { action: 'accept', label: 'Aceptar', icon: Check, color: 'bg-blue-600 hover:bg-blue-700' },
-        { action: 'cancel', label: 'Rechazar', icon: X, color: 'bg-red-600 hover:bg-red-700' }
+        { action: 'reject', label: 'Rechazar', icon: X, color: 'bg-red-600 hover:bg-red-700', isSpecial: 'reject' }
       ],
       confirmed: [
         { action: 'start_delivery', label: 'Iniciar Entrega', icon: Truck, color: 'bg-purple-600 hover:bg-purple-700' },
-        { action: 'cancel', label: 'Cancelar', icon: X, color: 'bg-red-600 hover:bg-red-700' }
+        { action: 'reject', label: 'Rechazar', icon: X, color: 'bg-red-600 hover:bg-red-700', isSpecial: 'reject' }
       ],
       in_delivery: [
-        { action: 'complete', label: 'Marcar Entregada', icon: CheckCircle, color: 'bg-green-600 hover:bg-green-700' },
-        { action: 'cancel', label: 'Cancelar', icon: X, color: 'bg-red-600 hover:bg-red-700' }
+        { action: 'deliver', label: 'Completar Entrega', icon: CheckCircle, color: 'bg-green-600 hover:bg-green-700', isSpecial: 'deliver' }
       ]
     }
     return actions[status] || []
+  }
+
+  // Open reject modal
+  const openRejectModal = (order: Order) => {
+    setRejectingOrder(order)
+    setSelectedReason('')
+    setRejectNotes('')
+    setRejectModalOpen(true)
+  }
+
+  // Handle reject submission
+  const handleReject = async () => {
+    if (!rejectingOrder || !selectedReason) return
+    if (selectedReason === 'other' && !rejectNotes.trim()) {
+      alert('Por favor especifique el motivo en las notas')
+      return
+    }
+
+    setRejectLoading(true)
+    try {
+      const response = await fetch('/api/broker/orders', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          orderId: rejectingOrder.id,
+          action: 'reject',
+          rejectionReason: selectedReason,
+          notes: rejectNotes || undefined
+        })
+      })
+
+      const data = await response.json()
+      if (data.success) {
+        setSuccessMessage('Orden rechazada. Los fondos han sido liberados.')
+        setRejectModalOpen(false)
+        fetchOrders()
+        setTimeout(() => setSuccessMessage(null), 5000)
+      } else {
+        alert(data.error || 'Error al rechazar la orden')
+      }
+    } catch (error) {
+      console.error('Error:', error)
+      alert('Error al rechazar la orden')
+    } finally {
+      setRejectLoading(false)
+    }
+  }
+
+  // Navigate to delivery wizard
+  const goToDeliveryWizard = (orderId: number) => {
+    router.push(`/dashboard/broker/orders/${orderId}/deliver`)
+  }
+
+  // Handle action click
+  const handleActionClick = (order: Order, action: string, isSpecial?: string) => {
+    if (isSpecial === 'reject') {
+      openRejectModal(order)
+    } else if (isSpecial === 'deliver') {
+      goToDeliveryWizard(order.id)
+    } else {
+      handleAction(order.id, action)
+    }
   }
 
   const filteredOrders = orders.filter(order => {
@@ -326,14 +429,14 @@ export default function BrokerOrdersPage() {
                       {/* Actions */}
                       {actions.length > 0 && (
                         <div className="flex gap-2 mt-4 pt-4 border-t border-gray-100 dark:border-gray-700">
-                          {actions.map(({ action, label, icon: Icon, color }) => (
+                          {actions.map(({ action, label, icon: Icon, color, isSpecial }) => (
                             <button
                               key={action}
-                              onClick={() => handleAction(order.id, action)}
+                              onClick={() => handleActionClick(order, action, isSpecial)}
                               disabled={actionLoading === order.id}
                               className={`flex-1 flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-white font-medium transition-colors ${color} disabled:opacity-50`}
                             >
-                              {actionLoading === order.id ? (
+                              {actionLoading === order.id && !isSpecial ? (
                                 <RefreshCw className="w-4 h-4 animate-spin" />
                               ) : (
                                 <Icon className="w-4 h-4" />
@@ -365,6 +468,146 @@ export default function BrokerOrdersPage() {
               </p>
             </motion.div>
           )}
+
+          {/* Success Message */}
+          <AnimatePresence>
+            {successMessage && (
+              <motion.div
+                initial={{ opacity: 0, y: 50 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: 50 }}
+                className="fixed bottom-6 right-6 bg-green-600 text-white px-6 py-3 rounded-lg shadow-lg flex items-center gap-3 z-50"
+              >
+                <CheckCircle className="w-5 h-5" />
+                <span>{successMessage}</span>
+                <button onClick={() => setSuccessMessage(null)}>
+                  <X className="w-4 h-4" />
+                </button>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          {/* Reject Modal */}
+          <AnimatePresence>
+            {rejectModalOpen && rejectingOrder && (
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
+                onClick={() => setRejectModalOpen(false)}
+              >
+                <motion.div
+                  initial={{ scale: 0.9, opacity: 0 }}
+                  animate={{ scale: 1, opacity: 1 }}
+                  exit={{ scale: 0.9, opacity: 0 }}
+                  onClick={(e) => e.stopPropagation()}
+                  className="bg-white dark:bg-gray-800 rounded-xl shadow-xl max-w-lg w-full max-h-[90vh] overflow-y-auto"
+                >
+                  {/* Modal Header */}
+                  <div className="p-6 border-b border-gray-200 dark:border-gray-700">
+                    <div className="flex items-center gap-3">
+                      <div className="p-2 bg-red-100 dark:bg-red-900/30 rounded-lg">
+                        <AlertTriangle className="w-6 h-6 text-red-600 dark:text-red-400" />
+                      </div>
+                      <div>
+                        <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                          Rechazar Orden
+                        </h3>
+                        <p className="text-sm text-gray-500 dark:text-gray-400">
+                          {rejectingOrder.orderNumber} - {rejectingOrder.recipientName}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Modal Body */}
+                  <div className="p-6 space-y-4">
+                    <p className="text-sm text-gray-600 dark:text-gray-300">
+                      Seleccione el motivo del rechazo. Los fondos reservados seran liberados automaticamente.
+                    </p>
+
+                    {/* Rejection Reasons */}
+                    <div className="space-y-2">
+                      {REJECTION_REASONS.map((reason) => {
+                        const Icon = reason.icon
+                        return (
+                          <button
+                            key={reason.value}
+                            onClick={() => setSelectedReason(reason.value)}
+                            className={`w-full flex items-start gap-3 p-3 rounded-lg border-2 transition-colors text-left
+                              ${selectedReason === reason.value
+                                ? 'border-red-500 bg-red-50 dark:bg-red-900/20'
+                                : 'border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600'}
+                            `}
+                          >
+                            <Icon className={`w-5 h-5 mt-0.5 flex-shrink-0 ${
+                              selectedReason === reason.value
+                                ? 'text-red-600 dark:text-red-400'
+                                : 'text-gray-400'
+                            }`} />
+                            <div>
+                              <p className={`font-medium ${
+                                selectedReason === reason.value
+                                  ? 'text-red-700 dark:text-red-300'
+                                  : 'text-gray-900 dark:text-white'
+                              }`}>
+                                {reason.label}
+                              </p>
+                              <p className="text-sm text-gray-500 dark:text-gray-400">
+                                {reason.description}
+                              </p>
+                            </div>
+                          </button>
+                        )
+                      })}
+                    </div>
+
+                    {/* Notes */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                        Notas adicionales {selectedReason === 'other' && <span className="text-red-500">*</span>}
+                      </label>
+                      <textarea
+                        value={rejectNotes}
+                        onChange={(e) => setRejectNotes(e.target.value)}
+                        rows={3}
+                        placeholder={selectedReason === 'other' ? 'Especifique el motivo...' : 'Opcional...'}
+                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-red-500"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Modal Footer */}
+                  <div className="p-6 border-t border-gray-200 dark:border-gray-700 flex gap-3 justify-end">
+                    <button
+                      onClick={() => setRejectModalOpen(false)}
+                      className="px-4 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+                    >
+                      Cancelar
+                    </button>
+                    <button
+                      onClick={handleReject}
+                      disabled={!selectedReason || rejectLoading}
+                      className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                    >
+                      {rejectLoading ? (
+                        <>
+                          <RefreshCw className="w-4 h-4 animate-spin" />
+                          Procesando...
+                        </>
+                      ) : (
+                        <>
+                          <X className="w-4 h-4" />
+                          Confirmar Rechazo
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </motion.div>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
       </DashboardLayout>
     </ProtectedRoute>

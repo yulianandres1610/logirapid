@@ -384,11 +384,35 @@ export async function POST(request: NextRequest) {
 
       const order = insertResult.rows[0]
 
-      // Reserve funds in broker's wallet if broker was assigned and has funds
-      if (brokerCompanyId && estimatedDelivery === '1-24 horas') {
+      // ALWAYS reserve funds in broker's wallet if broker was assigned
+      let fundsReserved = false
+      if (brokerCompanyId) {
+        try {
+          const reserveResult = await db.query(`
+            SELECT reserve_broker_funds($1, $2, $3, $4, $5) as reserved
+          `, [brokerCompanyId, finalReceiveCurrency, receiveAmount, order.id, payload.userId])
+
+          fundsReserved = reserveResult.rows[0]?.reserved === true
+
+          if (fundsReserved) {
+            console.log(`[Remittance Orders] Funds reserved for order ${order.id}: ${receiveAmount} ${finalReceiveCurrency}`)
+          } else {
+            console.log(`[Remittance Orders] Could not reserve funds for order ${order.id} - broker may have insufficient balance`)
+          }
+        } catch (reserveError) {
+          console.error(`[Remittance Orders] Error reserving funds:`, reserveError)
+          // Continue without reservation - order will need manual handling
+        }
+      }
+
+      // Update order with reservation status
+      if (fundsReserved) {
         await db.query(`
-          SELECT reserve_broker_funds($1, $2, $3, $4, $5)
-        `, [brokerCompanyId, finalReceiveCurrency, receiveAmount, order.id, payload.userId])
+          UPDATE remittance_orders
+          SET estimated_delivery = '1-24 horas'
+          WHERE id = $1
+        `, [order.id])
+        order.estimated_delivery = '1-24 horas'
       }
 
       await db.query('COMMIT')
@@ -413,6 +437,7 @@ export async function POST(request: NextRequest) {
           recipientProvince: order.recipient_province,
           recipientMunicipality: order.recipient_municipality,
           brokerCompanyId: order.broker_company_id,
+          fundsReserved,
           createdAt: order.created_at
         }
       })

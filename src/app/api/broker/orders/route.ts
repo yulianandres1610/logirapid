@@ -197,7 +197,17 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json()
-    const { orderId, action, notes, deliveryProofPhoto, deliverySignature } = body
+    const { orderId, action, notes, deliveryProofPhoto, deliverySignature, rejectionReason } = body
+
+    // Valid rejection reasons
+    const REJECTION_REASONS = [
+      'insufficient_funds',      // Sin fondos suficientes
+      'out_of_coverage',         // Fuera de zona de cobertura
+      'recipient_unreachable',   // No se puede contactar destinatario
+      'invalid_information',     // Información incorrecta
+      'schedule_conflict',       // Conflicto de horario
+      'other'                    // Otro (con nota obligatoria)
+    ]
 
     if (!orderId || !action) {
       return NextResponse.json({
@@ -301,6 +311,71 @@ export async function POST(request: NextRequest) {
             success: true,
             message: 'Entrega completada',
             data: { status: 'delivered' }
+          })
+
+        } catch (err) {
+          await db.query('ROLLBACK')
+          throw err
+        }
+      }
+
+      case 'reject': {
+        // Brokers can reject pending or confirmed orders
+        if (!['pending', 'confirmed'].includes(order.status)) {
+          return NextResponse.json({
+            success: false,
+            error: 'Solo se pueden rechazar órdenes pendientes o confirmadas'
+          }, { status: 400 })
+        }
+
+        // Validate rejection reason
+        if (!rejectionReason || !REJECTION_REASONS.includes(rejectionReason)) {
+          return NextResponse.json({
+            success: false,
+            error: `Se requiere un motivo de rechazo válido: ${REJECTION_REASONS.join(', ')}`
+          }, { status: 400 })
+        }
+
+        // If reason is 'other', notes are required
+        if (rejectionReason === 'other' && !notes) {
+          return NextResponse.json({
+            success: false,
+            error: 'Se requiere una nota explicativa cuando el motivo es "otro"'
+          }, { status: 400 })
+        }
+
+        await db.query('BEGIN')
+
+        try {
+          // Update order - set to 'rejected' status so it can be reassigned
+          await db.query(`
+            UPDATE remittance_orders
+            SET
+              status = 'rejected',
+              rejection_reason = $2,
+              rejection_notes = $3,
+              rejected_at = NOW(),
+              rejected_by_user_id = $4,
+              broker_company_id = NULL,
+              updated_at = NOW()
+            WHERE id = $1
+          `, [orderId, rejectionReason, notes || null, payload.userId])
+
+          // Return reserved funds to broker's available balance
+          await db.query(`
+            SELECT release_broker_funds_cancelled($1, $2, $3)
+          `, [orderId, payload.userId, `Rechazado: ${rejectionReason}`])
+
+          await db.query('COMMIT')
+
+          return NextResponse.json({
+            success: true,
+            message: 'Orden rechazada. Los fondos han sido liberados.',
+            data: {
+              status: 'rejected',
+              rejectionReason,
+              fundsReleased: true
+            }
           })
 
         } catch (err) {
