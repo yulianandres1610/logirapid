@@ -2,1240 +2,677 @@
 
 import React, { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
+import { useRouter } from 'next/navigation'
 import {
-  MapPin, DollarSign, User, CreditCard, CheckCircle, Send,
-  Loader2, ArrowRight, ArrowLeft, Phone, Mail, Home, Users,
-  Banknote, AlertCircle, Clock, Printer, MessageCircle, Package,
-  TrendingUp
+  Send, Search, Plus, Eye, Trash2, RefreshCw,
+  ChevronLeft, ChevronRight, DollarSign, Clock,
+  CheckCircle, XCircle, AlertCircle, MapPin, Users,
+  Banknote, Building2, Phone, User
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
 import { cn } from '@/lib/utils'
 import { useTheme } from '@/contexts/theme-context'
+import { useAuth } from '@/hooks/useAuth'
+import { useNotifications } from '@/contexts/NotificationContext'
 import { DashboardLayout } from '@/components/layout/dashboard-layout'
+import LoadingBox from '@/components/ui/LoadingBox'
 
-interface Province {
-  name: string
-  municipalities: {
-    name: string
-    brokerCount: number
-    currencies: string[]
-  }[]
-}
-
-interface WizardData {
-  // Step 1: Location
-  province: string
-  municipality: string
-  // Step 2: Service
-  productId: number | null
-  serviceType: string
-  deliveryFee: number
-  // Step 3: Amount
+interface RemittanceOrder {
+  id: number
+  orderNumber: string
+  status: string
+  paymentStatus: string
   sendAmount: number
   sendCurrency: string
+  receiveAmount: number
   receiveCurrency: string
-  serviceFee: number
   totalCharged: number
-  estimatedDelivery: string
-  hasAvailability: boolean
-  // Step 4: Recipient
+  serviceFee: number
+  deliveryFee: number
   recipientName: string
   recipientPhone: string
-  recipientIdNumber: string
+  recipientProvince: string
+  recipientMunicipality: string
   recipientAddress: string
-  recipientNeighborhood: string
-  recipientAddressReferences: string
-  hasAlternateContact: boolean
-  alternateContactName: string
-  alternateContactPhone: string
-  // Step 5: Sender
   senderName: string
   senderPhone: string
-  senderEmail: string
-  // Step 6: Payment
+  sellingCompanyId: number
+  sellingCompanyName: string
+  brokerCompanyId: number
+  brokerCompanyName: string
+  soldByName: string
+  estimatedDelivery: string
+  createdAt: string
+  deliveredAt: string
   paymentMethod: string
-  paymentReference: string
-  cashReceived: number
-  // Step 7: Confirmation
-  orderNumber: string
-  orderId: number | null
 }
 
-const STEPS = [
-  { id: 1, name: 'Ubicación', icon: MapPin },
-  { id: 2, name: 'Servicio', icon: Banknote },
-  { id: 3, name: 'Monto', icon: DollarSign },
-  { id: 4, name: 'Destinatario', icon: User },
-  { id: 5, name: 'Remitente', icon: Users },
-  { id: 6, name: 'Pago', icon: CreditCard },
-  { id: 7, name: 'Confirmación', icon: CheckCircle }
-]
+const STATUSES: Record<string, { label: string; color: string; icon: typeof AlertCircle }> = {
+  pending: { label: 'Pendiente', color: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400', icon: AlertCircle },
+  confirmed: { label: 'Confirmada', color: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400', icon: CheckCircle },
+  in_delivery: { label: 'En Entrega', color: 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-400', icon: Send },
+  delivered: { label: 'Entregada', color: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400', icon: CheckCircle },
+  cancelled: { label: 'Cancelada', color: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400', icon: XCircle },
+  rejected: { label: 'Rechazada', color: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400', icon: XCircle },
+}
 
-const SERVICE_TYPES = [
-  { id: 'usd_cash', name: 'USD Efectivo', icon: '💵', currency: 'USD', fee: 5, fixedFee: 3 },
-  { id: 'cup_cash', name: 'CUP Efectivo', icon: '🇨🇺', currency: 'CUP', fee: 4, fixedFee: 2 },
-  { id: 'mlc_card', name: 'MLC Tarjeta', icon: '💳', currency: 'MLC', fee: 3, fixedFee: 5 }
-]
-
-const PAYMENT_METHODS = [
-  { id: 'cash', name: 'Efectivo', icon: '💵' },
-  { id: 'zelle', name: 'Zelle', icon: '📱' },
-  { id: 'card', name: 'Tarjeta', icon: '💳' }
-]
+const PAYMENT_STATUSES: Record<string, { label: string; color: string }> = {
+  pending: { label: 'Pendiente', color: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400' },
+  paid: { label: 'Pagado', color: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400' },
+  refunded: { label: 'Reembolsado', color: 'bg-gray-100 text-gray-800 dark:bg-gray-900/30 dark:text-gray-400' },
+}
 
 export default function CuponesFamiliaresPage() {
+  const { user } = useAuth()
   const { theme } = useTheme()
-  const [currentStep, setCurrentStep] = useState(1)
-  const [loading, setLoading] = useState(false)
-  const [provinces, setProvinces] = useState<Province[]>([])
-  const [availability, setAvailability] = useState<any>(null)
+  const { showNotification } = useNotifications()
+  const router = useRouter()
 
-  const [wizardData, setWizardData] = useState<WizardData>({
-    province: '',
-    municipality: '',
-    productId: null,
-    serviceType: '',
-    deliveryFee: 5,
-    sendAmount: 100,
-    sendCurrency: 'USD',
-    receiveCurrency: 'USD',
-    serviceFee: 0,
-    totalCharged: 0,
-    estimatedDelivery: '',
-    hasAvailability: false,
-    recipientName: '',
-    recipientPhone: '',
-    recipientIdNumber: '',
-    recipientAddress: '',
-    recipientNeighborhood: '',
-    recipientAddressReferences: '',
-    hasAlternateContact: false,
-    alternateContactName: '',
-    alternateContactPhone: '',
-    senderName: '',
-    senderPhone: '',
-    senderEmail: '',
-    paymentMethod: '',
-    paymentReference: '',
-    cashReceived: 0,
-    orderNumber: '',
-    orderId: null
-  })
+  const [orders, setOrders] = useState<RemittanceOrder[]>([])
+  const [loading, setLoading] = useState(true)
+  const [searchTerm, setSearchTerm] = useState('')
+  const [statusFilter, setStatusFilter] = useState<string>('all')
+  const [currentPage, setCurrentPage] = useState(1)
+  const [totalOrders, setTotalOrders] = useState(0)
+  const ORDERS_PER_PAGE = 25
 
-  // Load provinces on mount
-  useEffect(() => {
-    loadProvinces()
-  }, [])
-
-  const loadProvinces = async () => {
+  // Fetch orders
+  const fetchData = async () => {
     try {
-      const res = await fetch('/api/brokers/locations')
-      const data = await res.json()
-      if (data.success) {
-        setProvinces(data.data.provinces)
-      }
-    } catch (error) {
-      console.error('Error loading provinces:', error)
-    }
-  }
-
-  const checkAvailability = async () => {
-    if (!wizardData.province || !wizardData.municipality || !wizardData.sendAmount) return
-
-    setLoading(true)
-    try {
-      const res = await fetch(
-        `/api/brokers/availability?province=${encodeURIComponent(wizardData.province)}&municipality=${encodeURIComponent(wizardData.municipality)}&currency=${wizardData.receiveCurrency}&amount=${wizardData.sendAmount}`
-      )
-      const data = await res.json()
-      if (data.success) {
-        setAvailability(data.data)
-        updateWizardData({
-          estimatedDelivery: data.data.estimatedDelivery,
-          hasAvailability: data.data.hasAvailability
-        })
-      }
-    } catch (error) {
-      console.error('Error checking availability:', error)
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  // Check availability when amount or service changes
-  useEffect(() => {
-    if (currentStep === 3 && wizardData.sendAmount > 0) {
-      checkAvailability()
-    }
-  }, [wizardData.sendAmount, wizardData.receiveCurrency, currentStep])
-
-  const updateWizardData = (updates: Partial<WizardData>) => {
-    setWizardData(prev => {
-      const newData = { ...prev, ...updates }
-
-      // Calculate totals when relevant fields change
-      if ('sendAmount' in updates || 'serviceType' in updates || 'deliveryFee' in updates) {
-        const service = SERVICE_TYPES.find(s => s.id === (updates.serviceType || prev.serviceType))
-        if (service) {
-          const amount = updates.sendAmount ?? prev.sendAmount
-          const fee = (amount * service.fee / 100) + service.fixedFee
-          newData.serviceFee = fee
-          newData.totalCharged = amount + fee + (updates.deliveryFee ?? prev.deliveryFee)
-          newData.receiveCurrency = service.currency
-        }
-      }
-
-      return newData
-    })
-  }
-
-  const canProceed = (): boolean => {
-    switch (currentStep) {
-      case 1:
-        return !!wizardData.province && !!wizardData.municipality
-      case 2:
-        return !!wizardData.serviceType
-      case 3:
-        return wizardData.sendAmount > 0
-      case 4:
-        return !!wizardData.recipientName && !!wizardData.recipientPhone
-      case 5:
-        return !!wizardData.senderName
-      case 6:
-        return !!wizardData.paymentMethod
-      default:
-        return true
-    }
-  }
-
-  const handleNext = () => {
-    if (currentStep < 7 && canProceed()) {
-      setCurrentStep(prev => prev + 1)
-    }
-  }
-
-  const handleBack = () => {
-    if (currentStep > 1) {
-      setCurrentStep(prev => prev - 1)
-    }
-  }
-
-  const createOrder = async () => {
-    setLoading(true)
-    try {
-      const res = await fetch('/api/remittance-orders', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          province: wizardData.province,
-          municipality: wizardData.municipality,
-          productId: wizardData.productId,
-          serviceType: wizardData.serviceType,
-          sendAmount: wizardData.sendAmount,
-          sendCurrency: wizardData.sendCurrency,
-          receiveCurrency: wizardData.receiveCurrency,
-          deliveryFee: wizardData.deliveryFee,
-          recipient: {
-            name: wizardData.recipientName,
-            phone: wizardData.recipientPhone,
-            idNumber: wizardData.recipientIdNumber,
-            address: wizardData.recipientAddress,
-            neighborhood: wizardData.recipientNeighborhood,
-            addressReferences: wizardData.recipientAddressReferences,
-            hasAlternateContact: wizardData.hasAlternateContact,
-            alternateContactName: wizardData.alternateContactName,
-            alternateContactPhone: wizardData.alternateContactPhone
-          },
-          sender: {
-            name: wizardData.senderName,
-            phone: wizardData.senderPhone,
-            email: wizardData.senderEmail
-          },
-          paymentMethod: wizardData.paymentMethod,
-          paymentReference: wizardData.paymentReference,
-          cashReceived: wizardData.cashReceived
-        })
+      setLoading(true)
+      const params = new URLSearchParams({
+        page: currentPage.toString(),
+        limit: ORDERS_PER_PAGE.toString(),
+        ...(searchTerm && { search: searchTerm }),
+        ...(statusFilter && statusFilter !== 'all' && { status: statusFilter })
       })
 
-      const data = await res.json()
-      if (data.success) {
-        updateWizardData({
-          orderNumber: data.data.orderNumber,
-          orderId: data.data.id,
-          estimatedDelivery: data.data.estimatedDelivery
-        })
-        setCurrentStep(7)
-      } else {
-        alert(data.error || 'Error al crear orden')
+      const response = await fetch(`/api/remittance-orders?${params}`)
+      if (response.ok) {
+        const data = await response.json()
+        setOrders(data.data?.orders || [])
+        setTotalOrders(data.data?.pagination?.total || 0)
       }
     } catch (error) {
-      console.error('Error creating order:', error)
-      alert('Error al crear orden')
+      console.error('Error fetching orders:', error)
+      showNotification('error', 'Error', 'No se pudieron cargar las remesas')
     } finally {
       setLoading(false)
     }
   }
 
-  const resetWizard = () => {
-    setWizardData({
-      province: '',
-      municipality: '',
-      productId: null,
-      serviceType: '',
-      deliveryFee: 5,
-      sendAmount: 100,
-      sendCurrency: 'USD',
-      receiveCurrency: 'USD',
-      serviceFee: 0,
-      totalCharged: 0,
-      estimatedDelivery: '',
-      hasAvailability: false,
-      recipientName: '',
-      recipientPhone: '',
-      recipientIdNumber: '',
-      recipientAddress: '',
-      recipientNeighborhood: '',
-      recipientAddressReferences: '',
-      hasAlternateContact: false,
-      alternateContactName: '',
-      alternateContactPhone: '',
-      senderName: '',
-      senderPhone: '',
-      senderEmail: '',
-      paymentMethod: '',
-      paymentReference: '',
-      cashReceived: 0,
-      orderNumber: '',
-      orderId: null
-    })
-    setCurrentStep(1)
+  useEffect(() => {
+    setCurrentPage(1)
+  }, [searchTerm, statusFilter])
+
+  useEffect(() => {
+    fetchData()
+  }, [currentPage, searchTerm, statusFilter])
+
+  // Calculate statistics
+  const stats = {
+    total: totalOrders,
+    pending: orders.filter(o => o.status === 'pending').length,
+    delivered: orders.filter(o => o.status === 'delivered').length,
+    totalAmount: orders.reduce((sum, o) => sum + (o.sendAmount || 0), 0)
   }
 
-  const selectedMunicipalities = provinces.find(p => p.name === wizardData.province)?.municipalities || []
-
-  // Stats cards data
-  const statsCards = [
-    {
-      title: 'Nuevo Cupón',
-      value: 'Crear',
-      icon: Send,
-      gradient: 'from-green-400 to-green-600',
-      bgGradient: theme === 'dark' ? 'from-green-900/30' : 'from-green-50',
-      iconBg: theme === 'dark' ? 'bg-green-900/30 border-green-800/50' : 'bg-gradient-to-br from-green-50 to-green-100 border-green-200'
-    },
-    {
-      title: 'Paso Actual',
-      value: `${currentStep} de 7`,
-      icon: Package,
-      gradient: 'from-amber-400 to-amber-600',
-      bgGradient: theme === 'dark' ? 'from-amber-900/30' : 'from-amber-50',
-      iconBg: theme === 'dark' ? 'bg-amber-900/30 border-amber-800/50' : 'bg-gradient-to-br from-amber-50 to-amber-100 border-amber-200'
-    },
-    {
-      title: 'Monto',
-      value: `$${wizardData.sendAmount.toFixed(2)}`,
-      icon: DollarSign,
-      gradient: 'from-blue-400 to-blue-600',
-      bgGradient: theme === 'dark' ? 'from-blue-900/30' : 'from-blue-50',
-      iconBg: theme === 'dark' ? 'bg-blue-900/30 border-blue-800/50' : 'bg-gradient-to-br from-blue-50 to-blue-100 border-blue-200'
-    },
-    {
-      title: 'Total a Cobrar',
-      value: `$${wizardData.totalCharged.toFixed(2)}`,
-      icon: TrendingUp,
-      gradient: 'from-violet-400 to-violet-600',
-      bgGradient: theme === 'dark' ? 'from-violet-900/30' : 'from-violet-50',
-      iconBg: theme === 'dark' ? 'bg-violet-900/30 border-violet-800/50' : 'bg-gradient-to-br from-violet-50 to-violet-100 border-violet-200'
-    }
-  ]
+  // Handle view order
+  const handleViewOrder = (orderId: number) => {
+    router.push(`/dashboard/agency-admin/cupones-familiares/${orderId}`)
+  }
 
   return (
     <DashboardLayout>
-      <div className={cn(
-        "min-h-screen p-4 sm:p-6",
-        theme === 'dark' ? 'bg-gray-900' : 'bg-gray-50'
-      )}>
-        {/* Stats Cards */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-          {statsCards.map((stat, index) => {
-            const Icon = stat.icon
-            return (
-              <motion.div
-                key={stat.title}
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: index * 0.1 }}
+      <div className="min-h-screen p-6">
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="space-y-6"
+        >
+          {/* Stats Cards */}
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-5">
+            {/* Total de Remesas */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.1 }}
+              className={cn(
+                'relative overflow-hidden',
+                theme === 'dark'
+                  ? 'bg-gradient-to-br from-gray-800 to-gray-900 border-gray-700'
+                  : 'bg-gradient-to-br from-slate-50 to-white border-slate-200',
+                'rounded-2xl border shadow-xl'
+              )}
+            >
+              <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-400 to-blue-600"></div>
+              <div className="p-6">
+                <div className="flex items-start justify-between mb-4">
+                  <div className="flex items-center gap-3">
+                    <div className={cn(
+                      'p-3 rounded-xl shadow-sm',
+                      theme === 'dark'
+                        ? 'bg-blue-900/30 border border-blue-800/50'
+                        : 'bg-gradient-to-br from-blue-50 to-blue-100 border border-blue-200'
+                    )}>
+                      <Send className="w-6 h-6 text-blue-600" />
+                    </div>
+                    <div>
+                      <p className={cn(
+                        'text-sm font-medium',
+                        theme === 'dark' ? 'text-gray-400' : 'text-black'
+                      )}>Total Remesas</p>
+                      <p className={cn(
+                        'text-3xl font-bold mt-1',
+                        theme === 'dark' ? 'text-white' : 'text-slate-900'
+                      )}>{stats.total}</p>
+                    </div>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-1">
+                    <div className="w-2 h-2 bg-blue-400 rounded-full animate-pulse"></div>
+                    <span className={cn(
+                      'text-xs font-medium',
+                      theme === 'dark' ? 'text-gray-500' : 'text-black'
+                    )}>Cupones familiares</span>
+                  </div>
+                </div>
+              </div>
+            </motion.div>
+
+            {/* Pendientes */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.2 }}
+              className={cn(
+                'relative overflow-hidden',
+                theme === 'dark'
+                  ? 'bg-gradient-to-br from-gray-800 to-gray-900 border-gray-700'
+                  : 'bg-gradient-to-br from-slate-50 to-white border-slate-200',
+                'rounded-2xl border shadow-xl'
+              )}
+            >
+              <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-amber-400 to-orange-600"></div>
+              <div className="p-6">
+                <div className="flex items-start justify-between mb-4">
+                  <div className="flex items-center gap-3">
+                    <div className={cn(
+                      'p-3 rounded-xl shadow-sm',
+                      theme === 'dark'
+                        ? 'bg-amber-900/30 border border-amber-800/50'
+                        : 'bg-gradient-to-br from-amber-50 to-orange-100 border border-amber-200'
+                    )}>
+                      <Clock className="w-6 h-6 text-amber-600" />
+                    </div>
+                    <div>
+                      <p className={cn(
+                        'text-sm font-medium',
+                        theme === 'dark' ? 'text-gray-400' : 'text-black'
+                      )}>Pendientes</p>
+                      <p className={cn(
+                        'text-3xl font-bold mt-1',
+                        theme === 'dark' ? 'text-white' : 'text-slate-900'
+                      )}>{stats.pending}</p>
+                    </div>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-1">
+                    <div className="w-2 h-2 bg-amber-400 rounded-full"></div>
+                    <span className={cn(
+                      'text-xs font-medium',
+                      theme === 'dark' ? 'text-gray-500' : 'text-black'
+                    )}>Por entregar</span>
+                  </div>
+                </div>
+              </div>
+            </motion.div>
+
+            {/* Entregadas */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.3 }}
+              className={cn(
+                'relative overflow-hidden',
+                theme === 'dark'
+                  ? 'bg-gradient-to-br from-gray-800 to-gray-900 border-gray-700'
+                  : 'bg-gradient-to-br from-slate-50 to-white border-slate-200',
+                'rounded-2xl border shadow-xl'
+              )}
+            >
+              <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-emerald-400 to-green-600"></div>
+              <div className="p-6">
+                <div className="flex items-start justify-between mb-4">
+                  <div className="flex items-center gap-3">
+                    <div className={cn(
+                      'p-3 rounded-xl shadow-sm',
+                      theme === 'dark'
+                        ? 'bg-emerald-900/30 border border-emerald-800/50'
+                        : 'bg-gradient-to-br from-emerald-50 to-green-100 border border-emerald-200'
+                    )}>
+                      <CheckCircle className="w-6 h-6 text-emerald-600" />
+                    </div>
+                    <div>
+                      <p className={cn(
+                        'text-sm font-medium',
+                        theme === 'dark' ? 'text-gray-400' : 'text-black'
+                      )}>Entregadas</p>
+                      <p className={cn(
+                        'text-3xl font-bold mt-1',
+                        theme === 'dark' ? 'text-white' : 'text-slate-900'
+                      )}>{stats.delivered}</p>
+                    </div>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-1">
+                    <div className="w-2 h-2 bg-emerald-400 rounded-full"></div>
+                    <span className={cn(
+                      'text-xs font-medium',
+                      theme === 'dark' ? 'text-gray-500' : 'text-black'
+                    )}>Completadas</span>
+                  </div>
+                </div>
+              </div>
+            </motion.div>
+
+            {/* Monto Total */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.4 }}
+              className={cn(
+                'relative overflow-hidden',
+                theme === 'dark'
+                  ? 'bg-gradient-to-br from-gray-800 to-gray-900 border-gray-700'
+                  : 'bg-gradient-to-br from-slate-50 to-white border-slate-200',
+                'rounded-2xl border shadow-xl'
+              )}
+            >
+              <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-violet-400 to-purple-600"></div>
+              <div className="p-6">
+                <div className="flex items-start justify-between mb-4">
+                  <div className="flex items-center gap-3">
+                    <div className={cn(
+                      'p-3 rounded-xl shadow-sm',
+                      theme === 'dark'
+                        ? 'bg-violet-900/30 border border-violet-800/50'
+                        : 'bg-gradient-to-br from-violet-50 to-purple-100 border border-violet-200'
+                    )}>
+                      <DollarSign className="w-6 h-6 text-violet-600" />
+                    </div>
+                    <div>
+                      <p className={cn(
+                        'text-sm font-medium',
+                        theme === 'dark' ? 'text-gray-400' : 'text-black'
+                      )}>Monto Total</p>
+                      <p className={cn(
+                        'text-3xl font-bold mt-1',
+                        theme === 'dark' ? 'text-white' : 'text-slate-900'
+                      )}>${stats.totalAmount.toFixed(2)}</p>
+                    </div>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-1">
+                    <div className="w-2 h-2 bg-violet-400 rounded-full"></div>
+                    <span className={cn(
+                      'text-xs font-medium',
+                      theme === 'dark' ? 'text-gray-500' : 'text-black'
+                    )}>En esta vista</span>
+                  </div>
+                </div>
+              </div>
+            </motion.div>
+          </div>
+
+          {/* Filters */}
+          <div className="flex flex-col lg:flex-row gap-6 items-center justify-between py-6 px-4 bg-white dark:bg-gray-800/50 rounded-xl border border-gray-200 dark:border-gray-700">
+            <div className="flex-1 relative">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+              <input
+                type="text"
+                placeholder="Buscar por orden, destinatario o remitente..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
                 className={cn(
-                  'relative overflow-hidden',
+                  'w-full h-12 pl-10 pr-4 rounded-lg border transition-colors',
+                  'focus:outline-none focus:ring-2 focus:ring-blue-500',
                   theme === 'dark'
-                    ? 'bg-gradient-to-br from-gray-800 to-gray-900 border-gray-700'
-                    : 'bg-gradient-to-br from-slate-50 to-white border-slate-200',
-                  'rounded-2xl border shadow-xl'
+                    ? 'bg-gray-800 border-gray-600 text-white placeholder-gray-400 text-sm'
+                    : 'bg-white border-gray-300 text-black placeholder-gray-500 text-sm'
+                )}
+              />
+            </div>
+
+            <div className="flex flex-col sm:flex-row gap-3 w-full lg:w-auto">
+              <select
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value)}
+                className={cn(
+                  'w-full sm:w-auto h-12 px-4 rounded-lg border transition-colors',
+                  'focus:outline-none focus:ring-2 focus:ring-blue-500',
+                  theme === 'dark'
+                    ? 'bg-gray-800 border-gray-600 text-white text-sm'
+                    : 'bg-white border-gray-300 text-black text-sm'
                 )}
               >
-                <div className={cn("absolute top-0 left-0 w-full h-1 bg-gradient-to-r", stat.gradient)}></div>
-                <div className="p-4 sm:p-5">
-                  <div className="flex items-start justify-between">
-                    <div className="flex items-center gap-3">
-                      <div className={cn(
-                        'p-2.5 rounded-xl shadow-sm border',
-                        stat.iconBg
-                      )}>
-                        <Icon className={cn(
-                          "w-5 h-5",
-                          stat.gradient.includes('green') && "text-green-600",
-                          stat.gradient.includes('amber') && "text-amber-600",
-                          stat.gradient.includes('blue') && "text-blue-600",
-                          stat.gradient.includes('violet') && "text-violet-600"
-                        )} />
-                      </div>
-                      <div>
-                        <p className={cn(
-                          'text-xs sm:text-sm font-medium',
-                          theme === 'dark' ? 'text-gray-400' : 'text-gray-600'
-                        )}>{stat.title}</p>
-                        <p className={cn(
-                          'text-xl sm:text-2xl font-bold mt-0.5',
-                          theme === 'dark' ? 'text-white' : 'text-slate-900'
-                        )}>{stat.value}</p>
-                      </div>
+                <option value="all">Todos los estados</option>
+                {Object.entries(STATUSES).map(([key, status]) => (
+                  <option key={key} value={key}>{status.label}</option>
+                ))}
+              </select>
+
+              <div className="flex gap-3 w-full sm:w-auto">
+                <Button
+                  onClick={fetchData}
+                  className={cn(
+                    'flex-1 sm:flex-none items-center justify-center gap-2 h-12',
+                    'bg-blue-600 hover:bg-blue-700 text-white font-medium',
+                    'rounded-lg transition-all duration-200',
+                    'shadow-sm hover:shadow-md',
+                    'dark:bg-blue-700 dark:hover:bg-blue-800'
+                  )}
+                >
+                  <RefreshCw className="w-4 h-4" />
+                  Actualizar
+                </Button>
+
+                <button
+                  onClick={() => router.push('/dashboard/agency-admin/cupones-familiares/create')}
+                  className={cn(
+                    'flex-1 sm:flex-none justify-center whitespace-nowrap',
+                    'rounded-lg text-sm font-medium transition-all duration-200',
+                    'h-12 bg-green-600 hover:bg-green-700 text-white',
+                    'shadow-sm hover:shadow-md',
+                    'dark:bg-green-700 dark:hover:bg-green-800',
+                    'flex items-center gap-2 px-6'
+                  )}
+                >
+                  <Plus className="w-4 h-4" />
+                  Nueva Remesa
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* Orders Table */}
+          <div className={cn(
+            'rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden',
+            theme === 'dark' ? 'bg-gray-800' : 'bg-white'
+          )}>
+            {loading ? (
+              <div className="p-8">
+                <LoadingBox size="lg" text="Cargando remesas..." />
+              </div>
+            ) : orders.length === 0 ? (
+              <div className="p-8 text-center">
+                <Send className="w-12 h-12 mx-auto text-gray-400" />
+                <p className="mt-2 text-gray-600 dark:text-gray-400">
+                  {searchTerm || statusFilter !== 'all' ? 'No se encontraron remesas con los filtros aplicados' : 'No hay remesas registradas'}
+                </p>
+                <Button
+                  onClick={() => router.push('/dashboard/agency-admin/cupones-familiares/create')}
+                  className="mt-4 bg-green-600 hover:bg-green-700 text-white"
+                >
+                  <Plus className="w-4 h-4 mr-2" />
+                  Crear Primera Remesa
+                </Button>
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead className={cn(
+                    'border-b border-gray-200 dark:border-gray-700',
+                    theme === 'dark' ? 'bg-gray-900/50' : 'bg-gray-50'
+                  )}>
+                    <tr>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                        Orden
+                      </th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                        Destinatario
+                      </th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                        Ubicacion
+                      </th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                        Monto
+                      </th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                        Remitente
+                      </th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                        Pago
+                      </th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                        Estado
+                      </th>
+                      <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                        Acciones
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
+                    {orders.map((order) => {
+                      const statusInfo = STATUSES[order.status] || STATUSES.pending
+                      const paymentInfo = PAYMENT_STATUSES[order.paymentStatus] || PAYMENT_STATUSES.pending
+                      const StatusIcon = statusInfo.icon
+
+                      return (
+                        <motion.tr
+                          key={order.id}
+                          initial={{ opacity: 0 }}
+                          animate={{ opacity: 1 }}
+                          className="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
+                        >
+                          {/* Orden */}
+                          <td className="px-4 py-4 whitespace-nowrap">
+                            <div className="text-base font-bold text-black dark:text-white">
+                              {order.orderNumber}
+                            </div>
+                            <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                              {order.createdAt ? new Date(order.createdAt).toLocaleDateString('es-ES', {
+                                day: '2-digit',
+                                month: 'short',
+                                year: 'numeric'
+                              }) : '-'}
+                            </div>
+                          </td>
+
+                          {/* Destinatario */}
+                          <td className="px-4 py-4">
+                            <div className="flex items-center gap-2">
+                              <User className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                              <div>
+                                <div className="font-medium text-black dark:text-white">
+                                  {order.recipientName}
+                                </div>
+                                {order.recipientPhone && (
+                                  <div className="text-xs text-gray-500 dark:text-gray-400 flex items-center gap-1 mt-0.5">
+                                    <Phone className="w-3 h-3" />
+                                    {order.recipientPhone}
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          </td>
+
+                          {/* Ubicacion */}
+                          <td className="px-4 py-4">
+                            <div className="flex items-center gap-2">
+                              <MapPin className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                              <div>
+                                <div className="font-medium text-black dark:text-white">
+                                  {order.recipientMunicipality}
+                                </div>
+                                <div className="text-xs text-gray-500 dark:text-gray-400">
+                                  {order.recipientProvince}
+                                </div>
+                              </div>
+                            </div>
+                          </td>
+
+                          {/* Monto */}
+                          <td className="px-4 py-4 whitespace-nowrap">
+                            <div className="font-bold text-green-600 dark:text-green-400">
+                              ${order.sendAmount?.toFixed(2)} {order.sendCurrency}
+                            </div>
+                            <div className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                              Total: ${order.totalCharged?.toFixed(2)}
+                            </div>
+                          </td>
+
+                          {/* Remitente */}
+                          <td className="px-4 py-4">
+                            <div className="flex items-center gap-2">
+                              <Users className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                              <div>
+                                <div className="font-medium text-black dark:text-white">
+                                  {order.senderName}
+                                </div>
+                                {order.senderPhone && (
+                                  <div className="text-xs text-gray-500 dark:text-gray-400">
+                                    {order.senderPhone}
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          </td>
+
+                          {/* Pago */}
+                          <td className="px-4 py-4 whitespace-nowrap">
+                            <span className={cn(
+                              'inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium',
+                              paymentInfo.color
+                            )}>
+                              {paymentInfo.label}
+                            </span>
+                          </td>
+
+                          {/* Estado */}
+                          <td className="px-4 py-4 whitespace-nowrap">
+                            <span className={cn(
+                              'inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium',
+                              statusInfo.color
+                            )}>
+                              <StatusIcon className="w-3.5 h-3.5" />
+                              {statusInfo.label}
+                            </span>
+                            {order.estimatedDelivery && (
+                              <div className="text-xs text-gray-500 dark:text-gray-400 mt-1 flex items-center gap-1">
+                                <Clock className="w-3 h-3" />
+                                {order.estimatedDelivery}
+                              </div>
+                            )}
+                          </td>
+
+                          {/* Acciones */}
+                          <td className="px-4 py-4 whitespace-nowrap">
+                            <div className="flex gap-1 justify-end">
+                              <motion.button
+                                whileHover={{ scale: 1.1 }}
+                                whileTap={{ scale: 0.9 }}
+                                onClick={() => handleViewOrder(order.id)}
+                                className={cn(
+                                  'p-2 rounded-lg transition-all duration-200',
+                                  theme === 'dark'
+                                    ? 'text-blue-400 hover:bg-blue-900/30'
+                                    : 'text-blue-600 hover:bg-blue-50'
+                                )}
+                                title="Ver detalles"
+                              >
+                                <Eye className="w-4 h-4" />
+                              </motion.button>
+                            </div>
+                          </td>
+                        </motion.tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+
+            {/* Pagination */}
+            {totalOrders > ORDERS_PER_PAGE && (
+              <motion.div
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                className={cn(
+                  'p-4 border-t',
+                  theme === 'dark' ? 'border-gray-700' : 'border-gray-200'
+                )}
+              >
+                <div className="flex items-center justify-between">
+                  <div className="text-sm text-gray-600 dark:text-gray-400">
+                    Mostrando {((currentPage - 1) * ORDERS_PER_PAGE) + 1} a{' '}
+                    {Math.min(currentPage * ORDERS_PER_PAGE, totalOrders)} de {totalOrders} remesas
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setCurrentPage(currentPage - 1)}
+                      disabled={currentPage === 1}
+                      className="flex items-center gap-1"
+                    >
+                      <ChevronLeft className="w-4 h-4" />
+                      Anterior
+                    </Button>
+
+                    <div className="flex items-center gap-1">
+                      {Array.from({ length: Math.min(5, Math.ceil(totalOrders / ORDERS_PER_PAGE)) }, (_, i) => {
+                        const totalPages = Math.ceil(totalOrders / ORDERS_PER_PAGE)
+                        let pageNum
+
+                        if (totalPages <= 5) {
+                          pageNum = i + 1
+                        } else if (currentPage <= 3) {
+                          pageNum = i + 1
+                        } else if (currentPage >= totalPages - 2) {
+                          pageNum = totalPages - 4 + i
+                        } else {
+                          pageNum = currentPage - 2 + i
+                        }
+
+                        return (
+                          <Button
+                            key={pageNum}
+                            variant={currentPage === pageNum ? "default" : "outline"}
+                            size="sm"
+                            onClick={() => setCurrentPage(pageNum)}
+                            className={cn(
+                              'w-8 h-8 p-0',
+                              currentPage === pageNum && 'bg-blue-600 hover:bg-blue-700'
+                            )}
+                          >
+                            {pageNum}
+                          </Button>
+                        )
+                      })}
                     </div>
+
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setCurrentPage(currentPage + 1)}
+                      disabled={currentPage >= Math.ceil(totalOrders / ORDERS_PER_PAGE)}
+                      className="flex items-center gap-1"
+                    >
+                      Siguiente
+                      <ChevronRight className="w-4 h-4" />
+                    </Button>
                   </div>
                 </div>
               </motion.div>
-            )
-          })}
-        </div>
-
-        {/* Progress Steps - Sticky Header */}
-        <div className={cn(
-          "sticky top-0 z-20 py-4 mb-6 -mx-4 sm:-mx-6 px-4 sm:px-6 backdrop-blur-md",
-          theme === 'dark' ? 'bg-gray-900/90' : 'bg-gray-50/90'
-        )}>
-          <div className="overflow-x-auto scrollbar-hide">
-            <div className="flex items-center justify-between min-w-[640px] gap-2">
-              {STEPS.map((step, index) => {
-                const Icon = step.icon
-                const isActive = currentStep === step.id
-                const isCompleted = currentStep > step.id
-
-                return (
-                  <div key={step.id} className="flex items-center flex-1">
-                    <div className="flex flex-col items-center flex-1">
-                      <motion.div
-                        animate={{
-                          scale: isActive ? 1.1 : 1
-                        }}
-                        className={cn(
-                          "w-10 h-10 rounded-xl flex items-center justify-center transition-all duration-300 shadow-lg",
-                          isCompleted
-                            ? 'bg-gradient-to-r from-green-500 to-green-600 text-white'
-                            : isActive
-                              ? 'bg-gradient-to-r from-blue-500 to-blue-600 text-white'
-                              : theme === 'dark'
-                                ? 'bg-gray-800 text-gray-500 border border-gray-700'
-                                : 'bg-white text-gray-400 border border-gray-200'
-                        )}
-                      >
-                        {isCompleted ? (
-                          <CheckCircle className="w-5 h-5" />
-                        ) : (
-                          <Icon className="w-5 h-5" />
-                        )}
-                      </motion.div>
-                      <span className={cn(
-                        "text-xs mt-2 font-medium text-center",
-                        isActive
-                          ? theme === 'dark' ? 'text-blue-400' : 'text-blue-600'
-                          : isCompleted
-                            ? theme === 'dark' ? 'text-green-400' : 'text-green-600'
-                            : theme === 'dark' ? 'text-gray-500' : 'text-gray-400'
-                      )}>
-                        {step.name}
-                      </span>
-                    </div>
-                    {index < STEPS.length - 1 && (
-                      <div className={cn(
-                        "h-0.5 flex-1 mx-2 rounded-full transition-colors",
-                        isCompleted
-                          ? 'bg-gradient-to-r from-green-500 to-green-400'
-                          : theme === 'dark' ? 'bg-gray-700' : 'bg-gray-200'
-                      )} />
-                    )}
-                  </div>
-                )
-              })}
-            </div>
+            )}
           </div>
-        </div>
-
-        {/* Step Content */}
-        <AnimatePresence mode="wait">
-          <motion.div
-            key={currentStep}
-            initial={{ opacity: 0, x: 20 }}
-            animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: -20 }}
-            transition={{ duration: 0.2 }}
-            className={cn(
-              "rounded-2xl border p-6 sm:p-8 max-w-2xl mx-auto shadow-xl",
-              theme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'
-            )}
-          >
-            {/* Step 1: Location */}
-            {currentStep === 1 && (
-              <div className="space-y-6">
-                <div className="text-center mb-8">
-                  <div className={cn(
-                    "w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-lg",
-                    theme === 'dark' ? 'bg-gradient-to-br from-blue-600 to-blue-700' : 'bg-gradient-to-br from-blue-500 to-blue-600'
-                  )}>
-                    <MapPin className="w-8 h-8 text-white" />
-                  </div>
-                  <h2 className={cn(
-                    "text-xl font-bold",
-                    theme === 'dark' ? 'text-white' : 'text-gray-900'
-                  )}>
-                    Ubicación de Entrega
-                  </h2>
-                  <p className={cn(
-                    "text-sm mt-1",
-                    theme === 'dark' ? 'text-gray-400' : 'text-gray-600'
-                  )}>
-                    Selecciona dónde se entregará el dinero en Cuba
-                  </p>
-                </div>
-
-                <div className="space-y-4">
-                  <div>
-                    <label className={cn(
-                      "block text-sm font-medium mb-2",
-                      theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
-                    )}>
-                      Provincia
-                    </label>
-                    <select
-                      value={wizardData.province}
-                      onChange={(e) => updateWizardData({ province: e.target.value, municipality: '' })}
-                      className={cn(
-                        "w-full px-4 py-3 rounded-xl border text-base transition-all focus:ring-2 focus:ring-blue-500 focus:border-transparent",
-                        theme === 'dark'
-                          ? 'bg-gray-700 border-gray-600 text-white'
-                          : 'bg-white border-gray-300'
-                      )}
-                    >
-                      <option value="">Seleccionar provincia...</option>
-                      {provinces.map(p => (
-                        <option key={p.name} value={p.name}>{p.name}</option>
-                      ))}
-                    </select>
-                  </div>
-
-                  {wizardData.province && (
-                    <motion.div
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                    >
-                      <label className={cn(
-                        "block text-sm font-medium mb-2",
-                        theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
-                      )}>
-                        Municipio
-                      </label>
-                      <select
-                        value={wizardData.municipality}
-                        onChange={(e) => updateWizardData({ municipality: e.target.value })}
-                        className={cn(
-                          "w-full px-4 py-3 rounded-xl border text-base transition-all focus:ring-2 focus:ring-blue-500 focus:border-transparent",
-                          theme === 'dark'
-                            ? 'bg-gray-700 border-gray-600 text-white'
-                            : 'bg-white border-gray-300'
-                        )}
-                      >
-                        <option value="">Seleccionar municipio...</option>
-                        {selectedMunicipalities.map(m => (
-                          <option key={m.name} value={m.name}>
-                            {m.name} ({m.brokerCount} broker{m.brokerCount !== 1 && 's'})
-                          </option>
-                        ))}
-                      </select>
-                    </motion.div>
-                  )}
-
-                  {wizardData.municipality && (
-                    <motion.div
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      className={cn(
-                        "p-4 rounded-xl flex items-center gap-3",
-                        theme === 'dark' ? 'bg-green-900/20 border border-green-800' : 'bg-green-50 border border-green-200'
-                      )}
-                    >
-                      <CheckCircle className="w-5 h-5 text-green-600" />
-                      <span className={cn(
-                        "text-sm font-medium",
-                        theme === 'dark' ? 'text-green-400' : 'text-green-700'
-                      )}>
-                        Hay brokers disponibles en esta zona
-                      </span>
-                    </motion.div>
-                  )}
-                </div>
-              </div>
-            )}
-
-            {/* Step 2: Service Type */}
-            {currentStep === 2 && (
-              <div className="space-y-6">
-                <div className="text-center mb-8">
-                  <div className={cn(
-                    "w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-lg",
-                    theme === 'dark' ? 'bg-gradient-to-br from-green-600 to-green-700' : 'bg-gradient-to-br from-green-500 to-green-600'
-                  )}>
-                    <Banknote className="w-8 h-8 text-white" />
-                  </div>
-                  <h2 className={cn(
-                    "text-xl font-bold",
-                    theme === 'dark' ? 'text-white' : 'text-gray-900'
-                  )}>
-                    Tipo de Servicio
-                  </h2>
-                  <p className={cn(
-                    "text-sm mt-1",
-                    theme === 'dark' ? 'text-gray-400' : 'text-gray-600'
-                  )}>
-                    Selecciona cómo quieres que reciba el dinero
-                  </p>
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                  {SERVICE_TYPES.map(service => (
-                    <motion.button
-                      key={service.id}
-                      whileHover={{ scale: 1.02 }}
-                      whileTap={{ scale: 0.98 }}
-                      onClick={() => updateWizardData({ serviceType: service.id })}
-                      className={cn(
-                        "p-6 rounded-xl border-2 text-center transition-all",
-                        wizardData.serviceType === service.id
-                          ? 'border-blue-500 bg-blue-500/10 shadow-lg'
-                          : theme === 'dark'
-                            ? 'border-gray-600 hover:border-gray-500 hover:bg-gray-700/50'
-                            : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
-                      )}
-                    >
-                      <span className="text-4xl block mb-3">{service.icon}</span>
-                      <h3 className={cn(
-                        "font-bold",
-                        theme === 'dark' ? 'text-white' : 'text-gray-900'
-                      )}>
-                        {service.name}
-                      </h3>
-                      <p className={cn(
-                        "text-sm mt-1",
-                        theme === 'dark' ? 'text-gray-400' : 'text-gray-600'
-                      )}>
-                        {service.fee}% + ${service.fixedFee}
-                      </p>
-                    </motion.button>
-                  ))}
-                </div>
-
-                <div className="pt-4">
-                  <label className="flex items-center gap-3 cursor-pointer group">
-                    <input
-                      type="checkbox"
-                      checked={wizardData.deliveryFee > 0}
-                      onChange={(e) => updateWizardData({ deliveryFee: e.target.checked ? 5 : 0 })}
-                      className="w-5 h-5 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                    />
-                    <div className="group-hover:opacity-80 transition-opacity">
-                      <span className={cn(
-                        "font-medium",
-                        theme === 'dark' ? 'text-white' : 'text-gray-900'
-                      )}>
-                        Entrega a domicilio
-                      </span>
-                      <span className={cn(
-                        "text-sm ml-2 px-2 py-0.5 rounded-full",
-                        theme === 'dark' ? 'bg-green-900/30 text-green-400' : 'bg-green-100 text-green-700'
-                      )}>
-                        +$5.00
-                      </span>
-                    </div>
-                  </label>
-                </div>
-              </div>
-            )}
-
-            {/* Step 3: Amount */}
-            {currentStep === 3 && (
-              <div className="space-y-6">
-                <div className="text-center mb-8">
-                  <div className={cn(
-                    "w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-lg",
-                    theme === 'dark' ? 'bg-gradient-to-br from-yellow-600 to-yellow-700' : 'bg-gradient-to-br from-yellow-500 to-yellow-600'
-                  )}>
-                    <DollarSign className="w-8 h-8 text-white" />
-                  </div>
-                  <h2 className={cn(
-                    "text-xl font-bold",
-                    theme === 'dark' ? 'text-white' : 'text-gray-900'
-                  )}>
-                    Monto a Enviar
-                  </h2>
-                </div>
-
-                <div>
-                  <label className={cn(
-                    "block text-sm font-medium mb-2",
-                    theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
-                  )}>
-                    Monto en USD
-                  </label>
-                  <div className="relative">
-                    <span className="absolute left-4 top-1/2 -translate-y-1/2 text-xl font-bold text-gray-500">$</span>
-                    <Input
-                      type="number"
-                      value={wizardData.sendAmount}
-                      onChange={(e) => updateWizardData({ sendAmount: parseFloat(e.target.value) || 0 })}
-                      className={cn(
-                        "pl-10 text-2xl font-bold h-16 rounded-xl border-2 focus:border-blue-500 transition-colors",
-                        theme === 'dark' ? 'bg-gray-700 text-white border-gray-600' : 'border-gray-200'
-                      )}
-                      placeholder="100.00"
-                    />
-                  </div>
-                </div>
-
-                {/* Availability Status */}
-                {loading ? (
-                  <div className="flex items-center justify-center py-4">
-                    <Loader2 className="w-6 h-6 animate-spin text-blue-500" />
-                    <span className="ml-2 text-sm">Verificando disponibilidad...</span>
-                  </div>
-                ) : availability && (
-                  <motion.div
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    className={cn(
-                      "p-4 rounded-xl",
-                      availability.hasAvailability
-                        ? theme === 'dark' ? 'bg-green-900/20 border border-green-800' : 'bg-green-50 border border-green-200'
-                        : theme === 'dark' ? 'bg-yellow-900/20 border border-yellow-800' : 'bg-yellow-50 border border-yellow-200'
-                    )}
-                  >
-                    <div className="flex items-center gap-3">
-                      <Clock className={cn(
-                        "w-5 h-5",
-                        availability.hasAvailability ? 'text-green-600' : 'text-yellow-600'
-                      )} />
-                      <div>
-                        <p className={cn(
-                          "font-medium",
-                          availability.hasAvailability
-                            ? theme === 'dark' ? 'text-green-400' : 'text-green-700'
-                            : theme === 'dark' ? 'text-yellow-400' : 'text-yellow-700'
-                        )}>
-                          Entrega estimada: {availability.estimatedDelivery}
-                        </p>
-                        <p className={cn(
-                          "text-sm",
-                          theme === 'dark' ? 'text-gray-400' : 'text-gray-600'
-                        )}>
-                          ${availability.totalAvailable.toFixed(2)} {wizardData.receiveCurrency} disponibles en la zona
-                        </p>
-                      </div>
-                    </div>
-                  </motion.div>
-                )}
-
-                {/* Price Breakdown */}
-                <div className={cn(
-                  "p-5 rounded-xl space-y-3",
-                  theme === 'dark' ? 'bg-gray-700/50 border border-gray-600' : 'bg-gray-50 border border-gray-200'
-                )}>
-                  <div className="flex justify-between">
-                    <span className={theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}>Monto a enviar:</span>
-                    <span className={cn("font-medium", theme === 'dark' ? 'text-white' : 'text-gray-900')}>${wizardData.sendAmount.toFixed(2)}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className={theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}>Comisión del servicio:</span>
-                    <span className={cn("font-medium", theme === 'dark' ? 'text-white' : 'text-gray-900')}>${wizardData.serviceFee.toFixed(2)}</span>
-                  </div>
-                  {wizardData.deliveryFee > 0 && (
-                    <div className="flex justify-between">
-                      <span className={theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}>Entrega a domicilio:</span>
-                      <span className={cn("font-medium", theme === 'dark' ? 'text-white' : 'text-gray-900')}>${wizardData.deliveryFee.toFixed(2)}</span>
-                    </div>
-                  )}
-                  <div className={cn(
-                    "flex justify-between pt-3 border-t font-bold text-lg",
-                    theme === 'dark' ? 'border-gray-600' : 'border-gray-300'
-                  )}>
-                    <span>TOTAL A PAGAR:</span>
-                    <span className="text-blue-600">${wizardData.totalCharged.toFixed(2)}</span>
-                  </div>
-                  <div className={cn(
-                    "text-center text-sm pt-2 pb-1 rounded-lg",
-                    theme === 'dark' ? 'bg-green-900/20 text-green-400' : 'bg-green-50 text-green-700'
-                  )}>
-                    El destinatario recibirá: <strong>${wizardData.sendAmount.toFixed(2)} {wizardData.receiveCurrency}</strong>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* Step 4: Recipient */}
-            {currentStep === 4 && (
-              <div className="space-y-6">
-                <div className="text-center mb-8">
-                  <div className={cn(
-                    "w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-lg",
-                    theme === 'dark' ? 'bg-gradient-to-br from-purple-600 to-purple-700' : 'bg-gradient-to-br from-purple-500 to-purple-600'
-                  )}>
-                    <User className="w-8 h-8 text-white" />
-                  </div>
-                  <h2 className={cn(
-                    "text-xl font-bold",
-                    theme === 'dark' ? 'text-white' : 'text-gray-900'
-                  )}>
-                    Datos del Destinatario
-                  </h2>
-                  <p className={cn(
-                    "text-sm mt-1",
-                    theme === 'dark' ? 'text-gray-400' : 'text-gray-600'
-                  )}>
-                    Información del beneficiario en Cuba
-                  </p>
-                </div>
-
-                <div className="space-y-4">
-                  <Input
-                    placeholder="Nombre completo *"
-                    value={wizardData.recipientName}
-                    onChange={(e) => updateWizardData({ recipientName: e.target.value })}
-                    className={cn("rounded-xl h-12 border-2 focus:border-purple-500 transition-colors", theme === 'dark' ? 'bg-gray-700 text-white border-gray-600' : 'border-gray-200')}
-                  />
-
-                  <div className="grid grid-cols-2 gap-4">
-                    <Input
-                      placeholder="Teléfono *"
-                      value={wizardData.recipientPhone}
-                      onChange={(e) => updateWizardData({ recipientPhone: e.target.value })}
-                      className={cn("rounded-xl h-12 border-2 focus:border-purple-500 transition-colors", theme === 'dark' ? 'bg-gray-700 text-white border-gray-600' : 'border-gray-200')}
-                    />
-                    <Input
-                      placeholder="Carnet de Identidad"
-                      value={wizardData.recipientIdNumber}
-                      onChange={(e) => updateWizardData({ recipientIdNumber: e.target.value })}
-                      className={cn("rounded-xl h-12 border-2 focus:border-purple-500 transition-colors", theme === 'dark' ? 'bg-gray-700 text-white border-gray-600' : 'border-gray-200')}
-                    />
-                  </div>
-
-                  <div className={cn(
-                    "p-4 rounded-xl border-2",
-                    theme === 'dark' ? 'bg-gray-700/50 border-gray-600' : 'bg-gray-50 border-gray-200'
-                  )}>
-                    <h4 className={cn(
-                      "text-sm font-semibold mb-3 flex items-center gap-2",
-                      theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
-                    )}>
-                      <Home className="w-4 h-4" />
-                      Dirección de Entrega
-                    </h4>
-
-                    <div className="space-y-3">
-                      <Input
-                        placeholder="Calle/Avenida con número"
-                        value={wizardData.recipientAddress}
-                        onChange={(e) => updateWizardData({ recipientAddress: e.target.value })}
-                        className={cn("rounded-xl h-11", theme === 'dark' ? 'bg-gray-600 text-white border-gray-500' : 'border-gray-200')}
-                      />
-                      <Input
-                        placeholder="Reparto/Zona"
-                        value={wizardData.recipientNeighborhood}
-                        onChange={(e) => updateWizardData({ recipientNeighborhood: e.target.value })}
-                        className={cn("rounded-xl h-11", theme === 'dark' ? 'bg-gray-600 text-white border-gray-500' : 'border-gray-200')}
-                      />
-                      <div className="grid grid-cols-2 gap-3">
-                        <Input
-                          value={wizardData.municipality}
-                          disabled
-                          className={cn("rounded-xl h-11 opacity-70", theme === 'dark' ? 'bg-gray-600 text-white' : '')}
-                        />
-                        <Input
-                          value={wizardData.province}
-                          disabled
-                          className={cn("rounded-xl h-11 opacity-70", theme === 'dark' ? 'bg-gray-600 text-white' : '')}
-                        />
-                      </div>
-                      <Input
-                        placeholder="Referencias (ej: frente al parque)"
-                        value={wizardData.recipientAddressReferences}
-                        onChange={(e) => updateWizardData({ recipientAddressReferences: e.target.value })}
-                        className={cn("rounded-xl h-11", theme === 'dark' ? 'bg-gray-600 text-white border-gray-500' : 'border-gray-200')}
-                      />
-                    </div>
-                  </div>
-
-                  {/* Alternate Contact */}
-                  <div className={cn(
-                    "p-4 rounded-xl border-2",
-                    theme === 'dark' ? 'bg-gray-700/50 border-gray-600' : 'bg-gray-50 border-gray-200'
-                  )}>
-                    <label className="flex items-center gap-3 cursor-pointer mb-3">
-                      <input
-                        type="checkbox"
-                        checked={wizardData.hasAlternateContact}
-                        onChange={(e) => updateWizardData({ hasAlternateContact: e.target.checked })}
-                        className="w-5 h-5 rounded border-gray-300 text-purple-600 focus:ring-purple-500"
-                      />
-                      <span className={cn(
-                        "font-medium",
-                        theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
-                      )}>
-                        Agregar contacto alternativo
-                      </span>
-                    </label>
-
-                    {wizardData.hasAlternateContact && (
-                      <motion.div
-                        initial={{ opacity: 0, height: 0 }}
-                        animate={{ opacity: 1, height: 'auto' }}
-                        className="space-y-3"
-                      >
-                        <Input
-                          placeholder="Nombre del contacto"
-                          value={wizardData.alternateContactName}
-                          onChange={(e) => updateWizardData({ alternateContactName: e.target.value })}
-                          className={cn("rounded-xl h-11", theme === 'dark' ? 'bg-gray-600 text-white' : '')}
-                        />
-                        <Input
-                          placeholder="Teléfono del contacto"
-                          value={wizardData.alternateContactPhone}
-                          onChange={(e) => updateWizardData({ alternateContactPhone: e.target.value })}
-                          className={cn("rounded-xl h-11", theme === 'dark' ? 'bg-gray-600 text-white' : '')}
-                        />
-                        <p className={cn(
-                          "text-xs flex items-center gap-1",
-                          theme === 'dark' ? 'text-gray-400' : 'text-gray-500'
-                        )}>
-                          <AlertCircle className="w-3 h-3" />
-                          El contacto alternativo recibirá SMS si el principal no está disponible
-                        </p>
-                      </motion.div>
-                    )}
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* Step 5: Sender */}
-            {currentStep === 5 && (
-              <div className="space-y-6">
-                <div className="text-center mb-8">
-                  <div className={cn(
-                    "w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-lg",
-                    theme === 'dark' ? 'bg-gradient-to-br from-orange-600 to-orange-700' : 'bg-gradient-to-br from-orange-500 to-orange-600'
-                  )}>
-                    <Users className="w-8 h-8 text-white" />
-                  </div>
-                  <h2 className={cn(
-                    "text-xl font-bold",
-                    theme === 'dark' ? 'text-white' : 'text-gray-900'
-                  )}>
-                    Datos del Remitente
-                  </h2>
-                  <p className={cn(
-                    "text-sm mt-1",
-                    theme === 'dark' ? 'text-gray-400' : 'text-gray-600'
-                  )}>
-                    Información de quien envía el dinero
-                  </p>
-                </div>
-
-                <div className="space-y-4">
-                  <Input
-                    placeholder="Nombre completo *"
-                    value={wizardData.senderName}
-                    onChange={(e) => updateWizardData({ senderName: e.target.value })}
-                    className={cn("rounded-xl h-12 border-2 focus:border-orange-500 transition-colors", theme === 'dark' ? 'bg-gray-700 text-white border-gray-600' : 'border-gray-200')}
-                  />
-                  <Input
-                    placeholder="Teléfono"
-                    value={wizardData.senderPhone}
-                    onChange={(e) => updateWizardData({ senderPhone: e.target.value })}
-                    className={cn("rounded-xl h-12 border-2 focus:border-orange-500 transition-colors", theme === 'dark' ? 'bg-gray-700 text-white border-gray-600' : 'border-gray-200')}
-                  />
-                  <Input
-                    placeholder="Email (opcional)"
-                    type="email"
-                    value={wizardData.senderEmail}
-                    onChange={(e) => updateWizardData({ senderEmail: e.target.value })}
-                    className={cn("rounded-xl h-12 border-2 focus:border-orange-500 transition-colors", theme === 'dark' ? 'bg-gray-700 text-white border-gray-600' : 'border-gray-200')}
-                  />
-                </div>
-              </div>
-            )}
-
-            {/* Step 6: Payment */}
-            {currentStep === 6 && (
-              <div className="space-y-6">
-                <div className="text-center mb-8">
-                  <div className={cn(
-                    "w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-lg",
-                    theme === 'dark' ? 'bg-gradient-to-br from-pink-600 to-pink-700' : 'bg-gradient-to-br from-pink-500 to-pink-600'
-                  )}>
-                    <CreditCard className="w-8 h-8 text-white" />
-                  </div>
-                  <h2 className={cn(
-                    "text-xl font-bold",
-                    theme === 'dark' ? 'text-white' : 'text-gray-900'
-                  )}>
-                    Método de Pago
-                  </h2>
-                  <p className={cn(
-                    "text-3xl font-bold mt-2 bg-gradient-to-r from-blue-600 to-blue-400 bg-clip-text text-transparent"
-                  )}>
-                    Total: ${wizardData.totalCharged.toFixed(2)}
-                  </p>
-                </div>
-
-                <div className="grid grid-cols-3 gap-4">
-                  {PAYMENT_METHODS.map(method => (
-                    <motion.button
-                      key={method.id}
-                      whileHover={{ scale: 1.02 }}
-                      whileTap={{ scale: 0.98 }}
-                      onClick={() => updateWizardData({ paymentMethod: method.id })}
-                      className={cn(
-                        "p-4 rounded-xl border-2 text-center transition-all",
-                        wizardData.paymentMethod === method.id
-                          ? 'border-pink-500 bg-pink-500/10 shadow-lg'
-                          : theme === 'dark'
-                            ? 'border-gray-600 hover:border-gray-500 hover:bg-gray-700/50'
-                            : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
-                      )}
-                    >
-                      <span className="text-3xl block mb-2">{method.icon}</span>
-                      <span className={cn(
-                        "font-medium text-sm",
-                        theme === 'dark' ? 'text-white' : 'text-gray-900'
-                      )}>
-                        {method.name}
-                      </span>
-                    </motion.button>
-                  ))}
-                </div>
-
-                {wizardData.paymentMethod === 'cash' && (
-                  <motion.div
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    className="space-y-4"
-                  >
-                    <div>
-                      <label className={cn(
-                        "block text-sm font-medium mb-2",
-                        theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
-                      )}>
-                        Efectivo recibido
-                      </label>
-                      <Input
-                        type="number"
-                        value={wizardData.cashReceived || ''}
-                        onChange={(e) => updateWizardData({ cashReceived: parseFloat(e.target.value) || 0 })}
-                        className={cn("rounded-xl h-12 border-2", theme === 'dark' ? 'bg-gray-700 text-white border-gray-600' : 'border-gray-200')}
-                        placeholder="0.00"
-                      />
-                    </div>
-                    {wizardData.cashReceived >= wizardData.totalCharged && (
-                      <div className={cn(
-                        "p-4 rounded-xl text-center",
-                        theme === 'dark' ? 'bg-green-900/20 border border-green-800' : 'bg-green-50 border border-green-200'
-                      )}>
-                        <span className={cn(
-                          "text-lg font-bold",
-                          theme === 'dark' ? 'text-green-400' : 'text-green-700'
-                        )}>
-                          Cambio: ${(wizardData.cashReceived - wizardData.totalCharged).toFixed(2)}
-                        </span>
-                      </div>
-                    )}
-                  </motion.div>
-                )}
-
-                {(wizardData.paymentMethod === 'zelle' || wizardData.paymentMethod === 'card') && (
-                  <motion.div
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                  >
-                    <label className={cn(
-                      "block text-sm font-medium mb-2",
-                      theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
-                    )}>
-                      Referencia de pago
-                    </label>
-                    <Input
-                      value={wizardData.paymentReference}
-                      onChange={(e) => updateWizardData({ paymentReference: e.target.value })}
-                      className={cn("rounded-xl h-12 border-2", theme === 'dark' ? 'bg-gray-700 text-white border-gray-600' : 'border-gray-200')}
-                      placeholder={wizardData.paymentMethod === 'zelle' ? 'ZELLE-XXXXX' : 'Ref. Terminal'}
-                    />
-                  </motion.div>
-                )}
-              </div>
-            )}
-
-            {/* Step 7: Confirmation */}
-            {currentStep === 7 && (
-              <div className="space-y-6">
-                <div className="text-center mb-8">
-                  <motion.div
-                    initial={{ scale: 0 }}
-                    animate={{ scale: 1 }}
-                    transition={{ type: "spring", stiffness: 200 }}
-                    className="w-20 h-20 rounded-2xl flex items-center justify-center mx-auto mb-4 bg-gradient-to-br from-green-500 to-green-600 shadow-xl"
-                  >
-                    <CheckCircle className="w-10 h-10 text-white" />
-                  </motion.div>
-                  <h2 className={cn(
-                    "text-xl font-bold",
-                    theme === 'dark' ? 'text-white' : 'text-gray-900'
-                  )}>
-                    ¡Orden Creada Exitosamente!
-                  </h2>
-                  <p className="text-3xl font-bold mt-2 bg-gradient-to-r from-blue-600 to-blue-400 bg-clip-text text-transparent">
-                    {wizardData.orderNumber}
-                  </p>
-                </div>
-
-                <div className={cn(
-                  "p-5 rounded-xl space-y-3",
-                  theme === 'dark' ? 'bg-gray-700/50 border border-gray-600' : 'bg-gray-50 border border-gray-200'
-                )}>
-                  <div className="flex justify-between">
-                    <span className={theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}>Destinatario:</span>
-                    <span className={cn("font-medium", theme === 'dark' ? 'text-white' : 'text-gray-900')}>
-                      {wizardData.recipientName}
-                    </span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className={theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}>Monto a recibir:</span>
-                    <span className={cn("font-medium", theme === 'dark' ? 'text-white' : 'text-gray-900')}>
-                      ${wizardData.sendAmount.toFixed(2)} {wizardData.receiveCurrency}
-                    </span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className={theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}>Ubicación:</span>
-                    <span className={cn("font-medium", theme === 'dark' ? 'text-white' : 'text-gray-900')}>
-                      {wizardData.municipality}, {wizardData.province}
-                    </span>
-                  </div>
-                  <div className="flex justify-between items-center pt-3 border-t border-gray-600">
-                    <span className={theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}>Entrega estimada:</span>
-                    <span className={cn(
-                      "font-bold px-3 py-1 rounded-full text-sm",
-                      wizardData.estimatedDelivery === '1-24 horas'
-                        ? 'bg-green-500/20 text-green-500 border border-green-500/30'
-                        : 'bg-yellow-500/20 text-yellow-500 border border-yellow-500/30'
-                    )}>
-                      {wizardData.estimatedDelivery}
-                    </span>
-                  </div>
-                </div>
-
-                {/* Action Buttons */}
-                <div className="grid grid-cols-3 gap-3">
-                  <Button
-                    variant="outline"
-                    className={cn(
-                      "flex flex-col items-center gap-1 h-auto py-3 rounded-xl border-2 hover:bg-blue-50 dark:hover:bg-blue-900/20 hover:border-blue-300",
-                      theme === 'dark' ? 'border-gray-600' : 'border-gray-200'
-                    )}
-                  >
-                    <Phone className="w-5 h-5" />
-                    <span className="text-xs">SMS</span>
-                  </Button>
-                  <Button
-                    variant="outline"
-                    className={cn(
-                      "flex flex-col items-center gap-1 h-auto py-3 rounded-xl border-2 hover:bg-green-50 dark:hover:bg-green-900/20 hover:border-green-300",
-                      theme === 'dark' ? 'border-gray-600' : 'border-gray-200'
-                    )}
-                  >
-                    <MessageCircle className="w-5 h-5" />
-                    <span className="text-xs">WhatsApp</span>
-                  </Button>
-                  <Button
-                    variant="outline"
-                    className={cn(
-                      "flex flex-col items-center gap-1 h-auto py-3 rounded-xl border-2 hover:bg-purple-50 dark:hover:bg-purple-900/20 hover:border-purple-300",
-                      theme === 'dark' ? 'border-gray-600' : 'border-gray-200'
-                    )}
-                  >
-                    <Printer className="w-5 h-5" />
-                    <span className="text-xs">Imprimir</span>
-                  </Button>
-                </div>
-
-                <div className="flex gap-3 pt-4">
-                  <Button
-                    onClick={resetWizard}
-                    className="flex-1 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white rounded-xl h-12 shadow-lg"
-                  >
-                    <Send className="w-4 h-4 mr-2" />
-                    Nueva Orden
-                  </Button>
-                </div>
-              </div>
-            )}
-
-            {/* Navigation Buttons */}
-            {currentStep < 7 && (
-              <div className="flex justify-between mt-8 pt-6 border-t border-gray-200 dark:border-gray-700">
-                <Button
-                  variant="outline"
-                  onClick={handleBack}
-                  disabled={currentStep === 1}
-                  className={cn(
-                    "rounded-xl h-11 px-6",
-                    theme === 'dark' ? 'border-gray-600 hover:bg-gray-700' : 'hover:bg-gray-100'
-                  )}
-                >
-                  <ArrowLeft className="w-4 h-4 mr-2" />
-                  Atrás
-                </Button>
-
-                {currentStep < 6 ? (
-                  <Button
-                    onClick={handleNext}
-                    disabled={!canProceed()}
-                    className="rounded-xl h-11 px-6 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white shadow-lg disabled:opacity-50"
-                  >
-                    Siguiente
-                    <ArrowRight className="w-4 h-4 ml-2" />
-                  </Button>
-                ) : (
-                  <Button
-                    onClick={createOrder}
-                    disabled={!canProceed() || loading}
-                    className="rounded-xl h-11 px-6 bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 text-white shadow-lg disabled:opacity-50"
-                  >
-                    {loading ? (
-                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                    ) : (
-                      <CheckCircle className="w-4 h-4 mr-2" />
-                    )}
-                    Confirmar Orden
-                  </Button>
-                )}
-              </div>
-            )}
-          </motion.div>
-        </AnimatePresence>
+        </motion.div>
       </div>
     </DashboardLayout>
   )
