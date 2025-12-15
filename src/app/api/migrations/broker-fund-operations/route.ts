@@ -74,10 +74,23 @@ export async function POST() {
     console.log('[Migration] Added rejection columns to remittance_orders')
 
     // 4. Drop existing functions to avoid parameter name conflicts
-    await db.query(`DROP FUNCTION IF EXISTS reserve_broker_funds(INTEGER, VARCHAR, DECIMAL, INTEGER, INTEGER) CASCADE`)
-    await db.query(`DROP FUNCTION IF EXISTS complete_broker_delivery(INTEGER, INTEGER) CASCADE`)
-    await db.query(`DROP FUNCTION IF EXISTS release_broker_funds_cancelled(INTEGER, INTEGER, TEXT) CASCADE`)
-    await db.query(`DROP FUNCTION IF EXISTS release_broker_funds_delivered(INTEGER, INTEGER) CASCADE`)
+    // Use DO block to dynamically drop all versions of these functions
+    await db.query(`
+      DO $$
+      DECLARE
+        func_rec RECORD;
+      BEGIN
+        FOR func_rec IN
+          SELECT p.proname, pg_get_function_identity_arguments(p.oid) as args
+          FROM pg_proc p
+          JOIN pg_namespace n ON p.pronamespace = n.oid
+          WHERE n.nspname = 'public'
+          AND p.proname IN ('reserve_broker_funds', 'complete_broker_delivery', 'release_broker_funds_cancelled', 'release_broker_funds_delivered')
+        LOOP
+          EXECUTE format('DROP FUNCTION IF EXISTS %I(%s) CASCADE', func_rec.proname, func_rec.args);
+        END LOOP;
+      END $$
+    `)
     console.log('[Migration] Dropped existing functions')
 
     // 5. Create reserve_broker_funds function
