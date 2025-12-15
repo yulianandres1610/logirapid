@@ -284,11 +284,11 @@ export async function POST(
           await db.query(`
             INSERT INTO wallet_transactions (
               type, source_type, source_company_id, amount, fee, net_amount, currency,
-              status, description, created_by
-            ) VALUES ('debit', 'company', $1, $2, 0, $2, $3, 'completed', $4, $5)
+              status, description, notes, created_by
+            ) VALUES ('debit', 'company', $1, $2, 0, $2, $3, 'completed', $4, $5, $6)
           `, [
             reservation.broker_company_id, reservation.amount, reservation.currency,
-            `Entrega remesa orden #${orderId}`, payload.userId
+            `Débito - Entrega Remesa`, `Orden: ${order.order_number}`, payload.userId
           ])
 
           fundsDeducted = true
@@ -333,11 +333,11 @@ export async function POST(
             await db.query(`
               INSERT INTO wallet_transactions (
                 type, source_type, source_company_id, amount, fee, net_amount, currency,
-                status, description, created_by
-              ) VALUES ('debit', 'company', $1, $2, 0, $2, $3, 'completed', $4, $5)
+                status, description, notes, created_by
+              ) VALUES ('debit', 'company', $1, $2, 0, $2, $3, 'completed', $4, $5, $6)
             `, [
               payload.companyId, deliveryAmount, deliveryCurrencyFromOrder,
-              `Entrega remesa orden #${orderId}`, payload.userId
+              `Débito - Entrega Remesa`, `Orden: ${order.order_number}`, payload.userId
             ])
 
             fundsDeducted = true

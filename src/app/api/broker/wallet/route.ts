@@ -236,16 +236,26 @@ export async function GET(request: NextRequest) {
       history = historyResult.rows.map(row => {
         const isIncoming = row.target_company_id === payload.companyId
         const isCashDelivery = row.source_type === 'cash_delivery'
+        const isDebit = row.type === 'debit'
+
+        // Build the type label with order info if available
+        let typeLabel = typeLabels[row.type] || row.type
+        if (isCashDelivery) {
+          typeLabel = 'Entrega de Efectivo'
+        } else if (isDebit && row.notes) {
+          // For debits, show the order number from notes
+          typeLabel = `${row.description || 'Débito'}${row.notes ? ` (${row.notes})` : ''}`
+        }
 
         return {
           id: row.id,
           transactionNumber: row.transaction_number,
           type: row.type,
-          typeLabel: isCashDelivery ? 'Entrega de Efectivo' : (typeLabels[row.type] || row.type),
+          typeLabel,
           direction: isIncoming ? 'in' : 'out',
           directionLabel: isIncoming ? 'Entrada' : 'Salida',
           amount: parseFloat(row.amount) || 0,
-          amountFormatted: `$${(parseFloat(row.amount) || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}`,
+          amountFormatted: `${(parseFloat(row.amount) || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}`,
           fee: parseFloat(row.fee) || 0,
           netAmount: parseFloat(row.net_amount) || 0,
           currency: row.currency || 'USD',
