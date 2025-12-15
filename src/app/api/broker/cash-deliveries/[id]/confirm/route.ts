@@ -143,12 +143,15 @@ export async function POST(
       const balanceAfter = balanceBefore + amountToAdd
       const walletNumber = broker.wallet_number
 
-      // Update company wallet balance
+      // Update company wallet balance - update BOTH columns to keep them in sync
+      // walletbalance is numeric, "walletBalance" is varchar (legacy)
       await client.query(`
         UPDATE companies
-        SET walletbalance = $1
+        SET
+          walletbalance = COALESCE(walletbalance, 0) + $1,
+          "walletBalance" = (COALESCE("walletBalance"::numeric, walletbalance, 0) + $1)::varchar
         WHERE id = $2
-      `, [balanceAfter, brokerCompanyId])
+      `, [amountToAdd, brokerCompanyId])
 
       // Create transaction record in wallet_transactions
       const transactionResult = await client.query(`
