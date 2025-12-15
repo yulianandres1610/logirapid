@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useRef } from 'react'
+import { useEffect, useState } from 'react'
 import { motion, useSpring, useTransform } from 'framer-motion'
 import {
   Wallet,
@@ -13,17 +13,19 @@ import {
   Truck,
   AlertTriangle,
   RefreshCw,
-  Activity,
-  ChevronRight,
+  TrendingUp,
+  TrendingDown,
+  Eye,
+  Shield,
   Zap,
-  Target,
-  ArrowUpRight,
-  ArrowDownLeft
+  Calendar,
+  User,
+  DollarSign,
+  BarChart3
 } from 'lucide-react'
 import Link from 'next/link'
 import { DashboardLayout } from '@/components/layout/dashboard-layout'
 import { ProtectedRoute } from '@/components/protected-route'
-import { useAuth } from '@/hooks/useAuth'
 
 interface WalletData {
   companyName: string
@@ -61,13 +63,6 @@ interface RecentOrder {
   createdAt: string
 }
 
-interface CashDeliverySummary {
-  pending: number
-  receiving: number
-  validating: number
-  completed: number
-}
-
 interface CashDelivery {
   id: number
   order_number: string
@@ -83,25 +78,16 @@ function AnimatedCounter({
   value,
   prefix = '',
   suffix = '',
-  decimals = 0,
-  duration = 1
+  decimals = 0
 }: {
   value: number
   prefix?: string
   suffix?: string
   decimals?: number
-  duration?: number
 }) {
-  const spring = useSpring(0, {
-    stiffness: 50,
-    damping: 20,
-    duration: duration * 1000
-  })
-
+  const spring = useSpring(0, { stiffness: 50, damping: 20 })
   const display = useTransform(spring, (current) => {
-    if (decimals > 0) {
-      return `${prefix}${current.toFixed(decimals)}${suffix}`
-    }
+    if (decimals > 0) return `${prefix}${current.toFixed(decimals)}${suffix}`
     return `${prefix}${Math.round(current).toLocaleString()}${suffix}`
   })
 
@@ -112,12 +98,10 @@ function AnimatedCounter({
   return <motion.span>{display}</motion.span>
 }
 
-// Donut Chart Component
-function DonutChart({ percentage, size = 80, strokeWidth = 8 }: {
-  percentage: number
-  size?: number
-  strokeWidth?: number
-}) {
+// Circular Progress
+function CircularProgress({ value, max, size = 120 }: { value: number; max: number; size?: number }) {
+  const percentage = max > 0 ? (value / max) * 100 : 0
+  const strokeWidth = 10
   const radius = (size - strokeWidth) / 2
   const circumference = radius * 2 * Math.PI
   const offset = circumference - (percentage / 100) * circumference
@@ -148,49 +132,21 @@ function DonutChart({ percentage, size = 80, strokeWidth = 8 }: {
           className="stroke-[#cc0a46] dark:stroke-[#2a5caa]"
         />
       </svg>
-      <div className="absolute inset-0 flex items-center justify-center">
-        <span className="text-lg font-bold text-gray-900 dark:text-white">
-          <AnimatedCounter value={percentage} suffix="%" />
+      <div className="absolute inset-0 flex flex-col items-center justify-center">
+        <span className="text-2xl font-bold text-gray-900 dark:text-white">
+          <AnimatedCounter value={value} />
         </span>
+        <span className="text-xs text-gray-500 dark:text-gray-400">de {max}</span>
       </div>
     </div>
   )
 }
 
-// Mini Bar Chart Component
-function MiniBarChart({ data, maxValue }: { data: { label: string; value: number }[]; maxValue: number }) {
-  return (
-    <div className="flex items-end gap-3 h-20">
-      {data.map((item, index) => {
-        const height = maxValue > 0 ? (item.value / maxValue) * 100 : 0
-        return (
-          <div key={item.label} className="flex-1 flex flex-col items-center gap-1">
-            <span className="text-xs font-semibold text-gray-900 dark:text-white">
-              {item.value}
-            </span>
-            <motion.div
-              className="w-full rounded-t bg-[#cc0a46] dark:bg-[#2a5caa]"
-              initial={{ height: 0 }}
-              animate={{ height: `${Math.max(height, 8)}%` }}
-              transition={{ duration: 0.8, delay: index * 0.1, ease: "easeOut" }}
-            />
-            <span className="text-[10px] text-gray-500 dark:text-gray-400 text-center leading-tight">
-              {item.label}
-            </span>
-          </div>
-        )
-      })}
-    </div>
-  )
-}
-
 export default function BrokerDashboardPage() {
-  const { user } = useAuth()
   const [walletData, setWalletData] = useState<WalletData | null>(null)
   const [stats, setStats] = useState<OrderStats | null>(null)
   const [recentOrders, setRecentOrders] = useState<RecentOrder[]>([])
-  const [cashDeliverySummary, setCashDeliverySummary] = useState<CashDeliverySummary | null>(null)
-  const [urgentCashDeliveries, setUrgentCashDeliveries] = useState<CashDelivery[]>([])
+  const [cashDeliveries, setCashDeliveries] = useState<CashDelivery[]>([])
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
 
@@ -207,7 +163,7 @@ export default function BrokerDashboardPage() {
     try {
       const [walletRes, ordersRes, cashRes] = await Promise.all([
         fetch('/api/broker/wallet'),
-        fetch('/api/broker/orders?limit=10'),
+        fetch('/api/broker/orders?limit=5'),
         fetch('/api/broker/cash-deliveries?includeCompleted=false')
       ])
 
@@ -227,11 +183,9 @@ export default function BrokerDashboardPage() {
       if (cashRes.ok) {
         const cashData = await cashRes.json()
         if (cashData.success) {
-          setCashDeliverySummary(cashData.data.summary)
-          const urgent = (cashData.data.deliveries || [])
-            .filter((d: CashDelivery) => ['validating', 'pending_reception', 'in_transit'].includes(d.status))
-            .slice(0, 3)
-          setUrgentCashDeliveries(urgent)
+          const pending = (cashData.data.deliveries || [])
+            .filter((d: CashDelivery) => !['completed', 'cancelled'].includes(d.status))
+          setCashDeliveries(pending)
         }
       }
     } catch (error) {
@@ -247,39 +201,30 @@ export default function BrokerDashboardPage() {
     return `$${amount.toFixed(2)} ${currency}`
   }
 
-  const getStatusConfig = (status: string) => {
-    const configs: Record<string, { bg: string, text: string, icon: any, label: string }> = {
-      pending: { bg: 'bg-amber-100 dark:bg-amber-900/30', text: 'text-amber-700 dark:text-amber-300', icon: Clock, label: 'Pendiente' },
-      confirmed: { bg: 'bg-blue-100 dark:bg-blue-900/30', text: 'text-blue-700 dark:text-blue-300', icon: CheckCircle, label: 'Confirmada' },
-      in_delivery: { bg: 'bg-purple-100 dark:bg-purple-900/30', text: 'text-purple-700 dark:text-purple-300', icon: Truck, label: 'En Entrega' },
-      delivered: { bg: 'bg-emerald-100 dark:bg-emerald-900/30', text: 'text-emerald-700 dark:text-emerald-300', icon: CheckCircle, label: 'Entregada' },
-      cancelled: { bg: 'bg-red-100 dark:bg-red-900/30', text: 'text-red-700 dark:text-red-300', icon: AlertTriangle, label: 'Cancelada' }
+  const getStatusBadge = (status: string) => {
+    const configs: Record<string, { bg: string; text: string; label: string }> = {
+      pending: { bg: 'bg-amber-100 dark:bg-amber-900/30', text: 'text-amber-700 dark:text-amber-300', label: 'Pendiente' },
+      confirmed: { bg: 'bg-blue-100 dark:bg-blue-900/30', text: 'text-blue-700 dark:text-blue-300', label: 'Confirmada' },
+      in_delivery: { bg: 'bg-purple-100 dark:bg-purple-900/30', text: 'text-purple-700 dark:text-purple-300', label: 'En Entrega' },
+      delivered: { bg: 'bg-green-100 dark:bg-green-900/30', text: 'text-green-700 dark:text-green-300', label: 'Entregada' },
+      validating: { bg: 'bg-orange-100 dark:bg-orange-900/30', text: 'text-orange-700 dark:text-orange-300', label: 'Validando OTP' },
+      pending_reception: { bg: 'bg-purple-100 dark:bg-purple-900/30', text: 'text-purple-700 dark:text-purple-300', label: 'Recibiendo' },
+      in_transit: { bg: 'bg-blue-100 dark:bg-blue-900/30', text: 'text-blue-700 dark:text-blue-300', label: 'En Tránsito' }
     }
     return configs[status] || configs.pending
   }
 
-  // Calculate metrics
+  // Metrics
   const pendingCount = stats?.pending || 0
-  const confirmedCount = stats?.confirmed || 0
-  const inDeliveryCount = stats?.inDelivery || 0
+  const activeCount = (stats?.confirmed || 0) + (stats?.inDelivery || 0)
   const deliveredCount = stats?.delivered || 0
   const totalOrders = stats?.total || 0
   const completionRate = totalOrders > 0 ? Math.round((deliveredCount / totalOrders) * 100) : 0
 
-  // Chart data
-  const orderChartData = [
-    { label: 'Pend.', value: pendingCount },
-    { label: 'Conf.', value: confirmedCount },
-    { label: 'Entreg.', value: inDeliveryCount },
-    { label: 'Comp.', value: deliveredCount },
-  ]
-  const maxOrderValue = Math.max(...orderChartData.map(d => d.value), 1)
-
   // Alerts
   const hasLowBalance = (walletData?.walletBalance || 0) < 100
-  const hasUrgentCashDeliveries = urgentCashDeliveries.length > 0
+  const hasPendingCash = cashDeliveries.length > 0
   const hasPendingOrders = pendingCount > 0
-  const totalAlerts = (hasLowBalance ? 1 : 0) + (hasUrgentCashDeliveries ? 1 : 0) + (hasPendingOrders ? 1 : 0)
 
   if (loading) {
     return (
@@ -287,16 +232,10 @@ export default function BrokerDashboardPage() {
         <DashboardLayout>
           <div className="p-6">
             <div className="animate-pulse space-y-6">
-              <div className="h-10 bg-gray-200 dark:bg-gray-700 rounded-lg w-1/3"></div>
-              <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-                {[1, 2, 3, 4].map(i => (
-                  <div key={i} className="h-32 bg-gray-200 dark:bg-gray-700 rounded-xl"></div>
-                ))}
-              </div>
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-                {[1, 2, 3].map(i => (
-                  <div key={i} className="h-40 bg-gray-200 dark:bg-gray-700 rounded-xl"></div>
-                ))}
+              <div className="h-48 bg-gray-200 dark:bg-gray-700 rounded-2xl"></div>
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <div className="h-64 bg-gray-200 dark:bg-gray-700 rounded-2xl lg:col-span-2"></div>
+                <div className="h-64 bg-gray-200 dark:bg-gray-700 rounded-2xl"></div>
               </div>
             </div>
           </div>
@@ -309,567 +248,437 @@ export default function BrokerDashboardPage() {
     <ProtectedRoute>
       <DashboardLayout>
         <div className="p-6 space-y-6">
-          {/* Header */}
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <div>
-              <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
-                Dashboard
-              </h1>
-              <div className="flex items-center gap-2 mt-1">
-                <p className="text-gray-500 dark:text-gray-400">
-                  {walletData?.companyName || 'Broker'}
-                </p>
-                {walletData?.municipality && walletData?.province && (
-                  <span className="flex items-center gap-1 text-sm text-gray-400 dark:text-gray-500">
-                    <MapPin className="w-3 h-3" />
-                    {walletData.municipality}, {walletData.province}
-                  </span>
-                )}
-              </div>
+          {/* Hero Wallet Card */}
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-[#cc0a46] to-[#8b0731] dark:from-[#2a5caa] dark:to-[#1a3d6e] p-6 text-white"
+          >
+            {/* Background Pattern */}
+            <div className="absolute inset-0 opacity-10">
+              <div className="absolute -right-20 -top-20 w-64 h-64 rounded-full bg-white/20"></div>
+              <div className="absolute -left-10 -bottom-10 w-40 h-40 rounded-full bg-white/10"></div>
             </div>
 
-            <button
-              onClick={() => fetchDashboardData()}
-              disabled={refreshing}
-              className="flex items-center gap-2 px-4 py-2.5 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-xl transition-all text-gray-700 dark:text-gray-300 border border-gray-200 dark:border-gray-700"
-            >
-              <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
-              <span className="hidden sm:inline">Actualizar</span>
-            </button>
-          </div>
+            <div className="relative z-10">
+              <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
+                {/* Left: Balance Info */}
+                <div>
+                  <div className="flex items-center gap-3 mb-4">
+                    <div className="p-3 rounded-xl bg-white/20 backdrop-blur-sm">
+                      <Wallet className="w-6 h-6" />
+                    </div>
+                    <div>
+                      <p className="text-white/70 text-sm font-medium">Balance Disponible</p>
+                      <p className="text-3xl lg:text-4xl font-bold">
+                        <AnimatedCounter value={walletData?.walletBalance || 0} prefix="$" decimals={2} />
+                      </p>
+                    </div>
+                  </div>
 
-          {/* Alerts Row */}
-          {totalAlerts > 0 && (
+                  <div className="flex items-center gap-4 text-sm">
+                    <span className="flex items-center gap-1.5 text-white/80">
+                      <MapPin className="w-4 h-4" />
+                      {walletData?.municipality || 'Sin ubicación'}, {walletData?.province || ''}
+                    </span>
+                    {walletData?.isActive ? (
+                      <span className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-green-500/30 text-green-100 text-xs">
+                        <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse"></span>
+                        Activo
+                      </span>
+                    ) : (
+                      <span className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-red-500/30 text-red-100 text-xs">
+                        Inactivo
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                {/* Right: Quick Stats */}
+                <div className="flex gap-6">
+                  <div className="text-center">
+                    <div className="flex items-center justify-center gap-1 text-green-300 mb-1">
+                      <TrendingUp className="w-4 h-4" />
+                      <span className="text-xs">Depósitos</span>
+                    </div>
+                    <p className="text-xl font-bold">
+                      <AnimatedCounter value={walletData?.stats?.totalDeposits || 0} prefix="$" />
+                    </p>
+                  </div>
+                  <div className="w-px bg-white/20"></div>
+                  <div className="text-center">
+                    <div className="flex items-center justify-center gap-1 text-red-300 mb-1">
+                      <TrendingDown className="w-4 h-4" />
+                      <span className="text-xs">Retiros</span>
+                    </div>
+                    <p className="text-xl font-bold">
+                      <AnimatedCounter value={walletData?.stats?.totalWithdrawals || 0} prefix="$" />
+                    </p>
+                  </div>
+                  <div className="w-px bg-white/20"></div>
+                  <div className="text-center">
+                    <div className="flex items-center justify-center gap-1 text-blue-300 mb-1">
+                      <BarChart3 className="w-4 h-4" />
+                      <span className="text-xs">Transacciones</span>
+                    </div>
+                    <p className="text-xl font-bold">
+                      <AnimatedCounter value={walletData?.stats?.totalTransactions || 0} />
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex flex-wrap gap-3 mt-6">
+                <Link href="/dashboard/broker/wallet">
+                  <button className="flex items-center gap-2 px-4 py-2 rounded-xl bg-white/20 hover:bg-white/30 backdrop-blur-sm transition-all text-sm font-medium">
+                    <Eye className="w-4 h-4" />
+                    Ver Movimientos
+                  </button>
+                </Link>
+                <button
+                  onClick={() => fetchDashboardData()}
+                  disabled={refreshing}
+                  className="flex items-center gap-2 px-4 py-2 rounded-xl bg-white/10 hover:bg-white/20 backdrop-blur-sm transition-all text-sm font-medium"
+                >
+                  <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
+                  Actualizar
+                </button>
+              </div>
+            </div>
+          </motion.div>
+
+          {/* Alerts Section */}
+          {(hasLowBalance || hasPendingCash || hasPendingOrders) && (
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               {hasLowBalance && (
                 <motion.div
-                  initial={{ opacity: 0, y: -10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  className="flex items-center gap-3 p-4 rounded-xl bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800"
+                  initial={{ opacity: 0, x: -20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  className="flex items-center gap-4 p-4 rounded-xl bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800"
                 >
-                  <div className="p-2 rounded-lg bg-[#cc0a46] dark:bg-[#2a5caa]">
+                  <div className="p-2.5 rounded-xl bg-red-500">
                     <AlertTriangle className="w-5 h-5 text-white" />
                   </div>
                   <div className="flex-1">
-                    <p className="font-semibold text-red-800 dark:text-red-200 text-sm">Balance bajo</p>
-                    <p className="text-xs text-red-600 dark:text-red-400">Recarga tu wallet</p>
+                    <p className="font-semibold text-red-800 dark:text-red-200">Balance bajo</p>
+                    <p className="text-xs text-red-600 dark:text-red-400">Tu balance está por debajo de $100</p>
                   </div>
                 </motion.div>
               )}
 
               {hasPendingOrders && (
-                <motion.div
-                  initial={{ opacity: 0, y: -10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.1 }}
-                  className="flex items-center gap-3 p-4 rounded-xl bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800"
-                >
-                  <div className="p-2 rounded-lg bg-[#cc0a46] dark:bg-[#2a5caa]">
-                    <Package className="w-5 h-5 text-white" />
-                  </div>
-                  <div className="flex-1">
-                    <p className="font-semibold text-amber-800 dark:text-amber-200 text-sm">{pendingCount} orden{pendingCount > 1 ? 'es' : ''}</p>
-                    <p className="text-xs text-amber-600 dark:text-amber-400">Esperando confirmación</p>
-                  </div>
-                  <Link href="/dashboard/broker/orders">
-                    <ChevronRight className="w-5 h-5 text-amber-500" />
-                  </Link>
-                </motion.div>
+                <Link href="/dashboard/broker/orders">
+                  <motion.div
+                    initial={{ opacity: 0, x: -20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: 0.1 }}
+                    className="flex items-center gap-4 p-4 rounded-xl bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 hover:border-amber-300 dark:hover:border-amber-700 transition-colors cursor-pointer"
+                  >
+                    <div className="p-2.5 rounded-xl bg-amber-500">
+                      <Package className="w-5 h-5 text-white" />
+                    </div>
+                    <div className="flex-1">
+                      <p className="font-semibold text-amber-800 dark:text-amber-200">{pendingCount} órdenes pendientes</p>
+                      <p className="text-xs text-amber-600 dark:text-amber-400">Esperando tu confirmación</p>
+                    </div>
+                    <ArrowRight className="w-5 h-5 text-amber-500" />
+                  </motion.div>
+                </Link>
               )}
 
-              {hasUrgentCashDeliveries && (
-                <motion.div
-                  initial={{ opacity: 0, y: -10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.2 }}
-                  className="flex items-center gap-3 p-4 rounded-xl bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-800"
-                >
-                  <div className="p-2 rounded-lg bg-[#cc0a46] dark:bg-[#2a5caa]">
-                    <Banknote className="w-5 h-5 text-white" />
-                  </div>
-                  <div className="flex-1">
-                    <p className="font-semibold text-purple-800 dark:text-purple-200 text-sm">Efectivo pendiente</p>
-                    <p className="text-xs text-purple-600 dark:text-purple-400">{urgentCashDeliveries.length} entrega{urgentCashDeliveries.length > 1 ? 's' : ''}</p>
-                  </div>
-                  <Link href="/dashboard/broker/cash-deliveries">
-                    <ChevronRight className="w-5 h-5 text-purple-500" />
-                  </Link>
-                </motion.div>
+              {hasPendingCash && (
+                <Link href="/dashboard/broker/cash-deliveries">
+                  <motion.div
+                    initial={{ opacity: 0, x: -20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: 0.2 }}
+                    className="flex items-center gap-4 p-4 rounded-xl bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-800 hover:border-purple-300 dark:hover:border-purple-700 transition-colors cursor-pointer"
+                  >
+                    <div className="p-2.5 rounded-xl bg-purple-500">
+                      <Banknote className="w-5 h-5 text-white" />
+                    </div>
+                    <div className="flex-1">
+                      <p className="font-semibold text-purple-800 dark:text-purple-200">{cashDeliveries.length} entregas de efectivo</p>
+                      <p className="text-xs text-purple-600 dark:text-purple-400">Pendientes de recibir</p>
+                    </div>
+                    <ArrowRight className="w-5 h-5 text-purple-500" />
+                  </motion.div>
+                </Link>
               )}
             </div>
           )}
 
-          {/* Main Stats - All Equal Cards */}
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-            {/* Balance Card */}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="bg-white dark:bg-gray-800 rounded-xl p-5 border border-gray-200 dark:border-gray-700"
-            >
-              <div className="flex items-center gap-3 mb-4">
-                <div className="p-2.5 rounded-xl bg-[#cc0a46] dark:bg-[#2a5caa]">
-                  <Wallet className="w-5 h-5 text-white" />
+          {/* Main Content Grid */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {/* Left Column: Orders Overview + Quick Actions */}
+            <div className="lg:col-span-2 space-y-6">
+              {/* Order Stats Grid */}
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.1 }}
+                className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 p-6"
+              >
+                <div className="flex items-center justify-between mb-6">
+                  <h2 className="text-lg font-bold text-gray-900 dark:text-white">Resumen de Órdenes</h2>
+                  <Link href="/dashboard/broker/orders" className="text-sm text-[#cc0a46] dark:text-[#2a5caa] hover:underline flex items-center gap-1">
+                    Ver todas <ArrowRight className="w-4 h-4" />
+                  </Link>
                 </div>
-                <span className="text-sm font-medium text-gray-500 dark:text-gray-400">Balance</span>
-              </div>
-              <p className="text-2xl font-bold text-gray-900 dark:text-white">
-                <AnimatedCounter
-                  value={walletData?.walletBalance || 0}
-                  prefix="$"
-                  decimals={2}
-                />
-              </p>
-              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                {walletData?.currency || 'USD'} disponible
-              </p>
-            </motion.div>
 
-            {/* Pending Card */}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.05 }}
-              className="bg-white dark:bg-gray-800 rounded-xl p-5 border border-gray-200 dark:border-gray-700"
-            >
-              <div className="flex items-center gap-3 mb-4">
-                <div className="p-2.5 rounded-xl bg-[#cc0a46] dark:bg-[#2a5caa]">
-                  <Clock className="w-5 h-5 text-white" />
-                </div>
-                <span className="text-sm font-medium text-gray-500 dark:text-gray-400">Pendientes</span>
-              </div>
-              <p className="text-2xl font-bold text-gray-900 dark:text-white">
-                <AnimatedCounter value={pendingCount} />
-              </p>
-              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                Por confirmar
-              </p>
-            </motion.div>
-
-            {/* In Process Card */}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.1 }}
-              className="bg-white dark:bg-gray-800 rounded-xl p-5 border border-gray-200 dark:border-gray-700"
-            >
-              <div className="flex items-center gap-3 mb-4">
-                <div className="p-2.5 rounded-xl bg-[#cc0a46] dark:bg-[#2a5caa]">
-                  <Truck className="w-5 h-5 text-white" />
-                </div>
-                <span className="text-sm font-medium text-gray-500 dark:text-gray-400">En Proceso</span>
-              </div>
-              <p className="text-2xl font-bold text-gray-900 dark:text-white">
-                <AnimatedCounter value={confirmedCount + inDeliveryCount} />
-              </p>
-              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                Activas
-              </p>
-            </motion.div>
-
-            {/* Delivered Card */}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.15 }}
-              className="bg-white dark:bg-gray-800 rounded-xl p-5 border border-gray-200 dark:border-gray-700"
-            >
-              <div className="flex items-center gap-3 mb-4">
-                <div className="p-2.5 rounded-xl bg-[#cc0a46] dark:bg-[#2a5caa]">
-                  <CheckCircle className="w-5 h-5 text-white" />
-                </div>
-                <span className="text-sm font-medium text-gray-500 dark:text-gray-400">Entregadas</span>
-              </div>
-              <p className="text-2xl font-bold text-gray-900 dark:text-white">
-                <AnimatedCounter value={deliveredCount} />
-              </p>
-              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                Completadas
-              </p>
-            </motion.div>
-          </div>
-
-          {/* Second Row - Wallet Stats & Performance */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-            {/* Deposits Card */}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.2 }}
-              className="bg-white dark:bg-gray-800 rounded-xl p-5 border border-gray-200 dark:border-gray-700"
-            >
-              <div className="flex items-center gap-3 mb-4">
-                <div className="p-2.5 rounded-xl bg-[#cc0a46] dark:bg-[#2a5caa]">
-                  <ArrowDownLeft className="w-5 h-5 text-white" />
-                </div>
-                <span className="text-sm font-medium text-gray-500 dark:text-gray-400">Depósitos</span>
-              </div>
-              <p className="text-2xl font-bold text-gray-900 dark:text-white">
-                <AnimatedCounter
-                  value={walletData?.stats?.totalDeposits || 0}
-                  prefix="$"
-                  decimals={0}
-                />
-              </p>
-              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                Total acumulado
-              </p>
-            </motion.div>
-
-            {/* Withdrawals Card */}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.25 }}
-              className="bg-white dark:bg-gray-800 rounded-xl p-5 border border-gray-200 dark:border-gray-700"
-            >
-              <div className="flex items-center gap-3 mb-4">
-                <div className="p-2.5 rounded-xl bg-[#cc0a46] dark:bg-[#2a5caa]">
-                  <ArrowUpRight className="w-5 h-5 text-white" />
-                </div>
-                <span className="text-sm font-medium text-gray-500 dark:text-gray-400">Retiros</span>
-              </div>
-              <p className="text-2xl font-bold text-gray-900 dark:text-white">
-                <AnimatedCounter
-                  value={walletData?.stats?.totalWithdrawals || 0}
-                  prefix="$"
-                  decimals={0}
-                />
-              </p>
-              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                Total acumulado
-              </p>
-            </motion.div>
-
-            {/* Transactions Card */}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.3 }}
-              className="bg-white dark:bg-gray-800 rounded-xl p-5 border border-gray-200 dark:border-gray-700"
-            >
-              <div className="flex items-center gap-3 mb-4">
-                <div className="p-2.5 rounded-xl bg-[#cc0a46] dark:bg-[#2a5caa]">
-                  <Activity className="w-5 h-5 text-white" />
-                </div>
-                <span className="text-sm font-medium text-gray-500 dark:text-gray-400">Transacciones</span>
-              </div>
-              <p className="text-2xl font-bold text-gray-900 dark:text-white">
-                <AnimatedCounter value={walletData?.stats?.totalTransactions || 0} />
-              </p>
-              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                Movimientos totales
-              </p>
-            </motion.div>
-          </div>
-
-          {/* Performance & Chart Row */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            {/* Performance Card */}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.35 }}
-              className="bg-white dark:bg-gray-800 rounded-xl p-6 border border-gray-200 dark:border-gray-700"
-            >
-              <div className="flex items-center gap-3 mb-6">
-                <div className="p-2.5 rounded-xl bg-[#cc0a46] dark:bg-[#2a5caa]">
-                  <Target className="w-5 h-5 text-white" />
-                </div>
-                <span className="text-sm font-medium text-gray-500 dark:text-gray-400">Tasa de Completadas</span>
-              </div>
-              <div className="flex items-center justify-between">
-                <DonutChart percentage={completionRate} size={100} strokeWidth={10} />
-                <div className="text-right">
-                  <div className="grid grid-cols-2 gap-x-6 gap-y-2 text-sm">
-                    <div>
-                      <p className="text-gray-500 dark:text-gray-400">Total</p>
-                      <p className="font-bold text-gray-900 dark:text-white">
-                        <AnimatedCounter value={totalOrders} />
-                      </p>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  {/* Pending */}
+                  <div className="p-4 rounded-xl bg-amber-50 dark:bg-amber-900/20 border border-amber-100 dark:border-amber-800">
+                    <div className="flex items-center gap-2 mb-2">
+                      <Clock className="w-4 h-4 text-amber-600 dark:text-amber-400" />
+                      <span className="text-xs font-medium text-amber-600 dark:text-amber-400">Pendientes</span>
                     </div>
-                    <div>
-                      <p className="text-gray-500 dark:text-gray-400">Completadas</p>
-                      <p className="font-bold text-[#cc0a46] dark:text-[#2a5caa]">
-                        <AnimatedCounter value={deliveredCount} />
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </motion.div>
-
-            {/* Orders Chart Card */}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.4 }}
-              className="bg-white dark:bg-gray-800 rounded-xl p-6 border border-gray-200 dark:border-gray-700"
-            >
-              <div className="flex items-center gap-3 mb-6">
-                <div className="p-2.5 rounded-xl bg-[#cc0a46] dark:bg-[#2a5caa]">
-                  <Package className="w-5 h-5 text-white" />
-                </div>
-                <span className="text-sm font-medium text-gray-500 dark:text-gray-400">Distribución de Órdenes</span>
-              </div>
-              <MiniBarChart data={orderChartData} maxValue={maxOrderValue} />
-            </motion.div>
-          </div>
-
-          {/* Quick Actions */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <Link href="/dashboard/broker/orders">
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.45 }}
-                whileHover={{ scale: 1.02 }}
-                whileTap={{ scale: 0.98 }}
-                className="bg-[#cc0a46] dark:bg-[#2a5caa] rounded-xl p-5 text-white cursor-pointer"
-              >
-                <div className="flex items-center justify-between">
-                  <div>
-                    <h3 className="text-lg font-bold">Órdenes de Remesas</h3>
-                    <p className="text-white/70 text-sm mt-1">Gestionar entregas</p>
-                    {pendingCount > 0 && (
-                      <span className="inline-flex items-center gap-1.5 mt-3 text-xs px-3 py-1.5 rounded-full bg-white/20 font-medium">
-                        <Zap className="w-3 h-3" /> {pendingCount} pendiente{pendingCount > 1 ? 's' : ''}
-                      </span>
-                    )}
-                  </div>
-                  <Package className="w-10 h-10 text-white/50" />
-                </div>
-              </motion.div>
-            </Link>
-
-            <Link href="/dashboard/broker/cash-deliveries">
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.5 }}
-                whileHover={{ scale: 1.02 }}
-                whileTap={{ scale: 0.98 }}
-                className="bg-[#cc0a46] dark:bg-[#2a5caa] rounded-xl p-5 text-white cursor-pointer"
-              >
-                <div className="flex items-center justify-between">
-                  <div>
-                    <h3 className="text-lg font-bold">Entregas de Efectivo</h3>
-                    <p className="text-white/70 text-sm mt-1">Recibir cash</p>
-                    {((cashDeliverySummary?.pending || 0) + (cashDeliverySummary?.receiving || 0)) > 0 && (
-                      <span className="inline-flex items-center gap-1.5 mt-3 text-xs px-3 py-1.5 rounded-full bg-white/20 font-medium">
-                        <Zap className="w-3 h-3" /> {(cashDeliverySummary?.pending || 0) + (cashDeliverySummary?.receiving || 0)} activa{((cashDeliverySummary?.pending || 0) + (cashDeliverySummary?.receiving || 0)) > 1 ? 's' : ''}
-                      </span>
-                    )}
-                  </div>
-                  <Banknote className="w-10 h-10 text-white/50" />
-                </div>
-              </motion.div>
-            </Link>
-
-            <Link href="/dashboard/broker/wallet">
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.55 }}
-                whileHover={{ scale: 1.02 }}
-                whileTap={{ scale: 0.98 }}
-                className="bg-[#cc0a46] dark:bg-[#2a5caa] rounded-xl p-5 text-white cursor-pointer"
-              >
-                <div className="flex items-center justify-between">
-                  <div>
-                    <h3 className="text-lg font-bold">Mi Wallet</h3>
-                    <p className="text-white/70 text-sm mt-1">Balance y movimientos</p>
-                    <span className="inline-flex items-center gap-1.5 mt-3 text-xs px-3 py-1.5 rounded-full bg-white/20 font-medium">
-                      {walletData?.walletBalanceFormatted || '$0.00'}
-                    </span>
-                  </div>
-                  <Wallet className="w-10 h-10 text-white/50" />
-                </div>
-              </motion.div>
-            </Link>
-          </div>
-
-          {/* Recent Orders & Cash Deliveries */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            {/* Recent Orders */}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.6 }}
-              className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden"
-            >
-              <div className="p-5 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 rounded-lg bg-[#cc0a46] dark:bg-[#2a5caa]">
-                    <Package className="w-4 h-4 text-white" />
-                  </div>
-                  <h2 className="font-semibold text-gray-900 dark:text-white">Órdenes Recientes</h2>
-                </div>
-                <Link
-                  href="/dashboard/broker/orders"
-                  className="text-[#cc0a46] dark:text-[#2a5caa] text-sm flex items-center gap-1 font-medium hover:underline"
-                >
-                  Ver todas <ArrowRight className="w-4 h-4" />
-                </Link>
-              </div>
-
-              {recentOrders.length > 0 ? (
-                <div className="divide-y divide-gray-100 dark:divide-gray-700 max-h-[350px] overflow-y-auto">
-                  {recentOrders.slice(0, 5).map((order, index) => {
-                    const statusConfig = getStatusConfig(order.status)
-                    const StatusIcon = statusConfig.icon
-
-                    return (
-                      <motion.div
-                        key={order.id}
-                        initial={{ opacity: 0, x: -10 }}
-                        animate={{ opacity: 1, x: 0 }}
-                        transition={{ delay: 0.65 + index * 0.05 }}
-                        className="p-4 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
-                      >
-                        <div className="flex items-center justify-between gap-4">
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2 mb-1">
-                              <span className="font-medium text-gray-900 dark:text-white text-sm">
-                                {order.orderNumber}
-                              </span>
-                              <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${statusConfig.bg} ${statusConfig.text}`}>
-                                <StatusIcon className="w-3 h-3" />
-                                {statusConfig.label}
-                              </span>
-                            </div>
-                            <div className="flex items-center gap-3 text-xs text-gray-500 dark:text-gray-400">
-                              <span className="truncate">{order.recipientName}</span>
-                              <span className="flex items-center gap-1 shrink-0">
-                                <MapPin className="w-3 h-3" />
-                                {order.recipientMunicipality}
-                              </span>
-                            </div>
-                          </div>
-                          <div className="text-right shrink-0">
-                            <p className="font-semibold text-gray-900 dark:text-white text-sm">
-                              {formatCurrency(order.receiveAmount, order.receiveCurrency)}
-                            </p>
-                            <p className="text-xs text-gray-400">
-                              {new Date(order.createdAt).toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })}
-                            </p>
-                          </div>
-                        </div>
-                      </motion.div>
-                    )
-                  })}
-                </div>
-              ) : (
-                <div className="p-12 text-center">
-                  <div className="w-14 h-14 mx-auto mb-4 rounded-xl bg-gray-100 dark:bg-gray-700 flex items-center justify-center">
-                    <Package className="w-7 h-7 text-gray-400" />
-                  </div>
-                  <p className="text-gray-500 dark:text-gray-400 font-medium">No hay órdenes recientes</p>
-                  <p className="text-sm text-gray-400 dark:text-gray-500 mt-1">Las nuevas órdenes aparecerán aquí</p>
-                </div>
-              )}
-            </motion.div>
-
-            {/* Pending Cash Deliveries */}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.65 }}
-              className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden"
-            >
-              <div className="p-5 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 rounded-lg bg-[#cc0a46] dark:bg-[#2a5caa]">
-                    <Banknote className="w-4 h-4 text-white" />
-                  </div>
-                  <h2 className="font-semibold text-gray-900 dark:text-white">Entregas de Efectivo</h2>
-                </div>
-                <Link
-                  href="/dashboard/broker/cash-deliveries"
-                  className="text-[#cc0a46] dark:text-[#2a5caa] text-sm flex items-center gap-1 font-medium hover:underline"
-                >
-                  Ver todas <ArrowRight className="w-4 h-4" />
-                </Link>
-              </div>
-
-              {/* Summary */}
-              <div className="grid grid-cols-4 gap-2 p-4 bg-gray-50 dark:bg-gray-700/50">
-                {[
-                  { label: 'Pend.', value: cashDeliverySummary?.pending || 0 },
-                  { label: 'Recib.', value: cashDeliverySummary?.receiving || 0 },
-                  { label: 'Valid.', value: cashDeliverySummary?.validating || 0 },
-                  { label: 'Comp.', value: cashDeliverySummary?.completed || 0 },
-                ].map((item) => (
-                  <div key={item.label} className="text-center">
-                    <p className="text-xl font-bold text-[#cc0a46] dark:text-[#2a5caa]">
-                      <AnimatedCounter value={item.value} />
+                    <p className="text-2xl font-bold text-amber-700 dark:text-amber-300">
+                      <AnimatedCounter value={pendingCount} />
                     </p>
-                    <p className="text-xs text-gray-500 dark:text-gray-400">{item.label}</p>
                   </div>
-                ))}
-              </div>
 
-              {urgentCashDeliveries.length > 0 ? (
-                <div className="divide-y divide-gray-100 dark:divide-gray-700">
-                  {urgentCashDeliveries.map((delivery, index) => {
-                    const isValidating = delivery.status === 'validating'
-                    const isReceiving = delivery.status === 'pending_reception'
+                  {/* Active */}
+                  <div className="p-4 rounded-xl bg-blue-50 dark:bg-blue-900/20 border border-blue-100 dark:border-blue-800">
+                    <div className="flex items-center gap-2 mb-2">
+                      <Truck className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+                      <span className="text-xs font-medium text-blue-600 dark:text-blue-400">En Proceso</span>
+                    </div>
+                    <p className="text-2xl font-bold text-blue-700 dark:text-blue-300">
+                      <AnimatedCounter value={activeCount} />
+                    </p>
+                  </div>
 
-                    return (
-                      <motion.div
-                        key={delivery.id}
-                        initial={{ opacity: 0, x: -10 }}
-                        animate={{ opacity: 1, x: 0 }}
-                        transition={{ delay: 0.7 + index * 0.05 }}
-                        className="p-4 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
-                      >
-                        <div className="flex items-center justify-between gap-4">
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2 mb-1">
-                              <span className="font-medium text-gray-900 dark:text-white text-sm">
+                  {/* Delivered */}
+                  <div className="p-4 rounded-xl bg-green-50 dark:bg-green-900/20 border border-green-100 dark:border-green-800">
+                    <div className="flex items-center gap-2 mb-2">
+                      <CheckCircle className="w-4 h-4 text-green-600 dark:text-green-400" />
+                      <span className="text-xs font-medium text-green-600 dark:text-green-400">Entregadas</span>
+                    </div>
+                    <p className="text-2xl font-bold text-green-700 dark:text-green-300">
+                      <AnimatedCounter value={deliveredCount} />
+                    </p>
+                  </div>
+
+                  {/* Total */}
+                  <div className="p-4 rounded-xl bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600">
+                    <div className="flex items-center gap-2 mb-2">
+                      <Package className="w-4 h-4 text-gray-600 dark:text-gray-400" />
+                      <span className="text-xs font-medium text-gray-600 dark:text-gray-400">Total</span>
+                    </div>
+                    <p className="text-2xl font-bold text-gray-700 dark:text-gray-300">
+                      <AnimatedCounter value={totalOrders} />
+                    </p>
+                  </div>
+                </div>
+              </motion.div>
+
+              {/* Recent Activity */}
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.2 }}
+                className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 overflow-hidden"
+              >
+                <div className="p-5 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
+                  <h2 className="font-bold text-gray-900 dark:text-white">Actividad Reciente</h2>
+                  <Link href="/dashboard/broker/orders" className="text-sm text-[#cc0a46] dark:text-[#2a5caa] hover:underline flex items-center gap-1">
+                    Ver todo <ArrowRight className="w-4 h-4" />
+                  </Link>
+                </div>
+
+                {recentOrders.length > 0 ? (
+                  <div className="divide-y divide-gray-100 dark:divide-gray-700">
+                    {recentOrders.map((order, index) => {
+                      const badge = getStatusBadge(order.status)
+                      return (
+                        <motion.div
+                          key={order.id}
+                          initial={{ opacity: 0, x: -20 }}
+                          animate={{ opacity: 1, x: 0 }}
+                          transition={{ delay: 0.25 + index * 0.05 }}
+                          className="p-4 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
+                        >
+                          <div className="flex items-center gap-4">
+                            <div className="w-10 h-10 rounded-xl bg-[#cc0a46]/10 dark:bg-[#2a5caa]/10 flex items-center justify-center shrink-0">
+                              <Package className="w-5 h-5 text-[#cc0a46] dark:text-[#2a5caa]" />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2 mb-0.5">
+                                <span className="font-semibold text-gray-900 dark:text-white text-sm">
+                                  {order.orderNumber}
+                                </span>
+                                <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${badge.bg} ${badge.text}`}>
+                                  {badge.label}
+                                </span>
+                              </div>
+                              <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
+                                <User className="w-3 h-3" />
+                                <span className="truncate">{order.recipientName}</span>
+                                <span>•</span>
+                                <MapPin className="w-3 h-3" />
+                                <span>{order.recipientMunicipality}</span>
+                              </div>
+                            </div>
+                            <div className="text-right shrink-0">
+                              <p className="font-bold text-gray-900 dark:text-white text-sm">
+                                {formatCurrency(order.receiveAmount, order.receiveCurrency)}
+                              </p>
+                              <p className="text-xs text-gray-400">
+                                {new Date(order.createdAt).toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })}
+                              </p>
+                            </div>
+                          </div>
+                        </motion.div>
+                      )
+                    })}
+                  </div>
+                ) : (
+                  <div className="p-12 text-center">
+                    <Package className="w-12 h-12 mx-auto mb-3 text-gray-300 dark:text-gray-600" />
+                    <p className="text-gray-500 dark:text-gray-400">No hay órdenes recientes</p>
+                  </div>
+                )}
+              </motion.div>
+            </div>
+
+            {/* Right Column: Performance + Cash Deliveries */}
+            <div className="space-y-6">
+              {/* Performance Ring */}
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.15 }}
+                className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 p-6"
+              >
+                <h3 className="font-bold text-gray-900 dark:text-white mb-4">Rendimiento</h3>
+                <div className="flex flex-col items-center">
+                  <CircularProgress value={deliveredCount} max={totalOrders || 1} size={140} />
+                  <div className="mt-4 text-center">
+                    <p className="text-2xl font-bold text-[#cc0a46] dark:text-[#2a5caa]">
+                      <AnimatedCounter value={completionRate} suffix="%" />
+                    </p>
+                    <p className="text-sm text-gray-500 dark:text-gray-400">Tasa de completadas</p>
+                  </div>
+                </div>
+              </motion.div>
+
+              {/* Cash Deliveries */}
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.2 }}
+                className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 overflow-hidden"
+              >
+                <div className="p-5 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Banknote className="w-5 h-5 text-[#cc0a46] dark:text-[#2a5caa]" />
+                    <h3 className="font-bold text-gray-900 dark:text-white">Efectivo Pendiente</h3>
+                  </div>
+                  <Link href="/dashboard/broker/cash-deliveries" className="text-xs text-[#cc0a46] dark:text-[#2a5caa] hover:underline">
+                    Ver todo
+                  </Link>
+                </div>
+
+                {cashDeliveries.length > 0 ? (
+                  <div className="divide-y divide-gray-100 dark:divide-gray-700">
+                    {cashDeliveries.slice(0, 3).map((delivery, index) => {
+                      const badge = getStatusBadge(delivery.status)
+                      const isUrgent = delivery.status === 'validating'
+                      return (
+                        <Link key={delivery.id} href="/dashboard/broker/cash-deliveries">
+                          <motion.div
+                            initial={{ opacity: 0, x: -20 }}
+                            animate={{ opacity: 1, x: 0 }}
+                            transition={{ delay: 0.25 + index * 0.05 }}
+                            className={`p-4 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors cursor-pointer ${isUrgent ? 'bg-orange-50/50 dark:bg-orange-900/10' : ''}`}
+                          >
+                            <div className="flex items-center justify-between mb-2">
+                              <span className="font-semibold text-gray-900 dark:text-white text-sm">
                                 {delivery.order_number}
                               </span>
-                              {isValidating && (
-                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300">
-                                  <Zap className="w-3 h-3" /> OTP
-                                </span>
-                              )}
-                              {isReceiving && (
-                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300">
-                                  Recibiendo
+                              {isUrgent && (
+                                <span className="flex items-center gap-1 text-xs text-orange-600 dark:text-orange-400 font-medium">
+                                  <Shield className="w-3 h-3" />
+                                  OTP
                                 </span>
                               )}
                             </div>
-                            <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
-                              {delivery.delivery_user_name}
-                            </p>
-                          </div>
-                          <div className="text-right shrink-0">
-                            <p className="font-semibold text-gray-900 dark:text-white text-sm">
-                              {delivery.currency} ${parseFloat(String(delivery.total_amount)).toLocaleString()}
-                            </p>
-                            <Link
-                              href="/dashboard/broker/cash-deliveries"
-                              className="inline-flex items-center gap-1 text-xs font-medium mt-1 text-[#cc0a46] dark:text-[#2a5caa] hover:underline"
-                            >
-                              {isValidating ? 'Validar' : 'Recibir'} <ArrowRight className="w-3 h-3" />
-                            </Link>
-                          </div>
-                        </div>
-                      </motion.div>
-                    )
-                  })}
-                </div>
-              ) : (
-                <div className="p-12 text-center">
-                  <div className="w-14 h-14 mx-auto mb-4 rounded-xl bg-gray-100 dark:bg-gray-700 flex items-center justify-center">
-                    <Banknote className="w-7 h-7 text-gray-400" />
+                            <div className="flex items-center justify-between">
+                              <span className="text-xs text-gray-500 dark:text-gray-400 truncate">
+                                {delivery.delivery_user_name}
+                              </span>
+                              <span className="font-bold text-[#cc0a46] dark:text-[#2a5caa] text-sm">
+                                ${parseFloat(String(delivery.total_amount)).toLocaleString()}
+                              </span>
+                            </div>
+                          </motion.div>
+                        </Link>
+                      )
+                    })}
                   </div>
-                  <p className="text-gray-500 dark:text-gray-400 font-medium">No hay entregas pendientes</p>
-                  <p className="text-sm text-gray-400 dark:text-gray-500 mt-1">Las entregas aparecerán aquí</p>
-                </div>
-              )}
-            </motion.div>
+                ) : (
+                  <div className="p-8 text-center">
+                    <CheckCircle className="w-10 h-10 mx-auto mb-2 text-green-400" />
+                    <p className="text-sm text-gray-500 dark:text-gray-400">Sin entregas pendientes</p>
+                  </div>
+                )}
+
+                {cashDeliveries.length > 0 && (
+                  <div className="p-4 bg-gray-50 dark:bg-gray-700/50">
+                    <Link href="/dashboard/broker/cash-deliveries">
+                      <button className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-[#cc0a46] dark:bg-[#2a5caa] text-white font-semibold hover:opacity-90 transition-all">
+                        <Zap className="w-4 h-4" />
+                        Recibir Efectivo
+                      </button>
+                    </Link>
+                  </div>
+                )}
+              </motion.div>
+
+              {/* Quick Links */}
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.25 }}
+                className="space-y-3"
+              >
+                <Link href="/dashboard/broker/orders">
+                  <div className="p-4 rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 hover:border-[#cc0a46] dark:hover:border-[#2a5caa] transition-colors cursor-pointer group">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <div className="p-2 rounded-lg bg-[#cc0a46]/10 dark:bg-[#2a5caa]/10">
+                          <Package className="w-5 h-5 text-[#cc0a46] dark:text-[#2a5caa]" />
+                        </div>
+                        <div>
+                          <p className="font-semibold text-gray-900 dark:text-white text-sm">Órdenes de Remesas</p>
+                          <p className="text-xs text-gray-500 dark:text-gray-400">Gestionar entregas</p>
+                        </div>
+                      </div>
+                      <ArrowRight className="w-5 h-5 text-gray-400 group-hover:text-[#cc0a46] dark:group-hover:text-[#2a5caa] transition-colors" />
+                    </div>
+                  </div>
+                </Link>
+
+                <Link href="/dashboard/broker/wallet">
+                  <div className="p-4 rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 hover:border-[#cc0a46] dark:hover:border-[#2a5caa] transition-colors cursor-pointer group">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <div className="p-2 rounded-lg bg-[#cc0a46]/10 dark:bg-[#2a5caa]/10">
+                          <Wallet className="w-5 h-5 text-[#cc0a46] dark:text-[#2a5caa]" />
+                        </div>
+                        <div>
+                          <p className="font-semibold text-gray-900 dark:text-white text-sm">Mi Wallet</p>
+                          <p className="text-xs text-gray-500 dark:text-gray-400">Balance y movimientos</p>
+                        </div>
+                      </div>
+                      <ArrowRight className="w-5 h-5 text-gray-400 group-hover:text-[#cc0a46] dark:group-hover:text-[#2a5caa] transition-colors" />
+                    </div>
+                  </div>
+                </Link>
+              </motion.div>
+            </div>
           </div>
         </div>
       </DashboardLayout>
