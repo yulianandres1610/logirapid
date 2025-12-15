@@ -122,29 +122,60 @@ export async function POST(
 
     // Use transaction to ensure atomicity
     const result = await db.transaction(async (client) => {
-      // Get current broker wallet balance
-      const balanceResult = await client.query(`
+      // Get current broker info
+      const brokerResult = await client.query(`
         SELECT
           id,
           legalname,
-          COALESCE("walletNumber", walletnumber) as wallet_number,
-          COALESCE("walletBalance"::numeric, walletbalance, 0) as wallet_balance
+          COALESCE("walletNumber", walletnumber) as wallet_number
         FROM companies
         WHERE id = $1
         FOR UPDATE
       `, [brokerCompanyId])
 
-      if (balanceResult.rows.length === 0) {
+      if (brokerResult.rows.length === 0) {
         throw new Error('Broker no encontrado')
       }
 
-      const broker = balanceResult.rows[0]
-      const balanceBefore = parseFloat(broker.wallet_balance) || 0
-      const balanceAfter = balanceBefore + amountToAdd
+      const broker = brokerResult.rows[0]
       const walletNumber = broker.wallet_number
 
-      // Update company wallet balance - update BOTH columns to keep them in sync
-      // walletbalance is numeric, "walletBalance" is varchar (legacy)
+      // Get or create currency-specific balance in broker_wallet_balances
+      let currencyBalanceResult = await client.query(`
+        SELECT id, available_balance, total_deposits
+        FROM broker_wallet_balances
+        WHERE company_id = $1 AND currency = $2
+        FOR UPDATE
+      `, [brokerCompanyId, currency])
+
+      let balanceBefore = 0
+      let balanceAfter = 0
+
+      if (currencyBalanceResult.rows.length === 0) {
+        // Create new currency balance entry
+        const insertResult = await client.query(`
+          INSERT INTO broker_wallet_balances (company_id, currency, available_balance, total_deposits)
+          VALUES ($1, $2, $3, $3)
+          RETURNING available_balance
+        `, [brokerCompanyId, currency, amountToAdd])
+        balanceBefore = 0
+        balanceAfter = amountToAdd
+      } else {
+        // Update existing balance
+        balanceBefore = parseFloat(currencyBalanceResult.rows[0].available_balance) || 0
+        balanceAfter = balanceBefore + amountToAdd
+
+        await client.query(`
+          UPDATE broker_wallet_balances
+          SET
+            available_balance = available_balance + $1,
+            total_deposits = COALESCE(total_deposits, 0) + $1,
+            updated_at = NOW()
+          WHERE company_id = $2 AND currency = $3
+        `, [amountToAdd, brokerCompanyId, currency])
+      }
+
+      // Also update company wallet balance for backwards compatibility (total across all currencies)
       await client.query(`
         UPDATE companies
         SET
@@ -197,7 +228,7 @@ export async function POST(
         walletNumber,
         amountToAdd,
         currency,
-        `Depósito de efectivo - Orden ${order.order_number}`,
+        `Depósito de efectivo (${currency}) - Orden ${order.order_number}`,
         `Entrega de efectivo recibida del repartidor`,
         userId ? parseInt(userId) : null,
         userEmail || 'Sistema'
@@ -217,6 +248,7 @@ export async function POST(
       `, [userId ? parseInt(userId) : null, transactionResult.rows[0].id, orderId])
 
       return {
+        currency,
         balanceBefore,
         balanceAfter,
         transactionId: transactionResult.rows[0].id,

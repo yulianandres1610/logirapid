@@ -81,6 +81,32 @@ export async function GET(request: NextRequest) {
     const walletBalance = parseFloat(company.wallet_balance) || 0
     const currency = company.currency || 'USD'
 
+    // Get multi-currency balances from broker_wallet_balances
+    let currencyBalances: any[] = []
+    try {
+      const balancesResult = await db.query(`
+        SELECT
+          currency,
+          available_balance,
+          reserved_balance,
+          total_deposits,
+          total_withdrawals
+        FROM broker_wallet_balances
+        WHERE company_id = $1
+        ORDER BY currency
+      `, [payload.companyId])
+      currencyBalances = balancesResult.rows.map(row => ({
+        currency: row.currency,
+        available: parseFloat(row.available_balance) || 0,
+        reserved: parseFloat(row.reserved_balance) || 0,
+        totalDeposits: parseFloat(row.total_deposits) || 0,
+        totalWithdrawals: parseFloat(row.total_withdrawals) || 0
+      }))
+    } catch (e) {
+      // Table might not exist yet
+      console.log('[Broker Wallet] broker_wallet_balances table not found, using legacy balance')
+    }
+
     // Get transaction stats
     const statsResult = await db.query(`
       SELECT
@@ -207,6 +233,8 @@ export async function GET(request: NextRequest) {
         province: company.broker_province,
         municipality: company.broker_municipality,
         isActive: company.is_active,
+        // Multi-currency balances
+        currencyBalances,
         stats: {
           totalDeposits: parseFloat(stats.total_deposits) || 0,
           totalDepositsFormatted: `$${(parseFloat(stats.total_deposits) || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}`,

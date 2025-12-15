@@ -134,15 +134,30 @@ export default function BrokerWalletPage() {
         const data = await response.json()
         if (data.success && data.data) {
           const walletData = data.data
-          const walletBalance: WalletBalance = {
-            currency: walletData.currency || 'USD',
-            available: walletData.walletBalance || 0,
-            reserved: 0,
-            total: walletData.walletBalance || 0,
-            lowThreshold: 100,
-            isLow: (walletData.walletBalance || 0) < 100
+
+          // Use multi-currency balances if available
+          if (walletData.currencyBalances && walletData.currencyBalances.length > 0) {
+            const currencyBalances: WalletBalance[] = walletData.currencyBalances.map((cb: any) => ({
+              currency: cb.currency,
+              available: cb.available || 0,
+              reserved: cb.reserved || 0,
+              total: (cb.available || 0) + (cb.reserved || 0),
+              lowThreshold: 100,
+              isLow: (cb.available || 0) < 100
+            }))
+            setBalances(currencyBalances)
+          } else {
+            // Fallback to legacy single balance
+            const walletBalance: WalletBalance = {
+              currency: walletData.currency || 'USD',
+              available: walletData.walletBalance || 0,
+              reserved: 0,
+              total: walletData.walletBalance || 0,
+              lowThreshold: 100,
+              isLow: (walletData.walletBalance || 0) < 100
+            }
+            setBalances([walletBalance])
           }
-          setBalances([walletBalance])
 
           // Set stats
           if (walletData.stats) {
