@@ -72,46 +72,39 @@ interface DeliveryStats {
   amount: number
 }
 
-// Credit card style colors (American Express inspired)
+// Brand colors
+const BRAND_COLORS = {
+  red: '#cc0a46',      // Cards with balance
+  redAccent: '#8b0731',
+  blue: '#2a5caa',     // Cards without balance
+  blueAccent: '#1a3d6e'
+}
+
+// Currency configuration
 const CURRENCY_CONFIG: Record<string, {
   name: string
   symbol: string
   flag: string
-  bgColor: string
-  textColor: string
-  accentColor: string
 }> = {
   USD: {
     name: 'Dólar Americano',
     symbol: '$',
-    flag: '🇺🇸',
-    bgColor: '#006FCF', // Amex Blue
-    textColor: '#FFFFFF',
-    accentColor: '#004A8F'
+    flag: '🇺🇸'
   },
   CUP: {
     name: 'Peso Cubano',
     symbol: '$',
-    flag: '🇨🇺',
-    bgColor: '#8B0000', // Dark Red
-    textColor: '#FFFFFF',
-    accentColor: '#5C0000'
+    flag: '🇨🇺'
   },
   EUR: {
     name: 'Euro',
     symbol: '€',
-    flag: '🇪🇺',
-    bgColor: '#B4B4B4', // Platinum
-    textColor: '#1A1A1A',
-    accentColor: '#8A8A8A'
+    flag: '🇪🇺'
   },
   MLC: {
     name: 'Moneda Libremente Convertible',
     symbol: '$',
-    flag: '💳',
-    bgColor: '#1A1A1A', // Black
-    textColor: '#FFFFFF',
-    accentColor: '#333333'
+    flag: '💳'
   }
 }
 
@@ -151,7 +144,7 @@ function AnimatedCounter({ value, decimals = 0 }: { value: number; decimals?: nu
   return <span className="tabular-nums">{Math.round(displayValue).toLocaleString()}</span>
 }
 
-// Credit Card Component (American Express style)
+// Credit Card Component (Brand colors based on balance)
 function CurrencyCard({
   currency,
   balance,
@@ -167,6 +160,11 @@ function CurrencyCard({
 }) {
   const config = CURRENCY_CONFIG[currency] || CURRENCY_CONFIG.USD
   const [isHovered, setIsHovered] = useState(false)
+  const hasBalance = balance.available > 0
+
+  // Use red for cards with balance, blue for empty cards
+  const bgColor = hasBalance ? BRAND_COLORS.red : BRAND_COLORS.blue
+  const accentColor = hasBalance ? BRAND_COLORS.redAccent : BRAND_COLORS.blueAccent
 
   // Format wallet number like a credit card (4 groups of 4)
   const formatWalletNumber = (num: string = '') => {
@@ -191,13 +189,13 @@ function CurrencyCard({
           rotateY: isHovered ? 3 : 0,
           scale: isHovered ? 1.02 : 1,
           boxShadow: isHovered
-            ? '0 25px 50px -12px rgba(0, 0, 0, 0.35)'
-            : '0 10px 30px -10px rgba(0, 0, 0, 0.25)'
+            ? `0 25px 50px -12px ${hasBalance ? 'rgba(204, 10, 70, 0.4)' : 'rgba(42, 92, 170, 0.4)'}`
+            : `0 10px 30px -10px ${hasBalance ? 'rgba(204, 10, 70, 0.3)' : 'rgba(42, 92, 170, 0.3)'}`
         }}
         transition={{ duration: 0.3 }}
         className="relative overflow-hidden rounded-xl"
         style={{
-          backgroundColor: config.bgColor,
+          backgroundColor: bgColor,
           aspectRatio: '1.586',
           transformStyle: 'preserve-3d'
         }}
@@ -219,33 +217,33 @@ function CurrencyCard({
               135deg,
               transparent,
               transparent 2px,
-              ${config.textColor} 2px,
-              ${config.textColor} 4px
+              #FFFFFF 2px,
+              #FFFFFF 4px
             )`
           }}
         />
 
-        <div className="relative h-full p-4 flex flex-col justify-between" style={{ color: config.textColor }}>
+        <div className="relative h-full p-4 flex flex-col justify-between text-white">
           {/* Top row - Logo and Currency */}
           <div className="flex justify-between items-start">
             {/* Brand logo area */}
             <div className="flex items-center gap-2">
               <div
                 className="w-8 h-8 rounded-full flex items-center justify-center text-lg font-bold"
-                style={{ backgroundColor: config.accentColor }}
+                style={{ backgroundColor: accentColor }}
               >
                 {config.flag}
               </div>
               <div>
-                <p className="text-[10px] font-bold tracking-widest opacity-80">CUBARAPID</p>
-                <p className="text-[8px] opacity-60 tracking-wide">{config.name}</p>
+                <p className="text-[10px] font-bold tracking-widest opacity-90">CUBARAPID</p>
+                <p className="text-[8px] opacity-70 tracking-wide">{config.name}</p>
               </div>
             </div>
 
             {/* Currency badge */}
             <div
               className="px-2 py-0.5 rounded text-xs font-bold tracking-wider"
-              style={{ backgroundColor: config.accentColor }}
+              style={{ backgroundColor: accentColor }}
             >
               {currency}
             </div>
@@ -266,37 +264,44 @@ function CurrencyCard({
             </div>
           </div>
 
+          {/* Company Name - Prominent display */}
+          <div className="absolute top-12 right-4 text-right">
+            <p className="text-[10px] font-bold tracking-wider opacity-90 truncate max-w-[120px]">
+              {(companyName || 'BROKER').toUpperCase()}
+            </p>
+          </div>
+
           {/* Card Number */}
           <div className="mt-auto mb-1">
             <p
               className="font-mono text-base tracking-[0.15em] font-medium"
-              style={{ textShadow: '0 1px 2px rgba(0,0,0,0.2)' }}
+              style={{ textShadow: '0 1px 2px rgba(0,0,0,0.3)' }}
             >
               {formattedNumber}
             </p>
           </div>
 
-          {/* Bottom row - Balance and Member info */}
+          {/* Bottom row - Balance and Currency info */}
           <div className="flex justify-between items-end">
             <div>
-              <p className="text-[8px] uppercase tracking-wider opacity-60 mb-0.5">Balance Disponible</p>
+              <p className="text-[8px] uppercase tracking-wider opacity-70 mb-0.5">Balance Disponible</p>
               <p className="text-xl font-bold tracking-tight">
                 {config.symbol}<AnimatedCounter value={balance.available} decimals={currency === 'CUP' ? 0 : 2} />
               </p>
             </div>
 
             <div className="text-right">
-              <p className="text-[8px] uppercase tracking-wider opacity-60 mb-0.5">Titular</p>
-              <p className="text-[10px] font-medium tracking-wide truncate max-w-[100px]">
-                {(companyName || 'BROKER').toUpperCase()}
+              <p className="text-[8px] uppercase tracking-wider opacity-70 mb-0.5">Moneda</p>
+              <p className="text-sm font-bold tracking-wide">
+                {currency}
               </p>
             </div>
           </div>
         </div>
 
         {/* Contactless icon */}
-        <div className="absolute top-12 right-4 opacity-60">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+        <div className="absolute bottom-4 right-4 opacity-60">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
             <path d="M6.5 6.5c3.5-3.5 9-3.5 12.5 0" />
             <path d="M8.5 10.5c2-2 5-2 7 0" />
             <path d="M10.5 14.5c.5-.5 1.5-.5 2 0" />
@@ -362,8 +367,8 @@ function ExchangeRateCard({ rate, index }: { rate: ExchangeRate; index: number }
     >
       <div className="flex items-center gap-3">
         <div
-          className="w-10 h-10 rounded-xl flex items-center justify-center text-lg"
-          style={{ backgroundColor: config.bgColor, color: config.textColor }}
+          className="w-10 h-10 rounded-xl flex items-center justify-center text-lg text-white"
+          style={{ backgroundColor: BRAND_COLORS.blue }}
         >
           {config.flag}
         </div>
