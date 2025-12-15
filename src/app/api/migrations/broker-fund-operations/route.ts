@@ -73,7 +73,14 @@ export async function POST() {
     }
     console.log('[Migration] Added rejection columns to remittance_orders')
 
-    // 4. Create reserve_broker_funds function
+    // 4. Drop existing functions to avoid parameter name conflicts
+    await db.query(`DROP FUNCTION IF EXISTS reserve_broker_funds(INTEGER, VARCHAR, DECIMAL, INTEGER, INTEGER) CASCADE`)
+    await db.query(`DROP FUNCTION IF EXISTS complete_broker_delivery(INTEGER, INTEGER) CASCADE`)
+    await db.query(`DROP FUNCTION IF EXISTS release_broker_funds_cancelled(INTEGER, INTEGER, TEXT) CASCADE`)
+    await db.query(`DROP FUNCTION IF EXISTS release_broker_funds_delivered(INTEGER, INTEGER) CASCADE`)
+    console.log('[Migration] Dropped existing functions')
+
+    // 5. Create reserve_broker_funds function
     await db.query(`
       CREATE OR REPLACE FUNCTION reserve_broker_funds(
         p_broker_id INTEGER,
@@ -292,6 +299,20 @@ export async function POST() {
     `)
     console.log('[Migration] Created release_broker_funds_cancelled function')
 
+    // 6b. Create release_broker_funds_delivered function (alias for complete_broker_delivery)
+    await db.query(`
+      CREATE OR REPLACE FUNCTION release_broker_funds_delivered(
+        p_order_id INTEGER,
+        p_user_id INTEGER
+      ) RETURNS BOOLEAN AS $$
+      BEGIN
+        -- Just call complete_broker_delivery
+        RETURN complete_broker_delivery(p_order_id, p_user_id);
+      END;
+      $$ LANGUAGE plpgsql
+    `)
+    console.log('[Migration] Created release_broker_funds_delivered function')
+
     // 7. Create remittance_delivery_proofs table
     await db.query(`
       CREATE TABLE IF NOT EXISTS remittance_delivery_proofs (
@@ -357,7 +378,7 @@ export async function POST() {
       success: true,
       message: 'Broker fund operations migration completed',
       tables: ['broker_reservations', 'broker_wallet_transactions', 'remittance_delivery_proofs'],
-      functions: ['reserve_broker_funds', 'complete_broker_delivery', 'release_broker_funds_cancelled']
+      functions: ['reserve_broker_funds', 'complete_broker_delivery', 'release_broker_funds_cancelled', 'release_broker_funds_delivered']
     })
 
   } catch (error: any) {
@@ -383,14 +404,14 @@ export async function GET() {
       SELECT routine_name
       FROM information_schema.routines
       WHERE routine_schema = 'public'
-      AND routine_name IN ('reserve_broker_funds', 'complete_broker_delivery', 'release_broker_funds_cancelled')
+      AND routine_name IN ('reserve_broker_funds', 'complete_broker_delivery', 'release_broker_funds_cancelled', 'release_broker_funds_delivered')
     `)
 
     return NextResponse.json({
       success: true,
       tables: tables.rows.map(r => r.table_name),
       functions: functions.rows.map(r => r.routine_name),
-      needsMigration: tables.rows.length < 3 || functions.rows.length < 3
+      needsMigration: tables.rows.length < 3 || functions.rows.length < 4
     })
 
   } catch (error: any) {
