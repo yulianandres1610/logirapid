@@ -326,6 +326,19 @@ export async function POST() {
     `)
     console.log('[Migration] Created release_broker_funds_delivered function')
 
+    // 6c. Add delivery_proof_id column to remittance_orders if not exists
+    try {
+      await db.query(`
+        ALTER TABLE remittance_orders
+        ADD COLUMN IF NOT EXISTS delivery_proof_id INTEGER
+      `)
+      console.log('[Migration] Added delivery_proof_id column to remittance_orders')
+    } catch (e: any) {
+      if (!e.message.includes('already exists')) {
+        console.log('[Migration] Note: delivery_proof_id column - ' + e.message)
+      }
+    }
+
     // 7. Create remittance_delivery_proofs table
     await db.query(`
       CREATE TABLE IF NOT EXISTS remittance_delivery_proofs (
