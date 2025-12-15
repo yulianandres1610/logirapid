@@ -56,7 +56,7 @@ export async function POST(
 
     // Get order and verify it belongs to this broker
     const orderResult = await db.query(`
-      SELECT cdo.*, c.name as broker_name, c.legalname as broker_legalname
+      SELECT cdo.*, c.legalname as broker_name, c.tradename as broker_tradename
       FROM cash_delivery_orders cdo
       LEFT JOIN companies c ON cdo.broker_company_id = c.id
       WHERE cdo.id = $1 AND cdo.broker_company_id = $2
@@ -159,7 +159,7 @@ export async function POST(
     }
 
     // Send OTP via selected channel (SMS or WhatsApp)
-    const brokerName = order.broker_legalname || order.broker_name || 'Broker'
+    const brokerName = order.broker_name || order.broker_tradename || order.broker_company_name || 'Broker'
     const otpResult = await sendCashDeliveryOTPByChannel(
       order.delivery_user_phone,
       otpCode,

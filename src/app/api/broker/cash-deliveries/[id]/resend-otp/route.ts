@@ -45,7 +45,7 @@ export async function POST(
 
     // Get order
     const orderResult = await db.query(`
-      SELECT cdo.*, c.name as broker_name
+      SELECT cdo.*, c.legalname as broker_name
       FROM cash_delivery_orders cdo
       LEFT JOIN companies c ON cdo.broker_company_id = c.id
       WHERE cdo.id = $1 AND cdo.broker_company_id = $2
