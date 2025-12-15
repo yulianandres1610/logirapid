@@ -103,7 +103,8 @@ export default function CashDeliveryWizardPage() {
             wallet_number: b.wallet_number || '',
             phone: b.broker_contact_phone || b.phone || '',
             broker_contact_phone: b.broker_contact_phone || '',
-            is_active: b.is_active
+            // Default to true if is_active is not explicitly false
+            is_active: b.is_active !== false && b.is_active !== 'false'
           }))
           setBrokers(mappedBrokers)
         }
