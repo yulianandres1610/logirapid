@@ -583,7 +583,9 @@ export default function CreateRemittancePage() {
                   onChange={(e) => updateWizardData({ sendAmount: parseFloat(e.target.value) || 0 })}
                   className={cn(
                     "pl-10 text-2xl font-bold h-14 rounded-xl border-2",
-                    theme === 'dark' ? 'bg-gray-700 text-white border-gray-600' : 'border-gray-200'
+                    theme === 'dark'
+                      ? 'bg-gray-700 text-white border-gray-600'
+                      : 'bg-white text-gray-900 border-gray-300'
                   )}
                 />
               </div>
@@ -664,7 +666,7 @@ export default function CreateRemittancePage() {
                 placeholder="Nombre completo *"
                 value={wizardData.recipientName}
                 onChange={(e) => updateWizardData({ recipientName: e.target.value })}
-                className={cn("rounded-xl h-12", theme === 'dark' ? 'bg-gray-700 text-white border-gray-600' : '')}
+                className={cn("rounded-xl h-12", theme === 'dark' ? 'bg-gray-700 text-white border-gray-600' : 'bg-white text-gray-900 border-gray-300')}
               />
 
               <div className="grid grid-cols-2 gap-4">
@@ -672,13 +674,13 @@ export default function CreateRemittancePage() {
                   placeholder="Telefono *"
                   value={wizardData.recipientPhone}
                   onChange={(e) => updateWizardData({ recipientPhone: e.target.value })}
-                  className={cn("rounded-xl h-12", theme === 'dark' ? 'bg-gray-700 text-white border-gray-600' : '')}
+                  className={cn("rounded-xl h-12", theme === 'dark' ? 'bg-gray-700 text-white border-gray-600' : 'bg-white text-gray-900 border-gray-300')}
                 />
                 <Input
                   placeholder="Carnet de Identidad"
                   value={wizardData.recipientIdNumber}
                   onChange={(e) => updateWizardData({ recipientIdNumber: e.target.value })}
-                  className={cn("rounded-xl h-12", theme === 'dark' ? 'bg-gray-700 text-white border-gray-600' : '')}
+                  className={cn("rounded-xl h-12", theme === 'dark' ? 'bg-gray-700 text-white border-gray-600' : 'bg-white text-gray-900 border-gray-300')}
                 />
               </div>
 
@@ -692,23 +694,23 @@ export default function CreateRemittancePage() {
                     placeholder="Calle/Avenida con numero"
                     value={wizardData.recipientAddress}
                     onChange={(e) => updateWizardData({ recipientAddress: e.target.value })}
-                    className={cn("rounded-xl h-11", theme === 'dark' ? 'bg-gray-600 text-white border-gray-500' : '')}
+                    className={cn("rounded-xl h-11", theme === 'dark' ? 'bg-gray-600 text-white border-gray-500' : 'bg-white text-gray-900 border-gray-300')}
                   />
                   <Input
                     placeholder="Reparto/Zona"
                     value={wizardData.recipientNeighborhood}
                     onChange={(e) => updateWizardData({ recipientNeighborhood: e.target.value })}
-                    className={cn("rounded-xl h-11", theme === 'dark' ? 'bg-gray-600 text-white border-gray-500' : '')}
+                    className={cn("rounded-xl h-11", theme === 'dark' ? 'bg-gray-600 text-white border-gray-500' : 'bg-white text-gray-900 border-gray-300')}
                   />
                   <div className="grid grid-cols-2 gap-3">
-                    <Input value={wizardData.municipality} disabled className={cn("rounded-xl h-11 opacity-70", theme === 'dark' ? 'bg-gray-600 text-white' : '')} />
-                    <Input value={wizardData.province} disabled className={cn("rounded-xl h-11 opacity-70", theme === 'dark' ? 'bg-gray-600 text-white' : '')} />
+                    <Input value={wizardData.municipality} disabled className={cn("rounded-xl h-11 opacity-70", theme === 'dark' ? 'bg-gray-600 text-white' : 'bg-gray-100 text-gray-700 border-gray-300')} />
+                    <Input value={wizardData.province} disabled className={cn("rounded-xl h-11 opacity-70", theme === 'dark' ? 'bg-gray-600 text-white' : 'bg-gray-100 text-gray-700 border-gray-300')} />
                   </div>
                   <Input
                     placeholder="Referencias"
                     value={wizardData.recipientAddressReferences}
                     onChange={(e) => updateWizardData({ recipientAddressReferences: e.target.value })}
-                    className={cn("rounded-xl h-11", theme === 'dark' ? 'bg-gray-600 text-white border-gray-500' : '')}
+                    className={cn("rounded-xl h-11", theme === 'dark' ? 'bg-gray-600 text-white border-gray-500' : 'bg-white text-gray-900 border-gray-300')}
                   />
                 </div>
               </div>
@@ -731,13 +733,13 @@ export default function CreateRemittancePage() {
                     placeholder="Nombre del contacto"
                     value={wizardData.alternateContactName}
                     onChange={(e) => updateWizardData({ alternateContactName: e.target.value })}
-                    className={cn("rounded-xl h-11", theme === 'dark' ? 'bg-gray-600 text-white' : '')}
+                    className={cn("rounded-xl h-11", theme === 'dark' ? 'bg-gray-600 text-white border-gray-500' : 'bg-white text-gray-900 border-gray-300')}
                   />
                   <Input
                     placeholder="Telefono del contacto"
                     value={wizardData.alternateContactPhone}
                     onChange={(e) => updateWizardData({ alternateContactPhone: e.target.value })}
-                    className={cn("rounded-xl h-11", theme === 'dark' ? 'bg-gray-600 text-white' : '')}
+                    className={cn("rounded-xl h-11", theme === 'dark' ? 'bg-gray-600 text-white border-gray-500' : 'bg-white text-gray-900 border-gray-300')}
                   />
                 </motion.div>
               )}
@@ -762,20 +764,20 @@ export default function CreateRemittancePage() {
                 placeholder="Nombre completo *"
                 value={wizardData.senderName}
                 onChange={(e) => updateWizardData({ senderName: e.target.value })}
-                className={cn("rounded-xl h-12", theme === 'dark' ? 'bg-gray-700 text-white border-gray-600' : '')}
+                className={cn("rounded-xl h-12", theme === 'dark' ? 'bg-gray-700 text-white border-gray-600' : 'bg-white text-gray-900 border-gray-300')}
               />
               <Input
                 placeholder="Telefono"
                 value={wizardData.senderPhone}
                 onChange={(e) => updateWizardData({ senderPhone: e.target.value })}
-                className={cn("rounded-xl h-12", theme === 'dark' ? 'bg-gray-700 text-white border-gray-600' : '')}
+                className={cn("rounded-xl h-12", theme === 'dark' ? 'bg-gray-700 text-white border-gray-600' : 'bg-white text-gray-900 border-gray-300')}
               />
               <Input
                 placeholder="Email (opcional)"
                 type="email"
                 value={wizardData.senderEmail}
                 onChange={(e) => updateWizardData({ senderEmail: e.target.value })}
-                className={cn("rounded-xl h-12", theme === 'dark' ? 'bg-gray-700 text-white border-gray-600' : '')}
+                className={cn("rounded-xl h-12", theme === 'dark' ? 'bg-gray-700 text-white border-gray-600' : 'bg-white text-gray-900 border-gray-300')}
               />
             </div>
           </div>
@@ -829,7 +831,7 @@ export default function CreateRemittancePage() {
                     type="number"
                     value={wizardData.cashReceived || ''}
                     onChange={(e) => updateWizardData({ cashReceived: parseFloat(e.target.value) || 0 })}
-                    className={cn("rounded-xl h-12", theme === 'dark' ? 'bg-gray-700 text-white border-gray-600' : '')}
+                    className={cn("rounded-xl h-12", theme === 'dark' ? 'bg-gray-700 text-white border-gray-600' : 'bg-white text-gray-900 border-gray-300')}
                   />
                 </div>
                 {wizardData.cashReceived >= wizardData.totalCharged && (
@@ -850,7 +852,7 @@ export default function CreateRemittancePage() {
                 <Input
                   value={wizardData.paymentReference}
                   onChange={(e) => updateWizardData({ paymentReference: e.target.value })}
-                  className={cn("rounded-xl h-12", theme === 'dark' ? 'bg-gray-700 text-white border-gray-600' : '')}
+                  className={cn("rounded-xl h-12", theme === 'dark' ? 'bg-gray-700 text-white border-gray-600' : 'bg-white text-gray-900 border-gray-300')}
                   placeholder={wizardData.paymentMethod === 'zelle' ? 'ZELLE-XXXXX' : 'Ref. Terminal'}
                 />
               </motion.div>
@@ -891,7 +893,7 @@ export default function CreateRemittancePage() {
                 <span className={theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}>Ubicacion:</span>
                 <span className={cn("font-medium", theme === 'dark' ? 'text-white' : 'text-gray-900')}>{wizardData.municipality}, {wizardData.province}</span>
               </div>
-              <div className="flex justify-between items-center pt-3 border-t border-gray-600">
+              <div className={cn("flex justify-between items-center pt-3 border-t", theme === 'dark' ? 'border-gray-600' : 'border-gray-200')}>
                 <span className={theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}>Entrega estimada:</span>
                 <span className="font-bold px-3 py-1 rounded-full text-sm bg-green-500/20 text-green-500 border border-green-500/30">
                   {wizardData.estimatedDelivery}
