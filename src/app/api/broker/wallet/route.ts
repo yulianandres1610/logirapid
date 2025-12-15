@@ -45,6 +45,7 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url)
     const includeHistory = searchParams.get('history') === 'true'
     const historyLimit = parseInt(searchParams.get('historyLimit') || '20')
+    const filterCurrency = searchParams.get('currency') // Filter transactions by currency
 
     // Get company info and verify it's a broker
     const companyResult = await db.query(`
@@ -182,6 +183,14 @@ export async function GET(request: NextRequest) {
     // Get transaction history if requested
     let history: any[] = []
     if (includeHistory) {
+      // Build query with optional currency filter
+      const historyParams: any[] = [payload.companyId, historyLimit]
+      let currencyFilter = ''
+      if (filterCurrency) {
+        historyParams.push(filterCurrency)
+        currencyFilter = ` AND wt.currency = $${historyParams.length}`
+      }
+
       // Get transactions with cash delivery order info if applicable
       const historyResult = await db.query(`
         SELECT
@@ -218,10 +227,10 @@ export async function GET(request: NextRequest) {
         LEFT JOIN companies sc ON wt.source_company_id = sc.id
         LEFT JOIN companies tc ON wt.target_company_id = tc.id
         LEFT JOIN cash_delivery_orders cdo ON wt.source_type = 'cash_delivery' AND cdo.wallet_transaction_id = wt.id
-        WHERE wt.source_company_id = $1 OR wt.target_company_id = $1
+        WHERE (wt.source_company_id = $1 OR wt.target_company_id = $1)${currencyFilter}
         ORDER BY wt.created_at DESC
         LIMIT $2
-      `, [payload.companyId, historyLimit])
+      `, historyParams)
 
       const typeLabels: { [key: string]: string } = {
         'recharge': 'Recarga',

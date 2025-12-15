@@ -50,8 +50,18 @@ interface Transaction {
   notes: string
   description: string
   createdAt: string
+  direction: 'in' | 'out'
   isCashDelivery?: boolean
   cashDelivery?: CashDeliveryInfo | null
+}
+
+interface CurrencyDetailData {
+  currency: string
+  available: number
+  reserved: number
+  totalDeposits: number
+  totalWithdrawals: number
+  transactions: Transaction[]
 }
 
 const CURRENCIES = [
@@ -121,6 +131,11 @@ export default function BrokerWalletPage() {
 
   // Transaction detail modal
   const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null)
+
+  // Currency detail modal
+  const [selectedCurrency, setSelectedCurrency] = useState<string | null>(null)
+  const [currencyDetail, setCurrencyDetail] = useState<CurrencyDetailData | null>(null)
+  const [loadingCurrencyDetail, setLoadingCurrencyDetail] = useState(false)
 
   useEffect(() => {
     fetchWalletData()
@@ -228,6 +243,57 @@ export default function BrokerWalletPage() {
     } finally {
       setDepositLoading(false)
     }
+  }
+
+  const fetchCurrencyDetail = async (currencyCode: string) => {
+    setSelectedCurrency(currencyCode)
+    setLoadingCurrencyDetail(true)
+
+    try {
+      const response = await fetch(`/api/broker/wallet?history=true&historyLimit=50&currency=${currencyCode}`)
+      if (response.ok) {
+        const data = await response.json()
+        if (data.success && data.data) {
+          const walletData = data.data
+          const balance = walletData.currencyBalances?.find((b: any) => b.currency === currencyCode)
+
+          const txHistory = (walletData.history || []).map((tx: any) => ({
+            id: tx.id,
+            currency: tx.currency || currencyCode,
+            type: tx.direction === 'in' ? 'deposit' : 'withdrawal',
+            typeLabel: tx.typeLabel || tx.type,
+            amount: tx.amount || 0,
+            balanceAfter: 0,
+            referenceType: tx.typeLabel || tx.type,
+            referenceId: null,
+            notes: tx.notes || '',
+            description: tx.description || '',
+            createdAt: tx.createdAt,
+            direction: tx.direction || 'out',
+            isCashDelivery: tx.isCashDelivery || false,
+            cashDelivery: tx.cashDelivery || null
+          }))
+
+          setCurrencyDetail({
+            currency: currencyCode,
+            available: balance?.available || 0,
+            reserved: balance?.reserved || 0,
+            totalDeposits: balance?.totalDeposits || 0,
+            totalWithdrawals: balance?.totalWithdrawals || 0,
+            transactions: txHistory
+          })
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching currency detail:', error)
+    } finally {
+      setLoadingCurrencyDetail(false)
+    }
+  }
+
+  const closeCurrencyDetail = () => {
+    setSelectedCurrency(null)
+    setCurrencyDetail(null)
   }
 
   const formatCurrency = (amount: number, currency: string) => {
@@ -356,6 +422,7 @@ export default function BrokerWalletPage() {
             {CURRENCIES.map((currency, index) => {
               const balance = balances.find(b => b.currency === currency.code)
               const available = balance?.available || 0
+              const reserved = balance?.reserved || 0
 
               return (
                 <motion.div
@@ -363,15 +430,21 @@ export default function BrokerWalletPage() {
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: index * 0.1 }}
-                  className={`bg-white dark:bg-gray-800 rounded-xl p-4 shadow-sm border transition-colors ${
+                  onClick={() => fetchCurrencyDetail(currency.code)}
+                  whileHover={{ scale: 1.02, y: -2 }}
+                  whileTap={{ scale: 0.98 }}
+                  className={`bg-white dark:bg-gray-800 rounded-xl p-4 shadow-sm border transition-all cursor-pointer hover:shadow-md ${
                     available > 0
-                      ? 'border-[#cc0a46]/30 dark:border-[#2a5caa]/30'
-                      : 'border-gray-200 dark:border-gray-700'
+                      ? 'border-[#cc0a46]/30 dark:border-[#2a5caa]/30 hover:border-[#cc0a46] dark:hover:border-[#2a5caa]'
+                      : 'border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600'
                   }`}
                 >
-                  <div className="flex items-center gap-2 mb-3">
-                    <span className="text-xl">{currency.flag}</span>
-                    <span className="font-medium text-gray-700 dark:text-gray-300">{currency.code}</span>
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xl">{currency.flag}</span>
+                      <span className="font-medium text-gray-700 dark:text-gray-300">{currency.code}</span>
+                    </div>
+                    <ArrowUpRight className="w-4 h-4 text-gray-400 group-hover:text-[#cc0a46] dark:group-hover:text-[#2a5caa]" />
                   </div>
                   <p className="text-lg font-bold text-gray-900 dark:text-white">
                     {available > 0 ? (
@@ -380,6 +453,13 @@ export default function BrokerWalletPage() {
                       formatCurrency(0, currency.code)
                     )}
                   </p>
+                  {reserved > 0 && (
+                    <p className="text-xs text-orange-500 mt-1 flex items-center gap-1">
+                      <Clock className="w-3 h-3" />
+                      Reservado: {formatCurrency(reserved, currency.code)}
+                    </p>
+                  )}
+                  <p className="text-xs text-gray-400 mt-2">Click para ver detalles</p>
                 </motion.div>
               )
             })}
@@ -712,6 +792,177 @@ export default function BrokerWalletPage() {
                         <Plus className="w-4 h-4" />
                       )}
                       Depositar
+                    </button>
+                  </div>
+                </motion.div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          {/* Currency Detail Modal */}
+          <AnimatePresence>
+            {selectedCurrency && (
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
+                onClick={closeCurrencyDetail}
+              >
+                <motion.div
+                  initial={{ scale: 0.95, opacity: 0, y: 20 }}
+                  animate={{ scale: 1, opacity: 1, y: 0 }}
+                  exit={{ scale: 0.95, opacity: 0, y: 20 }}
+                  onClick={e => e.stopPropagation()}
+                  className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl w-full max-w-2xl max-h-[85vh] flex flex-col"
+                >
+                  {/* Header */}
+                  <div className="p-5 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between flex-shrink-0">
+                    <div className="flex items-center gap-3">
+                      <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-[#cc0a46] to-[#a50837] dark:from-[#2a5caa] dark:to-[#1e4387] flex items-center justify-center text-2xl">
+                        {CURRENCIES.find(c => c.code === selectedCurrency)?.flag}
+                      </div>
+                      <div>
+                        <h3 className="text-xl font-bold text-gray-900 dark:text-white">
+                          {CURRENCIES.find(c => c.code === selectedCurrency)?.name}
+                        </h3>
+                        <p className="text-sm text-gray-500 dark:text-gray-400">
+                          Detalles de {selectedCurrency}
+                        </p>
+                      </div>
+                    </div>
+                    <button
+                      onClick={closeCurrencyDetail}
+                      className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+                    >
+                      <X className="w-5 h-5" />
+                    </button>
+                  </div>
+
+                  {/* Content */}
+                  {loadingCurrencyDetail ? (
+                    <div className="p-12 flex items-center justify-center">
+                      <RefreshCw className="w-8 h-8 animate-spin text-[#cc0a46] dark:text-[#2a5caa]" />
+                    </div>
+                  ) : currencyDetail ? (
+                    <div className="flex-1 overflow-y-auto">
+                      {/* Balance Summary */}
+                      <div className="p-5 bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-800 dark:to-gray-900">
+                        <div className="grid grid-cols-2 gap-4">
+                          <div className="bg-white dark:bg-gray-700 rounded-xl p-4 shadow-sm">
+                            <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">Disponible</p>
+                            <p className="text-2xl font-bold text-green-600 dark:text-green-400">
+                              {formatCurrency(currencyDetail.available, selectedCurrency)}
+                            </p>
+                          </div>
+                          <div className="bg-white dark:bg-gray-700 rounded-xl p-4 shadow-sm">
+                            <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">Reservado</p>
+                            <p className="text-2xl font-bold text-orange-500">
+                              {formatCurrency(currencyDetail.reserved, selectedCurrency)}
+                            </p>
+                          </div>
+                        </div>
+
+                        {/* Stats */}
+                        <div className="grid grid-cols-2 gap-4 mt-4">
+                          <div className="flex items-center gap-3 bg-white dark:bg-gray-700 rounded-xl p-4 shadow-sm">
+                            <div className="p-2 bg-green-100 dark:bg-green-900/30 rounded-lg">
+                              <ArrowDownLeft className="w-5 h-5 text-green-600 dark:text-green-400" />
+                            </div>
+                            <div>
+                              <p className="text-xs text-gray-500 dark:text-gray-400">Total Depósitos</p>
+                              <p className="font-bold text-gray-900 dark:text-white">
+                                {formatCurrency(currencyDetail.totalDeposits, selectedCurrency)}
+                              </p>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-3 bg-white dark:bg-gray-700 rounded-xl p-4 shadow-sm">
+                            <div className="p-2 bg-red-100 dark:bg-red-900/30 rounded-lg">
+                              <ArrowUpRight className="w-5 h-5 text-red-600 dark:text-red-400" />
+                            </div>
+                            <div>
+                              <p className="text-xs text-gray-500 dark:text-gray-400">Total Retiros</p>
+                              <p className="font-bold text-gray-900 dark:text-white">
+                                {formatCurrency(currencyDetail.totalWithdrawals, selectedCurrency)}
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Transactions List */}
+                      <div className="p-5">
+                        <h4 className="font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+                          <History className="w-5 h-5" />
+                          Movimientos en {selectedCurrency}
+                        </h4>
+
+                        {currencyDetail.transactions.length > 0 ? (
+                          <div className="space-y-2">
+                            {currencyDetail.transactions.map((tx, index) => (
+                              <motion.div
+                                key={tx.id}
+                                initial={{ opacity: 0, x: -10 }}
+                                animate={{ opacity: 1, x: 0 }}
+                                transition={{ delay: index * 0.03 }}
+                                className="flex items-center justify-between p-3 rounded-xl bg-gray-50 dark:bg-gray-700/50 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                              >
+                                <div className="flex items-center gap-3">
+                                  <div className={`p-2 rounded-full ${
+                                    tx.direction === 'in' || tx.type === 'deposit'
+                                      ? 'bg-green-100 dark:bg-green-900/30'
+                                      : 'bg-red-100 dark:bg-red-900/30'
+                                  }`}>
+                                    {tx.direction === 'in' || tx.type === 'deposit' ? (
+                                      <ArrowDownLeft className="w-4 h-4 text-green-600 dark:text-green-400" />
+                                    ) : (
+                                      <ArrowUpRight className="w-4 h-4 text-red-600 dark:text-red-400" />
+                                    )}
+                                  </div>
+                                  <div>
+                                    <p className="font-medium text-sm text-gray-900 dark:text-white">
+                                      {tx.typeLabel}
+                                    </p>
+                                    <p className="text-xs text-gray-500 dark:text-gray-400">
+                                      {new Date(tx.createdAt).toLocaleDateString('es-ES', {
+                                        day: 'numeric',
+                                        month: 'short',
+                                        hour: '2-digit',
+                                        minute: '2-digit'
+                                      })}
+                                    </p>
+                                  </div>
+                                </div>
+                                <p className={`font-bold ${
+                                  tx.direction === 'in' || tx.type === 'deposit'
+                                    ? 'text-green-600 dark:text-green-400'
+                                    : 'text-red-600 dark:text-red-400'
+                                }`}>
+                                  {tx.direction === 'in' || tx.type === 'deposit' ? '+' : '-'}
+                                  {formatCurrency(Math.abs(tx.amount), selectedCurrency)}
+                                </p>
+                              </motion.div>
+                            ))}
+                          </div>
+                        ) : (
+                          <div className="py-12 text-center">
+                            <History className="w-12 h-12 text-gray-300 dark:text-gray-600 mx-auto mb-3" />
+                            <p className="text-gray-500 dark:text-gray-400">
+                              No hay movimientos en {selectedCurrency}
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ) : null}
+
+                  {/* Footer */}
+                  <div className="p-5 border-t border-gray-200 dark:border-gray-700 flex-shrink-0">
+                    <button
+                      onClick={closeCurrencyDetail}
+                      className="w-full py-2.5 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-xl hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors font-medium"
+                    >
+                      Cerrar
                     </button>
                   </div>
                 </motion.div>

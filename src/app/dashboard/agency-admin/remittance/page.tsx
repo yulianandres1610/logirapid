@@ -38,8 +38,30 @@ interface RemesaData {
   recipientId: string
   recipientPhone: string
   recipientAddress: string
+  recipientProvince: string
+  recipientMunicipality: string
   calculatedAmount: number
   exchangeRate: number
+}
+
+// Provincias de Cuba con sus municipios
+const CUBA_LOCATIONS: Record<string, string[]> = {
+  'Pinar del Río': ['Pinar del Río', 'Consolación del Sur', 'Viñales', 'Los Palacios', 'San Luis', 'San Juan y Martínez', 'Guane', 'Mantua', 'Minas de Matahambre', 'La Palma', 'Sandino'],
+  'Artemisa': ['Artemisa', 'Bauta', 'San Antonio de los Baños', 'Güira de Melena', 'Alquízar', 'Caimito', 'Guanajay', 'Mariel', 'Bahía Honda', 'Candelaria', 'San Cristóbal'],
+  'La Habana': ['La Habana Vieja', 'Centro Habana', 'Plaza de la Revolución', 'Playa', 'Marianao', 'La Lisa', 'Boyeros', 'Arroyo Naranjo', 'Diez de Octubre', 'Cerro', 'San Miguel del Padrón', 'Cotorro', 'Regla', 'Guanabacoa', 'Habana del Este'],
+  'Mayabeque': ['San José de las Lajas', 'Güines', 'Jaruco', 'Madruga', 'Santa Cruz del Norte', 'Bejucal', 'Quivicán', 'Batabanó', 'Melena del Sur', 'Nueva Paz', 'San Nicolás'],
+  'Matanzas': ['Matanzas', 'Cárdenas', 'Varadero', 'Colón', 'Jagüey Grande', 'Jovellanos', 'Perico', 'Pedro Betancourt', 'Unión de Reyes', 'Los Arabos', 'Limonar', 'Calimete', 'Martí'],
+  'Cienfuegos': ['Cienfuegos', 'Rodas', 'Palmira', 'Lajas', 'Cumanayagua', 'Cruces', 'Abreus', 'Aguada de Pasajeros'],
+  'Villa Clara': ['Santa Clara', 'Caibarién', 'Remedios', 'Camajuaní', 'Sagua la Grande', 'Placetas', 'Encrucijada', 'Ranchuelo', 'Manicaragua', 'Santo Domingo', 'Corralillo', 'Quemado de Güines', 'Cifuentes'],
+  'Sancti Spíritus': ['Sancti Spíritus', 'Trinidad', 'Yaguajay', 'Cabaiguán', 'Fomento', 'Jatibonico', 'Taguasco', 'La Sierpe'],
+  'Ciego de Ávila': ['Ciego de Ávila', 'Morón', 'Chambas', 'Ciro Redondo', 'Majagua', 'Florencia', 'Baraguá', 'Venezuela', 'Primero de Enero', 'Bolivia'],
+  'Camagüey': ['Camagüey', 'Florida', 'Nuevitas', 'Guáimaro', 'Esmeralda', 'Sibanicú', 'Céspedes', 'Sierra de Cubitas', 'Minas', 'Najasa', 'Santa Cruz del Sur', 'Jimaguayú', 'Vertientes'],
+  'Las Tunas': ['Las Tunas', 'Puerto Padre', 'Jobabo', 'Colombia', 'Manatí', 'Jesús Menéndez', 'Majibacoa', 'Amancio'],
+  'Holguín': ['Holguín', 'Banes', 'Moa', 'Gibara', 'Mayarí', 'Antilla', 'Rafael Freyre', 'Sagua de Tánamo', 'Cueto', 'Báguanos', 'Cacocum', 'Calixto García', 'Frank País', 'Urbano Noris'],
+  'Granma': ['Bayamo', 'Manzanillo', 'Media Luna', 'Niquero', 'Campechuela', 'Yara', 'Jiguaní', 'Buey Arriba', 'Guisa', 'Bartolomé Masó', 'Pilón', 'Cauto Cristo', 'Río Cauto'],
+  'Santiago de Cuba': ['Santiago de Cuba', 'Palma Soriano', 'San Luis', 'Contramaestre', 'Segundo Frente', 'Songo-La Maya', 'Guamá', 'Mella', 'Tercer Frente'],
+  'Guantánamo': ['Guantánamo', 'Baracoa', 'El Salvador', 'Manuel Tames', 'Yateras', 'San Antonio del Sur', 'Imías', 'Maisí', 'Niceto Pérez', 'Caimanera'],
+  'Isla de la Juventud': ['Nueva Gerona']
 }
 
 export default function RemesaPage() {
@@ -62,9 +84,15 @@ export default function RemesaPage() {
     recipientId: '',
     recipientPhone: '',
     recipientAddress: '',
+    recipientProvince: '',
+    recipientMunicipality: '',
     calculatedAmount: 0,
     exchangeRate: 1
   })
+
+  const availableMunicipalities = remesaData.recipientProvince
+    ? CUBA_LOCATIONS[remesaData.recipientProvince] || []
+    : []
 
   // Efecto para convertir tasas de agencia al formato existente para compatibilidad
   useEffect(() => {
@@ -178,6 +206,14 @@ export default function RemesaPage() {
           setError('Por favor ingresa el teléfono de contacto')
           return false
         }
+        if (!remesaData.recipientProvince) {
+          setError('Por favor selecciona la provincia')
+          return false
+        }
+        if (!remesaData.recipientMunicipality) {
+          setError('Por favor selecciona el municipio')
+          return false
+        }
         return true
       default:
         return true
@@ -189,16 +225,68 @@ export default function RemesaPage() {
 
     try {
       setLoading(true)
-      // Aquí iría la lógica para enviar los datos a tu API
-      console.log('Enviando remesa:', remesaData)
 
-      // Simulación de envío
-      await new Promise(resolve => setTimeout(resolve, 2000))
+      // Determine receive currency based on delivery type
+      const receiveCurrency = remesaData.currencyType === 'USD' ? 'USD' : 'CUP'
 
-      // Redirigir a página de éxito
-      router.push('/dashboard/agency-admin/remittance?success=true')
+      // Prepare API payload
+      const apiPayload = {
+        // Location - required
+        province: remesaData.recipientProvince,
+        municipality: remesaData.recipientMunicipality,
+        // Service type
+        serviceType: `Remesa ${remesaData.currencyType}`,
+        // Amounts
+        sendAmount: remesaData.amount,
+        sendCurrency: 'USD',
+        receiveCurrency: receiveCurrency,
+        exchangeRate: remesaData.exchangeRate,
+        // Recipient
+        recipient: {
+          name: remesaData.recipientName,
+          phone: remesaData.recipientPhone,
+          idNumber: remesaData.recipientId,
+          address: remesaData.recipientAddress || null,
+          addressReferences: null,
+          hasAlternateContact: false,
+          alternateContactName: null,
+          alternateContactPhone: null
+        },
+        // Sender
+        sender: {
+          name: remesaData.senderName,
+          phone: remesaData.senderPhone || null,
+          email: remesaData.senderEmail || null,
+          idType: null,
+          idNumber: null
+        },
+        // Payment
+        paymentMethod: 'cash'
+      }
+
+      console.log('[Remesa Form] Sending to API:', apiPayload)
+
+      const response = await fetch('/api/remittance-orders', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(apiPayload)
+      })
+
+      const data = await response.json()
+
+      if (!response.ok || !data.success) {
+        throw new Error(data.error || 'Error al crear la orden')
+      }
+
+      console.log('[Remesa Form] Order created successfully:', data.data)
+
+      // Redirect with order number for success page
+      router.push(`/dashboard/agency-admin/remittance?success=true&orderNumber=${data.data.orderNumber}`)
     } catch (error) {
-      setError('Error al procesar la remesa')
+      console.error('[Remesa Form] Error:', error)
+      setError(error instanceof Error ? error.message : 'Error al procesar la remesa')
     } finally {
       setLoading(false)
     }
@@ -512,30 +600,87 @@ export default function RemesaPage() {
     >
       <div className="text-center mb-8">
         <div className="inline-flex items-center justify-center w-16 h-16 bg-exa-primary/10 rounded-full mb-4">
-          <Phone className="w-8 h-8 text-exa-primary" />
+          <MapPin className="w-8 h-8 text-exa-primary" />
         </div>
-        <h2 className="text-3xl font-bold mb-4">Contacto del destinatario</h2>
+        <h2 className="text-3xl font-bold mb-4">Ubicación y contacto</h2>
         <p className={cn(
           "text-lg",
           theme === 'dark' ? "text-gray-400" : "text-gray-600"
         )}>
-          Ingresa el teléfono y dirección para la entrega
+          Ingresa el teléfono, ubicación y dirección para la entrega
         </p>
       </div>
 
       <div className="max-w-md mx-auto space-y-4">
-        <input
-          type="tel"
-          value={remesaData.recipientPhone}
-          onChange={(e) => updateData('recipientPhone', e.target.value)}
-          placeholder="Teléfono de contacto"
-          className={cn(
-            "w-full px-4 py-4 text-lg border-2 rounded-xl focus:outline-none focus:ring-2 focus:ring-exa-primary focus:border-transparent",
-            theme === 'dark'
-              ? "bg-gray-800 border-gray-700 text-white placeholder-gray-500"
-              : "bg-white border-gray-300 text-gray-900 placeholder-gray-400"
-          )}
-        />
+        <div className="relative">
+          <Phone className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+          <input
+            type="tel"
+            value={remesaData.recipientPhone}
+            onChange={(e) => updateData('recipientPhone', e.target.value)}
+            placeholder="Teléfono de contacto"
+            className={cn(
+              "w-full pl-12 pr-4 py-4 text-lg border-2 rounded-xl focus:outline-none focus:ring-2 focus:ring-exa-primary focus:border-transparent",
+              theme === 'dark'
+                ? "bg-gray-800 border-gray-700 text-white placeholder-gray-500"
+                : "bg-white border-gray-300 text-gray-900 placeholder-gray-400"
+            )}
+          />
+        </div>
+
+        {/* Province selector */}
+        <div>
+          <label className={cn(
+            "block text-sm font-medium mb-2",
+            theme === 'dark' ? "text-gray-300" : "text-gray-700"
+          )}>
+            Provincia *
+          </label>
+          <select
+            value={remesaData.recipientProvince}
+            onChange={(e) => {
+              updateData('recipientProvince', e.target.value)
+              updateData('recipientMunicipality', '') // Reset municipality when province changes
+            }}
+            className={cn(
+              "w-full px-4 py-4 text-lg border-2 rounded-xl focus:outline-none focus:ring-2 focus:ring-exa-primary focus:border-transparent appearance-none",
+              theme === 'dark'
+                ? "bg-gray-800 border-gray-700 text-white"
+                : "bg-white border-gray-300 text-gray-900"
+            )}
+          >
+            <option value="">Seleccionar provincia</option>
+            {Object.keys(CUBA_LOCATIONS).map((province) => (
+              <option key={province} value={province}>{province}</option>
+            ))}
+          </select>
+        </div>
+
+        {/* Municipality selector */}
+        <div>
+          <label className={cn(
+            "block text-sm font-medium mb-2",
+            theme === 'dark' ? "text-gray-300" : "text-gray-700"
+          )}>
+            Municipio *
+          </label>
+          <select
+            value={remesaData.recipientMunicipality}
+            onChange={(e) => updateData('recipientMunicipality', e.target.value)}
+            disabled={!remesaData.recipientProvince}
+            className={cn(
+              "w-full px-4 py-4 text-lg border-2 rounded-xl focus:outline-none focus:ring-2 focus:ring-exa-primary focus:border-transparent appearance-none",
+              theme === 'dark'
+                ? "bg-gray-800 border-gray-700 text-white disabled:opacity-50"
+                : "bg-white border-gray-300 text-gray-900 disabled:opacity-50"
+            )}
+          >
+            <option value="">Seleccionar municipio</option>
+            {availableMunicipalities.map((municipality) => (
+              <option key={municipality} value={municipality}>{municipality}</option>
+            ))}
+          </select>
+        </div>
 
         <textarea
           value={remesaData.recipientAddress}
@@ -650,6 +795,13 @@ export default function RemesaPage() {
               Teléfono:
             </span>
             <span className="font-semibold">{remesaData.recipientPhone}</span>
+          </div>
+
+          <div className="flex justify-between">
+            <span className={cn(theme === 'dark' ? "text-gray-400" : "text-gray-600")}>
+              Ubicación:
+            </span>
+            <span className="font-semibold">{remesaData.recipientMunicipality}, {remesaData.recipientProvince}</span>
           </div>
 
           {remesaData.recipientAddress && (
