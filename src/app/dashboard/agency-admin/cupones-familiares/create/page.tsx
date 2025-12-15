@@ -85,6 +85,12 @@ export default function CreateRemittancePage() {
   const [loadingProducts, setLoadingProducts] = useState(true)
   const [exchangeRates, setExchangeRates] = useState<Record<string, number>>({ USD: 1, CUP: 1 })
 
+  // Ref to always have latest exchange rates available in callbacks
+  const exchangeRatesRef = React.useRef(exchangeRates)
+  React.useEffect(() => {
+    exchangeRatesRef.current = exchangeRates
+  }, [exchangeRates])
+
   // Wizard data state
   const [wizardData, setWizardData] = useState({
     // Step 1: Location
@@ -227,6 +233,21 @@ export default function CreateRemittancePage() {
     }
   }, [currentStep, wizardData.sendAmount, wizardData.receiveCurrency])
 
+  // Recalculate receive amount when exchange rates change
+  useEffect(() => {
+    if (wizardData.productId && wizardData.receiveCurrency) {
+      const rate = exchangeRates[wizardData.receiveCurrency] || 1
+      if (rate !== wizardData.exchangeRate) {
+        console.log('[Remittance Wizard] Recalculating with new rate:', rate, 'for', wizardData.receiveCurrency)
+        setWizardData(prev => ({
+          ...prev,
+          exchangeRate: rate,
+          receiveAmount: prev.sendAmount * rate
+        }))
+      }
+    }
+  }, [exchangeRates, wizardData.productId, wizardData.receiveCurrency])
+
   const checkAvailability = async () => {
     setLoading(true)
     try {
@@ -275,12 +296,15 @@ export default function CreateRemittancePage() {
 
           // Get receive currency and calculate exchange rate
           const receiveCurrency = product.currency || 'USD'
-          const rate = exchangeRates[receiveCurrency] || 1
+          // Use ref to get latest exchange rates (avoid stale closure)
+          const currentRates = exchangeRatesRef.current
+          const rate = currentRates[receiveCurrency] || 1
 
           // Calculate receive amount based on currency
           // USD: 1:1 (no conversion)
-          // CUP: multiply by exchange rate
+          // CUP/MLC/EUR: multiply by exchange rate
           const receiveAmount = amount * rate
+          console.log(`[Remittance Wizard] Calculating: ${amount} USD × ${rate} = ${receiveAmount} ${receiveCurrency}`)
 
           newData.serviceFee = fee
           newData.totalCharged = amount + fee + (updates.deliveryFee ?? prev.deliveryFee)
@@ -612,8 +636,14 @@ export default function CreateRemittancePage() {
                 <span className="absolute left-4 top-1/2 -translate-y-1/2 text-xl font-bold text-gray-500">$</span>
                 <Input
                   type="number"
-                  value={wizardData.sendAmount}
-                  onChange={(e) => updateWizardData({ sendAmount: parseFloat(e.target.value) || 0 })}
+                  value={wizardData.sendAmount || ''}
+                  onChange={(e) => {
+                    const value = e.target.value
+                    const numValue = value === '' ? 0 : parseFloat(value)
+                    updateWizardData({ sendAmount: isNaN(numValue) ? 0 : numValue })
+                  }}
+                  min="0"
+                  step="0.01"
                   className={cn(
                     "pl-10 text-2xl font-bold h-14 rounded-xl border-2",
                     theme === 'dark'
