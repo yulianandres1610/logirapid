@@ -38,23 +38,59 @@ export async function GET(request: NextRequest) {
       }, { status: 401 })
     }
 
+    // ALWAYS get companyId from cookie as primary source (more reliable)
+    const companyIdCookie = cookieStore.get('user-company-id')?.value
+    if (companyIdCookie) {
+      payload.companyId = parseInt(companyIdCookie, 10)
+      console.log(`[Broker Orders GET] Using companyId from cookie: ${payload.companyId}`)
+    } else {
+      console.log(`[Broker Orders GET] Using companyId from JWT: ${payload.companyId}`)
+    }
+
     const { searchParams } = new URL(request.url)
     const status = searchParams.get('status')
     const page = parseInt(searchParams.get('page') || '1')
     const limit = parseInt(searchParams.get('limit') || '20')
     const offset = (page - 1) * limit
 
+    console.log(`[Broker Orders GET] ====== DEBUG ======`)
+    console.log(`[Broker Orders GET] User: ${payload.email}, companyId: ${payload.companyId}`)
+
     // Verify company is a broker
     const companyCheck = await db.query(`
-      SELECT companytype FROM companies WHERE id = $1
+      SELECT companytype, legalname FROM companies WHERE id = $1
     `, [payload.companyId])
 
+    console.log(`[Broker Orders GET] Company check result:`, companyCheck.rows[0])
+
     if (companyCheck.rows.length === 0 || companyCheck.rows[0].companytype !== 'broker') {
+      console.log(`[Broker Orders GET] ERROR: Company ${payload.companyId} is not a broker (type: ${companyCheck.rows[0]?.companytype})`)
       return NextResponse.json({
         success: false,
         error: 'Esta empresa no es un broker'
       }, { status: 403 })
     }
+
+    console.log(`[Broker Orders GET] Company ${companyCheck.rows[0].legalname} is a valid broker`)
+
+    // Debug: Check what orders exist with this broker_company_id
+    const debugOrders = await db.query(`
+      SELECT id, order_number, broker_company_id, selling_company_id, status, created_at
+      FROM remittance_orders
+      WHERE broker_company_id = $1
+      ORDER BY created_at DESC
+      LIMIT 5
+    `, [payload.companyId])
+    console.log(`[Broker Orders GET] Orders assigned to broker ${payload.companyId}:`, debugOrders.rows)
+
+    // Also check ALL recent orders to see what broker_company_id they have
+    const allRecentOrders = await db.query(`
+      SELECT id, order_number, broker_company_id, selling_company_id, status, created_at
+      FROM remittance_orders
+      ORDER BY created_at DESC
+      LIMIT 10
+    `)
+    console.log(`[Broker Orders GET] ALL recent orders in system:`, allRecentOrders.rows)
 
     // Build query
     let whereClause = 'WHERE ro.broker_company_id = $1'
@@ -206,6 +242,12 @@ export async function POST(request: NextRequest) {
       }, { status: 401 })
     }
 
+    // ALWAYS get companyId from cookie as primary source (more reliable)
+    const companyIdCookie = cookieStore.get('user-company-id')?.value
+    if (companyIdCookie) {
+      payload.companyId = parseInt(companyIdCookie, 10)
+    }
+
     const body = await request.json()
     const { orderId, action, notes, deliveryProofPhoto, deliverySignature, rejectionReason } = body
 
@@ -293,11 +335,10 @@ export async function POST(request: NextRequest) {
           }, { status: 400 })
         }
 
-        await db.query('BEGIN')
-
-        try {
+        // Use proper transaction with dedicated connection
+        await db.transaction(async (client) => {
           // Update order
-          await db.query(`
+          await client.query(`
             UPDATE remittance_orders
             SET
               status = 'delivered',
@@ -311,22 +352,16 @@ export async function POST(request: NextRequest) {
           `, [orderId, payload.userId, deliveryProofPhoto, deliverySignature, notes])
 
           // Release broker funds (mark as used)
-          await db.query(`
+          await client.query(`
             SELECT release_broker_funds_delivered($1, $2)
           `, [orderId, payload.userId])
+        })
 
-          await db.query('COMMIT')
-
-          return NextResponse.json({
-            success: true,
-            message: 'Entrega completada',
-            data: { status: 'delivered' }
-          })
-
-        } catch (err) {
-          await db.query('ROLLBACK')
-          throw err
-        }
+        return NextResponse.json({
+          success: true,
+          message: 'Entrega completada',
+          data: { status: 'delivered' }
+        })
       }
 
       case 'reject': {
@@ -354,11 +389,10 @@ export async function POST(request: NextRequest) {
           }, { status: 400 })
         }
 
-        await db.query('BEGIN')
-
-        try {
+        // Use proper transaction with dedicated connection
+        await db.transaction(async (client) => {
           // Update order - set to 'rejected' status so it can be reassigned
-          await db.query(`
+          await client.query(`
             UPDATE remittance_orders
             SET
               status = 'rejected',
@@ -372,26 +406,20 @@ export async function POST(request: NextRequest) {
           `, [orderId, rejectionReason, notes || null, payload.userId])
 
           // Return reserved funds to broker's available balance
-          await db.query(`
+          await client.query(`
             SELECT release_broker_funds_cancelled($1, $2, $3)
           `, [orderId, payload.userId, `Rechazado: ${rejectionReason}`])
+        })
 
-          await db.query('COMMIT')
-
-          return NextResponse.json({
-            success: true,
-            message: 'Orden rechazada. Los fondos han sido liberados.',
-            data: {
-              status: 'rejected',
-              rejectionReason,
-              fundsReleased: true
-            }
-          })
-
-        } catch (err) {
-          await db.query('ROLLBACK')
-          throw err
-        }
+        return NextResponse.json({
+          success: true,
+          message: 'Orden rechazada. Los fondos han sido liberados.',
+          data: {
+            status: 'rejected',
+            rejectionReason,
+            fundsReleased: true
+          }
+        })
       }
 
       case 'cancel': {
@@ -402,11 +430,10 @@ export async function POST(request: NextRequest) {
           }, { status: 400 })
         }
 
-        await db.query('BEGIN')
-
-        try {
+        // Use proper transaction with dedicated connection
+        await db.transaction(async (client) => {
           // Update order
-          await db.query(`
+          await client.query(`
             UPDATE remittance_orders
             SET
               status = 'cancelled',
@@ -418,22 +445,16 @@ export async function POST(request: NextRequest) {
           `, [orderId, payload.userId, notes])
 
           // Return reserved funds to available
-          await db.query(`
+          await client.query(`
             SELECT release_broker_funds_cancelled($1, $2, $3)
           `, [orderId, payload.userId, notes])
+        })
 
-          await db.query('COMMIT')
-
-          return NextResponse.json({
-            success: true,
-            message: 'Orden cancelada',
-            data: { status: 'cancelled' }
-          })
-
-        } catch (err) {
-          await db.query('ROLLBACK')
-          throw err
-        }
+        return NextResponse.json({
+          success: true,
+          message: 'Orden cancelada',
+          data: { status: 'cancelled' }
+        })
       }
 
       default:
