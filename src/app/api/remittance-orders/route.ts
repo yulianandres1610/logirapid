@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
 import jwt from 'jsonwebtoken'
 import { db } from '@/lib/database'
+import { sendBrokerRemittanceNotification } from '@/lib/sms-service'
 
 interface JWTPayload {
   userId: number
@@ -654,6 +655,70 @@ export async function POST(request: NextRequest) {
 
       await client.query('COMMIT')
       client.release()
+
+      // Send WhatsApp notification to broker (non-blocking)
+      if (brokerCompanyId) {
+        try {
+          // Get broker's phone number
+          const brokerInfoResult = await db.query(`
+            SELECT
+              c.broker_contact_phone,
+              u.phone as user_phone
+            FROM companies c
+            LEFT JOIN user_companies uc ON uc.company_id = c.id
+            LEFT JOIN users u ON u.id = uc.user_id
+            WHERE c.id = $1
+            ORDER BY u.role = 'ADMIN' DESC
+            LIMIT 1
+          `, [brokerCompanyId])
+
+          const brokerPhone = brokerInfoResult.rows[0]?.broker_contact_phone ||
+                              brokerInfoResult.rows[0]?.user_phone
+
+          if (brokerPhone) {
+            // Calculate delivery deadline
+            const deliveryDeadline = order.estimated_delivery === '1-24 horas'
+              ? new Date(Date.now() + 24 * 60 * 60 * 1000).toLocaleDateString('es-ES', {
+                  weekday: 'long',
+                  year: 'numeric',
+                  month: 'long',
+                  day: 'numeric'
+                })
+              : new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toLocaleDateString('es-ES', {
+                  weekday: 'long',
+                  year: 'numeric',
+                  month: 'long',
+                  day: 'numeric'
+                })
+
+            // Build recipient location
+            const recipientLocation = `${municipality}, ${province}`
+
+            // Send notification (don't await to keep response fast)
+            sendBrokerRemittanceNotification(
+              brokerPhone,
+              order.order_number,
+              recipient.name,
+              recipient.phone,
+              recipientLocation,
+              deliveryDeadline
+            ).then(result => {
+              if (result.success) {
+                console.log(`[Remittance Orders] WhatsApp sent to broker: ${result.messageId}`)
+              } else {
+                console.warn(`[Remittance Orders] Failed to send WhatsApp to broker: ${result.error}`)
+              }
+            }).catch(err => {
+              console.error('[Remittance Orders] WhatsApp notification error:', err)
+            })
+          } else {
+            console.log(`[Remittance Orders] No phone found for broker ${brokerCompanyId}`)
+          }
+        } catch (notifError) {
+          // Don't fail the order creation if notification fails
+          console.error('[Remittance Orders] Error preparing broker notification:', notifError)
+        }
+      }
 
       return NextResponse.json({
         success: true,

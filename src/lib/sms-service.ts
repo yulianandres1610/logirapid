@@ -664,6 +664,111 @@ export async function sendCashReceivedConfirmationSMS(
   return sendSMS(brokerPhone, message)
 }
 
+// ==========================================
+// BROKER REMITTANCE ORDER NOTIFICATION
+// ==========================================
+
+/**
+ * Sends WhatsApp notification to broker when a new remittance order is assigned
+ * Template: HX0e2324c2ee3839c08b8425fba9263387
+ * Variables:
+ *   {{1}} - Order number
+ *   {{2}} - Recipient name
+ *   {{3}} - Contact phone
+ *   {{4}} - Contact address/location
+ *   {{5}} - Delivery deadline
+ */
+export async function sendBrokerRemittanceNotification(
+  brokerPhone: string,
+  orderNumber: string,
+  recipientName: string,
+  recipientPhone: string,
+  recipientLocation: string,
+  deliveryDeadline: string
+): Promise<SMSResult> {
+  try {
+    const contentSid = process.env.TWILIO_CONTENT_SID_BROKER_ORDER || 'HX0e2324c2ee3839c08b8425fba9263387'
+    const twilioPhone = process.env.TWILIO_PHONE_NUMBER
+    const whatsappNumber = process.env.TWILIO_WHATSAPP_NUMBER ||
+      (twilioPhone ? `whatsapp:${twilioPhone}` : null)
+
+    if (!whatsappNumber) {
+      console.error('[WhatsApp Service] WhatsApp number not configured')
+      return {
+        success: false,
+        error: 'WhatsApp service not configured'
+      }
+    }
+
+    // Formatear y validar número destino
+    const formattedPhone = formatPhoneNumber(brokerPhone)
+
+    if (!isValidPhoneNumber(formattedPhone)) {
+      console.warn(`[WhatsApp Service] Invalid broker phone number: ${brokerPhone}`)
+      return {
+        success: false,
+        error: `Invalid phone number: ${brokerPhone}`,
+        to: formattedPhone
+      }
+    }
+
+    // Obtener cliente de Twilio
+    const client = await getClient()
+
+    // Función para sanitizar variables
+    const sanitize = (value: string | null | undefined, defaultVal: string): string => {
+      if (!value) return defaultVal
+      return String(value)
+        .replace(/[\n\r\t]/g, ' ')
+        .replace(/\s{4,}/g, '   ')
+        .trim() || defaultVal
+    }
+
+    // Preparar variables del template
+    // Template: 📦 Nueva orden recibida
+    // Se ha registrado una nueva orden en el sistema con el número de orden {{1}}.
+    // El pedido está a nombre de {{2}}.
+    // Información de contacto del cliente: {{3}} – {{4}}.
+    // La fecha límite de entrega establecida para esta orden es el {{5}}.
+    const contentVars = {
+      "1": sanitize(orderNumber, 'N/A'),
+      "2": sanitize(recipientName, 'Cliente'),
+      "3": sanitize(recipientPhone, 'No disponible'),
+      "4": sanitize(recipientLocation, 'No especificada'),
+      "5": sanitize(deliveryDeadline, 'Por confirmar')
+    }
+
+    console.log(`[WhatsApp Broker] Sending notification to broker ${formattedPhone}`)
+    console.log(`[WhatsApp Broker] Using ContentSid: ${contentSid}`)
+    console.log(`[WhatsApp Broker] Order: ${orderNumber}, Recipient: ${recipientName}`)
+
+    // Enviar mensaje usando Content Template
+    const result = await client.messages.create({
+      contentSid,
+      contentVariables: JSON.stringify(contentVars),
+      from: whatsappNumber.startsWith('whatsapp:') ? whatsappNumber : `whatsapp:${whatsappNumber}`,
+      to: `whatsapp:${formattedPhone}`
+    })
+
+    console.log(`[WhatsApp Broker] Notification sent successfully. SID: ${result.sid}`)
+
+    return {
+      success: true,
+      messageId: result.sid,
+      to: formattedPhone
+    }
+
+  } catch (error: any) {
+    console.error('[WhatsApp Broker] Error sending notification:', error)
+
+    return {
+      success: false,
+      error: error.message || 'Unknown error sending WhatsApp',
+      to: brokerPhone
+    }
+  }
+}
+
 /**
  * Masks a phone number for display (shows first 4 and last 3 digits)
  * Example: +17861234567 -> +1786***567
