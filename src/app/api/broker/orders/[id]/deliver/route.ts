@@ -277,7 +277,7 @@ export async function POST(
           `, [
             reservation.broker_company_id, reservation.currency, reservation.amount,
             availableBefore, reservedBefore, Math.max(0, reservedBefore - parseFloat(reservation.amount)),
-            orderId, payload.userId, `Entrega completada - Orden #${orderId}`
+            orderId, payload.userId, `Entrega completada - Orden ${order.order_number}`
           ])
 
           // Log to main wallet_transactions
@@ -326,7 +326,7 @@ export async function POST(
               payload.companyId, deliveryCurrencyFromOrder, deliveryAmount,
               availableBefore, Math.max(0, availableBefore - deliveryAmount),
               reservedBefore, orderId, payload.userId,
-              `Entrega completada - Orden #${orderId} (sin reserva previa)`
+              `Entrega completada - Orden ${order.order_number} (sin reserva previa)`
             ])
 
             // Log to main wallet_transactions
