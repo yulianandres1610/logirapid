@@ -37,6 +37,7 @@ import {
   List,
   SlidersHorizontal
 } from 'lucide-react'
+import { RechargeProductManager } from '@/components/admin/RechargeProductManager'
 
 // Interfaces
 interface Product {
@@ -581,16 +582,21 @@ export default function ProductConfigPage() {
                     )
                   })}
                 </div>
-                <button
-                  onClick={() => setShowCreateModal(true)}
-                  className="px-5 py-2.5 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white font-medium rounded-xl flex items-center gap-2 shadow-lg shadow-blue-500/25 transition-all hover:shadow-blue-500/40 whitespace-nowrap"
-                >
-                  <Plus className="w-5 h-5" />
-                  Nuevo Producto
-                </button>
+                {categoryFilter !== 'recarga' && (
+                  <button
+                    onClick={() => setShowCreateModal(true)}
+                    className="px-5 py-2.5 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white font-medium rounded-xl flex items-center gap-2 shadow-lg shadow-blue-500/25 transition-all hover:shadow-blue-500/40 whitespace-nowrap"
+                  >
+                    <Plus className="w-5 h-5" />
+                    Nuevo Producto
+                  </button>
+                )}
               </div>
 
-              {loading ? (
+              {/* Show RechargeProductManager when 'recarga' category is selected */}
+              {categoryFilter === 'recarga' ? (
+                <RechargeProductManager />
+              ) : loading ? (
                 <div className="flex items-center justify-center py-20">
                   <div className="text-center">
                     <div className={`w-16 h-16 mx-auto mb-4 rounded-2xl flex items-center justify-center ${isDark ? 'bg-gray-800' : 'bg-gray-100'}`}>
