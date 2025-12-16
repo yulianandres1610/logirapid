@@ -379,6 +379,7 @@ export async function POST(request: NextRequest) {
     console.log(`[Remittance Orders POST] Final sellingCompanyId: ${sellingCompanyId}`)
 
     const body = await request.json()
+    console.log(`[Remittance Orders POST] Request body:`, JSON.stringify(body, null, 2))
     const {
       // Location
       province,
