@@ -467,7 +467,8 @@ export async function POST(request: NextRequest) {
     }
 
     // Calculate totals
-    const receiveAmount = sendAmount * exchangeRate
+    // Round receiveAmount to whole number (no decimals for cash delivery)
+    const receiveAmount = Math.round(sendAmount * exchangeRate)
     const totalCharged = sendAmount + serviceFee + deliveryFee
     const cashChange = cashReceived ? cashReceived - totalCharged : null
 
