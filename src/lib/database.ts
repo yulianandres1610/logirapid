@@ -110,45 +110,29 @@ class DatabaseWrapper {
   }
 
   async transaction<T>(callback: (client: any) => Promise<T>): Promise<T> {
-    const txId = Date.now().toString(36)
-    console.log(`🔄 [DB Transaction ${txId}] Starting...`)
-
     const client = await getPool().connect();
-    console.log(`🔄 [DB Transaction ${txId}] Client acquired from pool`)
 
     try {
-      console.log(`🔄 [DB Transaction ${txId}] Executing BEGIN`)
       await client.query('BEGIN');
-
-      console.log(`🔄 [DB Transaction ${txId}] Executing callback`)
       const result = await callback(client);
-
-      console.log(`🔄 [DB Transaction ${txId}] Callback completed, executing COMMIT`)
       await client.query('COMMIT');
-      console.log(`✅ [DB Transaction ${txId}] COMMIT successful`)
-
       return result;
     } catch (error: any) {
-      console.error(`❌ [DB Transaction ${txId}] Error in transaction:`, error.message);
       try {
-        console.log(`🔄 [DB Transaction ${txId}] Executing ROLLBACK`)
         await client.query('ROLLBACK');
-        console.log(`⚠️ [DB Transaction ${txId}] ROLLBACK completed`)
       } catch (rollbackError: any) {
-        console.error(`❌ [DB Transaction ${txId}] Error during ROLLBACK:`, rollbackError.message);
+        console.error('❌ [DB] Error during ROLLBACK:', rollbackError.message);
       }
-      console.error(`❌ [DB Transaction ${txId}] Error details:`, {
+      console.error('❌ [DB Transaction Error]:', {
         message: error.message,
-        code: error.code || 'N/A',
-        stack: error.stack?.substring(0, 500)
+        code: error.code || 'N/A'
       });
       throw error;
     } finally {
       try {
         client.release();
-        console.log(`🔄 [DB Transaction ${txId}] Client released`)
       } catch (releaseError: any) {
-        console.error(`❌ [DB Transaction ${txId}] Error releasing client:`, releaseError.message);
+        console.error('❌ [DB] Error releasing client:', releaseError.message);
       }
     }
   }

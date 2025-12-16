@@ -260,26 +260,14 @@ export async function GET(request: NextRequest) {
     params.push(limit, offset)
     const result = await db.query(query, params)
 
-    console.log(`[Remittance Orders GET] ====== RETURNING RESPONSE ======`)
-    console.log(`[Remittance Orders GET] Total orders found: ${total}, returning: ${result.rows.length}`)
-
     return NextResponse.json({
       success: true,
       data: {
-        _debug: {
-          userCompanyId: userCompanyId,
-          userEmail: payload.email,
-          userRole: payload.role,
-          totalFound: total,
-          returnedCount: result.rows.length,
-          cookieCompanyId: cookieStore.get('user-company-id')?.value || 'not set'
-        },
         orders: result.rows.map(row => ({
           id: row.id,
           orderNumber: row.order_number,
           status: row.status,
           paymentStatus: row.payment_status,
-          _sellingCompanyId: row.selling_company_id,
           // Amounts
           sendAmount: parseFloat(row.send_amount),
           sendCurrency: row.send_currency,
@@ -586,21 +574,22 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // Begin transaction
+    await db.query('BEGIN')
+
     console.log(`[Remittance Orders POST] ====== CREATING ORDER ======`)
-    console.log(`[Remittance Orders POST] User: ${payload.email}, companyId: ${payload.companyId}, userId: ${payload.userId}`)
+    console.log(`[Remittance Orders POST] User: ${payload.email}, companyId: ${sellingCompanyId}, userId: ${payload.userId}`)
     console.log(`[Remittance Orders POST] Province: ${province}, Municipality: ${municipality}`)
     console.log(`[Remittance Orders POST] Broker assigned: ${brokerCompanyId}`)
 
-    // Use proper transaction method with dedicated connection
-    // This fixes the bug where BEGIN/COMMIT used different pool connections
-    const result = await db.transaction(async (client) => {
+    try {
       // Generate order number
-      const orderNumResult = await client.query('SELECT generate_remittance_order_number() as order_number')
+      const orderNumResult = await db.query('SELECT generate_remittance_order_number() as order_number')
       const orderNumber = orderNumResult.rows[0].order_number
       console.log(`[Remittance Orders POST] Generated order number: ${orderNumber}`)
 
       // Create the order
-      const insertResult = await client.query(`
+      const insertResult = await db.query(`
         INSERT INTO remittance_orders (
           order_number,
           selling_company_id, sold_by_user_id,
@@ -643,108 +632,62 @@ export async function POST(request: NextRequest) {
       ])
 
       const order = insertResult.rows[0]
-      console.log(`[Remittance Orders POST] Order created successfully:`)
-      console.log(`[Remittance Orders POST] - ID: ${order.id}`)
-      console.log(`[Remittance Orders POST] - Order Number: ${order.order_number}`)
-      console.log(`[Remittance Orders POST] - selling_company_id: ${order.selling_company_id}`)
-      console.log(`[Remittance Orders POST] - sold_by_user_id: ${order.sold_by_user_id}`)
+      console.log(`[Remittance Orders POST] Order created: ID=${order.id}, Number=${order.order_number}, SellingCompany=${order.selling_company_id}, Broker=${order.broker_company_id}`)
 
-      // Try to reserve funds in broker's wallet if broker was assigned
-      // Use SAVEPOINT to prevent reserve_broker_funds errors from aborting the entire transaction
+      // Try to reserve funds (non-blocking - if it fails, order still gets created)
       let fundsReserved = false
       if (brokerCompanyId) {
         try {
-          // Create savepoint before calling function that might fail
-          await client.query('SAVEPOINT before_reserve')
-
-          const reserveResult = await client.query(`
+          const reserveResult = await db.query(`
             SELECT reserve_broker_funds($1, $2, $3, $4, $5) as reserved
           `, [brokerCompanyId, finalReceiveCurrency, receiveAmount, order.id, payload.userId])
-
           fundsReserved = reserveResult.rows[0]?.reserved === true
-
           if (fundsReserved) {
-            console.log(`[Remittance Orders] Funds reserved for order ${order.id}: ${receiveAmount} ${finalReceiveCurrency}`)
-            // Release savepoint on success
-            await client.query('RELEASE SAVEPOINT before_reserve')
-          } else {
-            console.log(`[Remittance Orders] Could not reserve funds for order ${order.id} - broker may have insufficient balance`)
-            await client.query('RELEASE SAVEPOINT before_reserve')
+            console.log(`[Remittance Orders] Funds reserved: ${receiveAmount} ${finalReceiveCurrency}`)
           }
         } catch (reserveError) {
-          console.error(`[Remittance Orders] Error reserving funds:`, reserveError)
-          // CRITICAL: Rollback to savepoint to un-abort the transaction
-          try {
-            await client.query('ROLLBACK TO SAVEPOINT before_reserve')
-            console.log(`[Remittance Orders] Transaction recovered after reserve_broker_funds error`)
-          } catch (rollbackError) {
-            console.error(`[Remittance Orders] Failed to rollback to savepoint:`, rollbackError)
-          }
-          // Continue without reservation - order will still be created
+          console.error(`[Remittance Orders] Reserve funds error (non-blocking):`, reserveError)
         }
       }
 
-      // Update order with reservation status
+      // Update estimated delivery if funds reserved
       if (fundsReserved) {
-        await client.query(`
-          UPDATE remittance_orders
-          SET estimated_delivery = '1-24 horas'
-          WHERE id = $1
-        `, [order.id])
+        await db.query(`UPDATE remittance_orders SET estimated_delivery = '1-24 horas' WHERE id = $1`, [order.id])
         order.estimated_delivery = '1-24 horas'
       }
 
-      // CRITICAL: Verify order exists WITHIN transaction before commit
-      const verifyBeforeCommit = await client.query(
-        'SELECT id, order_number FROM remittance_orders WHERE id = $1',
-        [order.id]
-      )
-      if (verifyBeforeCommit.rows.length === 0) {
-        console.error(`[Remittance Orders POST] CRITICAL: Order ${order.id} NOT FOUND within transaction!`)
-        throw new Error(`Order ${order.id} was not inserted properly`)
-      }
-      console.log(`[Remittance Orders POST] Order ${order.id} (${order.order_number}) verified WITHIN transaction`)
+      await db.query('COMMIT')
 
-      return { order, fundsReserved }
-    })
+      return NextResponse.json({
+        success: true,
+        data: {
+          id: order.id,
+          orderNumber: order.order_number,
+          status: order.status,
+          paymentStatus: order.payment_status,
+          sendAmount: parseFloat(order.send_amount),
+          sendCurrency: order.send_currency,
+          receiveAmount: parseFloat(order.receive_amount),
+          receiveCurrency: order.receive_currency,
+          serviceFee: parseFloat(order.service_fee),
+          deliveryFee: parseFloat(order.delivery_fee),
+          totalCharged: parseFloat(order.total_charged),
+          cashChange: order.cash_change ? parseFloat(order.cash_change) : null,
+          estimatedDelivery: order.estimated_delivery,
+          recipientName: order.recipient_name,
+          recipientProvince: order.recipient_province,
+          recipientMunicipality: order.recipient_municipality,
+          sellingCompanyId: order.selling_company_id,
+          brokerCompanyId: order.broker_company_id,
+          fundsReserved,
+          createdAt: order.created_at
+        }
+      })
 
-    // Transaction committed successfully - verify the order exists
-    console.log(`[Remittance Orders POST] Transaction committed for order ${result.order.id}`)
-
-    // Verify order was saved (using a separate connection is fine now that transaction is committed)
-    const verifyResult = await db.query('SELECT id FROM remittance_orders WHERE id = $1', [result.order.id])
-    if (verifyResult.rows.length === 0) {
-      console.error(`[Remittance Orders POST] ERROR: Order ${result.order.id} not found after COMMIT!`)
-    } else {
-      console.log(`[Remittance Orders POST] Order ${result.order.id} verified in database`)
+    } catch (err) {
+      await db.query('ROLLBACK')
+      throw err
     }
-
-    const order = result.order
-    return NextResponse.json({
-      success: true,
-      data: {
-        id: order.id,
-        orderNumber: order.order_number,
-        status: order.status,
-        paymentStatus: order.payment_status,
-        sendAmount: parseFloat(order.send_amount),
-        sendCurrency: order.send_currency,
-        receiveAmount: parseFloat(order.receive_amount),
-        receiveCurrency: order.receive_currency,
-        serviceFee: parseFloat(order.service_fee),
-        deliveryFee: parseFloat(order.delivery_fee),
-        totalCharged: parseFloat(order.total_charged),
-        cashChange: order.cash_change ? parseFloat(order.cash_change) : null,
-        estimatedDelivery: order.estimated_delivery,
-        recipientName: order.recipient_name,
-        recipientProvince: order.recipient_province,
-        recipientMunicipality: order.recipient_municipality,
-        sellingCompanyId: order.selling_company_id,
-        brokerCompanyId: order.broker_company_id,
-        fundsReserved: result.fundsReserved,
-        createdAt: order.created_at
-      }
-    })
 
   } catch (error) {
     console.error('[Remittance Orders API] POST error:', error)
