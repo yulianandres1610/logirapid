@@ -185,19 +185,8 @@ export function RechargeProductManager() {
 
   return (
     <div className="space-y-6">
-      {/* Header with Balance */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <div>
-          <h2 className="text-xl font-semibold text-gray-900 dark:text-white flex items-center gap-2">
-            <Smartphone className="w-6 h-6 text-purple-500" />
-            Recargas Telefónicas
-          </h2>
-          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-            Productos configurados para agencias
-          </p>
-        </div>
-
-        {/* UnivCell Balance */}
+      {/* UnivCell Balance */}
+      <div className="flex justify-end">
         <div className="bg-gradient-to-r from-green-500 to-emerald-600 text-white px-4 py-2 rounded-xl shadow-md flex items-center gap-3">
           <Wallet className="w-5 h-5" />
           <div>
