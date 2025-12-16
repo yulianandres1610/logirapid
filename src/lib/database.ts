@@ -71,6 +71,11 @@ function getPool(): Pool {
 
 // Wrapper para PostgreSQL con métodos convenientes
 class DatabaseWrapper {
+  // Get a dedicated client from the pool for transactions
+  async getClient() {
+    return await getPool().connect()
+  }
+
   async query(text: string, params?: any[], retries = 2) {
     try {
       const result = await getPool().query(text, params);

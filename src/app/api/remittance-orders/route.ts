@@ -574,22 +574,18 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Begin transaction
-    await db.query('BEGIN')
-
-    console.log(`[Remittance Orders POST] ====== CREATING ORDER ======`)
-    console.log(`[Remittance Orders POST] User: ${payload.email}, companyId: ${sellingCompanyId}, userId: ${payload.userId}`)
-    console.log(`[Remittance Orders POST] Province: ${province}, Municipality: ${municipality}`)
-    console.log(`[Remittance Orders POST] Broker assigned: ${brokerCompanyId}`)
+    // Use dedicated client for transaction (pool.query uses different connections)
+    const client = await db.getClient()
 
     try {
+      await client.query('BEGIN')
+
       // Generate order number
-      const orderNumResult = await db.query('SELECT generate_remittance_order_number() as order_number')
+      const orderNumResult = await client.query('SELECT generate_remittance_order_number() as order_number')
       const orderNumber = orderNumResult.rows[0].order_number
-      console.log(`[Remittance Orders POST] Generated order number: ${orderNumber}`)
 
       // Create the order
-      const insertResult = await db.query(`
+      const insertResult = await client.query(`
         INSERT INTO remittance_orders (
           order_number,
           selling_company_id, sold_by_user_id,
@@ -632,31 +628,29 @@ export async function POST(request: NextRequest) {
       ])
 
       const order = insertResult.rows[0]
-      console.log(`[Remittance Orders POST] Order created: ID=${order.id}, Number=${order.order_number}, SellingCompany=${order.selling_company_id}, Broker=${order.broker_company_id}`)
 
-      // Try to reserve funds (non-blocking - if it fails, order still gets created)
+      // Try to reserve funds using same client
       let fundsReserved = false
       if (brokerCompanyId) {
         try {
-          const reserveResult = await db.query(`
+          const reserveResult = await client.query(`
             SELECT reserve_broker_funds($1, $2, $3, $4, $5) as reserved
           `, [brokerCompanyId, finalReceiveCurrency, receiveAmount, order.id, payload.userId])
           fundsReserved = reserveResult.rows[0]?.reserved === true
-          if (fundsReserved) {
-            console.log(`[Remittance Orders] Funds reserved: ${receiveAmount} ${finalReceiveCurrency}`)
-          }
         } catch (reserveError) {
-          console.error(`[Remittance Orders] Reserve funds error (non-blocking):`, reserveError)
+          // Non-blocking - order will be created without fund reservation
+          console.error('[Remittance Orders] Reserve funds error:', reserveError)
         }
       }
 
       // Update estimated delivery if funds reserved
       if (fundsReserved) {
-        await db.query(`UPDATE remittance_orders SET estimated_delivery = '1-24 horas' WHERE id = $1`, [order.id])
+        await client.query(`UPDATE remittance_orders SET estimated_delivery = '1-24 horas' WHERE id = $1`, [order.id])
         order.estimated_delivery = '1-24 horas'
       }
 
-      await db.query('COMMIT')
+      await client.query('COMMIT')
+      client.release()
 
       return NextResponse.json({
         success: true,
@@ -685,7 +679,8 @@ export async function POST(request: NextRequest) {
       })
 
     } catch (err) {
-      await db.query('ROLLBACK')
+      await client.query('ROLLBACK')
+      client.release()
       throw err
     }
 
