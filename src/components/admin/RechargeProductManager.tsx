@@ -12,6 +12,10 @@ import {
   Wallet,
   Edit2,
   Trash2,
+  Plus,
+  X,
+  Calendar,
+  DollarSign,
 } from 'lucide-react'
 import { RechargePricingModal } from './RechargePricingModal'
 
@@ -52,6 +56,11 @@ interface Country {
   country_name: string
 }
 
+interface RechargeProductManagerProps {
+  onOpenModal?: () => void
+  onProductsChange?: () => void
+}
+
 // Country flag mapping
 const getCountryFlag = (countryCode: string): string => {
   const flags: Record<string, string> = {
@@ -71,7 +80,7 @@ const getCountryFlag = (countryCode: string): string => {
   return flags[countryCode] || '🌍'
 }
 
-export function RechargeProductManager() {
+export function RechargeProductManager({ onOpenModal, onProductsChange }: RechargeProductManagerProps) {
   const [products, setProducts] = useState<RechargeProduct[]>([])
   const [countries, setCountries] = useState<Country[]>([])
   const [loading, setLoading] = useState(true)
@@ -86,6 +95,8 @@ export function RechargeProductManager() {
   // Modal
   const [selectedProduct, setSelectedProduct] = useState<RechargeProduct | null>(null)
   const [showPricingModal, setShowPricingModal] = useState(false)
+  const [showPromoModal, setShowPromoModal] = useState(false)
+  const [promoProduct, setPromoProduct] = useState<RechargeProduct | null>(null)
 
   const fetchProducts = useCallback(async () => {
     try {
@@ -148,6 +159,7 @@ export function RechargeProductManager() {
       const data = await response.json()
       if (data.success) {
         fetchProducts()
+        onProductsChange?.()
       } else {
         alert(data.error || 'Error eliminando producto')
       }
@@ -161,6 +173,20 @@ export function RechargeProductManager() {
     setShowPricingModal(false)
     setSelectedProduct(null)
     fetchProducts()
+    onProductsChange?.()
+  }
+
+  const handleShowPromo = (product: RechargeProduct) => {
+    setPromoProduct(product)
+    setShowPromoModal(true)
+  }
+
+  const formatDate = (dateString: string) => {
+    return new Date(dateString).toLocaleDateString('es-ES', {
+      day: 'numeric',
+      month: 'short',
+      year: 'numeric'
+    })
   }
 
   useEffect(() => {
@@ -185,8 +211,18 @@ export function RechargeProductManager() {
 
   return (
     <div className="space-y-6">
-      {/* UnivCell Balance */}
-      <div className="flex justify-end">
+      {/* Header with Button and Balance */}
+      <div className="flex items-center justify-between">
+        {/* Nuevo Producto Button */}
+        <button
+          onClick={onOpenModal}
+          className="px-5 py-2.5 bg-gradient-to-r from-purple-500 to-purple-600 hover:from-purple-600 hover:to-purple-700 text-white font-medium rounded-xl flex items-center gap-2 shadow-lg shadow-purple-500/25 transition-all hover:shadow-purple-500/40 whitespace-nowrap"
+        >
+          <Plus className="w-5 h-5" />
+          Nuevo Producto
+        </button>
+
+        {/* UnivCell Balance */}
         <div className="bg-gradient-to-r from-green-500 to-emerald-600 text-white px-4 py-2 rounded-xl shadow-md flex items-center gap-3">
           <Wallet className="w-5 h-5" />
           <div>
@@ -284,10 +320,14 @@ export function RechargeProductManager() {
                   </div>
                 </div>
                 {product.promotions.length > 0 && (
-                  <span className="bg-orange-100 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400 text-xs px-2 py-1 rounded-full flex items-center gap-1">
+                  <button
+                    onClick={() => handleShowPromo(product)}
+                    className="bg-orange-100 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400 text-xs px-2 py-1 rounded-full flex items-center gap-1 hover:bg-orange-200 dark:hover:bg-orange-900/50 transition-colors cursor-pointer"
+                    title="Ver promociones"
+                  >
                     <Gift className="w-3 h-3" />
                     Promo
-                  </span>
+                  </button>
                 )}
               </div>
 
@@ -358,6 +398,86 @@ export function RechargeProductManager() {
           }}
           onSave={handlePricingSaved}
         />
+      )}
+
+      {/* Promotion Info Modal */}
+      {showPromoModal && promoProduct && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-lg max-h-[80vh] overflow-hidden">
+            {/* Header */}
+            <div className="bg-gradient-to-r from-orange-500 to-amber-500 px-6 py-4 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <Gift className="w-6 h-6 text-white" />
+                <div>
+                  <h3 className="text-lg font-bold text-white">Promociones</h3>
+                  <p className="text-sm text-white/80">{promoProduct.name}</p>
+                </div>
+              </div>
+              <button
+                onClick={() => {
+                  setShowPromoModal(false)
+                  setPromoProduct(null)
+                }}
+                className="p-2 hover:bg-white/20 rounded-lg transition-colors"
+              >
+                <X className="w-5 h-5 text-white" />
+              </button>
+            </div>
+
+            {/* Content */}
+            <div className="p-6 space-y-4 overflow-y-auto max-h-[60vh]">
+              {promoProduct.promotions.map((promo) => (
+                <div
+                  key={promo.id}
+                  className="bg-gradient-to-r from-orange-50 to-amber-50 dark:from-orange-900/20 dark:to-amber-900/20 border border-orange-200 dark:border-orange-800 rounded-xl p-4"
+                >
+                  {/* Promo Summary */}
+                  <h4 className="font-semibold text-gray-900 dark:text-white mb-2">
+                    {promo.summary}
+                  </h4>
+
+                  {/* Promo Description */}
+                  {promo.description && (
+                    <p className="text-sm text-gray-600 dark:text-gray-300 mb-3">
+                      {promo.description}
+                    </p>
+                  )}
+
+                  {/* Promo Details */}
+                  <div className="flex flex-wrap gap-3 text-sm">
+                    {promo.minAmount > 0 && (
+                      <div className="flex items-center gap-1.5 bg-white dark:bg-gray-800 px-3 py-1.5 rounded-lg">
+                        <DollarSign className="w-4 h-4 text-green-500" />
+                        <span className="text-gray-600 dark:text-gray-300">
+                          Min: <span className="font-medium text-gray-900 dark:text-white">{formatCurrency(promo.minAmount)}</span>
+                        </span>
+                      </div>
+                    )}
+                    <div className="flex items-center gap-1.5 bg-white dark:bg-gray-800 px-3 py-1.5 rounded-lg">
+                      <Calendar className="w-4 h-4 text-blue-500" />
+                      <span className="text-gray-600 dark:text-gray-300">
+                        {formatDate(promo.validFrom)} - {formatDate(promo.validTo)}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Footer */}
+            <div className="border-t border-gray-200 dark:border-gray-700 px-6 py-4">
+              <button
+                onClick={() => {
+                  setShowPromoModal(false)
+                  setPromoProduct(null)
+                }}
+                className="w-full py-2.5 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 font-medium rounded-xl transition-colors"
+              >
+                Cerrar
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   )

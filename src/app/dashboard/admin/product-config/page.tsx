@@ -116,6 +116,9 @@ export default function ProductConfigPage() {
   const [companyPrices, setCompanyPrices] = useState<Record<number, number | null>>({})
   const [savingPrices, setSavingPrices] = useState(false)
 
+  // Recharge products count
+  const [rechargeProductsCount, setRechargeProductsCount] = useState(0)
+
   // Fetch products
   const fetchProducts = useCallback(async () => {
     try {
@@ -199,16 +202,41 @@ export default function ProductConfigPage() {
     }
   }, [selectedCompany])
 
+  // Fetch recharge products count
+  const fetchRechargeCount = useCallback(async () => {
+    try {
+      const response = await fetch('/api/recharges/products')
+      const data = await response.json()
+      if (data.success) {
+        // Count only products with pricing configured and enabled
+        const configuredCount = data.data.products.filter(
+          (p: any) => p.pricing !== null && p.pricing.isEnabled
+        ).length
+        setRechargeProductsCount(configuredCount)
+      }
+    } catch (error) {
+      console.error('Error fetching recharge count:', error)
+    }
+  }, [])
+
   useEffect(() => {
     fetchProducts()
     fetchCompanies()
-  }, [fetchProducts, fetchCompanies])
+    fetchRechargeCount()
+  }, [fetchProducts, fetchCompanies, fetchRechargeCount])
 
   useEffect(() => {
     if (selectedCompany) {
       fetchCompanyPrices()
     }
   }, [selectedCompany, fetchCompanyPrices])
+
+  // Refresh recharge count when category changes to recarga
+  useEffect(() => {
+    if (categoryFilter === 'recarga') {
+      fetchRechargeCount()
+    }
+  }, [categoryFilter, fetchRechargeCount])
 
   // Filter products
   const filteredProducts = products.filter(product => {
@@ -305,7 +333,9 @@ export default function ProductConfigPage() {
   const totalCost = products.reduce((acc, p) => acc + p.miCosto, 0)
   const categoryCounts = CATEGORIES.map(cat => ({
     ...cat,
-    count: products.filter(p => p.category === cat.id).length
+    count: cat.id === 'recarga'
+      ? rechargeProductsCount
+      : products.filter(p => p.category === cat.id).length
   }))
 
   return (
@@ -595,7 +625,10 @@ export default function ProductConfigPage() {
 
               {/* Show RechargeProductManager when 'recarga' category is selected */}
               {categoryFilter === 'recarga' ? (
-                <RechargeProductManager />
+                <RechargeProductManager
+                  onOpenModal={() => setShowCreateModal(true)}
+                  onProductsChange={fetchRechargeCount}
+                />
               ) : loading ? (
                 <div className="flex items-center justify-center py-20">
                   <div className="text-center">
