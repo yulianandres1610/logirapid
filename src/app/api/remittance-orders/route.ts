@@ -260,13 +260,19 @@ export async function GET(request: NextRequest) {
     params.push(limit, offset)
     const result = await db.query(query, params)
 
+    console.log(`[Remittance Orders GET] ====== RETURNING RESPONSE ======`)
+    console.log(`[Remittance Orders GET] Total orders found: ${total}, returning: ${result.rows.length}`)
+
     return NextResponse.json({
       success: true,
       data: {
         _debug: {
           userCompanyId: userCompanyId,
+          userEmail: payload.email,
           userRole: payload.role,
-          totalFound: total
+          totalFound: total,
+          returnedCount: result.rows.length,
+          cookieCompanyId: cookieStore.get('user-company-id')?.value || 'not set'
         },
         orders: result.rows.map(row => ({
           id: row.id,
@@ -673,6 +679,17 @@ export async function POST(request: NextRequest) {
         `, [order.id])
         order.estimated_delivery = '1-24 horas'
       }
+
+      // CRITICAL: Verify order exists WITHIN transaction before commit
+      const verifyBeforeCommit = await client.query(
+        'SELECT id, order_number FROM remittance_orders WHERE id = $1',
+        [order.id]
+      )
+      if (verifyBeforeCommit.rows.length === 0) {
+        console.error(`[Remittance Orders POST] CRITICAL: Order ${order.id} NOT FOUND within transaction!`)
+        throw new Error(`Order ${order.id} was not inserted properly`)
+      }
+      console.log(`[Remittance Orders POST] Order ${order.id} (${order.order_number}) verified WITHIN transaction`)
 
       return { order, fundsReserved }
     })
