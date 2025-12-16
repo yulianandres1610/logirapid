@@ -153,10 +153,13 @@ export async function POST(
       }, { status: 400 })
     }
 
-    await db.query('BEGIN')
+    // Use dedicated client for transaction to ensure all queries are on the same connection
+    const client = await db.getClient()
 
     try {
-      // Upload signature to storage
+      await client.query('BEGIN')
+
+      // Upload signature to storage (outside transaction since it's external storage)
       let signatureStoragePath = null
       if (signatureData) {
         signatureStoragePath = await uploadSignature(
@@ -174,7 +177,7 @@ export async function POST(
       }))
 
       // Create delivery proof record
-      const proofResult = await db.query(`
+      const proofResult = await client.query(`
         INSERT INTO remittance_delivery_proofs (
           remittance_order_id, order_number,
           bill_denominations, total_delivered, delivery_currency,
@@ -213,7 +216,7 @@ export async function POST(
       const deliveryProof = proofResult.rows[0]
 
       // Update order status to delivered with all fields
-      await db.query(`
+      await client.query(`
         UPDATE remittance_orders
         SET
           status = 'delivered',
@@ -233,7 +236,7 @@ export async function POST(
 
       try {
         // First, check if there's a reservation
-        const reservationResult = await db.query(`
+        const reservationResult = await client.query(`
           SELECT * FROM broker_reservations
           WHERE remittance_order_id = $1 AND status = 'reserved'
           FOR UPDATE
@@ -244,7 +247,7 @@ export async function POST(
           const reservation = reservationResult.rows[0]
 
           // Get current balances
-          const balanceResult = await db.query(`
+          const balanceResult = await client.query(`
             SELECT available_balance, reserved_balance
             FROM broker_wallet_balances
             WHERE company_id = $1 AND currency = $2
@@ -254,21 +257,21 @@ export async function POST(
           const reservedBefore = parseFloat(balanceResult.rows[0]?.reserved_balance || '0')
 
           // Reduce reserved balance (money was delivered)
-          await db.query(`
+          await client.query(`
             UPDATE broker_wallet_balances
             SET reserved_balance = GREATEST(reserved_balance - $1, 0), updated_at = NOW()
             WHERE company_id = $2 AND currency = $3
           `, [reservation.amount, reservation.broker_company_id, reservation.currency])
 
           // Update reservation status
-          await db.query(`
+          await client.query(`
             UPDATE broker_reservations
             SET status = 'completed', released_at = NOW(), released_by = $1
             WHERE id = $2
           `, [payload.userId, reservation.id])
 
           // Log to broker_wallet_transactions
-          await db.query(`
+          await client.query(`
             INSERT INTO broker_wallet_transactions (
               broker_company_id, currency, transaction_type, amount,
               balance_before, balance_after, reserved_before, reserved_after,
@@ -281,7 +284,7 @@ export async function POST(
           ])
 
           // Log to main wallet_transactions
-          await db.query(`
+          await client.query(`
             INSERT INTO wallet_transactions (
               type, source_type, source_company_id, amount, fee, net_amount, currency,
               status, description, notes, created_by
@@ -297,7 +300,7 @@ export async function POST(
           console.log(`[Deliver] No reservation found for order ${orderId}, deducting from available balance`)
 
           // Get current balance
-          const balanceResult = await db.query(`
+          const balanceResult = await client.query(`
             SELECT available_balance, reserved_balance
             FROM broker_wallet_balances
             WHERE company_id = $1 AND currency = $2
@@ -309,14 +312,14 @@ export async function POST(
             const reservedBefore = parseFloat(balanceResult.rows[0].reserved_balance || '0')
 
             // Deduct from available balance
-            await db.query(`
+            await client.query(`
               UPDATE broker_wallet_balances
               SET available_balance = GREATEST(available_balance - $1, 0), updated_at = NOW()
               WHERE company_id = $2 AND currency = $3
             `, [deliveryAmount, payload.companyId, deliveryCurrencyFromOrder])
 
             // Log to broker_wallet_transactions
-            await db.query(`
+            await client.query(`
               INSERT INTO broker_wallet_transactions (
                 broker_company_id, currency, transaction_type, amount,
                 balance_before, balance_after, reserved_before, reserved_after,
@@ -330,7 +333,7 @@ export async function POST(
             ])
 
             // Log to main wallet_transactions
-            await db.query(`
+            await client.query(`
               INSERT INTO wallet_transactions (
                 type, source_type, source_company_id, amount, fee, net_amount, currency,
                 status, description, notes, created_by
@@ -351,7 +354,7 @@ export async function POST(
         // Continue even if funds processing fails - the delivery proof is saved
       }
 
-      await db.query('COMMIT')
+      await client.query('COMMIT')
 
       // Send receipt if requested (async, don't wait)
       if (sendReceiptVia && sendReceiptVia !== 'none') {
@@ -377,8 +380,10 @@ export async function POST(
       })
 
     } catch (err) {
-      await db.query('ROLLBACK')
+      await client.query('ROLLBACK')
       throw err
+    } finally {
+      client.release()
     }
 
   } catch (error) {

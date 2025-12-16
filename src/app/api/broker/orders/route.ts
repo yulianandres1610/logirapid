@@ -58,7 +58,8 @@ export async function GET(request: NextRequest) {
 
     // Verify company is a broker
     const companyCheck = await db.query(`
-      SELECT companytype, legalname FROM companies WHERE id = $1
+      SELECT companytype, legalname, broker_province, broker_municipality
+      FROM companies WHERE id = $1
     `, [payload.companyId])
 
     console.log(`[Broker Orders GET] Company check result:`, companyCheck.rows[0])
@@ -71,30 +72,12 @@ export async function GET(request: NextRequest) {
       }, { status: 403 })
     }
 
-    console.log(`[Broker Orders GET] Company ${companyCheck.rows[0].legalname} is a valid broker`)
+    const brokerProvince = companyCheck.rows[0].broker_province
+    console.log(`[Broker Orders GET] Company ${companyCheck.rows[0].legalname} is a valid broker in province: ${brokerProvince}`)
 
-    // Debug: Check what orders exist with this broker_company_id
-    const debugOrders = await db.query(`
-      SELECT id, order_number, broker_company_id, selling_company_id, status, created_at
-      FROM remittance_orders
-      WHERE broker_company_id = $1
-      ORDER BY created_at DESC
-      LIMIT 5
-    `, [payload.companyId])
-    console.log(`[Broker Orders GET] Orders assigned to broker ${payload.companyId}:`, debugOrders.rows)
-
-    // Also check ALL recent orders to see what broker_company_id they have
-    const allRecentOrders = await db.query(`
-      SELECT id, order_number, broker_company_id, selling_company_id, status, created_at
-      FROM remittance_orders
-      ORDER BY created_at DESC
-      LIMIT 10
-    `)
-    console.log(`[Broker Orders GET] ALL recent orders in system:`, allRecentOrders.rows)
-
-    // Build query
-    let whereClause = 'WHERE ro.broker_company_id = $1'
-    const params: any[] = [payload.companyId]
+    // Build query - include orders assigned to this broker OR in broker's province/municipality
+    let whereClause = `WHERE (ro.broker_company_id = $1 OR (ro.broker_company_id IS NULL AND LOWER(ro.broker_province) = LOWER($2)))`
+    const params: any[] = [payload.companyId, brokerProvince]
 
     if (status) {
       params.push(status)
@@ -132,7 +115,7 @@ export async function GET(request: NextRequest) {
 
     const result = await db.query(query, params)
 
-    // Get stats
+    // Get stats - include orders assigned to this broker OR in broker's province/municipality
     const statsResult = await db.query(`
       SELECT
         COUNT(*) as total_count,
@@ -146,7 +129,8 @@ export async function GET(request: NextRequest) {
         SUM(receive_amount) FILTER (WHERE status = 'delivered') as delivered_amount
       FROM remittance_orders
       WHERE broker_company_id = $1
-    `, [payload.companyId])
+        OR (broker_company_id IS NULL AND LOWER(broker_province) = LOWER($2))
+    `, [payload.companyId, brokerProvince])
 
     const stats = statsResult.rows[0]
 

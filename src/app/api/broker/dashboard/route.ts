@@ -38,9 +38,10 @@ export async function GET(request: NextRequest) {
       }, { status: 401 })
     }
 
-    // Verify company is a broker
+    // Verify company is a broker and get its province/municipality
     const companyCheck = await db.query(`
-      SELECT companytype FROM companies WHERE id = $1
+      SELECT companytype, broker_province, broker_municipality
+      FROM companies WHERE id = $1
     `, [payload.companyId])
 
     if (companyCheck.rows.length === 0 || companyCheck.rows[0].companytype !== 'broker') {
@@ -50,7 +51,10 @@ export async function GET(request: NextRequest) {
       }, { status: 403 })
     }
 
-    // Get overall order stats
+    const brokerProvince = companyCheck.rows[0].broker_province
+    const brokerMunicipality = companyCheck.rows[0].broker_municipality
+
+    // Get overall order stats - include orders assigned to this broker OR in broker's province/municipality
     const statsResult = await db.query(`
       SELECT
         COUNT(*) as total_count,
@@ -64,11 +68,13 @@ export async function GET(request: NextRequest) {
         COALESCE(SUM(receive_amount) FILTER (WHERE status = 'delivered'), 0) as delivered_amount
       FROM remittance_orders
       WHERE broker_company_id = $1
-    `, [payload.companyId])
+        OR (broker_company_id IS NULL AND LOWER(broker_province) = LOWER($2))
+    `, [payload.companyId, brokerProvince])
 
     const stats = statsResult.rows[0]
 
     // Get daily delivery stats for the last 7 days
+    // Include orders assigned to this broker OR in broker's province/municipality
     const dailyStatsResult = await db.query(`
       WITH date_series AS (
         SELECT generate_series(
@@ -84,11 +90,14 @@ export async function GET(request: NextRequest) {
       FROM date_series ds
       LEFT JOIN remittance_orders ro ON
         DATE(ro.delivered_at) = ds.delivery_date
-        AND ro.broker_company_id = $1
         AND ro.status = 'delivered'
+        AND (
+          ro.broker_company_id = $1
+          OR (ro.broker_company_id IS NULL AND LOWER(ro.broker_province) = LOWER($2))
+        )
       GROUP BY ds.delivery_date
       ORDER BY ds.delivery_date ASC
-    `, [payload.companyId])
+    `, [payload.companyId, brokerProvince])
 
     // Format daily stats with day names
     const dayNames = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb']

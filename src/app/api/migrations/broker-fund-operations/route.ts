@@ -416,11 +416,21 @@ export async function POST() {
     `)
     console.log('[Migration] Created indexes')
 
+    // 9. Fix existing delivered orders that have NULL delivered_at
+    const fixedOrdersResult = await db.query(`
+      UPDATE remittance_orders
+      SET delivered_at = COALESCE(updated_at, created_at, NOW())
+      WHERE status = 'delivered' AND delivered_at IS NULL
+      RETURNING id, order_number
+    `)
+    console.log(`[Migration] Fixed ${fixedOrdersResult.rows.length} orders with NULL delivered_at`)
+
     return NextResponse.json({
       success: true,
       message: 'Broker fund operations migration completed',
       tables: ['broker_reservations', 'broker_wallet_transactions', 'remittance_delivery_proofs'],
-      functions: ['reserve_broker_funds', 'complete_broker_delivery', 'release_broker_funds_cancelled', 'release_broker_funds_delivered']
+      functions: ['reserve_broker_funds', 'complete_broker_delivery', 'release_broker_funds_cancelled', 'release_broker_funds_delivered'],
+      fixedOrders: fixedOrdersResult.rows.length
     })
 
   } catch (error: any) {
