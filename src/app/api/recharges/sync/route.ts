@@ -183,6 +183,24 @@ export async function POST() {
         }
       }
 
+      // Mark products as inactive if they no longer exist in UnivCell
+      let productsDeactivated = 0
+      if (products.length > 0) {
+        const externalIds = products.map(p => p.id)
+        const deactivateResult = await db.query(
+          `UPDATE external_recharge_products
+           SET is_active = false,
+               updated_at = NOW()
+           WHERE external_id NOT IN (${externalIds.map((_, i) => `$${i + 1}`).join(',')})
+           AND is_active = true`,
+          externalIds
+        )
+        productsDeactivated = deactivateResult.rowCount || 0
+        if (productsDeactivated > 0) {
+          console.log(`[Sync] Deactivated ${productsDeactivated} products no longer available from provider`)
+        }
+      }
+
       // Fetch and sync promotions
       try {
         const promotions = await client.getPromotions()
@@ -279,11 +297,12 @@ export async function POST() {
         data: {
           productsCreated,
           productsUpdated,
+          productsDeactivated,
           promotionsSynced,
           totalProducts: productsCreated + productsUpdated,
           errors: errors.length > 0 ? errors : undefined,
         },
-        message: `Sincronizacion completada: ${productsCreated} productos nuevos, ${productsUpdated} actualizados, ${promotionsSynced} promociones`,
+        message: `Sincronizacion completada: ${productsCreated} nuevos, ${productsUpdated} actualizados${productsDeactivated > 0 ? `, ${productsDeactivated} removidos por proveedor` : ''}, ${promotionsSynced} promociones`,
       })
     } catch (syncError: any) {
       // Update sync log with error
