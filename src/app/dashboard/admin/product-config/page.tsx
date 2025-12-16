@@ -1191,6 +1191,26 @@ const generateSKU = (category: string): string => {
   return `${prefix}-${timestamp}${random}`
 }
 
+// UnivCell Product interface for import
+interface UnivCellProduct {
+  id: number
+  externalId: number
+  name: string
+  slug: string
+  baseCost: number
+  countryCode: string
+  countryName: string
+  phonePattern: string
+  isActive: boolean
+  pricing: {
+    marginType: string
+    marginValue: number
+    sellingPrice: number
+    isEnabled: boolean
+  } | null
+  promotions: Array<{ summary: string }>
+}
+
 function ProductModal({ isDark, product, providerCompanies, onClose, onSave }: ProductModalProps) {
   const isNewProduct = !product
 
@@ -1214,7 +1234,94 @@ function ProductModal({ isDark, product, providerCompanies, onClose, onSave }: P
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
+  // UnivCell products state
+  const [univcellProducts, setUnivcellProducts] = useState<UnivCellProduct[]>([])
+  const [loadingUnivcell, setLoadingUnivcell] = useState(false)
+  const [syncingUnivcell, setSyncingUnivcell] = useState(false)
+  const [selectedUnivcellProduct, setSelectedUnivcellProduct] = useState<UnivCellProduct | null>(null)
+  const [univcellMarginType, setUnivcellMarginType] = useState<'percentage' | 'fixed'>('percentage')
+  const [univcellMarginValue, setUnivcellMarginValue] = useState('20')
+
   const isRemesa = formData.category === 'remesa'
+  const isRecarga = formData.category === 'recarga'
+
+  // Fetch UnivCell products when recarga is selected
+  useEffect(() => {
+    if (isRecarga && isNewProduct) {
+      fetchUnivcellProducts()
+    }
+  }, [isRecarga, isNewProduct])
+
+  const fetchUnivcellProducts = async () => {
+    setLoadingUnivcell(true)
+    try {
+      const response = await fetch('/api/recharges/products')
+      const data = await response.json()
+      if (data.success) {
+        setUnivcellProducts(data.data.products)
+      }
+    } catch (err) {
+      console.error('Error fetching UnivCell products:', err)
+    } finally {
+      setLoadingUnivcell(false)
+    }
+  }
+
+  const handleSyncUnivcell = async () => {
+    setSyncingUnivcell(true)
+    try {
+      const response = await fetch('/api/recharges/sync', { method: 'POST' })
+      const data = await response.json()
+      if (data.success) {
+        await fetchUnivcellProducts()
+      }
+    } catch (err) {
+      console.error('Error syncing UnivCell:', err)
+    } finally {
+      setSyncingUnivcell(false)
+    }
+  }
+
+  const handleConfigureUnivcellProduct = async () => {
+    if (!selectedUnivcellProduct) return
+    setSaving(true)
+    setError(null)
+    try {
+      const response = await fetch(`/api/recharges/products/${selectedUnivcellProduct.id}/pricing`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          marginType: univcellMarginType,
+          marginValue: parseFloat(univcellMarginValue) || 0,
+          isEnabled: true
+        })
+      })
+      const data = await response.json()
+      if (data.success) {
+        onClose()
+      } else {
+        setError(data.error || 'Error configurando producto')
+      }
+    } catch (err) {
+      setError('Error de conexion')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const getCountryFlag = (code: string) => {
+    const flags: Record<string, string> = { CU: '🇨🇺', MX: '🇲🇽', DO: '🇩🇴', US: '🇺🇸' }
+    return flags[code] || '🌍'
+  }
+
+  const calculateSellingPrice = () => {
+    if (!selectedUnivcellProduct) return 0
+    const margin = parseFloat(univcellMarginValue) || 0
+    if (univcellMarginType === 'percentage') {
+      return selectedUnivcellProduct.baseCost * (1 + margin / 100)
+    }
+    return selectedUnivcellProduct.baseCost + margin
+  }
 
   // Regenerate SKU when category changes (only for new products)
   const handleCategoryChange = (newCategory: string) => {
@@ -1232,6 +1339,8 @@ function ProductModal({ isDark, product, providerCompanies, onClose, onSave }: P
         precioMayorista: newIsRemesa ? 3 : 0,
         precioMayoristaFijo: newIsRemesa ? 5 : 0
       })
+      // Reset UnivCell selection when changing category
+      setSelectedUnivcellProduct(null)
     } else {
       setFormData({
         ...formData,
@@ -1353,6 +1462,165 @@ function ProductModal({ isDark, product, providerCompanies, onClose, onSave }: P
               </div>
             </div>
 
+            {/* UnivCell Products for Recarga category */}
+            {isRecarga && isNewProduct ? (
+              <div className="space-y-4">
+                {/* Sync Button */}
+                <div className="flex items-center justify-between">
+                  <p className={`text-sm ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
+                    Selecciona un producto de UnivCell para agregar al catalogo
+                  </p>
+                  <button
+                    type="button"
+                    onClick={handleSyncUnivcell}
+                    disabled={syncingUnivcell}
+                    className={`px-3 py-1.5 text-xs font-medium rounded-lg flex items-center gap-1.5 transition-colors ${
+                      isDark ? 'bg-purple-600 hover:bg-purple-700 text-white' : 'bg-purple-500 hover:bg-purple-600 text-white'
+                    } disabled:opacity-50`}
+                  >
+                    <RefreshCw className={`w-3.5 h-3.5 ${syncingUnivcell ? 'animate-spin' : ''}`} />
+                    Sincronizar
+                  </button>
+                </div>
+
+                {/* Products List */}
+                {loadingUnivcell ? (
+                  <div className="flex items-center justify-center py-8">
+                    <RefreshCw className={`w-6 h-6 animate-spin ${isDark ? 'text-purple-400' : 'text-purple-500'}`} />
+                  </div>
+                ) : univcellProducts.length === 0 ? (
+                  <div className={`text-center py-8 rounded-xl ${isDark ? 'bg-gray-700/50' : 'bg-gray-50'}`}>
+                    <Smartphone className={`w-10 h-10 mx-auto mb-3 ${isDark ? 'text-gray-600' : 'text-gray-400'}`} />
+                    <p className={`text-sm ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
+                      No hay productos sincronizados
+                    </p>
+                    <button
+                      type="button"
+                      onClick={handleSyncUnivcell}
+                      disabled={syncingUnivcell}
+                      className="mt-3 px-4 py-2 text-sm font-medium bg-purple-600 hover:bg-purple-700 text-white rounded-lg transition-colors"
+                    >
+                      Sincronizar desde UnivCell
+                    </button>
+                  </div>
+                ) : (
+                  <div className="space-y-2 max-h-48 overflow-y-auto">
+                    {univcellProducts.map(prod => (
+                      <button
+                        key={prod.id}
+                        type="button"
+                        onClick={() => setSelectedUnivcellProduct(prod)}
+                        className={`w-full p-3 rounded-xl flex items-center gap-3 transition-all text-left ${
+                          selectedUnivcellProduct?.id === prod.id
+                            ? isDark
+                              ? 'bg-purple-600/30 border-2 border-purple-500'
+                              : 'bg-purple-50 border-2 border-purple-400'
+                            : isDark
+                              ? 'bg-gray-700 hover:bg-gray-600 border-2 border-transparent'
+                              : 'bg-gray-50 hover:bg-gray-100 border-2 border-transparent'
+                        }`}
+                      >
+                        <span className="text-2xl">{getCountryFlag(prod.countryCode)}</span>
+                        <div className="flex-1 min-w-0">
+                          <p className={`font-medium text-sm truncate ${isDark ? 'text-white' : 'text-gray-900'}`}>
+                            {prod.name}
+                          </p>
+                          <p className={`text-xs ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
+                            {prod.countryName} • Costo: ${prod.baseCost.toFixed(2)}
+                          </p>
+                        </div>
+                        {prod.pricing?.isEnabled && (
+                          <span className={`px-2 py-0.5 text-xs rounded-full ${isDark ? 'bg-green-500/20 text-green-400' : 'bg-green-100 text-green-600'}`}>
+                            Activo
+                          </span>
+                        )}
+                        {prod.promotions.length > 0 && (
+                          <span className={`px-2 py-0.5 text-xs rounded-full ${isDark ? 'bg-orange-500/20 text-orange-400' : 'bg-orange-100 text-orange-600'}`}>
+                            Promo
+                          </span>
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                )}
+
+                {/* Selected Product Config */}
+                {selectedUnivcellProduct && (
+                  <div className={`p-4 rounded-xl ${isDark ? 'bg-purple-900/20 border border-purple-800' : 'bg-purple-50 border border-purple-200'}`}>
+                    <div className="flex items-center gap-3 mb-4">
+                      <span className="text-3xl">{getCountryFlag(selectedUnivcellProduct.countryCode)}</span>
+                      <div>
+                        <p className={`font-semibold ${isDark ? 'text-white' : 'text-gray-900'}`}>
+                          {selectedUnivcellProduct.name}
+                        </p>
+                        <p className={`text-sm ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
+                          Costo base: ${selectedUnivcellProduct.baseCost.toFixed(2)} USD
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Margin Type */}
+                    <div className="grid grid-cols-2 gap-2 mb-3">
+                      <button
+                        type="button"
+                        onClick={() => setUnivcellMarginType('percentage')}
+                        className={`p-2 rounded-lg text-sm font-medium transition-all ${
+                          univcellMarginType === 'percentage'
+                            ? 'bg-purple-600 text-white'
+                            : isDark ? 'bg-gray-700 text-gray-400' : 'bg-white text-gray-600 border border-gray-200'
+                        }`}
+                      >
+                        % Porcentaje
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setUnivcellMarginType('fixed')}
+                        className={`p-2 rounded-lg text-sm font-medium transition-all ${
+                          univcellMarginType === 'fixed'
+                            ? 'bg-purple-600 text-white'
+                            : isDark ? 'bg-gray-700 text-gray-400' : 'bg-white text-gray-600 border border-gray-200'
+                        }`}
+                      >
+                        $ Monto Fijo
+                      </button>
+                    </div>
+
+                    {/* Margin Value */}
+                    <div className="mb-3">
+                      <label className={`block text-xs mb-1 ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
+                        {univcellMarginType === 'percentage' ? 'Porcentaje de ganancia' : 'Ganancia fija'}
+                      </label>
+                      <div className="relative">
+                        <span className={`absolute left-3 top-1/2 -translate-y-1/2 text-sm ${isDark ? 'text-purple-400' : 'text-purple-500'}`}>
+                          {univcellMarginType === 'percentage' ? '%' : '$'}
+                        </span>
+                        <input
+                          type="number"
+                          value={univcellMarginValue}
+                          onChange={(e) => setUnivcellMarginValue(e.target.value)}
+                          step={univcellMarginType === 'percentage' ? '1' : '0.01'}
+                          min="0"
+                          className={`w-full pl-8 pr-3 py-2 rounded-lg text-right font-semibold ${
+                            isDark
+                              ? 'bg-gray-700 border-gray-600 text-white'
+                              : 'bg-white border-gray-200 text-gray-900'
+                          } border focus:outline-none focus:ring-2 focus:ring-purple-500/20`}
+                        />
+                      </div>
+                    </div>
+
+                    {/* Price Preview */}
+                    <div className={`flex items-center justify-between p-3 rounded-lg ${isDark ? 'bg-green-900/30' : 'bg-green-50'}`}>
+                      <span className={`text-sm ${isDark ? 'text-green-400' : 'text-green-700'}`}>Precio de venta:</span>
+                      <span className={`text-xl font-bold ${isDark ? 'text-green-400' : 'text-green-600'}`}>
+                        ${calculateSellingPrice().toFixed(2)}
+                      </span>
+                    </div>
+                  </div>
+                )}
+              </div>
+            ) : (
+            <>
             {/* Code and Name */}
             <div className="grid grid-cols-3 gap-4">
               <div>
@@ -1621,6 +1889,8 @@ function ProductModal({ isDark, product, providerCompanies, onClose, onSave }: P
                 placeholder="Descripcion opcional del producto..."
               />
             </div>
+            </>
+            )}
           </div>
 
           {/* Footer */}
@@ -1635,6 +1905,26 @@ function ProductModal({ isDark, product, providerCompanies, onClose, onSave }: P
             >
               Cancelar
             </button>
+            {isRecarga && isNewProduct ? (
+              <button
+                type="button"
+                onClick={handleConfigureUnivcellProduct}
+                disabled={saving || !selectedUnivcellProduct}
+                className={`px-6 py-2.5 bg-gradient-to-r from-purple-500 to-purple-600 text-white font-medium rounded-xl disabled:opacity-50 flex items-center gap-2 shadow-lg transition-all hover:shadow-xl`}
+              >
+                {saving ? (
+                  <>
+                    <RefreshCw className="w-4 h-4 animate-spin" />
+                    Configurando...
+                  </>
+                ) : (
+                  <>
+                    <Plus className="w-4 h-4" />
+                    Agregar Producto
+                  </>
+                )}
+              </button>
+            ) : (
             <button
               type="submit"
               disabled={saving}
@@ -1652,6 +1942,7 @@ function ProductModal({ isDark, product, providerCompanies, onClose, onSave }: P
                 </>
               )}
             </button>
+            )}
           </div>
         </form>
       </motion.div>
