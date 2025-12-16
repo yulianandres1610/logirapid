@@ -25,12 +25,19 @@ export async function GET(request: NextRequest) {
     if (fixMigration === 'fix-company-7-secret-2024') {
       console.log('[Migration] Running fix for selling_company_id')
 
-      // Fix orders with NULL selling_company_id - assign to company 7
+      // First, show all orders to see what's there
+      const allOrders = await db.query(`
+        SELECT id, order_number, selling_company_id, sold_by_user_id, created_at
+        FROM remittance_orders
+        ORDER BY created_at DESC
+      `)
+
+      // Fix orders with NULL OR wrong selling_company_id - assign to company 7
       const fixResult = await db.query(`
         UPDATE remittance_orders
         SET selling_company_id = 7
-        WHERE selling_company_id IS NULL
-        RETURNING id, order_number
+        WHERE selling_company_id IS NULL OR selling_company_id != 7
+        RETURNING id, order_number, selling_company_id
       `)
 
       console.log('[Migration] Fixed orders:', fixResult.rows)
@@ -38,6 +45,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({
         success: true,
         migration: {
+          allOrdersBefore: allOrders.rows,
           fixed: fixResult.rows.length,
           orders: fixResult.rows
         }
