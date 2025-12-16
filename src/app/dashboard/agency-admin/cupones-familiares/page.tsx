@@ -96,9 +96,11 @@ export default function CuponesFamiliaresPage() {
       console.log('[Cupones Familiares] API Response:', data)
 
       if (response.ok && data.success) {
-        setOrders(data.data?.orders || [])
+        const ordersData = data.data?.orders || []
+        console.log('[Cupones Familiares] Setting orders:', ordersData.length, ordersData)
+        setOrders(ordersData)
         setTotalOrders(data.data?.pagination?.total || 0)
-        console.log('[Cupones Familiares] Orders loaded:', data.data?.orders?.length || 0)
+        console.log('[Cupones Familiares] Orders loaded:', ordersData.length)
       } else {
         console.error('[Cupones Familiares] API Error:', data.error)
         showNotification('error', 'Error', data.error || 'No se pudieron cargar las remesas')
@@ -118,6 +120,9 @@ export default function CuponesFamiliaresPage() {
   useEffect(() => {
     fetchData()
   }, [currentPage, searchTerm, statusFilter])
+
+  // Debug: Log render state
+  console.log('[Cupones Familiares] RENDER - loading:', loading, 'orders.length:', orders.length)
 
   // Calculate statistics
   const stats = {
