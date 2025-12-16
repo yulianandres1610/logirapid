@@ -629,6 +629,28 @@ export async function POST(request: NextRequest) {
 
       const order = insertResult.rows[0]
 
+      // Reserve funds in broker wallet using SAVEPOINT
+      // If it fails, rollback to savepoint so order still gets created
+      let fundsReserved = false
+      if (brokerCompanyId) {
+        await client.query('SAVEPOINT reserve_funds')
+        try {
+          const reserveResult = await client.query(`
+            SELECT reserve_broker_funds($1, $2, $3, $4, $5) as reserved
+          `, [brokerCompanyId, finalReceiveCurrency, receiveAmount, order.id, payload.userId])
+          fundsReserved = reserveResult.rows[0]?.reserved === true
+
+          if (fundsReserved) {
+            await client.query(`UPDATE remittance_orders SET estimated_delivery = '1-24 horas' WHERE id = $1`, [order.id])
+            order.estimated_delivery = '1-24 horas'
+          }
+          await client.query('RELEASE SAVEPOINT reserve_funds')
+        } catch (reserveError) {
+          console.error('[Remittance Orders] Reserve funds error:', reserveError)
+          await client.query('ROLLBACK TO SAVEPOINT reserve_funds')
+        }
+      }
+
       await client.query('COMMIT')
       client.release()
 
