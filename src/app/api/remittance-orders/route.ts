@@ -580,22 +580,21 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Begin transaction
-    await db.query('BEGIN')
-
     console.log(`[Remittance Orders POST] ====== CREATING ORDER ======`)
     console.log(`[Remittance Orders POST] User: ${payload.email}, companyId: ${payload.companyId}, userId: ${payload.userId}`)
     console.log(`[Remittance Orders POST] Province: ${province}, Municipality: ${municipality}`)
     console.log(`[Remittance Orders POST] Broker assigned: ${brokerCompanyId}`)
 
-    try {
+    // Use proper transaction method with dedicated connection
+    // This fixes the bug where BEGIN/COMMIT used different pool connections
+    const result = await db.transaction(async (client) => {
       // Generate order number
-      const orderNumResult = await db.query('SELECT generate_remittance_order_number() as order_number')
+      const orderNumResult = await client.query('SELECT generate_remittance_order_number() as order_number')
       const orderNumber = orderNumResult.rows[0].order_number
       console.log(`[Remittance Orders POST] Generated order number: ${orderNumber}`)
 
       // Create the order
-      const insertResult = await db.query(`
+      const insertResult = await client.query(`
         INSERT INTO remittance_orders (
           order_number,
           selling_company_id, sold_by_user_id,
@@ -648,7 +647,7 @@ export async function POST(request: NextRequest) {
       let fundsReserved = false
       if (brokerCompanyId) {
         try {
-          const reserveResult = await db.query(`
+          const reserveResult = await client.query(`
             SELECT reserve_broker_funds($1, $2, $3, $4, $5) as reserved
           `, [brokerCompanyId, finalReceiveCurrency, receiveAmount, order.id, payload.userId])
 
@@ -667,7 +666,7 @@ export async function POST(request: NextRequest) {
 
       // Update order with reservation status
       if (fundsReserved) {
-        await db.query(`
+        await client.query(`
           UPDATE remittance_orders
           SET estimated_delivery = '1-24 horas'
           WHERE id = $1
@@ -675,38 +674,46 @@ export async function POST(request: NextRequest) {
         order.estimated_delivery = '1-24 horas'
       }
 
-      await db.query('COMMIT')
+      return { order, fundsReserved }
+    })
 
-      return NextResponse.json({
-        success: true,
-        data: {
-          id: order.id,
-          orderNumber: order.order_number,
-          status: order.status,
-          paymentStatus: order.payment_status,
-          sendAmount: parseFloat(order.send_amount),
-          sendCurrency: order.send_currency,
-          receiveAmount: parseFloat(order.receive_amount),
-          receiveCurrency: order.receive_currency,
-          serviceFee: parseFloat(order.service_fee),
-          deliveryFee: parseFloat(order.delivery_fee),
-          totalCharged: parseFloat(order.total_charged),
-          cashChange: order.cash_change ? parseFloat(order.cash_change) : null,
-          estimatedDelivery: order.estimated_delivery,
-          recipientName: order.recipient_name,
-          recipientProvince: order.recipient_province,
-          recipientMunicipality: order.recipient_municipality,
-          sellingCompanyId: order.selling_company_id,
-          brokerCompanyId: order.broker_company_id,
-          fundsReserved,
-          createdAt: order.created_at
-        }
-      })
+    // Transaction committed successfully - verify the order exists
+    console.log(`[Remittance Orders POST] Transaction committed for order ${result.order.id}`)
 
-    } catch (err) {
-      await db.query('ROLLBACK')
-      throw err
+    // Verify order was saved (using a separate connection is fine now that transaction is committed)
+    const verifyResult = await db.query('SELECT id FROM remittance_orders WHERE id = $1', [result.order.id])
+    if (verifyResult.rows.length === 0) {
+      console.error(`[Remittance Orders POST] ERROR: Order ${result.order.id} not found after COMMIT!`)
+    } else {
+      console.log(`[Remittance Orders POST] Order ${result.order.id} verified in database`)
     }
+
+    const order = result.order
+    return NextResponse.json({
+      success: true,
+      data: {
+        id: order.id,
+        orderNumber: order.order_number,
+        status: order.status,
+        paymentStatus: order.payment_status,
+        sendAmount: parseFloat(order.send_amount),
+        sendCurrency: order.send_currency,
+        receiveAmount: parseFloat(order.receive_amount),
+        receiveCurrency: order.receive_currency,
+        serviceFee: parseFloat(order.service_fee),
+        deliveryFee: parseFloat(order.delivery_fee),
+        totalCharged: parseFloat(order.total_charged),
+        cashChange: order.cash_change ? parseFloat(order.cash_change) : null,
+        estimatedDelivery: order.estimated_delivery,
+        recipientName: order.recipient_name,
+        recipientProvince: order.recipient_province,
+        recipientMunicipality: order.recipient_municipality,
+        sellingCompanyId: order.selling_company_id,
+        brokerCompanyId: order.broker_company_id,
+        fundsReserved: result.fundsReserved,
+        createdAt: order.created_at
+      }
+    })
 
   } catch (error) {
     console.error('[Remittance Orders API] POST error:', error)
