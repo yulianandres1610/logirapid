@@ -629,26 +629,6 @@ export async function POST(request: NextRequest) {
 
       const order = insertResult.rows[0]
 
-      // Try to reserve funds using same client
-      let fundsReserved = false
-      if (brokerCompanyId) {
-        try {
-          const reserveResult = await client.query(`
-            SELECT reserve_broker_funds($1, $2, $3, $4, $5) as reserved
-          `, [brokerCompanyId, finalReceiveCurrency, receiveAmount, order.id, payload.userId])
-          fundsReserved = reserveResult.rows[0]?.reserved === true
-        } catch (reserveError) {
-          // Non-blocking - order will be created without fund reservation
-          console.error('[Remittance Orders] Reserve funds error:', reserveError)
-        }
-      }
-
-      // Update estimated delivery if funds reserved
-      if (fundsReserved) {
-        await client.query(`UPDATE remittance_orders SET estimated_delivery = '1-24 horas' WHERE id = $1`, [order.id])
-        order.estimated_delivery = '1-24 horas'
-      }
-
       await client.query('COMMIT')
       client.release()
 
@@ -673,7 +653,6 @@ export async function POST(request: NextRequest) {
           recipientMunicipality: order.recipient_municipality,
           sellingCompanyId: order.selling_company_id,
           brokerCompanyId: order.broker_company_id,
-          fundsReserved,
           createdAt: order.created_at
         }
       })
