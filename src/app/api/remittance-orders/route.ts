@@ -649,10 +649,14 @@ export async function POST(request: NextRequest) {
       console.log(`[Remittance Orders POST] - selling_company_id: ${order.selling_company_id}`)
       console.log(`[Remittance Orders POST] - sold_by_user_id: ${order.sold_by_user_id}`)
 
-      // ALWAYS reserve funds in broker's wallet if broker was assigned
+      // Try to reserve funds in broker's wallet if broker was assigned
+      // Use SAVEPOINT to prevent reserve_broker_funds errors from aborting the entire transaction
       let fundsReserved = false
       if (brokerCompanyId) {
         try {
+          // Create savepoint before calling function that might fail
+          await client.query('SAVEPOINT before_reserve')
+
           const reserveResult = await client.query(`
             SELECT reserve_broker_funds($1, $2, $3, $4, $5) as reserved
           `, [brokerCompanyId, finalReceiveCurrency, receiveAmount, order.id, payload.userId])
@@ -661,12 +665,22 @@ export async function POST(request: NextRequest) {
 
           if (fundsReserved) {
             console.log(`[Remittance Orders] Funds reserved for order ${order.id}: ${receiveAmount} ${finalReceiveCurrency}`)
+            // Release savepoint on success
+            await client.query('RELEASE SAVEPOINT before_reserve')
           } else {
             console.log(`[Remittance Orders] Could not reserve funds for order ${order.id} - broker may have insufficient balance`)
+            await client.query('RELEASE SAVEPOINT before_reserve')
           }
         } catch (reserveError) {
           console.error(`[Remittance Orders] Error reserving funds:`, reserveError)
-          // Continue without reservation - order will need manual handling
+          // CRITICAL: Rollback to savepoint to un-abort the transaction
+          try {
+            await client.query('ROLLBACK TO SAVEPOINT before_reserve')
+            console.log(`[Remittance Orders] Transaction recovered after reserve_broker_funds error`)
+          } catch (rollbackError) {
+            console.error(`[Remittance Orders] Failed to rollback to savepoint:`, rollbackError)
+          }
+          // Continue without reservation - order will still be created
         }
       }
 
