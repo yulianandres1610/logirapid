@@ -500,10 +500,7 @@ export default function DeliveryWizardPage() {
   return (
     <ProtectedRoute>
       <DashboardLayout>
-        <div className={cn(
-          'min-h-screen pt-12 pb-20 px-4 sm:px-6 lg:px-8',
-          theme === 'dark' ? 'bg-gray-900' : 'bg-gray-50'
-        )}>
+        <div className="min-h-screen pt-12 pb-20 px-4 sm:px-6 lg:px-8">
           <div className="max-w-4xl mx-auto">
             {/* Header */}
             <motion.div
@@ -557,7 +554,7 @@ export default function DeliveryWizardPage() {
                           : currentStep === step.id
                             ? 'bg-gradient-to-br from-blue-500 to-blue-600 text-white shadow-lg shadow-blue-500/30'
                             : theme === 'dark'
-                              ? 'bg-gray-700 text-gray-400'
+                              ? 'bg-[#2d2d44] text-gray-400'
                               : 'bg-gray-200 text-gray-500'
                       )}
                     >
@@ -580,7 +577,7 @@ export default function DeliveryWizardPage() {
                         'w-8 sm:w-16 lg:w-24 h-1 mx-2 rounded-full transition-all duration-300',
                         currentStep > step.id
                           ? 'bg-gradient-to-r from-green-500 to-green-400'
-                          : theme === 'dark' ? 'bg-gray-700' : 'bg-gray-200'
+                          : theme === 'dark' ? 'bg-[#2d2d44]' : 'bg-gray-200'
                       )} />
                     )}
                   </div>
@@ -618,7 +615,7 @@ export default function DeliveryWizardPage() {
               transition={{ duration: 0.3 }}
               className={cn(
                 'rounded-2xl shadow-xl border p-6 sm:p-8',
-                theme === 'dark' ? 'bg-gray-800/95 border-gray-700/50 backdrop-blur-sm' : 'bg-white border-gray-200'
+                theme === 'dark' ? 'bg-[#1a1a2e]/90 border-[#2d2d44] backdrop-blur-sm' : 'bg-white border-gray-200'
               )}
             >
               {/* Step 1: Informacion del Envio */}
@@ -796,7 +793,7 @@ export default function DeliveryWizardPage() {
                     transition={{ delay: 0.2 }}
                     className={cn(
                       'rounded-xl p-5 border',
-                      theme === 'dark' ? 'bg-gray-700/50 border-gray-600' : 'bg-gray-50 border-gray-200'
+                      theme === 'dark' ? 'bg-[#232340]/50 border-[#2d2d44]' : 'bg-gray-50 border-gray-200'
                     )}
                   >
                     <div className="flex items-center gap-3 mb-4">
@@ -863,7 +860,7 @@ export default function DeliveryWizardPage() {
                     transition={{ delay: 0.3 }}
                     className={cn(
                       'rounded-xl p-5 border',
-                      theme === 'dark' ? 'bg-gray-700/50 border-gray-600' : 'bg-gray-50 border-gray-200'
+                      theme === 'dark' ? 'bg-[#232340]/50 border-[#2d2d44]' : 'bg-gray-50 border-gray-200'
                     )}
                   >
                     <div className="flex items-center gap-3 mb-4">
@@ -918,7 +915,7 @@ export default function DeliveryWizardPage() {
                     transition={{ delay: 0.4 }}
                     className={cn(
                       'rounded-xl p-4 border flex items-center gap-4',
-                      theme === 'dark' ? 'bg-gray-700/50 border-gray-600' : 'bg-gray-50 border-gray-200'
+                      theme === 'dark' ? 'bg-[#232340]/50 border-[#2d2d44]' : 'bg-gray-50 border-gray-200'
                     )}
                   >
                     <div className={cn(
@@ -1003,7 +1000,7 @@ export default function DeliveryWizardPage() {
                                 ? 'bg-blue-900/30 border-blue-700'
                                 : 'bg-blue-50 border-blue-300'
                               : theme === 'dark'
-                                ? 'bg-gray-700/50 border-gray-600'
+                                ? 'bg-[#232340]/50 border-[#2d2d44]'
                                 : 'bg-gray-50 border-gray-200'
                           )}
                         >
@@ -1022,7 +1019,7 @@ export default function DeliveryWizardPage() {
                               className={cn(
                                 'w-9 h-9 rounded-full flex items-center justify-center font-bold text-lg disabled:opacity-50 disabled:cursor-not-allowed transition-colors',
                                 theme === 'dark'
-                                  ? 'bg-gray-600 hover:bg-gray-500 text-white'
+                                  ? 'bg-[#2d2d44] hover:bg-[#3d3d5c] text-white'
                                   : 'bg-gray-200 hover:bg-gray-300 text-gray-700'
                               )}
                             >
@@ -1132,7 +1129,7 @@ export default function DeliveryWizardPage() {
                         className={cn(
                           'w-full px-4 py-3 rounded-xl border focus:ring-2 focus:ring-blue-500 transition-all',
                           theme === 'dark'
-                            ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-400'
+                            ? 'bg-[#232340] border-[#2d2d44] text-white placeholder-gray-400'
                             : 'bg-white border-gray-300 text-gray-900'
                         )}
                         placeholder="Nombre completo"
@@ -1152,7 +1149,7 @@ export default function DeliveryWizardPage() {
                         className={cn(
                           'w-full px-4 py-3 rounded-xl border focus:ring-2 focus:ring-blue-500 transition-all',
                           theme === 'dark'
-                            ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-400'
+                            ? 'bg-[#232340] border-[#2d2d44] text-white placeholder-gray-400'
                             : 'bg-white border-gray-300 text-gray-900'
                         )}
                         placeholder="Carnet de identidad"
@@ -1184,7 +1181,7 @@ export default function DeliveryWizardPage() {
                             signerRelation === option.value
                               ? 'border-blue-500 bg-blue-600 text-white'
                               : theme === 'dark'
-                                ? 'border-gray-600 bg-gray-700 text-gray-300 hover:border-gray-500'
+                                ? 'border-[#2d2d44] bg-[#232340] text-gray-300 hover:border-[#3d3d5c]'
                                 : 'border-gray-200 bg-white text-gray-700 hover:border-gray-300'
                           )}
                         >
@@ -1204,7 +1201,7 @@ export default function DeliveryWizardPage() {
                     </label>
                     <div className={cn(
                       'border-2 border-dashed rounded-2xl relative overflow-hidden',
-                      theme === 'dark' ? 'border-gray-600 bg-gray-700' : 'border-gray-300 bg-white'
+                      theme === 'dark' ? 'border-[#2d2d44] bg-[#232340]' : 'border-gray-300 bg-white'
                     )}>
                       <canvas
                         ref={canvasRef}
@@ -1230,7 +1227,7 @@ export default function DeliveryWizardPage() {
                         onClick={clearSignature}
                         className={cn(
                           'flex items-center gap-2 px-3 py-1 rounded-lg transition-colors',
-                          theme === 'dark' ? 'text-gray-400 hover:text-gray-200 hover:bg-gray-700' : 'text-gray-500 hover:text-gray-700 hover:bg-gray-100'
+                          theme === 'dark' ? 'text-gray-400 hover:text-gray-200 hover:bg-[#2d2d44]' : 'text-gray-500 hover:text-gray-700 hover:bg-gray-100'
                         )}
                       >
                         <RotateCcw className="w-4 h-4" />
@@ -1268,7 +1265,7 @@ export default function DeliveryWizardPage() {
                         animate={{ opacity: 1, scale: 1 }}
                         className={cn(
                           'relative aspect-square rounded-xl overflow-hidden border-2',
-                          theme === 'dark' ? 'border-gray-600' : 'border-gray-200'
+                          theme === 'dark' ? 'border-[#2d2d44]' : 'border-gray-200'
                         )}
                       >
                         <img
@@ -1294,7 +1291,7 @@ export default function DeliveryWizardPage() {
                         className={cn(
                           'aspect-square border-2 border-dashed rounded-xl flex flex-col items-center justify-center cursor-pointer transition-all',
                           theme === 'dark'
-                            ? 'border-gray-600 hover:border-blue-500 hover:bg-gray-700'
+                            ? 'border-[#2d2d44] hover:border-blue-500 hover:bg-[#232340]'
                             : 'border-gray-300 hover:border-blue-500 hover:bg-blue-50'
                         )}
                       >
@@ -1328,7 +1325,7 @@ export default function DeliveryWizardPage() {
                       className={cn(
                         'w-full px-4 py-3 rounded-xl border focus:ring-2 focus:ring-blue-500 transition-all',
                         theme === 'dark'
-                          ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-400'
+                          ? 'bg-[#232340] border-[#2d2d44] text-white placeholder-gray-400'
                           : 'bg-white border-gray-300 text-gray-900'
                       )}
                       placeholder="Observaciones sobre la entrega..."
@@ -1361,7 +1358,7 @@ export default function DeliveryWizardPage() {
                     animate={{ opacity: 1, y: 0 }}
                     className={cn(
                       'rounded-xl p-5 border',
-                      theme === 'dark' ? 'bg-gray-700/50 border-gray-600' : 'bg-gray-50 border-gray-200'
+                      theme === 'dark' ? 'bg-[#232340]/50 border-[#2d2d44]' : 'bg-gray-50 border-gray-200'
                     )}
                   >
                     <h3 className={cn('font-semibold mb-4', theme === 'dark' ? 'text-white' : 'text-gray-900')}>
@@ -1436,7 +1433,7 @@ export default function DeliveryWizardPage() {
                             sendReceiptVia === option.value
                               ? 'border-blue-500 bg-blue-600 text-white'
                               : theme === 'dark'
-                                ? 'border-gray-600 bg-gray-700 text-gray-300 hover:border-gray-500'
+                                ? 'border-[#2d2d44] bg-[#232340] text-gray-300 hover:border-[#3d3d5c]'
                                 : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300'
                           )}
                         >
@@ -1457,7 +1454,7 @@ export default function DeliveryWizardPage() {
               {/* Navigation Buttons */}
               <div className={cn(
                 'flex justify-between mt-8 pt-6 border-t',
-                theme === 'dark' ? 'border-gray-700' : 'border-gray-200'
+                theme === 'dark' ? 'border-[#2d2d44]' : 'border-gray-200'
               )}>
                 <motion.button
                   whileHover={{ scale: 1.02 }}
@@ -1466,7 +1463,7 @@ export default function DeliveryWizardPage() {
                   disabled={currentStep === 1}
                   className={cn(
                     'flex items-center gap-2 px-5 py-2.5 rounded-xl disabled:opacity-50 disabled:cursor-not-allowed transition-colors',
-                    theme === 'dark' ? 'text-gray-400 hover:text-gray-200 hover:bg-gray-700' : 'text-gray-600 hover:text-gray-800 hover:bg-gray-100'
+                    theme === 'dark' ? 'text-gray-400 hover:text-gray-200 hover:bg-[#2d2d44]' : 'text-gray-600 hover:text-gray-800 hover:bg-gray-100'
                   )}
                 >
                   <ArrowLeft className="w-4 h-4" />
