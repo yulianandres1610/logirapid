@@ -235,18 +235,24 @@ export async function DELETE(
     }
 
     const { searchParams } = new URL(request.url)
-    const companyId = searchParams.get('companyId')
+    const companyIdParam = searchParams.get('companyId')
+    // Treat empty string as null
+    const companyId = companyIdParam && companyIdParam.trim() !== '' ? parseInt(companyIdParam) : null
 
-    await db.query(
+    // Delete pricing for specific company or platform-wide (null)
+    const result = await db.query(
       `DELETE FROM recharge_product_pricing
        WHERE external_product_id = $1
-       AND (company_id = $2 OR ($2 IS NULL AND company_id IS NULL))`,
-      [productId, companyId ? parseInt(companyId) : null]
+       AND ${companyId !== null ? 'company_id = $2' : 'company_id IS NULL'}`,
+      companyId !== null ? [productId, companyId] : [productId]
     )
+
+    console.log(`[DELETE Pricing] Product ${productId}, Company ${companyId}, Deleted ${result.rowCount} rows`)
 
     return NextResponse.json({
       success: true,
-      message: 'Configuracion de precio eliminada',
+      message: 'Producto eliminado del catalogo',
+      deleted: result.rowCount,
     })
   } catch (error: any) {
     console.error('[Recharge Pricing DELETE Error]:', error)

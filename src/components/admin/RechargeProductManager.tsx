@@ -7,12 +7,9 @@ import {
   Smartphone,
   Gift,
   Check,
-  X,
-  Settings,
   Loader2,
   AlertCircle,
   Wallet,
-  TrendingUp,
   Edit2,
   Trash2,
 } from 'lucide-react'
@@ -103,7 +100,7 @@ export function RechargeProductManager() {
       const data = await response.json()
 
       if (data.success) {
-        // Filter only products that have pricing configured
+        // Filter only products that have pricing configured and enabled
         const configuredProducts = data.data.products.filter(
           (p: RechargeProduct) => p.pricing !== null && p.pricing.isEnabled
         )
@@ -140,25 +137,23 @@ export function RechargeProductManager() {
     setShowPricingModal(true)
   }
 
-  const handleDisableProduct = async (product: RechargeProduct) => {
-    if (!confirm(`¿Desactivar "${product.name}" del catalogo?`)) return
+  const handleDeleteProduct = async (product: RechargeProduct) => {
+    if (!confirm(`¿Eliminar "${product.name}" del catálogo?`)) return
 
     try {
-      const response = await fetch(`/api/recharges/products/${product.id}/pricing`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          marginType: product.pricing?.marginType || 'percentage',
-          marginValue: product.pricing?.marginValue || 0,
-          isEnabled: false,
-        }),
+      // Delete the pricing configuration completely
+      const response = await fetch(`/api/recharges/products/${product.id}/pricing?companyId=`, {
+        method: 'DELETE',
       })
       const data = await response.json()
       if (data.success) {
         fetchProducts()
+      } else {
+        alert(data.error || 'Error eliminando producto')
       }
     } catch (err) {
-      console.error('Error disabling product:', err)
+      console.error('Error deleting product:', err)
+      alert('Error de conexión')
     }
   }
 
@@ -188,93 +183,41 @@ export function RechargeProductManager() {
     }).format(amount)
   }
 
-  // Calculate totals
-  const totalProducts = products.length
-  const totalMargin = products.reduce((acc, p) => {
-    if (p.pricing?.sellingPrice && p.baseCost) {
-      return acc + (p.pricing.sellingPrice - p.baseCost)
-    }
-    return acc
-  }, 0)
-
   return (
     <div className="space-y-6">
-      {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      {/* Header with Balance */}
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+        <div>
+          <h2 className="text-xl font-semibold text-gray-900 dark:text-white flex items-center gap-2">
+            <Smartphone className="w-6 h-6 text-purple-500" />
+            Recargas Telefónicas
+          </h2>
+          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+            Productos configurados para agencias
+          </p>
+        </div>
+
         {/* UnivCell Balance */}
-        <div className="bg-gradient-to-br from-green-500 to-emerald-600 rounded-2xl p-5 text-white shadow-lg">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm opacity-80 flex items-center gap-1">
-                <Wallet className="w-4 h-4" />
-                Saldo UnivCell
-              </p>
-              <p className="text-3xl font-bold mt-1">
-                {creditsLoading ? (
-                  <Loader2 className="w-6 h-6 animate-spin" />
-                ) : credits !== null ? (
-                  formatCurrency(credits)
-                ) : (
-                  '$0.00'
-                )}
-              </p>
-              <p className="text-xs mt-2 opacity-70">
-                Disponible para recargas
-              </p>
-            </div>
-            <div className="w-14 h-14 bg-white/20 rounded-xl flex items-center justify-center">
-              <Wallet className="w-7 h-7" />
-            </div>
-          </div>
-        </div>
-
-        {/* Active Products */}
-        <div className="bg-white dark:bg-gray-800 rounded-2xl p-5 border border-gray-200 dark:border-gray-700 shadow-sm">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-gray-500 dark:text-gray-400 flex items-center gap-1">
-                <Smartphone className="w-4 h-4" />
-                Productos Activos
-              </p>
-              <p className="text-3xl font-bold text-gray-900 dark:text-white mt-1">
-                {totalProducts}
-              </p>
-              <p className="text-xs text-gray-400 dark:text-gray-500 mt-2">
-                Disponibles para agencias
-              </p>
-            </div>
-            <div className="w-14 h-14 bg-purple-100 dark:bg-purple-900/30 rounded-xl flex items-center justify-center">
-              <Smartphone className="w-7 h-7 text-purple-600 dark:text-purple-400" />
-            </div>
-          </div>
-        </div>
-
-        {/* Average Margin */}
-        <div className="bg-white dark:bg-gray-800 rounded-2xl p-5 border border-gray-200 dark:border-gray-700 shadow-sm">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-gray-500 dark:text-gray-400 flex items-center gap-1">
-                <TrendingUp className="w-4 h-4" />
-                Ganancia Promedio
-              </p>
-              <p className="text-3xl font-bold text-emerald-600 dark:text-emerald-400 mt-1">
-                {totalProducts > 0 ? formatCurrency(totalMargin / totalProducts) : '$0.00'}
-              </p>
-              <p className="text-xs text-gray-400 dark:text-gray-500 mt-2">
-                Por producto vendido
-              </p>
-            </div>
-            <div className="w-14 h-14 bg-emerald-100 dark:bg-emerald-900/30 rounded-xl flex items-center justify-center">
-              <TrendingUp className="w-7 h-7 text-emerald-600 dark:text-emerald-400" />
+        <div className="bg-gradient-to-r from-green-500 to-emerald-600 text-white px-4 py-2 rounded-xl shadow-md flex items-center gap-3">
+          <Wallet className="w-5 h-5" />
+          <div>
+            <div className="text-xs opacity-80">Saldo UnivCell</div>
+            <div className="text-lg font-bold">
+              {creditsLoading ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : credits !== null ? (
+                formatCurrency(credits)
+              ) : (
+                '$0.00'
+              )}
             </div>
           </div>
         </div>
       </div>
 
-      {/* Filters */}
-      {totalProducts > 0 && (
+      {/* Filters - only show if there are products */}
+      {products.length > 0 && (
         <div className="flex flex-col sm:flex-row gap-4">
-          {/* Search */}
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
             <input
@@ -286,22 +229,23 @@ export function RechargeProductManager() {
             />
           </div>
 
-          {/* Country Filter */}
-          <div className="relative">
-            <Filter className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-            <select
-              value={selectedCountry}
-              onChange={(e) => setSelectedCountry(e.target.value)}
-              className="pl-10 pr-8 py-2.5 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-purple-500 focus:border-transparent appearance-none min-w-[200px]"
-            >
-              <option value="">Todos los paises</option>
-              {countries.map((country) => (
-                <option key={country.country_code} value={country.country_code}>
-                  {getCountryFlag(country.country_code)} {country.country_name}
-                </option>
-              ))}
-            </select>
-          </div>
+          {countries.length > 1 && (
+            <div className="relative">
+              <Filter className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+              <select
+                value={selectedCountry}
+                onChange={(e) => setSelectedCountry(e.target.value)}
+                className="pl-10 pr-8 py-2.5 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-purple-500 focus:border-transparent appearance-none min-w-[180px]"
+              >
+                <option value="">Todos los países</option>
+                {countries.map((country) => (
+                  <option key={country.country_code} value={country.country_code}>
+                    {getCountryFlag(country.country_code)} {country.country_name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
         </div>
       )}
 
@@ -324,8 +268,8 @@ export function RechargeProductManager() {
           <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">
             Sin productos configurados
           </h3>
-          <p className="text-gray-500 dark:text-gray-400 max-w-md mx-auto mb-6">
-            Agrega productos de recarga usando el boton "Nuevo Producto" y selecciona la categoria "Recarga"
+          <p className="text-gray-500 dark:text-gray-400 max-w-md mx-auto">
+            Usa el botón <span className="font-medium">"Nuevo Producto"</span> y selecciona la categoría <span className="font-medium">"Recarga"</span> para agregar productos de UnivCell
           </p>
         </div>
       ) : (
@@ -333,7 +277,7 @@ export function RechargeProductManager() {
           {products.map((product) => (
             <div
               key={product.id}
-              className="group bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 p-5 hover:shadow-xl hover:border-purple-300 dark:hover:border-purple-700 transition-all"
+              className="group bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 p-5 hover:shadow-lg hover:border-purple-300 dark:hover:border-purple-700 transition-all"
             >
               {/* Header */}
               <div className="flex items-start justify-between mb-4">
@@ -378,7 +322,7 @@ export function RechargeProductManager() {
 
                 <div className="flex justify-between items-center pt-2 border-t border-gray-100 dark:border-gray-700">
                   <span className="text-sm text-gray-500 dark:text-gray-400">Margen:</span>
-                  <span className="font-semibold text-purple-600 dark:text-purple-400 bg-purple-50 dark:bg-purple-900/30 px-2 py-0.5 rounded-lg">
+                  <span className="font-semibold text-purple-600 dark:text-purple-400 bg-purple-50 dark:bg-purple-900/30 px-2 py-0.5 rounded-lg text-sm">
                     {product.pricing?.marginType === 'percentage'
                       ? `+${product.pricing.marginValue}%`
                       : `+${formatCurrency(product.pricing?.marginValue || 0)}`}
@@ -388,23 +332,23 @@ export function RechargeProductManager() {
 
               {/* Status & Actions */}
               <div className="flex items-center justify-between pt-3 border-t border-gray-100 dark:border-gray-700">
-                <span className="flex items-center gap-1.5 text-sm text-green-600 dark:text-green-400 bg-green-50 dark:bg-green-900/20 px-2 py-1 rounded-lg">
+                <span className="flex items-center gap-1.5 text-sm text-green-600 dark:text-green-400">
                   <Check className="w-3.5 h-3.5" />
                   Activo
                 </span>
 
-                <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                <div className="flex items-center gap-1">
                   <button
                     onClick={() => handleOpenPricing(product)}
-                    className="p-2 text-gray-500 hover:text-purple-600 hover:bg-purple-50 dark:hover:bg-purple-900/30 rounded-lg transition-colors"
+                    className="p-2 text-gray-400 hover:text-purple-600 hover:bg-purple-50 dark:hover:bg-purple-900/30 rounded-lg transition-colors"
                     title="Editar precio"
                   >
                     <Edit2 className="w-4 h-4" />
                   </button>
                   <button
-                    onClick={() => handleDisableProduct(product)}
-                    className="p-2 text-gray-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-lg transition-colors"
-                    title="Desactivar"
+                    onClick={() => handleDeleteProduct(product)}
+                    className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-lg transition-colors"
+                    title="Eliminar"
                   >
                     <Trash2 className="w-4 h-4" />
                   </button>
