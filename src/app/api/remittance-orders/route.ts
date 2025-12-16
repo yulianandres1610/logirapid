@@ -38,13 +38,13 @@ export async function GET(request: NextRequest) {
       }, { status: 401 })
     }
 
-    // Fallback: get companyId from cookie if not in JWT
-    if (!payload.companyId) {
-      const companyIdCookie = cookieStore.get('user-company-id')?.value
-      if (companyIdCookie) {
-        payload.companyId = parseInt(companyIdCookie, 10)
-        console.log(`[Remittance Orders GET] Using companyId from cookie: ${payload.companyId}`)
-      }
+    // ALWAYS get companyId from cookie as primary source (more reliable)
+    const companyIdCookie = cookieStore.get('user-company-id')?.value
+    if (companyIdCookie) {
+      payload.companyId = parseInt(companyIdCookie, 10)
+      console.log(`[Remittance Orders GET] Using companyId from cookie: ${payload.companyId}`)
+    } else if (!payload.companyId) {
+      console.log(`[Remittance Orders GET] WARNING: No companyId in cookie or JWT`)
     }
 
     // Handle debug parameter to check specific order
@@ -131,16 +131,26 @@ export async function GET(request: NextRequest) {
     // Ensure companyId is properly cast to integer for comparison
     const userCompanyId = parseInt(String(payload.companyId), 10)
 
-    // TEMPORARY FIX: Show all orders for ADMIN users to prevent data loss
-    // The selling_company_id filter was causing issues - we'll show all orders
-    // and fix the root cause later
-    if (payload.role !== 'SUPER_ADMIN' && payload.role !== 'ADMIN') {
-      params.push(userCompanyId)
-      whereClause += ` AND ro.selling_company_id = $${params.length}::integer`
-      console.log(`[Remittance Orders GET] Filtering by selling_company_id = ${userCompanyId}`)
+    if (payload.role !== 'SUPER_ADMIN') {
+      // Filter by company - users only see their company's orders
+      if (userCompanyId && !isNaN(userCompanyId) && userCompanyId > 0) {
+        params.push(userCompanyId)
+        whereClause += ` AND ro.selling_company_id = $${params.length}`
+        console.log(`[Remittance Orders GET] Filtering by selling_company_id = ${userCompanyId}`)
+      } else {
+        console.log(`[Remittance Orders GET] WARNING: Invalid userCompanyId (${userCompanyId}), showing no orders`)
+        // Return empty if no valid company ID
+        return NextResponse.json({
+          success: true,
+          data: {
+            orders: [],
+            pagination: { page: 1, limit: 20, total: 0, totalPages: 0 }
+          },
+          warning: 'No se pudo determinar la empresa del usuario'
+        })
+      }
     } else {
-      // ADMIN and SUPER_ADMIN see all orders for now
-      console.log(`[Remittance Orders GET] ${payload.role} - showing all orders (temporary fix)`)
+      console.log(`[Remittance Orders GET] SUPER_ADMIN - showing all orders`)
     }
 
     if (status) {
@@ -283,17 +293,17 @@ export async function POST(request: NextRequest) {
       }, { status: 401 })
     }
 
-    // Fallback: get companyId from cookie if not in JWT
-    if (!payload.companyId) {
-      const companyIdCookie = cookieStore.get('user-company-id')?.value
-      if (companyIdCookie) {
-        payload.companyId = parseInt(companyIdCookie, 10)
-        console.log(`[Remittance Orders POST] Using companyId from cookie: ${payload.companyId}`)
-      }
-    }
+    // ALWAYS get companyId from cookie as primary source (more reliable)
+    const companyIdCookie = cookieStore.get('user-company-id')?.value
+    let sellingCompanyId: number
 
-    // CRITICAL: Validate that we have a companyId
-    if (!payload.companyId) {
+    if (companyIdCookie) {
+      sellingCompanyId = parseInt(companyIdCookie, 10)
+      console.log(`[Remittance Orders POST] Using companyId from cookie: ${sellingCompanyId}`)
+    } else if (payload.companyId) {
+      sellingCompanyId = parseInt(String(payload.companyId), 10)
+      console.log(`[Remittance Orders POST] Using companyId from JWT: ${sellingCompanyId}`)
+    } else {
       console.error(`[Remittance Orders POST] ERROR: No companyId found for user ${payload.email}`)
       return NextResponse.json({
         success: false,
@@ -301,9 +311,16 @@ export async function POST(request: NextRequest) {
       }, { status: 400 })
     }
 
-    // Ensure companyId is a number
-    const sellingCompanyId = parseInt(String(payload.companyId), 10)
-    console.log(`[Remittance Orders POST] Using sellingCompanyId: ${sellingCompanyId}`)
+    // Validate we have a valid number
+    if (isNaN(sellingCompanyId) || sellingCompanyId <= 0) {
+      console.error(`[Remittance Orders POST] ERROR: Invalid companyId: ${sellingCompanyId}`)
+      return NextResponse.json({
+        success: false,
+        error: 'ID de empresa inválido. Por favor, cierre sesión e inicie nuevamente.'
+      }, { status: 400 })
+    }
+
+    console.log(`[Remittance Orders POST] Final sellingCompanyId: ${sellingCompanyId}`)
 
     const body = await request.json()
     const {
