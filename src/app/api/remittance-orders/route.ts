@@ -691,8 +691,11 @@ export async function POST(request: NextRequest) {
                   day: 'numeric'
                 })
 
-            // Build recipient location
-            const recipientLocation = `${municipality}, ${province}`
+            // Build recipient location with full address
+            const recipientAddress = recipient.address || ''
+            const recipientLocation = recipientAddress
+              ? `${recipientAddress}, ${municipality}, ${province}`
+              : `${municipality}, ${province}`
 
             // Send notification (don't await to keep response fast)
             sendBrokerRemittanceNotification(
