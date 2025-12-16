@@ -1,0 +1,1884 @@
+openapi: 3.1.0
+info:
+  title: UnivCell Reseller API
+  description: >-
+    This is the API description for UnivCell Inc.
+
+
+    This API uses
+    [JWT](https://jwt.io/) for authentication in HTTP header `Authorization` =
+    `Bearer xxxx`.
+
+
+    As another authentication method we have included a [basic auth](https://developer.mozilla.org/en-US/docs/Web/HTTP/Authentication)
+    system that you can use when performing operations
+    over our API when using the api credentials you can generate under your account.
+  termsOfService: "https://univcell.com/terms/"
+  contact:
+    email: info@univcell.com
+  version: "v1"
+servers:
+  - url: "https://api-staging.univcell.com/"
+  - url: "https://api.univcell.com/"
+tags:
+  - name: auth
+    description: API authentication
+  - name: user
+    description: Operations about user
+  - name: topup
+    description: Top-up operations and orders
+  # - name: ild
+  #   description: ILD top-up operations and orders
+  - name: products
+  # - name: sms
+
+paths:
+  /auth/login:
+    post:
+      tags:
+        - auth
+      summary: Authenticate a user in the system
+      requestBody:
+        content:
+          application/json:
+            schema:
+              properties:
+                user:
+                  type: string
+                  description: "Can be username or email"
+                password:
+                  type: string
+      responses:
+        200:
+          description: successful login
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResponse"
+        400:
+          description: >-
+            Error during authentication. Please refer to error message and code.
+            It can contain an error code like:
+              - LOGIN_INPUT_VALIDATION: when given data does not meet minimum requirements.
+              - LOGIN_NOT_ACTIVE: when given auth ID is not allowed for authentication.
+              - LOGIN_NOT_MISMATCH: credentials mismatch.
+              - LOGIN_ERROR: when temporary error occurred while attempting authentication.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiErrorResponse"
+              example:
+                success: false
+                error: "Authentication error."
+                metadata:
+                  error_code: LOGIN_INPUT_VALIDATION
+        404:
+          description: If given auth ID was not found.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiErrorResponse"
+              example:
+                success: false
+                error: "User account not found."
+                metadata:
+                  error_code: LOGIN_NOT_FOUND
+
+  /auth/refresh:
+    post:
+      tags:
+        - auth
+      summary: Get a new access token for user.
+      description: Get a new token for same user using an existing one. It may be expired.
+      parameters:
+        - name: Authorization
+          in: header
+          schema:
+            type: string
+            description: Expired JWT token that will be used to retrieve a new access token.
+            example: Bearer eyJ0...
+      responses:
+        200:
+          description: successful login
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResponse"
+
+  # /auth/logout:
+  #   post:
+  #     tags:
+  #       - auth
+  #     security:
+  #       - jwtAuth: []
+  #     summary: Invalidates the token in the server.
+  #     responses:
+  #       204:
+  #         description: successfully logged out
+
+  # /auth/recovery:
+  #   post:
+  #     tags:
+  #       - auth
+  #     security:
+  #       - jwtAuth: []
+  #     summary: Recovers user password using the choosen method.
+  #     requestBody:
+  #       content:
+  #         application/json:
+  #           schema:
+  #             properties:
+  #               phone:
+  #                 type: string
+  #                 description: "If user wants to use phone verification, if not do not send this parameter"
+  #               email:
+  #                 type: string
+  #                 description: "If user wants to use email verification, if not do not send this parameter"
+  #     responses:
+  #       200:
+  #         description: successfully sent confirmation using choosen method
+  #         content:
+  #           application/json:
+  #             schema:
+  #               $ref: "#/components/schemas/AuthResponse"
+  #       400:
+  #         description: application exception
+  #         content:
+  #           application/json:
+  #             schema:
+  #               $ref: "#/components/schemas/ApiResponse"
+  #       403:
+  #         description: Exceded daily attempts limit
+  #         content:
+  #           application/json:
+  #             schema:
+  #               $ref: "#/components/schemas/ApiResponse"
+  #       404:
+  #         description: not found email or phone
+  #         content:
+  #           application/json:
+  #             schema:
+  #               $ref: "#/components/schemas/ApiResponse"
+  #   put:
+  #     tags:
+  #       - auth
+  #     security:
+  #       - jwtAuth: []
+  #     summary: Checks sent code and returns a valid authenticated token if verification is completed
+  #     requestBody:
+  #       content:
+  #         application/json:
+  #           schema:
+  #             properties:
+  #               phone:
+  #                 type: string
+  #                 description: "If user wants to use phone verification, if not do not send this parameter"
+  #               email:
+  #                 type: string
+  #                 description: "If user wants to use email verification, if not do not send this parameter"
+  #               code:
+  #                 type: string
+  #                 description: "Code sent using POST: /auth/recovery"
+  #     responses:
+  #       200:
+  #         description: Successfully checked code and authentication method
+  #         content:
+  #           application/json:
+  #             schema:
+  #               $ref: "#/components/schemas/AuthResponse"
+  #       400:
+  #         description: application exception
+  #         content:
+  #           application/json:
+  #             schema:
+  #               $ref: "#/components/schemas/ApiResponse"
+  #       404:
+  #         description: not found email or phone
+  #         content:
+  #           application/json:
+  #             schema:
+  #               $ref: "#/components/schemas/ApiResponse"
+
+  /users:
+    post:
+      tags:
+        - user
+      security:
+        - jwtAuth: []
+        - BasicAuth: []
+      summary: Create user
+      description: Creates a new agent under your account. This can only be done by the logged in user.
+      requestBody:
+        description: Created user object
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateUser"
+      responses:
+        204:
+          description: successful operation
+        401:
+          description: Unauthorized
+
+  /users/me:
+    get:
+      tags:
+        - user
+      security:
+        - jwtAuth: []
+        - BasicAuth: []
+      summary: Get information from current authenticated user
+      parameters:
+        - name: If-None-Match
+          in: header
+          schema:
+            type: string
+      responses:
+        "200":
+          description: successful request
+          headers:
+            etag:
+              description: Contains a hash of the content.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "304":
+          description: >-
+            When If-None-Match header is sent and matches with the Etag (Not
+            Modified).
+        "400":
+          description: application exception
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiResponse"
+        "401":
+          description: unauthorized
+
+  /users/{userId}:
+    get:
+      tags:
+        - user
+      security:
+        - jwtAuth: []
+        - BasicAuth: []
+      summary: Get user by ID
+      operationId: getUserById
+      parameters:
+        - name: If-None-Match
+          in: header
+          schema:
+            type: string
+        - name: userId
+          in: path
+          description: The user ID.
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: successful operation
+          headers:
+            etag:
+              description: Contains a hash of the content.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "304":
+          description: >-
+            When If-None-Match header is sent and matches with the Etag (Not
+            Modified).
+        "400":
+          description: Invalid username supplied
+          content: {}
+        "401":
+          description: unauthorized
+        "404":
+          description: User not found
+          content: {}
+    put:
+      tags:
+        - user
+      security:
+        - BasicAuth: []
+      summary: Updated user
+      description: This can only be done by the logged in user.
+      parameters:
+        - name: userId
+          in: path
+          description: name that need to be updated
+          required: true
+          schema:
+            type: string
+      requestBody:
+        description: Updated user object
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/User"
+      responses:
+        "400":
+          description: Invalid user supplied
+          content: {}
+        "401":
+          description: unauthorized
+        "404":
+          description: User not found
+          content: {}
+
+  /credits:
+    get:
+      tags:
+        - user
+      security:
+        - jwtAuth: []
+        - BasicAuth: []
+      summary: User's credits
+      responses:
+        "200":
+          description: successful operation
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  credit:
+                    type: number
+                    format: float
+        "401":
+          description: unauthorized
+
+  /users/countries/availability:
+    get:
+      tags:
+        - user
+      security:
+        - jwtAuth: []
+        - BasicAuth: []
+      summary: Countries available for topup per client
+      responses:
+        "200":
+          description: successful operation
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Country"
+        "401":
+          description: unauthorized
+
+  /users/products/promotions:
+    get:
+      tags:
+        - user
+      security:
+        - jwtAuth: []
+        - BasicAuth: []
+      summary: Get user's active or future promotions for products the user has contract with.
+      responses:
+        "200":
+          description: user's promotions active or future
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Promotion"
+        "400":
+          description: application exception
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiResponse"
+        "401":
+          description: unauthorized
+
+  /users/products/promotions/countries:
+    get:
+      tags:
+        - user
+      security:
+        - jwtAuth: []
+        - BasicAuth: []
+      summary: Get user's active or future promotions for products the user has contract with organized by country.
+      responses:
+        "200":
+          description: user's promotions active or future organized by country
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/PromotionsByCountry"
+        "400":
+          description: application exception
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiResponse"
+        "401":
+          description: unauthorized
+
+  /resellers/clients:
+    get:
+      tags:
+        - user
+      security:
+        - jwtAuth: []
+        - BasicAuth: []
+      summary: List of clients from a reseller
+      parameters:
+        - name: include_sub_clients
+          in: query
+          schema:
+            type: boolean
+        - name: start
+          in: query
+          schema:
+            type: integer
+            format: int32
+            default: 0
+        - name: length
+          in: query
+          schema:
+            type: integer
+            format: int32
+        - name: "search[value]"
+          in: query
+          schema:
+            type: string
+        - name: "search[regexp]"
+          in: query
+          schema:
+            type: boolean
+            default: false
+      responses:
+        "200":
+          description: List of clients
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ClientsDataTable"
+        "401":
+          description: unauthorized
+
+  /topup:
+    post:
+      tags:
+        - topup
+      security:
+        - jwtAuth: []
+        - BasicAuth: []
+      summary: Perform a topup order.
+      description: >-
+        If performing topups with a 3rd party app, you'll need to provide us
+        with a callback URL (webhook) which our system will notify after every topup
+        either successful or not. If despite that your system requires realtime notifications
+        about orders, use the parameter `realtime=1` when calling this endpoint.
+      requestBody:
+        description: Parameters for topup
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - product_id
+                - destination
+                - amount
+                - local_reference
+              properties:
+                product_id:
+                  type: integer
+                  format: int32
+                  description: The product ID that will be used on topup. You can get those products you have available for topup by referring to the [/products/countries/{countryCode}](#/products/productByCountryCode) endpoint.
+                destination:
+                  type: string
+                  description: >-
+                    The account number used for the order. Test with
+                    `5300000000`
+                amount:
+                  type: integer
+                  format: int32
+                  description: The base amount to be used for topup. To avoid decimal misrepresentation you should send for instance `2000` if the desired amount is `20.00`
+                local_reference:
+                  type: string
+                  format: uuid
+                  description: Reference ID used by the client (you) to identify the orders. You can use this value later on to query the order status.
+                scheduled_date:
+                  type: string
+                  format: date-time
+                  description: "Use this parameter if you want to schedule the topup for certain date. Format in [ISO-8601](https://en.wikipedia.org/wiki/ISO_8601). ie: 2020-11-17T15:58:38+00:00"
+                  example: '2020-11-17T15:58:38+00:00'
+                email_notification:
+                  type: boolean
+                  description: >-
+                    Whether or not the client (you) must be notified via email when the order is
+                    completed.
+                  default: false
+                realtime:
+                  type: boolean
+                  description: "Instead of using our deferred processing system we'll attempt to perform the topup in realtime and notify you right away."
+                  default: false
+                unlimited:
+                  type: boolean
+                  description: "If true it will be up to you to control the number of topups the clients are allowed to make. By default this is controlled by our systems."
+                  default: false
+                topup_mode:
+                  type: string
+                  description: >-
+                    Determines whether the amount represents what is sent or what is received by the subscriber.
+                    If the value is `SOURCE_AMOUNT` then the amount represents what is sent in local currency debited from your account.
+                    If the value is `DESTINATION_AMOUNT` then the amount represents what the subscriber will receive in their account.
+                  enum:
+                  - SOURCE_AMOUNT
+                  - DESTINATION_AMOUNT
+                  default: SOURCE_AMOUNT
+      callbacks:
+        topup-response:
+          '{$request.body#/callbackUrl}':
+            post:
+              summary: Client's endpoint to accept notifications for successful or failed order.
+              description: >-
+                The URL must be from the Client's server and it'll be used to send a POST request with the payload response.
+                Hash can be checked using a serialized version of the POST payload content with sha256 hash.
+                For example using php can be archieved by using:
+
+                ```
+                  hash_equals(
+                    $_SERVER['HTTP_HASHED_CONTENT'],
+                    hash_hmac('sha256', serialize($_POST), 'API_WEBHOOK_SECRET_KEY')
+                  )
+                ```
+              parameters:
+              - name: HTTP_HASHED_CONTENT
+                in: header
+                description: Contains a hash of the content using provided webhook secret.
+                schema:
+                  type: string
+              requestBody:
+                required: true
+                content:
+                  application/x-www-form-urlencoded:
+                    schema:
+                      $ref: "#/components/schemas/TopupWebhookPayload"
+              responses:
+                200:
+                  description: The server expects a successful response code to complete the execution. Otherwise more attempts will be made every 15 minutes.
+      responses:
+        200:
+          description: >-
+            When receiving a `200` response code you can check for `resultCode` to determine if the topup was successful or not. Please refer to the following list of codes for more information.
+
+              List of result codes and meaning:
+              - 500: Operation completed
+              - 501: Unknown error
+              - 502: Operation pending
+              - 503: Operation rejected
+              - 504: Operation non existent or not completed previously
+              - 505: Rejected for security reasons
+              - 507: Distributor system error
+              - 508: Provider system error
+              - 509: Product unavailable temporarily
+              - 510: Topup limit exceeded
+              - 511: Duplicated transaction
+              - 512: Invalid amount
+              - 513: Invalid request
+              - 514: Operator unavailable
+              - 515: Asynchronous system unavailable
+              - 516: Invalid subscriber
+
+            This result codes can be used for testing proposes, using the last 2 digits of an result code on the destination. Ex 5300000010 will always return 510 result code.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TopupResponse"
+        400:
+          description: >-
+            An application error while placing the order. Please refer to error message and code.
+            It can contain an error code like:
+              - SYSTEM_MAINTENANCE: the system is not accepting orders at the moment.
+              - TOPUP_INPUT_VALIDATION: when given topup data does not meet the validation criteria. You must check the destination has the correct format, the price must not include decimal separator and reference must be unique.
+              - TOPUP_INVALID_PRODUCT: when requested product could not be found or is not available for you at the moment.
+              - TOPUP_INVALID_SUBSCRIBER: when the solicited subscriber does not have the expected format. Usually if the phone number misses the country code.
+              - TOPUP_SCHEDULED_DATE: when given date does not have the expected format. Remember to send us the timezone from where you are requesting the topup.
+              - TOPUP_LIMIT_REACHED: when the subscriber has reached the maximum topups for period. Unless you send `unlimited = 1`, we restrict to 5 the number of topups a subcriber can get in the last 24 hours.
+              - TOPUP_ERROR: an error occurred while placing order, please try again later. Usually if the topup is sent on real time and an error happens.
+              - TOPUP_DUPLICATED_REFERENCE: the identifier used for client already exist related to an order.
+              - TOPUP_PROVIDER_UNAVAILABLE: if for given subscriber and amount we are not able to find the connection for your topup. No all the products accept variable amount. It's advised to check [/products/{productId}/prices](#/products/productByCountryCode)
+              - TOPUP_INSUFFICIENT_BALANCE: your account does not have enough balance for topup. Please add more funds.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiErrorResponse"
+              example:
+                success: false
+                error: "Error while placing topup order."
+                metadata:
+                  error_code: TOPUP_ERROR
+        401:
+          description: Unauthorized
+  /v2/topup:
+    post:
+      tags:
+        - topup
+      security:
+        - jwtAuth: []
+        - BasicAuth: []
+      summary: Perform a topup order. This is the V2 version of the topup endpoint.
+      description: If performing topups with a 3rd party app, you'll need to provide us
+        with a callback URL (webhook) which our system will notify after every topup
+        either successful or not. If despite that your system requires synchronous
+        processing for orders, use the parameter `realtime=1` when calling this endpoint.
+        Keep in mind that this will only work for single subscriber topups.
+      requestBody:
+        description: Parameters for topup
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - product_id
+                - subscribers
+                - amount
+                - local_reference
+              properties:
+                product_id:
+                  type: integer
+                  format: int32
+                  description: >-
+                    The product ID that will be used on topup. You can get those products you have
+                    available for topup [/products/countries/{countryCode}](#/products/productByCountryCode).
+                subscribers:
+                  type: array
+                  items:
+                    oneOf:
+                      - type: string
+                        pattern: '^\+?[1-9]\d{1,14}$' # E164 phone number format
+                      - type: string
+                        pattern: '^[^@]+@nauta\.com\.cu$' # String ending with @nauta.com.cu
+                  description: >-
+                    The subscribers account numbers used for the order. Test with
+                    `5300000000` or valid emails ending with `@nauta.com.cu`
+                amount:
+                  type: object
+                  description: The base amount to be used for topup.
+                  properties:
+                    currency:
+                      type: string
+                      description: The currency of the amount.
+                      example: USD
+                    value:
+                      type: integer
+                      format: int32
+                      description: The value of the amount. To avoid decimal misrepresentation you should send for instance `2000` if the desired amount is `20.00`
+                amount_calculation:
+                  type: string
+                  description: >-
+                    Determines whether to use the source value or the destination value for the amount.
+                    If the value is `SOURCE` then the amount to send will be calculated in `USD` as source
+                    value. If the value is `DESTINATION` then the amount will reflect what the subscriber
+                    will receive in the destination currency.
+                  enum:
+                    - SOURCE
+                    - DESTINATION
+                  default: SOURCE
+                local_reference:
+                  type: string
+                  format: uuid
+                  description: Reference ID used by the client (you) to identify the orders. You can use this value later on to query the order status.
+                scheduled_date:
+                  type: string
+                  format: date-time
+                  description: >-
+                    Use this parameter if you want to schedule the topup for certain date.
+                    Format in [ISO-8601](https://en.wikipedia.org/wiki/ISO_8601).
+                    ```
+                    ie: 2020-11-17T15:58:38+00:00
+                    ```
+                  example: '2020-11-17T15:58:38+00:00'
+                email_notification:
+                  type: boolean
+                  description: >-
+                    Whether or not the client (you) must be notified via email when the order is
+                    completed or failed.
+                  default: false
+                callback_url:
+                  type: string
+                  description: >-
+                    The URL must be from the Client's server and it'll be used to send a POST request with the payload response.
+                    Hash can be checked using a serialized version of the POST payload content with sha256 hash.
+                    For example using php can be archieved by using:
+
+                    ```
+                      hash_equals(
+                        $_SERVER['HTTP_HASHED_CONTENT'],
+                        hash_hmac('sha256', serialize($_POST), 'API_WEBHOOK_SECRET_KEY')
+                      )
+                    ```
+                realtime:
+                  type: boolean
+                  description: >-
+                    Instead of using our deferred processing system we'll attempt to perform the
+                    topup in realtime and notify you right away. This is only available for single subcriber topups.
+                    If you have multiple subscribers we must use the deferred processing.
+                  default: false
+                unlimited:
+                  type: boolean
+                  description: >-
+                    If true, it will be up to you to control the number of topups the clients are allowed to make.
+                    By default this is controlled by our systems and allows up to 5 topups for the same subscriber
+                    in a 24 hour window.
+                  default: false
+      responses:
+        200:
+          description: >-
+            When receiving a `200` response code you can check for `resultCode` to determine if the topup was successful or not. Please refer to the following list of codes for more information.
+
+              List of result codes and meaning:
+              - 500: Operation completed
+              - 501: Unknown error
+              - 502: Operation pending
+              - 503: Operation rejected
+              - 504: Operation non existent or not completed previously
+              - 505: Rejected for security reasons
+              - 507: Distributor system error
+              - 508: Provider system error
+              - 509: Product unavailable temporarily
+              - 510: Topup limit exceeded
+              - 511: Duplicated transaction
+              - 512: Invalid amount
+              - 513: Invalid request
+              - 514: Operator unavailable
+              - 515: Asynchronous system unavailable
+              - 516: Invalid subscriber
+
+            This result codes can be used for testing proposes, using the last 2 digits of an result code on the destination. Ex 5300000010 will always return 510 result code.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TopupResponse"
+        400:
+          description: >-
+            An application error while placing the order. Please refer to error message and code.
+            It can contain an error code like:
+              - SYSTEM_MAINTENANCE: the system is not accepting orders at the moment.
+              - TOPUP_INPUT_VALIDATION: when given topup data does not meet the validation criteria. You must check the destination has the correct format, the price must not include decimal separator and reference must be unique.
+              - TOPUP_INVALID_PRODUCT: when requested product could not be found or is not available for you at the moment.
+              - TOPUP_INVALID_SUBSCRIBER: when the solicited subscriber does not have the expected format. Usually if the phone number misses the country code.
+              - TOPUP_SCHEDULED_DATE: when given date does not have the expected format. Remember to send us the timezone from where you are requesting the topup.
+              - TOPUP_LIMIT_REACHED: when the subscriber has reached the maximum topups for period. Unless you send `unlimited = 1`, we restrict to 5 the number of topups a subcriber can get in the last 24 hours.
+              - TOPUP_ERROR: an error occurred while placing order, please try again later. Usually if the topup is sent on real time and an error happens.
+              - TOPUP_DUPLICATED_REFERENCE: the identifier used for client already exist related to an order.
+              - TOPUP_PROVIDER_UNAVAILABLE: if for given subscriber and amount we are not able to find the connection for your topup. No all the products accept variable amount. It's advised to check [/products/{productId}/prices](#/products/productByCountryCode)
+              - TOPUP_INSUFFICIENT_BALANCE: your account does not have enough balance for topup. Please add more funds.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiErrorResponse"
+              example:
+                success: false
+                error: "Error while placing topup order."
+                metadata:
+                  error_code: TOPUP_ERROR
+        401:
+          description: Unauthorized
+  /topup-data:
+    get:
+      tags:
+        - topup
+      security:
+        - jwtAuth: []
+        - BasicAuth: []
+      summary: List of topup records paginated.
+      parameters:
+        - name: status
+          description: Filter by order status.
+          in: query
+          schema:
+            type: string
+            enum:
+              - ok
+              - error
+              - pending
+              - on-hold
+        - name: from
+          description: The starting day the orders will be filtered by. By default current date. All processing dates are in UTC, so meke sure you send us a ISO8601 format like `2020-01-01T10:00:00-04:00`
+          in: query
+          schema:
+            type: string
+            pattern: date-time
+          example: '2020-01-01T10:00:00-04:00'
+        - name: to
+          description: The end date, by default the end of current day.
+          in: query
+          schema:
+            type: string
+            format: date-time
+          example: '2020-01-01T23:59:59-04:00'
+        - name: start
+          description: The index for paginated results.
+          in: query
+          schema:
+            type: integer
+            default: 0
+        - name: length
+          description: The number of records to retrieve. For performance issues only a maximun number of 100 records will be retrieved.
+          in: query
+          schema:
+            type: integer
+            default: 100
+        - name: client
+          description: If you are a reseller and have multiple clients under you, you can filter their topups passing the client's id.
+          in: query
+          schema:
+            $ref: "#/components/schemas/UUID"
+      responses:
+        "200":
+          description: Topup data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TopupDataTable"
+        "401":
+          description: unauthorized
+
+  /topup/{reference}:
+    get:
+      tags:
+        - topup
+      security:
+        - jwtAuth: []
+        - BasicAuth: []
+      summary: Retrieve record topup by reference
+      parameters:
+        - name: reference
+          in: path
+          description: The order reference, either ID or the local reference used in your system.
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Topup record data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TopupRecord"
+        "401":
+          description: unauthorized
+        "404":
+          description: If given topup reference was not found.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiErrorResponse"
+              example:
+                success: false
+                error: "Topup not found."
+                metadata:
+                  error_code: NOT_FOUND
+
+  /countries/availability:
+    get:
+      tags:
+        - topup
+      security:
+        - jwtAuth: []
+        - BasicAuth: []
+      summary: List of available countries for topup
+      parameters:
+        - name: If-None-Match
+          in: header
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Countries for topup
+          headers:
+            etag:
+              description: Contains a hash of the content.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Country"
+        "304":
+          description: >-
+            When If-None-Match header is sent and matches with the Etag (Not
+            Modified).
+
+  /users/{id}/products:
+    get:
+      tags:
+        - products
+      security:
+        - jwtAuth: []
+        - BasicAuth: []
+      summary: Get products the user has contract with.
+      parameters:
+        - name: If-None-Match
+          in: header
+          schema:
+            type: string
+        - name: id
+          in: path
+          required: true
+          description: User ID
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: user's products response
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/UserProduct"
+        "400":
+          description: application exception
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiResponse"
+        "401":
+          description: unauthorized
+
+  /products/countries/{countryCode}:
+    get:
+      tags:
+        - products
+      operationId: "productByCountryCode"
+      security:
+        - jwtAuth: []
+        - BasicAuth: []
+      summary: List of available products per country.
+      parameters:
+        - name: If-None-Match
+          in: header
+          schema:
+            type: string
+        - name: countryCode
+          in: path
+          description: "This represents the country ISO code ie: CU"
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Countries for topup
+          headers:
+            etag:
+              description: Contains a hash of the content.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Product"
+        "304":
+          description: >-
+            When If-None-Match header is sent and matches with the Etag (Not
+            Modified).
+        "400":
+          description: application exception
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiResponse"
+        "401":
+          description: Unauthorized
+
+  /products/lookup:
+    get:
+      tags:
+        - products
+      security:
+        - jwtAuth: []
+        - BasicAuth: []
+      summary: Determine the product asociated to subscriber.
+      parameters:
+        - name: subscriber
+          in: query
+          description: "The subscriber number used for lookup"
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Products associated to subscriber. If just one result, then the subscriber has no more products associated and you can use that one for top-up. Otherwise it's recommended to allow the consumer to select.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Product"
+        "400":
+          description: application exception
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiResponse"
+        "401":
+          description: Unauthorized
+
+  "/products/{productId}/prices":
+    get:
+      tags:
+        - products
+      security:
+        - jwtAuth: []
+        - BasicAuth: []
+      summary: Prices per product.
+      parameters:
+        - name: If-None-Match
+          in: header
+          schema:
+            type: string
+        - name: productId
+          in: path
+          description: This is the product id
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Get all the prices available at the moment for the product.
+          headers:
+            etag:
+              description: Contains a hash of the content.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: number
+                  format: float
+        "304":
+          description: >-
+            When If-None-Match header is sent and matches with the Etag (Not
+            Modified)
+
+  "/products/{productId}/promotions":
+    get:
+      tags:
+        - products
+      security:
+        - jwtAuth: []
+        - BasicAuth: []
+      summary: Promotions active or future per product.
+      parameters:
+        - name: productId
+          in: path
+          description: This is the product id
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Get all the active or future promotions at the moment for the product.
+          headers:
+            etag:
+              description: Contains a hash of the content.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Promotion"
+        "400":
+          description: application exception
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiResponse"
+        "401":
+          description: Unauthorized
+
+  # /sms:
+  #   post:
+  #     tags:
+  #       - sms
+  #     security:
+  #       - jwtAuth: []
+  #       - BasicAuth: []
+  #     summary: Send an SMS to client (Beta, only Cuba supported now).
+  #     requestBody:
+  #       description: Parameters for message
+  #       content:
+  #         application/json:
+  #           schema:
+  #             type: object
+  #             required:
+  #               - subscriber
+  #               - message
+  #             properties:
+  #               subscriber:
+  #                 type: string
+  #                 description: Subscriber phone number
+  #                 example: "+5350000000"
+  #               message:
+  #                 type: string
+  #                 description: SMS message up to 160 characters
+  #                 example: "This is a dumy message"
+  #     responses:
+  #       202:
+  #         description: If message was successfully queued for delivery.
+  #       400:
+  #         description: >-
+  #           An application error while sending the message.
+  #         content:
+  #           application/json:
+  #             schema:
+  #               $ref: "#/components/schemas/ApiErrorResponse"
+  #       401:
+  #         description: Unauthorized
+  # /sms/prices:
+  #   get:
+  #     tags:
+  #       - sms
+  #     security:
+  #       - jwtAuth: []
+  #       - BasicAuth: []
+  #     summary: SMS get the list of prices per country for user.
+  #     responses:
+  #       "200":
+  #         description: Get all the active SMS prices per country.
+  #         headers:
+  #           etag:
+  #             description: Contains a hash of the content.
+  #             schema:
+  #               type: string
+  #         content:
+  #           application/json:
+  #             schema:
+  #               type: object
+  #               properties:
+  #                 countryISO:
+  #                   description: 2 letters country ISO
+  #                 value:
+  #                   description: Price for country
+  #       "400":
+  #         description: application exception
+  #         content:
+  #           application/json:
+  #             schema:
+  #               $ref: "#/components/schemas/ApiResponse"
+  #       "401":
+  #         description: Unauthorized
+
+  # /ild-topup:
+  #   post:
+  #     tags:
+  #       - ild
+  #     security:
+  #       - jwtAuth: []
+  #     summary: Process topup for ild provider
+  #     requestBody:
+  #       content:
+  #         application/json:
+  #           schema:
+  #             properties:
+  #               destination:
+  #                 type: string
+  #                 description: "Phone number in the united stats to be used as target"
+  #               minutes:
+  #                 type: number
+  #                 format: int32
+  #                 description: "Number of minutes to be sent"
+  #                 example: 10
+  #               local_reference:
+  #                 type: string
+  #                 description: "Local reference to identify order"
+  #               note:
+  #                 type: string
+  #                 description: "User's note to the order"
+  #     responses:
+  #       200:
+  #         description: Successful operation
+  #         content:
+  #           application/json:
+  #             schema:
+  #               $ref: "#/components/schemas/IldResponse"
+  #       400:
+  #         description:
+  #           Error during top-up process.
+  #         content:
+  #           application/json:
+  #             schema:
+  #               $ref: "#/components/schemas/ApiErrorResponse"
+  #             example:
+  #               success: false
+  #               error: "Not enough balance."
+  #               metadata:
+  #                 error_code: TOPUP_INSUFFICIENT_BALANCE
+  #       401:
+  #         description: Unauthorized
+  #   get:
+  #     tags:
+  #       - ild
+  #     security:
+  #       - jwtAuth: []
+  #     summary: List of ild topup records paginated.
+  #     responses:
+  #       200:
+  #         description: Ild topup data
+  #         content:
+  #           application/json:
+  #             schema:
+  #               $ref: "#/components/schemas/IldTopupDataTable"
+  #       401:
+  #         description: unauthorized
+
+  # /ild-topup/{destination}/minutes:
+  #   post:
+  #     tags:
+  #       - ild
+  #     security:
+  #       - jwtAuth: []
+  #     summary: Process topup for ild provider
+  #     parameters:
+  #       - name: destination
+  #         required: true
+  #         in: path
+  #         schema:
+  #           type: string
+  #           description: "Phone number without + sign"
+  #           example: 12345678945
+  #     responses:
+  #       200:
+  #         description: Successful operation
+  #         content:
+  #           application/json:
+  #             schema:
+  #               type: object
+  #               properties:
+  #                 success:
+  #                   type: boolean
+  #                   description: Describes successful operation
+  #                 minutes:
+  #                   type: integer
+  #                   format: int32
+  #                   description: The amount of minutes left for the provided destination
+  #       400:
+  #         description:
+  #           Error during top-up process.
+  #         content:
+  #           application/json:
+  #             schema:
+  #               $ref: "#/components/schemas/ApiErrorResponse"
+  #             example:
+  #               success: false
+  #               error: "Error while get available minutes from ild provider."
+  #               metadata:
+  #                 error_code: ILD_ERROR
+  #       401:
+  #         description: Unauthorized
+
+  # /ild-topup/prices:
+  #   get:
+  #     tags:
+  #       - ild
+  #     security:
+  #       - jwtAuth: []
+  #     summary: Ild Topup prices list.
+  #     responses:
+  #       200:
+  #         description: Ild topup prices
+  #         content:
+  #           application/json:
+  #             schema:
+  #               type: object
+  #               properties:
+  #                 country:
+  #                   type: string
+  #                 price:
+  #                   type: integer
+  #                   format: float
+  #               example:
+  #                 country: "Cuba"
+  #                 price: 0.63
+  #       401:
+  #         description: unauthorized
+
+components:
+  schemas:
+    UUID:
+      type: string
+      format: uuid
+    AuthResponse:
+      type: object
+      properties:
+        access_token:
+          type: string
+          description: JWT token
+        token_type:
+          type: string
+          enum:
+            - bearer
+        expires_in:
+          type: number
+          description: Time in seconds the token will last
+          format: float
+    ApiResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          description: whether or not the operation was successful
+        data:
+          type: object
+          properties:
+            resultCode:
+              type: integer
+              format: int32
+            resultMessage:
+              type: string
+    ApiErrorResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          description: Flag indicating the operation status.
+          default: false
+        error:
+          type: string
+          description: Error message indicating what just happened.
+        metadata:
+          type: object
+          additionalProperties:
+            type: object
+    CreateUser:
+      type: object
+      required:
+        - parent_id
+        - username
+        - password
+        - email
+        - acl_level
+      properties:
+        parent_id:
+          $ref: "#/components/schemas/UUID"
+        username:
+          type: string
+        password:
+          type: string
+        email:
+          type: string
+          format: email
+        active:
+          type: boolean
+          default: false
+        acl_level:
+          type: integer
+          format: int32
+          description: User's access level. Default users (1) and resellers (50)
+          enum:
+            - 1
+            - 50
+        callback_url:
+          type: string
+          nullable: true
+        details:
+          $ref: "#/components/schemas/CreateUserDetails"
+    CreateUserDetails:
+      type: object
+      required:
+        - name
+        - last_name
+      properties:
+        name:
+          type: string
+        last_name:
+          type: string
+        birthday:
+          type: string
+          format: date
+    User:
+      type: object
+      properties:
+        id:
+          $ref: "#/components/schemas/UUID"
+        parent_id:
+          $ref: "#/components/schemas/UUID"
+        username:
+          type: string
+        email:
+          type: string
+          format: email
+        api_token:
+          type: string
+        active:
+          type: boolean
+        acl_level:
+          type: integer
+          description: User access level
+          format: int32
+        prepaid:
+          type: boolean
+        callback_url:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        deleted_at:
+          type: string
+          format: date-time
+          nullable: true
+        details:
+          $ref: "#/components/schemas/UserDetails"
+    UserDetails:
+      type: object
+      properties:
+        name:
+          type: string
+        last_name:
+          type: string
+        balance:
+          type: number
+          format: float
+        birthday:
+          type: string
+          format: date
+        address:
+          type: string
+          nullable: true
+          deprecated: true
+        city:
+          type: string
+          nullable: true
+          deprecated: true
+        state_id:
+          type: string
+          nullable: true
+          deprecated: true
+        country_id:
+          type: string
+          nullable: true
+          deprecated: true
+    UserProduct:
+      allOf:
+        - $ref: "#/components/schemas/Product"
+        - type: object
+          properties:
+            range:
+              type: boolean
+              description: Returns if wheter or not the product accepts ranged denominations.
+            pivot:
+              type: object
+              properties:
+                user_id:
+                  type: string
+                  format: uuid
+                product_id:
+                  type: integer
+                  format: int32
+                rate:
+                  type: number
+                  format: float
+                created_at:
+                  type: string
+                  format: date-time
+                updated_at:
+                  type: string
+                  format: date-time
+            country:
+              $ref: "#/components/schemas/Country"
+    ClientsDataTable:
+      type: object
+      properties:
+        draw:
+          type: integer
+          format: int32
+        recordsTotal:
+          type: integer
+          format: int32
+        recordsFiltered:
+          type: integer
+          format: int32
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/User"
+    TopupResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          description: If whether or not the was successful.
+        data:
+          type: object
+          properties:
+            id:
+              type: string
+              format: uuid
+              description: The order ID used by our system.
+            reference:
+              type: string
+              description: Unique reference used for client when placing the order.
+            resultCode:
+              type: integer
+              description: Internal result code.
+            resultMessage:
+              type: string
+              description: Result message after placing the order.
+            destination:
+              type: string
+              description: The subscriber the topup was for.
+            confirmationCode:
+              type: string
+              description: The confirmation number given by provider if successful.
+              nullable: true
+            status:
+              type: string
+              description: Order status
+              enum:
+                - ok
+                - error
+                - pending
+                - on-hold
+    TopupDataTable:
+      type: object
+      properties:
+        draw:
+          type: integer
+          format: int32
+        recordsTotal:
+          type: integer
+          format: int32
+        recordsFiltered:
+          type: integer
+          format: int32
+        data:
+          type: array
+          items:
+            type: object
+            properties:
+              id:
+                $ref: "#/components/schemas/UUID"
+              destination:
+                type: string
+              reference:
+                type: string
+              price:
+                type: number
+                format: float
+              amount:
+                type: integer
+                format: int32
+              status:
+                type: string
+                enum:
+                  - ok
+                  - error
+              note:
+                type: string
+              created_at:
+                type: string
+                format: date-time
+              scheduled_at:
+                type: string
+                format: date-time
+              response:
+                type: string
+                format: json
+              username:
+                type: string
+    Country:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int32
+        sortname:
+          type: string
+        name:
+          type: string
+        phonecode:
+          type: integer
+          format: int32
+        iso_code_3:
+          type: string
+        continent_code:
+          type: string
+        taxable:
+          type: integer
+          format: int32
+
+    Product:
+      type: object
+      properties:
+        id:
+          $ref: "#/components/schemas/UUID"
+        slug:
+          type: string
+        name:
+          type: string
+        price:
+          type: integer
+          format: int32
+          description: Product's base price
+        description:
+          type: string
+        pattern:
+          type: string
+          description: Regular expression the input value should match
+        country_id:
+          type: integer
+          format: int32
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    TopupWebhookPayload:
+      type: object
+      required:
+        - destination
+        - resultMessage
+        - status
+        - reference
+        - orderId
+      properties:
+        destination:
+          type: string
+          description: The subscriber destination who received the topup.
+        resultMessage:
+          type: string
+          description: Order response message
+        confirmationCode:
+          type: string
+          description: Confirmation code receive by provider.
+        status:
+          type: string
+          description: Order status after completed the execution.
+          enum:
+            - ok
+            - error
+        reference:
+          type: string
+          description: Client's order reference.
+        orderId:
+          type: string
+          description: System's order ID.
+
+    TopupRecord:
+      type: object
+      properties:
+        id:
+          $ref: "#/components/schemas/UUID"
+        destination:
+          type: string
+        reference:
+          type: string
+        price:
+          type: number
+          format: float
+        amount:
+          type: number
+          format: integer
+        status:
+          type: string
+        responce:
+          type: string
+        note:
+          type: string
+        notify:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+        scheduled_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        deleted_at:
+          type: string
+          format: date-time
+          nullable: true
+        product:
+          $ref: "#/components/schemas/Product"
+
+    Promotion:
+      type: object
+      properties:
+        id:
+          $ref: "#/components/schemas/UUID"
+        product_id:
+          type: integer
+          format: int32
+        min_amount:
+          type: integer
+          format: int32
+          description: Minimum amount applicable to promotion
+        from:
+          type: string
+          format: date-time
+        effective_date:
+          type: string
+          format: date-time
+        to:
+          type: string
+          format: date-time
+        summary:
+          type: string
+        description:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        deleted_at:
+          type: string
+          format: date-time
+          nullable: true
+        product:
+          $ref: "#/components/schemas/Product"
+
+    PromotionsByCountry:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int32
+        sortname:
+          type: string
+        name:
+          type: string
+        phonecode:
+          type: integer
+          format: int32
+        iso_code_3:
+          type: string
+        continent_code:
+          type: string
+        taxable:
+          type: integer
+          format: int32
+        promotions:
+          type: array
+          items:
+            $ref: "#/components/schemas/Promotion"
+
+    # IldResponse:
+    #   type: object
+    #   properties:
+    #     success:
+    #       type: boolean
+    #       description: Describes successful operation
+    #     data:
+    #       type: object
+    #       properties:
+    #         id:
+    #           $ref: "#/components/schemas/UUID"
+    #         local_reference:
+    #           type: string
+    # IldTopupDataTable:
+    #   type: object
+    #   properties:
+    #     draw:
+    #       type: integer
+    #       format: int32
+    #     recordsTotal:
+    #       type: integer
+    #       format: int32
+    #     recordsFiltered:
+    #       type: integer
+    #       format: int32
+    #     data:
+    #       type: array
+    #       items:
+    #         $ref: "#/components/schemas/IldTopupRecord"
+    # IldTopupRecord:
+    #   type: object
+    #   properties:
+    #     id:
+    #       $ref: "#/components/schemas/UUID"
+    #     destination:
+    #       type: string
+    #       description: Phone number used as target
+    #     reference:
+    #       type: string
+    #       description: Reference number for the order
+    #     minutes:
+    #       type: integer
+    #       format: int32
+    #       description: Minutes sent to destination
+    #     price:
+    #       type: number
+    #       format: float
+    #       description: Topup price for this order
+    #     amount:
+    #       type: integer
+    #       format: int32
+    #       description: Amount used for this order
+    #     status:
+    #       type: string
+    #       enum:
+    #         - ok
+    #         - error
+    #       description: Operation status
+    #     note:
+    #       type: string
+    #       description: Note sent with this order
+    #     created_at:
+    #       type: string
+    #       format: date-time
+    #       description: Creation date
+    #     response:
+    #       type: string
+    #       format: json
+    #       description: Processing response for the order
+    #     username:
+    #       type: string
+    #       description: Username who sent the order
+    #     name:
+    #       type: string
+    #       description: User's name who sent the order
+    #     last_name:
+    #       type: string
+    #       description: User's last name who sent the order
+
+  securitySchemes:
+    jwtAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+    BasicAuth:
+      type: http
+      scheme: Basic
+      description: Use your API key as the username and your API secret as the password.
