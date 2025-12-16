@@ -30,6 +30,22 @@ export async function POST() {
     `)
     console.log('[Migration] Created broker_reservations table')
 
+    // 1b. Add unique constraint if it doesn't exist (for tables created before this constraint was added)
+    try {
+      await db.query(`
+        ALTER TABLE broker_reservations
+        ADD CONSTRAINT broker_reservations_remittance_order_id_key
+        UNIQUE (remittance_order_id)
+      `)
+      console.log('[Migration] Added unique constraint on remittance_order_id')
+    } catch (e: any) {
+      if (e.message?.includes('already exists')) {
+        console.log('[Migration] Unique constraint already exists')
+      } else {
+        console.log('[Migration] Note: unique constraint -', e.message)
+      }
+    }
+
     // 2. Create broker_wallet_transactions table if not exists
     await db.query(`
       CREATE TABLE IF NOT EXISTS broker_wallet_transactions (

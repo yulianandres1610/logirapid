@@ -665,8 +665,8 @@ export async function POST(request: NextRequest) {
               c.broker_contact_phone,
               u.phone as user_phone
             FROM companies c
-            LEFT JOIN user_companies uc ON uc.company_id = c.id
-            LEFT JOIN users u ON u.id = uc.user_id
+            LEFT JOIN user_companies uc ON uc.companyid = c.id
+            LEFT JOIN users u ON u.id = uc.userid
             WHERE c.id = $1
             ORDER BY u.role = 'ADMIN' DESC
             LIMIT 1
