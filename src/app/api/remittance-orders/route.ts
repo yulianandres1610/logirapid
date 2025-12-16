@@ -17,6 +17,33 @@ interface JWTPayload {
  */
 export async function GET(request: NextRequest) {
   try {
+    // Handle special migration BEFORE auth check
+    const { searchParams } = new URL(request.url)
+    const fixMigration = searchParams.get('fixMigration')
+
+    // FIX MIGRATION: Fix orders with NULL selling_company_id (no auth required, one-time use)
+    if (fixMigration === 'fix-company-7-secret-2024') {
+      console.log('[Migration] Running fix for selling_company_id')
+
+      // Fix orders with NULL selling_company_id - assign to company 7
+      const fixResult = await db.query(`
+        UPDATE remittance_orders
+        SET selling_company_id = 7
+        WHERE selling_company_id IS NULL
+        RETURNING id, order_number
+      `)
+
+      console.log('[Migration] Fixed orders:', fixResult.rows)
+
+      return NextResponse.json({
+        success: true,
+        migration: {
+          fixed: fixResult.rows.length,
+          orders: fixResult.rows
+        }
+      })
+    }
+
     const cookieStore = await cookies()
     const authToken = cookieStore.get('auth-token')?.value
 
@@ -47,11 +74,7 @@ export async function GET(request: NextRequest) {
       console.log(`[Remittance Orders GET] WARNING: No companyId in cookie or JWT`)
     }
 
-    // Handle special actions
-    const { searchParams } = new URL(request.url)
-
-    // FIX MIGRATION: Fix orders with NULL selling_company_id
-    const fixMigration = searchParams.get('fixMigration')
+    // Old migration parameter (kept for backwards compat)
     if (fixMigration === 'fix-company-7') {
       console.log('[Migration] Running fix for selling_company_id')
 
