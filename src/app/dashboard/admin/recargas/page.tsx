@@ -76,10 +76,10 @@ const getCountryFlag = (countryCode: string): string => {
   return flags[countryCode] || '\u{1F30D}'
 }
 
-// Default amounts for products
+// Default amounts for products without custom range
 const DEFAULT_AMOUNTS = [5, 10, 15, 20, 25, 30, 50, 100]
 
-export default function RecargasPage() {
+export default function AdminRecargasPage() {
   const { theme } = useTheme()
   const { showNotification } = useNotifications()
   const [currentStep, setCurrentStep] = useState<RecargaStep>('service')
@@ -109,7 +109,7 @@ export default function RecargasPage() {
       const data = await response.json()
 
       if (data.success) {
-        // Only show enabled products with pricing for this company
+        // Only show enabled products with pricing
         const enabledProducts = data.data.products.filter(
           (p: RechargeProduct) => p.pricing?.isEnabled && p.isActive
         )
@@ -189,7 +189,7 @@ export default function RecargasPage() {
     }
   }
 
-  // Calculate selling price using company-configured pricing
+  // Calculate selling price
   const calculateSellingPrice = (amount: number): number => {
     const product = recargaData.product
     if (!product?.pricing) return amount
@@ -255,8 +255,8 @@ ID: ${recargaId}
 Fecha: ${new Date().toLocaleString('es-ES')}
 Producto: ${recargaData.product?.name || '-'}
 Numero: ${recargaData.phoneNumber}
-Monto: $${recargaData.amount.toFixed(2)}
-Precio: $${sellingPrice.toFixed(2)}
+Monto Base: $${recargaData.amount.toFixed(2)}
+Precio Venta: $${sellingPrice.toFixed(2)}
 Estado: COMPLETADO
 ====================================
 Gracias por su compra!
@@ -310,25 +310,25 @@ Gracias por su compra!
           onClick={() => handleServiceSelect('telefono')}
           className={cn(
             "p-8 rounded-2xl border-2 transition-all duration-300",
-            "hover:shadow-xl hover:border-exa-primary",
+            "hover:shadow-xl hover:border-purple-500",
             theme === 'dark'
               ? "bg-gray-800 border-gray-700 hover:bg-gray-700"
               : "bg-white border-gray-200 hover:bg-gray-50"
           )}
         >
           <div className="flex flex-col items-center space-y-4">
-            <div className="w-20 h-20 bg-gradient-to-br from-blue-500 to-blue-600 rounded-full flex items-center justify-center">
+            <div className="w-20 h-20 bg-gradient-to-br from-purple-500 to-purple-600 rounded-full flex items-center justify-center">
               <Smartphone className="w-10 h-10 text-white" />
             </div>
-            <h3 className="text-2xl font-bold">Telefono</h3>
+            <h3 className="text-2xl font-bold">Recarga Numero</h3>
             <p className="text-gray-600 dark:text-gray-400 text-center">
               Recarga para telefono movil
             </p>
             <div className="flex flex-wrap gap-2 mt-4 justify-center">
-              <span className="px-3 py-1 bg-blue-100 text-blue-700 rounded-full text-sm">
+              <span className="px-3 py-1 bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 rounded-full text-sm">
                 Cubacel
               </span>
-              <span className="px-3 py-1 bg-blue-100 text-blue-700 rounded-full text-sm">
+              <span className="px-3 py-1 bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 rounded-full text-sm">
                 Internacional
               </span>
             </div>
@@ -344,7 +344,7 @@ Gracias por su compra!
           onClick={() => handleServiceSelect('nauta')}
           className={cn(
             "p-8 rounded-2xl border-2 transition-all duration-300",
-            "hover:shadow-xl hover:border-exa-primary",
+            "hover:shadow-xl hover:border-cyan-500",
             theme === 'dark'
               ? "bg-gray-800 border-gray-700 hover:bg-gray-700"
               : "bg-white border-gray-200 hover:bg-gray-50"
@@ -359,10 +359,10 @@ Gracias por su compra!
               Recarga para cuenta Nauta
             </p>
             <div className="flex flex-wrap gap-2 mt-4 justify-center">
-              <span className="px-3 py-1 bg-cyan-100 text-cyan-700 rounded-full text-sm">
+              <span className="px-3 py-1 bg-cyan-100 dark:bg-cyan-900/30 text-cyan-700 dark:text-cyan-300 rounded-full text-sm">
                 Internet
               </span>
-              <span className="px-3 py-1 bg-cyan-100 text-cyan-700 rounded-full text-sm">
+              <span className="px-3 py-1 bg-cyan-100 dark:bg-cyan-900/30 text-cyan-700 dark:text-cyan-300 rounded-full text-sm">
                 WiFi
               </span>
             </div>
@@ -395,7 +395,7 @@ Gracias por su compra!
 
         {loadingProducts ? (
           <div className="flex items-center justify-center py-12">
-            <Loader2 className="w-8 h-8 animate-spin text-exa-primary" />
+            <Loader2 className="w-8 h-8 animate-spin text-purple-500" />
           </div>
         ) : filteredProducts.length === 0 ? (
           <div className="text-center py-12">
@@ -425,7 +425,10 @@ Gracias por su compra!
                 onClick={() => handleProductSelect(product)}
                 className={cn(
                   "p-4 rounded-xl border-2 transition-all duration-300 text-left",
-                  "hover:shadow-lg hover:border-exa-primary",
+                  "hover:shadow-lg",
+                  recargaData.service === 'nauta'
+                    ? "hover:border-cyan-500"
+                    : "hover:border-purple-500",
                   theme === 'dark'
                     ? "bg-gray-800 border-gray-700 hover:bg-gray-700"
                     : "bg-white border-gray-200 hover:bg-gray-50"
@@ -436,7 +439,7 @@ Gracias por su compra!
                     "w-12 h-12 rounded-xl flex items-center justify-center text-2xl flex-shrink-0",
                     recargaData.service === 'nauta'
                       ? "bg-gradient-to-br from-cyan-500 to-cyan-600"
-                      : "bg-gradient-to-br from-blue-500 to-blue-600"
+                      : "bg-gradient-to-br from-purple-500 to-purple-600"
                   )}>
                     {getCountryFlag(product.countryCode)}
                   </div>
@@ -447,18 +450,18 @@ Gracias por su compra!
                     <div className="text-sm text-gray-500 dark:text-gray-400">
                       {product.countryName}
                     </div>
-                    {product.pricing && (
-                      <div className="flex items-center gap-2 mt-2">
-                        <span className="text-sm font-medium text-emerald-600 dark:text-emerald-400">
-                          Desde ${product.baseCost.toFixed(2)}
-                        </span>
+                    <div className="flex items-center gap-2 mt-2">
+                      <span className="text-sm font-medium text-emerald-600 dark:text-emerald-400">
+                        Desde ${product.baseCost.toFixed(2)}
+                      </span>
+                      {product.pricing && (
                         <span className="text-xs text-gray-400">
                           +{product.pricing.marginType === 'percentage'
                             ? `${product.pricing.marginValue}%`
                             : `$${product.pricing.marginValue}`}
                         </span>
-                      </div>
-                    )}
+                      )}
+                    </div>
                   </div>
                 </div>
               </motion.button>
@@ -517,7 +520,7 @@ Gracias por su compra!
               "w-12 h-12 rounded-xl flex items-center justify-center text-2xl",
               isNauta
                 ? "bg-gradient-to-br from-cyan-500 to-cyan-600"
-                : "bg-gradient-to-br from-blue-500 to-blue-600"
+                : "bg-gradient-to-br from-purple-500 to-purple-600"
             )}>
               {getCountryFlag(recargaData.product.countryCode)}
             </div>
@@ -555,7 +558,7 @@ Gracias por su compra!
                 placeholder={isNauta ? 'usuario@nauta.com.cu' : '5xxxxxxx'}
                 className={cn(
                   "w-full pl-10 pr-3 py-3 rounded-lg border transition-colors",
-                  "focus:ring-2 focus:ring-exa-primary focus:border-transparent",
+                  "focus:ring-2 focus:ring-purple-500 focus:border-transparent",
                   theme === 'dark'
                     ? "bg-gray-800 border-gray-700 text-white"
                     : "bg-white border-gray-300 text-gray-900"
@@ -564,7 +567,7 @@ Gracias por su compra!
             </div>
             {recargaData.product?.phonePattern && (
               <p className="text-sm text-gray-500 mt-2">
-                Formato: {recargaData.product.phonePattern}
+                Formato esperado: {recargaData.product.phonePattern}
               </p>
             )}
           </div>
@@ -622,9 +625,9 @@ Gracias por su compra!
                 onClick={() => handleAmountSelect(amount)}
                 className={cn(
                   "p-4 rounded-xl border-2 transition-all duration-300",
-                  "hover:shadow-lg hover:border-exa-primary",
+                  "hover:shadow-lg hover:border-purple-500",
                   recargaData.amount === amount
-                    ? "border-exa-primary bg-exa-primary/10"
+                    ? "border-purple-500 bg-purple-50 dark:bg-purple-900/30"
                     : theme === 'dark'
                       ? "bg-gray-800 border-gray-700"
                       : "bg-white border-gray-200"
@@ -662,7 +665,7 @@ Gracias por su compra!
                   placeholder="0.00"
                   className={cn(
                     "w-full pl-10 pr-3 py-3 rounded-lg border transition-colors",
-                    "focus:ring-2 focus:ring-exa-primary focus:border-transparent",
+                    "focus:ring-2 focus:ring-purple-500 focus:border-transparent",
                     theme === 'dark'
                       ? "bg-gray-800 border-gray-700 text-white"
                       : "bg-white border-gray-300 text-gray-900"
@@ -731,7 +734,7 @@ Gracias por su compra!
             <span className="font-medium">{recargaData.phoneNumber}</span>
           </div>
           <div className="flex justify-between items-center">
-            <span className="text-gray-600 dark:text-gray-400">Monto:</span>
+            <span className="text-gray-600 dark:text-gray-400">Monto Base:</span>
             <span className="font-medium">${recargaData.amount.toFixed(2)}</span>
           </div>
           <div className="border-t pt-4 mt-4 dark:border-gray-600">
@@ -742,8 +745,8 @@ Gracias por su compra!
               </span>
             </div>
             <div className="flex justify-between items-center mt-2">
-              <span className="text-lg font-semibold">Total a Cobrar:</span>
-              <span className="text-xl font-bold text-exa-primary">
+              <span className="text-lg font-semibold">Precio de Venta:</span>
+              <span className="text-xl font-bold text-purple-600 dark:text-purple-400">
                 ${sellingPrice.toFixed(2)}
               </span>
             </div>
@@ -760,7 +763,7 @@ Gracias por su compra!
               placeholder="Nombre del cliente"
               className={cn(
                 "w-full px-3 py-2 rounded-lg border transition-colors",
-                "focus:ring-2 focus:ring-exa-primary focus:border-transparent",
+                "focus:ring-2 focus:ring-purple-500 focus:border-transparent",
                 theme === 'dark'
                   ? "bg-gray-800 border-gray-700 text-white"
                   : "bg-white border-gray-300 text-gray-900"
@@ -777,7 +780,7 @@ Gracias por su compra!
               placeholder="email@ejemplo.com"
               className={cn(
                 "w-full px-3 py-2 rounded-lg border transition-colors",
-                "focus:ring-2 focus:ring-exa-primary focus:border-transparent",
+                "focus:ring-2 focus:ring-purple-500 focus:border-transparent",
                 theme === 'dark'
                   ? "bg-gray-800 border-gray-700 text-white"
                   : "bg-white border-gray-300 text-gray-900"
@@ -798,11 +801,11 @@ Gracias por su compra!
           <Button
             onClick={handleConfirmRecarga}
             disabled={isProcessing}
-            className="flex-1"
+            className="flex-1 bg-purple-600 hover:bg-purple-700"
           >
             {isProcessing ? (
               <>
-                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                <Loader2 className="animate-spin rounded-full h-4 w-4 mr-2" />
                 Procesando...
               </>
             ) : (
@@ -835,7 +838,7 @@ Gracias por su compra!
         <div>
           <h2 className="text-3xl font-bold mb-4">¡Recarga Exitosa!</h2>
           <p className="text-gray-600 dark:text-gray-400 mb-6">
-            Tu recarga ha sido procesada correctamente
+            La recarga ha sido procesada correctamente
           </p>
         </div>
 
@@ -859,7 +862,7 @@ Gracias por su compra!
           </div>
           <div className="flex justify-between items-center">
             <span className="text-gray-600 dark:text-gray-400">Monto:</span>
-            <span className="font-bold text-exa-primary">
+            <span className="font-bold text-purple-600 dark:text-purple-400">
               ${recargaData.amount.toFixed(2)}
             </span>
           </div>
@@ -894,7 +897,7 @@ Gracias por su compra!
           </Button>
           <Button
             onClick={handleNewRecarga}
-            className="w-full"
+            className="w-full bg-purple-600 hover:bg-purple-700"
           >
             Nueva Recarga
             <ArrowRight className="w-4 h-4 ml-2" />
@@ -917,14 +920,14 @@ Gracias por su compra!
   const currentStepIndex = steps.findIndex(s => s.id === currentStep)
 
   return (
-    <ProtectedRoute requiredRole="ADMIN">
+    <ProtectedRoute requiredRole="SUPER_ADMIN">
       <DashboardLayout>
         <div className="max-w-4xl mx-auto p-6">
           {/* Header */}
           <div className="mb-8">
             <h1 className="text-4xl font-bold mb-2">Recargas</h1>
             <p className="text-gray-600 dark:text-gray-400">
-              Sistema de recargas para Telefono y Nauta
+              Sistema de recargas con productos dinamicos
             </p>
           </div>
 
@@ -937,13 +940,9 @@ Gracias por su compra!
                     <div className={cn(
                       "w-10 h-10 rounded-full flex items-center justify-center text-sm font-medium transition-all duration-300",
                       currentStep === step.id
-                        ? theme === 'dark'
-                          ? "bg-exa-secondary text-white"
-                          : "bg-exa-primary text-white"
+                        ? "bg-purple-600 text-white"
                         : currentStepIndex > index
-                          ? theme === 'dark'
-                            ? "bg-white/10 text-white"
-                            : "bg-gray-100 text-gray-700"
+                          ? "bg-purple-200 dark:bg-purple-900/50 text-purple-700 dark:text-purple-300"
                           : theme === 'dark'
                             ? "bg-gray-700 text-gray-400"
                             : "bg-gray-200 text-gray-500"
@@ -953,7 +952,7 @@ Gracias por su compra!
                     <span className={cn(
                       "ml-2 text-sm font-medium hidden sm:block",
                       currentStep === step.id
-                        ? "text-exa-primary"
+                        ? "text-purple-600 dark:text-purple-400"
                         : currentStepIndex > index
                           ? "text-gray-900 dark:text-white"
                           : "text-gray-500"
@@ -965,10 +964,10 @@ Gracias por su compra!
                     <div className={cn(
                       "flex-1 h-1 mx-4 rounded",
                       currentStepIndex > index
-                        ? theme === 'dark'
-                          ? "bg-white/10"
+                        ? "bg-purple-400"
+                        : theme === 'dark'
+                          ? "bg-gray-700"
                           : "bg-gray-200"
-                        : "bg-exa-primary"
                     )}></div>
                   )}
                 </div>
