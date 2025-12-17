@@ -147,6 +147,9 @@ export default function ProductConfigPage() {
   // Recharge products for pricing tab
   const [rechargeProductsForPricing, setRechargeProductsForPricing] = useState<RechargeProductForPricing[]>([])
 
+  // Recharge products for "all" view (unified table)
+  const [rechargeProductsForAll, setRechargeProductsForAll] = useState<any[]>([])
+
   // Fetch products
   const fetchProducts = useCallback(async () => {
     try {
@@ -236,11 +239,13 @@ export default function ProductConfigPage() {
       const response = await fetch('/api/recharges/products')
       const data = await response.json()
       if (data.success) {
-        // Count only products with pricing configured and enabled
-        const configuredCount = data.data.products.filter(
+        // Filter only products with pricing configured and enabled
+        const configuredProducts = data.data.products.filter(
           (p: any) => p.pricing !== null && p.pricing.isEnabled
-        ).length
-        setRechargeProductsCount(configuredCount)
+        )
+        setRechargeProductsCount(configuredProducts.length)
+        // Store recharge products for unified "all" view
+        setRechargeProductsForAll(configuredProducts)
       }
     } catch (error) {
       console.error('Error fetching recharge count:', error)
@@ -296,12 +301,43 @@ export default function ProductConfigPage() {
   }, [categoryFilter, fetchRechargeCount])
 
   // Filter products
-  const filteredProducts = products.filter(product => {
+  const filteredRegularProducts = products.filter(product => {
     const matchesSearch = product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          product.code.toLowerCase().includes(searchTerm.toLowerCase())
     const matchesCategory = categoryFilter === 'all' || product.category === categoryFilter
     return matchesSearch && matchesCategory
   })
+
+  // Map recharge products to unified format for "all" view (use negative IDs to differentiate)
+  const mappedRechargeProducts = categoryFilter === 'all' ? rechargeProductsForAll
+    .filter(p => {
+      const matchesSearch = searchTerm === '' ||
+        p.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        p.countryName?.toLowerCase().includes(searchTerm.toLowerCase())
+      return matchesSearch
+    })
+    .map(p => ({
+      id: -(p.id + 100000), // Negative ID to differentiate from regular products
+      originalId: p.id,
+      code: p.countryCode || '',
+      name: p.name,
+      description: p.countryName || '',
+      category: 'recarga',
+      miCosto: p.baseCost,
+      miCostoFijo: 0,
+      precioMayorista: p.pricing?.sellingPrice || p.baseCost,
+      precioMayoristaFijo: 0,
+      providerCompanyId: null,
+      providerName: 'UnivCell',
+      isActive: true,
+      pricingModel: p.pricing?.marginType || 'fixed',
+      currency: 'USD',
+      isRechargeProduct: true,
+      rechargeData: p
+    })) : []
+
+  // Combine regular and recharge products for unified view
+  const filteredProducts = [...filteredRegularProducts, ...mappedRechargeProducts] as any[]
 
   // Delete product
   const handleDeleteProduct = async (productId: number) => {
@@ -856,19 +892,6 @@ export default function ProductConfigPage() {
                     })}
                   </div>
 
-                  {/* Show Recharge Products in "All" view - Grid */}
-                  {categoryFilter === 'all' && rechargeProductsCount > 0 && (
-                    <div className="mt-6">
-                      <RechargeProductManager
-                        key={rechargeRefreshKey}
-                        hideHeader={true}
-                        onProductsChange={() => {
-                          fetchRechargeCount()
-                          setRechargeRefreshKey(prev => prev + 1)
-                        }}
-                      />
-                    </div>
-                  )}
                 </>
               ) : (
                 /* List View */
@@ -1006,19 +1029,6 @@ export default function ProductConfigPage() {
                     </table>
                   </div>
 
-                  {/* Show Recharge Products in "All" view */}
-                  {categoryFilter === 'all' && rechargeProductsCount > 0 && (
-                    <div className="mt-6">
-                      <RechargeProductManager
-                        key={rechargeRefreshKey}
-                        hideHeader={true}
-                        onProductsChange={() => {
-                          fetchRechargeCount()
-                          setRechargeRefreshKey(prev => prev + 1)
-                        }}
-                      />
-                    </div>
-                  )}
                 </>
               )}
             </>
