@@ -53,6 +53,7 @@ interface RechargeProduct {
 interface RechargeProductManagerProps {
   onOpenModal?: () => void
   onProductsChange?: () => void
+  hideHeader?: boolean
 }
 
 // Country flag mapping
@@ -74,7 +75,7 @@ const getCountryFlag = (countryCode: string): string => {
   return flags[countryCode] || '🌍'
 }
 
-export function RechargeProductManager({ onOpenModal, onProductsChange }: RechargeProductManagerProps) {
+export function RechargeProductManager({ onOpenModal, onProductsChange, hideHeader = false }: RechargeProductManagerProps) {
   const [products, setProducts] = useState<RechargeProduct[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -188,34 +189,36 @@ export function RechargeProductManager({ onOpenModal, onProductsChange }: Rechar
 
   return (
     <div className="space-y-6">
-      {/* Header with Button and Balance */}
-      <div className="flex items-center justify-between">
-        {/* Nuevo Producto Button */}
-        <button
-          onClick={() => setShowProductSelector(true)}
-          className="px-5 py-2.5 bg-gradient-to-r from-purple-500 to-purple-600 hover:from-purple-600 hover:to-purple-700 text-white font-medium rounded-xl flex items-center gap-2 shadow-lg shadow-purple-500/25 transition-all hover:shadow-purple-500/40 whitespace-nowrap"
-        >
-          <Plus className="w-5 h-5" />
-          Nuevo Producto
-        </button>
+      {/* Header with Button and Balance - only show when not in "all" view */}
+      {!hideHeader && (
+        <div className="flex items-center justify-between">
+          {/* Nuevo Producto Button */}
+          <button
+            onClick={() => setShowProductSelector(true)}
+            className="px-5 py-2.5 bg-gradient-to-r from-purple-500 to-purple-600 hover:from-purple-600 hover:to-purple-700 text-white font-medium rounded-xl flex items-center gap-2 shadow-lg shadow-purple-500/25 transition-all hover:shadow-purple-500/40 whitespace-nowrap"
+          >
+            <Plus className="w-5 h-5" />
+            Nuevo Producto
+          </button>
 
-        {/* UnivCell Balance */}
-        <div className="bg-gradient-to-r from-green-500 to-emerald-600 text-white px-4 py-2 rounded-xl shadow-md flex items-center gap-3">
-          <Wallet className="w-5 h-5" />
-          <div>
-            <div className="text-xs opacity-80">Saldo UnivCell</div>
-            <div className="text-lg font-bold">
-              {creditsLoading ? (
-                <Loader2 className="w-4 h-4 animate-spin" />
-              ) : credits !== null ? (
-                formatCurrency(credits)
-              ) : (
-                '$0.00'
-              )}
+          {/* UnivCell Balance */}
+          <div className="bg-gradient-to-r from-green-500 to-emerald-600 text-white px-4 py-2 rounded-xl shadow-md flex items-center gap-3">
+            <Wallet className="w-5 h-5" />
+            <div>
+              <div className="text-xs opacity-80">Saldo UnivCell</div>
+              <div className="text-lg font-bold">
+                {creditsLoading ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : credits !== null ? (
+                  formatCurrency(credits)
+                ) : (
+                  '$0.00'
+                )}
+              </div>
             </div>
           </div>
         </div>
-      </div>
+      )}
 
 
       {/* Error Message */}

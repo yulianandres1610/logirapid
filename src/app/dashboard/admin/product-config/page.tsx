@@ -861,7 +861,7 @@ export default function ProductConfigPage() {
                     <div className="mt-6">
                       <RechargeProductManager
                         key={rechargeRefreshKey}
-                        onOpenModal={() => setShowCreateModal(true)}
+                        hideHeader={true}
                         onProductsChange={() => {
                           fetchRechargeCount()
                           setRechargeRefreshKey(prev => prev + 1)
@@ -1011,7 +1011,7 @@ export default function ProductConfigPage() {
                     <div className="mt-6">
                       <RechargeProductManager
                         key={rechargeRefreshKey}
-                        onOpenModal={() => setShowCreateModal(true)}
+                        hideHeader={true}
                         onProductsChange={() => {
                           fetchRechargeCount()
                           setRechargeRefreshKey(prev => prev + 1)
@@ -1308,43 +1308,86 @@ export default function ProductConfigPage() {
                                 </td>
                                 <td className="px-6 py-4">
                                   <div className="flex flex-col items-center gap-1">
-                                    <div className="relative">
-                                      <span className={`absolute left-4 top-1/2 -translate-y-1/2 ${
-                                        isDark ? 'text-purple-400' : 'text-purple-500'
-                                      }`}>$</span>
-                                      <input
-                                        type="number"
-                                        step="0.01"
-                                        min={product.baseCost}
-                                        value={customSellingPrice?.toFixed(2) ?? ''}
-                                        placeholder={product.pricing?.sellingPrice?.toFixed(2) || '0.00'}
-                                        onChange={(e) => {
-                                          const value = e.target.value ? parseFloat(e.target.value) : null
-                                          if (value !== null && value >= product.baseCost) {
-                                            // Calculate margin as fixed amount
-                                            const marginValue = value - product.baseCost
-                                            setRechargeCompanyMargins(prev => ({
-                                              ...prev,
-                                              [product.id]: { marginType: 'fixed', marginValue }
-                                            }))
-                                          } else if (value === null || e.target.value === '') {
-                                            setRechargeCompanyMargins(prev => ({
-                                              ...prev,
-                                              [product.id]: null
-                                            }))
-                                          }
-                                        }}
-                                        className={`w-36 pl-8 pr-4 py-2.5 text-center text-lg font-semibold rounded-xl border-2 transition-all ${
-                                          hasCustomPrice
-                                            ? isDark
-                                              ? 'bg-purple-900/30 border-purple-600 text-purple-300 focus:border-purple-500'
-                                              : 'bg-purple-50 border-purple-300 text-purple-700 focus:border-purple-400'
-                                            : isDark
-                                              ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-600 focus:border-purple-500'
-                                              : 'bg-white border-gray-200 text-gray-900 placeholder-gray-400 focus:border-purple-400'
-                                        } focus:outline-none focus:ring-4 focus:ring-purple-500/10`}
-                                      />
-                                    </div>
+                                    {/* Show input based on product's margin type */}
+                                    {product.pricing?.marginType === 'percentage' ? (
+                                      <div className="relative">
+                                        <input
+                                          type="number"
+                                          step="0.1"
+                                          min="0"
+                                          value={customMargin?.marginValue ?? ''}
+                                          placeholder={product.pricing?.marginValue?.toString() || '0'}
+                                          onChange={(e) => {
+                                            const value = e.target.value ? parseFloat(e.target.value) : null
+                                            if (value !== null && value >= 0) {
+                                              setRechargeCompanyMargins(prev => ({
+                                                ...prev,
+                                                [product.id]: { marginType: 'percentage', marginValue: value }
+                                              }))
+                                            } else if (value === null || e.target.value === '') {
+                                              setRechargeCompanyMargins(prev => ({
+                                                ...prev,
+                                                [product.id]: null
+                                              }))
+                                            }
+                                          }}
+                                          className={`w-28 pr-8 pl-4 py-2.5 text-center text-lg font-semibold rounded-xl border-2 transition-all ${
+                                            hasCustomPrice
+                                              ? isDark
+                                                ? 'bg-purple-900/30 border-purple-600 text-purple-300 focus:border-purple-500'
+                                                : 'bg-purple-50 border-purple-300 text-purple-700 focus:border-purple-400'
+                                              : isDark
+                                                ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-600 focus:border-purple-500'
+                                                : 'bg-white border-gray-200 text-gray-900 placeholder-gray-400 focus:border-purple-400'
+                                          } focus:outline-none focus:ring-4 focus:ring-purple-500/10`}
+                                        />
+                                        <span className={`absolute right-4 top-1/2 -translate-y-1/2 ${
+                                          isDark ? 'text-purple-400' : 'text-purple-500'
+                                        }`}>%</span>
+                                      </div>
+                                    ) : (
+                                      <div className="relative">
+                                        <span className={`absolute left-4 top-1/2 -translate-y-1/2 ${
+                                          isDark ? 'text-purple-400' : 'text-purple-500'
+                                        }`}>+$</span>
+                                        <input
+                                          type="number"
+                                          step="0.01"
+                                          min="0"
+                                          value={customMargin?.marginValue ?? ''}
+                                          placeholder={product.pricing?.marginValue?.toString() || '0'}
+                                          onChange={(e) => {
+                                            const value = e.target.value ? parseFloat(e.target.value) : null
+                                            if (value !== null && value >= 0) {
+                                              setRechargeCompanyMargins(prev => ({
+                                                ...prev,
+                                                [product.id]: { marginType: 'fixed', marginValue: value }
+                                              }))
+                                            } else if (value === null || e.target.value === '') {
+                                              setRechargeCompanyMargins(prev => ({
+                                                ...prev,
+                                                [product.id]: null
+                                              }))
+                                            }
+                                          }}
+                                          className={`w-28 pl-10 pr-4 py-2.5 text-center text-lg font-semibold rounded-xl border-2 transition-all ${
+                                            hasCustomPrice
+                                              ? isDark
+                                                ? 'bg-purple-900/30 border-purple-600 text-purple-300 focus:border-purple-500'
+                                                : 'bg-purple-50 border-purple-300 text-purple-700 focus:border-purple-400'
+                                              : isDark
+                                                ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-600 focus:border-purple-500'
+                                                : 'bg-white border-gray-200 text-gray-900 placeholder-gray-400 focus:border-purple-400'
+                                          } focus:outline-none focus:ring-4 focus:ring-purple-500/10`}
+                                        />
+                                      </div>
+                                    )}
+                                    {/* Show calculated price preview */}
+                                    {hasCustomPrice && customSellingPrice && (
+                                      <span className={`text-xs ${isDark ? 'text-emerald-400' : 'text-emerald-600'}`}>
+                                        = ${customSellingPrice.toFixed(2)}
+                                      </span>
+                                    )}
                                   </div>
                                 </td>
                               </tr>
