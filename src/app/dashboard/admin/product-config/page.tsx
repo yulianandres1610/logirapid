@@ -759,235 +759,267 @@ export default function ProductConfigPage() {
                 </div>
               ) : viewMode === 'grid' ? (
                 /* Grid View */
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-                  {filteredProducts.map((product, idx) => {
-                    const catConfig = getCategoryConfig(product.category)
-                    const Icon = catConfig.icon
-                    return (
-                      <motion.div
-                        key={product.id}
-                        initial={{ opacity: 0, scale: 0.95 }}
-                        animate={{ opacity: 1, scale: 1 }}
-                        transition={{ delay: idx * 0.03 }}
-                        className={`group relative rounded-2xl p-5 transition-all hover:shadow-xl ${
-                          isDark
-                            ? 'bg-gray-800 border border-gray-700 hover:border-gray-600'
-                            : 'bg-white border border-gray-200 hover:border-gray-300 hover:shadow-gray-200/50'
-                        }`}
-                      >
-                        {/* Category Badge */}
-                        <div className={`absolute top-4 right-4 px-2.5 py-1 rounded-lg text-xs font-medium bg-gradient-to-r ${catConfig.gradient} text-white`}>
-                          {catConfig.name}
-                        </div>
+                <>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                    {filteredProducts.map((product, idx) => {
+                      const catConfig = getCategoryConfig(product.category)
+                      const Icon = catConfig.icon
+                      return (
+                        <motion.div
+                          key={product.id}
+                          initial={{ opacity: 0, scale: 0.95 }}
+                          animate={{ opacity: 1, scale: 1 }}
+                          transition={{ delay: idx * 0.03 }}
+                          className={`group relative rounded-2xl p-5 transition-all hover:shadow-xl ${
+                            isDark
+                              ? 'bg-gray-800 border border-gray-700 hover:border-gray-600'
+                              : 'bg-white border border-gray-200 hover:border-gray-300 hover:shadow-gray-200/50'
+                          }`}
+                        >
+                          {/* Category Badge */}
+                          <div className={`absolute top-4 right-4 px-2.5 py-1 rounded-lg text-xs font-medium bg-gradient-to-r ${catConfig.gradient} text-white`}>
+                            {catConfig.name}
+                          </div>
 
-                        {/* Icon */}
-                        <div className={`w-14 h-14 rounded-2xl flex items-center justify-center mb-4 bg-gradient-to-br ${catConfig.gradient}`}>
-                          <Icon className="w-7 h-7 text-white" />
-                        </div>
+                          {/* Icon */}
+                          <div className={`w-14 h-14 rounded-2xl flex items-center justify-center mb-4 bg-gradient-to-br ${catConfig.gradient}`}>
+                            <Icon className="w-7 h-7 text-white" />
+                          </div>
 
-                        {/* Product Info */}
-                        <h3 className={`font-semibold text-lg mb-1 pr-16 ${isDark ? 'text-white' : 'text-gray-900'}`}>
-                          {product.name}
-                        </h3>
-                        <p className={`text-sm font-mono mb-3 ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
-                          {product.code}
-                        </p>
-
-                        {product.description && (
-                          <p className={`text-sm mb-4 line-clamp-2 ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
-                            {product.description}
+                          {/* Product Info */}
+                          <h3 className={`font-semibold text-lg mb-1 pr-16 ${isDark ? 'text-white' : 'text-gray-900'}`}>
+                            {product.name}
+                          </h3>
+                          <p className={`text-sm font-mono mb-3 ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
+                            {product.code}
                           </p>
-                        )}
 
-                        {/* Prices */}
-                        <div className="space-y-1">
-                          <div className="flex items-center justify-between">
-                            <span className={`text-xs ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>Mi Costo:</span>
-                            <span className={`text-sm ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
-                              {product.pricingModel === 'percentage'
-                                ? `${product.miCosto}%${product.miCostoFijo > 0 ? ` + $${product.miCostoFijo}` : ''}`
-                                : `$${product.miCosto.toFixed(2)}`}
-                            </span>
-                          </div>
-                          <div className="flex items-center justify-between">
-                            <span className={`text-xs ${isDark ? 'text-emerald-500' : 'text-emerald-600'}`}>Venta:</span>
-                            <span className={`text-lg font-bold ${isDark ? 'text-emerald-400' : 'text-emerald-600'}`}>
-                              {product.pricingModel === 'percentage'
-                                ? `${product.precioMayorista}%${product.precioMayoristaFijo > 0 ? ` + $${product.precioMayoristaFijo}` : ''}`
-                                : `$${product.precioMayorista.toFixed(2)}`}
-                            </span>
-                          </div>
-                          {product.currency && (
-                            <div className="flex items-center justify-between">
-                              <span className={`text-xs ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>Moneda:</span>
-                              <span className={`text-xs font-medium px-2 py-0.5 rounded ${isDark ? 'bg-emerald-500/20 text-emerald-400' : 'bg-emerald-100 text-emerald-700'}`}>
-                                {product.currency}
-                              </span>
-                            </div>
+                          {product.description && (
+                            <p className={`text-sm mb-4 line-clamp-2 ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
+                              {product.description}
+                            </p>
                           )}
-                        </div>
-                        <p className={`text-xs mt-2 ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
-                          {product.providerName || 'Sin proveedor'}
-                        </p>
 
-                        {/* Actions */}
-                        <div className="flex items-center gap-2 mt-4 pt-4 border-t border-dashed opacity-0 group-hover:opacity-100 transition-opacity" style={{ borderColor: isDark ? '#374151' : '#e5e7eb' }}>
-                          <button
-                            onClick={() => setEditingProduct(product)}
-                            className={`flex-1 py-2 rounded-lg text-sm font-medium transition-colors ${
-                              isDark ? 'bg-gray-700 hover:bg-gray-600 text-white' : 'bg-gray-100 hover:bg-gray-200 text-gray-700'
-                            }`}
-                          >
-                            <Edit2 className="w-4 h-4 inline mr-1" />
-                            Editar
-                          </button>
-                          <button
-                            onClick={() => handleDeleteProduct(product.id)}
-                            className={`p-2 rounded-lg transition-colors ${
-                              isDark ? 'hover:bg-red-500/20 text-red-400' : 'hover:bg-red-50 text-red-500'
-                            }`}
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        </div>
-                      </motion.div>
-                    )
-                  })}
-                </div>
-              ) : (
-                /* List View */
-                <div className={`rounded-2xl overflow-hidden border ${isDark ? 'bg-gray-800/50 border-gray-800' : 'bg-white border-gray-200'}`}>
-                  <table className="w-full">
-                    <thead>
-                      <tr className={isDark ? 'bg-gray-800' : 'bg-gray-50'}>
-                        <th className={`px-6 py-4 text-left text-xs font-semibold uppercase tracking-wider ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
-                          Producto
-                        </th>
-                        <th className={`px-6 py-4 text-left text-xs font-semibold uppercase tracking-wider ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
-                          Categoria
-                        </th>
-                        <th className={`px-6 py-4 text-right text-xs font-semibold uppercase tracking-wider ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
-                          Mi Costo
-                        </th>
-                        <th className={`px-6 py-4 text-right text-xs font-semibold uppercase tracking-wider ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
-                          Venta Empresas
-                        </th>
-                        <th className={`px-6 py-4 text-left text-xs font-semibold uppercase tracking-wider ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
-                          Proveedor
-                        </th>
-                        <th className={`px-6 py-4 text-center text-xs font-semibold uppercase tracking-wider ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
-                          Estado
-                        </th>
-                        <th className={`px-6 py-4 w-28`}></th>
-                      </tr>
-                    </thead>
-                    <tbody className={`divide-y ${isDark ? 'divide-gray-800' : 'divide-gray-100'}`}>
-                      {filteredProducts.map((product, idx) => {
-                        const catConfig = getCategoryConfig(product.category)
-                        const Icon = catConfig.icon
-                        return (
-                          <motion.tr
-                            key={product.id}
-                            initial={{ opacity: 0, x: -10 }}
-                            animate={{ opacity: 1, x: 0 }}
-                            transition={{ delay: idx * 0.02 }}
-                            className={`group transition-colors ${isDark ? 'hover:bg-gray-700/50' : 'hover:bg-gray-50'}`}
-                          >
-                            <td className="px-6 py-4">
-                              <div className="flex items-center gap-4">
-                                <div className={`w-12 h-12 rounded-xl flex items-center justify-center bg-gradient-to-br ${catConfig.gradient}`}>
-                                  <Icon className="w-6 h-6 text-white" />
-                                </div>
-                                <div>
-                                  <div className={`font-semibold ${isDark ? 'text-white' : 'text-gray-900'}`}>
-                                    {product.name}
-                                  </div>
-                                  <div className="flex items-center gap-2 mt-0.5">
-                                    <span className={`text-sm font-mono ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
-                                      {product.code}
-                                    </span>
-                                    <button
-                                      onClick={() => copyToClipboard(product.code)}
-                                      className={`opacity-0 group-hover:opacity-100 p-1 rounded transition-all ${
-                                        isDark ? 'hover:bg-gray-600' : 'hover:bg-gray-200'
-                                      }`}
-                                    >
-                                      <Copy className="w-3 h-3" />
-                                    </button>
-                                  </div>
-                                </div>
-                              </div>
-                            </td>
-                            <td className="px-6 py-4">
-                              <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium bg-gradient-to-r ${catConfig.gradient} text-white`}>
-                                <Icon className="w-3.5 h-3.5" />
-                                {catConfig.name}
-                              </span>
-                            </td>
-                            <td className={`px-6 py-4 text-right`}>
-                              <span className={`text-base font-semibold ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
+                          {/* Prices */}
+                          <div className="space-y-1">
+                            <div className="flex items-center justify-between">
+                              <span className={`text-xs ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>Mi Costo:</span>
+                              <span className={`text-sm ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
                                 {product.pricingModel === 'percentage'
                                   ? `${product.miCosto}%${product.miCostoFijo > 0 ? ` + $${product.miCostoFijo}` : ''}`
                                   : `$${product.miCosto.toFixed(2)}`}
                               </span>
-                            </td>
-                            <td className={`px-6 py-4 text-right`}>
-                              <div className="flex flex-col items-end">
-                                <span className={`text-lg font-bold ${isDark ? 'text-emerald-400' : 'text-emerald-600'}`}>
-                                  {product.pricingModel === 'percentage'
-                                    ? `${product.precioMayorista}%${product.precioMayoristaFijo > 0 ? ` + $${product.precioMayoristaFijo}` : ''}`
-                                    : `$${product.precioMayorista.toFixed(2)}`}
-                                </span>
-                                {product.currency && (
-                                  <span className={`text-xs ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
-                                    {product.currency}
-                                  </span>
-                                )}
-                              </div>
-                            </td>
-                            <td className={`px-6 py-4 ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
-                              {product.providerName || (
-                                <span className={isDark ? 'text-gray-600' : 'text-gray-300'}>Sin asignar</span>
-                              )}
-                            </td>
-                            <td className="px-6 py-4 text-center">
-                              <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium ${
-                                product.isActive
-                                  ? isDark ? 'bg-emerald-500/20 text-emerald-400' : 'bg-emerald-100 text-emerald-700'
-                                  : isDark ? 'bg-gray-700 text-gray-400' : 'bg-gray-100 text-gray-500'
-                              }`}>
-                                <span className={`w-1.5 h-1.5 rounded-full ${product.isActive ? 'bg-emerald-500' : 'bg-gray-400'}`} />
-                                {product.isActive ? 'Activo' : 'Inactivo'}
+                            </div>
+                            <div className="flex items-center justify-between">
+                              <span className={`text-xs ${isDark ? 'text-emerald-500' : 'text-emerald-600'}`}>Venta:</span>
+                              <span className={`text-lg font-bold ${isDark ? 'text-emerald-400' : 'text-emerald-600'}`}>
+                                {product.pricingModel === 'percentage'
+                                  ? `${product.precioMayorista}%${product.precioMayoristaFijo > 0 ? ` + $${product.precioMayoristaFijo}` : ''}`
+                                  : `$${product.precioMayorista.toFixed(2)}`}
                               </span>
-                            </td>
-                            <td className="px-6 py-4">
-                              <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                <button
-                                  onClick={() => setEditingProduct(product)}
-                                  className={`p-2 rounded-lg transition-colors ${
-                                    isDark ? 'hover:bg-gray-600 text-gray-400' : 'hover:bg-gray-100 text-gray-500'
-                                  }`}
-                                  title="Editar"
-                                >
-                                  <Edit2 className="w-4 h-4" />
-                                </button>
-                                <button
-                                  onClick={() => handleDeleteProduct(product.id)}
-                                  className={`p-2 rounded-lg transition-colors ${
-                                    isDark ? 'hover:bg-red-500/20 text-red-400' : 'hover:bg-red-50 text-red-500'
-                                  }`}
-                                  title="Eliminar"
-                                >
-                                  <Trash2 className="w-4 h-4" />
-                                </button>
+                            </div>
+                            {product.currency && (
+                              <div className="flex items-center justify-between">
+                                <span className={`text-xs ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>Moneda:</span>
+                                <span className={`text-xs font-medium px-2 py-0.5 rounded ${isDark ? 'bg-emerald-500/20 text-emerald-400' : 'bg-emerald-100 text-emerald-700'}`}>
+                                  {product.currency}
+                                </span>
                               </div>
-                            </td>
-                          </motion.tr>
-                        )
-                      })}
-                    </tbody>
-                  </table>
-                </div>
+                            )}
+                          </div>
+                          <p className={`text-xs mt-2 ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
+                            {product.providerName || 'Sin proveedor'}
+                          </p>
+
+                          {/* Actions */}
+                          <div className="flex items-center gap-2 mt-4 pt-4 border-t border-dashed opacity-0 group-hover:opacity-100 transition-opacity" style={{ borderColor: isDark ? '#374151' : '#e5e7eb' }}>
+                            <button
+                              onClick={() => setEditingProduct(product)}
+                              className={`flex-1 py-2 rounded-lg text-sm font-medium transition-colors ${
+                                isDark ? 'bg-gray-700 hover:bg-gray-600 text-white' : 'bg-gray-100 hover:bg-gray-200 text-gray-700'
+                              }`}
+                            >
+                              <Edit2 className="w-4 h-4 inline mr-1" />
+                              Editar
+                            </button>
+                            <button
+                              onClick={() => handleDeleteProduct(product.id)}
+                              className={`p-2 rounded-lg transition-colors ${
+                                isDark ? 'hover:bg-red-500/20 text-red-400' : 'hover:bg-red-50 text-red-500'
+                              }`}
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
+                        </motion.div>
+                      )
+                    })}
+                  </div>
+
+                  {/* Show Recharge Products in "All" view - Grid */}
+                  {categoryFilter === 'all' && rechargeProductsCount > 0 && (
+                    <div className="mt-6">
+                      <RechargeProductManager
+                        key={rechargeRefreshKey}
+                        onOpenModal={() => setShowCreateModal(true)}
+                        onProductsChange={() => {
+                          fetchRechargeCount()
+                          setRechargeRefreshKey(prev => prev + 1)
+                        }}
+                      />
+                    </div>
+                  )}
+                </>
+              ) : (
+                /* List View */
+                <>
+                  <div className={`rounded-2xl overflow-hidden border ${isDark ? 'bg-gray-800/50 border-gray-800' : 'bg-white border-gray-200'}`}>
+                    <table className="w-full">
+                      <thead>
+                        <tr className={isDark ? 'bg-gray-800' : 'bg-gray-50'}>
+                          <th className={`px-6 py-4 text-left text-xs font-semibold uppercase tracking-wider ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
+                            Producto
+                          </th>
+                          <th className={`px-6 py-4 text-left text-xs font-semibold uppercase tracking-wider ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
+                            Categoria
+                          </th>
+                          <th className={`px-6 py-4 text-right text-xs font-semibold uppercase tracking-wider ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
+                            Mi Costo
+                          </th>
+                          <th className={`px-6 py-4 text-right text-xs font-semibold uppercase tracking-wider ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
+                            Venta Empresas
+                          </th>
+                          <th className={`px-6 py-4 text-left text-xs font-semibold uppercase tracking-wider ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
+                            Proveedor
+                          </th>
+                          <th className={`px-6 py-4 text-center text-xs font-semibold uppercase tracking-wider ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
+                            Estado
+                          </th>
+                          <th className={`px-6 py-4 w-28`}></th>
+                        </tr>
+                      </thead>
+                      <tbody className={`divide-y ${isDark ? 'divide-gray-800' : 'divide-gray-100'}`}>
+                        {filteredProducts.map((product, idx) => {
+                          const catConfig = getCategoryConfig(product.category)
+                          const Icon = catConfig.icon
+                          return (
+                            <motion.tr
+                              key={product.id}
+                              initial={{ opacity: 0, x: -10 }}
+                              animate={{ opacity: 1, x: 0 }}
+                              transition={{ delay: idx * 0.02 }}
+                              className={`group transition-colors ${isDark ? 'hover:bg-gray-700/50' : 'hover:bg-gray-50'}`}
+                            >
+                              <td className="px-6 py-4">
+                                <div className="flex items-center gap-4">
+                                  <div className={`w-12 h-12 rounded-xl flex items-center justify-center bg-gradient-to-br ${catConfig.gradient}`}>
+                                    <Icon className="w-6 h-6 text-white" />
+                                  </div>
+                                  <div>
+                                    <div className={`font-semibold ${isDark ? 'text-white' : 'text-gray-900'}`}>
+                                      {product.name}
+                                    </div>
+                                    <div className="flex items-center gap-2 mt-0.5">
+                                      <span className={`text-sm font-mono ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
+                                        {product.code}
+                                      </span>
+                                      <button
+                                        onClick={() => copyToClipboard(product.code)}
+                                        className={`opacity-0 group-hover:opacity-100 p-1 rounded transition-all ${
+                                          isDark ? 'hover:bg-gray-600' : 'hover:bg-gray-200'
+                                        }`}
+                                      >
+                                        <Copy className="w-3 h-3" />
+                                      </button>
+                                    </div>
+                                  </div>
+                                </div>
+                              </td>
+                              <td className="px-6 py-4">
+                                <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium bg-gradient-to-r ${catConfig.gradient} text-white`}>
+                                  <Icon className="w-3.5 h-3.5" />
+                                  {catConfig.name}
+                                </span>
+                              </td>
+                              <td className={`px-6 py-4 text-right`}>
+                                <span className={`text-base font-semibold ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
+                                  {product.pricingModel === 'percentage'
+                                    ? `${product.miCosto}%${product.miCostoFijo > 0 ? ` + $${product.miCostoFijo}` : ''}`
+                                    : `$${product.miCosto.toFixed(2)}`}
+                                </span>
+                              </td>
+                              <td className={`px-6 py-4 text-right`}>
+                                <div className="flex flex-col items-end">
+                                  <span className={`text-lg font-bold ${isDark ? 'text-emerald-400' : 'text-emerald-600'}`}>
+                                    {product.pricingModel === 'percentage'
+                                      ? `${product.precioMayorista}%${product.precioMayoristaFijo > 0 ? ` + $${product.precioMayoristaFijo}` : ''}`
+                                      : `$${product.precioMayorista.toFixed(2)}`}
+                                  </span>
+                                  {product.currency && (
+                                    <span className={`text-xs ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
+                                      {product.currency}
+                                    </span>
+                                  )}
+                                </div>
+                              </td>
+                              <td className={`px-6 py-4 ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
+                                {product.providerName || (
+                                  <span className={isDark ? 'text-gray-600' : 'text-gray-300'}>Sin asignar</span>
+                                )}
+                              </td>
+                              <td className="px-6 py-4 text-center">
+                                <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium ${
+                                  product.isActive
+                                    ? isDark ? 'bg-emerald-500/20 text-emerald-400' : 'bg-emerald-100 text-emerald-700'
+                                    : isDark ? 'bg-gray-700 text-gray-400' : 'bg-gray-100 text-gray-500'
+                                }`}>
+                                  <span className={`w-1.5 h-1.5 rounded-full ${product.isActive ? 'bg-emerald-500' : 'bg-gray-400'}`} />
+                                  {product.isActive ? 'Activo' : 'Inactivo'}
+                                </span>
+                              </td>
+                              <td className="px-6 py-4">
+                                <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                  <button
+                                    onClick={() => setEditingProduct(product)}
+                                    className={`p-2 rounded-lg transition-colors ${
+                                      isDark ? 'hover:bg-gray-600 text-gray-400' : 'hover:bg-gray-100 text-gray-500'
+                                    }`}
+                                    title="Editar"
+                                  >
+                                    <Edit2 className="w-4 h-4" />
+                                  </button>
+                                  <button
+                                    onClick={() => handleDeleteProduct(product.id)}
+                                    className={`p-2 rounded-lg transition-colors ${
+                                      isDark ? 'hover:bg-red-500/20 text-red-400' : 'hover:bg-red-50 text-red-500'
+                                    }`}
+                                    title="Eliminar"
+                                  >
+                                    <Trash2 className="w-4 h-4" />
+                                  </button>
+                                </div>
+                              </td>
+                            </motion.tr>
+                          )
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  {/* Show Recharge Products in "All" view */}
+                  {categoryFilter === 'all' && rechargeProductsCount > 0 && (
+                    <div className="mt-6">
+                      <RechargeProductManager
+                        key={rechargeRefreshKey}
+                        onOpenModal={() => setShowCreateModal(true)}
+                        onProductsChange={() => {
+                          fetchRechargeCount()
+                          setRechargeRefreshKey(prev => prev + 1)
+                        }}
+                      />
+                    </div>
+                  )}
+                </>
               )}
             </>
           )}

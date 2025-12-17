@@ -16,6 +16,7 @@ import {
   DollarSign,
 } from 'lucide-react'
 import { RechargePricingModal } from './RechargePricingModal'
+import { RechargeProductSelector } from './RechargeProductSelector'
 
 interface RechargeProduct {
   id: number
@@ -85,6 +86,7 @@ export function RechargeProductManager({ onOpenModal, onProductsChange }: Rechar
   const [showPricingModal, setShowPricingModal] = useState(false)
   const [showPromoModal, setShowPromoModal] = useState(false)
   const [promoProduct, setPromoProduct] = useState<RechargeProduct | null>(null)
+  const [showProductSelector, setShowProductSelector] = useState(false)
 
   const fetchProducts = useCallback(async () => {
     try {
@@ -190,7 +192,7 @@ export function RechargeProductManager({ onOpenModal, onProductsChange }: Rechar
       <div className="flex items-center justify-between">
         {/* Nuevo Producto Button */}
         <button
-          onClick={onOpenModal}
+          onClick={() => setShowProductSelector(true)}
           className="px-5 py-2.5 bg-gradient-to-r from-purple-500 to-purple-600 hover:from-purple-600 hover:to-purple-700 text-white font-medium rounded-xl flex items-center gap-2 shadow-lg shadow-purple-500/25 transition-all hover:shadow-purple-500/40 whitespace-nowrap"
         >
           <Plus className="w-5 h-5" />
@@ -443,6 +445,19 @@ export function RechargeProductManager({ onOpenModal, onProductsChange }: Rechar
             </div>
           </div>
         </div>
+      )}
+
+      {/* Product Selector Modal */}
+      {showProductSelector && (
+        <RechargeProductSelector
+          onClose={() => setShowProductSelector(false)}
+          onProductSelected={(product) => {
+            setShowProductSelector(false)
+            // Open pricing modal for the selected product
+            setSelectedProduct(product as RechargeProduct)
+            setShowPricingModal(true)
+          }}
+        />
       )}
     </div>
   )

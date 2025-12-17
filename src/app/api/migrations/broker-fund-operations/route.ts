@@ -46,6 +46,39 @@ export async function POST() {
       }
     }
 
+    // 1c. Add release_reason column if it doesn't exist (for tables created before this column was added)
+    try {
+      await db.query(`
+        ALTER TABLE broker_reservations
+        ADD COLUMN IF NOT EXISTS release_reason TEXT
+      `)
+      console.log('[Migration] Added release_reason column to broker_reservations')
+    } catch (e: any) {
+      console.log('[Migration] Note: release_reason column -', e.message)
+    }
+
+    // 1d. Add released_at column if it doesn't exist
+    try {
+      await db.query(`
+        ALTER TABLE broker_reservations
+        ADD COLUMN IF NOT EXISTS released_at TIMESTAMP
+      `)
+      console.log('[Migration] Added released_at column to broker_reservations')
+    } catch (e: any) {
+      console.log('[Migration] Note: released_at column -', e.message)
+    }
+
+    // 1e. Add released_by column if it doesn't exist
+    try {
+      await db.query(`
+        ALTER TABLE broker_reservations
+        ADD COLUMN IF NOT EXISTS released_by INTEGER
+      `)
+      console.log('[Migration] Added released_by column to broker_reservations')
+    } catch (e: any) {
+      console.log('[Migration] Note: released_by column -', e.message)
+    }
+
     // 2. Create broker_wallet_transactions table if not exists
     await db.query(`
       CREATE TABLE IF NOT EXISTS broker_wallet_transactions (

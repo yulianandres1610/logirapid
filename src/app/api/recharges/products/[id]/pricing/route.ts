@@ -164,21 +164,53 @@ export async function POST(
     // Round to 2 decimal places
     sellingPrice = Math.round(sellingPrice * 100) / 100
 
-    // Upsert pricing configuration
-    const result = await db.query(
-      `INSERT INTO recharge_product_pricing
-       (external_product_id, company_id, margin_type, margin_value, selling_price, is_enabled)
-       VALUES ($1, $2, $3, $4, $5, $6)
-       ON CONFLICT (external_product_id, company_id)
-       DO UPDATE SET
-         margin_type = $3,
-         margin_value = $4,
-         selling_price = $5,
-         is_enabled = $6,
-         updated_at = NOW()
-       RETURNING *`,
-      [productId, companyId || null, marginType, marginValue, sellingPrice, isEnabled]
+    // Check if pricing already exists (handle NULL company_id separately due to PostgreSQL unique constraint behavior)
+    const existingQuery = companyId
+      ? `SELECT id FROM recharge_product_pricing WHERE external_product_id = $1 AND company_id = $2`
+      : `SELECT id FROM recharge_product_pricing WHERE external_product_id = $1 AND company_id IS NULL`
+
+    const existingResult = await db.query(
+      existingQuery,
+      companyId ? [productId, companyId] : [productId]
     )
+
+    let result
+    if (existingResult.rows.length > 0) {
+      // Update existing pricing
+      const updateQuery = companyId
+        ? `UPDATE recharge_product_pricing SET
+             margin_type = $1,
+             margin_value = $2,
+             selling_price = $3,
+             is_enabled = $4,
+             updated_at = NOW()
+           WHERE external_product_id = $5 AND company_id = $6
+           RETURNING *`
+        : `UPDATE recharge_product_pricing SET
+             margin_type = $1,
+             margin_value = $2,
+             selling_price = $3,
+             is_enabled = $4,
+             updated_at = NOW()
+           WHERE external_product_id = $5 AND company_id IS NULL
+           RETURNING *`
+
+      result = await db.query(
+        updateQuery,
+        companyId
+          ? [marginType, marginValue, sellingPrice, isEnabled, productId, companyId]
+          : [marginType, marginValue, sellingPrice, isEnabled, productId]
+      )
+    } else {
+      // Insert new pricing
+      result = await db.query(
+        `INSERT INTO recharge_product_pricing
+         (external_product_id, company_id, margin_type, margin_value, selling_price, is_enabled)
+         VALUES ($1, $2, $3, $4, $5, $6)
+         RETURNING *`,
+        [productId, companyId || null, marginType, marginValue, sellingPrice, isEnabled]
+      )
+    }
 
     const pricing = result.rows[0]
 
