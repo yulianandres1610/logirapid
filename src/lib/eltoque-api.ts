@@ -21,7 +21,7 @@ export interface AllExchangeRates {
 
 class ElToqueAPI {
   private static readonly BASE_URL = 'https://eltoque.cubarapid.com'
-  private static readonly FALLBACK_BASE_URL = 'https://api.eltoque.cubarapid.com'
+  private static readonly API_KEY = 'logirapid_02c9333b1a53596be22d3ecf34d605c5'
   private static lastFetchTime = 0
   private static readonly MIN_FETCH_INTERVAL = 300000 // 5 minutos mínimo entre peticiones para reducir latencia
   private static cachedRates: AllExchangeRates | null = null
@@ -41,175 +41,39 @@ class ElToqueAPI {
 
       console.log('🔄 Fetching fresh exchange rates from eltoque.cubarapid.com...')
 
-      // Estrategia optimizada - priorizar endpoints que funcionan
-      const endpointStrategies = [
-        // Estrategia 1: API principal - endpoint que sabemos funciona
-        {
-          baseUrl: this.BASE_URL,
-          endpoints: [
-            '/api/tasas',  // Este es el endpoint correcto que funciona
-            '/api/v1/tasas',
-            '/api/v1/rates',
-            '/api/rates'
-          ]
+      // Nueva autenticación con x-api-key
+      const url = `${this.BASE_URL}/api/tasas`
+      console.log('📡 Fetching from:', url)
+
+      const controller = new AbortController()
+      const timeoutId = setTimeout(() => controller.abort(), 10000) // 10 segundos timeout
+
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          'x-api-key': this.API_KEY
         },
-        // Estrategia 2: Rutas simples (backup)
-        {
-          baseUrl: this.BASE_URL,
-          endpoints: [
-            '/tasas',
-            '/rates'
-          ]
-        },
-        // Estrategia 3: Subdominio API (fallback)
-        {
-          baseUrl: this.FALLBACK_BASE_URL,
-          endpoints: [
-            '/api/tasas',
-            '/tasas',
-            '/api/rates',
-            '/rates'
-          ]
-        }
-      ]
+        cache: 'no-store',
+        signal: controller.signal
+      })
 
-      let apiResponse: any = null
-      let successEndpoint = ''
-      let successStrategy = ''
+      clearTimeout(timeoutId)
 
-      for (const strategy of endpointStrategies) {
-        for (const endpoint of strategy.endpoints) {
-          try {
-            const url = `${strategy.baseUrl}${endpoint}`
-            console.log('📡 Attempting endpoint:', url)
+      console.log('📡 Response status:', response.status, response.statusText)
 
-            // Headers optimizados para evitar el firewall de Vercel
-            const headers: Record<string, string> = {
-              'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
-              'Accept-Language': 'es-ES,es;q=0.9',
-              'Accept-Encoding': 'gzip, deflate, br',
-              'Cache-Control': 'max-age=0',
-              'Sec-Ch-Ua': '"Google Chrome";v="121", "Chromium";v="121", "Not=A?Brand";v="99"',
-              'Sec-Ch-Ua-Mobile': '?0',
-              'Sec-Ch-Ua-Platform': '"Windows"',
-              'Sec-Fetch-Dest': 'document',
-              'Sec-Fetch-Mode': 'navigate',
-              'Sec-Fetch-Site': 'none',
-              'Sec-Fetch-User': '?1',
-              'Upgrade-Insecure-Requests': '1'
-            }
-
-            // User-Agent más realista y actualizado (navegadores comunes)
-            const userAgents = [
-              'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
-              'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
-              'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:123.0) Gecko/20100101 Firefox/123.0',
-              'Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:123.0) Gecko/20100101 Firefox/123.0',
-              'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36 Edg/121.0.0.0'
-            ]
-            headers['User-Agent'] = userAgents[Math.floor(Math.random() * userAgents.length)]
-
-            // Timeout optimizado para fallback rápido
-            const controller = new AbortController()
-            const timeoutId = setTimeout(() => controller.abort(), 5000) // 5 segundos para fallback rápido
-
-            const response = await fetch(url, {
-              method: 'GET',
-              headers,
-              cache: 'no-store',
-              signal: controller.signal,
-              // Opciones adicionales para evitar detección
-              referrer: 'https://cubarapid.com/',
-              referrerPolicy: 'no-referrer-when-downgrade'
-            })
-
-            clearTimeout(timeoutId)
-
-            console.log('📡 Response from', endpoint, '- Status:', response.status, response.statusText)
-
-            // Analizar headers de respuesta para más información
-            const responseHeaders = Object.fromEntries(response.headers.entries())
-            console.log('📡 Response headers:', responseHeaders)
-
-            if (response.ok) {
-              let responseText: string = ''
-
-              try {
-                responseText = await response.text()
-                console.log('📡 Raw response from', endpoint, '(first 500 chars):', responseText.substring(0, 500))
-
-                // Detectar checkpoint de seguridad de Vercel
-                if (responseText.includes('Vercel Security Checkpoint') ||
-                    responseText.includes('vercel-challenge-token') ||
-                    responseText.includes('estamos verificando tu navegador') ||
-                    responseText.includes('We\'re verifying your browser')) {
-                  console.warn('🚫 Security checkpoint detected - treating as failure')
-                  throw new Error('Security checkpoint blocking access')
-                }
-
-                if (!responseText || responseText.trim() === '') {
-                  throw new Error('Empty response from server')
-                }
-
-                // Intentar parsear como JSON
-                apiResponse = JSON.parse(responseText)
-                successEndpoint = endpoint
-                successStrategy = strategy.baseUrl
-                console.log('✅ Successfully parsed response from:', endpoint)
-                console.log('📊 API Response structure:', {
-                  type: typeof apiResponse,
-                  isArray: Array.isArray(apiResponse),
-                  keys: Object.keys(apiResponse || {}),
-                  length: responseText.length
-                })
-                break
-
-              } catch (parseError) {
-                console.warn('⚠️ JSON parse error for', endpoint, ':', parseError)
-
-                // Si el JSON falla, intentar parsear como texto plano o CSV
-                if (this.parseTextResponse(responseText)) {
-                  successEndpoint = endpoint
-                  successStrategy = strategy.baseUrl
-                  break
-                }
-              }
-            } else if (response.status === 429) {
-              console.warn('⚠️ Rate limited on endpoint:', endpoint, '- moving to next...')
-              // Pequeña espera antes de continuar al siguiente
-              await new Promise(resolve => setTimeout(resolve, 1000))
-              continue
-            } else if (response.status === 403) {
-              console.warn('⚠️ Forbidden on endpoint:', endpoint, '- trying next...')
-              continue
-            } else if (response.status >= 500) {
-              console.warn('⚠️ Server error on endpoint:', endpoint, response.status, '- trying next...')
-              continue
-            } else {
-              console.warn('⚠️ HTTP error on endpoint:', endpoint, response.status, response.statusText)
-            }
-
-          } catch (endpointError) {
-            const errorMessage = endpointError instanceof Error ? endpointError.message : 'Unknown error'
-            console.warn('⚠️ Failed to fetch from endpoint:', endpoint, '-', errorMessage)
-
-            // Si es error de Abort (timeout), continuar rápidamente al siguiente
-            if (errorMessage.includes('abort')) {
-              await new Promise(resolve => setTimeout(resolve, 200)) // Espera mínima
-            }
-          }
-        }
-
-        // Si encontramos éxito con esta estrategia, no necesitamos probar las demás
-        if (apiResponse) {
-          break
-        }
+      if (!response.ok) {
+        throw new Error(`API error: ${response.status} ${response.statusText}`)
       }
 
-      if (apiResponse) {
-        console.log('🎯 Success with strategy:', successStrategy)
-        console.log('🎯 Success endpoint:', successEndpoint)
+      const data = await response.json()
+      console.log('📊 API Response:', JSON.stringify(data).substring(0, 500))
 
+      // El nuevo formato devuelve { datos: [{ moneda: 'USD', tasa: 440 }, ...] }
+      let apiResponse = data
+
+      if (apiResponse) {
         // Procesar la respuesta
         const processedRates = this.processAPIResponse(apiResponse)
 
@@ -217,10 +81,11 @@ class ElToqueAPI {
         this.cachedRates = processedRates
         this.lastFetchTime = now
 
+        console.log('✅ Exchange rates updated successfully')
         return processedRates
       }
 
-      throw new Error('All endpoints and strategies failed')
+      throw new Error('Empty response from API')
 
     } catch (error) {
       console.error('❌ Error fetching all exchange rates:', error)
