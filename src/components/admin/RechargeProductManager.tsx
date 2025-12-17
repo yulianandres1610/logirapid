@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
+import { motion } from 'framer-motion'
 import {
   Search,
   Filter,
@@ -282,7 +283,7 @@ export function RechargeProductManager({ onOpenModal, onProductsChange }: Rechar
         </div>
       )}
 
-      {/* Products Grid */}
+      {/* Products Table */}
       {loading ? (
         <div className="flex items-center justify-center py-12">
           <Loader2 className="w-8 h-8 animate-spin text-purple-500" />
@@ -294,97 +295,120 @@ export function RechargeProductManager({ onOpenModal, onProductsChange }: Rechar
             Sin productos configurados
           </h3>
           <p className="text-gray-500 dark:text-gray-400 max-w-md mx-auto">
-            Usa el botón <span className="font-medium">"Nuevo Producto"</span> y selecciona la categoría <span className="font-medium">"Recarga"</span> para agregar productos de UnivCell
+            Usa el boton <span className="font-medium">"Nuevo Producto"</span> para agregar productos de UnivCell
           </p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-          {products.map((product) => (
-            <div
-              key={product.id}
-              className="group bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 p-5 hover:shadow-lg hover:border-purple-300 dark:hover:border-purple-700 transition-all"
-            >
-              {/* Header */}
-              <div className="flex items-start justify-between mb-4">
-                <div className="flex items-center gap-3">
-                  <span className="text-3xl">
-                    {getCountryFlag(product.countryCode)}
-                  </span>
-                  <div>
-                    <h3 className="font-semibold text-gray-900 dark:text-white">
-                      {product.name}
-                    </h3>
-                    <p className="text-sm text-gray-500 dark:text-gray-400">
-                      {product.countryName}
-                    </p>
-                  </div>
-                </div>
-                {product.promotions.length > 0 && (
-                  <button
-                    onClick={() => handleShowPromo(product)}
-                    className="bg-orange-100 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400 text-xs px-2 py-1 rounded-full flex items-center gap-1 hover:bg-orange-200 dark:hover:bg-orange-900/50 transition-colors cursor-pointer"
-                    title="Ver promociones"
-                  >
-                    <Gift className="w-3 h-3" />
-                    Promo
-                  </button>
-                )}
-              </div>
-
-              {/* Pricing Info */}
-              <div className="space-y-2 mb-4">
-                <div className="flex justify-between items-center">
-                  <span className="text-sm text-gray-500 dark:text-gray-400">Costo:</span>
-                  <span className="font-medium text-gray-700 dark:text-gray-300">
-                    {formatCurrency(product.baseCost)}
-                  </span>
-                </div>
-
-                <div className="flex justify-between items-center">
-                  <span className="text-sm text-gray-500 dark:text-gray-400">Venta:</span>
-                  <span className="text-xl font-bold text-emerald-600 dark:text-emerald-400">
-                    {product.pricing?.sellingPrice
-                      ? formatCurrency(product.pricing.sellingPrice)
-                      : '-'}
-                  </span>
-                </div>
-
-                <div className="flex justify-between items-center pt-2 border-t border-gray-100 dark:border-gray-700">
-                  <span className="text-sm text-gray-500 dark:text-gray-400">Margen:</span>
-                  <span className="font-semibold text-purple-600 dark:text-purple-400 bg-purple-50 dark:bg-purple-900/30 px-2 py-0.5 rounded-lg text-sm">
-                    {product.pricing?.marginType === 'percentage'
-                      ? `+${product.pricing.marginValue}%`
-                      : `+${formatCurrency(product.pricing?.marginValue || 0)}`}
-                  </span>
-                </div>
-              </div>
-
-              {/* Status & Actions */}
-              <div className="flex items-center justify-between pt-3 border-t border-gray-100 dark:border-gray-700">
-                <span className="flex items-center gap-1.5 text-sm text-green-600 dark:text-green-400">
-                  <Check className="w-3.5 h-3.5" />
-                  Activo
-                </span>
-
-                <div className="flex items-center gap-1">
-                  <button
-                    onClick={() => handleOpenPricing(product)}
-                    className="p-2 text-gray-400 hover:text-purple-600 hover:bg-purple-50 dark:hover:bg-purple-900/30 rounded-lg transition-colors"
-                    title="Editar precio"
-                  >
-                    <Edit2 className="w-4 h-4" />
-                  </button>
-                  <button
-                    onClick={() => handleDeleteProduct(product)}
-                    className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-lg transition-colors"
-                    title="Eliminar"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
-                </div>
-              </div>
-            </div>
-          ))}
+        <div className="rounded-2xl overflow-hidden border bg-white dark:bg-gray-800/50 border-gray-200 dark:border-gray-800">
+          <table className="w-full">
+            <thead>
+              <tr className="bg-gray-50 dark:bg-gray-800">
+                <th className="px-6 py-4 text-left text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">
+                  Producto
+                </th>
+                <th className="px-6 py-4 text-right text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">
+                  Costo
+                </th>
+                <th className="px-6 py-4 text-right text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">
+                  Venta
+                </th>
+                <th className="px-6 py-4 text-center text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">
+                  Margen
+                </th>
+                <th className="px-6 py-4 text-center text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">
+                  Promo
+                </th>
+                <th className="px-6 py-4 text-center text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">
+                  Estado
+                </th>
+                <th className="px-6 py-4 w-28"></th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
+              {products.map((product, idx) => (
+                <motion.tr
+                  key={product.id}
+                  initial={{ opacity: 0, x: -10 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: idx * 0.03, duration: 0.3 }}
+                  className="group transition-colors hover:bg-gray-50 dark:hover:bg-gray-700/50"
+                >
+                  <td className="px-6 py-4">
+                    <div className="flex items-center gap-4">
+                      <div className="w-12 h-12 rounded-xl flex items-center justify-center bg-gradient-to-br from-purple-500 to-purple-600 text-2xl">
+                        {getCountryFlag(product.countryCode)}
+                      </div>
+                      <div>
+                        <div className="font-semibold text-gray-900 dark:text-white">
+                          {product.name}
+                        </div>
+                        <div className="text-sm text-gray-500 dark:text-gray-400">
+                          {product.countryName}
+                        </div>
+                      </div>
+                    </div>
+                  </td>
+                  <td className="px-6 py-4 text-right">
+                    <span className="text-base font-semibold text-gray-500 dark:text-gray-400">
+                      {formatCurrency(product.baseCost)}
+                    </span>
+                  </td>
+                  <td className="px-6 py-4 text-right">
+                    <span className="text-lg font-bold text-emerald-600 dark:text-emerald-400">
+                      {product.pricing?.sellingPrice
+                        ? formatCurrency(product.pricing.sellingPrice)
+                        : '-'}
+                    </span>
+                  </td>
+                  <td className="px-6 py-4 text-center">
+                    <span className="inline-flex items-center px-2.5 py-1 rounded-lg text-sm font-semibold text-purple-600 dark:text-purple-400 bg-purple-50 dark:bg-purple-900/30">
+                      {product.pricing?.marginType === 'percentage'
+                        ? `+${product.pricing.marginValue}%`
+                        : `+${formatCurrency(product.pricing?.marginValue || 0)}`}
+                    </span>
+                  </td>
+                  <td className="px-6 py-4 text-center">
+                    {product.promotions.length > 0 ? (
+                      <button
+                        onClick={() => handleShowPromo(product)}
+                        className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-orange-100 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400 hover:bg-orange-200 dark:hover:bg-orange-900/50 transition-colors"
+                        title="Ver promociones"
+                      >
+                        <Gift className="w-3.5 h-3.5" />
+                        Promo
+                      </button>
+                    ) : (
+                      <span className="text-gray-300 dark:text-gray-600">-</span>
+                    )}
+                  </td>
+                  <td className="px-6 py-4 text-center">
+                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-emerald-100 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-400">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                      Activo
+                    </span>
+                  </td>
+                  <td className="px-6 py-4">
+                    <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <button
+                        onClick={() => handleOpenPricing(product)}
+                        className="p-2 rounded-lg transition-colors hover:bg-gray-100 dark:hover:bg-gray-600 text-gray-500 dark:text-gray-400"
+                        title="Editar precio"
+                      >
+                        <Edit2 className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={() => handleDeleteProduct(product)}
+                        className="p-2 rounded-lg transition-colors hover:bg-red-50 dark:hover:bg-red-500/20 text-red-500 dark:text-red-400"
+                        title="Eliminar"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </td>
+                </motion.tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       )}
 
