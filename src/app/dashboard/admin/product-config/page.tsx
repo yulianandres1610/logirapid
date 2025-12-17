@@ -80,6 +80,29 @@ interface Company {
   status: string
 }
 
+interface RechargeProductForPricing {
+  id: number
+  name: string
+  countryCode: string
+  countryName: string
+  baseCost: number
+  pricing: {
+    marginType: 'percentage' | 'fixed'
+    marginValue: number
+    sellingPrice: number
+  } | null
+}
+
+// Country flag mapping for recharge products
+const getCountryFlag = (countryCode: string): string => {
+  const flags: Record<string, string> = {
+    CU: '🇨🇺', MX: '🇲🇽', DO: '🇩🇴', HT: '🇭🇹', US: '🇺🇸',
+    ES: '🇪🇸', CO: '🇨🇴', VE: '🇻🇪', PE: '🇵🇪', AR: '🇦🇷',
+    CL: '🇨🇱', BR: '🇧🇷',
+  }
+  return flags[countryCode] || '🌍'
+}
+
 const CATEGORIES = [
   { id: 'paqueteria', name: 'Paqueteria', icon: Box, color: 'blue', gradient: 'from-blue-500 to-blue-600' },
   { id: 'remesa', name: 'Remesa', icon: Banknote, color: 'emerald', gradient: 'from-emerald-500 to-emerald-600' },
@@ -118,6 +141,9 @@ export default function ProductConfigPage() {
 
   // Recharge products count
   const [rechargeProductsCount, setRechargeProductsCount] = useState(0)
+
+  // Recharge products for pricing tab
+  const [rechargeProductsForPricing, setRechargeProductsForPricing] = useState<RechargeProductForPricing[]>([])
 
   // Fetch products
   const fetchProducts = useCallback(async () => {
@@ -219,6 +245,34 @@ export default function ProductConfigPage() {
     }
   }, [])
 
+  // Fetch recharge products for pricing tab
+  const fetchRechargeProductsForPricing = useCallback(async () => {
+    try {
+      const response = await fetch('/api/recharges/products')
+      const data = await response.json()
+      if (data.success) {
+        // Get only products with pricing configured and enabled
+        const configuredProducts = data.data.products
+          .filter((p: any) => p.pricing !== null && p.pricing.isEnabled)
+          .map((p: any) => ({
+            id: p.id,
+            name: p.name,
+            countryCode: p.countryCode,
+            countryName: p.countryName,
+            baseCost: p.baseCost,
+            pricing: p.pricing ? {
+              marginType: p.pricing.marginType,
+              marginValue: p.pricing.marginValue,
+              sellingPrice: p.pricing.sellingPrice
+            } : null
+          }))
+        setRechargeProductsForPricing(configuredProducts)
+      }
+    } catch (error) {
+      console.error('Error fetching recharge products for pricing:', error)
+    }
+  }, [])
+
   useEffect(() => {
     fetchProducts()
     fetchCompanies()
@@ -228,8 +282,9 @@ export default function ProductConfigPage() {
   useEffect(() => {
     if (selectedCompany) {
       fetchCompanyPrices()
+      fetchRechargeProductsForPricing()
     }
-  }, [selectedCompany, fetchCompanyPrices])
+  }, [selectedCompany, fetchCompanyPrices, fetchRechargeProductsForPricing])
 
   // Refresh recharge count when category changes to recarga
   useEffect(() => {
@@ -964,6 +1019,7 @@ export default function ProductConfigPage() {
                     </div>
                   </div>
                 ) : (
+                  <>
                   <div className={`rounded-2xl overflow-hidden border ${isDark ? 'bg-gray-800/50 border-gray-800' : 'bg-white border-gray-200'}`}>
                     {/* Info banner */}
                     <div className={`px-6 py-3 border-b ${isDark ? 'bg-blue-500/10 border-gray-800' : 'bg-blue-50 border-gray-200'}`}>
@@ -1108,8 +1164,86 @@ export default function ProductConfigPage() {
                       </tbody>
                     </table>
                   </div>
-                )
-              ) : (
+
+                  {/* Recharge Products Section */}
+                  {rechargeProductsForPricing.length > 0 && (
+                    <div className={`mt-6 rounded-2xl overflow-hidden border ${isDark ? 'bg-gray-800/50 border-gray-800' : 'bg-white border-gray-200'}`}>
+                      {/* Section Header */}
+                      <div className={`px-6 py-3 border-b ${isDark ? 'bg-purple-500/10 border-gray-800' : 'bg-purple-50 border-gray-200'}`}>
+                        <div className="flex items-center gap-2">
+                          <Smartphone className={`w-5 h-5 ${isDark ? 'text-purple-400' : 'text-purple-600'}`} />
+                          <span className={`font-semibold ${isDark ? 'text-purple-300' : 'text-purple-700'}`}>
+                            Recargas Telefonicas
+                          </span>
+                          <span className={`text-sm ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
+                            (Precios configurados globalmente)
+                          </span>
+                        </div>
+                      </div>
+                      <table className="w-full">
+                        <thead>
+                          <tr className={isDark ? 'bg-gray-800' : 'bg-gray-50'}>
+                            <th className={`px-6 py-4 text-left text-xs font-semibold uppercase tracking-wider ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
+                              Producto
+                            </th>
+                            <th className={`px-6 py-4 text-right text-xs font-semibold uppercase tracking-wider ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
+                              Costo
+                            </th>
+                            <th className={`px-6 py-4 text-center text-xs font-semibold uppercase tracking-wider ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
+                              Margen
+                            </th>
+                            <th className={`px-6 py-4 text-right text-xs font-semibold uppercase tracking-wider ${isDark ? 'text-purple-400' : 'text-purple-600'}`}>
+                              Precio Venta
+                            </th>
+                          </tr>
+                        </thead>
+                        <tbody className={`divide-y ${isDark ? 'divide-gray-800' : 'divide-gray-100'}`}>
+                          {rechargeProductsForPricing.map((product) => (
+                            <tr
+                              key={`recharge-${product.id}`}
+                              className={`transition-colors ${isDark ? 'hover:bg-gray-700/50' : 'hover:bg-gray-50'}`}
+                            >
+                              <td className="px-6 py-4">
+                                <div className="flex items-center gap-4">
+                                  <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-gradient-to-br from-purple-500 to-purple-600 text-xl">
+                                    {getCountryFlag(product.countryCode)}
+                                  </div>
+                                  <div>
+                                    <div className={`font-medium ${isDark ? 'text-white' : 'text-gray-900'}`}>
+                                      {product.name}
+                                    </div>
+                                    <div className={`text-sm ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
+                                      {product.countryName}
+                                    </div>
+                                  </div>
+                                </div>
+                              </td>
+                              <td className={`px-6 py-4 text-right`}>
+                                <span className={`text-base font-semibold ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
+                                  ${product.baseCost.toFixed(2)}
+                                </span>
+                              </td>
+                              <td className="px-6 py-4 text-center">
+                                <span className={`inline-flex items-center px-2.5 py-1 rounded-lg text-sm font-semibold ${isDark ? 'bg-purple-900/30 text-purple-400' : 'bg-purple-100 text-purple-700'}`}>
+                                  {product.pricing?.marginType === 'percentage'
+                                    ? `+${product.pricing.marginValue}%`
+                                    : `+$${product.pricing?.marginValue.toFixed(2) || '0.00'}`}
+                                </span>
+                              </td>
+                              <td className={`px-6 py-4 text-right`}>
+                                <span className={`text-lg font-bold ${isDark ? 'text-emerald-400' : 'text-emerald-600'}`}>
+                                  ${product.pricing?.sellingPrice?.toFixed(2) || '-'}
+                                </span>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </>
+              )
+            ) : (
                 <div className="flex items-center justify-center py-20">
                   <div className="text-center max-w-sm">
                     <div className={`w-20 h-20 mx-auto mb-6 rounded-3xl flex items-center justify-center ${

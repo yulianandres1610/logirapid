@@ -3,11 +3,8 @@
 import { useState, useEffect, useCallback } from 'react'
 import { motion } from 'framer-motion'
 import {
-  Search,
-  Filter,
   Smartphone,
   Gift,
-  Check,
   Loader2,
   AlertCircle,
   Wallet,
@@ -52,11 +49,6 @@ interface RechargeProduct {
   }>
 }
 
-interface Country {
-  country_code: string
-  country_name: string
-}
-
 interface RechargeProductManagerProps {
   onOpenModal?: () => void
   onProductsChange?: () => void
@@ -83,15 +75,10 @@ const getCountryFlag = (countryCode: string): string => {
 
 export function RechargeProductManager({ onOpenModal, onProductsChange }: RechargeProductManagerProps) {
   const [products, setProducts] = useState<RechargeProduct[]>([])
-  const [countries, setCountries] = useState<Country[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [credits, setCredits] = useState<number | null>(null)
   const [creditsLoading, setCreditsLoading] = useState(true)
-
-  // Filters
-  const [searchTerm, setSearchTerm] = useState('')
-  const [selectedCountry, setSelectedCountry] = useState<string>('')
 
   // Modal
   const [selectedProduct, setSelectedProduct] = useState<RechargeProduct | null>(null)
@@ -104,11 +91,7 @@ export function RechargeProductManager({ onOpenModal, onProductsChange }: Rechar
       setLoading(true)
       setError(null)
 
-      const params = new URLSearchParams()
-      if (selectedCountry) params.append('country', selectedCountry)
-      if (searchTerm) params.append('search', searchTerm)
-
-      const response = await fetch(`/api/recharges/products?${params.toString()}`)
+      const response = await fetch('/api/recharges/products')
       const data = await response.json()
 
       if (data.success) {
@@ -117,7 +100,6 @@ export function RechargeProductManager({ onOpenModal, onProductsChange }: Rechar
           (p: RechargeProduct) => p.pricing !== null && p.pricing.isEnabled
         )
         setProducts(configuredProducts)
-        setCountries(data.data.countries)
       } else {
         setError(data.error || 'Error cargando productos')
       }
@@ -126,7 +108,7 @@ export function RechargeProductManager({ onOpenModal, onProductsChange }: Rechar
     } finally {
       setLoading(false)
     }
-  }, [selectedCountry, searchTerm])
+  }, [])
 
   const fetchCredits = async () => {
     try {
@@ -195,14 +177,6 @@ export function RechargeProductManager({ onOpenModal, onProductsChange }: Rechar
     fetchCredits()
   }, [fetchProducts])
 
-  // Debounced search
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      fetchProducts()
-    }, 300)
-    return () => clearTimeout(timer)
-  }, [searchTerm, selectedCountry, fetchProducts])
-
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('en-US', {
       style: 'currency',
@@ -241,39 +215,6 @@ export function RechargeProductManager({ onOpenModal, onProductsChange }: Rechar
         </div>
       </div>
 
-      {/* Filters - only show if there are products */}
-      {products.length > 0 && (
-        <div className="flex flex-col sm:flex-row gap-4">
-          <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-            <input
-              type="text"
-              placeholder="Buscar producto..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-10 pr-4 py-2.5 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-            />
-          </div>
-
-          {countries.length > 1 && (
-            <div className="relative">
-              <Filter className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-              <select
-                value={selectedCountry}
-                onChange={(e) => setSelectedCountry(e.target.value)}
-                className="pl-10 pr-8 py-2.5 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-purple-500 focus:border-transparent appearance-none min-w-[180px]"
-              >
-                <option value="">Todos los países</option>
-                {countries.map((country) => (
-                  <option key={country.country_code} value={country.country_code}>
-                    {getCountryFlag(country.country_code)} {country.country_name}
-                  </option>
-                ))}
-              </select>
-            </div>
-          )}
-        </div>
-      )}
 
       {/* Error Message */}
       {error && (
