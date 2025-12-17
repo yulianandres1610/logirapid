@@ -137,10 +137,12 @@ export default function ProductConfigPage() {
   // Precios por empresa
   const [selectedCompany, setSelectedCompany] = useState<number | null>(null)
   const [companyPrices, setCompanyPrices] = useState<Record<number, number | null>>({})
+  const [rechargeCompanyMargins, setRechargeCompanyMargins] = useState<Record<number, { marginType: 'percentage' | 'fixed', marginValue: number } | null>>({})
   const [savingPrices, setSavingPrices] = useState(false)
 
-  // Recharge products count
+  // Recharge products count and refresh key
   const [rechargeProductsCount, setRechargeProductsCount] = useState(0)
+  const [rechargeRefreshKey, setRechargeRefreshKey] = useState(0)
 
   // Recharge products for pricing tab
   const [rechargeProductsForPricing, setRechargeProductsForPricing] = useState<RechargeProductForPricing[]>([])
@@ -353,25 +355,55 @@ export default function ProductConfigPage() {
         return
       }
 
-      if (productsToUpdate.length === 0) {
+      // Check if there are products or recharge margins to save
+      const rechargeToUpdate = Object.entries(rechargeCompanyMargins)
+        .filter(([_, margin]) => margin !== null)
+        .map(([productId, margin]) => ({
+          productId: parseInt(productId),
+          marginType: margin!.marginType,
+          marginValue: margin!.marginValue
+        }))
+
+      if (productsToUpdate.length === 0 && rechargeToUpdate.length === 0) {
         showNotification('warning', 'Aviso', 'No hay precios para guardar')
         setSavingPrices(false)
         return
       }
 
-      const response = await fetch(`/api/companies/${selectedCompany}/products/pricing`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ products: productsToUpdate })
-      })
-
-      const data = await response.json()
-
-      if (data.success) {
-        showNotification('success', 'Exito', 'Precios guardados correctamente')
-      } else {
-        showNotification('error', 'Error', data.error || 'Error al guardar precios')
+      // Save regular product prices
+      if (productsToUpdate.length > 0) {
+        const response = await fetch(`/api/companies/${selectedCompany}/products/pricing`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ products: productsToUpdate })
+        })
+        const data = await response.json()
+        if (!data.success) {
+          showNotification('error', 'Error', data.error || 'Error al guardar precios')
+          setSavingPrices(false)
+          return
+        }
       }
+
+      // Save recharge product prices
+      for (const recharge of rechargeToUpdate) {
+        const response = await fetch(`/api/recharges/products/${recharge.productId}/pricing`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            companyId: selectedCompany,
+            marginType: recharge.marginType,
+            marginValue: recharge.marginValue,
+            isEnabled: true
+          })
+        })
+        const data = await response.json()
+        if (!data.success) {
+          console.error('Error saving recharge pricing:', data.error)
+        }
+      }
+
+      showNotification('success', 'Exito', 'Precios guardados correctamente')
     } catch (error) {
       showNotification('error', 'Error', 'Error de conexion')
     } finally {
@@ -681,8 +713,12 @@ export default function ProductConfigPage() {
               {/* Show RechargeProductManager when 'recarga' category is selected */}
               {categoryFilter === 'recarga' ? (
                 <RechargeProductManager
+                  key={rechargeRefreshKey}
                   onOpenModal={() => setShowCreateModal(true)}
-                  onProductsChange={fetchRechargeCount}
+                  onProductsChange={() => {
+                    fetchRechargeCount()
+                    setRechargeRefreshKey(prev => prev + 1)
+                  }}
                 />
               ) : loading ? (
                 <div className="flex items-center justify-center py-20">
@@ -976,6 +1012,7 @@ export default function ProductConfigPage() {
                           onChange={(e) => {
                             setSelectedCompany(e.target.value ? parseInt(e.target.value) : null)
                             setCompanyPrices({})
+                            setRechargeCompanyMargins({})
                           }}
                           className={`w-full md:w-96 appearance-none px-4 py-3 pr-10 rounded-xl text-sm font-medium cursor-pointer ${
                             isDark
@@ -1175,9 +1212,6 @@ export default function ProductConfigPage() {
                           <span className={`font-semibold ${isDark ? 'text-purple-300' : 'text-purple-700'}`}>
                             Recargas Telefonicas
                           </span>
-                          <span className={`text-sm ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
-                            (Precios configurados globalmente)
-                          </span>
                         </div>
                       </div>
                       <table className="w-full">
@@ -1189,54 +1223,101 @@ export default function ProductConfigPage() {
                             <th className={`px-6 py-4 text-right text-xs font-semibold uppercase tracking-wider ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
                               Costo
                             </th>
-                            <th className={`px-6 py-4 text-center text-xs font-semibold uppercase tracking-wider ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
-                              Margen
+                            <th className={`px-6 py-4 text-right text-xs font-semibold uppercase tracking-wider ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
+                              Precio Global
                             </th>
-                            <th className={`px-6 py-4 text-right text-xs font-semibold uppercase tracking-wider ${isDark ? 'text-purple-400' : 'text-purple-600'}`}>
-                              Precio Venta
+                            <th className={`px-6 py-4 text-center text-xs font-semibold uppercase tracking-wider ${isDark ? 'text-purple-400' : 'text-purple-600'}`}>
+                              Precio Especial
                             </th>
                           </tr>
                         </thead>
                         <tbody className={`divide-y ${isDark ? 'divide-gray-800' : 'divide-gray-100'}`}>
-                          {rechargeProductsForPricing.map((product) => (
-                            <tr
-                              key={`recharge-${product.id}`}
-                              className={`transition-colors ${isDark ? 'hover:bg-gray-700/50' : 'hover:bg-gray-50'}`}
-                            >
-                              <td className="px-6 py-4">
-                                <div className="flex items-center gap-4">
-                                  <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-gradient-to-br from-purple-500 to-purple-600 text-xl">
-                                    {getCountryFlag(product.countryCode)}
-                                  </div>
-                                  <div>
-                                    <div className={`font-medium ${isDark ? 'text-white' : 'text-gray-900'}`}>
-                                      {product.name}
+                          {rechargeProductsForPricing.map((product) => {
+                            const customMargin = rechargeCompanyMargins[product.id]
+                            const hasCustomPrice = customMargin !== undefined && customMargin !== null
+                            // Calculate selling price with custom margin
+                            let customSellingPrice: number | null = null
+                            if (hasCustomPrice && customMargin) {
+                              if (customMargin.marginType === 'percentage') {
+                                customSellingPrice = product.baseCost * (1 + customMargin.marginValue / 100)
+                              } else {
+                                customSellingPrice = product.baseCost + customMargin.marginValue
+                              }
+                            }
+                            return (
+                              <tr
+                                key={`recharge-${product.id}`}
+                                className={`transition-colors ${isDark ? 'hover:bg-gray-700/50' : 'hover:bg-gray-50'}`}
+                              >
+                                <td className="px-6 py-4">
+                                  <div className="flex items-center gap-4">
+                                    <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-gradient-to-br from-purple-500 to-purple-600 text-xl">
+                                      {getCountryFlag(product.countryCode)}
                                     </div>
-                                    <div className={`text-sm ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
-                                      {product.countryName}
+                                    <div>
+                                      <div className={`font-medium ${isDark ? 'text-white' : 'text-gray-900'}`}>
+                                        {product.name}
+                                      </div>
+                                      <div className={`text-sm ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
+                                        {product.countryName}
+                                      </div>
                                     </div>
                                   </div>
-                                </div>
-                              </td>
-                              <td className={`px-6 py-4 text-right`}>
-                                <span className={`text-base font-semibold ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
-                                  ${product.baseCost.toFixed(2)}
-                                </span>
-                              </td>
-                              <td className="px-6 py-4 text-center">
-                                <span className={`inline-flex items-center px-2.5 py-1 rounded-lg text-sm font-semibold ${isDark ? 'bg-purple-900/30 text-purple-400' : 'bg-purple-100 text-purple-700'}`}>
-                                  {product.pricing?.marginType === 'percentage'
-                                    ? `+${product.pricing.marginValue}%`
-                                    : `+$${product.pricing?.marginValue.toFixed(2) || '0.00'}`}
-                                </span>
-                              </td>
-                              <td className={`px-6 py-4 text-right`}>
-                                <span className={`text-lg font-bold ${isDark ? 'text-emerald-400' : 'text-emerald-600'}`}>
-                                  ${product.pricing?.sellingPrice?.toFixed(2) || '-'}
-                                </span>
-                              </td>
-                            </tr>
-                          ))}
+                                </td>
+                                <td className={`px-6 py-4 text-right`}>
+                                  <span className={`text-base font-semibold ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
+                                    ${product.baseCost.toFixed(2)}
+                                  </span>
+                                </td>
+                                <td className={`px-6 py-4 text-right`}>
+                                  <span className={`text-lg font-semibold ${isDark ? 'text-emerald-400' : 'text-emerald-600'}`}>
+                                    ${product.pricing?.sellingPrice?.toFixed(2) || '-'}
+                                  </span>
+                                </td>
+                                <td className="px-6 py-4">
+                                  <div className="flex flex-col items-center gap-1">
+                                    <div className="relative">
+                                      <span className={`absolute left-4 top-1/2 -translate-y-1/2 ${
+                                        isDark ? 'text-purple-400' : 'text-purple-500'
+                                      }`}>$</span>
+                                      <input
+                                        type="number"
+                                        step="0.01"
+                                        min={product.baseCost}
+                                        value={customSellingPrice?.toFixed(2) ?? ''}
+                                        placeholder={product.pricing?.sellingPrice?.toFixed(2) || '0.00'}
+                                        onChange={(e) => {
+                                          const value = e.target.value ? parseFloat(e.target.value) : null
+                                          if (value !== null && value >= product.baseCost) {
+                                            // Calculate margin as fixed amount
+                                            const marginValue = value - product.baseCost
+                                            setRechargeCompanyMargins(prev => ({
+                                              ...prev,
+                                              [product.id]: { marginType: 'fixed', marginValue }
+                                            }))
+                                          } else if (value === null || e.target.value === '') {
+                                            setRechargeCompanyMargins(prev => ({
+                                              ...prev,
+                                              [product.id]: null
+                                            }))
+                                          }
+                                        }}
+                                        className={`w-36 pl-8 pr-4 py-2.5 text-center text-lg font-semibold rounded-xl border-2 transition-all ${
+                                          hasCustomPrice
+                                            ? isDark
+                                              ? 'bg-purple-900/30 border-purple-600 text-purple-300 focus:border-purple-500'
+                                              : 'bg-purple-50 border-purple-300 text-purple-700 focus:border-purple-400'
+                                            : isDark
+                                              ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-600 focus:border-purple-500'
+                                              : 'bg-white border-gray-200 text-gray-900 placeholder-gray-400 focus:border-purple-400'
+                                        } focus:outline-none focus:ring-4 focus:ring-purple-500/10`}
+                                      />
+                                    </div>
+                                  </div>
+                                </td>
+                              </tr>
+                            )
+                          })}
                         </tbody>
                       </table>
                     </div>
