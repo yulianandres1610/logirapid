@@ -337,7 +337,7 @@ export function Sidebar({ isCollapsed, onToggle }: SidebarProps) {
     { icon: Settings, label: "Catálogo Productos", href: "/dashboard/admin/product-config" },
     { icon: UserCheck, label: "CRM", href: "/dashboard/admin/crm" },
     { icon: Wallet, label: "Wallet Manager", href: "/dashboard/admin/wallet" },
-    { icon: Send, label: "Cupones Familiares", href: "/dashboard/admin/remittance" },
+    { icon: Send, label: "Cupones Familiares", href: "/dashboard/admin/cupones-familiares" },
     {
       icon: Globe,
       label: "Brokers",
@@ -350,7 +350,7 @@ export function Sidebar({ isCollapsed, onToggle }: SidebarProps) {
         { icon: Banknote, label: "Entregas Efectivo", href: "/dashboard/admin/brokers/cash-delivery/list" }
       ]
     },
-    { icon: Smartphone, label: "Recarga", href: "/dashboard/admin/recharge" },
+    { icon: Smartphone, label: "Recargas", href: "/dashboard/admin/recargas" },
     { icon: Package, label: "Rastreador", href: "/dashboard/admin/tracker" },
     { icon: ShoppingCart, label: "Mercado", href: "/dashboard/admin/marketplace" },
     {
