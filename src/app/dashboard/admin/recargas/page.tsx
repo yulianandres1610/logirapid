@@ -15,7 +15,10 @@ import {
   Globe,
   Zap,
   Loader2,
-  RefreshCw
+  RefreshCw,
+  Gift,
+  Calendar,
+  Clock
 } from 'lucide-react'
 import { DashboardLayout } from '@/components/layout/dashboard-layout'
 import { ProtectedRoute } from '@/components/protected-route'
@@ -40,11 +43,16 @@ interface RechargeProduct {
   phonePattern: string
   acceptsRange: boolean
   isActive: boolean
+  isPromotion: boolean
+  validFrom: string | null
+  validTo: string | null
   pricing: {
     marginType: 'percentage' | 'fixed'
     marginValue: number
     sellingPrice: number | null
+    costPrice: number
     isEnabled: boolean
+    isManualPricing: boolean
   } | null
 }
 
@@ -163,7 +171,11 @@ export default function AdminRecargasPage() {
 
   // Handle product selection
   const handleProductSelect = (product: RechargeProduct) => {
-    setRecargaData(prev => ({ ...prev, product, phoneNumber: '', amount: 0 }))
+    // For manual pricing products, set the amount directly from selling price
+    const amount = product.pricing?.isManualPricing && product.pricing?.sellingPrice
+      ? product.pricing.sellingPrice
+      : 0
+    setRecargaData(prev => ({ ...prev, product, phoneNumber: '', amount }))
     setCustomAmount('')
     setCurrentStep('phone')
   }
@@ -171,7 +183,12 @@ export default function AdminRecargasPage() {
   // Handle phone submit
   const handlePhoneSubmit = () => {
     if (recargaData.product && validatePhoneNumber(recargaData.phoneNumber, recargaData.product.phonePattern)) {
-      setCurrentStep('amount')
+      // For manual pricing products, skip amount step and go directly to confirmation
+      if (recargaData.product.pricing?.isManualPricing && recargaData.product.pricing?.sellingPrice) {
+        setCurrentStep('confirmation')
+      } else {
+        setCurrentStep('amount')
+      }
     }
   }
 
@@ -194,11 +211,41 @@ export default function AdminRecargasPage() {
     const product = recargaData.product
     if (!product?.pricing) return amount
 
+    // For manual pricing products, return the fixed selling price
+    if (product.pricing.isManualPricing && product.pricing.sellingPrice) {
+      return product.pricing.sellingPrice
+    }
+
+    // For margin-based pricing
     if (product.pricing.marginType === 'percentage') {
       return amount * (1 + product.pricing.marginValue / 100)
     } else {
       return amount + product.pricing.marginValue
     }
+  }
+
+  // Helper to format date
+  const formatExpirationDate = (dateString: string | null): string => {
+    if (!dateString) return ''
+    try {
+      const date = new Date(dateString)
+      return date.toLocaleDateString('es-ES', {
+        day: '2-digit',
+        month: 'short',
+        year: 'numeric'
+      })
+    } catch {
+      return dateString
+    }
+  }
+
+  // Check if promotion is about to expire (within 7 days)
+  const isExpiringsoon = (dateString: string | null): boolean => {
+    if (!dateString) return false
+    const expDate = new Date(dateString)
+    const now = new Date()
+    const daysUntilExpiry = Math.ceil((expDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
+    return daysUntilExpiry > 0 && daysUntilExpiry <= 7
   }
 
   // Process recharge
@@ -417,55 +464,112 @@ Gracias por su compra!
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {filteredProducts.map((product) => (
-              <motion.button
-                key={product.id}
-                whileHover={{ scale: 1.02 }}
-                whileTap={{ scale: 0.98 }}
-                onClick={() => handleProductSelect(product)}
-                className={cn(
-                  "p-4 rounded-xl border-2 transition-all duration-300 text-left",
-                  "hover:shadow-lg",
-                  recargaData.service === 'nauta'
-                    ? "hover:border-cyan-500"
-                    : "hover:border-purple-500",
-                  theme === 'dark'
-                    ? "bg-gray-800 border-gray-700 hover:bg-gray-700"
-                    : "bg-white border-gray-200 hover:bg-gray-50"
-                )}
-              >
-                <div className="flex items-start gap-3">
-                  <div className={cn(
-                    "w-12 h-12 rounded-xl flex items-center justify-center text-2xl flex-shrink-0",
-                    recargaData.service === 'nauta'
-                      ? "bg-gradient-to-br from-cyan-500 to-cyan-600"
-                      : "bg-gradient-to-br from-purple-500 to-purple-600"
-                  )}>
-                    {getCountryFlag(product.countryCode)}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="font-semibold text-gray-900 dark:text-white truncate">
-                      {product.name}
+            {filteredProducts.map((product) => {
+              const isPromo = product.isPromotion
+              const hasFixedPrice = product.pricing?.isManualPricing && product.pricing?.sellingPrice
+              const sellingPrice = hasFixedPrice
+                ? product.pricing!.sellingPrice
+                : product.baseCost
+              const expiringSoon = isExpiringsoon(product.validTo)
+
+              return (
+                <motion.button
+                  key={product.id}
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                  onClick={() => handleProductSelect(product)}
+                  className={cn(
+                    "p-4 rounded-xl border-2 transition-all duration-300 text-left relative",
+                    "hover:shadow-lg",
+                    isPromo
+                      ? "hover:border-amber-500 border-amber-200 dark:border-amber-800"
+                      : recargaData.service === 'nauta'
+                        ? "hover:border-cyan-500"
+                        : "hover:border-purple-500",
+                    theme === 'dark'
+                      ? "bg-gray-800 hover:bg-gray-700"
+                      : "bg-white hover:bg-gray-50",
+                    !isPromo && (theme === 'dark' ? "border-gray-700" : "border-gray-200")
+                  )}
+                >
+                  {/* Promo badge */}
+                  {isPromo && (
+                    <div className={cn(
+                      "absolute -top-2 -right-2 px-2 py-1 rounded-full text-xs font-semibold flex items-center gap-1",
+                      expiringSoon
+                        ? "bg-red-500 text-white animate-pulse"
+                        : "bg-gradient-to-r from-amber-400 to-orange-500 text-white"
+                    )}>
+                      <Gift className="w-3 h-3" />
+                      PROMO
                     </div>
-                    <div className="text-sm text-gray-500 dark:text-gray-400">
-                      {product.countryName}
+                  )}
+
+                  <div className="flex items-start gap-3">
+                    <div className={cn(
+                      "w-12 h-12 rounded-xl flex items-center justify-center text-2xl flex-shrink-0",
+                      isPromo
+                        ? "bg-gradient-to-br from-amber-400 to-orange-500"
+                        : recargaData.service === 'nauta'
+                          ? "bg-gradient-to-br from-cyan-500 to-cyan-600"
+                          : "bg-gradient-to-br from-purple-500 to-purple-600"
+                    )}>
+                      {isPromo ? <Gift className="w-6 h-6 text-white" /> : getCountryFlag(product.countryCode)}
                     </div>
-                    <div className="flex items-center gap-2 mt-2">
-                      <span className="text-sm font-medium text-emerald-600 dark:text-emerald-400">
-                        Desde ${product.baseCost.toFixed(2)}
-                      </span>
-                      {product.pricing && (
-                        <span className="text-xs text-gray-400">
-                          +{product.pricing.marginType === 'percentage'
-                            ? `${product.pricing.marginValue}%`
-                            : `$${product.pricing.marginValue}`}
-                        </span>
+                    <div className="flex-1 min-w-0">
+                      <div className="font-semibold text-gray-900 dark:text-white truncate">
+                        {product.name}
+                      </div>
+                      <div className="text-sm text-gray-500 dark:text-gray-400">
+                        {product.countryName}
+                      </div>
+
+                      {/* Pricing info */}
+                      <div className="flex items-center gap-2 mt-2">
+                        {hasFixedPrice ? (
+                          <span className="text-sm font-bold text-emerald-600 dark:text-emerald-400">
+                            ${sellingPrice?.toFixed(2)}
+                          </span>
+                        ) : (
+                          <>
+                            <span className="text-sm font-medium text-emerald-600 dark:text-emerald-400">
+                              Desde ${product.baseCost.toFixed(2)}
+                            </span>
+                            {product.pricing && !product.pricing.isManualPricing && (
+                              <span className="text-xs text-gray-400">
+                                +{product.pricing.marginType === 'percentage'
+                                  ? `${product.pricing.marginValue}%`
+                                  : `$${product.pricing.marginValue}`}
+                              </span>
+                            )}
+                          </>
+                        )}
+                      </div>
+
+                      {/* Expiration date for promotions */}
+                      {isPromo && product.validTo && (
+                        <div className={cn(
+                          "flex items-center gap-1 mt-2 text-xs",
+                          expiringSoon
+                            ? "text-red-500 font-semibold"
+                            : "text-gray-500 dark:text-gray-400"
+                        )}>
+                          {expiringSoon ? (
+                            <Clock className="w-3 h-3" />
+                          ) : (
+                            <Calendar className="w-3 h-3" />
+                          )}
+                          <span>
+                            {expiringSoon ? 'Expira: ' : 'Hasta: '}
+                            {formatExpirationDate(product.validTo)}
+                          </span>
+                        </div>
                       )}
                     </div>
                   </div>
-                </div>
-              </motion.button>
-            ))}
+                </motion.button>
+              )
+            })}
           </div>
         )}
 
@@ -702,8 +806,14 @@ Gracias por su compra!
 
   // Render confirmation step
   const renderConfirmationStep = () => {
+    const product = recargaData.product
+    const isManualPricing = product?.pricing?.isManualPricing
     const sellingPrice = calculateSellingPrice(recargaData.amount)
-    const margin = sellingPrice - recargaData.amount
+    const costPrice = product?.pricing?.costPrice || recargaData.amount
+    const margin = isManualPricing
+      ? sellingPrice - costPrice
+      : sellingPrice - recargaData.amount
+    const isPromo = product?.isPromotion
 
     return (
       <motion.div
@@ -721,36 +831,82 @@ Gracias por su compra!
 
         <div className={cn(
           "p-6 rounded-xl border-2 space-y-4",
+          isPromo
+            ? "border-amber-300 dark:border-amber-700"
+            : theme === 'dark'
+              ? "border-gray-700"
+              : "border-gray-200",
           theme === 'dark'
-            ? "bg-gray-800 border-gray-700"
-            : "bg-gray-50 border-gray-200"
+            ? "bg-gray-800"
+            : "bg-gray-50"
         )}>
+          {/* Promo indicator */}
+          {isPromo && (
+            <div className="flex items-center gap-2 text-amber-600 dark:text-amber-400 mb-2">
+              <Gift className="w-5 h-5" />
+              <span className="font-semibold">Producto Promocional</span>
+              {product?.validTo && (
+                <span className="text-xs text-gray-500 ml-auto">
+                  Expira: {formatExpirationDate(product.validTo)}
+                </span>
+              )}
+            </div>
+          )}
+
           <div className="flex justify-between items-center">
             <span className="text-gray-600 dark:text-gray-400">Producto:</span>
-            <span className="font-medium">{recargaData.product?.name}</span>
+            <span className="font-medium">{product?.name}</span>
           </div>
           <div className="flex justify-between items-center">
             <span className="text-gray-600 dark:text-gray-400">Numero:</span>
             <span className="font-medium">{recargaData.phoneNumber}</span>
           </div>
-          <div className="flex justify-between items-center">
-            <span className="text-gray-600 dark:text-gray-400">Monto Base:</span>
-            <span className="font-medium">${recargaData.amount.toFixed(2)}</span>
-          </div>
-          <div className="border-t pt-4 mt-4 dark:border-gray-600">
-            <div className="flex justify-between items-center">
-              <span className="text-gray-600 dark:text-gray-400">Margen:</span>
-              <span className="font-medium text-emerald-600 dark:text-emerald-400">
-                +${margin.toFixed(2)}
-              </span>
-            </div>
-            <div className="flex justify-between items-center mt-2">
-              <span className="text-lg font-semibold">Precio de Venta:</span>
-              <span className="text-xl font-bold text-purple-600 dark:text-purple-400">
-                ${sellingPrice.toFixed(2)}
-              </span>
-            </div>
-          </div>
+
+          {isManualPricing ? (
+            <>
+              {/* For manual pricing, show cost and selling price */}
+              <div className="flex justify-between items-center">
+                <span className="text-gray-600 dark:text-gray-400">Costo:</span>
+                <span className="font-medium">${costPrice.toFixed(2)}</span>
+              </div>
+              <div className="border-t pt-4 mt-4 dark:border-gray-600">
+                <div className="flex justify-between items-center">
+                  <span className="text-gray-600 dark:text-gray-400">Ganancia:</span>
+                  <span className="font-medium text-emerald-600 dark:text-emerald-400">
+                    +${margin.toFixed(2)}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center mt-2">
+                  <span className="text-lg font-semibold">Precio de Venta:</span>
+                  <span className="text-xl font-bold text-purple-600 dark:text-purple-400">
+                    ${sellingPrice.toFixed(2)}
+                  </span>
+                </div>
+              </div>
+            </>
+          ) : (
+            <>
+              {/* For margin-based pricing, show base amount and margin */}
+              <div className="flex justify-between items-center">
+                <span className="text-gray-600 dark:text-gray-400">Monto Base:</span>
+                <span className="font-medium">${recargaData.amount.toFixed(2)}</span>
+              </div>
+              <div className="border-t pt-4 mt-4 dark:border-gray-600">
+                <div className="flex justify-between items-center">
+                  <span className="text-gray-600 dark:text-gray-400">Margen:</span>
+                  <span className="font-medium text-emerald-600 dark:text-emerald-400">
+                    +${margin.toFixed(2)}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center mt-2">
+                  <span className="text-lg font-semibold">Precio de Venta:</span>
+                  <span className="text-xl font-bold text-purple-600 dark:text-purple-400">
+                    ${sellingPrice.toFixed(2)}
+                  </span>
+                </div>
+              </div>
+            </>
+          )}
         </div>
 
         <div className="space-y-4">
@@ -792,7 +948,7 @@ Gracias por su compra!
         <div className="flex space-x-4">
           <Button
             variant="outline"
-            onClick={() => setCurrentStep('amount')}
+            onClick={() => setCurrentStep(isManualPricing ? 'phone' : 'amount')}
             className="flex-1"
           >
             <ArrowLeft className="w-4 h-4 mr-2" />
@@ -822,7 +978,11 @@ Gracias por su compra!
 
   // Render success step
   const renderSuccessStep = () => {
+    const product = recargaData.product
     const sellingPrice = calculateSellingPrice(recargaData.amount)
+    const isManualPricing = product?.pricing?.isManualPricing
+    const costPrice = product?.pricing?.costPrice || recargaData.amount
+    const isPromo = product?.isPromotion
 
     return (
       <motion.div
@@ -831,39 +991,62 @@ Gracias por su compra!
         exit={{ opacity: 0, scale: 0.9 }}
         className="space-y-8 text-center max-w-md mx-auto"
       >
-        <div className="w-20 h-20 bg-green-500 rounded-full flex items-center justify-center mx-auto">
-          <Check className="w-10 h-10 text-white" />
+        <div className={cn(
+          "w-20 h-20 rounded-full flex items-center justify-center mx-auto",
+          isPromo ? "bg-gradient-to-br from-amber-400 to-orange-500" : "bg-green-500"
+        )}>
+          {isPromo ? (
+            <Gift className="w-10 h-10 text-white" />
+          ) : (
+            <Check className="w-10 h-10 text-white" />
+          )}
         </div>
 
         <div>
           <h2 className="text-3xl font-bold mb-4">¡Recarga Exitosa!</h2>
           <p className="text-gray-600 dark:text-gray-400 mb-6">
-            La recarga ha sido procesada correctamente
+            {isPromo
+              ? 'La recarga promocional ha sido procesada correctamente'
+              : 'La recarga ha sido procesada correctamente'
+            }
           </p>
         </div>
 
         <div className={cn(
           "p-6 rounded-xl border-2 space-y-3 text-left",
+          isPromo
+            ? "border-amber-300 dark:border-amber-700"
+            : theme === 'dark'
+              ? "border-gray-700"
+              : "border-gray-200",
           theme === 'dark'
-            ? "bg-gray-800 border-gray-700"
-            : "bg-gray-50 border-gray-200"
+            ? "bg-gray-800"
+            : "bg-gray-50"
         )}>
+          {isPromo && (
+            <div className="flex items-center gap-2 text-amber-600 dark:text-amber-400 mb-2 pb-2 border-b dark:border-gray-700">
+              <Gift className="w-4 h-4" />
+              <span className="font-semibold text-sm">Promocion Aplicada</span>
+            </div>
+          )}
           <div className="flex justify-between items-center">
             <span className="text-gray-600 dark:text-gray-400">ID:</span>
             <span className="font-medium font-mono">{recargaId}</span>
           </div>
           <div className="flex justify-between items-center">
             <span className="text-gray-600 dark:text-gray-400">Producto:</span>
-            <span className="font-medium">{recargaData.product?.name}</span>
+            <span className="font-medium">{product?.name}</span>
           </div>
           <div className="flex justify-between items-center">
             <span className="text-gray-600 dark:text-gray-400">Numero:</span>
             <span className="font-medium">{recargaData.phoneNumber}</span>
           </div>
           <div className="flex justify-between items-center">
-            <span className="text-gray-600 dark:text-gray-400">Monto:</span>
+            <span className="text-gray-600 dark:text-gray-400">
+              {isManualPricing ? 'Costo:' : 'Monto:'}
+            </span>
             <span className="font-bold text-purple-600 dark:text-purple-400">
-              ${recargaData.amount.toFixed(2)}
+              ${isManualPricing ? costPrice.toFixed(2) : recargaData.amount.toFixed(2)}
             </span>
           </div>
           <div className="flex justify-between items-center">
