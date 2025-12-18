@@ -1914,7 +1914,7 @@ function ProductModal({ isDark, product, providerCompanies, onClose, onSave }: P
                     {/* Promotions */}
                     {univcellProducts.filter(p => p.type === 'promotion').length > 0 && (
                       <div>
-                        <p className={`text-xs font-semibold mb-2 px-1 ${isDark ? 'text-orange-400' : 'text-orange-500'}`}>
+                        <p className={`text-xs font-semibold mb-2 px-1 ${isDark ? 'text-red-400' : 'text-exa-primary'}`}>
                           PROMOCIONES
                         </p>
                         <div className="space-y-2">
@@ -1926,8 +1926,8 @@ function ProductModal({ isDark, product, providerCompanies, onClose, onSave }: P
                               className={`w-full p-3 rounded-xl flex items-center gap-3 transition-all text-left ${
                                 selectedUnivcellProduct?.id === prod.id
                                   ? isDark
-                                    ? 'bg-orange-600/30 border-2 border-orange-500'
-                                    : 'bg-orange-50 border-2 border-orange-400'
+                                    ? 'bg-red-600/30 border-2 border-red-500'
+                                    : 'bg-red-50 border-2 border-exa-primary'
                                   : isDark
                                     ? 'bg-gray-700 hover:bg-gray-600 border-2 border-transparent'
                                     : 'bg-gray-50 hover:bg-gray-100 border-2 border-transparent'
@@ -1943,7 +1943,7 @@ function ProductModal({ isDark, product, providerCompanies, onClose, onSave }: P
                                   {prod.validTo && ` • Hasta: ${new Date(prod.validTo).toLocaleDateString('es-ES')}`}
                                 </p>
                               </div>
-                              <span className={`px-2 py-0.5 text-xs rounded-full ${isDark ? 'bg-orange-500/20 text-orange-400' : 'bg-orange-100 text-orange-600'}`}>
+                              <span className={`px-2 py-0.5 text-xs rounded-full ${isDark ? 'bg-red-500/20 text-red-400' : 'bg-red-100 text-exa-primary'}`}>
                                 Promo
                               </span>
                             </button>
@@ -1958,7 +1958,7 @@ function ProductModal({ isDark, product, providerCompanies, onClose, onSave }: P
                 {selectedUnivcellProduct && (
                   <div className={`p-4 rounded-xl ${
                     selectedUnivcellProduct.type === 'promotion'
-                      ? isDark ? 'bg-orange-900/20 border border-orange-800' : 'bg-orange-50 border border-orange-200'
+                      ? isDark ? 'bg-red-900/20 border border-red-800' : 'bg-red-50 border border-red-200'
                       : isDark ? 'bg-purple-900/20 border border-purple-800' : 'bg-purple-50 border border-purple-200'
                   }`}>
                     {/* Product Info */}
@@ -1972,14 +1972,14 @@ function ProductModal({ isDark, product, providerCompanies, onClose, onSave }: P
                           {selectedUnivcellProduct.type === 'promotion' ? 'Monto minimo' : 'Monto'}: ${selectedUnivcellProduct.providerAmount.toFixed(2)} USD (fijo)
                         </p>
                         {selectedUnivcellProduct.type === 'promotion' && selectedUnivcellProduct.validTo && (
-                          <p className={`text-xs mt-1 ${isDark ? 'text-orange-400' : 'text-orange-600'}`}>
+                          <p className={`text-xs mt-1 ${isDark ? 'text-red-400' : 'text-exa-primary'}`}>
                             Valido hasta: {new Date(selectedUnivcellProduct.validTo).toLocaleDateString('es-ES')}
                           </p>
                         )}
                       </div>
                       <span className={`px-2 py-1 text-xs rounded-full ${
                         selectedUnivcellProduct.type === 'promotion'
-                          ? isDark ? 'bg-orange-500/20 text-orange-400' : 'bg-orange-100 text-orange-600'
+                          ? isDark ? 'bg-red-500/20 text-red-400' : 'bg-red-100 text-exa-primary'
                           : isDark ? 'bg-blue-500/20 text-blue-400' : 'bg-blue-100 text-blue-600'
                       }`}>
                         {selectedUnivcellProduct.type === 'promotion' ? 'Promo' : 'Producto'}
@@ -1988,7 +1988,7 @@ function ProductModal({ isDark, product, providerCompanies, onClose, onSave }: P
 
                     {/* Promotion Description (if promotion) */}
                     {selectedUnivcellProduct.type === 'promotion' && selectedUnivcellProduct.description && (
-                      <div className={`mb-4 p-3 rounded-lg text-sm ${isDark ? 'bg-orange-900/30 text-orange-200' : 'bg-orange-100 text-orange-800'}`}>
+                      <div className={`mb-4 p-3 rounded-lg text-sm ${isDark ? 'bg-red-900/30 text-red-200' : 'bg-red-100 text-red-800'}`}>
                         {selectedUnivcellProduct.description}
                       </div>
                     )}
