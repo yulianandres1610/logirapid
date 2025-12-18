@@ -292,7 +292,11 @@ export async function GET(
 
     // ============================================================
     // RECHARGE PRODUCTS - Fetch from external_recharge_products
-    // Only products with pricing configured (manual or margin-based)
+    // Only products with MANUAL pricing configured by SuperAdmin
+    // Logic:
+    //   - LogiRapid cost = manual_cost_price
+    //   - LogiRapid selling price to companies = manual_selling_price
+    //   - Company's miCosto = LogiRapid's manual_selling_price
     // ============================================================
     const rechargeProductsResult = await db.query(`
       SELECT
@@ -311,65 +315,25 @@ export async function GET(
         erp.valid_to,
         erp.manual_cost_price,
         erp.manual_selling_price,
-        erp.provider_amount,
-        -- Company-specific pricing from recharge_product_pricing table
-        rpp.id as pricing_id,
-        rpp.margin_type,
-        rpp.margin_value,
-        rpp.selling_price as rpp_selling_price,
-        rpp.is_enabled as pricing_enabled,
-        rpp.company_id as pricing_company_id
+        erp.provider_amount
       FROM external_recharge_products erp
-      LEFT JOIN recharge_product_pricing rpp
-        ON rpp.external_product_id = erp.id
-        AND (rpp.company_id = $1 OR rpp.company_id IS NULL)
       WHERE erp.is_active = true
-        AND (
-          -- Only include products with manual pricing configured
-          (erp.manual_cost_price IS NOT NULL AND erp.manual_selling_price IS NOT NULL)
-          -- OR products with margin-based pricing for this company
-          OR (rpp.id IS NOT NULL AND rpp.is_enabled = true)
-        )
-      ORDER BY
-        CASE WHEN rpp.company_id = $1 THEN 0 ELSE 1 END,
-        erp.country_name ASC, erp.name ASC
-    `, [companyId])
+        -- Only include products with manual pricing configured by SuperAdmin
+        AND erp.manual_cost_price IS NOT NULL
+        AND erp.manual_selling_price IS NOT NULL
+      ORDER BY erp.country_name ASC, erp.name ASC
+    `)
 
     // Transform recharge products to match the products format
     const rechargeProducts = rechargeProductsResult.rows.map((row: any) => {
-      // Check if product has manual pricing
-      const hasManualPricing = row.manual_cost_price !== null && row.manual_selling_price !== null
+      // For companies:
+      // - miCosto = LogiRapid's selling price (manual_selling_price) - what LogiRapid charges the company
+      // - precioClientes = same as miCosto by default, company can configure their own
+      const miCosto = parseFloat(row.manual_selling_price)
+      const precioClientes = miCosto // Default to miCosto, company can set their own margin
 
-      let miCosto = 0
-      let precioClientes = null
-      let hasPricing = false
-
-      if (hasManualPricing) {
-        // Manual pricing products have fixed cost and selling price
-        miCosto = parseFloat(row.manual_cost_price)
-        precioClientes = parseFloat(row.manual_selling_price)
-        hasPricing = true
-      } else if (row.pricing_id) {
-        // Margin-based pricing
-        const baseCost = row.provider_amount
-          ? parseFloat(row.provider_amount)
-          : parseFloat(row.base_cost || 0)
-        miCosto = baseCost
-
-        if (row.margin_type === 'percentage') {
-          precioClientes = baseCost * (1 + parseFloat(row.margin_value || 0) / 100)
-        } else if (row.margin_type === 'fixed') {
-          precioClientes = baseCost + parseFloat(row.margin_value || 0)
-        } else if (row.rpp_selling_price) {
-          precioClientes = parseFloat(row.rpp_selling_price)
-        }
-        hasPricing = row.pricing_enabled === true
-      } else {
-        // No pricing configured - use base cost
-        miCosto = row.provider_amount
-          ? parseFloat(row.provider_amount)
-          : parseFloat(row.base_cost || 0)
-      }
+      // LogiRapid's own cost (for reference)
+      const logirapidCost = parseFloat(row.manual_cost_price)
 
       return {
         productId: `recharge-${row.id}`,  // Prefix to distinguish from catalog products
@@ -382,41 +346,39 @@ export async function GET(
         dimensions: null,
         weightCapacity: null,
         unitType: 'unit',
-        pricingModel: hasManualPricing ? 'manual' : 'margin',
+        pricingModel: 'manual',
         currency: 'USD',
         displayOrder: 0,
         servicesCount: 0,
 
-        // Catalog level prices
-        catalogMiCosto: parseFloat(row.base_cost || 0),
+        // Catalog level prices (LogiRapid's prices)
+        catalogMiCosto: logirapidCost,  // LogiRapid's cost
         catalogMiCostoFijo: 0,
-        catalogPrecioMayorista: parseFloat(row.base_cost || 0),
+        catalogPrecioMayorista: miCosto,  // What LogiRapid charges companies
         catalogPrecioMayoristaFijo: 0,
         catalogPrecioPublico: 0,
 
         // Company level pricing
-        miCosto,
+        miCosto,  // Company's cost = LogiRapid's selling price
         precioSucursales: null,
-        precioClientes,
+        precioClientes,  // Default same as miCosto
 
         // Legacy field names
         costPrice: miCosto,
         b2bPrice: null,
         b2cPrice: precioClientes,
 
-        markupType: row.margin_type || null,
-        markupValue: row.margin_value ? parseFloat(row.margin_value) : null,
+        markupType: null,
+        markupValue: null,
 
-        // Margins
-        margenClientes: precioClientes && miCosto ? precioClientes - miCosto : null,
-        margenClientesPct: precioClientes && miCosto && miCosto > 0
-          ? ((precioClientes - miCosto) / miCosto) * 100
-          : null,
+        // Margins (0 by default since precioClientes = miCosto)
+        margenClientes: 0,
+        margenClientesPct: 0,
 
         // Metadata
-        priceSource: hasManualPricing ? 'manual' : 'platform',
-        hasPricing,
-        pricingId: row.pricing_id || (hasManualPricing ? row.id : null),
+        priceSource: 'platform',
+        hasPricing: true,
+        pricingId: row.id,
 
         // Company type flags
         isBranch,
@@ -435,8 +397,11 @@ export async function GET(
         isPromotion: row.is_promotion || false,
         validFrom: row.valid_from,
         validTo: row.valid_to,
-        hasManualPricing,
-        providerAmount: row.provider_amount ? parseFloat(row.provider_amount) : null
+        hasManualPricing: true,
+        providerAmount: row.provider_amount ? parseFloat(row.provider_amount) : null,
+
+        // LogiRapid's cost for reference (SuperAdmin sees this)
+        logirapidCost
       }
     })
 
