@@ -43,15 +43,17 @@ export async function GET(request: NextRequest) {
       ? 'WHERE ' + whereConditions.join(' AND ')
       : ''
 
-    // Get products with pricing for the company (or platform-wide pricing)
+    // Get products with pricing for the company (prefer company-specific over platform-wide)
+    // Use a subquery to get the best matching pricing for each product
     const query = `
       SELECT
         erp.*,
-        rpp.id as pricing_id,
-        rpp.margin_type,
-        rpp.margin_value,
-        rpp.selling_price,
-        rpp.is_enabled as pricing_enabled,
+        best_pricing.pricing_id,
+        best_pricing.margin_type,
+        best_pricing.margin_value,
+        best_pricing.selling_price,
+        best_pricing.is_enabled as pricing_enabled,
+        best_pricing.company_id as pricing_company_id,
         COALESCE(
           (SELECT json_agg(json_build_object(
             'id', rpr.id,
@@ -68,8 +70,22 @@ export async function GET(request: NextRequest) {
           ), '[]'
         ) as promotions
       FROM external_recharge_products erp
-      LEFT JOIN recharge_product_pricing rpp ON rpp.external_product_id = erp.id
-        AND (rpp.company_id IS NULL OR rpp.company_id = $${paramIndex})
+      LEFT JOIN LATERAL (
+        SELECT
+          rpp.id as pricing_id,
+          rpp.margin_type,
+          rpp.margin_value,
+          rpp.selling_price,
+          rpp.is_enabled,
+          rpp.company_id
+        FROM recharge_product_pricing rpp
+        WHERE rpp.external_product_id = erp.id
+          AND (rpp.company_id = $${paramIndex} OR rpp.company_id IS NULL)
+        ORDER BY
+          CASE WHEN rpp.company_id = $${paramIndex} THEN 0 ELSE 1 END,
+          rpp.id DESC
+        LIMIT 1
+      ) best_pricing ON true
       ${whereClause}
       ORDER BY erp.country_name ASC, erp.name ASC
       LIMIT $${paramIndex + 1} OFFSET $${paramIndex + 2}
