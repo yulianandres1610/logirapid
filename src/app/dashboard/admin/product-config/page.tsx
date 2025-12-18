@@ -1546,6 +1546,7 @@ interface UnivCellProduct {
 
 function ProductModal({ isDark, product, providerCompanies, onClose, onSave }: ProductModalProps) {
   const isNewProduct = !product
+  const { showNotification } = useNotifications()
 
   const [formData, setFormData] = useState(() => {
     const initialCategory = product?.category || 'paqueteria'
@@ -1572,8 +1573,11 @@ function ProductModal({ isDark, product, providerCompanies, onClose, onSave }: P
   const [loadingUnivcell, setLoadingUnivcell] = useState(false)
   const [syncingUnivcell, setSyncingUnivcell] = useState(false)
   const [selectedUnivcellProduct, setSelectedUnivcellProduct] = useState<UnivCellProduct | null>(null)
-  const [univcellMarginType, setUnivcellMarginType] = useState<'percentage' | 'fixed'>('percentage')
-  const [univcellMarginValue, setUnivcellMarginValue] = useState('20')
+  // Nuevos campos para crear producto de recarga
+  const [univcellProductName, setUnivcellProductName] = useState('')
+  const [univcellProductDescription, setUnivcellProductDescription] = useState('')
+  const [univcellCostPrice, setUnivcellCostPrice] = useState('')
+  const [univcellSellingPrice, setUnivcellSellingPrice] = useState('')
 
   const isRemesa = formData.category === 'remesa'
   const isRecarga = formData.category === 'recarga'
@@ -1617,20 +1621,52 @@ function ProductModal({ isDark, product, providerCompanies, onClose, onSave }: P
 
   const handleConfigureUnivcellProduct = async () => {
     if (!selectedUnivcellProduct) return
+    if (!univcellProductName.trim()) {
+      setError('El nombre del servicio es requerido')
+      return
+    }
+    if (!univcellCostPrice || parseFloat(univcellCostPrice) <= 0) {
+      setError('El precio de costo debe ser mayor a 0')
+      return
+    }
+    if (!univcellSellingPrice || parseFloat(univcellSellingPrice) <= 0) {
+      setError('El precio de venta debe ser mayor a 0')
+      return
+    }
+    if (parseFloat(univcellSellingPrice) < parseFloat(univcellCostPrice)) {
+      setError('El precio de venta no puede ser menor al precio de costo')
+      return
+    }
+
     setSaving(true)
     setError(null)
     try {
-      const response = await fetch(`/api/recharges/products/${selectedUnivcellProduct.id}/pricing`, {
+      const response = await fetch('/api/recharges/products/create', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          marginType: univcellMarginType,
-          marginValue: parseFloat(univcellMarginValue) || 0,
-          isEnabled: true
+          name: univcellProductName.trim(),
+          description: univcellProductDescription.trim() || null,
+          univcellProductId: selectedUnivcellProduct.externalId,
+          isPromotion: selectedUnivcellProduct.promotions?.length > 0 || false,
+          providerAmount: selectedUnivcellProduct.baseCost,
+          costPrice: parseFloat(univcellCostPrice),
+          sellingPrice: parseFloat(univcellSellingPrice),
+          pattern: selectedUnivcellProduct.phonePattern || '',
+          mask: '',
+          countryCode: selectedUnivcellProduct.countryCode,
+          countryName: selectedUnivcellProduct.countryName,
         })
       })
       const data = await response.json()
       if (data.success) {
+        showNotification('success', 'Exito', 'Producto de recarga creado exitosamente')
+        // Reset form
+        setSelectedUnivcellProduct(null)
+        setUnivcellProductName('')
+        setUnivcellProductDescription('')
+        setUnivcellCostPrice('')
+        setUnivcellSellingPrice('')
         onClose()
       } else {
         setError(data.error || 'Error configurando producto')
@@ -1647,13 +1683,10 @@ function ProductModal({ isDark, product, providerCompanies, onClose, onSave }: P
     return flags[code] || '🌍'
   }
 
-  const calculateSellingPrice = () => {
-    if (!selectedUnivcellProduct) return 0
-    const margin = parseFloat(univcellMarginValue) || 0
-    if (univcellMarginType === 'percentage') {
-      return selectedUnivcellProduct.baseCost * (1 + margin / 100)
-    }
-    return selectedUnivcellProduct.baseCost + margin
+  const calculateProfit = () => {
+    const cost = parseFloat(univcellCostPrice) || 0
+    const selling = parseFloat(univcellSellingPrice) || 0
+    return selling - cost
   }
 
   // Regenerate SKU when category changes (only for new products)
@@ -1880,75 +1913,129 @@ function ProductModal({ isDark, product, providerCompanies, onClose, onSave }: P
                 {/* Selected Product Config */}
                 {selectedUnivcellProduct && (
                   <div className={`p-4 rounded-xl ${isDark ? 'bg-purple-900/20 border border-purple-800' : 'bg-purple-50 border border-purple-200'}`}>
+                    {/* Product Info */}
                     <div className="flex items-center gap-3 mb-4">
                       <span className="text-3xl">{getCountryFlag(selectedUnivcellProduct.countryCode)}</span>
-                      <div>
+                      <div className="flex-1">
                         <p className={`font-semibold ${isDark ? 'text-white' : 'text-gray-900'}`}>
                           {selectedUnivcellProduct.name}
                         </p>
                         <p className={`text-sm ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
-                          Costo base: ${selectedUnivcellProduct.baseCost.toFixed(2)} USD
+                          Monto proveedor: ${selectedUnivcellProduct.baseCost.toFixed(2)} USD (fijo)
                         </p>
                       </div>
-                    </div>
-
-                    {/* Margin Type */}
-                    <div className="grid grid-cols-2 gap-2 mb-3">
-                      <button
-                        type="button"
-                        onClick={() => setUnivcellMarginType('percentage')}
-                        className={`p-2 rounded-lg text-sm font-medium transition-all ${
-                          univcellMarginType === 'percentage'
-                            ? 'bg-purple-600 text-white'
-                            : isDark ? 'bg-gray-700 text-gray-400' : 'bg-white text-gray-600 border border-gray-200'
-                        }`}
-                      >
-                        % Porcentaje
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setUnivcellMarginType('fixed')}
-                        className={`p-2 rounded-lg text-sm font-medium transition-all ${
-                          univcellMarginType === 'fixed'
-                            ? 'bg-purple-600 text-white'
-                            : isDark ? 'bg-gray-700 text-gray-400' : 'bg-white text-gray-600 border border-gray-200'
-                        }`}
-                      >
-                        $ Monto Fijo
-                      </button>
-                    </div>
-
-                    {/* Margin Value */}
-                    <div className="mb-3">
-                      <label className={`block text-xs mb-1 ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
-                        {univcellMarginType === 'percentage' ? 'Porcentaje de ganancia' : 'Ganancia fija'}
-                      </label>
-                      <div className="relative">
-                        <span className={`absolute left-3 top-1/2 -translate-y-1/2 text-sm ${isDark ? 'text-purple-400' : 'text-purple-500'}`}>
-                          {univcellMarginType === 'percentage' ? '%' : '$'}
+                      {selectedUnivcellProduct.promotions?.length > 0 && (
+                        <span className={`px-2 py-1 text-xs rounded-full ${isDark ? 'bg-orange-500/20 text-orange-400' : 'bg-orange-100 text-orange-600'}`}>
+                          Promo
                         </span>
-                        <input
-                          type="number"
-                          value={univcellMarginValue}
-                          onChange={(e) => setUnivcellMarginValue(e.target.value)}
-                          step={univcellMarginType === 'percentage' ? '1' : '0.01'}
-                          min="0"
-                          className={`w-full pl-8 pr-3 py-2 rounded-lg text-right font-semibold ${
-                            isDark
-                              ? 'bg-gray-700 border-gray-600 text-white'
-                              : 'bg-white border-gray-200 text-gray-900'
-                          } border focus:outline-none focus:ring-2 focus:ring-purple-500/20`}
-                        />
+                      )}
+                    </div>
+
+                    {/* Nombre del Servicio */}
+                    <div className="mb-3">
+                      <label className={`block text-xs font-medium mb-1 ${isDark ? 'text-gray-300' : 'text-gray-600'}`}>
+                        Nombre del Servicio *
+                      </label>
+                      <input
+                        type="text"
+                        value={univcellProductName}
+                        onChange={(e) => setUnivcellProductName(e.target.value)}
+                        placeholder="Ej: Recarga Cubacel Ilimitada"
+                        className={`w-full px-3 py-2 rounded-lg text-sm ${
+                          isDark
+                            ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-500'
+                            : 'bg-white border-gray-200 text-gray-900 placeholder-gray-400'
+                        } border focus:outline-none focus:ring-2 focus:ring-purple-500/20`}
+                      />
+                    </div>
+
+                    {/* Descripcion */}
+                    <div className="mb-3">
+                      <label className={`block text-xs font-medium mb-1 ${isDark ? 'text-gray-300' : 'text-gray-600'}`}>
+                        Descripcion
+                      </label>
+                      <textarea
+                        value={univcellProductDescription}
+                        onChange={(e) => setUnivcellProductDescription(e.target.value)}
+                        placeholder="Descripcion del servicio..."
+                        rows={2}
+                        className={`w-full px-3 py-2 rounded-lg text-sm resize-none ${
+                          isDark
+                            ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-500'
+                            : 'bg-white border-gray-200 text-gray-900 placeholder-gray-400'
+                        } border focus:outline-none focus:ring-2 focus:ring-purple-500/20`}
+                      />
+                    </div>
+
+                    {/* Precios */}
+                    <div className="grid grid-cols-2 gap-3 mb-3">
+                      <div>
+                        <label className={`block text-xs font-medium mb-1 ${isDark ? 'text-gray-300' : 'text-gray-600'}`}>
+                          Precio de Costo *
+                        </label>
+                        <div className="relative">
+                          <span className={`absolute left-3 top-1/2 -translate-y-1/2 text-sm ${isDark ? 'text-amber-400' : 'text-amber-500'}`}>$</span>
+                          <input
+                            type="number"
+                            value={univcellCostPrice}
+                            onChange={(e) => setUnivcellCostPrice(e.target.value)}
+                            step="0.01"
+                            min="0"
+                            placeholder="0.00"
+                            className={`w-full pl-8 pr-3 py-2 rounded-lg text-sm ${
+                              isDark
+                                ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-500'
+                                : 'bg-white border-gray-200 text-gray-900 placeholder-gray-400'
+                            } border focus:outline-none focus:ring-2 focus:ring-purple-500/20`}
+                          />
+                        </div>
+                        <p className={`text-xs mt-1 ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>Tu costo real</p>
+                      </div>
+                      <div>
+                        <label className={`block text-xs font-medium mb-1 ${isDark ? 'text-gray-300' : 'text-gray-600'}`}>
+                          Precio de Venta *
+                        </label>
+                        <div className="relative">
+                          <span className={`absolute left-3 top-1/2 -translate-y-1/2 text-sm ${isDark ? 'text-green-400' : 'text-green-500'}`}>$</span>
+                          <input
+                            type="number"
+                            value={univcellSellingPrice}
+                            onChange={(e) => setUnivcellSellingPrice(e.target.value)}
+                            step="0.01"
+                            min="0"
+                            placeholder="0.00"
+                            className={`w-full pl-8 pr-3 py-2 rounded-lg text-sm ${
+                              isDark
+                                ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-500'
+                                : 'bg-white border-gray-200 text-gray-900 placeholder-gray-400'
+                            } border focus:outline-none focus:ring-2 focus:ring-purple-500/20`}
+                          />
+                        </div>
+                        <p className={`text-xs mt-1 ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>Lo que cobras</p>
                       </div>
                     </div>
 
-                    {/* Price Preview */}
-                    <div className={`flex items-center justify-between p-3 rounded-lg ${isDark ? 'bg-green-900/30' : 'bg-green-50'}`}>
-                      <span className={`text-sm ${isDark ? 'text-green-400' : 'text-green-700'}`}>Precio de venta:</span>
-                      <span className={`text-xl font-bold ${isDark ? 'text-green-400' : 'text-green-600'}`}>
-                        ${calculateSellingPrice().toFixed(2)}
-                      </span>
-                    </div>
+                    {/* Profit Preview */}
+                    {univcellCostPrice && univcellSellingPrice && (
+                      <div className={`flex items-center justify-between p-3 rounded-lg ${
+                        calculateProfit() >= 0
+                          ? isDark ? 'bg-green-900/30' : 'bg-green-50'
+                          : isDark ? 'bg-red-900/30' : 'bg-red-50'
+                      }`}>
+                        <span className={`text-sm ${
+                          calculateProfit() >= 0
+                            ? isDark ? 'text-green-400' : 'text-green-700'
+                            : isDark ? 'text-red-400' : 'text-red-700'
+                        }`}>Ganancia:</span>
+                        <span className={`text-xl font-bold ${
+                          calculateProfit() >= 0
+                            ? isDark ? 'text-green-400' : 'text-green-600'
+                            : isDark ? 'text-red-400' : 'text-red-600'
+                        }`}>
+                          ${calculateProfit().toFixed(2)}
+                        </span>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
