@@ -154,6 +154,37 @@ export async function POST() {
       results.push('Index idx_recharge_promotions_dates already exists or error: ' + error.message)
     }
 
+    // Add new columns to external_recharge_products for manual product creation
+    const newColumns = [
+      { name: 'custom_name', definition: 'VARCHAR(255)' },
+      { name: 'custom_description', definition: 'TEXT' },
+      { name: 'manual_cost_price', definition: 'DECIMAL(10,2)' },
+      { name: 'manual_selling_price', definition: 'DECIMAL(10,2)' },
+      { name: 'is_promotion', definition: 'BOOLEAN DEFAULT false' },
+      { name: 'promotion_id', definition: 'VARCHAR(100)' },
+      { name: 'provider_amount', definition: 'DECIMAL(10,2)' },
+      { name: 'univcell_product_id', definition: 'INTEGER' },
+      { name: 'phone_mask', definition: 'VARCHAR(100)' },
+      { name: 'valid_from', definition: 'TIMESTAMP' },
+      { name: 'valid_to', definition: 'TIMESTAMP' },
+    ]
+
+    for (const column of newColumns) {
+      try {
+        await db.query(`
+          ALTER TABLE external_recharge_products
+          ADD COLUMN IF NOT EXISTS ${column.name} ${column.definition}
+        `)
+        results.push(`Added column: external_recharge_products.${column.name}`)
+      } catch (error: any) {
+        if (error.code === '42701') {
+          results.push(`Column ${column.name} already exists`)
+        } else {
+          results.push(`Error adding column ${column.name}: ${error.message}`)
+        }
+      }
+    }
+
     // Create recharge_orders table for tracking executed recharges
     try {
       await db.query(`
