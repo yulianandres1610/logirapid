@@ -1106,52 +1106,131 @@ Gracias por su compra!
     <ProtectedRoute requiredRole="SUPER_ADMIN">
       <DashboardLayout>
         <div className="max-w-4xl mx-auto p-6">
-          {/* Header */}
-          <div className="mb-8">
-            <h1 className="text-4xl font-bold mb-2">Recargas</h1>
-            <p className="text-gray-600 dark:text-gray-400">
-              Sistema de recargas con productos dinamicos
-            </p>
-          </div>
-
-          {/* Progress Bar */}
-          <div className="mb-8">
-            <div className="flex items-center justify-between mb-4">
+          {/* Progress Bar with Animations */}
+          <div className="mb-8 sm:mb-12">
+            <div className="flex items-center justify-between">
               {steps.map((step, index) => (
                 <div key={step.id} className="flex items-center flex-1">
-                  <div className="flex items-center">
-                    <div className={cn(
-                      "w-10 h-10 rounded-full flex items-center justify-center text-sm font-medium transition-all duration-300",
-                      currentStep === step.id
-                        ? "bg-purple-600 text-white"
-                        : currentStepIndex > index
-                          ? "bg-purple-200 dark:bg-purple-900/50 text-purple-700 dark:text-purple-300"
-                          : theme === 'dark'
-                            ? "bg-gray-700 text-gray-400"
-                            : "bg-gray-200 text-gray-500"
-                    )}>
-                      <step.icon className="w-5 h-5" />
+                  <div className="flex flex-col items-center">
+                    <div className="relative w-12 h-12 sm:w-14 sm:h-14">
+                      {/* Pulsing ring for active step */}
+                      {currentStep === step.id && (
+                        <motion.div
+                          className="absolute inset-0 rounded-full"
+                          animate={{
+                            scale: [1, 1.3, 1],
+                            opacity: [0.6, 0, 0.6]
+                          }}
+                          transition={{
+                            duration: 2,
+                            repeat: Infinity,
+                            ease: "easeInOut"
+                          }}
+                          style={{
+                            background: theme === 'dark'
+                              ? 'rgba(147, 51, 234, 0.5)' // purple-600
+                              : 'rgba(126, 34, 206, 0.5)' // purple-700
+                          }}
+                        />
+                      )}
+
+                      <motion.div
+                        initial={false}
+                        animate={{
+                          scale: currentStep === step.id ? 1.1 : 1,
+                          backgroundColor: currentStep === step.id
+                            ? theme === 'dark' ? '#9333EA' : '#7E22CE' // purple colors
+                            : currentStepIndex > index
+                            ? theme === 'dark' ? '#10B981' : '#059669' // green colors
+                            : theme === 'dark' ? '#374151' : '#E5E7EB'
+                        }}
+                        transition={{
+                          scale: { duration: 0.3, type: "spring", stiffness: 200 },
+                          backgroundColor: { duration: 0.3 }
+                        }}
+                        whileHover={{ scale: currentStepIndex >= index ? 1.15 : 1.05 }}
+                        className={cn(
+                          "w-12 h-12 sm:w-14 sm:h-14 rounded-full flex items-center justify-center relative z-10",
+                          "transition-shadow duration-300",
+                          currentStep === step.id && (
+                            theme === 'dark'
+                              ? 'shadow-lg shadow-purple-500/50'
+                              : 'shadow-lg shadow-purple-400/50'
+                          ),
+                          currentStepIndex > index && (
+                            theme === 'dark'
+                              ? 'shadow-md shadow-green-500/30'
+                              : 'shadow-md shadow-green-400/30'
+                          )
+                        )}
+                      >
+                        {currentStepIndex > index ? (
+                          <motion.div
+                            initial={{ scale: 0, rotate: -180 }}
+                            animate={{ scale: 1, rotate: 0 }}
+                            transition={{ type: "spring", stiffness: 200, damping: 15 }}
+                          >
+                            <Check className="w-6 h-6 sm:w-7 sm:h-7 text-white" />
+                          </motion.div>
+                        ) : (
+                          <motion.div
+                            animate={{
+                              rotate: currentStep === step.id ? [0, 10, -10, 0] : 0
+                            }}
+                            transition={{
+                              duration: 0.5,
+                              ease: "easeInOut",
+                              times: [0, 0.25, 0.75, 1]
+                            }}
+                          >
+                            <step.icon className={cn(
+                              "w-5 h-5 sm:w-6 sm:h-6",
+                              currentStep === step.id ? 'text-white' : theme === 'dark' ? 'text-gray-500' : 'text-gray-400'
+                            )} />
+                          </motion.div>
+                        )}
+                      </motion.div>
                     </div>
-                    <span className={cn(
-                      "ml-2 text-sm font-medium hidden sm:block",
-                      currentStep === step.id
-                        ? "text-purple-600 dark:text-purple-400"
-                        : currentStepIndex > index
-                          ? "text-gray-900 dark:text-white"
-                          : "text-gray-500"
-                    )}>
-                      {step.label}
-                    </span>
+
+                    <motion.div
+                      className="mt-2 sm:mt-3 text-center"
+                      initial={false}
+                      animate={{
+                        y: currentStep === step.id ? -2 : 0
+                      }}
+                      transition={{ duration: 0.2 }}
+                    >
+                      <p className={cn(
+                        "text-xs sm:text-sm font-semibold transition-colors duration-300",
+                        currentStep === step.id
+                          ? theme === 'dark' ? 'text-purple-400' : 'text-purple-600'
+                          : currentStepIndex > index
+                          ? theme === 'dark' ? 'text-green-400' : 'text-green-600'
+                          : theme === 'dark' ? 'text-gray-500' : 'text-gray-400'
+                      )}>
+                        {step.label}
+                      </p>
+                    </motion.div>
                   </div>
+
                   {index < steps.length - 1 && (
-                    <div className={cn(
-                      "flex-1 h-1 mx-4 rounded",
-                      currentStepIndex > index
-                        ? "bg-purple-400"
-                        : theme === 'dark'
-                          ? "bg-gray-700"
-                          : "bg-gray-200"
-                    )}></div>
+                    <div className="flex-1 h-1 mx-2 sm:mx-3 mb-8 sm:mb-10 relative">
+                      <div className={cn(
+                        "absolute inset-0 rounded-full",
+                        theme === 'dark' ? 'bg-gray-700' : 'bg-gray-200'
+                      )} />
+                      <motion.div
+                        initial={false}
+                        animate={{
+                          scaleX: currentStepIndex > index ? 1 : 0
+                        }}
+                        transition={{ duration: 0.5, ease: "easeInOut" }}
+                        className={cn(
+                          "h-full origin-left rounded-full",
+                          theme === 'dark' ? 'bg-green-500' : 'bg-green-600'
+                        )}
+                      />
+                    </div>
                   )}
                 </div>
               ))}
