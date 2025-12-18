@@ -180,15 +180,15 @@ export default function AdminRecargasPage() {
     setCurrentStep('phone')
   }
 
-  // Handle phone submit
+  // Handle phone submit - validation is done by button disabled state
   const handlePhoneSubmit = () => {
-    if (recargaData.product && validatePhoneNumber(recargaData.phoneNumber, recargaData.product.phonePattern)) {
-      // For manual pricing products, skip amount step and go directly to confirmation
-      if (recargaData.product.pricing?.isManualPricing && recargaData.product.pricing?.sellingPrice) {
-        setCurrentStep('confirmation')
-      } else {
-        setCurrentStep('amount')
-      }
+    if (!recargaData.product) return
+
+    // For manual pricing products, skip amount step and go directly to confirmation
+    if (recargaData.product.pricing?.isManualPricing && recargaData.product.pricing?.sellingPrice) {
+      setCurrentStep('confirmation')
+    } else {
+      setCurrentStep('confirmation') // Skip amount step since price is fixed in product
     }
   }
 

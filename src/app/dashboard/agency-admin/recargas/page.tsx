@@ -225,12 +225,11 @@ export default function RecargasPage() {
     setCurrentStep('phone')
   }
 
-  // Handle phone submit - skip amount step for fixed-price products, go to confirmation
+  // Handle phone submit - validation is done by button disabled state
   const handlePhoneSubmit = () => {
-    if (recargaData.product && validatePhoneNumber(recargaData.phoneNumber, recargaData.product.phonePattern || '')) {
-      // For recharge products with fixed price, skip amount selection
-      setCurrentStep('confirmation')
-    }
+    if (!recargaData.product) return
+    // For recharge products with fixed price, skip amount selection
+    setCurrentStep('confirmation')
   }
 
   // Handle amount selection (not used for fixed-price recharge products)
