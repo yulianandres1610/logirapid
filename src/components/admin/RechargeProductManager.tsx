@@ -33,12 +33,19 @@ interface RechargeProduct {
   acceptsRange: boolean
   isActive: boolean
   lastSyncedAt: string
+  isPromotion?: boolean
+  providerAmount?: number | null
+  univcellProductId?: number
+  validFrom?: string
+  validTo?: string
   pricing: {
     id: number
     marginType: 'percentage' | 'fixed'
     marginValue: number
     sellingPrice: number | null
+    costPrice?: number
     isEnabled: boolean
+    isManualPricing?: boolean
   } | null
   promotions: Array<{
     id: number
@@ -296,7 +303,7 @@ export function RechargeProductManager({ onOpenModal, onProductsChange, hideHead
                   </td>
                   <td className="px-6 py-4 text-right">
                     <span className="text-base font-semibold text-gray-500 dark:text-gray-400">
-                      {formatCurrency(product.baseCost)}
+                      {formatCurrency(product.pricing?.costPrice || product.baseCost)}
                     </span>
                   </td>
                   <td className="px-6 py-4 text-right">
@@ -308,16 +315,23 @@ export function RechargeProductManager({ onOpenModal, onProductsChange, hideHead
                   </td>
                   <td className="px-6 py-4 text-center">
                     <span className="inline-flex items-center px-2.5 py-1 rounded-lg text-sm font-semibold text-purple-600 dark:text-purple-400 bg-purple-50 dark:bg-purple-900/30">
-                      {product.pricing?.marginType === 'percentage'
-                        ? `+${product.pricing.marginValue}%`
-                        : `+${formatCurrency(product.pricing?.marginValue || 0)}`}
+                      {product.pricing?.isManualPricing
+                        ? `+${formatCurrency(product.pricing.marginValue || 0)}`
+                        : product.pricing?.marginType === 'percentage'
+                          ? `+${product.pricing.marginValue}%`
+                          : `+${formatCurrency(product.pricing?.marginValue || 0)}`}
                     </span>
                   </td>
                   <td className="px-6 py-4 text-center">
-                    {product.promotions.length > 0 ? (
+                    {product.isPromotion ? (
+                      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-red-100 dark:bg-red-900/30 text-exa-primary dark:text-red-400">
+                        <Gift className="w-3.5 h-3.5" />
+                        Promo
+                      </span>
+                    ) : product.promotions.length > 0 ? (
                       <button
                         onClick={() => handleShowPromo(product)}
-                        className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-orange-100 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400 hover:bg-orange-200 dark:hover:bg-orange-900/50 transition-colors"
+                        className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-red-100 dark:bg-red-900/30 text-exa-primary dark:text-red-400 hover:bg-red-200 dark:hover:bg-red-900/50 transition-colors"
                         title="Ver promociones"
                       >
                         <Gift className="w-3.5 h-3.5" />
@@ -454,11 +468,11 @@ export function RechargeProductManager({ onOpenModal, onProductsChange, hideHead
       {showProductSelector && (
         <RechargeProductSelector
           onClose={() => setShowProductSelector(false)}
-          onProductSelected={(product) => {
+          onProductSelected={() => {
             setShowProductSelector(false)
-            // Open pricing modal for the selected product
-            setSelectedProduct(product as RechargeProduct)
-            setShowPricingModal(true)
+            // Refresh products list after new product is created
+            fetchProducts()
+            onProductsChange?.()
           }}
         />
       )}

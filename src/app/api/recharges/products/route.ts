@@ -97,34 +97,59 @@ export async function GET(request: NextRequest) {
     `)
 
     // Transform response
-    const products = result.rows.map((row: any) => ({
-      id: row.id,
-      externalId: row.external_id,
-      name: row.name,
-      slug: row.slug,
-      description: row.description,
-      baseCost: parseFloat(row.base_cost),
-      countryCode: row.country_code,
-      countryName: row.country_name,
-      phonePattern: row.phone_pattern,
-      minAmount: row.min_amount ? parseFloat(row.min_amount) : null,
-      maxAmount: row.max_amount ? parseFloat(row.max_amount) : null,
-      acceptsRange: row.accepts_range,
-      isActive: row.is_active,
-      lastSyncedAt: row.last_synced_at,
-      pricing: row.pricing_id
-        ? {
-            id: row.pricing_id,
-            marginType: row.margin_type,
-            marginValue: parseFloat(row.margin_value),
-            sellingPrice: row.selling_price ? parseFloat(row.selling_price) : null,
-            isEnabled: row.pricing_enabled,
-          }
-        : null,
-      promotions: typeof row.promotions === 'string'
-        ? JSON.parse(row.promotions)
-        : row.promotions,
-    }))
+    const products = result.rows.map((row: any) => {
+      // Check if product has manual pricing (created via new form)
+      const hasManualPricing = row.manual_cost_price !== null && row.manual_selling_price !== null
+
+      // Build pricing object - prioritize manual pricing over margin-based
+      let pricing = null
+      if (hasManualPricing) {
+        pricing = {
+          id: row.id, // Use product id as pricing id for manual pricing
+          marginType: 'fixed' as const,
+          marginValue: parseFloat(row.manual_selling_price) - parseFloat(row.manual_cost_price),
+          sellingPrice: parseFloat(row.manual_selling_price),
+          costPrice: parseFloat(row.manual_cost_price),
+          isEnabled: true,
+          isManualPricing: true,
+        }
+      } else if (row.pricing_id) {
+        pricing = {
+          id: row.pricing_id,
+          marginType: row.margin_type,
+          marginValue: parseFloat(row.margin_value),
+          sellingPrice: row.selling_price ? parseFloat(row.selling_price) : null,
+          isEnabled: row.pricing_enabled,
+          isManualPricing: false,
+        }
+      }
+
+      return {
+        id: row.id,
+        externalId: row.external_id,
+        name: row.custom_name || row.name,
+        slug: row.slug,
+        description: row.custom_description || row.description,
+        baseCost: row.provider_amount ? parseFloat(row.provider_amount) : parseFloat(row.base_cost),
+        countryCode: row.country_code,
+        countryName: row.country_name,
+        phonePattern: row.phone_pattern,
+        minAmount: row.min_amount ? parseFloat(row.min_amount) : null,
+        maxAmount: row.max_amount ? parseFloat(row.max_amount) : null,
+        acceptsRange: row.accepts_range,
+        isActive: row.is_active,
+        lastSyncedAt: row.last_synced_at,
+        isPromotion: row.is_promotion || false,
+        providerAmount: row.provider_amount ? parseFloat(row.provider_amount) : null,
+        univcellProductId: row.univcell_product_id,
+        validFrom: row.valid_from,
+        validTo: row.valid_to,
+        pricing,
+        promotions: typeof row.promotions === 'string'
+          ? JSON.parse(row.promotions)
+          : row.promotions,
+      }
+    })
 
     return NextResponse.json({
       success: true,
