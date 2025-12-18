@@ -611,8 +611,15 @@ export async function POST(
           // Use new names, fallback to legacy
           const finalPrecioClientes = precioClientes ?? b2cPrice
 
+          // If no price is being set, skip this product
+          if (finalPrecioClientes === undefined || finalPrecioClientes === null) {
+            console.log('[Company Pricing POST] Skipping recharge product - no price set:', { productId, finalPrecioClientes })
+            results.push({ productId, success: true })
+            continue
+          }
+
           // Validation: precio_clientes >= mi_costo (unless SUPER_ADMIN)
-          if (user.role !== 'SUPER_ADMIN' && finalPrecioClientes !== undefined && finalPrecioClientes !== null && finalPrecioClientes < miCosto) {
+          if (user.role !== 'SUPER_ADMIN' && finalPrecioClientes < miCosto) {
             results.push({
               productId,
               success: false,
@@ -621,11 +628,8 @@ export async function POST(
             continue
           }
 
-          // Calculate margin
-          let marginValue = null
-          if (finalPrecioClientes !== undefined && finalPrecioClientes !== null && miCosto > 0) {
-            marginValue = finalPrecioClientes - miCosto
-          }
+          // Calculate margin (can't be null since we have a price)
+          const marginValue = finalPrecioClientes - miCosto
 
           console.log('[Company Pricing POST] Saving recharge product pricing:', {
             rechargeProductId,
@@ -643,9 +647,9 @@ export async function POST(
             ) VALUES ($1, $2, $3, $4, $5, $6)
             ON CONFLICT (external_product_id, company_id)
             DO UPDATE SET
-              margin_type = COALESCE($3, recharge_product_pricing.margin_type),
-              margin_value = COALESCE($4, recharge_product_pricing.margin_value),
-              selling_price = COALESCE($5, recharge_product_pricing.selling_price),
+              margin_type = $3,
+              margin_value = $4,
+              selling_price = $5,
               is_enabled = $6,
               updated_at = NOW()
             RETURNING *
@@ -653,8 +657,8 @@ export async function POST(
             rechargeProductId,
             companyId,
             'fixed',  // margin_type
-            marginValue,  // margin_value
-            finalPrecioClientes || null,  // selling_price
+            marginValue,  // margin_value (never null now)
+            finalPrecioClientes,  // selling_price (never null now)
             true  // is_enabled
           ])
 
