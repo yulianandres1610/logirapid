@@ -874,11 +874,22 @@ Gracias por su compra!
     )
   }
 
-  // Render wizard as main content - Full page wizard design
+  // Steps for progress bar
+  const steps = [
+    { id: 'service', label: 'Servicio', icon: Globe },
+    { id: 'product', label: 'Producto', icon: Smartphone },
+    { id: 'phone', label: 'Numero', icon: Phone },
+    { id: 'confirmation', label: 'Confirmar', icon: CreditCard },
+    { id: 'success', label: 'Completado', icon: Check }
+  ]
+
+  const currentStepIndex = steps.findIndex(s => s.id === currentStep)
+
+  // Render wizard as main content - Full page wizard design with animated progress bar
   const renderWizardView = () => (
-    <div className="flex flex-col items-center justify-center min-h-[calc(100vh-120px)]">
-      {/* Back button - fixed at top */}
-      <div className="w-full max-w-2xl mb-6">
+    <div className="max-w-4xl mx-auto">
+      {/* Back button */}
+      <div className="mb-6">
         <Button
           variant="outline"
           onClick={closeWizard}
@@ -892,41 +903,144 @@ Gracias por su compra!
         </Button>
       </div>
 
-      {/* Wizard Card - Centered with gradient border */}
-      <div className={cn(
-        "w-full max-w-2xl rounded-3xl p-8 shadow-2xl",
-        theme === 'dark'
-          ? 'bg-gradient-to-br from-gray-800 to-gray-900 border border-gray-700'
-          : 'bg-white border border-gray-200'
-      )}>
-        {/* Progress indicator */}
-        <div className="flex justify-center mb-8">
-          <div className="flex items-center gap-2">
-            {['service', 'product', 'phone', 'confirmation', 'success'].map((step, index) => {
-              const stepOrder = ['service', 'product', 'phone', 'confirmation', 'success']
-              const currentIndex = stepOrder.indexOf(currentStep)
-              const isCompleted = index < currentIndex
-              const isCurrent = step === currentStep
-
-              return (
-                <div key={step} className="flex items-center">
-                  <div className={cn(
-                    "w-3 h-3 rounded-full transition-all duration-300",
-                    isCompleted ? "bg-purple-500" : isCurrent ? "bg-purple-500 ring-4 ring-purple-500/30" : theme === 'dark' ? "bg-gray-600" : "bg-gray-300"
-                  )} />
-                  {index < 4 && (
-                    <div className={cn(
-                      "w-8 h-0.5 mx-1",
-                      isCompleted ? "bg-purple-500" : theme === 'dark' ? "bg-gray-600" : "bg-gray-300"
-                    )} />
+      {/* Progress Bar with Animations */}
+      <div className="mb-8 sm:mb-12">
+        <div className="flex items-center justify-between">
+          {steps.map((step, index) => (
+            <div key={step.id} className="flex items-center flex-1">
+              <div className="flex flex-col items-center">
+                <div className="relative w-12 h-12 sm:w-14 sm:h-14">
+                  {/* Pulsing ring for active step */}
+                  {currentStep === step.id && (
+                    <motion.div
+                      className="absolute inset-0 rounded-full"
+                      animate={{
+                        scale: [1, 1.3, 1],
+                        opacity: [0.6, 0, 0.6]
+                      }}
+                      transition={{
+                        duration: 2,
+                        repeat: Infinity,
+                        ease: "easeInOut"
+                      }}
+                      style={{
+                        background: theme === 'dark'
+                          ? 'rgba(147, 51, 234, 0.5)'
+                          : 'rgba(126, 34, 206, 0.5)'
+                      }}
+                    />
                   )}
-                </div>
-              )
-            })}
-          </div>
-        </div>
 
-        {/* Wizard Content */}
+                  <motion.div
+                    initial={false}
+                    animate={{
+                      scale: currentStep === step.id ? 1.1 : 1,
+                      backgroundColor: currentStep === step.id
+                        ? theme === 'dark' ? '#9333EA' : '#7E22CE'
+                        : currentStepIndex > index
+                        ? theme === 'dark' ? '#10B981' : '#059669'
+                        : theme === 'dark' ? '#374151' : '#E5E7EB'
+                    }}
+                    transition={{
+                      scale: { duration: 0.3, type: "spring", stiffness: 200 },
+                      backgroundColor: { duration: 0.3 }
+                    }}
+                    whileHover={{ scale: currentStepIndex >= index ? 1.15 : 1.05 }}
+                    className={cn(
+                      "w-12 h-12 sm:w-14 sm:h-14 rounded-full flex items-center justify-center relative z-10",
+                      "transition-shadow duration-300",
+                      currentStep === step.id && (
+                        theme === 'dark'
+                          ? 'shadow-lg shadow-purple-500/50'
+                          : 'shadow-lg shadow-purple-400/50'
+                      ),
+                      currentStepIndex > index && (
+                        theme === 'dark'
+                          ? 'shadow-md shadow-green-500/30'
+                          : 'shadow-md shadow-green-400/30'
+                      )
+                    )}
+                  >
+                    {currentStepIndex > index ? (
+                      <motion.div
+                        initial={{ scale: 0, rotate: -180 }}
+                        animate={{ scale: 1, rotate: 0 }}
+                        transition={{ type: "spring", stiffness: 200, damping: 15 }}
+                      >
+                        <Check className="w-6 h-6 sm:w-7 sm:h-7 text-white" />
+                      </motion.div>
+                    ) : (
+                      <motion.div
+                        animate={{
+                          rotate: currentStep === step.id ? [0, 10, -10, 0] : 0
+                        }}
+                        transition={{
+                          duration: 0.5,
+                          ease: "easeInOut",
+                          times: [0, 0.25, 0.75, 1]
+                        }}
+                      >
+                        <step.icon className={cn(
+                          "w-5 h-5 sm:w-6 sm:h-6",
+                          currentStep === step.id ? 'text-white' : theme === 'dark' ? 'text-gray-500' : 'text-gray-400'
+                        )} />
+                      </motion.div>
+                    )}
+                  </motion.div>
+                </div>
+
+                <motion.div
+                  className="mt-2 sm:mt-3 text-center"
+                  initial={false}
+                  animate={{
+                    y: currentStep === step.id ? -2 : 0
+                  }}
+                  transition={{ duration: 0.2 }}
+                >
+                  <p className={cn(
+                    "text-xs sm:text-sm font-semibold transition-colors duration-300",
+                    currentStep === step.id
+                      ? theme === 'dark' ? 'text-purple-400' : 'text-purple-600'
+                      : currentStepIndex > index
+                      ? theme === 'dark' ? 'text-green-400' : 'text-green-600'
+                      : theme === 'dark' ? 'text-gray-500' : 'text-gray-400'
+                  )}>
+                    {step.label}
+                  </p>
+                </motion.div>
+              </div>
+
+              {index < steps.length - 1 && (
+                <div className="flex-1 h-1 mx-2 sm:mx-3 mb-8 sm:mb-10 relative">
+                  <div className={cn(
+                    "absolute inset-0 rounded-full",
+                    theme === 'dark' ? 'bg-gray-700' : 'bg-gray-200'
+                  )} />
+                  <motion.div
+                    initial={false}
+                    animate={{
+                      scaleX: currentStepIndex > index ? 1 : 0
+                    }}
+                    transition={{ duration: 0.5, ease: "easeInOut" }}
+                    className={cn(
+                      "h-full origin-left rounded-full",
+                      theme === 'dark' ? 'bg-green-500' : 'bg-green-600'
+                    )}
+                  />
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Main Content Card */}
+      <div className={cn(
+        "rounded-2xl p-6 sm:p-8 min-h-[500px]",
+        theme === 'dark'
+          ? 'bg-gray-800/50 border border-gray-700'
+          : 'bg-white border border-gray-200 shadow-lg'
+      )}>
         <AnimatePresence mode="wait">
           {currentStep === 'service' && renderServiceStep()}
           {currentStep === 'product' && renderProductStep()}
@@ -935,10 +1049,6 @@ Gracias por su compra!
           {currentStep === 'success' && renderSuccessStep()}
         </AnimatePresence>
       </div>
-
-      {/* Decorative elements */}
-      <div className="absolute top-20 left-10 w-72 h-72 bg-purple-500/10 rounded-full blur-3xl pointer-events-none" />
-      <div className="absolute bottom-20 right-10 w-96 h-96 bg-cyan-500/10 rounded-full blur-3xl pointer-events-none" />
     </div>
   )
 
