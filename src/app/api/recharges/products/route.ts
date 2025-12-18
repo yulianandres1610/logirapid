@@ -114,11 +114,19 @@ export async function GET(request: NextRequest) {
           isManualPricing: true,
         }
       } else if (row.pricing_id) {
+        // For margin-based pricing, cost is base_cost (or provider_amount if available)
+        const baseCostValue = row.provider_amount
+          ? parseFloat(row.provider_amount)
+          : row.base_cost
+            ? parseFloat(row.base_cost)
+            : 0
+
         pricing = {
           id: row.pricing_id,
           marginType: row.margin_type,
           marginValue: parseFloat(row.margin_value),
           sellingPrice: row.selling_price ? parseFloat(row.selling_price) : null,
+          costPrice: baseCostValue, // Add costPrice for margin-based products too
           isEnabled: row.pricing_enabled,
           isManualPricing: false,
         }
