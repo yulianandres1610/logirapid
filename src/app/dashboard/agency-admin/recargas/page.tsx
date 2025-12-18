@@ -579,9 +579,29 @@ Gracias por su compra!
   const renderPhoneStep = () => {
     const isNauta = recargaData.service === 'nauta'
     const isCuban = recargaData.product?.countryCode === 'CU'
-    const isValid = recargaData.product
-      ? validatePhoneNumber(recargaData.phoneNumber, recargaData.product.phonePattern || '')
-      : false
+
+    // For Cuban numbers, validate without the +53 prefix (should be 8 digits)
+    const phoneToValidate = isCuban && !isNauta
+      ? recargaData.phoneNumber.replace(/^\+53/, '')
+      : recargaData.phoneNumber
+
+    // Cuban numbers: just check for 8 digits starting with 5
+    // Nauta: check email format
+    // Other: use product pattern
+    const isValid = (() => {
+      if (!recargaData.product) return false
+      if (isCuban && !isNauta) {
+        // Cuban mobile: 8 digits starting with 5
+        const cleaned = phoneToValidate.replace(/\D/g, '')
+        return cleaned.length === 8 && cleaned.startsWith('5')
+      }
+      if (isNauta) {
+        // Nauta email format
+        return phoneToValidate.includes('@nauta.com.cu') && phoneToValidate.length > 14
+      }
+      // Other countries: use pattern or minimum length
+      return validatePhoneNumber(recargaData.phoneNumber, recargaData.product.phonePattern || '')
+    })()
 
     // Get display phone number (without +53 prefix for Cuban numbers)
     const displayPhoneNumber = isCuban && !isNauta
