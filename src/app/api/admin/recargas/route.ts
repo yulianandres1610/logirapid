@@ -1,172 +1,422 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { cookies } from 'next/headers'
+import jwt from 'jsonwebtoken'
+import { db } from '@/lib/database'
+import { getUnivCellClient, UNIVCELL_RESULT_CODES } from '@/lib/univcell-client'
+import { v4 as uuidv4 } from 'uuid'
 
 // Force dynamic rendering - don't execute during build
 export const dynamic = 'force-dynamic'
 export const dynamicParams = true
 export const runtime = 'nodejs'
 
+interface JWTPayload {
+  userId: number
+  email: string
+  role: string
+  companyId: number
+  companyName: string
+}
 
-// Base de datos simulada para recargas
-let RECARGAS_DB = [
-  {
-    id: 'REC-001',
-    date: '2024-01-15 14:30',
-    service: 'telefono',
-    phoneNumber: '52345678',
-    amount: 100.00,
-    commission: 2.00,
-    total: 102.00,
-    status: 'completed',
-    customerName: 'María González',
-    customerEmail: 'maria@nauta.com.cu',
-    referenceCode: 'REC-001',
-    agencyId: 'agency-1',
-    createdBy: 'admin-1',
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString()
+// Ensure recharge_transactions table exists
+async function ensureTable() {
+  try {
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS recharge_transactions (
+        id SERIAL PRIMARY KEY,
+        company_id INTEGER REFERENCES companies(id),
+        user_id INTEGER REFERENCES users(id),
+
+        -- Datos de la recarga
+        univcell_order_id VARCHAR(100),
+        local_reference VARCHAR(100) UNIQUE,
+        product_id INTEGER,
+        product_name VARCHAR(255),
+        destination VARCHAR(50),
+        amount DECIMAL(10,2),
+        amount_cents INTEGER,
+        service_type VARCHAR(20),
+
+        -- Resultado
+        status VARCHAR(20) DEFAULT 'pending',
+        result_code INTEGER,
+        result_message TEXT,
+        confirmation_code VARCHAR(100),
+
+        -- Cliente
+        customer_name VARCHAR(255),
+        customer_email VARCHAR(255),
+
+        -- Timestamps
+        created_at TIMESTAMP DEFAULT NOW(),
+        completed_at TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT NOW()
+      )
+    `)
+
+    // Create indexes if they don't exist
+    await db.query(`
+      CREATE INDEX IF NOT EXISTS idx_recharge_transactions_company ON recharge_transactions(company_id)
+    `)
+    await db.query(`
+      CREATE INDEX IF NOT EXISTS idx_recharge_transactions_reference ON recharge_transactions(local_reference)
+    `)
+    await db.query(`
+      CREATE INDEX IF NOT EXISTS idx_recharge_transactions_status ON recharge_transactions(status)
+    `)
+  } catch (error) {
+    console.error('[Recargas] Error ensuring table:', error)
   }
-]
+}
 
 // GET - Obtener todas las recargas
 export async function GET(request: NextRequest) {
   try {
+    await ensureTable()
+
+    const cookieStore = await cookies()
+    const authToken = cookieStore.get('auth-token')?.value
+
+    if (!authToken) {
+      return NextResponse.json({
+        success: false,
+        error: 'No autorizado'
+      }, { status: 401 })
+    }
+
+    let payload: JWTPayload
+    try {
+      const secret = process.env.JWT_SECRET || 'your-secret-key'
+      payload = jwt.verify(authToken, secret) as JWTPayload
+    } catch {
+      return NextResponse.json({
+        success: false,
+        error: 'Token invalido'
+      }, { status: 401 })
+    }
+
     const { searchParams } = new URL(request.url)
     const service = searchParams.get('service')
     const status = searchParams.get('status')
-    const agencyId = searchParams.get('agencyId')
-    const limit = searchParams.get('limit')
-    const offset = searchParams.get('offset')
+    const limit = parseInt(searchParams.get('limit') || '50')
+    const offset = parseInt(searchParams.get('offset') || '0')
 
-    let filteredRecargas = [...RECARGAS_DB]
+    // Build query with filters
+    let query = `
+      SELECT * FROM recharge_transactions
+      WHERE 1=1
+    `
+    const params: (string | number)[] = []
+    let paramIndex = 1
 
-    // Aplicar filtros
+    // Filter by company for non-SUPER_ADMIN
+    if (payload.role !== 'SUPER_ADMIN') {
+      query += ` AND company_id = $${paramIndex}`
+      params.push(payload.companyId)
+      paramIndex++
+    }
+
     if (service && service !== 'all') {
-      filteredRecargas = filteredRecargas.filter(recarga => recarga.service === service)
+      query += ` AND service_type = $${paramIndex}`
+      params.push(service)
+      paramIndex++
     }
+
     if (status && status !== 'all') {
-      filteredRecargas = filteredRecargas.filter(recarga => recarga.status === status)
-    }
-    if (agencyId) {
-      filteredRecargas = filteredRecargas.filter(recarga => recarga.agencyId === agencyId)
+      query += ` AND status = $${paramIndex}`
+      params.push(status)
+      paramIndex++
     }
 
-    // Ordenar por fecha (más recientes primero)
-    filteredRecargas.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+    // Get total count
+    const countQuery = query.replace('SELECT *', 'SELECT COUNT(*)')
+    const countResult = await db.query(countQuery, params)
+    const total = parseInt(countResult.rows[0]?.count || '0')
 
-    // Aplicar paginación
-    const limitNum = limit ? parseInt(limit) : 50
-    const offsetNum = offset ? parseInt(offset) : 0
-    const paginatedRecargas = filteredRecargas.slice(offsetNum, offsetNum + limitNum)
+    // Add pagination
+    query += ` ORDER BY created_at DESC LIMIT $${paramIndex} OFFSET $${paramIndex + 1}`
+    params.push(limit, offset)
 
-    // Calcular estadísticas
-    const stats = {
-      total: filteredRecargas.length,
-      completed: filteredRecargas.filter(r => r.status === 'completed').length,
-      pending: filteredRecargas.filter(r => r.status === 'pending').length,
-      cancelled: filteredRecargas.filter(r => r.status === 'cancelled').length,
-      totalAmount: filteredRecargas.reduce((sum, recarga) => sum + recarga.amount, 0),
-      totalCommission: filteredRecargas.reduce((sum, recarga) => sum + recarga.commission, 0)
+    const result = await db.query(query, params)
+
+    // Get stats
+    let statsQuery = `
+      SELECT
+        COUNT(*) as total,
+        COUNT(*) FILTER (WHERE status = 'completed') as completed,
+        COUNT(*) FILTER (WHERE status = 'pending') as pending,
+        COUNT(*) FILTER (WHERE status = 'failed') as failed,
+        COALESCE(SUM(amount) FILTER (WHERE status = 'completed'), 0) as total_amount
+      FROM recharge_transactions
+      WHERE 1=1
+    `
+    const statsParams: (string | number)[] = []
+
+    if (payload.role !== 'SUPER_ADMIN') {
+      statsQuery += ` AND company_id = $1`
+      statsParams.push(payload.companyId)
     }
+
+    const statsResult = await db.query(statsQuery, statsParams)
+    const stats = statsResult.rows[0]
 
     return NextResponse.json({
       success: true,
-      data: paginatedRecargas,
-      stats,
-      total: filteredRecargas.length,
-      hasMore: offsetNum + limitNum < filteredRecargas.length
+      data: result.rows.map(row => ({
+        id: row.id,
+        localReference: row.local_reference,
+        univcellOrderId: row.univcell_order_id,
+        productId: row.product_id,
+        productName: row.product_name,
+        service: row.service_type,
+        phoneNumber: row.destination,
+        amount: parseFloat(row.amount) || 0,
+        status: row.status,
+        resultCode: row.result_code,
+        resultMessage: row.result_message,
+        confirmationCode: row.confirmation_code,
+        customerName: row.customer_name,
+        customerEmail: row.customer_email,
+        createdAt: row.created_at,
+        completedAt: row.completed_at
+      })),
+      stats: {
+        total: parseInt(stats.total) || 0,
+        completed: parseInt(stats.completed) || 0,
+        pending: parseInt(stats.pending) || 0,
+        failed: parseInt(stats.failed) || 0,
+        totalAmount: parseFloat(stats.total_amount) || 0
+      },
+      total,
+      hasMore: offset + limit < total
     })
   } catch (error) {
-    console.error('Error fetching recargas:', error)
+    console.error('[Recargas] Error fetching:', error)
     return NextResponse.json(
-      { success: false, error: 'Internal server error' },
+      { success: false, error: 'Error al obtener recargas' },
       { status: 500 }
     )
   }
 }
 
-// POST - Crear una nueva recarga
+// POST - Crear una nueva recarga (REAL con UnivCell)
 export async function POST(request: NextRequest) {
   try {
+    await ensureTable()
+
+    const cookieStore = await cookies()
+    const authToken = cookieStore.get('auth-token')?.value
+
+    if (!authToken) {
+      return NextResponse.json({
+        success: false,
+        error: 'No autorizado'
+      }, { status: 401 })
+    }
+
+    let payload: JWTPayload
+    try {
+      const secret = process.env.JWT_SECRET || 'your-secret-key'
+      payload = jwt.verify(authToken, secret) as JWTPayload
+    } catch {
+      return NextResponse.json({
+        success: false,
+        error: 'Token invalido'
+      }, { status: 401 })
+    }
+
     const body = await request.json()
     const {
+      productId,
+      productName,
       service,
       phoneNumber,
       amount,
-      commission = 2.00,
+      sellingPrice,
       customerName,
-      customerEmail,
-      agencyId = 'agency-1' // En producción vendría del token de autenticación
+      customerEmail
     } = body
 
-    // Validación de campos requeridos
-    if (!service || !phoneNumber || !amount) {
+    // Validacion de campos requeridos
+    if (!productId || !phoneNumber || !amount) {
       return NextResponse.json(
-        { success: false, error: 'Missing required fields' },
+        { success: false, error: 'Faltan campos requeridos (productId, phoneNumber, amount)' },
         { status: 400 }
       )
     }
 
-    // Validar que el servicio sea válido
-    if (!['telefono', 'nauta'].includes(service)) {
-      return NextResponse.json(
-        { success: false, error: 'Invalid service type' },
-        { status: 400 }
-      )
-    }
+    // Generar referencia unica
+    const localReference = uuidv4()
 
-    // Validar el número de teléfono
-    if (service === 'telefono') {
-      const phoneRegex = /^5\d{7}$/
-      if (!phoneRegex.test(phoneNumber.replace(/\D/g, ''))) {
-        return NextResponse.json(
-          { success: false, error: 'Invalid phone number format' },
-          { status: 400 }
-        )
-      }
-    }
+    // Convertir amount a centavos para UnivCell
+    // El amount viene como dolares (ej: 20.00), UnivCell espera centavos (2000)
+    const amountCents = Math.round(parseFloat(amount) * 100)
 
-    // Generar ID único
-    const recargaId = `REC-${Date.now().toString().slice(-6)}`
+    console.log('[Recargas] Processing topup:', {
+      productId,
+      destination: phoneNumber,
+      amount,
+      amountCents,
+      localReference
+    })
 
-    // Calcular total
-    const total = parseFloat(amount) + parseFloat(commission.toString())
-
-    // Crear nueva recarga
-    const newRecarga = {
-      id: recargaId,
-      date: new Date().toLocaleString('es-ES', {
-        day: '2-digit',
-        month: '2-digit',
-        year: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit'
-      }),
-      service,
+    // Crear registro pendiente en BD
+    const insertResult = await db.query(`
+      INSERT INTO recharge_transactions (
+        company_id, user_id, local_reference, product_id, product_name,
+        destination, amount, amount_cents, service_type, status,
+        customer_name, customer_email
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'pending', $10, $11)
+      RETURNING id
+    `, [
+      payload.companyId,
+      payload.userId,
+      localReference,
+      productId,
+      productName || 'Recarga',
       phoneNumber,
-      amount: parseFloat(amount),
-      commission: parseFloat(commission.toString()),
-      total,
-      status: 'completed',
-      referenceCode: recargaId,
-      customerName: customerName || '',
-      customerEmail: customerEmail || '',
-      agencyId,
-      createdBy: 'admin-1', // En producción vendría del token de autenticación
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
+      sellingPrice || amount,
+      amountCents,
+      service || 'telefono',
+      customerName || null,
+      customerEmail || null
+    ])
+
+    const transactionId = insertResult.rows[0].id
+
+    // Llamar a UnivCell API
+    const univcellClient = getUnivCellClient()
+
+    if (!univcellClient.isConfigured()) {
+      console.error('[Recargas] UnivCell client not configured')
+
+      // Update transaction as failed
+      await db.query(`
+        UPDATE recharge_transactions
+        SET status = 'failed', result_message = 'Cliente UnivCell no configurado', updated_at = NOW()
+        WHERE id = $1
+      `, [transactionId])
+
+      return NextResponse.json({
+        success: false,
+        error: 'Servicio de recargas no configurado'
+      }, { status: 500 })
     }
 
-    RECARGAS_DB.push(newRecarga)
+    try {
+      const topupResult = await univcellClient.executeTopUp({
+        product_id: productId,
+        destination: phoneNumber, // Ya viene con +53
+        amount: amountCents,
+        local_reference: localReference,
+        realtime: true,
+        unlimited: false
+      })
 
-    return NextResponse.json({
-      success: true,
-      data: newRecarga,
-      message: 'Recarga created successfully'
-    }, { status: 201 })
+      console.log('[Recargas] UnivCell response:', topupResult)
+
+      const resultCode = topupResult.data?.resultCode
+      const resultMessage = topupResult.data?.resultMessage || UNIVCELL_RESULT_CODES[resultCode] || 'Unknown'
+      const univcellOrderId = topupResult.data?.id
+      const confirmationCode = topupResult.data?.confirmationCode
+      const univcellStatus = topupResult.data?.status
+
+      // Determinar estado basado en resultCode
+      let finalStatus = 'failed'
+      if (resultCode === 500) {
+        finalStatus = 'completed'
+      } else if (resultCode === 502) {
+        finalStatus = 'pending' // Esperar webhook
+      }
+
+      // Actualizar transaccion
+      await db.query(`
+        UPDATE recharge_transactions
+        SET
+          univcell_order_id = $1,
+          result_code = $2,
+          result_message = $3,
+          confirmation_code = $4,
+          status = $5,
+          completed_at = $6,
+          updated_at = NOW()
+        WHERE id = $7
+      `, [
+        univcellOrderId,
+        resultCode,
+        resultMessage,
+        confirmationCode,
+        finalStatus,
+        finalStatus === 'completed' ? new Date() : null,
+        transactionId
+      ])
+
+      if (finalStatus === 'completed') {
+        return NextResponse.json({
+          success: true,
+          data: {
+            id: transactionId,
+            localReference,
+            univcellOrderId,
+            confirmationCode,
+            status: finalStatus,
+            resultCode,
+            resultMessage
+          },
+          message: 'Recarga procesada exitosamente'
+        }, { status: 201 })
+      } else if (finalStatus === 'pending') {
+        return NextResponse.json({
+          success: true,
+          data: {
+            id: transactionId,
+            localReference,
+            univcellOrderId,
+            status: 'pending',
+            resultCode,
+            resultMessage
+          },
+          message: 'Recarga en proceso, esperando confirmacion'
+        }, { status: 202 })
+      } else {
+        return NextResponse.json({
+          success: false,
+          error: resultMessage || 'Error al procesar recarga',
+          data: {
+            id: transactionId,
+            localReference,
+            resultCode,
+            resultMessage
+          }
+        }, { status: 400 })
+      }
+
+    } catch (univcellError: unknown) {
+      console.error('[Recargas] UnivCell API error:', univcellError)
+
+      const errorMessage = univcellError instanceof Error ? univcellError.message : 'Error de conexion con UnivCell'
+
+      // Actualizar como fallido
+      await db.query(`
+        UPDATE recharge_transactions
+        SET status = 'failed', result_message = $1, updated_at = NOW()
+        WHERE id = $2
+      `, [errorMessage, transactionId])
+
+      return NextResponse.json({
+        success: false,
+        error: errorMessage,
+        data: {
+          id: transactionId,
+          localReference
+        }
+      }, { status: 500 })
+    }
+
   } catch (error) {
-    console.error('Error creating recarga:', error)
+    console.error('[Recargas] Error creating:', error)
     return NextResponse.json(
-      { success: false, error: 'Internal server error' },
+      { success: false, error: error instanceof Error ? error.message : 'Error interno del servidor' },
       { status: 500 }
     )
   }

@@ -144,8 +144,9 @@ export async function middleware(request: NextRequest) {
   const companyName = decodedToken.companyName || request.cookies.get('user-company-name')?.value
   const companyType = decodedToken.companyType || request.cookies.get('user-company-type')?.value
   const isBrokerCompany = companyType === 'broker'
+  const isMarketCompany = companyType === 'market'
 
-  console.log('[MIDDLEWARE] User info:', { userRole, companyId, companyType, isBrokerCompany, pathname })
+  console.log('[MIDDLEWARE] User info:', { userRole, companyId, companyType, isBrokerCompany, isMarketCompany, pathname })
 
   // ============================================================
   // BROKER COMPANY HANDLING - Usuarios de empresas tipo broker
@@ -219,6 +220,86 @@ export async function middleware(request: NextRequest) {
     console.log('🔄 Redirecting BROKER COMPANY user from user to broker dashboard')
     const brokerDashboardUrl = new URL('/dashboard/broker', request.url)
     return NextResponse.redirect(brokerDashboardUrl)
+  }
+
+  // ============================================================
+  // MARKET COMPANY HANDLING - Usuarios de empresas tipo market
+  // NOTA: SUPER_ADMIN siempre puede acceder a cualquier ruta
+  // ============================================================
+
+  // SUPER_ADMIN puede acceder a /dashboard/market (para administrar mercados)
+  if (userRole === 'SUPER_ADMIN' && pathname.startsWith('/dashboard/market')) {
+    console.log('✅ SUPER_ADMIN accessing market dashboard')
+    const response = NextResponse.next()
+    response.headers.set('x-user-role', userRole)
+    if (companyId) response.headers.set('x-user-company-id', companyId)
+    if (companyName) response.headers.set('x-user-company-name', companyName)
+    if (companyType) response.headers.set('x-user-company-type', companyType || '')
+    return response
+  }
+
+  // Si es usuario de empresa market (pero NO SUPER_ADMIN), permitir acceso a /dashboard/market
+  if (isMarketCompany && userRole !== 'SUPER_ADMIN' && pathname.startsWith('/dashboard/market')) {
+    console.log('✅ MARKET COMPANY user accessing market dashboard, companyId:', companyId)
+    const response = NextResponse.next()
+    if (userRole) response.headers.set('x-user-role', userRole)
+    if (companyId) response.headers.set('x-user-company-id', companyId)
+    if (companyName) response.headers.set('x-user-company-name', companyName)
+    if (companyType) response.headers.set('x-user-company-type', companyType)
+    return response
+  }
+
+  // Redirigir usuarios NO-market que intentan acceder a /dashboard/market a su dashboard correcto
+  if (!isMarketCompany && userRole !== 'SUPER_ADMIN' && pathname.startsWith('/dashboard/market')) {
+    console.log('🔄 Redirecting NON-MARKET user from market dashboard, role:', userRole)
+    let redirectPath = '/dashboard/agency-admin'
+    switch (userRole) {
+      case 'ADMIN':
+        redirectPath = '/dashboard/agency-admin'
+        break
+      case 'MANAGER':
+        redirectPath = '/dashboard/manager'
+        break
+      case 'USER':
+        redirectPath = '/dashboard/user'
+        break
+      case 'DRIVER':
+        redirectPath = '/dashboard/agency-admin'
+        break
+    }
+    const redirectUrl = new URL(redirectPath, request.url)
+    return NextResponse.redirect(redirectUrl)
+  }
+
+  // Redirigir usuarios de empresa market (pero NO SUPER_ADMIN) a su dashboard si intentan acceder a otros dashboards
+  if (isMarketCompany && userRole !== 'SUPER_ADMIN' && pathname.startsWith('/dashboard/admin')) {
+    console.log('🔄 Redirecting MARKET COMPANY user from admin to market dashboard')
+    const marketDashboardUrl = new URL('/dashboard/market', request.url)
+    return NextResponse.redirect(marketDashboardUrl)
+  }
+
+  if (isMarketCompany && userRole !== 'SUPER_ADMIN' && pathname.startsWith('/dashboard/agency-admin')) {
+    console.log('🔄 Redirecting MARKET COMPANY user from agency-admin to market dashboard')
+    const marketDashboardUrl = new URL('/dashboard/market', request.url)
+    return NextResponse.redirect(marketDashboardUrl)
+  }
+
+  if (isMarketCompany && userRole !== 'SUPER_ADMIN' && pathname.startsWith('/dashboard/manager')) {
+    console.log('🔄 Redirecting MARKET COMPANY user from manager to market dashboard')
+    const marketDashboardUrl = new URL('/dashboard/market', request.url)
+    return NextResponse.redirect(marketDashboardUrl)
+  }
+
+  if (isMarketCompany && userRole !== 'SUPER_ADMIN' && pathname.startsWith('/dashboard/user')) {
+    console.log('🔄 Redirecting MARKET COMPANY user from user to market dashboard')
+    const marketDashboardUrl = new URL('/dashboard/market', request.url)
+    return NextResponse.redirect(marketDashboardUrl)
+  }
+
+  if (isMarketCompany && userRole !== 'SUPER_ADMIN' && pathname.startsWith('/dashboard/broker')) {
+    console.log('🔄 Redirecting MARKET COMPANY user from broker to market dashboard')
+    const marketDashboardUrl = new URL('/dashboard/market', request.url)
+    return NextResponse.redirect(marketDashboardUrl)
   }
 
   // ============================================================

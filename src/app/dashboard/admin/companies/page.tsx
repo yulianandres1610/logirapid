@@ -145,6 +145,15 @@ const BROKER_STEPS = [
   { id: 4, title: 'Revisión', icon: Check }
 ]
 
+// Pasos para Mercados (similar a Brokers)
+const MARKET_STEPS = [
+  { id: 1, title: 'Información del Mercado', icon: Building2 },
+  { id: 2, title: 'Ubicación', icon: MapPin },
+  { id: 3, title: 'Wallet', icon: CreditCard },
+  { id: 4, title: 'Documentos', icon: FileText },
+  { id: 5, title: 'Revisión', icon: Check }
+]
+
 const SERVICES = [
   { id: 'wallet', name: 'Wallet', description: 'Gestión de billeteras digitales' },
   { id: 'recharge', name: 'Recarga', description: 'Recargas móviles y servicios' },
@@ -634,6 +643,20 @@ export default function CompaniesPage() {
       accountNumber: string
       currency: string
     }>,
+    // Campos específicos para Mercados
+    market_province: '',
+    market_municipality: '',
+    market_address: '',
+    market_contact_phone: '',
+    market_alternate_phone: '',
+    market_delivery_start: '08:00',
+    market_delivery_end: '20:00',
+    market_categories: [] as string[],
+    // Integración Odoo
+    odoo_url: '',
+    odoo_database: '',
+    odoo_api_key: '',
+    odoo_enabled: false,
   })
 
   // Load companies from API on mount
@@ -742,6 +765,19 @@ export default function CompaniesPage() {
       broker_contact_phone: '',
       broker_alternate_phone: '',
       broker_bank_accounts: [],
+      // Campos de mercado
+      market_province: '',
+      market_municipality: '',
+      market_address: '',
+      market_contact_phone: '',
+      market_alternate_phone: '',
+      market_delivery_start: '08:00',
+      market_delivery_end: '20:00',
+      market_categories: [],
+      odoo_url: '',
+      odoo_database: '',
+      odoo_api_key: '',
+      odoo_enabled: false,
     })
     setCurrentStep(1)
   }
@@ -806,13 +842,13 @@ export default function CompaniesPage() {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               name: formData.legalName,
-              address: formData.address,
-              province: formData.city.toLowerCase().includes('la habana') ? 'la-habana' : 'matanzas',
-              municipality: 'vedado',
-              phone: formData.phone,
+              address: formData.market_address || formData.address,
+              province: formData.market_province,
+              municipality: formData.market_municipality,
+              phone: formData.market_contact_phone || formData.phone,
               description: `Empresa tipo mercado: ${formData.legalName}`,
-              categories: ['Mercado'],
-              schedule: 'Lun-Dom: 8:00 AM - 8:00 PM',
+              categories: formData.market_categories?.length > 0 ? formData.market_categories : ['Mercado'],
+              schedule: `${formData.market_delivery_start || '08:00'} - ${formData.market_delivery_end || '20:00'}`,
               deliveryTime: '30-45 min',
               deliveryCost: 2.50
             })
@@ -1325,8 +1361,8 @@ export default function CompaniesPage() {
             {/* Progress Steps */}
             <div className="mb-8">
               <div className="flex items-center justify-between">
-                {(formData.companyType === 'broker' ? BROKER_STEPS : STEPS).map((step, index) => {
-                  const activeSteps = formData.companyType === 'broker' ? BROKER_STEPS : STEPS
+                {(formData.companyType === 'broker' ? BROKER_STEPS : formData.companyType === 'market' ? MARKET_STEPS : STEPS).map((step, index) => {
+                  const activeSteps = formData.companyType === 'broker' ? BROKER_STEPS : formData.companyType === 'market' ? MARKET_STEPS : STEPS
                   return (
                     <div key={step.id} className="flex items-center flex-1">
                       <div className="flex items-center">
@@ -1392,7 +1428,7 @@ export default function CompaniesPage() {
                     "text-xl font-bold mb-6",
                     theme === 'dark' ? "text-white" : "text-black"
                   )}>
-                    {formData.companyType === 'broker' ? 'Información del Broker' : 'Información Básica de la Empresa'}
+                    {formData.companyType === 'broker' ? 'Información del Broker' : formData.companyType === 'market' ? 'Información del Mercado' : 'Información Básica de la Empresa'}
                   </h2>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -1401,7 +1437,7 @@ export default function CompaniesPage() {
                         "block text-sm font-medium mb-2",
                         theme === 'dark' ? "text-gray-300" : "text-gray-700"
                       )}>
-                        {formData.companyType === 'broker' ? 'Nombre del Broker *' : 'Nombre Legal *'}
+                        {formData.companyType === 'broker' ? 'Nombre del Broker *' : formData.companyType === 'market' ? 'Nombre del Mercado *' : 'Nombre Legal *'}
                       </label>
                       <input
                         type="text"
@@ -1418,7 +1454,7 @@ export default function CompaniesPage() {
                               ? "bg-gray-800/50 border-gray-700 text-white focus:border-blue-500 focus:ring-blue-500/20"
                               : "bg-white border-gray-300 text-black focus:border-blue-500 focus:ring-blue-500/20"
                         )}
-                        placeholder={formData.companyType === 'broker' ? "Ej: Juan Pérez García" : "Ej: CubaExpress S.A."}
+                        placeholder={formData.companyType === 'broker' ? "Ej: Juan Pérez García" : formData.companyType === 'market' ? "Ej: Mercado La Habana" : "Ej: CubaExpress S.A."}
                       />
                       {formErrors.legalName && (
                         <p className="text-red-500 text-xs mt-1">Este campo es obligatorio</p>
@@ -1623,20 +1659,25 @@ export default function CompaniesPage() {
                     </div>
 
                     {/* Dirección - Condicional según tipo de empresa */}
-                    {formData.companyType === 'broker' ? (
-                      /* Dirección para Brokers - Campos manuales */
+                    {(formData.companyType === 'broker' || formData.companyType === 'market') ? (
+                      /* Dirección para Brokers y Mercados - Campos manuales con mapa */
                       <>
                         <div className="md:col-span-2">
                           <label className={cn(
                             "block text-sm font-medium mb-2",
                             theme === 'dark' ? "text-gray-300" : "text-gray-700"
                           )}>
-                            Dirección del Broker *
+                            {formData.companyType === 'broker' ? 'Dirección del Broker *' : 'Dirección del Mercado *'}
                           </label>
                           <input
                             type="text"
-                            value={formData.broker_address}
-                            onChange={(e) => setFormData({...formData, broker_address: e.target.value})}
+                            value={formData.companyType === 'broker' ? formData.broker_address : formData.market_address}
+                            onChange={(e) => setFormData({
+                              ...formData,
+                              ...(formData.companyType === 'broker'
+                                ? { broker_address: e.target.value }
+                                : { market_address: e.target.value })
+                            })}
                             className={cn(
                               "w-full px-4 py-3 rounded-xl border focus:outline-none focus:ring-2 transition-all duration-300",
                               theme === 'dark'
@@ -1655,22 +1696,24 @@ export default function CompaniesPage() {
                             Provincia *
                           </label>
                           <select
-                            value={formData.broker_province}
+                            value={formData.companyType === 'broker' ? formData.broker_province : formData.market_province}
                             onChange={(e) => {
                               const province = BROKER_PROVINCES.find(p => p.id === e.target.value)
+                              const provinceField = formData.companyType === 'broker' ? 'broker_province' : 'market_province'
+                              const municipalityField = formData.companyType === 'broker' ? 'broker_municipality' : 'market_municipality'
                               setFormData({
                                 ...formData,
-                                broker_province: e.target.value,
-                                broker_municipality: '',
-                                // Centrar mapa en la provincia seleccionada
+                                [provinceField]: e.target.value,
+                                [municipalityField]: '',
                                 latitude: province?.coords[1] || null,
                                 longitude: province?.coords[0] || null
                               })
                               if (formErrors.broker_province) setFormErrors({...formErrors, broker_province: false})
+                              if (formErrors.market_province) setFormErrors({...formErrors, market_province: false})
                             }}
                             className={cn(
                               "w-full px-4 py-3 rounded-xl border focus:outline-none focus:ring-2 transition-all duration-300",
-                              formErrors.broker_province
+                              (formErrors.broker_province || formErrors.market_province)
                                 ? "border-red-500 bg-red-500/10 focus:border-red-500 focus:ring-red-500/20"
                                 : theme === 'dark'
                                   ? "bg-gray-800/50 border-gray-700 text-white focus:border-blue-500 focus:ring-blue-500/20"
@@ -1682,7 +1725,7 @@ export default function CompaniesPage() {
                               <option key={province.id} value={province.id}>{province.name}</option>
                             ))}
                           </select>
-                          {formErrors.broker_province && (
+                          {(formErrors.broker_province || formErrors.market_province) && (
                             <p className="text-red-500 text-xs mt-1">Selecciona una provincia</p>
                           )}
                         </div>
@@ -1695,23 +1738,25 @@ export default function CompaniesPage() {
                             Municipio *
                           </label>
                           <select
-                            value={formData.broker_municipality}
+                            value={formData.companyType === 'broker' ? formData.broker_municipality : formData.market_municipality}
                             onChange={(e) => {
-                              const province = BROKER_PROVINCES.find(p => p.id === formData.broker_province)
+                              const currentProvince = formData.companyType === 'broker' ? formData.broker_province : formData.market_province
+                              const province = BROKER_PROVINCES.find(p => p.id === currentProvince)
                               const municipality = province?.municipalities.find(m => m.id === e.target.value)
+                              const municipalityField = formData.companyType === 'broker' ? 'broker_municipality' : 'market_municipality'
                               setFormData({
                                 ...formData,
-                                broker_municipality: e.target.value,
-                                // Actualizar coordenadas con las del municipio
+                                [municipalityField]: e.target.value,
                                 latitude: municipality?.coords?.[1] || formData.latitude,
                                 longitude: municipality?.coords?.[0] || formData.longitude
                               })
                               if (formErrors.broker_municipality) setFormErrors({...formErrors, broker_municipality: false})
+                              if (formErrors.market_municipality) setFormErrors({...formErrors, market_municipality: false})
                             }}
-                            disabled={!formData.broker_province}
+                            disabled={!(formData.companyType === 'broker' ? formData.broker_province : formData.market_province)}
                             className={cn(
                               "w-full px-4 py-3 rounded-xl border focus:outline-none focus:ring-2 transition-all duration-300",
-                              formErrors.broker_municipality
+                              (formErrors.broker_municipality || formErrors.market_municipality)
                                 ? "border-red-500 bg-red-500/10 focus:border-red-500 focus:ring-red-500/20"
                                 : theme === 'dark'
                                   ? "bg-gray-800/50 border-gray-700 text-white focus:border-blue-500 focus:ring-blue-500/20 disabled:opacity-50"
@@ -1719,13 +1764,13 @@ export default function CompaniesPage() {
                             )}
                           >
                             <option value="">Seleccionar municipio</option>
-                            {formData.broker_province &&
-                              BROKER_PROVINCES.find(p => p.id === formData.broker_province)?.municipalities.map(muni => (
+                            {(formData.companyType === 'broker' ? formData.broker_province : formData.market_province) &&
+                              BROKER_PROVINCES.find(p => p.id === (formData.companyType === 'broker' ? formData.broker_province : formData.market_province))?.municipalities.map(muni => (
                                 <option key={muni.id} value={muni.id}>{muni.name}</option>
                               ))
                             }
                           </select>
-                          {formErrors.broker_municipality && (
+                          {(formErrors.broker_municipality || formErrors.market_municipality) && (
                             <p className="text-red-500 text-xs mt-1">Selecciona un municipio</p>
                           )}
                         </div>
@@ -1735,7 +1780,7 @@ export default function CompaniesPage() {
                             "block text-sm font-medium mb-2",
                             theme === 'dark' ? "text-gray-300" : "text-gray-700"
                           )}>
-                            Horario de Entrega
+                            {formData.companyType === 'broker' ? 'Horario de Entrega' : 'Horario de Atención'}
                           </label>
                           <div className="flex items-center gap-4">
                             <div className="flex-1">
@@ -1747,8 +1792,13 @@ export default function CompaniesPage() {
                               </label>
                               <input
                                 type="time"
-                                value={formData.broker_delivery_start}
-                                onChange={(e) => setFormData({...formData, broker_delivery_start: e.target.value})}
+                                value={formData.companyType === 'broker' ? formData.broker_delivery_start : formData.market_delivery_start}
+                                onChange={(e) => setFormData({
+                                  ...formData,
+                                  ...(formData.companyType === 'broker'
+                                    ? { broker_delivery_start: e.target.value }
+                                    : { market_delivery_start: e.target.value })
+                                })}
                                 className={cn(
                                   "w-full px-4 py-3 rounded-xl border focus:outline-none focus:ring-2 transition-all duration-300",
                                   theme === 'dark'
@@ -1772,8 +1822,13 @@ export default function CompaniesPage() {
                               </label>
                               <input
                                 type="time"
-                                value={formData.broker_delivery_end}
-                                onChange={(e) => setFormData({...formData, broker_delivery_end: e.target.value})}
+                                value={formData.companyType === 'broker' ? formData.broker_delivery_end : formData.market_delivery_end}
+                                onChange={(e) => setFormData({
+                                  ...formData,
+                                  ...(formData.companyType === 'broker'
+                                    ? { broker_delivery_end: e.target.value }
+                                    : { market_delivery_end: e.target.value })
+                                })}
                                 className={cn(
                                   "w-full px-4 py-3 rounded-xl border focus:outline-none focus:ring-2 transition-all duration-300",
                                   theme === 'dark'
@@ -1790,12 +1845,17 @@ export default function CompaniesPage() {
                             "block text-sm font-medium mb-2",
                             theme === 'dark' ? "text-gray-300" : "text-gray-700"
                           )}>
-                            Teléfono de Contacto Broker
+                            {formData.companyType === 'broker' ? 'Teléfono de Contacto Broker' : 'Teléfono de Contacto Mercado'}
                           </label>
                           <input
                             type="tel"
-                            value={formData.broker_contact_phone}
-                            onChange={(e) => setFormData({...formData, broker_contact_phone: e.target.value})}
+                            value={formData.companyType === 'broker' ? formData.broker_contact_phone : formData.market_contact_phone}
+                            onChange={(e) => setFormData({
+                              ...formData,
+                              ...(formData.companyType === 'broker'
+                                ? { broker_contact_phone: e.target.value }
+                                : { market_contact_phone: e.target.value })
+                            })}
                             className={cn(
                               "w-full px-4 py-3 rounded-xl border focus:outline-none focus:ring-2 transition-all duration-300",
                               theme === 'dark'
@@ -1807,7 +1867,8 @@ export default function CompaniesPage() {
                         </div>
 
                         {/* Mapa para seleccionar ubicación con pin */}
-                        {formData.broker_province && formData.broker_municipality && (
+                        {((formData.companyType === 'broker' && formData.broker_province && formData.broker_municipality) ||
+                          (formData.companyType === 'market' && formData.market_province && formData.market_municipality)) && (
                           <div className="md:col-span-2">
                             <label className={cn(
                               "block text-sm font-medium mb-2",
@@ -1817,8 +1878,8 @@ export default function CompaniesPage() {
                             </label>
                             <BrokerMapPicker
                               theme={theme}
-                              province={formData.broker_province}
-                              municipality={formData.broker_municipality}
+                              province={formData.companyType === 'broker' ? formData.broker_province : formData.market_province}
+                              municipality={formData.companyType === 'broker' ? formData.broker_municipality : formData.market_municipality}
                               latitude={formData.latitude}
                               longitude={formData.longitude}
                               onLocationChange={(lat: number, lng: number) => {
@@ -3114,7 +3175,7 @@ export default function CompaniesPage() {
               )}
 
               {/* Step 6/3: Documents (Paso 6 para otros, Paso 3 para brokers) */}
-              {((currentStep === 6 && formData.companyType !== 'broker') || (currentStep === 3 && formData.companyType === 'broker')) && (
+              {((currentStep === 6 && formData.companyType !== 'broker' && formData.companyType !== 'market') || (currentStep === 3 && formData.companyType === 'broker') || (currentStep === 4 && formData.companyType === 'market')) && (
                 <div className={cn(
                   "backdrop-blur-sm border rounded-2xl p-8",
                   theme === 'dark' ? "bg-white/5 border-white/10" : "bg-white/90 border-gray-200"
@@ -3311,7 +3372,7 @@ export default function CompaniesPage() {
               )}
 
               {/* Step 7/4: Review (Paso 7 para otros, Paso 4 para brokers) */}
-              {((currentStep === 7 && formData.companyType !== 'broker') || (currentStep === 4 && formData.companyType === 'broker')) && (
+              {((currentStep === 7 && formData.companyType !== 'broker' && formData.companyType !== 'market') || (currentStep === 4 && formData.companyType === 'broker') || (currentStep === 5 && formData.companyType === 'market')) && (
                 <div className={cn(
                   "backdrop-blur-sm border rounded-2xl p-8",
                   theme === 'dark' ? "bg-white/5 border-white/10" : "bg-white/90 border-gray-200"
@@ -3531,7 +3592,7 @@ export default function CompaniesPage() {
               Guardar
             </motion.button>
 
-            {currentStep === (formData.companyType === 'broker' ? BROKER_STEPS.length : STEPS.length) ? (
+            {currentStep === (formData.companyType === 'broker' ? BROKER_STEPS.length : formData.companyType === 'market' ? MARKET_STEPS.length : STEPS.length) ? (
               <motion.button
                 onClick={formData.editMode ? handleUpdateCompany : handleCreateCompany}
                 whileHover={{ scale: 1.02 }}
@@ -3550,7 +3611,7 @@ export default function CompaniesPage() {
             ) : (
               <motion.button
                 onClick={() => {
-                  const maxSteps = formData.companyType === 'broker' ? BROKER_STEPS.length : STEPS.length
+                  const maxSteps = formData.companyType === 'broker' ? BROKER_STEPS.length : formData.companyType === 'market' ? MARKET_STEPS.length : STEPS.length
 
                   // Validación del paso 1
                   if (currentStep === 1) {
@@ -3566,6 +3627,12 @@ export default function CompaniesPage() {
                       if (!formData.einNumber?.trim()) errors.einNumber = true
                       if (!formData.broker_province) errors.broker_province = true
                       if (!formData.broker_municipality) errors.broker_municipality = true
+                    } else if (formData.companyType === 'market') {
+                      // Campos obligatorios para mercados
+                      if (!formData.phone?.trim() && !formData.market_contact_phone?.trim()) errors.phone = true
+                      if (!formData.einNumber?.trim()) errors.einNumber = true
+                      if (!formData.market_province) errors.market_province = true
+                      if (!formData.market_municipality) errors.market_municipality = true
                     } else {
                       // Campos obligatorios para otras empresas
                       if (!formData.phone?.trim()) errors.phone = true

@@ -142,7 +142,20 @@ export async function POST(request: NextRequest) {
       broker_delivery_end,
       broker_contact_phone,
       broker_alternate_phone,
-      broker_bank_accounts
+      broker_bank_accounts,
+      // Campos para Mercados
+      market_province,
+      market_municipality,
+      market_address,
+      market_contact_phone,
+      market_alternate_phone,
+      market_delivery_start,
+      market_delivery_end,
+      market_categories,
+      odoo_url,
+      odoo_database,
+      odoo_api_key,
+      odoo_enabled
     } = body
 
     // Log para depurar datos de broker
@@ -165,6 +178,14 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({
           success: false,
           error: 'Faltan campos requeridos para el broker'
+        }, { status: 400 })
+      }
+    } else if (companyType === 'market') {
+      // Para mercados: nombre, identificación, teléfono, provincia y municipio
+      if (!legalName || !einNumber || (!phone && !market_contact_phone) || !market_province || !market_municipality) {
+        return NextResponse.json({
+          success: false,
+          error: 'Faltan campos requeridos para el mercado'
         }, { status: 400 })
       }
     } else {
@@ -261,6 +282,9 @@ export async function POST(request: NextRequest) {
         is_provider, provider_type, provider_categories, provider_services,
         latitude, longitude, broker_province, broker_municipality, broker_address,
         broker_delivery_hours, broker_contact_phone, broker_alternate_phone, broker_bank_accounts,
+        market_province, market_municipality, market_address, market_contact_phone, market_alternate_phone,
+        market_delivery_hours, market_is_active, market_categories,
+        odoo_url, odoo_database, odoo_api_key, odoo_enabled,
         status, createdat, walletbalance, transactionscount, userscount
       ) VALUES (
         $1, $2, $3, $4, $5, $6, $7, $8, $9, $10,
@@ -271,6 +295,9 @@ export async function POST(request: NextRequest) {
         $29, $30, $31, $32,
         $33, $34, $35, $36, $37,
         $38, $39, $40, $41,
+        $42, $43, $44, $45, $46,
+        $47, $48, $49,
+        $50, $51, $52, $53,
         'active', NOW(), 0, 0, 0
       ) RETURNING
         id,
@@ -282,19 +309,32 @@ export async function POST(request: NextRequest) {
         createdat as "createdAt"
     `
 
-    // Combinar horarios de entrega si están definidos
+    // Combinar horarios de entrega si están definidos (broker)
     const brokerDeliveryHours = broker_delivery_start && broker_delivery_end
       ? `${broker_delivery_start} - ${broker_delivery_end}`
       : null
 
-    // Para brokers, usar campos específicos como fallback
-    const finalAddress = companyType === 'broker' ? (address || broker_address || '') : address
-    const finalCity = companyType === 'broker' ? (city || broker_municipality || '') : city
-    const finalCountry = companyType === 'broker' ? (country || 'Cuba') : country
+    // Combinar horarios de entrega si están definidos (market)
+    const marketDeliveryHours = market_delivery_start && market_delivery_end
+      ? `${market_delivery_start} - ${market_delivery_end}`
+      : null
 
-    // Para brokers: multi-moneda activada por defecto con USD principal y CUP, EUR, MLC secundarias
-    const finalIsMultiCurrency = companyType === 'broker' ? true : (isMultiCurrency || false)
-    const finalSecondaryCurrencies = companyType === 'broker'
+    // Para brokers y mercados, usar campos específicos como fallback
+    let finalAddress = address
+    let finalCity = city
+    let finalCountry = country || 'Cuba'
+
+    if (companyType === 'broker') {
+      finalAddress = address || broker_address || ''
+      finalCity = city || broker_municipality || ''
+    } else if (companyType === 'market') {
+      finalAddress = address || market_address || ''
+      finalCity = city || market_municipality || ''
+    }
+
+    // Para brokers y mercados: multi-moneda activada por defecto con USD principal y CUP, EUR, MLC secundarias
+    const finalIsMultiCurrency = (companyType === 'broker' || companyType === 'market') ? true : (isMultiCurrency || false)
+    const finalSecondaryCurrencies = (companyType === 'broker' || companyType === 'market')
       ? ['CUP', 'EUR', 'MLC']
       : (secondaryCurrencies || [])
 
@@ -340,7 +380,21 @@ export async function POST(request: NextRequest) {
       brokerDeliveryHours,
       broker_contact_phone || null,
       broker_alternate_phone || null,
-      JSON.stringify(broker_bank_accounts || [])
+      JSON.stringify(broker_bank_accounts || []),
+      // Campos para Mercados
+      market_province || null,
+      market_municipality || null,
+      market_address || null,
+      market_contact_phone || null,
+      market_alternate_phone || null,
+      marketDeliveryHours,
+      true, // market_is_active por defecto
+      JSON.stringify(market_categories || []),
+      // Campos de Odoo
+      odoo_url || null,
+      odoo_database || null,
+      odoo_api_key || null,
+      odoo_enabled || false
     ]
 
     // Log para depurar valores de broker que se van a insertar
@@ -357,8 +411,8 @@ export async function POST(request: NextRequest) {
     const result = await db.query(query, values)
     const newCompany = result.rows[0]
 
-    // Si es un broker, inicializar los balances multi-moneda
-    if (companyType === 'broker' && newCompany.id) {
+    // Si es un broker o market, inicializar los balances multi-moneda
+    if ((companyType === 'broker' || companyType === 'market') && newCompany.id) {
       const supportedCurrencies = ['USD', 'CUP', 'EUR', 'MLC']
       for (const curr of supportedCurrencies) {
         try {
@@ -369,10 +423,10 @@ export async function POST(request: NextRequest) {
           `, [newCompany.id, curr])
         } catch (e) {
           // Ignore if table doesn't exist yet
-          console.log(`[Companies API] Could not initialize ${curr} balance for broker ${newCompany.id}:`, e)
+          console.log(`[Companies API] Could not initialize ${curr} balance for ${companyType} ${newCompany.id}:`, e)
         }
       }
-      console.log(`[Companies API] Initialized multi-currency balances for broker ${newCompany.id}`)
+      console.log(`[Companies API] Initialized multi-currency balances for ${companyType} ${newCompany.id}`)
     }
 
     return NextResponse.json({

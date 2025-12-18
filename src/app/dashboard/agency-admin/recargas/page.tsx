@@ -578,9 +578,29 @@ Gracias por su compra!
   // Render phone step
   const renderPhoneStep = () => {
     const isNauta = recargaData.service === 'nauta'
+    const isCuban = recargaData.product?.countryCode === 'CU'
     const isValid = recargaData.product
       ? validatePhoneNumber(recargaData.phoneNumber, recargaData.product.phonePattern || '')
       : false
+
+    // Get display phone number (without +53 prefix for Cuban numbers)
+    const displayPhoneNumber = isCuban && !isNauta
+      ? recargaData.phoneNumber.replace(/^\+53/, '')
+      : recargaData.phoneNumber
+
+    // Handle phone number change with +53 prefix for Cuban numbers
+    const handlePhoneChange = (value: string) => {
+      if (isNauta) {
+        setRecargaData(prev => ({ ...prev, phoneNumber: value }))
+      } else if (isCuban) {
+        // For Cuban numbers, only allow 8 digits and always store with +53 prefix
+        const cleaned = value.replace(/\D/g, '').slice(0, 8)
+        // Always store with +53 prefix for Cuban numbers
+        setRecargaData(prev => ({ ...prev, phoneNumber: cleaned ? `+53${cleaned}` : '' }))
+      } else {
+        setRecargaData(prev => ({ ...prev, phoneNumber: formatPhoneNumber(value) }))
+      }
+    }
 
     return (
       <motion.div
@@ -633,32 +653,51 @@ Gracias por su compra!
             <label className="block text-sm font-medium mb-2">
               {isNauta ? 'Cuenta Nauta' : 'Numero'}
             </label>
-            <div className="relative">
-              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                {isNauta ? (
-                  <Wifi className="h-5 w-5 text-gray-400" />
-                ) : (
-                  <Smartphone className="h-5 w-5 text-gray-400" />
-                )}
-              </div>
-              <input
-                type="text"
-                value={recargaData.phoneNumber}
-                onChange={(e) => setRecargaData(prev => ({
-                  ...prev,
-                  phoneNumber: isNauta ? e.target.value : formatPhoneNumber(e.target.value)
-                }))}
-                placeholder={isNauta ? 'usuario@nauta.com.cu' : '5xxxxxxx'}
-                className={cn(
-                  "w-full pl-10 pr-3 py-3 rounded-lg border transition-colors",
-                  "focus:ring-2 focus:ring-purple-500 focus:border-transparent",
+            <div className="relative flex">
+              {/* +53 prefix for Cuban numbers */}
+              {isCuban && !isNauta && (
+                <div className={cn(
+                  "flex items-center px-3 rounded-l-lg border border-r-0",
                   theme === 'dark'
-                    ? "bg-gray-800 border-gray-700 text-white"
-                    : "bg-white border-gray-300 text-gray-900"
+                    ? "bg-gray-700 border-gray-600 text-gray-300"
+                    : "bg-gray-100 border-gray-300 text-gray-600"
+                )}>
+                  <span className="font-semibold">+53</span>
+                </div>
+              )}
+              <div className={cn("relative flex-1", isCuban && !isNauta && "")}>
+                {(!isCuban || isNauta) && (
+                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                    {isNauta ? (
+                      <Wifi className="h-5 w-5 text-gray-400" />
+                    ) : (
+                      <Smartphone className="h-5 w-5 text-gray-400" />
+                    )}
+                  </div>
                 )}
-              />
+                <input
+                  type="text"
+                  value={displayPhoneNumber}
+                  onChange={(e) => handlePhoneChange(e.target.value)}
+                  placeholder={isNauta ? 'usuario@nauta.com.cu' : isCuban ? '5xxxxxxx' : '5xxxxxxx'}
+                  className={cn(
+                    "w-full py-3 border transition-colors",
+                    "focus:ring-2 focus:ring-purple-500 focus:border-transparent",
+                    isCuban && !isNauta
+                      ? "pl-3 pr-3 rounded-r-lg rounded-l-none"
+                      : "pl-10 pr-3 rounded-lg",
+                    theme === 'dark'
+                      ? "bg-gray-800 border-gray-700 text-white"
+                      : "bg-white border-gray-300 text-gray-900"
+                  )}
+                />
+              </div>
             </div>
-            {recargaData.product?.phonePattern && (
+            {isCuban && !isNauta ? (
+              <p className="text-sm text-gray-500 mt-2">
+                Ingresa 8 digitos (el +53 se agrega automaticamente)
+              </p>
+            ) : recargaData.product?.phonePattern && (
               <p className="text-sm text-gray-500 mt-2">
                 Formato esperado: {recargaData.product.phonePattern}
               </p>

@@ -465,6 +465,17 @@ export function Sidebar({ isCollapsed, onToggle }: SidebarProps) {
     { icon: Settings, label: "Configuración", href: "/dashboard/broker/settings" },
   ]
 
+  // Menu items para MARKET (gestión de inventario, órdenes y entregas)
+  const marketMenuItems = [
+    { icon: Home, label: "Dashboard", href: "/dashboard/market" },
+    { icon: Package, label: "Inventario", href: "/dashboard/market/inventory" },
+    { icon: FileText, label: "Compras", href: "/dashboard/market/purchases" },
+    { icon: ShoppingCart, label: "Órdenes Recibidas", href: "/dashboard/market/orders" },
+    { icon: Wallet, label: "Mi Wallet", href: "/dashboard/market/wallet" },
+    { icon: Truck, label: "Entregas", href: "/dashboard/market/deliveries" },
+    { icon: Settings, label: "Configuración", href: "/dashboard/market/settings" },
+  ]
+
   // Hook para verificar servicios habilitados
   const { hasService, hasSubmodule } = useEnabledServices()
 
@@ -502,11 +513,13 @@ export function Sidebar({ isCollapsed, onToggle }: SidebarProps) {
   }
 
   // Seleccionar el menú adecuado según el rol del usuario y tipo de empresa
-  // Si la empresa es de tipo 'broker', mostrar menú de broker sin importar el rol
+  // Si la empresa es de tipo 'broker' o 'market', mostrar menú correspondiente sin importar el rol
   const isBrokerCompany = user?.companyType === 'broker'
+  const isMarketCompany = user?.companyType === 'market'
 
   let baseMenuItems = user?.role === 'SUPER_ADMIN' ? superAdminMenuItems :
                       isBrokerCompany ? brokerMenuItems :  // Priorizar tipo de empresa broker
+                      isMarketCompany ? marketMenuItems :  // Priorizar tipo de empresa market
                       user?.role === 'ADMIN' ? adminMenuItems :
                       user?.role === 'MANAGER' ? managerMenuItems :
                       user?.role === 'BROKER' ? brokerMenuItems :
