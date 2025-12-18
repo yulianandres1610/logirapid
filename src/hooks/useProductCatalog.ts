@@ -292,6 +292,8 @@ export function useCompanyProductPricing(companyId: number | null) {
         markupValue: p.markupValue
       }))
 
+      console.log('[useCompanyProductPricing] Sending products to API:', apiProducts)
+
       const response = await fetch(`/api/companies/${companyId}/products/pricing`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

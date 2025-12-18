@@ -547,6 +547,8 @@ export async function POST(
 
     const results: { productId: number | string; success: boolean; error?: string }[] = []
 
+    console.log('[Company Pricing POST] Received products:', JSON.stringify(products, null, 2))
+
     for (const product of products) {
       try {
         const {

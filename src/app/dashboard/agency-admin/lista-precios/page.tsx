@@ -129,6 +129,15 @@ export default function ListaPreciosEmpresaPage() {
     value: number,
     originalProduct: any
   ) => {
+    console.log('[Lista Precios] handleCompanyPriceChange called:', {
+      productId,
+      productIdType: typeof productId,
+      field,
+      value,
+      originalProductId: originalProduct.productId,
+      isRechargeProduct: originalProduct.isRechargeProduct
+    })
+
     const miCosto = originalProduct.miCosto || originalProduct.catalogMiCosto || 0
 
     setEditingCompanyPrices(prev => ({
