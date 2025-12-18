@@ -618,56 +618,50 @@ export async function POST(
           const rawMiCosto = parseFloat(rechargeProduct.manual_selling_price)
           const miCosto = isNaN(rawMiCosto) ? 0 : rawMiCosto
 
-          // Use new names, fallback to legacy
-          // IMPORTANT: Ensure we get the value correctly - check precioClientes first, then b2cPrice
-          let finalPrecioClientes = precioClientes
-          if (finalPrecioClientes === undefined || finalPrecioClientes === null) {
-            finalPrecioClientes = b2cPrice
-          }
+          // Get price value - use new names, fallback to legacy (same as catalog products)
+          let finalPrecioClientes = precioClientes ?? b2cPrice
 
-          console.log('[Company Pricing POST] Recharge product values:', {
+          console.log('[Company Pricing POST] Recharge product - received values:', {
             productId,
             precioClientes,
+            precioClientesType: typeof precioClientes,
             b2cPrice,
             finalPrecioClientes,
-            miCosto,
-            rawMiCosto
+            miCosto
           })
 
-          // If no price is being set, skip this product
-          if (finalPrecioClientes === undefined || finalPrecioClientes === null) {
-            console.log('[Company Pricing POST] Skipping recharge product - no price set:', { productId, finalPrecioClientes })
-            results.push({ productId, success: true })
-            continue
+          // Convert to number if it's a string
+          if (finalPrecioClientes !== undefined && finalPrecioClientes !== null) {
+            finalPrecioClientes = typeof finalPrecioClientes === 'string'
+              ? parseFloat(finalPrecioClientes)
+              : finalPrecioClientes
           }
 
-          // Convert to number if it's a string
-          const numericPrecioClientes = typeof finalPrecioClientes === 'string'
-            ? parseFloat(finalPrecioClientes)
-            : finalPrecioClientes
-
           // Validation: precio_clientes >= mi_costo (unless SUPER_ADMIN)
-          if (user.role !== 'SUPER_ADMIN' && numericPrecioClientes < miCosto) {
+          if (user.role !== 'SUPER_ADMIN' && finalPrecioClientes !== undefined && finalPrecioClientes !== null && finalPrecioClientes < miCosto) {
             results.push({
               productId,
               success: false,
-              error: `Precio Clientes ($${numericPrecioClientes}) no puede ser menor que Mi Costo ($${miCosto})`
+              error: `Precio Clientes ($${finalPrecioClientes}) no puede ser menor que Mi Costo ($${miCosto})`
             })
             continue
           }
 
-          // Calculate margin (can't be null since we have a price)
-          const marginValue = numericPrecioClientes - miCosto
+          // Calculate margin - same pattern as catalog products
+          let marginValue = 0
+          if (finalPrecioClientes !== undefined && finalPrecioClientes !== null && miCosto > 0) {
+            marginValue = finalPrecioClientes - miCosto
+          }
 
           console.log('[Company Pricing POST] Saving recharge product pricing:', {
             rechargeProductId,
             companyId,
             miCosto,
-            numericPrecioClientes,
+            finalPrecioClientes,
             marginValue
           })
 
-          // Upsert into recharge_product_pricing
+          // Upsert into recharge_product_pricing - using COALESCE like catalog products
           const upsertResult = await db.query(`
             INSERT INTO recharge_product_pricing (
               external_product_id, company_id,
@@ -675,19 +669,19 @@ export async function POST(
             ) VALUES ($1, $2, $3, $4, $5, $6)
             ON CONFLICT (external_product_id, company_id)
             DO UPDATE SET
-              margin_type = $3,
-              margin_value = $4,
-              selling_price = $5,
-              is_enabled = $6,
+              margin_type = COALESCE($3, recharge_product_pricing.margin_type),
+              margin_value = COALESCE($4, recharge_product_pricing.margin_value),
+              selling_price = COALESCE($5, recharge_product_pricing.selling_price),
+              is_enabled = COALESCE($6, recharge_product_pricing.is_enabled),
               updated_at = NOW()
             RETURNING *
           `, [
             rechargeProductId,
             companyId,
-            'fixed',  // margin_type
-            marginValue,  // margin_value (never null now)
-            numericPrecioClientes,  // selling_price (never null now)
-            true  // is_enabled
+            'fixed',
+            marginValue,
+            finalPrecioClientes || null,  // Can be null, COALESCE will keep old value
+            true
           ])
 
           console.log('[Company Pricing POST] Upsert result:', upsertResult.rows[0])
