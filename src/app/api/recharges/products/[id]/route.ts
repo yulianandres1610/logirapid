@@ -199,6 +199,13 @@ export async function PUT(
       paramIndex++
     }
 
+    // Allow updating univcell_product_id for manual products
+    if (body.univcellProductId !== undefined) {
+      updates.push(`univcell_product_id = $${paramIndex}`)
+      values.push(body.univcellProductId)
+      paramIndex++
+    }
+
     updates.push(`updated_at = NOW()`)
 
     // Add product ID as last parameter
@@ -220,6 +227,7 @@ export async function PUT(
       data: {
         id: row.id,
         externalId: row.external_id,
+        univcellProductId: row.univcell_product_id,
         name: row.custom_name || row.name,
         description: row.custom_description || row.description,
         costPrice: row.manual_cost_price ? parseFloat(row.manual_cost_price) : null,
