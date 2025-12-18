@@ -29,28 +29,24 @@ type RecargaStep = 'service' | 'product' | 'phone' | 'amount' | 'confirmation' |
 type ServiceType = 'telefono' | 'nauta'
 
 interface RechargeProduct {
-  id: number
-  externalId: number
+  productId: string
+  rechargeProductId: number
+  code: string
   name: string
-  slug: string
   description: string
-  baseCost: number
   countryCode: string
   countryName: string
-  phonePattern: string
-  acceptsRange: boolean
-  isActive: boolean
-  isPromotion?: boolean
-  validFrom?: string | null
-  validTo?: string | null
-  pricing: {
-    marginType: 'percentage' | 'fixed'
-    marginValue: number
-    sellingPrice: number | null
-    costPrice?: number
-    isEnabled: boolean
-    isManualPricing?: boolean
-  } | null
+  isPromotion: boolean
+  validFrom: string | null
+  validTo: string | null
+  // Pricing
+  miCosto: number      // Company's cost (what LogiRapid charges them)
+  precioClientes: number | null  // Company's selling price to customers
+  hasPricing: boolean
+  // For display
+  slug?: string
+  phonePattern?: string
+  acceptsRange?: boolean
 }
 
 interface RecargaData {
@@ -110,34 +106,41 @@ export default function RecargasPage() {
   const fetchProducts = async () => {
     try {
       setLoadingProducts(true)
-      const response = await fetch('/api/recharges/products?limit=500')
+
+      // Get company ID from cookie
+      const companyIdCookie = document.cookie
+        .split('; ')
+        .find(row => row.startsWith('user-company-id='))
+        ?.split('=')[1]
+
+      if (!companyIdCookie) {
+        console.error('[Agency Recargas] No company ID found in cookies')
+        showNotification('error', 'Error', 'No se pudo identificar la empresa')
+        return
+      }
+
+      // Fetch products from company catalog with pricing
+      const response = await fetch(`/api/companies/${companyIdCookie}/products/pricing`)
       const data = await response.json()
 
       console.log('[Agency Recargas] API Response:', data)
 
       if (data.success) {
-        const allProducts = data.data.products || []
-        console.log('[Agency Recargas] Total products from API:', allProducts.length)
+        // Filter only recharge products (serviceCategory === 'recarga')
+        const rechargeProducts = (data.data.byCategory?.recarga || []) as RechargeProduct[]
 
-        // Log each product's pricing status
-        allProducts.forEach((p: any) => {
-          console.log(`[Agency Recargas] Product ${p.id} "${p.name}":`, {
-            isActive: p.isActive,
-            hasPricing: !!p.pricing,
-            pricingEnabled: p.pricing?.isEnabled,
-            isManualPricing: p.pricing?.isManualPricing,
-            sellingPrice: p.pricing?.sellingPrice
-          })
-        })
+        console.log('[Agency Recargas] Recharge products found:', rechargeProducts.length)
 
-        // Only show enabled products with pricing for this company
-        const enabledProducts = allProducts.filter(
-          (p: RechargeProduct) => p.pricing?.isEnabled && p.isActive
+        // Only show products with pricing configured (precioClientes set)
+        const enabledProducts = rechargeProducts.filter(
+          (p: RechargeProduct) => p.hasPricing && p.precioClientes !== null && p.precioClientes > 0
         )
-        console.log('[Agency Recargas] Enabled products after filter:', enabledProducts.length)
+
+        console.log('[Agency Recargas] Products with pricing:', enabledProducts.length)
         setProducts(enabledProducts)
       } else {
         console.error('[Agency Recargas] API error:', data.error)
+        showNotification('error', 'Error', data.error || 'No se pudieron cargar los productos')
       }
     } catch (error) {
       console.error('Error fetching products:', error)
@@ -150,7 +153,8 @@ export default function RecargasPage() {
   // Filter products by service type
   const getFilteredProducts = (serviceType: ServiceType) => {
     return products.filter(p => {
-      const isNauta = p.slug?.toLowerCase().includes('nauta')
+      const productName = p.name?.toLowerCase() || ''
+      const isNauta = productName.includes('nauta')
       return serviceType === 'nauta' ? isNauta : !isNauta
     })
   }
@@ -185,27 +189,30 @@ export default function RecargasPage() {
     setCurrentStep('product')
   }
 
-  // Handle product selection
+  // Handle product selection - for recharge products, go directly to phone since price is fixed
   const handleProductSelect = (product: RechargeProduct) => {
-    setRecargaData(prev => ({ ...prev, product, phoneNumber: '', amount: 0 }))
+    // Set amount to the company's selling price (precioClientes)
+    const amount = product.precioClientes || product.miCosto
+    setRecargaData(prev => ({ ...prev, product, phoneNumber: '', amount }))
     setCustomAmount('')
     setCurrentStep('phone')
   }
 
-  // Handle phone submit
+  // Handle phone submit - skip amount step for fixed-price products, go to confirmation
   const handlePhoneSubmit = () => {
-    if (recargaData.product && validatePhoneNumber(recargaData.phoneNumber, recargaData.product.phonePattern)) {
-      setCurrentStep('amount')
+    if (recargaData.product && validatePhoneNumber(recargaData.phoneNumber, recargaData.product.phonePattern || '')) {
+      // For recharge products with fixed price, skip amount selection
+      setCurrentStep('confirmation')
     }
   }
 
-  // Handle amount selection
+  // Handle amount selection (not used for fixed-price recharge products)
   const handleAmountSelect = (amount: number) => {
     setRecargaData(prev => ({ ...prev, amount }))
     setCurrentStep('confirmation')
   }
 
-  // Handle custom amount
+  // Handle custom amount (not used for fixed-price recharge products)
   const handleCustomAmountSubmit = () => {
     const amount = parseFloat(customAmount)
     if (amount > 0) {
@@ -213,16 +220,11 @@ export default function RecargasPage() {
     }
   }
 
-  // Calculate selling price using company-configured pricing
-  const calculateSellingPrice = (amount: number): number => {
+  // Get the selling price - for recharge products it's precioClientes
+  const getSellingPrice = (): number => {
     const product = recargaData.product
-    if (!product?.pricing) return amount
-
-    if (product.pricing.marginType === 'percentage') {
-      return amount * (1 + product.pricing.marginValue / 100)
-    } else {
-      return amount + product.pricing.marginValue
-    }
+    if (!product) return 0
+    return product.precioClientes || product.miCosto || 0
   }
 
   // Process recharge
@@ -230,16 +232,18 @@ export default function RecargasPage() {
     setIsProcessing(true)
 
     try {
+      const sellingPrice = getSellingPrice()
+
       const response = await fetch('/api/admin/recargas', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          productId: recargaData.product?.id,
+          productId: recargaData.product?.rechargeProductId,
           productName: recargaData.product?.name,
           service: recargaData.service,
           phoneNumber: recargaData.phoneNumber,
-          amount: recargaData.amount,
-          sellingPrice: calculateSellingPrice(recargaData.amount),
+          amount: sellingPrice, // For fixed-price products, amount = selling price
+          sellingPrice: sellingPrice,
           customerName: recargaData.customerName,
           customerEmail: recargaData.customerEmail,
         }),
@@ -270,7 +274,7 @@ export default function RecargasPage() {
 
   // Print ticket
   const handlePrintTicket = () => {
-    const sellingPrice = calculateSellingPrice(recargaData.amount)
+    const sellingPrice = getSellingPrice()
     const printContent = `
 ====================================
      CUBARAPID - RECARGA EXITOSA
@@ -279,8 +283,7 @@ ID: ${recargaId}
 Fecha: ${new Date().toLocaleString('es-ES')}
 Producto: ${recargaData.product?.name || '-'}
 Numero: ${recargaData.phoneNumber}
-Monto: $${recargaData.amount.toFixed(2)}
-Precio: $${sellingPrice.toFixed(2)}
+Precio Cobrado: $${sellingPrice.toFixed(2)}
 Estado: COMPLETADO
 ====================================
 Gracias por su compra!
@@ -443,7 +446,7 @@ Gracias por su compra!
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {filteredProducts.map((product) => (
               <motion.button
-                key={product.id}
+                key={product.productId}
                 whileHover={{ scale: 1.02 }}
                 whileTap={{ scale: 0.98 }}
                 onClick={() => handleProductSelect(product)}
@@ -471,17 +474,16 @@ Gracias por su compra!
                     <div className="text-sm text-gray-500 dark:text-gray-400">
                       {product.countryName}
                     </div>
-                    {product.pricing && (
-                      <div className="flex items-center gap-2 mt-2">
-                        <span className="text-sm font-medium text-emerald-600 dark:text-emerald-400">
-                          Desde ${product.baseCost.toFixed(2)}
-                        </span>
-                        <span className="text-xs text-gray-400">
-                          +{product.pricing.marginType === 'percentage'
-                            ? `${product.pricing.marginValue}%`
-                            : `$${product.pricing.marginValue}`}
-                        </span>
-                      </div>
+                    {/* Show company's selling price */}
+                    <div className="flex items-center gap-2 mt-2">
+                      <span className="text-lg font-bold text-emerald-600 dark:text-emerald-400">
+                        ${(product.precioClientes || product.miCosto).toFixed(2)}
+                      </span>
+                    </div>
+                    {product.isPromotion && (
+                      <span className="inline-block mt-1 px-2 py-0.5 bg-amber-100 text-amber-700 text-xs rounded-full">
+                        Promoción
+                      </span>
                     )}
                   </div>
                 </div>
@@ -507,7 +509,7 @@ Gracias por su compra!
   const renderPhoneStep = () => {
     const isNauta = recargaData.service === 'nauta'
     const isValid = recargaData.product
-      ? validatePhoneNumber(recargaData.phoneNumber, recargaData.product.phonePattern)
+      ? validatePhoneNumber(recargaData.phoneNumber, recargaData.product.phonePattern || '')
       : false
 
     return (
@@ -616,7 +618,7 @@ Gracias por su compra!
     )
   }
 
-  // Render amount step
+  // Render amount step (not used for fixed-price recharge products)
   const renderAmountStep = () => {
     const product = recargaData.product
 
@@ -636,34 +638,28 @@ Gracias por su compra!
 
         {/* Preset amounts */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 max-w-3xl mx-auto">
-          {DEFAULT_AMOUNTS.map((amount) => {
-            const sellingPrice = calculateSellingPrice(amount)
-            return (
-              <motion.button
-                key={amount}
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-                onClick={() => handleAmountSelect(amount)}
-                className={cn(
-                  "p-4 rounded-xl border-2 transition-all duration-300",
-                  "hover:shadow-lg hover:border-exa-primary",
-                  recargaData.amount === amount
-                    ? "border-exa-primary bg-exa-primary/10"
-                    : theme === 'dark'
-                      ? "bg-gray-800 border-gray-700"
-                      : "bg-white border-gray-200"
-                )}
-              >
-                <div className="flex flex-col items-center space-y-1">
-                  <span className="text-2xl font-bold">${amount}</span>
-                  <span className="text-xs text-gray-500">USD</span>
-                  <span className="text-sm font-medium text-emerald-600 dark:text-emerald-400">
-                    Venta: ${sellingPrice.toFixed(2)}
-                  </span>
-                </div>
-              </motion.button>
-            )
-          })}
+          {DEFAULT_AMOUNTS.map((amount) => (
+            <motion.button
+              key={amount}
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+              onClick={() => handleAmountSelect(amount)}
+              className={cn(
+                "p-4 rounded-xl border-2 transition-all duration-300",
+                "hover:shadow-lg hover:border-exa-primary",
+                recargaData.amount === amount
+                  ? "border-exa-primary bg-exa-primary/10"
+                  : theme === 'dark'
+                    ? "bg-gray-800 border-gray-700"
+                    : "bg-white border-gray-200"
+              )}
+            >
+              <div className="flex flex-col items-center space-y-1">
+                <span className="text-2xl font-bold">${amount}</span>
+                <span className="text-xs text-gray-500">USD</span>
+              </div>
+            </motion.button>
+          ))}
         </div>
 
         {/* Custom amount */}
@@ -700,11 +696,6 @@ Gracias por su compra!
                 Aplicar
               </Button>
             </div>
-            {customAmount && parseFloat(customAmount) > 0 && (
-              <p className="text-sm text-center mt-2 text-emerald-600 dark:text-emerald-400">
-                Precio de venta: ${calculateSellingPrice(parseFloat(customAmount)).toFixed(2)}
-              </p>
-            )}
           </div>
         )}
 
@@ -723,8 +714,7 @@ Gracias por su compra!
 
   // Render confirmation step
   const renderConfirmationStep = () => {
-    const sellingPrice = calculateSellingPrice(recargaData.amount)
-    const margin = sellingPrice - recargaData.amount
+    const sellingPrice = getSellingPrice()
 
     return (
       <motion.div
@@ -754,20 +744,18 @@ Gracias por su compra!
             <span className="text-gray-600 dark:text-gray-400">Numero:</span>
             <span className="font-medium">{recargaData.phoneNumber}</span>
           </div>
-          <div className="flex justify-between items-center">
-            <span className="text-gray-600 dark:text-gray-400">Monto:</span>
-            <span className="font-medium">${recargaData.amount.toFixed(2)}</span>
-          </div>
-          <div className="border-t pt-4 mt-4 dark:border-gray-600">
+          {recargaData.product?.isPromotion && (
             <div className="flex justify-between items-center">
-              <span className="text-gray-600 dark:text-gray-400">Margen:</span>
-              <span className="font-medium text-emerald-600 dark:text-emerald-400">
-                +${margin.toFixed(2)}
+              <span className="text-gray-600 dark:text-gray-400">Tipo:</span>
+              <span className="px-2 py-0.5 bg-amber-100 text-amber-700 text-sm rounded-full">
+                Promoción
               </span>
             </div>
-            <div className="flex justify-between items-center mt-2">
+          )}
+          <div className="border-t pt-4 mt-4 dark:border-gray-600">
+            <div className="flex justify-between items-center">
               <span className="text-lg font-semibold">Total a Cobrar:</span>
-              <span className="text-xl font-bold text-exa-primary">
+              <span className="text-2xl font-bold text-exa-primary">
                 ${sellingPrice.toFixed(2)}
               </span>
             </div>
@@ -813,7 +801,7 @@ Gracias por su compra!
         <div className="flex space-x-4">
           <Button
             variant="outline"
-            onClick={() => setCurrentStep('amount')}
+            onClick={() => setCurrentStep('phone')}
             className="flex-1"
           >
             <ArrowLeft className="w-4 h-4 mr-2" />
@@ -843,7 +831,7 @@ Gracias por su compra!
 
   // Render success step
   const renderSuccessStep = () => {
-    const sellingPrice = calculateSellingPrice(recargaData.amount)
+    const sellingPrice = getSellingPrice()
 
     return (
       <motion.div
@@ -880,12 +868,6 @@ Gracias por su compra!
           <div className="flex justify-between items-center">
             <span className="text-gray-600 dark:text-gray-400">Numero:</span>
             <span className="font-medium">{recargaData.phoneNumber}</span>
-          </div>
-          <div className="flex justify-between items-center">
-            <span className="text-gray-600 dark:text-gray-400">Monto:</span>
-            <span className="font-bold text-exa-primary">
-              ${recargaData.amount.toFixed(2)}
-            </span>
           </div>
           <div className="flex justify-between items-center">
             <span className="text-gray-600 dark:text-gray-400">Precio Cobrado:</span>
