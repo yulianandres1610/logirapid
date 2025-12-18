@@ -323,14 +323,16 @@ export default function ProductConfigPage() {
       name: p.name,
       description: p.countryName || '',
       category: 'recarga',
-      miCosto: p.baseCost,
+      // Use costPrice from pricing (our actual cost after provider discount), fallback to baseCost
+      miCosto: p.pricing?.costPrice || p.baseCost,
       miCostoFijo: 0,
+      // Use sellingPrice from pricing (what we charge companies)
       precioMayorista: p.pricing?.sellingPrice || p.baseCost,
       precioMayoristaFijo: 0,
       providerCompanyId: null,
       providerName: 'UnivCell',
       isActive: true,
-      pricingModel: p.pricing?.marginType || 'fixed',
+      pricingModel: p.pricing?.isManualPricing ? 'fixed' : (p.pricing?.marginType || 'fixed'),
       currency: 'USD',
       isRechargeProduct: true,
       rechargeData: p
