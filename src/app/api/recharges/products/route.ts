@@ -91,7 +91,11 @@ export async function GET(request: NextRequest) {
       LIMIT $${paramIndex + 1} OFFSET $${paramIndex + 2}
     `
 
-    params.push(companyId ? parseInt(companyId) : null, limit, offset)
+    // Parse companyId safely
+    const parsedCompanyId = companyId ? parseInt(companyId) : null
+    params.push(parsedCompanyId, limit, offset)
+
+    console.log('[Recharge Products] Query params:', { companyId, parsedCompanyId, userRole, paramIndex })
 
     const result = await db.query(query, params)
 
@@ -112,10 +116,23 @@ export async function GET(request: NextRequest) {
       ORDER BY country_name ASC
     `)
 
+    console.log('[Recharge Products] Total rows returned:', result.rows.length)
+
     // Transform response
     const products = result.rows.map((row: any) => {
       // Check if product has manual pricing (created via new form)
       const hasManualPricing = row.manual_cost_price !== null && row.manual_selling_price !== null
+
+      // Debug logging for troubleshooting
+      if (hasManualPricing || row.pricing_id) {
+        console.log('[Recharge Products] Product:', row.id, row.name, {
+          hasManualPricing,
+          manualCost: row.manual_cost_price,
+          manualSell: row.manual_selling_price,
+          pricingId: row.pricing_id,
+          isActive: row.is_active
+        })
+      }
 
       // Build pricing object - prioritize manual pricing over margin-based
       let pricing = null
@@ -173,6 +190,16 @@ export async function GET(request: NextRequest) {
           ? JSON.parse(row.promotions)
           : row.promotions,
       }
+    })
+
+    // Log summary of products with pricing
+    const productsWithPricing = products.filter((p: any) => p.pricing !== null)
+    console.log('[Recharge Products] Summary:', {
+      totalProducts: products.length,
+      withPricing: productsWithPricing.length,
+      withManualPricing: products.filter((p: any) => p.pricing?.isManualPricing).length,
+      withMarginPricing: products.filter((p: any) => p.pricing && !p.pricing.isManualPricing).length,
+      activeProducts: products.filter((p: any) => p.isActive).length
     })
 
     return NextResponse.json({
