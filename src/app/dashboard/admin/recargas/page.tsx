@@ -888,19 +888,19 @@ Gracias por su compra!
   // Render wizard as main content - Full page wizard design with animated progress bar
   const renderWizardView = () => (
     <div className="max-w-4xl mx-auto">
-      {/* Back button */}
-      <div className="mb-6">
-        <Button
-          variant="outline"
+      {/* Close button - minimalist */}
+      <div className="flex justify-end mb-4">
+        <button
           onClick={closeWizard}
           className={cn(
-            "gap-2",
-            theme === 'dark' ? 'border-gray-700 hover:bg-gray-800' : 'border-gray-300 hover:bg-gray-100'
+            "p-2 rounded-full transition-all duration-200",
+            theme === 'dark'
+              ? 'hover:bg-gray-700 text-gray-400 hover:text-white'
+              : 'hover:bg-gray-100 text-gray-500 hover:text-gray-900'
           )}
         >
-          <ArrowLeft className="w-4 h-4" />
-          Volver al Historial
-        </Button>
+          <X className="w-5 h-5" />
+        </button>
       </div>
 
       {/* Progress Bar with Animations */}
