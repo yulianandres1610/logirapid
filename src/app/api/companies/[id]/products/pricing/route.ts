@@ -297,6 +297,7 @@ export async function GET(
     //   - LogiRapid cost = manual_cost_price
     //   - LogiRapid selling price to companies = manual_selling_price
     //   - Company's miCosto = LogiRapid's manual_selling_price
+    //   - Company can set their own precioClientes in recharge_product_pricing
     // ============================================================
     const rechargeProductsResult = await db.query(`
       SELECT
@@ -315,25 +316,42 @@ export async function GET(
         erp.valid_to,
         erp.manual_cost_price,
         erp.manual_selling_price,
-        erp.provider_amount
+        erp.provider_amount,
+        -- Get company-specific pricing from recharge_product_pricing
+        rpp.id as company_pricing_id,
+        rpp.selling_price as company_selling_price,
+        rpp.margin_type as company_margin_type,
+        rpp.margin_value as company_margin_value,
+        rpp.is_enabled as company_pricing_enabled
       FROM external_recharge_products erp
+      LEFT JOIN recharge_product_pricing rpp
+        ON rpp.external_product_id = erp.id
+        AND rpp.company_id = $1
       WHERE erp.is_active = true
         -- Only include products with manual pricing configured by SuperAdmin
         AND erp.manual_cost_price IS NOT NULL
         AND erp.manual_selling_price IS NOT NULL
       ORDER BY erp.country_name ASC, erp.name ASC
-    `)
+    `, [companyId])
 
     // Transform recharge products to match the products format
     const rechargeProducts = rechargeProductsResult.rows.map((row: any) => {
       // For companies:
       // - miCosto = LogiRapid's selling price (manual_selling_price) - what LogiRapid charges the company
-      // - precioClientes = same as miCosto by default, company can configure their own
+      // - precioClientes = company's configured price, or miCosto by default
       const miCosto = parseFloat(row.manual_selling_price)
-      const precioClientes = miCosto // Default to miCosto, company can set their own margin
+
+      // Company-specific selling price from recharge_product_pricing, or default to miCosto
+      const precioClientes = row.company_selling_price
+        ? parseFloat(row.company_selling_price)
+        : miCosto
 
       // LogiRapid's own cost (for reference)
       const logirapidCost = parseFloat(row.manual_cost_price)
+
+      // Calculate margin
+      const margenClientes = precioClientes - miCosto
+      const margenClientesPct = miCosto > 0 ? ((precioClientes - miCosto) / miCosto) * 100 : 0
 
       return {
         productId: `recharge-${row.id}`,  // Prefix to distinguish from catalog products
@@ -361,24 +379,25 @@ export async function GET(
         // Company level pricing
         miCosto,  // Company's cost = LogiRapid's selling price
         precioSucursales: null,
-        precioClientes,  // Default same as miCosto
+        precioClientes,  // Company's selling price (from recharge_product_pricing or default)
 
         // Legacy field names
         costPrice: miCosto,
         b2bPrice: null,
         b2cPrice: precioClientes,
 
-        markupType: null,
-        markupValue: null,
+        markupType: row.company_margin_type || null,
+        markupValue: row.company_margin_value ? parseFloat(row.company_margin_value) : null,
 
-        // Margins (0 by default since precioClientes = miCosto)
-        margenClientes: 0,
-        margenClientesPct: 0,
+        // Margins
+        margenClientes,
+        margenClientesPct,
 
         // Metadata
-        priceSource: 'platform',
+        priceSource: row.company_pricing_id ? 'company' : 'platform',
         hasPricing: true,
-        pricingId: row.id,
+        pricingId: row.company_pricing_id || row.id,
+        hasCompanyPricing: row.company_pricing_id !== null,
 
         // Company type flags
         isBranch,
@@ -526,7 +545,7 @@ export async function POST(
     const isProvider = company.is_provider === true
     const providerCategories: string[] = company.provider_categories || []
 
-    const results: { productId: number; success: boolean; error?: string }[] = []
+    const results: { productId: number | string; success: boolean; error?: string }[] = []
 
     for (const product of products) {
       try {
@@ -551,6 +570,84 @@ export async function POST(
           results.push({ productId: 0, success: false, error: 'productId requerido' })
           continue
         }
+
+        // ============================================================
+        // HANDLE RECHARGE PRODUCTS (productId starts with "recharge-")
+        // ============================================================
+        const isRechargeProduct = typeof productId === 'string' && productId.startsWith('recharge-')
+
+        if (isRechargeProduct) {
+          // Extract the actual recharge product ID
+          const rechargeProductId = parseInt(productId.replace('recharge-', ''))
+
+          if (isNaN(rechargeProductId)) {
+            results.push({ productId, success: false, error: 'ID de producto de recarga invalido' })
+            continue
+          }
+
+          // Get recharge product info
+          const rechargeProductResult = await db.query(`
+            SELECT id, manual_selling_price
+            FROM external_recharge_products
+            WHERE id = $1 AND is_active = true
+          `, [rechargeProductId])
+
+          if (rechargeProductResult.rows.length === 0) {
+            results.push({ productId, success: false, error: 'Producto de recarga no encontrado' })
+            continue
+          }
+
+          const rechargeProduct = rechargeProductResult.rows[0]
+          const miCosto = parseFloat(rechargeProduct.manual_selling_price)
+
+          // Use new names, fallback to legacy
+          const finalPrecioClientes = precioClientes ?? b2cPrice
+
+          // Validation: precio_clientes >= mi_costo (unless SUPER_ADMIN)
+          if (user.role !== 'SUPER_ADMIN' && finalPrecioClientes !== undefined && finalPrecioClientes !== null && finalPrecioClientes < miCosto) {
+            results.push({
+              productId,
+              success: false,
+              error: `Precio Clientes ($${finalPrecioClientes}) no puede ser menor que Mi Costo ($${miCosto})`
+            })
+            continue
+          }
+
+          // Calculate margin
+          let marginValue = null
+          if (finalPrecioClientes !== undefined && finalPrecioClientes !== null && miCosto > 0) {
+            marginValue = finalPrecioClientes - miCosto
+          }
+
+          // Upsert into recharge_product_pricing
+          await db.query(`
+            INSERT INTO recharge_product_pricing (
+              external_product_id, company_id,
+              margin_type, margin_value, selling_price, is_enabled
+            ) VALUES ($1, $2, $3, $4, $5, $6)
+            ON CONFLICT (external_product_id, company_id)
+            DO UPDATE SET
+              margin_type = COALESCE($3, recharge_product_pricing.margin_type),
+              margin_value = COALESCE($4, recharge_product_pricing.margin_value),
+              selling_price = COALESCE($5, recharge_product_pricing.selling_price),
+              is_enabled = $6,
+              updated_at = NOW()
+          `, [
+            rechargeProductId,
+            companyId,
+            'fixed',  // margin_type
+            marginValue,  // margin_value
+            finalPrecioClientes || null,  // selling_price
+            true  // is_enabled
+          ])
+
+          results.push({ productId, success: true })
+          continue
+        }
+
+        // ============================================================
+        // HANDLE CATALOG PRODUCTS (regular numeric productId)
+        // ============================================================
 
         // Get product info and determine mi_costo
         let costPriceQuery: string

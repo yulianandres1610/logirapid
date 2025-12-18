@@ -94,7 +94,7 @@ export default function ListaPreciosEmpresaPage() {
   })
   const [activeCategory, setActiveCategory] = useState<string>('all')
   const [searchTerm, setSearchTerm] = useState('')
-  const [editingCompanyPrices, setEditingCompanyPrices] = useState<Record<number, EditingCompanyPrice>>({})
+  const [editingCompanyPrices, setEditingCompanyPrices] = useState<Record<string | number, EditingCompanyPrice>>({})
   const [saving, setSaving] = useState(false)
   const [company, setCompany] = useState<Company | null>(null)
 
@@ -124,7 +124,7 @@ export default function ListaPreciosEmpresaPage() {
 
   // Handle company-specific price change
   const handleCompanyPriceChange = (
-    productId: number,
+    productId: number | string,
     field: 'precioSucursales' | 'precioClientes' | 'providerCost' | 'precioALogiRapid',
     value: number,
     originalProduct: any
@@ -151,7 +151,15 @@ export default function ListaPreciosEmpresaPage() {
     const errors: string[] = []
 
     for (const [productId, prices] of Object.entries(editingCompanyPrices)) {
-      const product = companyPricingData?.products.find(p => p.productId === parseInt(productId))
+      // Handle both string (recharge products) and numeric productIds
+      const product = companyPricingData?.products.find(p => {
+        // For recharge products, compare as strings
+        if (productId.startsWith('recharge-')) {
+          return p.productId === productId
+        }
+        // For catalog products, compare as numbers
+        return p.productId === parseInt(productId)
+      })
       if (!product) continue
 
       const miCosto = prices.miCosto || product.catalogMiCosto || 0
@@ -182,8 +190,9 @@ export default function ListaPreciosEmpresaPage() {
       }
 
       // Save company-specific prices
+      // Handle both numeric IDs and string IDs (recharge products like "recharge-123")
       const products = Object.entries(editingCompanyPrices).map(([id, prices]) => ({
-        productId: parseInt(id),
+        productId: id.startsWith('recharge-') ? id : parseInt(id),
         precioSucursales: prices.precioSucursales,
         precioClientes: prices.precioClientes,
         providerCost: prices.providerCost,

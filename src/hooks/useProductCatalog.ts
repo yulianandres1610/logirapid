@@ -38,7 +38,7 @@ export interface ProductCatalogData {
 
 // Types for company product pricing - NEW SIMPLIFIED NAMES
 export interface CompanyProductPricing {
-  productId: number
+  productId: number | string  // String for recharge products (e.g., "recharge-123")
   code: string
   name: string
   description: string | null
@@ -262,7 +262,7 @@ export function useCompanyProductPricing(companyId: number | null) {
   }, [companyId])
 
   const updatePrices = useCallback(async (products: Array<{
-    productId: number
+    productId: number | string  // String for recharge products (e.g., "recharge-123")
     // New field names
     precioSucursales?: number
     precioClientes?: number
