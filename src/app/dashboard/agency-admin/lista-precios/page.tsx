@@ -199,16 +199,31 @@ export default function ListaPreciosEmpresaPage() {
 
       // Save company-specific prices
       // Use the stored originalProductId to ensure correct type is sent
-      const products = Object.entries(editingCompanyPrices).map(([_key, prices]) => ({
-        productId: prices.originalProductId,  // Use stored original productId
-        precioSucursales: prices.precioSucursales,
-        precioClientes: prices.precioClientes,
-        providerCost: prices.providerCost,
-        precioALogiRapid: prices.precioALogiRapid
-      }))
+      const products = Object.entries(editingCompanyPrices).map(([key, prices]) => {
+        const product = {
+          productId: prices.originalProductId,  // Use stored original productId
+          precioSucursales: prices.precioSucursales,
+          precioClientes: prices.precioClientes,
+          providerCost: prices.providerCost,
+          precioALogiRapid: prices.precioALogiRapid
+        }
 
-      console.log('[Lista Precios] Saving products:', products)
-      console.log('[Lista Precios] editingCompanyPrices:', editingCompanyPrices)
+        // Log each product being saved for debugging
+        console.log('[Lista Precios] Product to save:', {
+          key,
+          originalProductId: prices.originalProductId,
+          originalProductIdType: typeof prices.originalProductId,
+          precioClientes: prices.precioClientes,
+          precioClientesType: typeof prices.precioClientes,
+          isRechargeProduct: typeof prices.originalProductId === 'string' &&
+            (prices.originalProductId as string).startsWith('recharge-')
+        })
+
+        return product
+      })
+
+      console.log('[Lista Precios] All products to save:', JSON.stringify(products, null, 2))
+      console.log('[Lista Precios] editingCompanyPrices state:', JSON.stringify(editingCompanyPrices, null, 2))
 
       await updateCompanyPrices(products, 'Actualizacion de precios desde Lista de Precios')
 
@@ -866,7 +881,9 @@ export default function ListaPreciosEmpresaPage() {
                                   )
                                 } else {
                                   // CLIENT VIEW
-                                  const editing = editingCompanyPrices[product.productId]
+                                  // Use String() to match how keys are stored in editingCompanyPrices
+                                  const productKey = String(product.productId)
+                                  const editing = editingCompanyPrices[productKey]
                                   const miCosto = product.miCosto || product.catalogMiCosto || 0
                                   const precioSucursales = editing?.precioSucursales ?? product.precioSucursales
                                   const precioClientes = editing?.precioClientes ?? product.precioClientes

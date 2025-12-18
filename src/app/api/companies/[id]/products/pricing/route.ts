@@ -613,10 +613,26 @@ export async function POST(
           }
 
           const rechargeProduct = rechargeProductResult.rows[0]
-          const miCosto = parseFloat(rechargeProduct.manual_selling_price)
+
+          // Safely parse miCosto, default to 0 if null/invalid
+          const rawMiCosto = parseFloat(rechargeProduct.manual_selling_price)
+          const miCosto = isNaN(rawMiCosto) ? 0 : rawMiCosto
 
           // Use new names, fallback to legacy
-          const finalPrecioClientes = precioClientes ?? b2cPrice
+          // IMPORTANT: Ensure we get the value correctly - check precioClientes first, then b2cPrice
+          let finalPrecioClientes = precioClientes
+          if (finalPrecioClientes === undefined || finalPrecioClientes === null) {
+            finalPrecioClientes = b2cPrice
+          }
+
+          console.log('[Company Pricing POST] Recharge product values:', {
+            productId,
+            precioClientes,
+            b2cPrice,
+            finalPrecioClientes,
+            miCosto,
+            rawMiCosto
+          })
 
           // If no price is being set, skip this product
           if (finalPrecioClientes === undefined || finalPrecioClientes === null) {
@@ -625,24 +641,29 @@ export async function POST(
             continue
           }
 
+          // Convert to number if it's a string
+          const numericPrecioClientes = typeof finalPrecioClientes === 'string'
+            ? parseFloat(finalPrecioClientes)
+            : finalPrecioClientes
+
           // Validation: precio_clientes >= mi_costo (unless SUPER_ADMIN)
-          if (user.role !== 'SUPER_ADMIN' && finalPrecioClientes < miCosto) {
+          if (user.role !== 'SUPER_ADMIN' && numericPrecioClientes < miCosto) {
             results.push({
               productId,
               success: false,
-              error: `Precio Clientes ($${finalPrecioClientes}) no puede ser menor que Mi Costo ($${miCosto})`
+              error: `Precio Clientes ($${numericPrecioClientes}) no puede ser menor que Mi Costo ($${miCosto})`
             })
             continue
           }
 
           // Calculate margin (can't be null since we have a price)
-          const marginValue = finalPrecioClientes - miCosto
+          const marginValue = numericPrecioClientes - miCosto
 
           console.log('[Company Pricing POST] Saving recharge product pricing:', {
             rechargeProductId,
             companyId,
             miCosto,
-            finalPrecioClientes,
+            numericPrecioClientes,
             marginValue
           })
 
@@ -665,7 +686,7 @@ export async function POST(
             companyId,
             'fixed',  // margin_type
             marginValue,  // margin_value (never null now)
-            finalPrecioClientes,  // selling_price (never null now)
+            numericPrecioClientes,  // selling_price (never null now)
             true  // is_enabled
           ])
 
