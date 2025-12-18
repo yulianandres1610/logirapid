@@ -576,6 +576,14 @@ export async function POST(
         // ============================================================
         const isRechargeProduct = typeof productId === 'string' && productId.startsWith('recharge-')
 
+        console.log('[Company Pricing POST] Processing product:', {
+          productId,
+          productIdType: typeof productId,
+          isRechargeProduct,
+          precioClientes,
+          b2cPrice
+        })
+
         if (isRechargeProduct) {
           // Extract the actual recharge product ID
           const rechargeProductId = parseInt(productId.replace('recharge-', ''))
@@ -619,8 +627,16 @@ export async function POST(
             marginValue = finalPrecioClientes - miCosto
           }
 
+          console.log('[Company Pricing POST] Saving recharge product pricing:', {
+            rechargeProductId,
+            companyId,
+            miCosto,
+            finalPrecioClientes,
+            marginValue
+          })
+
           // Upsert into recharge_product_pricing
-          await db.query(`
+          const upsertResult = await db.query(`
             INSERT INTO recharge_product_pricing (
               external_product_id, company_id,
               margin_type, margin_value, selling_price, is_enabled
@@ -632,6 +648,7 @@ export async function POST(
               selling_price = COALESCE($5, recharge_product_pricing.selling_price),
               is_enabled = $6,
               updated_at = NOW()
+            RETURNING *
           `, [
             rechargeProductId,
             companyId,
@@ -640,6 +657,8 @@ export async function POST(
             finalPrecioClientes || null,  // selling_price
             true  // is_enabled
           ])
+
+          console.log('[Company Pricing POST] Upsert result:', upsertResult.rows[0])
 
           results.push({ productId, success: true })
           continue

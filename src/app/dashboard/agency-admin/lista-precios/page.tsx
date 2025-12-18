@@ -199,6 +199,9 @@ export default function ListaPreciosEmpresaPage() {
         precioALogiRapid: prices.precioALogiRapid
       }))
 
+      console.log('[Lista Precios] Saving products:', products)
+      console.log('[Lista Precios] editingCompanyPrices keys:', Object.keys(editingCompanyPrices))
+
       await updateCompanyPrices(products, 'Actualizacion de precios desde Lista de Precios')
 
       showNotification('success', 'Precios actualizados', `${products.length} precio(s) actualizado(s) correctamente`)
