@@ -68,6 +68,8 @@ interface Product {
   currency: string | null // Currency for remesa
   serviciosCount: number
   isActive: boolean
+  // For recharge products, this stores the original string ID like "recharge-6"
+  originalProductId?: string
 }
 
 interface ProductService {
@@ -247,12 +249,13 @@ export default function CatalogoEmpresaPage() {
 
   // Tab 2: Precios Sucursales
   const [selectedBranch, setSelectedBranch] = useState<number | null>(null)
-  const [branchPrices, setBranchPrices] = useState<Record<number, number | null>>({})
+  const [branchPrices, setBranchPrices] = useState<Record<string, number | null>>({})
   const [savingBranchPrices, setSavingBranchPrices] = useState(false)
 
   // Tab 3: Precio Venta Publico
-  const [publicPrices, setPublicPrices] = useState<Record<number, number | null>>({})
-  const [branchSalePrices, setBranchSalePrices] = useState<Record<number, number | null>>({}) // precio_sucursales
+  // Note: Keys are strings - numeric for catalog products, "recharge-X" for recharge products
+  const [publicPrices, setPublicPrices] = useState<Record<string, number | null>>({})
+  const [branchSalePrices, setBranchSalePrices] = useState<Record<string, number | null>>({}) // precio_sucursales
   const [servicePrices, setServicePrices] = useState<Record<number, number | null>>({})
   const [allServices, setAllServices] = useState<ProductService[]>([])
   const [savingPublicPrices, setSavingPublicPrices] = useState(false)
@@ -276,33 +279,46 @@ export default function CatalogoEmpresaPage() {
       const data = await response.json()
 
       if (data.success && data.data.products) {
-        const mappedProducts = data.data.products.map((p: any) => ({
-          id: p.productId,
-          code: p.code,
-          name: p.name,
-          description: p.description,
-          category: p.serviceCategory,
-          miCosto: parseFloat(p.miCosto) || 0,
-          // For fixed fee, use catalog values (these come from LogiRapid's configuration)
-          miCostoFijo: parseFloat(p.catalogMiCostoFijo) || 0,
-          precioMayorista: parseFloat(p.catalogPrecioMayorista) || 0,
-          precioMayoristaFijo: parseFloat(p.catalogPrecioMayoristaFijo) || 0,
-          pricingModel: p.pricingModel || 'fixed',
-          currency: p.currency || null,
-          serviciosCount: p.servicesCount || 0,
-          isActive: p.isActive !== false
-        }))
+        const mappedProducts = data.data.products.map((p: any) => {
+          // Check if this is a recharge product (productId is a string like "recharge-6")
+          const isRechargeProduct = typeof p.productId === 'string' && p.productId.startsWith('recharge-')
+          // For recharge products, extract numeric part; for catalog products, use as-is
+          const numericId = isRechargeProduct
+            ? parseInt(p.productId.replace('recharge-', ''))
+            : (typeof p.productId === 'number' ? p.productId : parseInt(p.productId))
+
+          return {
+            id: numericId,
+            code: p.code,
+            name: p.name,
+            description: p.description,
+            category: p.serviceCategory,
+            miCosto: parseFloat(p.miCosto) || 0,
+            // For fixed fee, use catalog values (these come from LogiRapid's configuration)
+            miCostoFijo: parseFloat(p.catalogMiCostoFijo) || 0,
+            precioMayorista: parseFloat(p.catalogPrecioMayorista) || 0,
+            precioMayoristaFijo: parseFloat(p.catalogPrecioMayoristaFijo) || 0,
+            pricingModel: p.pricingModel || 'fixed',
+            currency: p.currency || null,
+            serviciosCount: p.servicesCount || 0,
+            isActive: p.isActive !== false,
+            // Store original productId for recharge products
+            originalProductId: isRechargeProduct ? p.productId : undefined
+          }
+        })
         setProducts(mappedProducts)
 
         // Also load public prices (precio_clientes) from the same API response
-        const prices: Record<number, number | null> = {}
-        const branchPricesData: Record<number, number | null> = {}
+        // Use string keys for all products to handle both numeric and recharge product IDs
+        const prices: Record<string, number | null> = {}
+        const branchPricesData: Record<string, number | null> = {}
         data.data.products.forEach((p: any) => {
+          const priceKey = String(p.productId)  // Convert to string for consistent key handling
           if (p.precioClientes !== null && p.precioClientes !== undefined) {
-            prices[p.productId] = parseFloat(p.precioClientes)
+            prices[priceKey] = parseFloat(p.precioClientes)
           }
           if (p.precioSucursales !== null && p.precioSucursales !== undefined) {
-            branchPricesData[p.productId] = parseFloat(p.precioSucursales)
+            branchPricesData[priceKey] = parseFloat(p.precioSucursales)
           }
         })
         setPublicPrices(prev => ({ ...prev, ...prices }))
@@ -668,10 +684,12 @@ export default function CatalogoEmpresaPage() {
     setSavingPublicPrices(true)
     try {
       // Save product prices
+      // IMPORTANT: Recharge products have string IDs like "recharge-6", don't use parseInt on them
       const productsToUpdate = Object.entries(publicPrices)
         .filter(([_, price]) => price !== null)
         .map(([productId, price]) => ({
-          productId: parseInt(productId),
+          // Keep string IDs for recharge products, convert to number for regular products
+          productId: productId.startsWith('recharge-') ? productId : parseInt(productId),
           precioClientes: price
         }))
 
@@ -716,7 +734,7 @@ export default function CatalogoEmpresaPage() {
 
       const isRemesa = product.category === 'remesa' && product.pricingModel === 'percentage'
       const servicesCost = getServicesCost(product.id)
-      const productPublicPrice = publicPrices[product.id] ?? 0
+      const productPublicPrice = publicPrices[getProductPriceKey(product)] ?? 0
 
       // For remesa: margin is percentage points difference
       // For others: margin is dollar difference
@@ -883,6 +901,12 @@ export default function CatalogoEmpresaPage() {
         return sum + (serviceSellPrice * c.commissionValue / 100)
       }
     }, 0)
+  }
+
+  // Helper: Get the correct price key for a product
+  // Recharge products use "recharge-X" format, catalog products use "X" as string
+  const getProductPriceKey = (product: Product): string => {
+    return product.originalProductId || String(product.id)
   }
 
   // Toggle product expansion in price tab
@@ -1766,7 +1790,8 @@ export default function CatalogoEmpresaPage() {
                       const isRemesa = product.category === 'remesa' && product.pricingModel === 'percentage'
                       // For remesa: cost is % + fixed fee, not additive with services
                       const totalCost = isRemesa ? product.miCosto : (product.miCosto + servicesCost)
-                      const publicPrice = publicPrices[product.id]
+                      const priceKey = getProductPriceKey(product)
+                      const publicPrice = publicPrices[priceKey]
                       // For remesa: margin is the difference in percentage points
                       const margin = publicPrice !== null && publicPrice !== undefined
                         ? (isRemesa ? publicPrice - product.miCosto : publicPrice - totalCost)
@@ -1841,7 +1866,7 @@ export default function CatalogoEmpresaPage() {
                                       const value = e.target.value ? parseFloat(e.target.value) : null
                                       setPublicPrices(prev => ({
                                         ...prev,
-                                        [product.id]: value
+                                        [priceKey]: value
                                       }))
                                     }}
                                     className={`w-36 ${isRemesa ? 'pl-4' : 'pl-8'} pr-4 py-2.5 text-center text-lg font-semibold rounded-xl border-2 transition-all ${
@@ -2048,7 +2073,8 @@ export default function CatalogoEmpresaPage() {
 
                       // Calculate margin for this product
                       const servicesCost = getServicesCost(product.id)
-                      const publicPrice = publicPrices[product.id] ?? 0
+                      const priceKey = getProductPriceKey(product)
+                      const publicPrice = publicPrices[priceKey] ?? 0
 
                       // For remesa: margin is percentage points difference
                       // For others: margin is dollar difference
@@ -2937,8 +2963,9 @@ export default function CatalogoEmpresaPage() {
                     {products.map(product => {
                       const catConfig = getCategoryConfig(product.category)
                       const Icon = catConfig.icon
-                      const publicPrice = publicPrices[product.id] ?? 0
-                      const branchPrice = branchSalePrices[product.id] ?? 0
+                      const priceKey = getProductPriceKey(product)
+                      const publicPrice = publicPrices[priceKey] ?? 0
+                      const branchPrice = branchSalePrices[priceKey] ?? 0
                       const servicesCost = allServices.filter(s => s.productId === product.id).reduce((sum, s) => sum + s.costPrice, 0)
                       const totalCost = product.miCosto + servicesCost
 
