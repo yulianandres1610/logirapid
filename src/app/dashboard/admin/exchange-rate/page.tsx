@@ -34,6 +34,8 @@ import { cn } from '@/lib/utils'
 import { useTheme } from '@/contexts/theme-context'
 import { DashboardLayout } from '@/components/layout/dashboard-layout'
 
+import { getCurrencyMeta, CURRENCY_METADATA } from '@/lib/eltoque-api'
+
 interface ExchangeRate {
   rate: number
   formatted: string
@@ -41,11 +43,8 @@ interface ExchangeRate {
   variacion: number
 }
 
-interface ExchangeRatesData {
-  USD: ExchangeRate
-  EUR: ExchangeRate
-  MLC: ExchangeRate
-}
+// Dynamic type - accepts any currency from the API
+type ExchangeRatesData = Record<string, ExchangeRate>
 
 interface ConversionResult {
   amount: number
@@ -139,18 +138,16 @@ function RateCard({
   data,
   index,
   theme,
-  currencyFlags,
-  currencyNames,
   adjustmentPercentage = 0
 }: {
   currency: string
   data: ExchangeRate
   index: number
   theme: 'light' | 'dark'
-  currencyFlags: Record<string, string>
-  currencyNames: Record<string, string>
   adjustmentPercentage: number
 }) {
+  // Get currency metadata dynamically
+  const currencyMeta = getCurrencyMeta(currency)
   // Hook para contador animado - ahora dentro de su propio componente
   const [count, setCount] = useState(0)
   const [isAnimating, setIsAnimating] = useState(false)
@@ -237,7 +234,7 @@ function RateCard({
               }}
               transition={{ duration: 0.3 }}
             >
-              {currencyFlags[currency as keyof typeof currencyFlags]}
+              {currencyMeta.flag}
             </motion.div>
             <div>
               <h3 className={cn(
@@ -250,7 +247,7 @@ function RateCard({
                 "text-xs",
                 theme === 'dark' ? "text-gray-400" : "text-gray-600"
               )}>
-                {currencyNames[currency as keyof typeof currencyNames]}
+                {currencyMeta.name}
               </p>
             </div>
           </div>
@@ -927,19 +924,7 @@ export default function ExchangeRatePage() {
     }
   }, [])
 
-  const currencyFlags = {
-    USD: '🇺🇸',
-    EUR: '🇪🇺',
-    MLC: '💳',
-    CUP: '🇨🇺'
-  }
-
-  const currencyNames = {
-    USD: 'Dólar Americano',
-    EUR: 'Euro',
-    MLC: 'Tarjeta MLC',
-    CUP: 'Peso Cubano'
-  }
+  // Currency metadata is now imported from eltoque-api.ts (getCurrencyMeta, CURRENCY_METADATA)
 
   // Función para verificar salud del API en tiempo real
   const checkAPIHealth = async () => {
@@ -1323,8 +1308,15 @@ export default function ExchangeRatePage() {
                   theme === 'dark' ? "bg-gray-800 border-gray-700" : "bg-white border-gray-200"
                 )}
               >
-                {/* Tarjetas de Tasas deltoque */}
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {/* Tarjetas de Tasas deltoque - Dynamic grid based on currency count */}
+                <div className={cn(
+                  "grid gap-4",
+                  rates && Object.keys(rates).length <= 3
+                    ? "grid-cols-1 md:grid-cols-2 lg:grid-cols-3"
+                    : rates && Object.keys(rates).length <= 6
+                      ? "grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4"
+                      : "grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5"
+                )}>
                   {rates && Object.entries(rates).map(([currency, data], index) => (
                     <RateCard
                       key={currency}
@@ -1332,8 +1324,6 @@ export default function ExchangeRatePage() {
                       data={data}
                       index={index}
                       theme={theme}
-                      currencyFlags={currencyFlags}
-                      currencyNames={currencyNames}
                       adjustmentPercentage={adjustmentPercentage}
                     />
                   ))}
@@ -1615,10 +1605,18 @@ export default function ExchangeRatePage() {
                     </span>
                   </h3>
 
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  <div className={cn(
+                    "grid gap-4",
+                    agencyRates && Object.keys(agencyRates).length <= 3
+                      ? "grid-cols-1 md:grid-cols-2 lg:grid-cols-3"
+                      : agencyRates && Object.keys(agencyRates).length <= 6
+                        ? "grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4"
+                        : "grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5"
+                  )}>
                     {agencyRates && Object.entries(agencyRates).map(([currency, data], index) => {
-                      const baseRate = rates?.[currency as keyof ExchangeRatesData]?.rate || 0
+                      const baseRate = rates?.[currency]?.rate || 0
                       const isAdjusted = globalConfig?.isActive && baseRate !== data.rate
+                      const currencyMeta = getCurrencyMeta(currency)
 
                       return (
                         <motion.div
@@ -1657,7 +1655,7 @@ export default function ExchangeRatePage() {
                                   )}
                                   whileHover={{ scale: 1.05, rotate: [0, -5, 5, 0] }}
                                 >
-                                  {currencyFlags[currency as keyof typeof currencyFlags]}
+                                  {currencyMeta.flag}
                                 </motion.div>
                                 <div>
                                   <h3 className={cn(
@@ -1670,7 +1668,7 @@ export default function ExchangeRatePage() {
                                     "text-xs",
                                     theme === 'dark' ? "text-gray-400" : "text-gray-600"
                                   )}>
-                                    {currencyNames[currency as keyof typeof currencyNames]}
+                                    {currencyMeta.name}
                                   </p>
                                 </div>
                               </div>
@@ -1799,10 +1797,16 @@ export default function ExchangeRatePage() {
                           : "bg-white border-gray-300 text-gray-900"
                       )}
                     >
-                      <option value="USD">🇺🇸 USD - Dólar Americano</option>
-                      <option value="EUR">🇪🇺 EUR - Euro</option>
-                      <option value="MLC">💳 MLC - Tarjeta MLC</option>
-                      <option value="CUP">🇨🇺 CUP - Peso Cubano</option>
+                      {/* Dynamic currency options from available rates + CUP */}
+                      {rates && Object.keys(rates).map(currency => {
+                        const meta = getCurrencyMeta(currency)
+                        return (
+                          <option key={currency} value={currency}>
+                            {meta.flag} {currency} - {meta.name}
+                          </option>
+                        )
+                      })}
+                      <option value="CUP">{getCurrencyMeta('CUP').flag} CUP - {getCurrencyMeta('CUP').name}</option>
                     </select>
                   </div>
 
@@ -1844,10 +1848,17 @@ export default function ExchangeRatePage() {
                           : "bg-white border-gray-300 text-gray-900"
                       )}
                     >
-                      <option value="CUP">🇨🇺 CUP - Peso Cubano</option>
-                      <option value="USD">🇺🇸 USD - Dólar Americano</option>
-                      <option value="EUR">🇪🇺 EUR - Euro</option>
-                      <option value="MLC">💳 MLC - Tarjeta MLC</option>
+                      {/* CUP first as default target */}
+                      <option value="CUP">{getCurrencyMeta('CUP').flag} CUP - {getCurrencyMeta('CUP').name}</option>
+                      {/* Then all other currencies from rates */}
+                      {rates && Object.keys(rates).map(currency => {
+                        const meta = getCurrencyMeta(currency)
+                        return (
+                          <option key={currency} value={currency}>
+                            {meta.flag} {currency} - {meta.name}
+                          </option>
+                        )
+                      })}
                     </select>
                   </div>
 

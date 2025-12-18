@@ -7,10 +7,42 @@ export interface ExchangeRate {
   variacion?: number
 }
 
-export interface AllExchangeRates {
-  USD: ExchangeRate
-  EUR: ExchangeRate
-  MLC: ExchangeRate
+// Dynamic type that accepts any currency from the API
+export type AllExchangeRates = Record<string, ExchangeRate>
+
+// Currency metadata for UI display
+export interface CurrencyMeta {
+  flag: string
+  name: string
+  symbol?: string
+}
+
+// Comprehensive currency metadata - add new currencies here
+export const CURRENCY_METADATA: Record<string, CurrencyMeta> = {
+  USD: { flag: '🇺🇸', name: 'Dólar Americano', symbol: '$' },
+  EUR: { flag: '🇪🇺', name: 'Euro', symbol: '€' },
+  MLC: { flag: '💳', name: 'Tarjeta MLC', symbol: 'MLC' },
+  CUP: { flag: '🇨🇺', name: 'Peso Cubano', symbol: '₱' },
+  GBP: { flag: '🇬🇧', name: 'Libra Esterlina', symbol: '£' },
+  CAD: { flag: '🇨🇦', name: 'Dólar Canadiense', symbol: 'C$' },
+  MXN: { flag: '🇲🇽', name: 'Peso Mexicano', symbol: 'MX$' },
+  BRL: { flag: '🇧🇷', name: 'Real Brasileño', symbol: 'R$' },
+  ZELLE: { flag: '💸', name: 'Zelle', symbol: 'Z' },
+  CLA: { flag: '🏦', name: 'Classic', symbol: 'CLA' },
+  USDT: { flag: '💰', name: 'Tether USDT', symbol: '₮' },
+  BTC: { flag: '₿', name: 'Bitcoin', symbol: '₿' },
+  ETH: { flag: '⟠', name: 'Ethereum', symbol: 'Ξ' },
+  TRX: { flag: '🔷', name: 'Tron', symbol: 'TRX' },
+  ECU: { flag: '🇪🇨', name: 'Dólar Ecuatoriano', symbol: '$' },
+}
+
+// Helper function to get currency metadata with fallback
+export function getCurrencyMeta(currency: string): CurrencyMeta {
+  return CURRENCY_METADATA[currency.toUpperCase()] || {
+    flag: '💱',
+    name: currency,
+    symbol: currency
+  }
 }
 
 class ElToqueAPI {
@@ -191,9 +223,9 @@ class ElToqueAPI {
       }
     }
 
-    // Si no encontramos formato válido, crear tasas simuladas
-    console.warn('⚠️ No valid format found, creating simulated rates')
-    return this.getSimulatedRates()
+    // Si no encontramos formato válido, lanzar error (nunca tasas simuladas)
+    console.error('❌ No valid format found in API response')
+    throw new Error('No se pudo procesar la respuesta del API. Formato no reconocido.')
   }
 
   /**
@@ -281,79 +313,35 @@ class ElToqueAPI {
   private static isValidRatesObject(obj: any): boolean {
     if (!obj || typeof obj !== 'object') return false
 
-    const validCurrencies = ['USD', 'EUR', 'MLC']
+    // Accept any currency that's in our metadata or looks like a valid currency code
+    const knownCurrencies = Object.keys(CURRENCY_METADATA)
     const keys = Object.keys(obj)
 
     // Verificar si alguna clave es una moneda válida (insensible a mayúsculas)
     return keys.some(key => {
       const upperKey = key.toUpperCase().trim()
-      return validCurrencies.includes(upperKey) ||
-             validCurrencies.some(curr => upperKey.includes(curr) || curr.includes(upperKey))
+      // Check if it's a known currency or looks like a 3-letter currency code
+      return knownCurrencies.includes(upperKey) ||
+             (upperKey.length >= 2 && upperKey.length <= 5 && /^[A-Z]+$/.test(upperKey))
     })
   }
 
   /**
-   * Obtener tasas locales del agency-rates.service como fallback
+   * Obtener tasas de fallback cuando el API no está disponible
+   * Solo usa el caché si está disponible, nunca tasas simuladas
    */
   private static getLocalFallbackRates(): AllExchangeRates {
-    console.log('🏠 Using local agency rates as fallback')
+    console.log('🏠 Using fallback rates from cache')
 
-    try {
-      // Importar dinámicamente para evitar dependencia circular
-      const { AgencyRatesService } = require('./agency-rates.service')
-      const service = AgencyRatesService.getInstance()
-
-      // Obtener tasas base del servicio local
-      const baseRates = service.getBaseRates()
-
-      const now = new Date().toISOString()
-
-      // Si tenemos tasas base locales, usarlas
-      if (baseRates && Object.keys(baseRates).length > 0) {
-        console.log('✅ Using cached local base rates:', Object.keys(baseRates))
-
-        return {
-          USD: { moneda: 'USD', tasa: baseRates.USD || 440, fechaActualizacion: now, variacion: 0 },
-          EUR: { moneda: 'EUR', tasa: baseRates.EUR || 480, fechaActualizacion: now, variacion: 0 },
-          MLC: { moneda: 'MLC', tasa: baseRates.MLC || 300, fechaActualizacion: now, variacion: 0 }
-        }
-      }
-    } catch (error) {
-      console.warn('⚠️ Could not load local agency rates, using simulated:', error)
+    // Solo usar caché real, nunca tasas simuladas
+    if (this.cachedRates && Object.keys(this.cachedRates).length > 0) {
+      console.log('✅ Using cached rates as fallback')
+      return this.cachedRates
     }
 
-    // Si no hay tasas locales, usar tasas simuladas como último recurso
-    return this.getSimulatedRates()
-  }
-
-  /**
-   * Obtener tasas simuladas con variaciones realistas
-   */
-  private static getSimulatedRates(): AllExchangeRates {
-    console.log('🎲 Using simulated exchange rates')
-    const now = new Date().toISOString()
-
-    // Tasas base realistas basadas en los valores actuales del API (2025)
-    return {
-      USD: {
-        moneda: 'USD',
-        tasa: 440 + Math.round((Math.random() - 0.5) * 20),
-        fechaActualizacion: now,
-        variacion: (Math.random() - 0.5) * 2
-      },
-      EUR: {
-        moneda: 'EUR',
-        tasa: 480 + Math.round((Math.random() - 0.5) * 25),
-        fechaActualizacion: now,
-        variacion: (Math.random() - 0.5) * 2
-      },
-      MLC: {
-        moneda: 'MLC',
-        tasa: 300 + Math.round((Math.random() - 0.5) * 10),
-        fechaActualizacion: now,
-        variacion: (Math.random() - 0.5) * 2
-      }
-    }
+    // Si no hay caché, lanzar error para que el endpoint maneje el fallback a BD
+    console.error('❌ No cached rates available, API must be used or database fallback')
+    throw new Error('No hay tasas en caché. El servidor debe usar la base de datos como fallback.')
   }
 
   /**
@@ -417,18 +405,15 @@ class ElToqueAPI {
 
   /**
    * Obtener tasas formateadas para la UI
+   * Returns all currencies dynamically from the API
    */
-  static async getFormattedRates(): Promise<{
-    USD: { rate: number; formatted: string; lastUpdate: string; variacion: number }
-    EUR: { rate: number; formatted: string; lastUpdate: string; variacion: number }
-    MLC: { rate: number; formatted: string; lastUpdate: string; variacion: number }
-  }> {
+  static async getFormattedRates(): Promise<Record<string, { rate: number; formatted: string; lastUpdate: string; variacion: number }>> {
     try {
       const rates = await this.getAllRates()
 
-      const formatRate = (rate: ExchangeRate | undefined, defaultRate: number = 0) => ({
-        rate: rate?.tasa || defaultRate,
-        formatted: rate ? rate.tasa.toFixed(2) : defaultRate.toFixed(2),
+      const formatRate = (rate: ExchangeRate | undefined) => ({
+        rate: rate?.tasa || 0,
+        formatted: rate ? rate.tasa.toFixed(2) : '0.00',
         lastUpdate: rate ? new Date(rate.fechaActualizacion).toLocaleString('es-ES', {
           day: '2-digit',
           month: '2-digit',
@@ -445,11 +430,14 @@ class ElToqueAPI {
         variacion: rate?.variacion || 0
       })
 
-      return {
-        USD: formatRate(rates.USD, 440),
-        EUR: formatRate(rates.EUR, 480),
-        MLC: formatRate(rates.MLC, 300)
-      }
+      // Dynamically format all currencies from the API response
+      const formattedRates: Record<string, { rate: number; formatted: string; lastUpdate: string; variacion: number }> = {}
+
+      Object.entries(rates).forEach(([currency, rate]) => {
+        formattedRates[currency] = formatRate(rate)
+      })
+
+      return formattedRates
     } catch (error) {
       console.error('Error formatting exchange rates:', error)
       throw error
@@ -458,67 +446,74 @@ class ElToqueAPI {
 
   /**
    * Convertir moneda usando tasas reales
+   * Accepts any currency code dynamically
    */
   static async convertCurrency(
-    from: keyof AllExchangeRates | 'CUP',
-    to: keyof AllExchangeRates | 'CUP',
+    from: string,
+    to: string,
     amount: number
   ): Promise<{ amount: number; rate: number; result: number }> {
     try {
       console.log(`💱 Converting ${amount} ${from} to ${to}`)
       const rates = await this.getAllRates()
 
-      // Validar monedas
-      const validCurrencies = ['USD', 'EUR', 'MLC', 'CUP']
-      if (!validCurrencies.includes(from) || !validCurrencies.includes(to)) {
-        throw new Error(`Invalid currency. From: ${from}, To: ${to}`)
+      // Normalize currency codes
+      const fromCurrency = from.toUpperCase()
+      const toCurrency = to.toUpperCase()
+
+      // Get available currencies from rates + CUP
+      const availableCurrencies = [...Object.keys(rates), 'CUP']
+
+      // Validate currencies
+      if (!availableCurrencies.includes(fromCurrency) || !availableCurrencies.includes(toCurrency)) {
+        throw new Error(`Invalid currency. From: ${fromCurrency}, To: ${toCurrency}. Available: ${availableCurrencies.join(', ')}`)
       }
 
       // Obtener tasa de la moneda de origen
       let fromRate: number
-      if (from === 'CUP') {
+      if (fromCurrency === 'CUP') {
         fromRate = 1
       } else {
-        const rateData = rates[from as keyof AllExchangeRates]
+        const rateData = rates[fromCurrency]
         fromRate = rateData?.tasa || 0
         if (fromRate === 0) {
-          throw new Error(`No rate found for currency: ${from}`)
+          throw new Error(`No rate found for currency: ${fromCurrency}`)
         }
       }
 
       let result: number
       let usedRate: number
 
-      if (from === 'CUP') {
+      if (fromCurrency === 'CUP') {
         // Convertir de CUP a moneda extranjera
-        if (to === 'CUP') {
+        if (toCurrency === 'CUP') {
           return { amount, rate: 1, result: amount }
         }
-        const toRateData = rates[to as keyof AllExchangeRates]
+        const toRateData = rates[toCurrency]
         const toRate = toRateData?.tasa || 0
         if (toRate === 0) {
-          throw new Error(`No rate found for currency: ${to}`)
+          throw new Error(`No rate found for currency: ${toCurrency}`)
         }
         result = amount / toRate
         usedRate = 1 / toRate
-      } else if (to === 'CUP') {
+      } else if (toCurrency === 'CUP') {
         // Convertir de moneda extranjera a CUP
         result = amount * fromRate
         usedRate = fromRate
       } else {
         // Convertir entre monedas extranjeras
         const amountInCup = amount * fromRate
-        const toRateData = rates[to as keyof AllExchangeRates]
+        const toRateData = rates[toCurrency]
         const toRate = toRateData?.tasa || 0
         if (toRate === 0) {
-          throw new Error(`No rate found for currency: ${to}`)
+          throw new Error(`No rate found for currency: ${toCurrency}`)
         }
         result = amountInCup / toRate
         usedRate = fromRate / toRate
       }
 
       const finalResult = Math.round(result * 100) / 100 // Redondear a 2 decimales
-      console.log(`💱 Conversion result: ${amount} ${from} = ${finalResult} ${to} (rate: ${usedRate})`)
+      console.log(`💱 Conversion result: ${amount} ${fromCurrency} = ${finalResult} ${toCurrency} (rate: ${usedRate})`)
 
       return {
         amount,
