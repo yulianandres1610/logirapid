@@ -21,26 +21,18 @@ export default function ExchangeRatePage() {
   const currencyFlags: Record<string, string> = {
     USD: '🇺🇸',
     EUR: '🇪🇺',
-    MLC: '💳',
-    GBP: '🇬🇧',
-    CAD: '🇨🇦',
-    MXN: '🇲🇽',
-    BRL: '🇧🇷',
-    ZELLE: '💸',
-    CLA: '📱'
+    MLC: '💳'
   }
 
   const currencyNames: Record<string, string> = {
     USD: 'Dólar Americano',
     EUR: 'Euro',
-    MLC: 'Tarjeta de Débito',
-    GBP: 'Libra Esterlina',
-    CAD: 'Dólar Canadiense',
-    MXN: 'Peso Mexicano',
-    BRL: 'Real Brasileño',
-    ZELLE: 'Zelle',
-    CLA: 'CashApp'
+    MLC: 'Tarjeta MLC'
   }
+
+  // Filtrar solo las monedas disponibles del API
+  const availableCurrencies = ['USD', 'EUR', 'MLC']
+  const filteredRates = rates.filter(rate => availableCurrencies.includes(rate.currency))
 
   if (loading && rates.length === 0) {
     return (
@@ -156,9 +148,9 @@ export default function ExchangeRatePage() {
             </motion.div>
           </AnimatePresence>
 
-          {/* Grid de Tasas - 9 monedas */}
+          {/* Grid de Tasas - Solo USD, EUR, MLC */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {rates.map((rateData, index) => (
+            {filteredRates.map((rateData, index) => (
               <motion.div
                 key={rateData.currency}
                 initial={{ opacity: 0, y: 20 }}
@@ -231,7 +223,7 @@ export default function ExchangeRatePage() {
           </div>
 
           {/* Mensaje si no hay tasas */}
-          {rates.length === 0 && !loading && (
+          {filteredRates.length === 0 && !loading && (
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
