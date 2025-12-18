@@ -782,22 +782,62 @@ Gracias por su compra!
             Imprimir Ticket
           </Button>
           <Button onClick={closeWizard} className="w-full bg-purple-600 hover:bg-purple-700">
-            Cerrar
+            Volver al Historial
           </Button>
         </div>
       </motion.div>
     )
   }
 
+  // Render wizard as main content
+  const renderWizardView = () => (
+    <div className="max-w-2xl mx-auto">
+      {/* Header with back button */}
+      <div className="mb-6">
+        <Button
+          variant="outline"
+          onClick={closeWizard}
+          className="mb-4"
+        >
+          <ArrowLeft className="w-4 h-4 mr-2" />
+          Volver al Historial
+        </Button>
+        <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Nueva Recarga</h1>
+      </div>
+
+      {/* Wizard Card */}
+      <div className={cn(
+        "rounded-2xl border p-6",
+        theme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'
+      )}>
+        <AnimatePresence mode="wait">
+          {currentStep === 'service' && renderServiceStep()}
+          {currentStep === 'product' && renderProductStep()}
+          {currentStep === 'phone' && renderPhoneStep()}
+          {currentStep === 'confirmation' && renderConfirmationStep()}
+          {currentStep === 'success' && renderSuccessStep()}
+        </AnimatePresence>
+      </div>
+    </div>
+  )
+
   return (
     <ProtectedRoute requiredRole="ADMIN">
       <DashboardLayout>
         <div className="min-h-screen p-6">
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="space-y-6"
-          >
+          {showWizard ? (
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+            >
+              {renderWizardView()}
+            </motion.div>
+          ) : (
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="space-y-6"
+            >
             {/* Stats Cards */}
             <div className="grid grid-cols-1 md:grid-cols-4 gap-5">
               {/* Total Recargas */}
@@ -1145,50 +1185,8 @@ Gracias por su compra!
               )}
             </div>
           </motion.div>
-        </div>
-
-        {/* Wizard Modal */}
-        <AnimatePresence>
-          {showWizard && (
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
-              onClick={closeWizard}
-            >
-              <motion.div
-                initial={{ scale: 0.9, opacity: 0 }}
-                animate={{ scale: 1, opacity: 1 }}
-                exit={{ scale: 0.9, opacity: 0 }}
-                onClick={(e) => e.stopPropagation()}
-                className={cn(
-                  "w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-2xl p-6",
-                  theme === 'dark' ? 'bg-gray-900' : 'bg-white'
-                )}
-              >
-                {/* Close button */}
-                <div className="flex justify-end mb-4">
-                  <button
-                    onClick={closeWizard}
-                    className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
-                  >
-                    <X className="w-5 h-5 text-gray-500" />
-                  </button>
-                </div>
-
-                {/* Wizard Content */}
-                <AnimatePresence mode="wait">
-                  {currentStep === 'service' && renderServiceStep()}
-                  {currentStep === 'product' && renderProductStep()}
-                  {currentStep === 'phone' && renderPhoneStep()}
-                  {currentStep === 'confirmation' && renderConfirmationStep()}
-                  {currentStep === 'success' && renderSuccessStep()}
-                </AnimatePresence>
-              </motion.div>
-            </motion.div>
           )}
-        </AnimatePresence>
+        </div>
       </DashboardLayout>
     </ProtectedRoute>
   )
