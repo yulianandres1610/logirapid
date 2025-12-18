@@ -45,12 +45,6 @@ interface ExchangeRatesData {
   USD: ExchangeRate
   EUR: ExchangeRate
   MLC: ExchangeRate
-  GBP: ExchangeRate
-  CAD: ExchangeRate
-  MXN: ExchangeRate
-  BRL: ExchangeRate
-  ZELLE: ExchangeRate
-  CLA: ExchangeRate
 }
 
 interface ConversionResult {
@@ -937,25 +931,13 @@ export default function ExchangeRatePage() {
     USD: '🇺🇸',
     EUR: '🇪🇺',
     MLC: '💳',
-    GBP: '🇬🇧',
-    CAD: '🇨🇦',
-    MXN: '🇲🇽',
-    BRL: '🇧🇷',
-    ZELLE: '💸',
-    CLA: '📱',
     CUP: '🇨🇺'
   }
 
   const currencyNames = {
     USD: 'Dólar Americano',
     EUR: 'Euro',
-    MLC: 'Tarjeta de Débito',
-    GBP: 'Libra Esterlina',
-    CAD: 'Dólar Canadiense',
-    MXN: 'Peso Mexicano',
-    BRL: 'Real Brasileño',
-    ZELLE: 'Zelle',
-    CLA: 'CashApp',
+    MLC: 'Tarjeta MLC',
     CUP: 'Peso Cubano'
   }
 
@@ -1819,13 +1801,7 @@ export default function ExchangeRatePage() {
                     >
                       <option value="USD">🇺🇸 USD - Dólar Americano</option>
                       <option value="EUR">🇪🇺 EUR - Euro</option>
-                      <option value="MLC">💳 MLC - Tarjeta de Débito</option>
-                      <option value="GBP">🇬🇧 GBP - Libra Esterlina</option>
-                      <option value="CAD">🇨🇦 CAD - Dólar Canadiense</option>
-                      <option value="MXN">🇲🇽 MXN - Peso Mexicano</option>
-                      <option value="BRL">🇧🇷 BRL - Real Brasileño</option>
-                      <option value="ZELLE">💸 ZELLE</option>
-                      <option value="CLA">📱 CLA - CashApp</option>
+                      <option value="MLC">💳 MLC - Tarjeta MLC</option>
                       <option value="CUP">🇨🇺 CUP - Peso Cubano</option>
                     </select>
                   </div>
@@ -1871,13 +1847,7 @@ export default function ExchangeRatePage() {
                       <option value="CUP">🇨🇺 CUP - Peso Cubano</option>
                       <option value="USD">🇺🇸 USD - Dólar Americano</option>
                       <option value="EUR">🇪🇺 EUR - Euro</option>
-                      <option value="MLC">💳 MLC - Tarjeta de Débito</option>
-                      <option value="GBP">🇬🇧 GBP - Libra Esterlina</option>
-                      <option value="CAD">🇨🇦 CAD - Dólar Canadiense</option>
-                      <option value="MXN">🇲🇽 MXN - Peso Mexicano</option>
-                      <option value="BRL">🇧🇷 BRL - Real Brasileño</option>
-                      <option value="ZELLE">💸 ZELLE</option>
-                      <option value="CLA">📱 CLA - CashApp</option>
+                      <option value="MLC">💳 MLC - Tarjeta MLC</option>
                     </select>
                   </div>
 

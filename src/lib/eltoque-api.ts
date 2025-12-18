@@ -11,12 +11,6 @@ export interface AllExchangeRates {
   USD: ExchangeRate
   EUR: ExchangeRate
   MLC: ExchangeRate
-  GBP: ExchangeRate
-  CAD: ExchangeRate
-  MXN: ExchangeRate
-  BRL: ExchangeRate
-  ZELLE: ExchangeRate
-  CLA: ExchangeRate
 }
 
 class ElToqueAPI {
@@ -287,7 +281,7 @@ class ElToqueAPI {
   private static isValidRatesObject(obj: any): boolean {
     if (!obj || typeof obj !== 'object') return false
 
-    const validCurrencies = ['USD', 'EUR', 'MLC', 'GBP', 'CAD', 'MXN', 'BRL', 'ZELLE', 'CLA']
+    const validCurrencies = ['USD', 'EUR', 'MLC']
     const keys = Object.keys(obj)
 
     // Verificar si alguna clave es una moneda válida (insensible a mayúsculas)
@@ -319,15 +313,9 @@ class ElToqueAPI {
         console.log('✅ Using cached local base rates:', Object.keys(baseRates))
 
         return {
-          USD: { moneda: 'USD', tasa: baseRates.USD || 475, fechaActualizacion: now, variacion: 0 },
-          EUR: { moneda: 'EUR', tasa: baseRates.EUR || 530, fechaActualizacion: now, variacion: 0 },
-          MLC: { moneda: 'MLC', tasa: baseRates.MLC || 200, fechaActualizacion: now, variacion: 0 },
-          GBP: { moneda: 'GBP', tasa: baseRates.GBP || 488.84, fechaActualizacion: now, variacion: 0 },
-          CAD: { moneda: 'CAD', tasa: baseRates.CAD || 310, fechaActualizacion: now, variacion: 0 },
-          MXN: { moneda: 'MXN', tasa: baseRates.MXN || 22.33, fechaActualizacion: now, variacion: 0 },
-          BRL: { moneda: 'BRL', tasa: baseRates.BRL || 77.14, fechaActualizacion: now, variacion: 0 },
-          ZELLE: { moneda: 'ZELLE', tasa: baseRates.ZELLE || 453.08, fechaActualizacion: now, variacion: 0 },
-          CLA: { moneda: 'CLA', tasa: baseRates.CLA || 438.27, fechaActualizacion: now, variacion: 0 }
+          USD: { moneda: 'USD', tasa: baseRates.USD || 440, fechaActualizacion: now, variacion: 0 },
+          EUR: { moneda: 'EUR', tasa: baseRates.EUR || 480, fechaActualizacion: now, variacion: 0 },
+          MLC: { moneda: 'MLC', tasa: baseRates.MLC || 300, fechaActualizacion: now, variacion: 0 }
         }
       }
     } catch (error) {
@@ -345,30 +333,27 @@ class ElToqueAPI {
     console.log('🎲 Using simulated exchange rates')
     const now = new Date().toISOString()
 
-    // Tasas base realistas basadas en los valores actuales del API (2024)
-    const baseRates = {
-      USD: 475 + (Math.random() - 0.5) * 20,  // Valor real actual ~475
-      EUR: 530 + (Math.random() - 0.5) * 25,  // Valor real actual ~530
-      MLC: 200 + (Math.random() - 0.5) * 10,  // Valor real actual ~200
-      GBP: 489 + (Math.random() - 0.5) * 30,  // Valor real actual ~489.33
-      CAD: 310 + (Math.random() - 0.5) * 15,  // Valor real actual ~310
-      MXN: 22 + (Math.random() - 0.5) * 4,    // Valor real actual ~22.3
-      BRL: 77 + (Math.random() - 0.5) * 8,    // Valor real actual ~77.38
-      ZELLE: 454 + (Math.random() - 0.5) * 20, // Valor real actual ~454.2
-      CLA: 438 + (Math.random() - 0.5) * 18   // Valor real actual ~438.15
-    }
-
-    const rates: AllExchangeRates = {} as AllExchangeRates
-    Object.entries(baseRates).forEach(([currency, rate]) => {
-      rates[currency as keyof AllExchangeRates] = {
-        moneda: currency,
-        tasa: Math.round(rate * 100) / 100, // Redondear a 2 decimales
+    // Tasas base realistas basadas en los valores actuales del API (2025)
+    return {
+      USD: {
+        moneda: 'USD',
+        tasa: 440 + Math.round((Math.random() - 0.5) * 20),
         fechaActualizacion: now,
-        variacion: (Math.random() - 0.5) * 2 // Variación entre -1% y 1%
+        variacion: (Math.random() - 0.5) * 2
+      },
+      EUR: {
+        moneda: 'EUR',
+        tasa: 480 + Math.round((Math.random() - 0.5) * 25),
+        fechaActualizacion: now,
+        variacion: (Math.random() - 0.5) * 2
+      },
+      MLC: {
+        moneda: 'MLC',
+        tasa: 300 + Math.round((Math.random() - 0.5) * 10),
+        fechaActualizacion: now,
+        variacion: (Math.random() - 0.5) * 2
       }
-    })
-
-    return rates
+    }
   }
 
   /**
@@ -437,12 +422,6 @@ class ElToqueAPI {
     USD: { rate: number; formatted: string; lastUpdate: string; variacion: number }
     EUR: { rate: number; formatted: string; lastUpdate: string; variacion: number }
     MLC: { rate: number; formatted: string; lastUpdate: string; variacion: number }
-    GBP: { rate: number; formatted: string; lastUpdate: string; variacion: number }
-    CAD: { rate: number; formatted: string; lastUpdate: string; variacion: number }
-    MXN: { rate: number; formatted: string; lastUpdate: string; variacion: number }
-    BRL: { rate: number; formatted: string; lastUpdate: string; variacion: number }
-    ZELLE: { rate: number; formatted: string; lastUpdate: string; variacion: number }
-    CLA: { rate: number; formatted: string; lastUpdate: string; variacion: number }
   }> {
     try {
       const rates = await this.getAllRates()
@@ -467,15 +446,9 @@ class ElToqueAPI {
       })
 
       return {
-        USD: formatRate(rates.USD, 470),
-        EUR: formatRate(rates.EUR, 525),
-        MLC: formatRate(rates.MLC, 200),
-        GBP: formatRate(rates.GBP, 487.91),
-        CAD: formatRate(rates.CAD, 304.48),
-        MXN: formatRate(rates.MXN, 23.46),
-        BRL: formatRate(rates.BRL, 77.9),
-        ZELLE: formatRate(rates.ZELLE, 449.21),
-        CLA: formatRate(rates.CLA, 432.65)
+        USD: formatRate(rates.USD, 440),
+        EUR: formatRate(rates.EUR, 480),
+        MLC: formatRate(rates.MLC, 300)
       }
     } catch (error) {
       console.error('Error formatting exchange rates:', error)
@@ -496,7 +469,7 @@ class ElToqueAPI {
       const rates = await this.getAllRates()
 
       // Validar monedas
-      const validCurrencies = ['USD', 'EUR', 'MLC', 'GBP', 'CAD', 'MXN', 'BRL', 'ZELLE', 'CLA', 'CUP']
+      const validCurrencies = ['USD', 'EUR', 'MLC', 'CUP']
       if (!validCurrencies.includes(from) || !validCurrencies.includes(to)) {
         throw new Error(`Invalid currency. From: ${from}, To: ${to}`)
       }
