@@ -27,6 +27,7 @@ import {
   Activity
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { getCurrencyMeta, CURRENCY_METADATA } from '@/lib/eltoque-api'
 
 interface RateHistoryEntry {
   timestamp: string
@@ -39,18 +40,11 @@ interface RatesReportTabProps {
   theme: string
 }
 
-// Monedas disponibles
-const CURRENCIES = [
-  { code: 'USD', name: 'Dólar USD', flag: '🇺🇸' },
-  { code: 'EUR', name: 'Euro', flag: '🇪🇺' },
-  { code: 'MLC', name: 'MLC', flag: '🇨🇺' },
-  { code: 'GBP', name: 'Libra', flag: '🇬🇧' },
-  { code: 'CAD', name: 'Dólar CAD', flag: '🇨🇦' },
-  { code: 'MXN', name: 'Peso MXN', flag: '🇲🇽' },
-  { code: 'BRL', name: 'Real BRL', flag: '🇧🇷' },
-  { code: 'ZELLE', name: 'Zelle', flag: '💳' },
-  { code: 'CLA', name: 'CLA', flag: '💰' }
-]
+interface CurrencyOption {
+  code: string
+  name: string
+  flag: string
+}
 
 // Períodos de tiempo
 const TIME_PERIODS = [
@@ -137,6 +131,72 @@ export default function RatesReportTab({ theme }: RatesReportTabProps) {
   const [historyData, setHistoryData] = useState<RateHistoryEntry[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [availableCurrencies, setAvailableCurrencies] = useState<CurrencyOption[]>([])
+  const [loadingCurrencies, setLoadingCurrencies] = useState(true)
+
+  // Obtener monedas disponibles del API
+  const fetchAvailableCurrencies = async () => {
+    setLoadingCurrencies(true)
+    try {
+      // First try to get currencies from history
+      const historyResponse = await fetch('/api/agency-rates/currencies')
+      const historyData = await historyResponse.json()
+
+      let currencyCodes: string[] = []
+
+      if (historyData.success && Array.isArray(historyData.data) && historyData.data.length > 0) {
+        currencyCodes = historyData.data
+      } else {
+        // If no history, try to get from current exchange rates
+        const ratesResponse = await fetch('/api/exchange-rates')
+        const ratesData = await ratesResponse.json()
+
+        if (ratesData.success && ratesData.data) {
+          currencyCodes = Object.keys(ratesData.data)
+        }
+      }
+
+      // If still no currencies, use default from CURRENCY_METADATA
+      if (currencyCodes.length === 0) {
+        currencyCodes = Object.keys(CURRENCY_METADATA).filter(c => c !== 'CUP')
+      }
+
+      // Build currency options with metadata
+      const options: CurrencyOption[] = currencyCodes.map(code => {
+        const meta = getCurrencyMeta(code)
+        return {
+          code,
+          name: meta.name,
+          flag: meta.flag
+        }
+      })
+
+      setAvailableCurrencies(options)
+
+      // Set default currency if current selection is not available
+      if (options.length > 0 && !options.find(c => c.code === selectedCurrency)) {
+        setSelectedCurrency(options[0].code)
+      }
+    } catch (err) {
+      console.error('Error fetching currencies:', err)
+      // Use default currencies from CURRENCY_METADATA
+      const defaultCurrencies = Object.entries(CURRENCY_METADATA)
+        .filter(([code]) => code !== 'CUP')
+        .map(([code, meta]) => ({
+          code,
+          name: meta.name,
+          flag: meta.flag
+        }))
+      setAvailableCurrencies(defaultCurrencies)
+    } finally {
+      setLoadingCurrencies(false)
+    }
+  }
+
+  // Cargar monedas disponibles al montar
+  useEffect(() => {
+    fetchAvailableCurrencies()
+  }, [])
 
   // Obtener datos del historial
   const fetchHistory = async () => {
@@ -153,47 +213,20 @@ export default function RatesReportTab({ theme }: RatesReportTabProps) {
       if (data.success && Array.isArray(data.data) && data.data.length > 0) {
         // Usar datos reales de la base de datos
         setHistoryData(data.data)
+        setError(null)
       } else {
-        // Solo generar datos de ejemplo si NO hay datos reales
-        console.log('No hay datos históricos, generando datos de demostración')
-        setHistoryData(generateSampleData(days, selectedCurrency))
+        // No hay datos históricos disponibles
+        console.log('No hay datos históricos para', selectedCurrency)
+        setHistoryData([])
+        setError(`No hay datos históricos disponibles para ${selectedCurrency}. Los datos se generarán cuando el cron job actualice las tasas.`)
       }
     } catch (err) {
       console.error('Error fetching history:', err)
-      // Generar datos de ejemplo en caso de error
-      setHistoryData(generateSampleData(period?.days || 30, selectedCurrency))
+      setHistoryData([])
+      setError('Error al cargar el historial de tasas. Por favor intente de nuevo.')
     } finally {
       setLoading(false)
     }
-  }
-
-  // Generar datos de ejemplo para demo
-  function generateSampleData(days: number, currency: string): RateHistoryEntry[] {
-    const baseRates: Record<string, number> = {
-      USD: 380, EUR: 410, MLC: 280, GBP: 480, CAD: 290,
-      MXN: 22, BRL: 78, ZELLE: 375, CLA: 1
-    }
-    const base = baseRates[currency] || 100
-    const data: RateHistoryEntry[] = []
-    const now = new Date()
-
-    for (let i = days; i >= 0; i--) {
-      const date = new Date(now)
-      date.setDate(date.getDate() - i)
-
-      // Variación aleatoria para simular movimiento de mercado
-      const variation = (Math.random() - 0.5) * 0.05 * base
-      const rate = base + variation + (Math.sin(i / 7) * base * 0.02)
-
-      data.push({
-        timestamp: date.toISOString(),
-        currency,
-        baserate: rate,
-        agencyrate: rate * 1.05
-      })
-    }
-
-    return data
   }
 
   useEffect(() => {
@@ -235,7 +268,11 @@ export default function RatesReportTab({ theme }: RatesReportTabProps) {
   // Calcular estabilidad
   const stability = useMemo(() => calculateStability(chartData), [chartData])
 
-  const currencyInfo = CURRENCIES.find(c => c.code === selectedCurrency)
+  // Get currency info from available currencies or from metadata
+  const currencyInfo = availableCurrencies.find(c => c.code === selectedCurrency) || {
+    code: selectedCurrency,
+    ...getCurrencyMeta(selectedCurrency)
+  }
 
   // Custom tooltip para la gráfica
   const CustomTooltip = ({ active, payload, label }: any) => {
@@ -282,11 +319,15 @@ export default function RatesReportTab({ theme }: RatesReportTabProps) {
                 : "bg-white border-gray-300 text-gray-900"
             )}
           >
-            {CURRENCIES.map(currency => (
-              <option key={currency.code} value={currency.code}>
-                {currency.flag} {currency.code} - {currency.name}
-              </option>
-            ))}
+            {loadingCurrencies ? (
+              <option value="">Cargando...</option>
+            ) : (
+              availableCurrencies.map(currency => (
+                <option key={currency.code} value={currency.code}>
+                  {currency.flag} {currency.code} - {currency.name}
+                </option>
+              ))
+            )}
           </select>
         </div>
 
@@ -359,6 +400,53 @@ export default function RatesReportTab({ theme }: RatesReportTabProps) {
               "w-8 h-8 animate-spin",
               theme === 'dark' ? "text-gray-500" : "text-gray-400"
             )} />
+          </div>
+        ) : error ? (
+          <div className="h-80 flex items-center justify-center">
+            <div className={cn(
+              "text-center p-6 rounded-lg",
+              theme === 'dark' ? "bg-gray-700/50" : "bg-gray-100"
+            )}>
+              <Activity className={cn(
+                "w-12 h-12 mx-auto mb-4",
+                theme === 'dark' ? "text-gray-500" : "text-gray-400"
+              )} />
+              <p className={cn(
+                "text-sm",
+                theme === 'dark' ? "text-gray-400" : "text-gray-600"
+              )}>
+                {error}
+              </p>
+              <button
+                onClick={fetchHistory}
+                className={cn(
+                  "mt-4 px-4 py-2 rounded-lg text-sm font-medium transition-all",
+                  theme === 'dark'
+                    ? "bg-exa-secondary text-white hover:bg-exa-primary"
+                    : "bg-exa-primary text-white hover:bg-exa-secondary"
+                )}
+              >
+                Reintentar
+              </button>
+            </div>
+          </div>
+        ) : chartData.length === 0 ? (
+          <div className="h-80 flex items-center justify-center">
+            <div className={cn(
+              "text-center p-6 rounded-lg",
+              theme === 'dark' ? "bg-gray-700/50" : "bg-gray-100"
+            )}>
+              <BarChart3 className={cn(
+                "w-12 h-12 mx-auto mb-4",
+                theme === 'dark' ? "text-gray-500" : "text-gray-400"
+              )} />
+              <p className={cn(
+                "text-sm",
+                theme === 'dark' ? "text-gray-400" : "text-gray-600"
+              )}>
+                No hay datos históricos para {selectedCurrency}
+              </p>
+            </div>
           </div>
         ) : (
           <ResponsiveContainer width="100%" height={320}>
