@@ -40,11 +40,16 @@ interface RechargeProduct {
   phonePattern: string
   acceptsRange: boolean
   isActive: boolean
+  isPromotion?: boolean
+  validFrom?: string | null
+  validTo?: string | null
   pricing: {
     marginType: 'percentage' | 'fixed'
     marginValue: number
     sellingPrice: number | null
+    costPrice?: number
     isEnabled: boolean
+    isManualPricing?: boolean
   } | null
 }
 
@@ -108,12 +113,31 @@ export default function RecargasPage() {
       const response = await fetch('/api/recharges/products?limit=500')
       const data = await response.json()
 
+      console.log('[Agency Recargas] API Response:', data)
+
       if (data.success) {
+        const allProducts = data.data.products || []
+        console.log('[Agency Recargas] Total products from API:', allProducts.length)
+
+        // Log each product's pricing status
+        allProducts.forEach((p: any) => {
+          console.log(`[Agency Recargas] Product ${p.id} "${p.name}":`, {
+            isActive: p.isActive,
+            hasPricing: !!p.pricing,
+            pricingEnabled: p.pricing?.isEnabled,
+            isManualPricing: p.pricing?.isManualPricing,
+            sellingPrice: p.pricing?.sellingPrice
+          })
+        })
+
         // Only show enabled products with pricing for this company
-        const enabledProducts = data.data.products.filter(
+        const enabledProducts = allProducts.filter(
           (p: RechargeProduct) => p.pricing?.isEnabled && p.isActive
         )
+        console.log('[Agency Recargas] Enabled products after filter:', enabledProducts.length)
         setProducts(enabledProducts)
+      } else {
+        console.error('[Agency Recargas] API error:', data.error)
       }
     } catch (error) {
       console.error('Error fetching products:', error)
