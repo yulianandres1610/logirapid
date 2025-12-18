@@ -442,75 +442,120 @@ Gracias por su compra!
   })
 
   // Render service step
-  const renderServiceStep = () => (
-    <motion.div
-      initial={{ opacity: 0, x: 50 }}
-      animate={{ opacity: 1, x: 0 }}
-      exit={{ opacity: 0, x: -50 }}
-      className="space-y-8"
-    >
-      <div className="text-center">
-        <h2 className="text-2xl font-bold mb-4">Seleccionar Servicio</h2>
-        <p className="text-gray-600 dark:text-gray-400 mb-6">
-          ¿Que tipo de recarga deseas realizar?
-        </p>
-      </div>
+  const renderServiceStep = () => {
+    const telefonoCount = getFilteredProducts('telefono').length
+    const nautaCount = getFilteredProducts('nauta').length
 
-      <div className="grid md:grid-cols-2 gap-4">
-        <motion.button
-          whileHover={{ scale: 1.02 }}
-          whileTap={{ scale: 0.98 }}
-          onClick={() => handleServiceSelect('telefono')}
-          className={cn(
-            "p-6 rounded-xl border-2 transition-all duration-300",
-            "hover:shadow-xl hover:border-purple-500",
-            theme === 'dark'
-              ? "bg-gray-800 border-gray-700 hover:bg-gray-700"
-              : "bg-white border-gray-200 hover:bg-gray-50"
-          )}
-        >
-          <div className="flex flex-col items-center space-y-3">
-            <div className="w-16 h-16 bg-gradient-to-br from-purple-500 to-purple-600 rounded-full flex items-center justify-center">
-              <Smartphone className="w-8 h-8 text-white" />
-            </div>
-            <h3 className="text-xl font-bold">Recarga Numero</h3>
-            <p className="text-gray-600 dark:text-gray-400 text-center text-sm">
-              Recarga para telefono movil
-            </p>
-            <div className="text-xs text-gray-500 dark:text-gray-400">
-              {getFilteredProducts('telefono').length} productos
-            </div>
-          </div>
-        </motion.button>
+    return (
+      <motion.div
+        initial={{ opacity: 0, x: 50 }}
+        animate={{ opacity: 1, x: 0 }}
+        exit={{ opacity: 0, x: -50 }}
+        className="space-y-8"
+      >
+        <div className="text-center">
+          <h2 className="text-2xl font-bold mb-4">Seleccionar Servicio</h2>
+          <p className="text-gray-600 dark:text-gray-400 mb-6">
+            ¿Que tipo de recarga deseas realizar?
+          </p>
+        </div>
 
-        <motion.button
-          whileHover={{ scale: 1.02 }}
-          whileTap={{ scale: 0.98 }}
-          onClick={() => handleServiceSelect('nauta')}
-          className={cn(
-            "p-6 rounded-xl border-2 transition-all duration-300",
-            "hover:shadow-xl hover:border-cyan-500",
-            theme === 'dark'
-              ? "bg-gray-800 border-gray-700 hover:bg-gray-700"
-              : "bg-white border-gray-200 hover:bg-gray-50"
-          )}
-        >
-          <div className="flex flex-col items-center space-y-3">
-            <div className="w-16 h-16 bg-gradient-to-br from-cyan-500 to-cyan-600 rounded-full flex items-center justify-center">
-              <Wifi className="w-8 h-8 text-white" />
+        <div className="grid md:grid-cols-2 gap-4">
+          <motion.button
+            whileHover={telefonoCount > 0 ? { scale: 1.02 } : {}}
+            whileTap={telefonoCount > 0 ? { scale: 0.98 } : {}}
+            onClick={() => telefonoCount > 0 && handleServiceSelect('telefono')}
+            disabled={telefonoCount === 0}
+            className={cn(
+              "p-6 rounded-xl border-2 transition-all duration-300",
+              telefonoCount > 0
+                ? cn(
+                    "hover:shadow-xl hover:border-purple-500 cursor-pointer",
+                    theme === 'dark'
+                      ? "bg-gray-800 border-gray-700 hover:bg-gray-700"
+                      : "bg-white border-gray-200 hover:bg-gray-50"
+                  )
+                : cn(
+                    "cursor-not-allowed opacity-50",
+                    theme === 'dark'
+                      ? "bg-gray-800/50 border-gray-700"
+                      : "bg-gray-100 border-gray-200"
+                  )
+            )}
+          >
+            <div className="flex flex-col items-center space-y-3">
+              <div className={cn(
+                "w-16 h-16 rounded-full flex items-center justify-center",
+                telefonoCount > 0
+                  ? "bg-gradient-to-br from-purple-500 to-purple-600"
+                  : "bg-gray-400"
+              )}>
+                <Smartphone className="w-8 h-8 text-white" />
+              </div>
+              <h3 className="text-xl font-bold">Recarga Numero</h3>
+              <p className="text-gray-600 dark:text-gray-400 text-center text-sm">
+                Recarga para telefono movil
+              </p>
+              <div className={cn(
+                "text-xs",
+                telefonoCount > 0
+                  ? "text-gray-500 dark:text-gray-400"
+                  : "text-red-500 dark:text-red-400 font-medium"
+              )}>
+                {telefonoCount > 0 ? `${telefonoCount} productos` : 'No disponible'}
+              </div>
             </div>
-            <h3 className="text-xl font-bold">Nauta</h3>
-            <p className="text-gray-600 dark:text-gray-400 text-center text-sm">
-              Recarga para cuenta Nauta
-            </p>
-            <div className="text-xs text-gray-500 dark:text-gray-400">
-              {getFilteredProducts('nauta').length} productos
+          </motion.button>
+
+          <motion.button
+            whileHover={nautaCount > 0 ? { scale: 1.02 } : {}}
+            whileTap={nautaCount > 0 ? { scale: 0.98 } : {}}
+            onClick={() => nautaCount > 0 && handleServiceSelect('nauta')}
+            disabled={nautaCount === 0}
+            className={cn(
+              "p-6 rounded-xl border-2 transition-all duration-300",
+              nautaCount > 0
+                ? cn(
+                    "hover:shadow-xl hover:border-cyan-500 cursor-pointer",
+                    theme === 'dark'
+                      ? "bg-gray-800 border-gray-700 hover:bg-gray-700"
+                      : "bg-white border-gray-200 hover:bg-gray-50"
+                  )
+                : cn(
+                    "cursor-not-allowed opacity-50",
+                    theme === 'dark'
+                      ? "bg-gray-800/50 border-gray-700"
+                      : "bg-gray-100 border-gray-200"
+                  )
+            )}
+          >
+            <div className="flex flex-col items-center space-y-3">
+              <div className={cn(
+                "w-16 h-16 rounded-full flex items-center justify-center",
+                nautaCount > 0
+                  ? "bg-gradient-to-br from-cyan-500 to-cyan-600"
+                  : "bg-gray-400"
+              )}>
+                <Wifi className="w-8 h-8 text-white" />
+              </div>
+              <h3 className="text-xl font-bold">Nauta</h3>
+              <p className="text-gray-600 dark:text-gray-400 text-center text-sm">
+                Recarga para cuenta Nauta
+              </p>
+              <div className={cn(
+                "text-xs",
+                nautaCount > 0
+                  ? "text-gray-500 dark:text-gray-400"
+                  : "text-red-500 dark:text-red-400 font-medium"
+              )}>
+                {nautaCount > 0 ? `${nautaCount} productos` : 'No disponible'}
+              </div>
             </div>
-          </div>
-        </motion.button>
-      </div>
-    </motion.div>
-  )
+          </motion.button>
+        </div>
+      </motion.div>
+    )
+  }
 
   // Render product selection step
   const renderProductStep = () => {
