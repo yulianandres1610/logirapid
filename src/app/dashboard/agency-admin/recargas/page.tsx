@@ -789,27 +789,59 @@ Gracias por su compra!
     )
   }
 
-  // Render wizard as main content
+  // Render wizard as main content - Full page wizard design
   const renderWizardView = () => (
-    <div className="max-w-2xl mx-auto">
-      {/* Header with back button */}
-      <div className="mb-6">
+    <div className="flex flex-col items-center justify-center min-h-[calc(100vh-120px)]">
+      {/* Back button - fixed at top */}
+      <div className="w-full max-w-2xl mb-6">
         <Button
           variant="outline"
           onClick={closeWizard}
-          className="mb-4"
+          className={cn(
+            "gap-2",
+            theme === 'dark' ? 'border-gray-700 hover:bg-gray-800' : 'border-gray-300 hover:bg-gray-100'
+          )}
         >
-          <ArrowLeft className="w-4 h-4 mr-2" />
+          <ArrowLeft className="w-4 h-4" />
           Volver al Historial
         </Button>
-        <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Nueva Recarga</h1>
       </div>
 
-      {/* Wizard Card */}
+      {/* Wizard Card - Centered with gradient border */}
       <div className={cn(
-        "rounded-2xl border p-6",
-        theme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'
+        "w-full max-w-2xl rounded-3xl p-8 shadow-2xl",
+        theme === 'dark'
+          ? 'bg-gradient-to-br from-gray-800 to-gray-900 border border-gray-700'
+          : 'bg-white border border-gray-200'
       )}>
+        {/* Progress indicator */}
+        <div className="flex justify-center mb-8">
+          <div className="flex items-center gap-2">
+            {['service', 'product', 'phone', 'confirmation', 'success'].map((step, index) => {
+              const stepOrder = ['service', 'product', 'phone', 'confirmation', 'success']
+              const currentIndex = stepOrder.indexOf(currentStep)
+              const isCompleted = index < currentIndex
+              const isCurrent = step === currentStep
+
+              return (
+                <div key={step} className="flex items-center">
+                  <div className={cn(
+                    "w-3 h-3 rounded-full transition-all duration-300",
+                    isCompleted ? "bg-purple-500" : isCurrent ? "bg-purple-500 ring-4 ring-purple-500/30" : theme === 'dark' ? "bg-gray-600" : "bg-gray-300"
+                  )} />
+                  {index < 4 && (
+                    <div className={cn(
+                      "w-8 h-0.5 mx-1",
+                      isCompleted ? "bg-purple-500" : theme === 'dark' ? "bg-gray-600" : "bg-gray-300"
+                    )} />
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        </div>
+
+        {/* Wizard Content */}
         <AnimatePresence mode="wait">
           {currentStep === 'service' && renderServiceStep()}
           {currentStep === 'product' && renderProductStep()}
@@ -818,6 +850,10 @@ Gracias por su compra!
           {currentStep === 'success' && renderSuccessStep()}
         </AnimatePresence>
       </div>
+
+      {/* Decorative elements */}
+      <div className="absolute top-20 left-10 w-72 h-72 bg-purple-500/10 rounded-full blur-3xl pointer-events-none" />
+      <div className="absolute bottom-20 right-10 w-96 h-96 bg-cyan-500/10 rounded-full blur-3xl pointer-events-none" />
     </div>
   )
 
