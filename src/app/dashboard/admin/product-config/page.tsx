@@ -86,10 +86,12 @@ interface RechargeProductForPricing {
   countryCode: string
   countryName: string
   baseCost: number
+  costPrice: number // Our actual cost (after provider discount)
   pricing: {
     marginType: 'percentage' | 'fixed'
     marginValue: number
     sellingPrice: number
+    costPrice: number
   } | null
 }
 
@@ -267,10 +269,13 @@ export default function ProductConfigPage() {
             countryCode: p.countryCode,
             countryName: p.countryName,
             baseCost: p.baseCost,
+            // Use costPrice from pricing (our actual cost after provider discount)
+            costPrice: p.pricing?.costPrice || p.baseCost,
             pricing: p.pricing ? {
               marginType: p.pricing.marginType,
               marginValue: p.pricing.marginValue,
-              sellingPrice: p.pricing.sellingPrice
+              sellingPrice: p.pricing.sellingPrice,
+              costPrice: p.pricing.costPrice || p.baseCost
             } : null
           }))
         setRechargeProductsForPricing(configuredProducts)
@@ -1310,7 +1315,7 @@ export default function ProductConfigPage() {
                                 </td>
                                 <td className={`px-6 py-4 text-right`}>
                                   <span className={`text-base font-semibold ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
-                                    ${product.baseCost.toFixed(2)}
+                                    ${product.costPrice.toFixed(2)}
                                   </span>
                                 </td>
                                 <td className={`px-6 py-4 text-right`}>
