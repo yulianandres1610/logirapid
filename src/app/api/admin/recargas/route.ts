@@ -245,6 +245,30 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    // Buscar el producto en la base de datos para obtener el univcell_product_id real
+    const productResult = await db.query(`
+      SELECT id, univcell_product_id, name, country_code
+      FROM external_recharge_products
+      WHERE id = $1
+    `, [productId])
+
+    if (productResult.rows.length === 0) {
+      return NextResponse.json(
+        { success: false, error: 'Producto no encontrado' },
+        { status: 404 }
+      )
+    }
+
+    const product = productResult.rows[0]
+    const univcellProductId = product.univcell_product_id
+
+    if (!univcellProductId) {
+      return NextResponse.json(
+        { success: false, error: 'Producto no tiene ID de UnivCell configurado' },
+        { status: 400 }
+      )
+    }
+
     // Generar referencia unica
     const localReference = uuidv4()
 
@@ -252,9 +276,19 @@ export async function POST(request: NextRequest) {
     // El amount viene como dolares (ej: 20.00), UnivCell espera centavos (2000)
     const amountCents = Math.round(parseFloat(amount) * 100)
 
+    // Formatear numero de telefono para UnivCell
+    // Para Cuba: quitar el +53 y enviar solo los 8 digitos
+    // Para otros paises: enviar con el codigo de pais
+    let formattedDestination = phoneNumber
+    if (product.country_code === 'CU' && phoneNumber.startsWith('+53')) {
+      formattedDestination = phoneNumber.replace(/^\+53/, '')
+    }
+
     console.log('[Recargas] Processing topup:', {
-      productId,
-      destination: phoneNumber,
+      localProductId: productId,
+      univcellProductId,
+      destination: formattedDestination,
+      originalPhone: phoneNumber,
       amount,
       amountCents,
       localReference
@@ -305,8 +339,8 @@ export async function POST(request: NextRequest) {
 
     try {
       const topupResult = await univcellClient.executeTopUp({
-        product_id: productId,
-        destination: phoneNumber, // Ya viene con +53
+        product_id: univcellProductId, // ID real de UnivCell, no el ID local
+        destination: formattedDestination, // Sin +53 para Cuba
         amount: amountCents,
         local_reference: localReference,
         realtime: true,
