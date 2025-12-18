@@ -551,6 +551,8 @@ export async function POST(
 
     for (const product of products) {
       try {
+        console.log('[Company Pricing POST] Raw product object:', product)
+
         const {
           productId,
           // New field names
@@ -568,7 +570,10 @@ export async function POST(
           markupValue
         } = product
 
+        console.log('[Company Pricing POST] Extracted productId:', productId, 'typeof:', typeof productId)
+
         if (!productId) {
+          console.log('[Company Pricing POST] productId is falsy, skipping:', productId)
           results.push({ productId: 0, success: false, error: 'productId requerido' })
           continue
         }

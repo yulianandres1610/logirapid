@@ -42,6 +42,7 @@ const categoryLabels: Record<string, string> = {
 }
 
 interface EditingCompanyPrice {
+  originalProductId: number | string  // Store the original productId to avoid key conversion issues
   precioSucursales: number | null
   precioClientes: number | null
   miCosto: number
@@ -140,14 +141,18 @@ export default function ListaPreciosEmpresaPage() {
 
     const miCosto = originalProduct.miCosto || originalProduct.catalogMiCosto || 0
 
+    // Use String(productId) as key to ensure consistent key type
+    const keyId = String(productId)
+
     setEditingCompanyPrices(prev => ({
       ...prev,
-      [productId]: {
-        precioSucursales: prev[productId]?.precioSucursales ?? originalProduct.precioSucursales,
-        precioClientes: prev[productId]?.precioClientes ?? originalProduct.precioClientes,
+      [keyId]: {
+        originalProductId: productId,  // Store original productId to preserve type
+        precioSucursales: prev[keyId]?.precioSucursales ?? originalProduct.precioSucursales,
+        precioClientes: prev[keyId]?.precioClientes ?? originalProduct.precioClientes,
         miCosto: miCosto,
-        providerCost: prev[productId]?.providerCost ?? originalProduct.providerCost,
-        precioALogiRapid: prev[productId]?.precioALogiRapid ?? originalProduct.precioALogiRapid,
+        providerCost: prev[keyId]?.providerCost ?? originalProduct.providerCost,
+        precioALogiRapid: prev[keyId]?.precioALogiRapid ?? originalProduct.precioALogiRapid,
         [field]: value
       }
     }))
@@ -159,16 +164,10 @@ export default function ListaPreciosEmpresaPage() {
   const validateCompanyPrices = (): { valid: boolean; errors: string[] } => {
     const errors: string[] = []
 
-    for (const [productId, prices] of Object.entries(editingCompanyPrices)) {
-      // Handle both string (recharge products) and numeric productIds
-      const product = companyPricingData?.products.find(p => {
-        // For recharge products, compare as strings
-        if (productId.startsWith('recharge-')) {
-          return p.productId === productId
-        }
-        // For catalog products, compare as numbers
-        return p.productId === parseInt(productId)
-      })
+    for (const [_key, prices] of Object.entries(editingCompanyPrices)) {
+      // Use stored originalProductId for lookup
+      const originalProductId = prices.originalProductId
+      const product = companyPricingData?.products.find(p => p.productId === originalProductId)
       if (!product) continue
 
       const miCosto = prices.miCosto || product.catalogMiCosto || 0
@@ -199,9 +198,9 @@ export default function ListaPreciosEmpresaPage() {
       }
 
       // Save company-specific prices
-      // Handle both numeric IDs and string IDs (recharge products like "recharge-123")
-      const products = Object.entries(editingCompanyPrices).map(([id, prices]) => ({
-        productId: id.startsWith('recharge-') ? id : parseInt(id),
+      // Use the stored originalProductId to ensure correct type is sent
+      const products = Object.entries(editingCompanyPrices).map(([_key, prices]) => ({
+        productId: prices.originalProductId,  // Use stored original productId
         precioSucursales: prices.precioSucursales,
         precioClientes: prices.precioClientes,
         providerCost: prices.providerCost,
@@ -209,7 +208,7 @@ export default function ListaPreciosEmpresaPage() {
       }))
 
       console.log('[Lista Precios] Saving products:', products)
-      console.log('[Lista Precios] editingCompanyPrices keys:', Object.keys(editingCompanyPrices))
+      console.log('[Lista Precios] editingCompanyPrices:', editingCompanyPrices)
 
       await updateCompanyPrices(products, 'Actualizacion de precios desde Lista de Precios')
 
