@@ -292,6 +292,7 @@ export async function GET(
 
     // ============================================================
     // RECHARGE PRODUCTS - Fetch from external_recharge_products
+    // Only products with pricing configured (manual or margin-based)
     // ============================================================
     const rechargeProductsResult = await db.query(`
       SELECT
@@ -323,6 +324,12 @@ export async function GET(
         ON rpp.external_product_id = erp.id
         AND (rpp.company_id = $1 OR rpp.company_id IS NULL)
       WHERE erp.is_active = true
+        AND (
+          -- Only include products with manual pricing configured
+          (erp.manual_cost_price IS NOT NULL AND erp.manual_selling_price IS NOT NULL)
+          -- OR products with margin-based pricing for this company
+          OR (rpp.id IS NOT NULL AND rpp.is_enabled = true)
+        )
       ORDER BY
         CASE WHEN rpp.company_id = $1 THEN 0 ELSE 1 END,
         erp.country_name ASC, erp.name ASC
