@@ -145,16 +145,33 @@ export function RechargeProductManager({ onOpenModal, onProductsChange, hideHead
     if (!confirm(`¿Eliminar "${product.name}" del catálogo?`)) return
 
     try {
-      // Delete the pricing configuration completely
-      const response = await fetch(`/api/recharges/products/${product.id}/pricing?companyId=`, {
-        method: 'DELETE',
-      })
-      const data = await response.json()
-      if (data.success) {
-        fetchProducts()
-        onProductsChange?.()
+      // Check if product has manual pricing (created via form)
+      const hasManualPricing = product.pricing?.isManualPricing
+
+      if (hasManualPricing) {
+        // Delete the actual product (includes pricing)
+        const response = await fetch(`/api/recharges/products/${product.id}`, {
+          method: 'DELETE',
+        })
+        const data = await response.json()
+        if (data.success) {
+          fetchProducts()
+          onProductsChange?.()
+        } else {
+          alert(data.error || 'Error eliminando producto')
+        }
       } else {
-        alert(data.error || 'Error eliminando producto')
+        // For synced products, just delete the pricing configuration
+        const response = await fetch(`/api/recharges/products/${product.id}/pricing?companyId=`, {
+          method: 'DELETE',
+        })
+        const data = await response.json()
+        if (data.success) {
+          fetchProducts()
+          onProductsChange?.()
+        } else {
+          alert(data.error || 'Error eliminando producto')
+        }
       }
     } catch (err) {
       console.error('Error deleting product:', err)

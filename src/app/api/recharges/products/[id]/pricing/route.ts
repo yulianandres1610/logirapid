@@ -61,16 +61,30 @@ export async function GET(
       ? JSON.parse(product.pricing_configs)
       : product.pricing_configs
 
+    // Prioritize manual_cost_price, then provider_amount, then base_cost
+    const baseCost = product.manual_cost_price !== null
+      ? parseFloat(product.manual_cost_price)
+      : product.provider_amount !== null
+        ? parseFloat(product.provider_amount)
+        : parseFloat(product.base_cost || '0')
+
+    // Use custom_name if available, otherwise use name
+    const productName = product.custom_name || product.name
+
     return NextResponse.json({
       success: true,
       data: {
         product: {
           id: product.id,
           externalId: product.external_id,
-          name: product.name,
-          baseCost: parseFloat(product.base_cost),
+          name: productName,
+          baseCost: baseCost,
           countryCode: product.country_code,
           countryName: product.country_name,
+          isPromotion: product.is_promotion || false,
+          manualCostPrice: product.manual_cost_price ? parseFloat(product.manual_cost_price) : null,
+          manualSellingPrice: product.manual_selling_price ? parseFloat(product.manual_selling_price) : null,
+          providerAmount: product.provider_amount ? parseFloat(product.provider_amount) : null,
         },
         pricingConfigs: pricingConfigs.map((p: any) => ({
           id: p.id,
@@ -138,9 +152,9 @@ export async function POST(
       )
     }
 
-    // Get product base cost
+    // Get product cost (prioritize manual_cost_price, then provider_amount, then base_cost)
     const productResult = await db.query(
-      'SELECT base_cost FROM external_recharge_products WHERE id = $1',
+      'SELECT base_cost, manual_cost_price, provider_amount FROM external_recharge_products WHERE id = $1',
       [productId]
     )
 
@@ -151,7 +165,13 @@ export async function POST(
       )
     }
 
-    const baseCost = parseFloat(productResult.rows[0].base_cost)
+    const product = productResult.rows[0]
+    // Prioritize manual_cost_price, then provider_amount, then base_cost
+    const baseCost = product.manual_cost_price !== null
+      ? parseFloat(product.manual_cost_price)
+      : product.provider_amount !== null
+        ? parseFloat(product.provider_amount)
+        : parseFloat(product.base_cost || '0')
 
     // Calculate selling price
     let sellingPrice: number

@@ -28,12 +28,19 @@ interface RechargeProduct {
   acceptsRange: boolean
   isActive: boolean
   lastSyncedAt: string
+  isPromotion?: boolean
+  providerAmount?: number | null
+  univcellProductId?: number
+  validFrom?: string
+  validTo?: string
   pricing: {
     id: number
     marginType: 'percentage' | 'fixed'
     marginValue: number
     sellingPrice: number | null
+    costPrice?: number
     isEnabled: boolean
+    isManualPricing?: boolean
   } | null
   promotions: Array<{
     id: number
@@ -75,6 +82,10 @@ export function RechargePricingModal({
   onClose,
   onSave,
 }: RechargePricingModalProps) {
+  // Determine if this is a product with manual pricing
+  const isManualPricing = product.pricing?.isManualPricing || false
+
+  // State for margin-based pricing
   const [marginType, setMarginType] = useState<'percentage' | 'fixed'>(
     product.pricing?.marginType || 'percentage'
   )
@@ -82,20 +93,35 @@ export function RechargePricingModal({
     product.pricing?.marginValue?.toString() || '20'
   )
   const [isEnabled, setIsEnabled] = useState(product.pricing?.isEnabled ?? true)
+
+  // State for manual pricing
+  const [productName, setProductName] = useState(product.name || '')
+  const [productDescription, setProductDescription] = useState(product.description || '')
+  const [costPrice, setCostPrice] = useState<string>(
+    product.pricing?.costPrice?.toString() || product.baseCost?.toString() || '0'
+  )
+  const [sellingPrice, setSellingPrice] = useState<string>(
+    product.pricing?.sellingPrice?.toString() || '0'
+  )
+
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState(false)
 
-  // Calculate selling price
-  const calculatedPrice = (() => {
-    const value = parseFloat(marginValue) || 0
-    if (marginType === 'percentage') {
-      return product.baseCost * (1 + value / 100)
-    }
-    return product.baseCost + value
-  })()
+  // Calculate selling price for margin-based pricing
+  const calculatedPrice = isManualPricing
+    ? parseFloat(sellingPrice) || 0
+    : (() => {
+        const value = parseFloat(marginValue) || 0
+        if (marginType === 'percentage') {
+          return product.baseCost * (1 + value / 100)
+        }
+        return product.baseCost + value
+      })()
 
-  const profit = calculatedPrice - product.baseCost
+  // Calculate profit
+  const baseCostForProfit = isManualPricing ? (parseFloat(costPrice) || 0) : product.baseCost
+  const profit = calculatedPrice - baseCostForProfit
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('en-US', {
@@ -109,27 +135,84 @@ export function RechargePricingModal({
       setSaving(true)
       setError(null)
 
-      const response = await fetch(`/api/recharges/products/${product.id}/pricing`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          marginType,
-          marginValue: parseFloat(marginValue) || 0,
-          isEnabled,
-        }),
-      })
+      if (isManualPricing) {
+        // Validate manual pricing fields
+        if (!productName.trim()) {
+          setError('El nombre es requerido')
+          setSaving(false)
+          return
+        }
 
-      const data = await response.json()
+        const cost = parseFloat(costPrice)
+        const selling = parseFloat(sellingPrice)
 
-      if (data.success) {
-        setSuccess(true)
-        setTimeout(() => {
-          onSave()
-        }, 1000)
+        if (isNaN(cost) || cost <= 0) {
+          setError('El precio de costo debe ser mayor a 0')
+          setSaving(false)
+          return
+        }
+
+        if (isNaN(selling) || selling <= 0) {
+          setError('El precio de venta debe ser mayor a 0')
+          setSaving(false)
+          return
+        }
+
+        if (selling < cost) {
+          setError('El precio de venta no puede ser menor al precio de costo')
+          setSaving(false)
+          return
+        }
+
+        // Update product with manual pricing
+        const response = await fetch(`/api/recharges/products/${product.id}`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            name: productName.trim(),
+            description: productDescription.trim() || null,
+            costPrice: cost,
+            sellingPrice: selling,
+            isActive: isEnabled,
+          }),
+        })
+
+        const data = await response.json()
+
+        if (data.success) {
+          setSuccess(true)
+          setTimeout(() => {
+            onSave()
+          }, 1000)
+        } else {
+          setError(data.error || 'Error guardando configuracion')
+        }
       } else {
-        setError(data.error || 'Error guardando configuracion')
+        // Margin-based pricing
+        const response = await fetch(`/api/recharges/products/${product.id}/pricing`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            marginType,
+            marginValue: parseFloat(marginValue) || 0,
+            isEnabled,
+          }),
+        })
+
+        const data = await response.json()
+
+        if (data.success) {
+          setSuccess(true)
+          setTimeout(() => {
+            onSave()
+          }, 1000)
+        } else {
+          setError(data.error || 'Error guardando configuracion')
+        }
       }
     } catch (err: any) {
       setError(err.message || 'Error de conexion')
@@ -169,113 +252,217 @@ export function RechargePricingModal({
 
         {/* Content */}
         <div className="p-6 space-y-6">
-          {/* Product Info */}
-          <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-4">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-gray-500 dark:text-gray-400 text-sm">
-                Costo Base (UnivCell)
-              </span>
-              <span className="text-xl font-bold text-gray-900 dark:text-white">
-                {formatCurrency(product.baseCost)}
-              </span>
-            </div>
-            {product.description && (
-              <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
-                {product.description}
-              </p>
-            )}
-          </div>
-
-          {/* Promotions */}
-          {product.promotions.length > 0 && (
-            <div className="bg-orange-50 dark:bg-orange-900/20 rounded-lg p-4 border border-orange-200 dark:border-orange-800">
-              <div className="flex items-center gap-2 text-orange-600 dark:text-orange-400 mb-2">
-                <Gift className="w-4 h-4" />
-                <span className="font-medium text-sm">Promociones Activas</span>
+          {isManualPricing ? (
+            <>
+              {/* Manual Pricing Mode - Edit product details */}
+              {/* Product Name */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  Nombre del Producto *
+                </label>
+                <input
+                  type="text"
+                  value={productName}
+                  onChange={(e) => setProductName(e.target.value)}
+                  className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                  placeholder="Nombre del producto"
+                />
               </div>
-              {product.promotions.map((promo) => (
-                <div key={promo.id} className="text-sm text-orange-700 dark:text-orange-300">
-                  {promo.summary}
+
+              {/* Product Description */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  Descripcion
+                </label>
+                <textarea
+                  value={productDescription}
+                  onChange={(e) => setProductDescription(e.target.value)}
+                  rows={2}
+                  className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-purple-500 focus:border-transparent resize-none"
+                  placeholder="Descripcion del producto"
+                />
+              </div>
+
+              {/* Provider Amount (read-only) */}
+              {product.providerAmount && (
+                <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-4">
+                  <div className="flex items-center justify-between">
+                    <span className="text-gray-500 dark:text-gray-400 text-sm">
+                      Monto al Proveedor (fijo)
+                    </span>
+                    <span className="text-lg font-bold text-gray-900 dark:text-white">
+                      {formatCurrency(product.providerAmount)}
+                    </span>
+                  </div>
                 </div>
-              ))}
-            </div>
-          )}
+              )}
 
-          {/* Margin Type */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
-              Tipo de Margen
-            </label>
-            <div className="grid grid-cols-2 gap-3">
-              <button
-                type="button"
-                onClick={() => setMarginType('percentage')}
-                className={`flex items-center justify-center gap-2 p-3 rounded-lg border-2 transition-all ${
-                  marginType === 'percentage'
-                    ? 'border-purple-500 bg-purple-50 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300'
-                    : 'border-gray-200 dark:border-gray-600 text-gray-600 dark:text-gray-400 hover:border-gray-300'
-                }`}
-              >
-                <Percent className="w-5 h-5" />
-                <span className="font-medium">Porcentaje</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => setMarginType('fixed')}
-                className={`flex items-center justify-center gap-2 p-3 rounded-lg border-2 transition-all ${
-                  marginType === 'fixed'
-                    ? 'border-purple-500 bg-purple-50 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300'
-                    : 'border-gray-200 dark:border-gray-600 text-gray-600 dark:text-gray-400 hover:border-gray-300'
-                }`}
-              >
-                <DollarSign className="w-5 h-5" />
-                <span className="font-medium">Monto Fijo</span>
-              </button>
-            </div>
-          </div>
+              {/* Cost and Selling Price */}
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    Precio de Costo *
+                  </label>
+                  <div className="relative">
+                    <div className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
+                      <DollarSign className="w-5 h-5" />
+                    </div>
+                    <input
+                      type="number"
+                      value={costPrice}
+                      onChange={(e) => setCostPrice(e.target.value)}
+                      min="0.01"
+                      step="0.01"
+                      className="w-full pl-10 pr-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                      placeholder="0.00"
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    Precio de Venta *
+                  </label>
+                  <div className="relative">
+                    <div className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
+                      <DollarSign className="w-5 h-5" />
+                    </div>
+                    <input
+                      type="number"
+                      value={sellingPrice}
+                      onChange={(e) => setSellingPrice(e.target.value)}
+                      min="0.01"
+                      step="0.01"
+                      className="w-full pl-10 pr-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                      placeholder="0.00"
+                    />
+                  </div>
+                </div>
+              </div>
 
-          {/* Margin Value */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-              {marginType === 'percentage' ? 'Porcentaje de Ganancia' : 'Monto de Ganancia'}
-            </label>
-            <div className="relative">
-              <div className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
-                {marginType === 'percentage' ? (
-                  <Percent className="w-5 h-5" />
-                ) : (
-                  <DollarSign className="w-5 h-5" />
+              {/* Profit Preview */}
+              <div className="bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-900/20 dark:to-emerald-900/20 rounded-lg p-4 border border-green-200 dark:border-green-800">
+                <div className="flex justify-between items-center">
+                  <span className="text-green-700 dark:text-green-300 text-sm">
+                    Ganancia por recarga
+                  </span>
+                  <span className="text-xl font-bold text-green-600 dark:text-green-400">
+                    +{formatCurrency(profit > 0 ? profit : 0)}
+                  </span>
+                </div>
+              </div>
+            </>
+          ) : (
+            <>
+              {/* Margin-based Pricing Mode */}
+              {/* Product Info */}
+              <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-4">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-gray-500 dark:text-gray-400 text-sm">
+                    Costo Base (UnivCell)
+                  </span>
+                  <span className="text-xl font-bold text-gray-900 dark:text-white">
+                    {formatCurrency(product.baseCost)}
+                  </span>
+                </div>
+                {product.description && (
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
+                    {product.description}
+                  </p>
                 )}
               </div>
-              <input
-                type="number"
-                value={marginValue}
-                onChange={(e) => setMarginValue(e.target.value)}
-                min="0"
-                step={marginType === 'percentage' ? '1' : '0.01'}
-                className="w-full pl-10 pr-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-purple-500 focus:border-transparent text-lg"
-                placeholder={marginType === 'percentage' ? '20' : '1.00'}
-              />
-            </div>
-          </div>
 
-          {/* Price Preview */}
-          <div className="bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-900/20 dark:to-emerald-900/20 rounded-lg p-4 border border-green-200 dark:border-green-800">
-            <div className="flex justify-between items-center mb-2">
-              <span className="text-green-700 dark:text-green-300 text-sm">
-                Precio de Venta
-              </span>
-              <span className="text-2xl font-bold text-green-600 dark:text-green-400">
-                {formatCurrency(calculatedPrice)}
-              </span>
-            </div>
-            <div className="flex justify-between items-center text-sm">
-              <span className="text-green-600 dark:text-green-400">Ganancia por recarga</span>
-              <span className="font-medium text-green-600 dark:text-green-400">
-                +{formatCurrency(profit)}
-              </span>
-            </div>
-          </div>
+              {/* Promotions */}
+              {product.promotions.length > 0 && (
+                <div className="bg-red-50 dark:bg-red-900/20 rounded-lg p-4 border border-red-200 dark:border-red-800">
+                  <div className="flex items-center gap-2 text-exa-primary dark:text-red-400 mb-2">
+                    <Gift className="w-4 h-4" />
+                    <span className="font-medium text-sm">Promociones Activas</span>
+                  </div>
+                  {product.promotions.map((promo) => (
+                    <div key={promo.id} className="text-sm text-red-700 dark:text-red-300">
+                      {promo.summary}
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Margin Type */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
+                  Tipo de Margen
+                </label>
+                <div className="grid grid-cols-2 gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setMarginType('percentage')}
+                    className={`flex items-center justify-center gap-2 p-3 rounded-lg border-2 transition-all ${
+                      marginType === 'percentage'
+                        ? 'border-purple-500 bg-purple-50 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300'
+                        : 'border-gray-200 dark:border-gray-600 text-gray-600 dark:text-gray-400 hover:border-gray-300'
+                    }`}
+                  >
+                    <Percent className="w-5 h-5" />
+                    <span className="font-medium">Porcentaje</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setMarginType('fixed')}
+                    className={`flex items-center justify-center gap-2 p-3 rounded-lg border-2 transition-all ${
+                      marginType === 'fixed'
+                        ? 'border-purple-500 bg-purple-50 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300'
+                        : 'border-gray-200 dark:border-gray-600 text-gray-600 dark:text-gray-400 hover:border-gray-300'
+                    }`}
+                  >
+                    <DollarSign className="w-5 h-5" />
+                    <span className="font-medium">Monto Fijo</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Margin Value */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  {marginType === 'percentage' ? 'Porcentaje de Ganancia' : 'Monto de Ganancia'}
+                </label>
+                <div className="relative">
+                  <div className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
+                    {marginType === 'percentage' ? (
+                      <Percent className="w-5 h-5" />
+                    ) : (
+                      <DollarSign className="w-5 h-5" />
+                    )}
+                  </div>
+                  <input
+                    type="number"
+                    value={marginValue}
+                    onChange={(e) => setMarginValue(e.target.value)}
+                    min="0"
+                    step={marginType === 'percentage' ? '1' : '0.01'}
+                    className="w-full pl-10 pr-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-purple-500 focus:border-transparent text-lg"
+                    placeholder={marginType === 'percentage' ? '20' : '1.00'}
+                  />
+                </div>
+              </div>
+
+              {/* Price Preview */}
+              <div className="bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-900/20 dark:to-emerald-900/20 rounded-lg p-4 border border-green-200 dark:border-green-800">
+                <div className="flex justify-between items-center mb-2">
+                  <span className="text-green-700 dark:text-green-300 text-sm">
+                    Precio de Venta
+                  </span>
+                  <span className="text-2xl font-bold text-green-600 dark:text-green-400">
+                    {formatCurrency(calculatedPrice)}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center text-sm">
+                  <span className="text-green-600 dark:text-green-400">Ganancia por recarga</span>
+                  <span className="font-medium text-green-600 dark:text-green-400">
+                    +{formatCurrency(profit)}
+                  </span>
+                </div>
+              </div>
+            </>
+          )}
 
           {/* Enable/Disable */}
           <div className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
