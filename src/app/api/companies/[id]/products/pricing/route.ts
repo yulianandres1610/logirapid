@@ -290,9 +290,155 @@ export async function GET(
       isProviderPricing: row.is_provider_pricing || false
     }))
 
+    // ============================================================
+    // RECHARGE PRODUCTS - Fetch from external_recharge_products
+    // ============================================================
+    const rechargeProductsResult = await db.query(`
+      SELECT
+        erp.id,
+        erp.external_id,
+        erp.name,
+        erp.custom_name,
+        erp.description,
+        erp.custom_description,
+        erp.base_cost,
+        erp.country_code,
+        erp.country_name,
+        erp.is_active,
+        erp.is_promotion,
+        erp.valid_from,
+        erp.valid_to,
+        erp.manual_cost_price,
+        erp.manual_selling_price,
+        erp.provider_amount,
+        -- Company-specific pricing from recharge_product_pricing table
+        rpp.id as pricing_id,
+        rpp.margin_type,
+        rpp.margin_value,
+        rpp.selling_price as rpp_selling_price,
+        rpp.is_enabled as pricing_enabled,
+        rpp.company_id as pricing_company_id
+      FROM external_recharge_products erp
+      LEFT JOIN recharge_product_pricing rpp
+        ON rpp.external_product_id = erp.id
+        AND (rpp.company_id = $1 OR rpp.company_id IS NULL)
+      WHERE erp.is_active = true
+      ORDER BY
+        CASE WHEN rpp.company_id = $1 THEN 0 ELSE 1 END,
+        erp.country_name ASC, erp.name ASC
+    `, [companyId])
+
+    // Transform recharge products to match the products format
+    const rechargeProducts = rechargeProductsResult.rows.map((row: any) => {
+      // Check if product has manual pricing
+      const hasManualPricing = row.manual_cost_price !== null && row.manual_selling_price !== null
+
+      let miCosto = 0
+      let precioClientes = null
+      let hasPricing = false
+
+      if (hasManualPricing) {
+        // Manual pricing products have fixed cost and selling price
+        miCosto = parseFloat(row.manual_cost_price)
+        precioClientes = parseFloat(row.manual_selling_price)
+        hasPricing = true
+      } else if (row.pricing_id) {
+        // Margin-based pricing
+        const baseCost = row.provider_amount
+          ? parseFloat(row.provider_amount)
+          : parseFloat(row.base_cost || 0)
+        miCosto = baseCost
+
+        if (row.margin_type === 'percentage') {
+          precioClientes = baseCost * (1 + parseFloat(row.margin_value || 0) / 100)
+        } else if (row.margin_type === 'fixed') {
+          precioClientes = baseCost + parseFloat(row.margin_value || 0)
+        } else if (row.rpp_selling_price) {
+          precioClientes = parseFloat(row.rpp_selling_price)
+        }
+        hasPricing = row.pricing_enabled === true
+      } else {
+        // No pricing configured - use base cost
+        miCosto = row.provider_amount
+          ? parseFloat(row.provider_amount)
+          : parseFloat(row.base_cost || 0)
+      }
+
+      return {
+        productId: `recharge-${row.id}`,  // Prefix to distinguish from catalog products
+        rechargeProductId: row.id,
+        code: `REC-${row.id}`,
+        name: row.custom_name || row.name,
+        description: row.custom_description || row.description,
+        serviceCategory: 'recarga',
+        productType: 'recharge',
+        dimensions: null,
+        weightCapacity: null,
+        unitType: 'unit',
+        pricingModel: hasManualPricing ? 'manual' : 'margin',
+        currency: 'USD',
+        displayOrder: 0,
+        servicesCount: 0,
+
+        // Catalog level prices
+        catalogMiCosto: parseFloat(row.base_cost || 0),
+        catalogMiCostoFijo: 0,
+        catalogPrecioMayorista: parseFloat(row.base_cost || 0),
+        catalogPrecioMayoristaFijo: 0,
+        catalogPrecioPublico: 0,
+
+        // Company level pricing
+        miCosto,
+        precioSucursales: null,
+        precioClientes,
+
+        // Legacy field names
+        costPrice: miCosto,
+        b2bPrice: null,
+        b2cPrice: precioClientes,
+
+        markupType: row.margin_type || null,
+        markupValue: row.margin_value ? parseFloat(row.margin_value) : null,
+
+        // Margins
+        margenClientes: precioClientes && miCosto ? precioClientes - miCosto : null,
+        margenClientesPct: precioClientes && miCosto && miCosto > 0
+          ? ((precioClientes - miCosto) / miCosto) * 100
+          : null,
+
+        // Metadata
+        priceSource: hasManualPricing ? 'manual' : 'platform',
+        hasPricing,
+        pricingId: row.pricing_id || (hasManualPricing ? row.id : null),
+
+        // Company type flags
+        isBranch,
+        canEditPrecioSucursales: false,
+        hasCustomBranchPrice: false,
+        customBranchPrice: null,
+        isProviderCategory: false,
+        providerCost: null,
+        precioALogiRapid: null,
+        isProviderPricing: false,
+
+        // Recharge-specific fields
+        isRechargeProduct: true,
+        countryCode: row.country_code,
+        countryName: row.country_name,
+        isPromotion: row.is_promotion || false,
+        validFrom: row.valid_from,
+        validTo: row.valid_to,
+        hasManualPricing,
+        providerAmount: row.provider_amount ? parseFloat(row.provider_amount) : null
+      }
+    })
+
+    // Combine catalog products with recharge products
+    const allProducts = [...products, ...rechargeProducts]
+
     // Group by category
-    const byCategory: Record<string, typeof products> = {}
-    for (const product of products) {
+    const byCategory: Record<string, typeof allProducts> = {}
+    for (const product of allProducts) {
       const cat = product.serviceCategory
       if (!byCategory[cat]) {
         byCategory[cat] = []
@@ -310,9 +456,11 @@ export async function GET(
         parentCompanyName: company.parent_name,
         isProvider,
         providerCategories,
-        products,
+        products: allProducts,
         byCategory,
-        total: products.length
+        total: allProducts.length,
+        catalogProductsCount: products.length,
+        rechargeProductsCount: rechargeProducts.length
       }
     })
 
