@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/database'
 import { cookies } from 'next/headers'
 
+// API de productos de recarga - v2.0
 export async function GET(request: NextRequest) {
   try {
     const cookieStore = await cookies()
