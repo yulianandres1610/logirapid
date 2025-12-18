@@ -245,9 +245,11 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Buscar el producto en la base de datos para obtener el univcell_product_id real
+    // Buscar el producto en la base de datos para obtener el ID real de UnivCell
+    // Para productos sincronizados, external_id es el ID de UnivCell
+    // Para productos manuales, univcell_product_id es el ID asociado
     const productResult = await db.query(`
-      SELECT id, univcell_product_id, name, country_code
+      SELECT id, external_id, univcell_product_id, name, country_code
       FROM external_recharge_products
       WHERE id = $1
     `, [productId])
@@ -260,7 +262,8 @@ export async function POST(request: NextRequest) {
     }
 
     const product = productResult.rows[0]
-    const univcellProductId = product.univcell_product_id
+    // Usar univcell_product_id si existe (productos manuales), sino usar external_id (productos sincronizados)
+    const univcellProductId = product.univcell_product_id || product.external_id
 
     if (!univcellProductId) {
       return NextResponse.json(
@@ -277,11 +280,11 @@ export async function POST(request: NextRequest) {
     const amountCents = Math.round(parseFloat(amount) * 100)
 
     // Formatear numero de telefono para UnivCell
-    // Para Cuba: quitar el +53 y enviar solo los 8 digitos
-    // Para otros paises: enviar con el codigo de pais
+    // UnivCell espera el numero CON codigo de pais pero SIN el simbolo +
+    // Ej: 5356886845 (no +5356886845, no 56886845)
     let formattedDestination = phoneNumber
-    if (product.country_code === 'CU' && phoneNumber.startsWith('+53')) {
-      formattedDestination = phoneNumber.replace(/^\+53/, '')
+    if (phoneNumber.startsWith('+')) {
+      formattedDestination = phoneNumber.replace(/^\+/, '')
     }
 
     console.log('[Recargas] Processing topup:', {
