@@ -15,7 +15,10 @@ import {
   Globe,
   Zap,
   Loader2,
-  RefreshCw
+  RefreshCw,
+  Gift,
+  Calendar,
+  Clock
 } from 'lucide-react'
 import { DashboardLayout } from '@/components/layout/dashboard-layout'
 import { ProtectedRoute } from '@/components/protected-route'
@@ -182,6 +185,30 @@ export default function RecargasPage() {
     return cleaned.slice(0, 12)
   }
 
+  // Helper to format date
+  const formatExpirationDate = (dateString: string | null): string => {
+    if (!dateString) return ''
+    try {
+      const date = new Date(dateString)
+      return date.toLocaleDateString('es-ES', {
+        day: '2-digit',
+        month: 'short',
+        year: 'numeric'
+      })
+    } catch {
+      return dateString
+    }
+  }
+
+  // Check if promotion is about to expire (within 7 days)
+  const isExpiringSoon = (dateString: string | null): boolean => {
+    if (!dateString) return false
+    const expDate = new Date(dateString)
+    const now = new Date()
+    const daysUntilExpiry = Math.ceil((expDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
+    return daysUntilExpiry > 0 && daysUntilExpiry <= 7
+  }
+
   // Handle service selection
   const handleServiceSelect = (service: ServiceType) => {
     setRecargaData(prev => ({ ...prev, service, product: null, phoneNumber: '', amount: 0 }))
@@ -337,25 +364,25 @@ Gracias por su compra!
           onClick={() => handleServiceSelect('telefono')}
           className={cn(
             "p-8 rounded-2xl border-2 transition-all duration-300",
-            "hover:shadow-xl hover:border-exa-primary",
+            "hover:shadow-xl hover:border-purple-500",
             theme === 'dark'
               ? "bg-gray-800 border-gray-700 hover:bg-gray-700"
               : "bg-white border-gray-200 hover:bg-gray-50"
           )}
         >
           <div className="flex flex-col items-center space-y-4">
-            <div className="w-20 h-20 bg-gradient-to-br from-blue-500 to-blue-600 rounded-full flex items-center justify-center">
+            <div className="w-20 h-20 bg-gradient-to-br from-purple-500 to-purple-600 rounded-full flex items-center justify-center">
               <Smartphone className="w-10 h-10 text-white" />
             </div>
-            <h3 className="text-2xl font-bold">Telefono</h3>
+            <h3 className="text-2xl font-bold">Recarga Numero</h3>
             <p className="text-gray-600 dark:text-gray-400 text-center">
               Recarga para telefono movil
             </p>
             <div className="flex flex-wrap gap-2 mt-4 justify-center">
-              <span className="px-3 py-1 bg-blue-100 text-blue-700 rounded-full text-sm">
+              <span className="px-3 py-1 bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 rounded-full text-sm">
                 Cubacel
               </span>
-              <span className="px-3 py-1 bg-blue-100 text-blue-700 rounded-full text-sm">
+              <span className="px-3 py-1 bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 rounded-full text-sm">
                 Internacional
               </span>
             </div>
@@ -371,7 +398,7 @@ Gracias por su compra!
           onClick={() => handleServiceSelect('nauta')}
           className={cn(
             "p-8 rounded-2xl border-2 transition-all duration-300",
-            "hover:shadow-xl hover:border-exa-primary",
+            "hover:shadow-xl hover:border-cyan-500",
             theme === 'dark'
               ? "bg-gray-800 border-gray-700 hover:bg-gray-700"
               : "bg-white border-gray-200 hover:bg-gray-50"
@@ -386,10 +413,10 @@ Gracias por su compra!
               Recarga para cuenta Nauta
             </p>
             <div className="flex flex-wrap gap-2 mt-4 justify-center">
-              <span className="px-3 py-1 bg-cyan-100 text-cyan-700 rounded-full text-sm">
+              <span className="px-3 py-1 bg-cyan-100 dark:bg-cyan-900/30 text-cyan-700 dark:text-cyan-300 rounded-full text-sm">
                 Internet
               </span>
-              <span className="px-3 py-1 bg-cyan-100 text-cyan-700 rounded-full text-sm">
+              <span className="px-3 py-1 bg-cyan-100 dark:bg-cyan-900/30 text-cyan-700 dark:text-cyan-300 rounded-full text-sm">
                 WiFi
               </span>
             </div>
@@ -422,7 +449,7 @@ Gracias por su compra!
 
         {loadingProducts ? (
           <div className="flex items-center justify-center py-12">
-            <Loader2 className="w-8 h-8 animate-spin text-exa-primary" />
+            <Loader2 className="w-8 h-8 animate-spin text-purple-500" />
           </div>
         ) : filteredProducts.length === 0 ? (
           <div className="text-center py-12">
@@ -444,51 +471,94 @@ Gracias por su compra!
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {filteredProducts.map((product) => (
-              <motion.button
-                key={product.productId}
-                whileHover={{ scale: 1.02 }}
-                whileTap={{ scale: 0.98 }}
-                onClick={() => handleProductSelect(product)}
-                className={cn(
-                  "p-4 rounded-xl border-2 transition-all duration-300 text-left",
-                  "hover:shadow-lg hover:border-exa-primary",
-                  theme === 'dark'
-                    ? "bg-gray-800 border-gray-700 hover:bg-gray-700"
-                    : "bg-white border-gray-200 hover:bg-gray-50"
-                )}
-              >
-                <div className="flex items-start gap-3">
-                  <div className={cn(
-                    "w-12 h-12 rounded-xl flex items-center justify-center text-2xl flex-shrink-0",
-                    recargaData.service === 'nauta'
-                      ? "bg-gradient-to-br from-cyan-500 to-cyan-600"
-                      : "bg-gradient-to-br from-blue-500 to-blue-600"
-                  )}>
-                    {getCountryFlag(product.countryCode)}
+            {filteredProducts.map((product) => {
+              const isPromo = product.isPromotion
+              const sellingPrice = product.precioClientes || product.miCosto
+              const expiringSoon = isExpiringSoon(product.validTo)
+
+              return (
+                <motion.button
+                  key={product.productId}
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                  onClick={() => handleProductSelect(product)}
+                  className={cn(
+                    "p-4 rounded-xl border-2 transition-all duration-300 text-left relative",
+                    "hover:shadow-lg",
+                    isPromo
+                      ? "hover:border-amber-500 border-amber-200 dark:border-amber-800"
+                      : recargaData.service === 'nauta'
+                        ? "hover:border-cyan-500"
+                        : "hover:border-purple-500",
+                    theme === 'dark'
+                      ? "bg-gray-800 hover:bg-gray-700"
+                      : "bg-white hover:bg-gray-50",
+                    !isPromo && (theme === 'dark' ? "border-gray-700" : "border-gray-200")
+                  )}
+                >
+                  {/* Promo badge */}
+                  {isPromo && (
+                    <div className={cn(
+                      "absolute -top-2 -right-2 px-2 py-1 rounded-full text-xs font-semibold flex items-center gap-1",
+                      expiringSoon
+                        ? "bg-red-500 text-white animate-pulse"
+                        : "bg-gradient-to-r from-amber-400 to-orange-500 text-white"
+                    )}>
+                      <Gift className="w-3 h-3" />
+                      PROMO
+                    </div>
+                  )}
+
+                  <div className="flex items-start gap-3">
+                    <div className={cn(
+                      "w-12 h-12 rounded-xl flex items-center justify-center text-2xl flex-shrink-0",
+                      isPromo
+                        ? "bg-gradient-to-br from-amber-400 to-orange-500"
+                        : recargaData.service === 'nauta'
+                          ? "bg-gradient-to-br from-cyan-500 to-cyan-600"
+                          : "bg-gradient-to-br from-purple-500 to-purple-600"
+                    )}>
+                      {isPromo ? <Gift className="w-6 h-6 text-white" /> : getCountryFlag(product.countryCode)}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="font-semibold text-gray-900 dark:text-white truncate">
+                        {product.name}
+                      </div>
+                      <div className="text-sm text-gray-500 dark:text-gray-400">
+                        {product.countryName}
+                      </div>
+
+                      {/* Pricing info */}
+                      <div className="flex items-center gap-2 mt-2">
+                        <span className="text-sm font-bold text-emerald-600 dark:text-emerald-400">
+                          ${sellingPrice.toFixed(2)}
+                        </span>
+                      </div>
+
+                      {/* Expiration date for promotions */}
+                      {isPromo && product.validTo && (
+                        <div className={cn(
+                          "flex items-center gap-1 mt-2 text-xs",
+                          expiringSoon
+                            ? "text-red-500 font-semibold"
+                            : "text-gray-500 dark:text-gray-400"
+                        )}>
+                          {expiringSoon ? (
+                            <Clock className="w-3 h-3" />
+                          ) : (
+                            <Calendar className="w-3 h-3" />
+                          )}
+                          <span>
+                            {expiringSoon ? 'Expira: ' : 'Hasta: '}
+                            {formatExpirationDate(product.validTo)}
+                          </span>
+                        </div>
+                      )}
+                    </div>
                   </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="font-semibold text-gray-900 dark:text-white truncate">
-                      {product.name}
-                    </div>
-                    <div className="text-sm text-gray-500 dark:text-gray-400">
-                      {product.countryName}
-                    </div>
-                    {/* Show company's selling price */}
-                    <div className="flex items-center gap-2 mt-2">
-                      <span className="text-lg font-bold text-emerald-600 dark:text-emerald-400">
-                        ${(product.precioClientes || product.miCosto).toFixed(2)}
-                      </span>
-                    </div>
-                    {product.isPromotion && (
-                      <span className="inline-block mt-1 px-2 py-0.5 bg-amber-100 text-amber-700 text-xs rounded-full">
-                        Promoción
-                      </span>
-                    )}
-                  </div>
-                </div>
-              </motion.button>
-            ))}
+                </motion.button>
+              )
+            })}
           </div>
         )}
 
@@ -543,7 +613,7 @@ Gracias por su compra!
               "w-12 h-12 rounded-xl flex items-center justify-center text-2xl",
               isNauta
                 ? "bg-gradient-to-br from-cyan-500 to-cyan-600"
-                : "bg-gradient-to-br from-blue-500 to-blue-600"
+                : "bg-gradient-to-br from-purple-500 to-purple-600"
             )}>
               {getCountryFlag(recargaData.product.countryCode)}
             </div>
@@ -581,7 +651,7 @@ Gracias por su compra!
                 placeholder={isNauta ? 'usuario@nauta.com.cu' : '5xxxxxxx'}
                 className={cn(
                   "w-full pl-10 pr-3 py-3 rounded-lg border transition-colors",
-                  "focus:ring-2 focus:ring-exa-primary focus:border-transparent",
+                  "focus:ring-2 focus:ring-purple-500 focus:border-transparent",
                   theme === 'dark'
                     ? "bg-gray-800 border-gray-700 text-white"
                     : "bg-white border-gray-300 text-gray-900"
@@ -590,7 +660,7 @@ Gracias por su compra!
             </div>
             {recargaData.product?.phonePattern && (
               <p className="text-sm text-gray-500 mt-2">
-                Formato: {recargaData.product.phonePattern}
+                Formato esperado: {recargaData.product.phonePattern}
               </p>
             )}
           </div>
@@ -646,9 +716,9 @@ Gracias por su compra!
               onClick={() => handleAmountSelect(amount)}
               className={cn(
                 "p-4 rounded-xl border-2 transition-all duration-300",
-                "hover:shadow-lg hover:border-exa-primary",
+                "hover:shadow-lg hover:border-purple-500",
                 recargaData.amount === amount
-                  ? "border-exa-primary bg-exa-primary/10"
+                  ? "border-purple-500 bg-purple-50 dark:bg-purple-900/30"
                   : theme === 'dark'
                     ? "bg-gray-800 border-gray-700"
                     : "bg-white border-gray-200"
@@ -682,7 +752,7 @@ Gracias por su compra!
                   placeholder="0.00"
                   className={cn(
                     "w-full pl-10 pr-3 py-3 rounded-lg border transition-colors",
-                    "focus:ring-2 focus:ring-exa-primary focus:border-transparent",
+                    "focus:ring-2 focus:ring-purple-500 focus:border-transparent",
                     theme === 'dark'
                       ? "bg-gray-800 border-gray-700 text-white"
                       : "bg-white border-gray-300 text-gray-900"
@@ -714,7 +784,9 @@ Gracias por su compra!
 
   // Render confirmation step
   const renderConfirmationStep = () => {
+    const product = recargaData.product
     const sellingPrice = getSellingPrice()
+    const isPromo = product?.isPromotion
 
     return (
       <motion.div
@@ -732,30 +804,40 @@ Gracias por su compra!
 
         <div className={cn(
           "p-6 rounded-xl border-2 space-y-4",
+          isPromo
+            ? "border-amber-300 dark:border-amber-700"
+            : theme === 'dark'
+              ? "border-gray-700"
+              : "border-gray-200",
           theme === 'dark'
-            ? "bg-gray-800 border-gray-700"
-            : "bg-gray-50 border-gray-200"
+            ? "bg-gray-800"
+            : "bg-gray-50"
         )}>
+          {/* Promo indicator */}
+          {isPromo && (
+            <div className="flex items-center gap-2 text-amber-600 dark:text-amber-400 mb-2">
+              <Gift className="w-5 h-5" />
+              <span className="font-semibold">Producto Promocional</span>
+              {product?.validTo && (
+                <span className="text-xs text-gray-500 ml-auto">
+                  Expira: {formatExpirationDate(product.validTo)}
+                </span>
+              )}
+            </div>
+          )}
+
           <div className="flex justify-between items-center">
             <span className="text-gray-600 dark:text-gray-400">Producto:</span>
-            <span className="font-medium">{recargaData.product?.name}</span>
+            <span className="font-medium">{product?.name}</span>
           </div>
           <div className="flex justify-between items-center">
             <span className="text-gray-600 dark:text-gray-400">Numero:</span>
             <span className="font-medium">{recargaData.phoneNumber}</span>
           </div>
-          {recargaData.product?.isPromotion && (
-            <div className="flex justify-between items-center">
-              <span className="text-gray-600 dark:text-gray-400">Tipo:</span>
-              <span className="px-2 py-0.5 bg-amber-100 text-amber-700 text-sm rounded-full">
-                Promoción
-              </span>
-            </div>
-          )}
           <div className="border-t pt-4 mt-4 dark:border-gray-600">
             <div className="flex justify-between items-center">
               <span className="text-lg font-semibold">Total a Cobrar:</span>
-              <span className="text-2xl font-bold text-exa-primary">
+              <span className="text-xl font-bold text-purple-600 dark:text-purple-400">
                 ${sellingPrice.toFixed(2)}
               </span>
             </div>
@@ -772,7 +854,7 @@ Gracias por su compra!
               placeholder="Nombre del cliente"
               className={cn(
                 "w-full px-3 py-2 rounded-lg border transition-colors",
-                "focus:ring-2 focus:ring-exa-primary focus:border-transparent",
+                "focus:ring-2 focus:ring-purple-500 focus:border-transparent",
                 theme === 'dark'
                   ? "bg-gray-800 border-gray-700 text-white"
                   : "bg-white border-gray-300 text-gray-900"
@@ -789,7 +871,7 @@ Gracias por su compra!
               placeholder="email@ejemplo.com"
               className={cn(
                 "w-full px-3 py-2 rounded-lg border transition-colors",
-                "focus:ring-2 focus:ring-exa-primary focus:border-transparent",
+                "focus:ring-2 focus:ring-purple-500 focus:border-transparent",
                 theme === 'dark'
                   ? "bg-gray-800 border-gray-700 text-white"
                   : "bg-white border-gray-300 text-gray-900"
@@ -810,11 +892,11 @@ Gracias por su compra!
           <Button
             onClick={handleConfirmRecarga}
             disabled={isProcessing}
-            className="flex-1"
+            className="flex-1 bg-purple-600 hover:bg-purple-700"
           >
             {isProcessing ? (
               <>
-                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                <Loader2 className="animate-spin rounded-full h-4 w-4 mr-2" />
                 Procesando...
               </>
             ) : (
@@ -831,7 +913,9 @@ Gracias por su compra!
 
   // Render success step
   const renderSuccessStep = () => {
+    const product = recargaData.product
     const sellingPrice = getSellingPrice()
+    const isPromo = product?.isPromotion
 
     return (
       <motion.div
@@ -840,30 +924,51 @@ Gracias por su compra!
         exit={{ opacity: 0, scale: 0.9 }}
         className="space-y-8 text-center max-w-md mx-auto"
       >
-        <div className="w-20 h-20 bg-green-500 rounded-full flex items-center justify-center mx-auto">
-          <Check className="w-10 h-10 text-white" />
+        <div className={cn(
+          "w-20 h-20 rounded-full flex items-center justify-center mx-auto",
+          isPromo ? "bg-gradient-to-br from-amber-400 to-orange-500" : "bg-green-500"
+        )}>
+          {isPromo ? (
+            <Gift className="w-10 h-10 text-white" />
+          ) : (
+            <Check className="w-10 h-10 text-white" />
+          )}
         </div>
 
         <div>
           <h2 className="text-3xl font-bold mb-4">¡Recarga Exitosa!</h2>
           <p className="text-gray-600 dark:text-gray-400 mb-6">
-            Tu recarga ha sido procesada correctamente
+            {isPromo
+              ? 'La recarga promocional ha sido procesada correctamente'
+              : 'La recarga ha sido procesada correctamente'
+            }
           </p>
         </div>
 
         <div className={cn(
           "p-6 rounded-xl border-2 space-y-3 text-left",
+          isPromo
+            ? "border-amber-300 dark:border-amber-700"
+            : theme === 'dark'
+              ? "border-gray-700"
+              : "border-gray-200",
           theme === 'dark'
-            ? "bg-gray-800 border-gray-700"
-            : "bg-gray-50 border-gray-200"
+            ? "bg-gray-800"
+            : "bg-gray-50"
         )}>
+          {isPromo && (
+            <div className="flex items-center gap-2 text-amber-600 dark:text-amber-400 mb-2 pb-2 border-b dark:border-gray-700">
+              <Gift className="w-4 h-4" />
+              <span className="font-semibold text-sm">Promocion Aplicada</span>
+            </div>
+          )}
           <div className="flex justify-between items-center">
             <span className="text-gray-600 dark:text-gray-400">ID:</span>
             <span className="font-medium font-mono">{recargaId}</span>
           </div>
           <div className="flex justify-between items-center">
             <span className="text-gray-600 dark:text-gray-400">Producto:</span>
-            <span className="font-medium">{recargaData.product?.name}</span>
+            <span className="font-medium">{product?.name}</span>
           </div>
           <div className="flex justify-between items-center">
             <span className="text-gray-600 dark:text-gray-400">Numero:</span>
@@ -900,7 +1005,7 @@ Gracias por su compra!
           </Button>
           <Button
             onClick={handleNewRecarga}
-            className="w-full"
+            className="w-full bg-purple-600 hover:bg-purple-700"
           >
             Nueva Recarga
             <ArrowRight className="w-4 h-4 ml-2" />
@@ -926,56 +1031,131 @@ Gracias por su compra!
     <ProtectedRoute requiredRole="ADMIN">
       <DashboardLayout>
         <div className="max-w-4xl mx-auto p-6">
-          {/* Header */}
-          <div className="mb-8">
-            <h1 className="text-4xl font-bold mb-2">Recargas</h1>
-            <p className="text-gray-600 dark:text-gray-400">
-              Sistema de recargas para Telefono y Nauta
-            </p>
-          </div>
-
-          {/* Progress Bar */}
-          <div className="mb-8">
-            <div className="flex items-center justify-between mb-4">
+          {/* Progress Bar with Animations */}
+          <div className="mb-8 sm:mb-12">
+            <div className="flex items-center justify-between">
               {steps.map((step, index) => (
                 <div key={step.id} className="flex items-center flex-1">
-                  <div className="flex items-center">
-                    <div className={cn(
-                      "w-10 h-10 rounded-full flex items-center justify-center text-sm font-medium transition-all duration-300",
-                      currentStep === step.id
-                        ? theme === 'dark'
-                          ? "bg-exa-secondary text-white"
-                          : "bg-exa-primary text-white"
-                        : currentStepIndex > index
-                          ? theme === 'dark'
-                            ? "bg-white/10 text-white"
-                            : "bg-gray-100 text-gray-700"
-                          : theme === 'dark'
-                            ? "bg-gray-700 text-gray-400"
-                            : "bg-gray-200 text-gray-500"
-                    )}>
-                      <step.icon className="w-5 h-5" />
+                  <div className="flex flex-col items-center">
+                    <div className="relative w-12 h-12 sm:w-14 sm:h-14">
+                      {/* Pulsing ring for active step */}
+                      {currentStep === step.id && (
+                        <motion.div
+                          className="absolute inset-0 rounded-full"
+                          animate={{
+                            scale: [1, 1.3, 1],
+                            opacity: [0.6, 0, 0.6]
+                          }}
+                          transition={{
+                            duration: 2,
+                            repeat: Infinity,
+                            ease: "easeInOut"
+                          }}
+                          style={{
+                            background: theme === 'dark'
+                              ? 'rgba(147, 51, 234, 0.5)' // purple-600
+                              : 'rgba(126, 34, 206, 0.5)' // purple-700
+                          }}
+                        />
+                      )}
+
+                      <motion.div
+                        initial={false}
+                        animate={{
+                          scale: currentStep === step.id ? 1.1 : 1,
+                          backgroundColor: currentStep === step.id
+                            ? theme === 'dark' ? '#9333EA' : '#7E22CE' // purple colors
+                            : currentStepIndex > index
+                            ? theme === 'dark' ? '#10B981' : '#059669' // green colors
+                            : theme === 'dark' ? '#374151' : '#E5E7EB'
+                        }}
+                        transition={{
+                          scale: { duration: 0.3, type: "spring", stiffness: 200 },
+                          backgroundColor: { duration: 0.3 }
+                        }}
+                        whileHover={{ scale: currentStepIndex >= index ? 1.15 : 1.05 }}
+                        className={cn(
+                          "w-12 h-12 sm:w-14 sm:h-14 rounded-full flex items-center justify-center relative z-10",
+                          "transition-shadow duration-300",
+                          currentStep === step.id && (
+                            theme === 'dark'
+                              ? 'shadow-lg shadow-purple-500/50'
+                              : 'shadow-lg shadow-purple-400/50'
+                          ),
+                          currentStepIndex > index && (
+                            theme === 'dark'
+                              ? 'shadow-md shadow-green-500/30'
+                              : 'shadow-md shadow-green-400/30'
+                          )
+                        )}
+                      >
+                        {currentStepIndex > index ? (
+                          <motion.div
+                            initial={{ scale: 0, rotate: -180 }}
+                            animate={{ scale: 1, rotate: 0 }}
+                            transition={{ type: "spring", stiffness: 200, damping: 15 }}
+                          >
+                            <Check className="w-6 h-6 sm:w-7 sm:h-7 text-white" />
+                          </motion.div>
+                        ) : (
+                          <motion.div
+                            animate={{
+                              rotate: currentStep === step.id ? [0, 10, -10, 0] : 0
+                            }}
+                            transition={{
+                              duration: 0.5,
+                              ease: "easeInOut",
+                              times: [0, 0.25, 0.75, 1]
+                            }}
+                          >
+                            <step.icon className={cn(
+                              "w-5 h-5 sm:w-6 sm:h-6",
+                              currentStep === step.id ? 'text-white' : theme === 'dark' ? 'text-gray-500' : 'text-gray-400'
+                            )} />
+                          </motion.div>
+                        )}
+                      </motion.div>
                     </div>
-                    <span className={cn(
-                      "ml-2 text-sm font-medium hidden sm:block",
-                      currentStep === step.id
-                        ? "text-exa-primary"
-                        : currentStepIndex > index
-                          ? "text-gray-900 dark:text-white"
-                          : "text-gray-500"
-                    )}>
-                      {step.label}
-                    </span>
+
+                    <motion.div
+                      className="mt-2 sm:mt-3 text-center"
+                      initial={false}
+                      animate={{
+                        y: currentStep === step.id ? -2 : 0
+                      }}
+                      transition={{ duration: 0.2 }}
+                    >
+                      <p className={cn(
+                        "text-xs sm:text-sm font-semibold transition-colors duration-300",
+                        currentStep === step.id
+                          ? theme === 'dark' ? 'text-purple-400' : 'text-purple-600'
+                          : currentStepIndex > index
+                          ? theme === 'dark' ? 'text-green-400' : 'text-green-600'
+                          : theme === 'dark' ? 'text-gray-500' : 'text-gray-400'
+                      )}>
+                        {step.label}
+                      </p>
+                    </motion.div>
                   </div>
+
                   {index < steps.length - 1 && (
-                    <div className={cn(
-                      "flex-1 h-1 mx-4 rounded",
-                      currentStepIndex > index
-                        ? theme === 'dark'
-                          ? "bg-white/10"
-                          : "bg-gray-200"
-                        : "bg-exa-primary"
-                    )}></div>
+                    <div className="flex-1 h-1 mx-2 sm:mx-3 mb-8 sm:mb-10 relative">
+                      <div className={cn(
+                        "absolute inset-0 rounded-full",
+                        theme === 'dark' ? 'bg-gray-700' : 'bg-gray-200'
+                      )} />
+                      <motion.div
+                        initial={false}
+                        animate={{
+                          scaleX: currentStepIndex > index ? 1 : 0
+                        }}
+                        transition={{ duration: 0.5, ease: "easeInOut" }}
+                        className={cn(
+                          "h-full origin-left rounded-full",
+                          theme === 'dark' ? 'bg-green-500' : 'bg-green-600'
+                        )}
+                      />
+                    </div>
                   )}
                 </div>
               ))}
