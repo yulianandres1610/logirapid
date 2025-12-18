@@ -249,7 +249,8 @@ export async function POST(request: NextRequest) {
     // Para productos sincronizados, external_id es el ID de UnivCell
     // Para productos manuales, univcell_product_id es el ID asociado
     const productResult = await db.query(`
-      SELECT id, external_id, univcell_product_id, name, country_code
+      SELECT id, external_id, univcell_product_id, name, country_code,
+             provider_amount, base_cost, manual_cost_price
       FROM external_recharge_products
       WHERE id = $1
     `, [productId])
@@ -275,9 +276,18 @@ export async function POST(request: NextRequest) {
     // Generar referencia unica
     const localReference = uuidv4()
 
-    // Convertir amount a centavos para UnivCell
-    // El amount viene como dolares (ej: 20.00), UnivCell espera centavos (2000)
-    const amountCents = Math.round(parseFloat(amount) * 100)
+    // IMPORTANTE: Para UnivCell, debemos enviar el monto del TOPUP (provider_amount),
+    // NO el precio de venta ni el costo. El provider_amount es lo que se carga al telefono.
+    // Por ejemplo, para la promocion "Cubacel ilimitada", el topup es $42.25 aunque
+    // el costo sea diferente.
+    const topupAmount = product.provider_amount
+      ? parseFloat(product.provider_amount)
+      : product.base_cost
+        ? parseFloat(product.base_cost)
+        : parseFloat(amount) // Fallback al amount enviado
+
+    // Convertir topupAmount a centavos para UnivCell
+    const amountCents = Math.round(topupAmount * 100)
 
     // Formatear numero de telefono para UnivCell
     // UnivCell espera el numero CON codigo de pais pero SIN el simbolo +
@@ -292,7 +302,8 @@ export async function POST(request: NextRequest) {
       univcellProductId,
       destination: formattedDestination,
       originalPhone: phoneNumber,
-      amount,
+      requestedAmount: amount,
+      topupAmount,
       amountCents,
       localReference
     })
