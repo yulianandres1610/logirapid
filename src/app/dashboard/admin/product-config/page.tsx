@@ -1524,24 +1524,21 @@ const generateSKU = (category: string): string => {
   return `${prefix}-${timestamp}${random}`
 }
 
-// UnivCell Product interface for import
-interface UnivCellProduct {
-  id: number
-  externalId: number
+// UnivCell Product Option interface (from /api/recharges/univcell-products)
+interface UnivCellProductOption {
+  id: string              // 'product-7' or 'promo-xxx'
+  univcellProductId: number
   name: string
-  slug: string
-  baseCost: number
+  description: string | null
+  type: 'product' | 'promotion'
+  providerAmount: number  // price for products, min_amount for promotions
+  pattern: string
+  mask: string
   countryCode: string
   countryName: string
-  phonePattern: string
-  isActive: boolean
-  pricing: {
-    marginType: string
-    marginValue: number
-    sellingPrice: number
-    isEnabled: boolean
-  } | null
-  promotions: Array<{ summary: string }>
+  validFrom?: string
+  validTo?: string
+  promotionSummary?: string
 }
 
 function ProductModal({ isDark, product, providerCompanies, onClose, onSave }: ProductModalProps) {
@@ -1569,10 +1566,10 @@ function ProductModal({ isDark, product, providerCompanies, onClose, onSave }: P
   const [error, setError] = useState<string | null>(null)
 
   // UnivCell products state
-  const [univcellProducts, setUnivcellProducts] = useState<UnivCellProduct[]>([])
+  const [univcellProducts, setUnivcellProducts] = useState<UnivCellProductOption[]>([])
   const [loadingUnivcell, setLoadingUnivcell] = useState(false)
   const [syncingUnivcell, setSyncingUnivcell] = useState(false)
-  const [selectedUnivcellProduct, setSelectedUnivcellProduct] = useState<UnivCellProduct | null>(null)
+  const [selectedUnivcellProduct, setSelectedUnivcellProduct] = useState<UnivCellProductOption | null>(null)
   // Nuevos campos para crear producto de recarga
   const [univcellProductName, setUnivcellProductName] = useState('')
   const [univcellProductDescription, setUnivcellProductDescription] = useState('')
@@ -1592,7 +1589,7 @@ function ProductModal({ isDark, product, providerCompanies, onClose, onSave }: P
   const fetchUnivcellProducts = async () => {
     setLoadingUnivcell(true)
     try {
-      const response = await fetch('/api/recharges/products')
+      const response = await fetch('/api/recharges/univcell-products')
       const data = await response.json()
       if (data.success) {
         setUnivcellProducts(data.data.products)
@@ -1646,16 +1643,19 @@ function ProductModal({ isDark, product, providerCompanies, onClose, onSave }: P
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           name: univcellProductName.trim(),
-          description: univcellProductDescription.trim() || null,
-          univcellProductId: selectedUnivcellProduct.externalId,
-          isPromotion: selectedUnivcellProduct.promotions?.length > 0 || false,
-          providerAmount: selectedUnivcellProduct.baseCost,
+          description: univcellProductDescription.trim() || selectedUnivcellProduct.description || null,
+          univcellProductId: selectedUnivcellProduct.univcellProductId,
+          isPromotion: selectedUnivcellProduct.type === 'promotion',
+          promotionId: selectedUnivcellProduct.type === 'promotion' ? selectedUnivcellProduct.id : null,
+          providerAmount: selectedUnivcellProduct.providerAmount,
           costPrice: parseFloat(univcellCostPrice),
           sellingPrice: parseFloat(univcellSellingPrice),
-          pattern: selectedUnivcellProduct.phonePattern || '',
-          mask: '',
+          pattern: selectedUnivcellProduct.pattern || '',
+          mask: selectedUnivcellProduct.mask || '',
           countryCode: selectedUnivcellProduct.countryCode,
           countryName: selectedUnivcellProduct.countryName,
+          validFrom: selectedUnivcellProduct.validFrom || null,
+          validTo: selectedUnivcellProduct.validTo || null,
         })
       })
       const data = await response.json()
@@ -1870,49 +1870,97 @@ function ProductModal({ isDark, product, providerCompanies, onClose, onSave }: P
                     </button>
                   </div>
                 ) : (
-                  <div className="space-y-2 max-h-48 overflow-y-auto">
-                    {univcellProducts.map(prod => (
-                      <button
-                        key={prod.id}
-                        type="button"
-                        onClick={() => setSelectedUnivcellProduct(prod)}
-                        className={`w-full p-3 rounded-xl flex items-center gap-3 transition-all text-left ${
-                          selectedUnivcellProduct?.id === prod.id
-                            ? isDark
-                              ? 'bg-purple-600/30 border-2 border-purple-500'
-                              : 'bg-purple-50 border-2 border-purple-400'
-                            : isDark
-                              ? 'bg-gray-700 hover:bg-gray-600 border-2 border-transparent'
-                              : 'bg-gray-50 hover:bg-gray-100 border-2 border-transparent'
-                        }`}
-                      >
-                        <span className="text-2xl">{getCountryFlag(prod.countryCode)}</span>
-                        <div className="flex-1 min-w-0">
-                          <p className={`font-medium text-sm truncate ${isDark ? 'text-white' : 'text-gray-900'}`}>
-                            {prod.name}
-                          </p>
-                          <p className={`text-xs ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
-                            {prod.countryName} • Costo: ${prod.baseCost.toFixed(2)}
-                          </p>
+                  <div className="space-y-3 max-h-64 overflow-y-auto">
+                    {/* Regular Products */}
+                    {univcellProducts.filter(p => p.type === 'product').length > 0 && (
+                      <div>
+                        <p className={`text-xs font-semibold mb-2 px-1 ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
+                          PRODUCTOS
+                        </p>
+                        <div className="space-y-2">
+                          {univcellProducts.filter(p => p.type === 'product').map(prod => (
+                            <button
+                              key={prod.id}
+                              type="button"
+                              onClick={() => setSelectedUnivcellProduct(prod)}
+                              className={`w-full p-3 rounded-xl flex items-center gap-3 transition-all text-left ${
+                                selectedUnivcellProduct?.id === prod.id
+                                  ? isDark
+                                    ? 'bg-purple-600/30 border-2 border-purple-500'
+                                    : 'bg-purple-50 border-2 border-purple-400'
+                                  : isDark
+                                    ? 'bg-gray-700 hover:bg-gray-600 border-2 border-transparent'
+                                    : 'bg-gray-50 hover:bg-gray-100 border-2 border-transparent'
+                              }`}
+                            >
+                              <span className="text-2xl">{getCountryFlag(prod.countryCode)}</span>
+                              <div className="flex-1 min-w-0">
+                                <p className={`font-medium text-sm truncate ${isDark ? 'text-white' : 'text-gray-900'}`}>
+                                  {prod.name}
+                                </p>
+                                <p className={`text-xs ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
+                                  {prod.countryName} • Monto: ${prod.providerAmount.toFixed(2)}
+                                </p>
+                              </div>
+                              <span className={`px-2 py-0.5 text-xs rounded-full ${isDark ? 'bg-blue-500/20 text-blue-400' : 'bg-blue-100 text-blue-600'}`}>
+                                Producto
+                              </span>
+                            </button>
+                          ))}
                         </div>
-                        {prod.pricing?.isEnabled && (
-                          <span className={`px-2 py-0.5 text-xs rounded-full ${isDark ? 'bg-green-500/20 text-green-400' : 'bg-green-100 text-green-600'}`}>
-                            Activo
-                          </span>
-                        )}
-                        {prod.promotions.length > 0 && (
-                          <span className={`px-2 py-0.5 text-xs rounded-full ${isDark ? 'bg-orange-500/20 text-orange-400' : 'bg-orange-100 text-orange-600'}`}>
-                            Promo
-                          </span>
-                        )}
-                      </button>
-                    ))}
+                      </div>
+                    )}
+
+                    {/* Promotions */}
+                    {univcellProducts.filter(p => p.type === 'promotion').length > 0 && (
+                      <div>
+                        <p className={`text-xs font-semibold mb-2 px-1 ${isDark ? 'text-orange-400' : 'text-orange-500'}`}>
+                          PROMOCIONES
+                        </p>
+                        <div className="space-y-2">
+                          {univcellProducts.filter(p => p.type === 'promotion').map(prod => (
+                            <button
+                              key={prod.id}
+                              type="button"
+                              onClick={() => setSelectedUnivcellProduct(prod)}
+                              className={`w-full p-3 rounded-xl flex items-center gap-3 transition-all text-left ${
+                                selectedUnivcellProduct?.id === prod.id
+                                  ? isDark
+                                    ? 'bg-orange-600/30 border-2 border-orange-500'
+                                    : 'bg-orange-50 border-2 border-orange-400'
+                                  : isDark
+                                    ? 'bg-gray-700 hover:bg-gray-600 border-2 border-transparent'
+                                    : 'bg-gray-50 hover:bg-gray-100 border-2 border-transparent'
+                              }`}
+                            >
+                              <span className="text-2xl">{getCountryFlag(prod.countryCode)}</span>
+                              <div className="flex-1 min-w-0">
+                                <p className={`font-medium text-sm truncate ${isDark ? 'text-white' : 'text-gray-900'}`}>
+                                  {prod.name}
+                                </p>
+                                <p className={`text-xs ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
+                                  Monto minimo: ${prod.providerAmount.toFixed(2)}
+                                  {prod.validTo && ` • Hasta: ${new Date(prod.validTo).toLocaleDateString('es-ES')}`}
+                                </p>
+                              </div>
+                              <span className={`px-2 py-0.5 text-xs rounded-full ${isDark ? 'bg-orange-500/20 text-orange-400' : 'bg-orange-100 text-orange-600'}`}>
+                                Promo
+                              </span>
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
 
                 {/* Selected Product Config */}
                 {selectedUnivcellProduct && (
-                  <div className={`p-4 rounded-xl ${isDark ? 'bg-purple-900/20 border border-purple-800' : 'bg-purple-50 border border-purple-200'}`}>
+                  <div className={`p-4 rounded-xl ${
+                    selectedUnivcellProduct.type === 'promotion'
+                      ? isDark ? 'bg-orange-900/20 border border-orange-800' : 'bg-orange-50 border border-orange-200'
+                      : isDark ? 'bg-purple-900/20 border border-purple-800' : 'bg-purple-50 border border-purple-200'
+                  }`}>
                     {/* Product Info */}
                     <div className="flex items-center gap-3 mb-4">
                       <span className="text-3xl">{getCountryFlag(selectedUnivcellProduct.countryCode)}</span>
@@ -1921,15 +1969,29 @@ function ProductModal({ isDark, product, providerCompanies, onClose, onSave }: P
                           {selectedUnivcellProduct.name}
                         </p>
                         <p className={`text-sm ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
-                          Monto proveedor: ${selectedUnivcellProduct.baseCost.toFixed(2)} USD (fijo)
+                          {selectedUnivcellProduct.type === 'promotion' ? 'Monto minimo' : 'Monto'}: ${selectedUnivcellProduct.providerAmount.toFixed(2)} USD (fijo)
                         </p>
+                        {selectedUnivcellProduct.type === 'promotion' && selectedUnivcellProduct.validTo && (
+                          <p className={`text-xs mt-1 ${isDark ? 'text-orange-400' : 'text-orange-600'}`}>
+                            Valido hasta: {new Date(selectedUnivcellProduct.validTo).toLocaleDateString('es-ES')}
+                          </p>
+                        )}
                       </div>
-                      {selectedUnivcellProduct.promotions?.length > 0 && (
-                        <span className={`px-2 py-1 text-xs rounded-full ${isDark ? 'bg-orange-500/20 text-orange-400' : 'bg-orange-100 text-orange-600'}`}>
-                          Promo
-                        </span>
-                      )}
+                      <span className={`px-2 py-1 text-xs rounded-full ${
+                        selectedUnivcellProduct.type === 'promotion'
+                          ? isDark ? 'bg-orange-500/20 text-orange-400' : 'bg-orange-100 text-orange-600'
+                          : isDark ? 'bg-blue-500/20 text-blue-400' : 'bg-blue-100 text-blue-600'
+                      }`}>
+                        {selectedUnivcellProduct.type === 'promotion' ? 'Promo' : 'Producto'}
+                      </span>
                     </div>
+
+                    {/* Promotion Description (if promotion) */}
+                    {selectedUnivcellProduct.type === 'promotion' && selectedUnivcellProduct.description && (
+                      <div className={`mb-4 p-3 rounded-lg text-sm ${isDark ? 'bg-orange-900/30 text-orange-200' : 'bg-orange-100 text-orange-800'}`}>
+                        {selectedUnivcellProduct.description}
+                      </div>
+                    )}
 
                     {/* Nombre del Servicio */}
                     <div className="mb-3">
