@@ -387,22 +387,35 @@ export async function DELETE(
       return NextResponse.json({ success: false, error: 'Sin empresa asignada' }, { status: 403 })
     }
 
-    // Get user info from token
+    if (!authToken) {
+      return NextResponse.json({ success: false, error: 'No autorizado' }, { status: 401 })
+    }
+
+    // Get user info from token and verify admin role
     let userId = 0
     let userName = 'Sistema'
     let userEmail = ''
-    if (authToken) {
-      try {
-        const secret = process.env.JWT_SECRET || 'your-secret-key'
-        const payload = jwt.verify(authToken, secret) as JWTPayload
-        userId = payload.userId
-        userEmail = payload.email
+    let userRole = ''
 
-        const userResult = await db.query('SELECT name FROM users WHERE id = $1', [userId])
-        userName = userResult.rows[0]?.name || payload.email
-      } catch {
-        // Token invalid
-      }
+    try {
+      const secret = process.env.JWT_SECRET || 'your-secret-key'
+      const payload = jwt.verify(authToken, secret) as JWTPayload
+      userId = payload.userId
+      userEmail = payload.email
+      userRole = payload.role
+
+      const userResult = await db.query('SELECT name FROM users WHERE id = $1', [userId])
+      userName = userResult.rows[0]?.name || payload.email
+    } catch {
+      return NextResponse.json({ success: false, error: 'Token inválido' }, { status: 401 })
+    }
+
+    // Only ADMIN and SUPER_ADMIN can delete products
+    if (userRole !== 'ADMIN' && userRole !== 'SUPER_ADMIN') {
+      return NextResponse.json({
+        success: false,
+        error: 'Solo los administradores pueden eliminar productos'
+      }, { status: 403 })
     }
 
     const { id } = await params

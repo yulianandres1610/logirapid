@@ -19,12 +19,14 @@ import {
   Eye,
   TrendingUp,
   Barcode,
-  Printer
+  Printer,
+  Trash2
 } from 'lucide-react'
 import Link from 'next/link'
 import { DashboardLayout } from '@/components/layout/dashboard-layout'
 import { ProtectedRoute } from '@/components/protected-route'
 import { useTheme } from '@/contexts/theme-context'
+import { useAuth } from '@/hooks/useAuth'
 import { cn } from '@/lib/utils'
 
 interface Product {
@@ -74,6 +76,7 @@ const CURRENCY_SYMBOLS: Record<string, string> = {
 
 export default function MarketInventoryPage() {
   const { theme } = useTheme()
+  const { user } = useAuth()
   const [products, setProducts] = useState<Product[]>([])
   const [categories, setCategories] = useState<string[]>([])
   const [stats, setStats] = useState<Stats>({ total: 0, inStock: 0, lowStock: 0, outOfStock: 0 })
@@ -83,6 +86,11 @@ export default function MarketInventoryPage() {
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null)
   const [stockFilter, setStockFilter] = useState<string | null>(null)
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null)
+  const [deleteProduct, setDeleteProduct] = useState<Product | null>(null)
+  const [deleting, setDeleting] = useState(false)
+
+  // Check if user is admin
+  const isAdmin = user?.role === 'ADMIN' || user?.role === 'SUPER_ADMIN'
 
   useEffect(() => {
     fetchProducts()
@@ -230,6 +238,39 @@ export default function MarketInventoryPage() {
     setTimeout(() => {
       printWindow.print()
     }, 500)
+  }
+
+  // Delete product function
+  const handleDeleteProduct = async () => {
+    if (!deleteProduct) return
+
+    setDeleting(true)
+    try {
+      const response = await fetch(`/api/market/products/${deleteProduct.id}`, {
+        method: 'DELETE'
+      })
+
+      if (response.ok) {
+        const data = await response.json()
+        if (data.success) {
+          // Remove from local state
+          setProducts(prev => prev.filter(p => p.id !== deleteProduct.id))
+          // Update stats
+          setStats(prev => ({
+            ...prev,
+            total: prev.total - 1,
+            inStock: deleteProduct.quantityOnHand > deleteProduct.minimumStock ? prev.inStock - 1 : prev.inStock,
+            lowStock: deleteProduct.quantityOnHand <= deleteProduct.minimumStock && deleteProduct.quantityOnHand > 0 ? prev.lowStock - 1 : prev.lowStock,
+            outOfStock: deleteProduct.quantityOnHand === 0 ? prev.outOfStock - 1 : prev.outOfStock
+          }))
+          setDeleteProduct(null)
+        }
+      }
+    } catch (error) {
+      console.error('Error deleting product:', error)
+    } finally {
+      setDeleting(false)
+    }
   }
 
   return (
@@ -785,6 +826,17 @@ export default function MarketInventoryPage() {
                                     <Edit className="w-4 h-4 text-amber-500" />
                                   </motion.button>
                                 </Link>
+                                {isAdmin && (
+                                  <motion.button
+                                    whileHover={{ scale: 1.1 }}
+                                    whileTap={{ scale: 0.9 }}
+                                    onClick={() => setDeleteProduct(product)}
+                                    className="p-2 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+                                    title="Eliminar producto"
+                                  >
+                                    <Trash2 className="w-4 h-4 text-red-500" />
+                                  </motion.button>
+                                )}
                               </div>
                             </td>
                           </motion.tr>
@@ -996,6 +1048,108 @@ export default function MarketInventoryPage() {
                         )}
                       >
                         Cerrar
+                      </motion.button>
+                    </div>
+                  </motion.div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+
+            {/* Delete Confirmation Modal */}
+            <AnimatePresence>
+              {deleteProduct && (
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4"
+                  onClick={() => !deleting && setDeleteProduct(null)}
+                >
+                  <motion.div
+                    initial={{ scale: 0.9, opacity: 0, y: 20 }}
+                    animate={{ scale: 1, opacity: 1, y: 0 }}
+                    exit={{ scale: 0.9, opacity: 0, y: 20 }}
+                    transition={{ type: 'spring', duration: 0.3 }}
+                    onClick={(e) => e.stopPropagation()}
+                    className={cn(
+                      'w-full max-w-md rounded-2xl p-6 shadow-2xl',
+                      theme === 'dark' ? 'bg-gray-900' : 'bg-white'
+                    )}
+                  >
+                    <div className="flex items-center gap-4 mb-4">
+                      <div className="p-3 rounded-xl bg-red-100 dark:bg-red-900/30">
+                        <Trash2 className="w-6 h-6 text-red-600" />
+                      </div>
+                      <div>
+                        <h3 className="text-lg font-bold text-gray-900 dark:text-white">Eliminar Producto</h3>
+                        <p className="text-sm text-gray-500">Esta acción no se puede deshacer</p>
+                      </div>
+                    </div>
+
+                    <div className={cn(
+                      'p-4 rounded-xl mb-4',
+                      theme === 'dark' ? 'bg-gray-800' : 'bg-gray-50'
+                    )}>
+                      <div className="flex items-center gap-3">
+                        <div className={cn(
+                          'w-12 h-12 rounded-lg overflow-hidden flex items-center justify-center',
+                          theme === 'dark' ? 'bg-gray-700' : 'bg-gray-200'
+                        )}>
+                          {deleteProduct.imageUrl ? (
+                            <img
+                              src={deleteProduct.imageUrl}
+                              alt={deleteProduct.name}
+                              className="w-full h-full object-cover"
+                            />
+                          ) : (
+                            <ImageIcon className="w-5 h-5 text-gray-400" />
+                          )}
+                        </div>
+                        <div>
+                          <p className="font-medium text-gray-900 dark:text-white">{deleteProduct.name}</p>
+                          <p className="text-sm text-gray-500">SKU: {deleteProduct.sku}</p>
+                        </div>
+                      </div>
+                    </div>
+
+                    <p className="text-sm text-gray-600 dark:text-gray-400 mb-6">
+                      ¿Estás seguro de que deseas eliminar este producto? Se eliminará permanentemente del inventario.
+                    </p>
+
+                    <div className="flex gap-3">
+                      <motion.button
+                        whileHover={{ scale: 1.02 }}
+                        whileTap={{ scale: 0.98 }}
+                        onClick={() => setDeleteProduct(null)}
+                        disabled={deleting}
+                        className={cn(
+                          'flex-1 py-2.5 rounded-xl transition-colors font-medium',
+                          theme === 'dark'
+                            ? 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                            : 'bg-gray-100 text-gray-600 hover:bg-gray-200',
+                          deleting && 'opacity-50 cursor-not-allowed'
+                        )}
+                      >
+                        Cancelar
+                      </motion.button>
+                      <motion.button
+                        whileHover={{ scale: 1.02 }}
+                        whileTap={{ scale: 0.98 }}
+                        onClick={handleDeleteProduct}
+                        disabled={deleting}
+                        className={cn(
+                          'flex-1 py-2.5 rounded-xl bg-gradient-to-r from-red-500 to-red-600 text-white font-medium shadow-lg shadow-red-500/25 transition-all',
+                          deleting ? 'opacity-70 cursor-not-allowed' : 'hover:from-red-600 hover:to-red-700'
+                        )}
+                      >
+                        {deleting ? (
+                          <span className="flex items-center justify-center gap-2">
+                            <RefreshCw className="w-4 h-4 animate-spin" />
+                            Eliminando...
+                          </span>
+                        ) : (
+                          'Eliminar'
+                        )}
                       </motion.button>
                     </div>
                   </motion.div>
