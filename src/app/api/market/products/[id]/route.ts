@@ -450,11 +450,23 @@ export async function DELETE(
       userEmail
     )
 
-    // Delete variants first
-    try {
-      await db.query('DELETE FROM market_product_variants WHERE product_id = $1', [productId])
-    } catch {
-      // Variants table may not exist
+    // Delete related records first (handle foreign key constraints)
+    const relatedTables = [
+      'market_product_variants',
+      'market_product_suppliers',
+      'market_inventory_movements',
+      'market_order_lines',
+      'market_purchase_lines',
+      'odoo_product_mapping'
+    ]
+
+    for (const table of relatedTables) {
+      try {
+        const column = table === 'odoo_product_mapping' ? 'local_product_id' : 'product_id'
+        await db.query(`DELETE FROM ${table} WHERE ${column} = $1`, [productId])
+      } catch {
+        // Table may not exist
+      }
     }
 
     // Delete product
