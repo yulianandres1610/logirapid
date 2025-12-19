@@ -87,6 +87,7 @@ export default function MarketInventoryPage() {
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null)
   const [deleteProduct, setDeleteProduct] = useState<Product | null>(null)
   const [deleting, setDeleting] = useState(false)
+  const [deleteError, setDeleteError] = useState<string | null>(null)
 
   // Check if user is admin
   const isAdmin = user?.role === 'ADMIN' || user?.role === 'SUPER_ADMIN'
@@ -244,29 +245,33 @@ export default function MarketInventoryPage() {
     if (!deleteProduct) return
 
     setDeleting(true)
+    setDeleteError(null)
     try {
       const response = await fetch(`/api/market/products/${deleteProduct.id}`, {
         method: 'DELETE'
       })
 
-      if (response.ok) {
-        const data = await response.json()
-        if (data.success) {
-          // Remove from local state
-          setProducts(prev => prev.filter(p => p.id !== deleteProduct.id))
-          // Update stats
-          setStats(prev => ({
-            ...prev,
-            total: prev.total - 1,
-            inStock: deleteProduct.quantityOnHand > deleteProduct.minimumStock ? prev.inStock - 1 : prev.inStock,
-            lowStock: deleteProduct.quantityOnHand <= deleteProduct.minimumStock && deleteProduct.quantityOnHand > 0 ? prev.lowStock - 1 : prev.lowStock,
-            outOfStock: deleteProduct.quantityOnHand === 0 ? prev.outOfStock - 1 : prev.outOfStock
-          }))
-          setDeleteProduct(null)
-        }
+      const data = await response.json()
+
+      if (response.ok && data.success) {
+        // Remove from local state
+        setProducts(prev => prev.filter(p => p.id !== deleteProduct.id))
+        // Update stats
+        setStats(prev => ({
+          ...prev,
+          total: prev.total - 1,
+          inStock: deleteProduct.quantityOnHand > deleteProduct.minimumStock ? prev.inStock - 1 : prev.inStock,
+          lowStock: deleteProduct.quantityOnHand <= deleteProduct.minimumStock && deleteProduct.quantityOnHand > 0 ? prev.lowStock - 1 : prev.lowStock,
+          outOfStock: deleteProduct.quantityOnHand === 0 ? prev.outOfStock - 1 : prev.outOfStock
+        }))
+        setDeleteProduct(null)
+      } else {
+        // Show error message
+        setDeleteError(data.error || 'Error al eliminar el producto')
       }
     } catch (error) {
       console.error('Error deleting product:', error)
+      setDeleteError('Error de conexión. Intente nuevamente.')
     } finally {
       setDeleting(false)
     }
@@ -1100,15 +1105,27 @@ export default function MarketInventoryPage() {
                       </div>
                     </div>
 
-                    <p className="text-sm text-gray-600 dark:text-gray-400 mb-6">
+                    <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
                       ¿Estás seguro de que deseas eliminar este producto? Se eliminará permanentemente del inventario.
                     </p>
+
+                    {deleteError && (
+                      <div className={cn(
+                        'p-3 rounded-lg mb-4 text-sm flex items-center gap-2',
+                        theme === 'dark'
+                          ? 'bg-red-900/30 text-red-300 border border-red-800'
+                          : 'bg-red-50 text-red-600 border border-red-200'
+                      )}>
+                        <X className="w-4 h-4 flex-shrink-0" />
+                        {deleteError}
+                      </div>
+                    )}
 
                     <div className="flex gap-3">
                       <motion.button
                         whileHover={{ scale: 1.02 }}
                         whileTap={{ scale: 0.98 }}
-                        onClick={() => setDeleteProduct(null)}
+                        onClick={() => { setDeleteProduct(null); setDeleteError(null); }}
                         disabled={deleting}
                         className={cn(
                           'flex-1 py-2.5 rounded-xl transition-colors font-medium',

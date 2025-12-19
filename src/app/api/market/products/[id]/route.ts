@@ -451,21 +451,37 @@ export async function DELETE(
     )
 
     // Delete related records first (handle foreign key constraints)
+    // Order matters: delete from dependent tables first
     const relatedTables = [
-      'market_product_variants',
-      'market_product_suppliers',
-      'market_inventory_movements',
-      'market_order_lines',
-      'market_purchase_lines',
-      'odoo_product_mapping'
+      // Warehouse-related tables first
+      { table: 'market_stock_movements', column: 'product_id' },
+      { table: 'market_warehouse_operation_lines', column: 'product_id' },
+      { table: 'market_warehouse_stock', column: 'product_id' },
+      // Order and purchase lines
+      { table: 'market_order_lines', column: 'product_id' },
+      { table: 'market_purchase_lines', column: 'product_id' },
+      // Inventory movements
+      { table: 'market_inventory_movements', column: 'product_id' },
+      // Product-specific tables
+      { table: 'market_product_variants', column: 'product_id' },
+      { table: 'market_product_suppliers', column: 'product_id' },
+      // Odoo mapping
+      { table: 'odoo_product_mapping', column: 'local_product_id' },
+      // Change logs (don't delete, but set product_id to NULL or skip)
+      { table: 'market_product_change_logs', column: 'product_id', skipOnError: true }
     ]
 
-    for (const table of relatedTables) {
+    for (const { table, column, skipOnError } of relatedTables) {
       try {
-        const column = table === 'odoo_product_mapping' ? 'local_product_id' : 'product_id'
-        await db.query(`DELETE FROM ${table} WHERE ${column} = $1`, [productId])
-      } catch {
-        // Table may not exist
+        const result = await db.query(`DELETE FROM ${table} WHERE ${column} = $1`, [productId])
+        if (result.rowCount && result.rowCount > 0) {
+          console.log(`[Product Delete] Deleted ${result.rowCount} rows from ${table}`)
+        }
+      } catch (e: any) {
+        // Table may not exist or other error
+        if (!skipOnError) {
+          console.warn(`[Product Delete] Could not delete from ${table}:`, e.message)
+        }
       }
     }
 

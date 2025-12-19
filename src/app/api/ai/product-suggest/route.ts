@@ -1,9 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { createClient } from '@supabase/supabase-js'
+import { randomBytes } from 'crypto'
 
 // Z.ai API Configuration (docs: https://docs.z.ai/api-reference/introduction)
 const ZAI_API_URL = 'https://api.z.ai/api/paas/v4/chat/completions'
 const ZAI_API_KEY = '98c8e5eeb08d4f42963bcb4d963bbfd6.NbBtw1KWVhSdb5HC'
 const ZAI_MODEL = 'glm-4.6' // GLM-4.6 flagship model
+
+// Supabase Configuration for image storage
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
+const BUCKET_NAME = 'company-documents'
 
 // Available categories (must match the ones in the create form)
 const CATEGORIES = [
@@ -96,6 +103,122 @@ function fallbackCategorization(productName: string): ProductSuggestion {
     category: 'Otros',
     description: 'Producto para inventario'
   }
+}
+
+// Download image from external URL and upload to Supabase Storage
+async function downloadAndUploadImage(imageUrl: string): Promise<string | null> {
+  try {
+    console.log('[AI Suggest] Downloading image from:', imageUrl)
+
+    // Check if Supabase is configured
+    if (!supabaseUrl || !supabaseServiceKey) {
+      console.warn('[AI Suggest] Supabase not configured, returning original URL')
+      return imageUrl
+    }
+
+    // Create Supabase client
+    const supabase = createClient(supabaseUrl, supabaseServiceKey, {
+      auth: {
+        autoRefreshToken: false,
+        persistSession: false
+      }
+    })
+
+    // Download the image
+    const response = await fetch(imageUrl, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+        'Accept': 'image/*'
+      },
+      signal: AbortSignal.timeout(10000) // 10 second timeout
+    })
+
+    if (!response.ok) {
+      console.error('[AI Suggest] Failed to download image:', response.status)
+      return null
+    }
+
+    const contentType = response.headers.get('content-type') || 'image/jpeg'
+
+    // Validate content type is an image
+    if (!contentType.startsWith('image/')) {
+      console.error('[AI Suggest] Response is not an image:', contentType)
+      return null
+    }
+
+    // Get the image data as ArrayBuffer
+    const arrayBuffer = await response.arrayBuffer()
+    const buffer = Buffer.from(arrayBuffer)
+
+    // Check file size (max 5MB)
+    if (buffer.length > 5 * 1024 * 1024) {
+      console.warn('[AI Suggest] Image too large:', buffer.length)
+      return null
+    }
+
+    // Determine file extension from content type
+    let extension = 'jpg'
+    if (contentType.includes('png')) extension = 'png'
+    else if (contentType.includes('webp')) extension = 'webp'
+    else if (contentType.includes('gif')) extension = 'gif'
+
+    // Generate unique filename
+    const timestamp = Date.now()
+    const randomSuffix = randomBytes(8).toString('hex')
+    const fileName = `ai-product-${timestamp}-${randomSuffix}.${extension}`
+    const storagePath = `market-products/${fileName}`
+
+    console.log('[AI Suggest] Uploading to Supabase:', storagePath)
+
+    // Upload to Supabase Storage
+    const { data, error } = await supabase.storage
+      .from(BUCKET_NAME)
+      .upload(storagePath, buffer, {
+        contentType,
+        upsert: false
+      })
+
+    if (error) {
+      console.error('[AI Suggest] Supabase upload error:', error.message)
+      return null
+    }
+
+    // Get public URL
+    const { data: publicUrlData } = supabase.storage
+      .from(BUCKET_NAME)
+      .getPublicUrl(storagePath)
+
+    console.log('[AI Suggest] Image uploaded successfully:', publicUrlData.publicUrl)
+    return publicUrlData.publicUrl
+  } catch (error) {
+    console.error('[AI Suggest] Error downloading/uploading image:', error)
+    return null
+  }
+}
+
+// Extract image URL from various response formats
+function extractImageUrl(content: string): string | null {
+  // Try JSON format first
+  const jsonMatch = content.match(/"imageUrl"\s*:\s*"([^"]+)"/)
+  if (jsonMatch) return jsonMatch[1]
+
+  // Try to find any https URL that looks like an image
+  // More lenient pattern that accepts URLs with or without extensions
+  const urlPatterns = [
+    // URLs with standard image extensions
+    /https?:\/\/[^\s"<>]+\.(?:jpg|jpeg|png|webp|gif)(?:\?[^\s"<>]*)?/i,
+    // URLs from common CDN/storage services (often don't have extensions)
+    /https?:\/\/(?:images|cdn|static|img|media|assets|storage)[^\s"<>]+/i,
+    // URLs containing image-related path segments
+    /https?:\/\/[^\s"<>]*(?:\/image\/|\/img\/|\/photo\/|\/product\/)[^\s"<>]*/i
+  ]
+
+  for (const pattern of urlPatterns) {
+    const match = content.match(pattern)
+    if (match) return match[0]
+  }
+
+  return null
 }
 
 export async function POST(request: NextRequest) {
@@ -258,7 +381,7 @@ JSON:`
     console.log('[AI Suggest] Category and description:', suggestion)
 
     // Now search for a product image using web search
-    let imageUrl: string | null = null
+    let finalImageUrl: string | null = null
     try {
       console.log('[AI Suggest] Searching for product image...')
 
@@ -302,17 +425,22 @@ JSON:`
         const imageContent = imageData.choices?.[0]?.message?.content || ''
         console.log('[AI Suggest] Image search response:', imageContent)
 
-        // Try to extract image URL from response
-        const imageUrlMatch = imageContent.match(/"imageUrl"\s*:\s*"([^"]+)"/) ||
-                              imageContent.match(/https?:\/\/[^\s"<>]+\.(?:jpg|jpeg|png|webp|gif)/i)
+        // Extract image URL using the more lenient function
+        const externalImageUrl = extractImageUrl(imageContent)
 
-        if (imageUrlMatch) {
-          imageUrl = imageUrlMatch[1] || imageUrlMatch[0]
-          // Validate it looks like an image URL
-          if (imageUrl && /\.(jpg|jpeg|png|webp|gif)/i.test(imageUrl)) {
-            console.log('[AI Suggest] Found image URL:', imageUrl)
+        if (externalImageUrl) {
+          console.log('[AI Suggest] Found external image URL:', externalImageUrl)
+
+          // Download the image and upload to Supabase Storage
+          const uploadedUrl = await downloadAndUploadImage(externalImageUrl)
+
+          if (uploadedUrl) {
+            finalImageUrl = uploadedUrl
+            console.log('[AI Suggest] Image stored in Supabase:', finalImageUrl)
           } else {
-            imageUrl = null
+            console.warn('[AI Suggest] Failed to store image, returning external URL')
+            // Optionally return the external URL as fallback
+            // finalImageUrl = externalImageUrl
           }
         }
       }
@@ -321,14 +449,14 @@ JSON:`
       // Continue without image - it's optional
     }
 
-    console.log('[AI Suggest] Final suggestion:', { ...suggestion, imageUrl })
+    console.log('[AI Suggest] Final suggestion:', { ...suggestion, imageUrl: finalImageUrl })
 
     return NextResponse.json({
       success: true,
       data: {
         category: suggestion.category,
         description: suggestion.description,
-        imageUrl: imageUrl,
+        imageUrl: finalImageUrl,
         productName: productName.trim()
       }
     })
