@@ -1,609 +1,1023 @@
 'use client'
 
-import { useEffect, useState } from 'react'
-import { useRouter } from 'next/navigation'
+import React, { useState, useEffect, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
+  Truck,
+  Warehouse,
+  Package,
+  Calendar,
+  Check,
   ArrowLeft,
+  ArrowRight,
+  Search,
   Plus,
   Trash2,
-  Search,
-  Save,
-  Send,
-  Package,
-  DollarSign,
-  Calendar,
-  User,
+  Loader2,
+  X,
+  AlertTriangle,
+  Building2,
   Phone,
   MapPin,
-  X,
-  FileText
+  Star,
+  Clock,
+  FileText,
+  Hash
 } from 'lucide-react'
+import { useRouter } from 'next/navigation'
 import { DashboardLayout } from '@/components/layout/dashboard-layout'
 import { ProtectedRoute } from '@/components/protected-route'
+import { useTheme } from '@/contexts/theme-context'
+import { cn } from '@/lib/utils'
+
+type Step = 'supplier' | 'warehouse' | 'products' | 'lots' | 'review'
+
+interface WizardStep {
+  id: Step
+  title: string
+  description: string
+  icon: React.ElementType
+  color: string
+}
+
+const STEPS: WizardStep[] = [
+  { id: 'supplier', title: 'Proveedor', description: 'Buscar o crear', icon: Truck, color: 'blue' },
+  { id: 'warehouse', title: 'Almacén', description: 'Dónde recibir', icon: Warehouse, color: 'purple' },
+  { id: 'products', title: 'Productos', description: 'Agregar líneas', icon: Package, color: 'emerald' },
+  { id: 'lots', title: 'Lotes', description: 'Vencimientos', icon: Calendar, color: 'amber' },
+  { id: 'review', title: 'Revisar', description: 'Confirmar compra', icon: Check, color: 'green' }
+]
+
+const CURRENCY_SYMBOLS: Record<string, string> = {
+  USD: '$',
+  CUP: '₱',
+  EUR: '€',
+  MLC: '$'
+}
+
+interface Supplier {
+  id: number
+  supplierCode: string
+  name: string
+  phone: string | null
+  email: string | null
+  address: string | null
+  city: string | null
+  state: string | null
+  fullAddress: string
+}
+
+interface WarehouseOption {
+  id: number
+  code: string
+  name: string
+  address: string | null
+  city: string | null
+  state: string | null
+  isCentral: boolean
+}
 
 interface Product {
   id: number
   name: string
   sku: string
+  barcode: string | null
   imageUrl: string | null
   costPrice: number
   sellingPrice: number
+  currency: string
   quantityOnHand: number
-  category: string
 }
 
 interface PurchaseLine {
   productId: number
-  productName: string
-  productSku: string
+  product: Product
   quantity: number
   unitPrice: number
   totalPrice: number
+  lotNumber: string
+  expirationDate: string
+  manufacturingDate: string
 }
 
 export default function CreatePurchasePage() {
+  const { theme } = useTheme()
   const router = useRouter()
+  const [currentStep, setCurrentStep] = useState<Step>('supplier')
   const [loading, setLoading] = useState(false)
-  const [products, setProducts] = useState<Product[]>([])
-  const [loadingProducts, setLoadingProducts] = useState(true)
+  const [errors, setErrors] = useState<Record<string, string>>({})
+  const [showCancelModal, setShowCancelModal] = useState(false)
 
-  // Form state
-  const [supplierName, setSupplierName] = useState('')
-  const [supplierContact, setSupplierContact] = useState('')
-  const [supplierAddress, setSupplierAddress] = useState('')
+  // Step 1: Supplier
+  const [supplierSearch, setSupplierSearch] = useState('')
+  const [supplierResults, setSupplierResults] = useState<Supplier[]>([])
+  const [searchingSupplier, setSearchingSupplier] = useState(false)
+  const [selectedSupplier, setSelectedSupplier] = useState<Supplier | null>(null)
+  const [showNewSupplierModal, setShowNewSupplierModal] = useState(false)
+  const [newSupplierData, setNewSupplierData] = useState({
+    name: '',
+    phone: '',
+    address: '',
+    city: '',
+    state: ''
+  })
+  const [creatingSupplier, setCreatingSupplier] = useState(false)
+
+  // Step 2: Warehouse
+  const [warehouses, setWarehouses] = useState<WarehouseOption[]>([])
+  const [loadingWarehouses, setLoadingWarehouses] = useState(false)
+  const [selectedWarehouse, setSelectedWarehouse] = useState<WarehouseOption | null>(null)
+
+  // Step 3: Products
+  const [purchaseLines, setPurchaseLines] = useState<PurchaseLine[]>([])
+  const [productSearch, setProductSearch] = useState('')
+  const [productResults, setProductResults] = useState<Product[]>([])
+  const [searchingProducts, setSearchingProducts] = useState(false)
+  const [showProductModal, setShowProductModal] = useState(false)
+
+  // Step 5: Review
   const [purchaseDate, setPurchaseDate] = useState(new Date().toISOString().split('T')[0])
   const [expectedDate, setExpectedDate] = useState('')
   const [notes, setNotes] = useState('')
-  const [lines, setLines] = useState<PurchaseLine[]>([])
+  const [currency, setCurrency] = useState('USD')
 
-  // Product search modal
-  const [showProductModal, setShowProductModal] = useState(false)
-  const [productSearch, setProductSearch] = useState('')
-  const [editingLineIndex, setEditingLineIndex] = useState<number | null>(null)
+  const currentStepIndex = STEPS.findIndex(s => s.id === currentStep)
 
+  // Search suppliers with debounce
   useEffect(() => {
-    fetchProducts()
-  }, [])
+    const timer = setTimeout(async () => {
+      if (supplierSearch.length >= 2) {
+        setSearchingSupplier(true)
+        try {
+          const response = await fetch(`/api/market/suppliers/search?q=${encodeURIComponent(supplierSearch)}&limit=10`)
+          const data = await response.json()
+          if (data.success) {
+            setSupplierResults(data.data)
+          }
+        } catch (error) {
+          console.error('Error searching suppliers:', error)
+        } finally {
+          setSearchingSupplier(false)
+        }
+      } else {
+        setSupplierResults([])
+      }
+    }, 300)
 
-  const fetchProducts = async () => {
-    try {
-      const response = await fetch('/api/market/products?limit=200')
-      if (response.ok) {
+    return () => clearTimeout(timer)
+  }, [supplierSearch])
+
+  // Load warehouses
+  useEffect(() => {
+    const loadWarehouses = async () => {
+      setLoadingWarehouses(true)
+      try {
+        const response = await fetch('/api/market/warehouses')
         const data = await response.json()
         if (data.success) {
-          setProducts(data.data.products)
+          setWarehouses(data.data.warehouses || data.data || [])
         }
+      } catch (error) {
+        console.error('Error loading warehouses:', error)
+      } finally {
+        setLoadingWarehouses(false)
+      }
+    }
+    loadWarehouses()
+  }, [])
+
+  // Search products
+  const searchProducts = useCallback(async (query: string) => {
+    if (query.length < 2) {
+      setProductResults([])
+      return
+    }
+    setSearchingProducts(true)
+    try {
+      const response = await fetch(`/api/market/products?search=${encodeURIComponent(query)}&limit=20`)
+      const data = await response.json()
+      if (data.success) {
+        setProductResults(data.data.products || [])
       }
     } catch (error) {
-      console.error('Error fetching products:', error)
+      console.error('Error searching products:', error)
     } finally {
-      setLoadingProducts(false)
+      setSearchingProducts(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (productSearch) {
+        searchProducts(productSearch)
+      }
+    }, 300)
+    return () => clearTimeout(timer)
+  }, [productSearch, searchProducts])
+
+  // Create new supplier
+  const handleCreateSupplier = async () => {
+    if (!newSupplierData.name.trim()) return
+    setCreatingSupplier(true)
+    try {
+      const response = await fetch('/api/market/suppliers', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newSupplierData)
+      })
+      const data = await response.json()
+      if (data.success) {
+        setSelectedSupplier({
+          id: data.data.id,
+          supplierCode: data.data.supplierCode,
+          name: newSupplierData.name,
+          phone: newSupplierData.phone || null,
+          email: null,
+          address: newSupplierData.address || null,
+          city: newSupplierData.city || null,
+          state: newSupplierData.state || null,
+          fullAddress: [newSupplierData.address, newSupplierData.city, newSupplierData.state].filter(Boolean).join(', ')
+        })
+        setShowNewSupplierModal(false)
+        setNewSupplierData({ name: '', phone: '', address: '', city: '', state: '' })
+        setSupplierSearch('')
+      }
+    } catch (error) {
+      console.error('Error creating supplier:', error)
+    } finally {
+      setCreatingSupplier(false)
     }
   }
 
-  const addLine = (product: Product) => {
-    if (editingLineIndex !== null) {
-      // Replace existing line
-      const newLines = [...lines]
-      newLines[editingLineIndex] = {
+  // Add product to purchase
+  const addProductToPurchase = (product: Product) => {
+    const existing = purchaseLines.find(l => l.productId === product.id)
+    if (existing) {
+      setPurchaseLines(prev => prev.map(l =>
+        l.productId === product.id
+          ? { ...l, quantity: l.quantity + 1, totalPrice: (l.quantity + 1) * l.unitPrice }
+          : l
+      ))
+    } else {
+      setPurchaseLines(prev => [...prev, {
         productId: product.id,
-        productName: product.name,
-        productSku: product.sku,
+        product,
         quantity: 1,
         unitPrice: product.costPrice,
-        totalPrice: product.costPrice
-      }
-      setLines(newLines)
-      setEditingLineIndex(null)
-    } else {
-      // Check if product already exists
-      const existingIndex = lines.findIndex(l => l.productId === product.id)
-      if (existingIndex >= 0) {
-        const newLines = [...lines]
-        newLines[existingIndex].quantity += 1
-        newLines[existingIndex].totalPrice = newLines[existingIndex].quantity * newLines[existingIndex].unitPrice
-        setLines(newLines)
-      } else {
-        setLines([...lines, {
-          productId: product.id,
-          productName: product.name,
-          productSku: product.sku,
-          quantity: 1,
-          unitPrice: product.costPrice,
-          totalPrice: product.costPrice
-        }])
-      }
+        totalPrice: product.costPrice,
+        lotNumber: '',
+        expirationDate: '',
+        manufacturingDate: ''
+      }])
     }
-    setShowProductModal(false)
     setProductSearch('')
+    setProductResults([])
+    setShowProductModal(false)
   }
 
-  const updateLine = (index: number, field: 'quantity' | 'unitPrice', value: number) => {
-    const newLines = [...lines]
-    newLines[index][field] = value
-    newLines[index].totalPrice = newLines[index].quantity * newLines[index].unitPrice
-    setLines(newLines)
+  // Update line quantity
+  const updateLineQuantity = (productId: number, quantity: number) => {
+    if (quantity < 1) return
+    setPurchaseLines(prev => prev.map(l =>
+      l.productId === productId
+        ? { ...l, quantity, totalPrice: quantity * l.unitPrice }
+        : l
+    ))
   }
 
-  const removeLine = (index: number) => {
-    setLines(lines.filter((_, i) => i !== index))
+  // Update line price
+  const updateLinePrice = (productId: number, unitPrice: number) => {
+    if (unitPrice < 0) return
+    setPurchaseLines(prev => prev.map(l =>
+      l.productId === productId
+        ? { ...l, unitPrice, totalPrice: l.quantity * unitPrice }
+        : l
+    ))
   }
 
-  const subtotal = lines.reduce((sum, line) => sum + line.totalPrice, 0)
-  const taxAmount = 0
-  const total = subtotal + taxAmount
+  // Update lot info
+  const updateLotInfo = (productId: number, field: 'lotNumber' | 'expirationDate' | 'manufacturingDate', value: string) => {
+    setPurchaseLines(prev => prev.map(l =>
+      l.productId === productId ? { ...l, [field]: value } : l
+    ))
+  }
 
-  const handleSave = async (confirm: boolean = false) => {
-    if (!supplierName.trim()) {
-      alert('El nombre del proveedor es requerido')
-      return
+  // Remove line
+  const removeLine = (productId: number) => {
+    setPurchaseLines(prev => prev.filter(l => l.productId !== productId))
+  }
+
+  // Calculate totals
+  const subtotal = purchaseLines.reduce((sum, l) => sum + l.totalPrice, 0)
+  const tax = 0
+  const total = subtotal + tax
+
+  // Validate step
+  const validateStep = (step: Step): boolean => {
+    const newErrors: Record<string, string> = {}
+    switch (step) {
+      case 'supplier':
+        if (!selectedSupplier) newErrors.supplier = 'Selecciona un proveedor'
+        break
+      case 'warehouse':
+        if (!selectedWarehouse) newErrors.warehouse = 'Selecciona un almacén'
+        break
+      case 'products':
+        if (purchaseLines.length === 0) newErrors.products = 'Agrega al menos un producto'
+        break
+      case 'review':
+        if (!purchaseDate) newErrors.purchaseDate = 'La fecha de compra es requerida'
+        break
     }
+    setErrors(newErrors)
+    return Object.keys(newErrors).length === 0
+  }
 
-    if (lines.length === 0) {
-      alert('Debe agregar al menos un producto')
-      return
+  // Navigate steps
+  const goToStep = (step: Step) => {
+    const targetIndex = STEPS.findIndex(s => s.id === step)
+    if (targetIndex <= currentStepIndex || validateStep(currentStep)) {
+      setCurrentStep(step)
     }
+  }
 
+  const nextStep = () => {
+    if (validateStep(currentStep)) {
+      const nextIndex = currentStepIndex + 1
+      if (nextIndex < STEPS.length) setCurrentStep(STEPS[nextIndex].id)
+    }
+  }
+
+  const prevStep = () => {
+    const prevIndex = currentStepIndex - 1
+    if (prevIndex >= 0) setCurrentStep(STEPS[prevIndex].id)
+  }
+
+  // Submit purchase
+  const handleSubmit = async () => {
+    if (!validateStep('review')) return
     setLoading(true)
     try {
       const response = await fetch('/api/market/purchases', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          supplierName,
-          supplierContact: supplierContact || null,
-          supplierAddress: supplierAddress || null,
+          supplierId: selectedSupplier!.id,
+          supplierName: selectedSupplier!.name,
+          supplierContact: selectedSupplier!.phone,
+          supplierAddress: selectedSupplier!.fullAddress,
+          warehouseId: selectedWarehouse!.id,
           purchaseDate,
           expectedDate: expectedDate || null,
           notes: notes || null,
-          currency: 'USD',
-          lines: lines.map(l => ({
+          currency,
+          lines: purchaseLines.map(l => ({
             productId: l.productId,
             quantity: l.quantity,
-            unitPrice: l.unitPrice
+            unitPrice: l.unitPrice,
+            lotNumber: l.lotNumber || null,
+            expirationDate: l.expirationDate || null,
+            manufacturingDate: l.manufacturingDate || null
           }))
         })
       })
-
       const data = await response.json()
       if (data.success) {
-        if (confirm) {
-          // Confirm the purchase immediately
-          const confirmResponse = await fetch(`/api/market/purchases/${data.data.id}`, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ action: 'confirm' })
-          })
-          const confirmData = await confirmResponse.json()
-          if (confirmData.success) {
-            router.push('/dashboard/market/purchases')
-          } else {
-            alert('Compra creada pero no se pudo confirmar')
-            router.push('/dashboard/market/purchases')
-          }
-        } else {
-          router.push('/dashboard/market/purchases')
-        }
+        router.push('/dashboard/market/purchases')
       } else {
-        alert(data.error || 'Error al crear orden de compra')
+        setErrors({ submit: data.error || 'Error al crear la compra' })
       }
     } catch (error) {
-      console.error('Error:', error)
-      alert('Error al crear orden de compra')
+      console.error('Error creating purchase:', error)
+      setErrors({ submit: 'Error al crear la compra' })
     } finally {
       setLoading(false)
     }
   }
 
-  const filteredProducts = products.filter(p =>
-    p.name.toLowerCase().includes(productSearch.toLowerCase()) ||
-    p.sku.toLowerCase().includes(productSearch.toLowerCase())
-  )
+  // Days until expiration helper
+  const getDaysUntilExpiration = (date: string) => {
+    if (!date) return null
+    const exp = new Date(date)
+    const today = new Date()
+    return Math.ceil((exp.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
+  }
 
   return (
-    <ProtectedRoute>
+    <ProtectedRoute requiredRole={['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'USER']}>
       <DashboardLayout>
-        <div className="p-6 space-y-6 max-w-5xl mx-auto">
+        <div className={cn('min-h-screen p-6', theme === 'dark' ? 'bg-gray-900' : 'bg-gray-50')}>
           {/* Header */}
-          <div className="flex items-center justify-between">
+          <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} className="mb-8">
             <div className="flex items-center gap-4">
-              <button
-                onClick={() => router.back()}
-                className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+              <motion.button
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                onClick={() => setShowCancelModal(true)}
+                className={cn('p-2 rounded-lg transition-colors', theme === 'dark' ? 'bg-gray-800 hover:bg-gray-700 text-gray-400' : 'bg-white hover:bg-gray-100 text-gray-600 shadow-sm')}
               >
                 <ArrowLeft className="w-5 h-5" />
-              </button>
+              </motion.button>
               <div>
-                <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
+                <h1 className={cn('text-2xl font-bold', theme === 'dark' ? 'text-white' : 'text-gray-900')}>
                   Nueva Orden de Compra
                 </h1>
-                <p className="text-gray-500 dark:text-gray-400">
-                  Crea una orden de compra a proveedor
+                <p className={cn('text-sm', theme === 'dark' ? 'text-gray-400' : 'text-gray-600')}>
+                  Paso {currentStepIndex + 1} de {STEPS.length}: {STEPS[currentStepIndex].title}
                 </p>
               </div>
             </div>
-          </div>
+          </motion.div>
 
-          {/* Purchase Form - Invoice Style */}
+          {/* Progress Steps */}
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 overflow-hidden"
+            transition={{ delay: 0.1 }}
+            className={cn('rounded-2xl p-6 mb-8 shadow-xl', theme === 'dark' ? 'bg-gray-800/50 border border-gray-700' : 'bg-white border border-gray-200')}
           >
-            {/* Header Section */}
-            <div className="p-6 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-700/50">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="p-3 bg-green-100 dark:bg-green-900/30 rounded-xl">
-                    <FileText className="w-6 h-6 text-green-600 dark:text-green-400" />
-                  </div>
-                  <div>
-                    <p className="text-sm text-gray-500 dark:text-gray-400">Orden de Compra</p>
-                    <p className="text-lg font-semibold text-gray-900 dark:text-white">
-                      PUR-{new Date().getFullYear()}-XXXX
-                    </p>
-                  </div>
-                </div>
-                <div className="text-right">
-                  <p className="text-sm text-gray-500 dark:text-gray-400">Estado</p>
-                  <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-gray-200 dark:bg-gray-600 rounded-full text-sm font-medium text-gray-700 dark:text-gray-300">
-                    Borrador
-                  </span>
-                </div>
-              </div>
-            </div>
+            <div className="flex items-center justify-between">
+              {STEPS.map((step, index) => {
+                const isCompleted = index < currentStepIndex
+                const isCurrent = index === currentStepIndex
+                const StepIcon = step.icon
 
-            {/* Supplier & Dates */}
-            <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-6 border-b border-gray-200 dark:border-gray-700">
-              {/* Supplier Info */}
-              <div className="space-y-4">
-                <h3 className="text-sm font-semibold text-gray-900 dark:text-white uppercase tracking-wider">
-                  Proveedor
-                </h3>
-                <div>
-                  <label className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400 mb-1">
-                    <User className="w-4 h-4" />
-                    Nombre del Proveedor *
-                  </label>
-                  <input
-                    type="text"
-                    value={supplierName}
-                    onChange={e => setSupplierName(e.target.value)}
-                    placeholder="Distribuidora ABC"
-                    className="w-full px-4 py-2.5 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-green-600 focus:border-transparent"
-                  />
-                </div>
-                <div>
-                  <label className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400 mb-1">
-                    <Phone className="w-4 h-4" />
-                    Contacto
-                  </label>
-                  <input
-                    type="text"
-                    value={supplierContact}
-                    onChange={e => setSupplierContact(e.target.value)}
-                    placeholder="+1 234 567 8900"
-                    className="w-full px-4 py-2.5 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-green-600 focus:border-transparent"
-                  />
-                </div>
-                <div>
-                  <label className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400 mb-1">
-                    <MapPin className="w-4 h-4" />
-                    Direccion
-                  </label>
-                  <input
-                    type="text"
-                    value={supplierAddress}
-                    onChange={e => setSupplierAddress(e.target.value)}
-                    placeholder="Calle 123, Ciudad"
-                    className="w-full px-4 py-2.5 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-green-600 focus:border-transparent"
-                  />
-                </div>
-              </div>
+                return (
+                  <React.Fragment key={step.id}>
+                    <motion.button
+                      onClick={() => goToStep(step.id)}
+                      whileHover={{ scale: 1.05 }}
+                      whileTap={{ scale: 0.95 }}
+                      className="flex flex-col items-center relative"
+                    >
+                      <div className={cn(
+                        'w-14 h-14 rounded-full flex items-center justify-center transition-all duration-300',
+                        isCompleted ? 'bg-gradient-to-br from-green-500 to-emerald-600 text-white' :
+                        isCurrent ? 'bg-gradient-to-br from-blue-500 to-blue-600 text-white ring-4 ring-blue-500/30' :
+                        theme === 'dark' ? 'bg-gray-700 text-gray-400' : 'bg-gray-100 text-gray-400'
+                      )}>
+                        {isCompleted ? <Check className="w-6 h-6" /> : <StepIcon className="w-6 h-6" />}
+                        {isCurrent && (
+                          <motion.div
+                            className="absolute inset-0 rounded-full bg-blue-500/20"
+                            animate={{ scale: [1, 1.2, 1] }}
+                            transition={{ duration: 2, repeat: Infinity }}
+                          />
+                        )}
+                      </div>
+                      <span className={cn('text-sm font-medium mt-2', isCurrent ? (theme === 'dark' ? 'text-white' : 'text-gray-900') : (theme === 'dark' ? 'text-gray-400' : 'text-gray-500'))}>
+                        {step.title}
+                      </span>
+                      <span className={cn('text-xs', theme === 'dark' ? 'text-gray-500' : 'text-gray-400')}>
+                        {step.description}
+                      </span>
+                    </motion.button>
 
-              {/* Dates */}
-              <div className="space-y-4">
-                <h3 className="text-sm font-semibold text-gray-900 dark:text-white uppercase tracking-wider">
-                  Fechas
-                </h3>
-                <div>
-                  <label className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400 mb-1">
-                    <Calendar className="w-4 h-4" />
-                    Fecha de Compra
-                  </label>
-                  <input
-                    type="date"
-                    value={purchaseDate}
-                    onChange={e => setPurchaseDate(e.target.value)}
-                    className="w-full px-4 py-2.5 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-green-600 focus:border-transparent"
-                  />
-                </div>
-                <div>
-                  <label className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400 mb-1">
-                    <Calendar className="w-4 h-4" />
-                    Fecha Esperada de Entrega
-                  </label>
-                  <input
-                    type="date"
-                    value={expectedDate}
-                    onChange={e => setExpectedDate(e.target.value)}
-                    className="w-full px-4 py-2.5 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-green-600 focus:border-transparent"
-                  />
-                </div>
-                <div>
-                  <label className="text-sm text-gray-600 dark:text-gray-400 mb-1 block">
-                    Notas
-                  </label>
-                  <textarea
-                    value={notes}
-                    onChange={e => setNotes(e.target.value)}
-                    placeholder="Notas adicionales..."
-                    rows={2}
-                    className="w-full px-4 py-2.5 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-green-600 focus:border-transparent resize-none"
-                  />
-                </div>
-              </div>
-            </div>
-
-            {/* Lines Section */}
-            <div className="p-6">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-sm font-semibold text-gray-900 dark:text-white uppercase tracking-wider">
-                  Lineas de Compra
-                </h3>
-                <button
-                  onClick={() => {
-                    setEditingLineIndex(null)
-                    setShowProductModal(true)
-                  }}
-                  className="flex items-center gap-2 px-3 py-1.5 bg-green-600 dark:bg-green-700 text-white text-sm rounded-lg hover:opacity-90 transition-colors"
-                >
-                  <Plus className="w-4 h-4" />
-                  Agregar Producto
-                </button>
-              </div>
-
-              {/* Lines Table */}
-              <div className="border border-gray-200 dark:border-gray-700 rounded-xl overflow-hidden">
-                <table className="w-full">
-                  <thead className="bg-gray-50 dark:bg-gray-700/50">
-                    <tr>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">
-                        Producto
-                      </th>
-                      <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase w-24">
-                        Cantidad
-                      </th>
-                      <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase w-32">
-                        Precio Unit.
-                      </th>
-                      <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase w-32">
-                        Subtotal
-                      </th>
-                      <th className="px-4 py-3 w-16"></th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
-                    {lines.length === 0 ? (
-                      <tr>
-                        <td colSpan={5} className="px-4 py-8 text-center text-gray-500 dark:text-gray-400">
-                          <Package className="w-8 h-8 mx-auto mb-2 opacity-50" />
-                          <p>No hay productos agregados</p>
-                          <button
-                            onClick={() => setShowProductModal(true)}
-                            className="mt-2 text-green-600 dark:text-green-400 hover:underline text-sm"
-                          >
-                            Agregar primer producto
-                          </button>
-                        </td>
-                      </tr>
-                    ) : (
-                      lines.map((line, index) => (
-                        <tr key={index} className="hover:bg-gray-50 dark:hover:bg-gray-700/30">
-                          <td className="px-4 py-3">
-                            <button
-                              onClick={() => {
-                                setEditingLineIndex(index)
-                                setShowProductModal(true)
-                              }}
-                              className="text-left hover:text-green-600 dark:hover:text-green-400 transition-colors"
-                            >
-                              <p className="font-medium text-gray-900 dark:text-white">
-                                {line.productName}
-                              </p>
-                              <p className="text-sm text-gray-500 dark:text-gray-400">
-                                {line.productSku}
-                              </p>
-                            </button>
-                          </td>
-                          <td className="px-4 py-3">
-                            <input
-                              type="number"
-                              value={line.quantity}
-                              onChange={e => updateLine(index, 'quantity', Math.max(1, parseInt(e.target.value) || 1))}
-                              min={1}
-                              className="w-full px-2 py-1.5 text-center bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg"
-                            />
-                          </td>
-                          <td className="px-4 py-3">
-                            <div className="relative">
-                              <DollarSign className="absolute left-2 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                              <input
-                                type="number"
-                                value={line.unitPrice}
-                                onChange={e => updateLine(index, 'unitPrice', Math.max(0, parseFloat(e.target.value) || 0))}
-                                min={0}
-                                step={0.01}
-                                className="w-full pl-7 pr-2 py-1.5 text-center bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg"
-                              />
-                            </div>
-                          </td>
-                          <td className="px-4 py-3 text-right">
-                            <p className="font-semibold text-gray-900 dark:text-white">
-                              ${line.totalPrice.toFixed(2)}
-                            </p>
-                          </td>
-                          <td className="px-4 py-3">
-                            <button
-                              onClick={() => removeLine(index)}
-                              className="p-1.5 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </button>
-                          </td>
-                        </tr>
-                      ))
+                    {index < STEPS.length - 1 && (
+                      <div className={cn('flex-1 h-1 mx-4 rounded-full overflow-hidden', theme === 'dark' ? 'bg-gray-700' : 'bg-gray-200')}>
+                        <motion.div
+                          initial={{ width: 0 }}
+                          animate={{ width: isCompleted ? '100%' : '0%' }}
+                          transition={{ duration: 0.3 }}
+                          className="h-full bg-gradient-to-r from-green-500 to-emerald-600"
+                        />
+                      </div>
                     )}
-                  </tbody>
-                </table>
-              </div>
+                  </React.Fragment>
+                )
+              })}
+            </div>
+          </motion.div>
 
-              {/* Totals */}
-              {lines.length > 0 && (
-                <div className="mt-4 flex justify-end">
-                  <div className="w-72 space-y-2">
-                    <div className="flex justify-between text-sm">
-                      <span className="text-gray-600 dark:text-gray-400">Subtotal:</span>
-                      <span className="font-medium text-gray-900 dark:text-white">${subtotal.toFixed(2)}</span>
+          {/* Step Content */}
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.2 }}
+            className={cn('rounded-2xl p-6 shadow-xl min-h-[500px]', theme === 'dark' ? 'bg-gray-800/50 border border-gray-700' : 'bg-white border border-gray-200')}
+          >
+            <AnimatePresence mode="wait">
+              {/* Step 1: Supplier */}
+              {currentStep === 'supplier' && (
+                <motion.div key="supplier" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="space-y-6">
+                  <div className="flex items-center gap-3 mb-6">
+                    <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center">
+                      <Truck className="w-5 h-5 text-white" />
                     </div>
-                    <div className="flex justify-between text-sm">
-                      <span className="text-gray-600 dark:text-gray-400">Impuesto (0%):</span>
-                      <span className="font-medium text-gray-900 dark:text-white">${taxAmount.toFixed(2)}</span>
-                    </div>
-                    <div className="flex justify-between pt-2 border-t border-gray-200 dark:border-gray-700">
-                      <span className="font-semibold text-gray-900 dark:text-white">Total:</span>
-                      <span className="text-xl font-bold text-green-600 dark:text-green-400">${total.toFixed(2)}</span>
+                    <div>
+                      <h2 className={cn('text-xl font-bold', theme === 'dark' ? 'text-white' : 'text-gray-900')}>Seleccionar Proveedor</h2>
+                      <p className={cn('text-sm', theme === 'dark' ? 'text-gray-400' : 'text-gray-600')}>Busca un proveedor existente o crea uno nuevo</p>
                     </div>
                   </div>
-                </div>
-              )}
-            </div>
 
-            {/* Actions */}
-            <div className="p-6 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-700/50 flex items-center justify-end gap-3">
-              <button
-                onClick={() => router.back()}
-                className="px-4 py-2 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition-colors"
-              >
-                Cancelar
-              </button>
-              <button
-                onClick={() => handleSave(false)}
-                disabled={loading}
-                className="flex items-center gap-2 px-4 py-2 bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-200 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-500 transition-colors"
-              >
-                <Save className="w-4 h-4" />
-                Guardar Borrador
-              </button>
-              <button
-                onClick={() => handleSave(true)}
-                disabled={loading || lines.length === 0}
-                className="flex items-center gap-2 px-4 py-2 bg-green-600 dark:bg-green-700 text-white rounded-lg hover:opacity-90 transition-colors disabled:opacity-50"
-              >
-                <Send className="w-4 h-4" />
-                Confirmar Compra
-              </button>
+                  {/* Search Input */}
+                  <div className="relative">
+                    <div className={cn('flex items-center gap-3 p-4 rounded-xl border-2 transition-all', theme === 'dark' ? 'bg-gray-900 border-gray-600 focus-within:border-blue-500' : 'bg-gray-50 border-gray-200 focus-within:border-blue-500')}>
+                      <Search className={cn('w-5 h-5', theme === 'dark' ? 'text-gray-400' : 'text-gray-500')} />
+                      <input
+                        type="text"
+                        placeholder="Buscar por nombre, código o teléfono..."
+                        value={supplierSearch}
+                        onChange={(e) => setSupplierSearch(e.target.value)}
+                        className={cn('flex-1 bg-transparent outline-none text-lg', theme === 'dark' ? 'text-white placeholder:text-gray-500' : 'text-gray-900 placeholder:text-gray-400')}
+                      />
+                      {searchingSupplier && <Loader2 className="w-5 h-5 animate-spin text-blue-500" />}
+                    </div>
+
+                    {/* Search Results */}
+                    {supplierSearch.length >= 2 && (
+                      <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} className={cn('absolute z-10 w-full mt-2 rounded-xl border shadow-xl overflow-hidden', theme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200')}>
+                        {supplierResults.length > 0 ? (
+                          <div className="max-h-64 overflow-y-auto">
+                            {supplierResults.map((supplier) => (
+                              <motion.button
+                                key={supplier.id}
+                                whileHover={{ backgroundColor: theme === 'dark' ? 'rgba(55, 65, 81, 0.5)' : 'rgba(249, 250, 251, 1)' }}
+                                onClick={() => { setSelectedSupplier(supplier); setSupplierSearch(''); setSupplierResults([]) }}
+                                className={cn('w-full p-4 flex items-start gap-3 text-left border-b last:border-b-0', theme === 'dark' ? 'border-gray-700' : 'border-gray-100')}
+                              >
+                                <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center flex-shrink-0">
+                                  <Building2 className="w-5 h-5 text-white" />
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex items-center gap-2">
+                                    <span className={cn('font-medium', theme === 'dark' ? 'text-white' : 'text-gray-900')}>{supplier.name}</span>
+                                    <span className="text-xs px-2 py-0.5 rounded-full bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400">{supplier.supplierCode}</span>
+                                  </div>
+                                  <div className={cn('flex items-center gap-4 text-sm mt-1', theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}>
+                                    {supplier.phone && <span className="flex items-center gap-1"><Phone className="w-3 h-3" />{supplier.phone}</span>}
+                                    {supplier.fullAddress && <span className="flex items-center gap-1 truncate"><MapPin className="w-3 h-3" />{supplier.fullAddress}</span>}
+                                  </div>
+                                </div>
+                              </motion.button>
+                            ))}
+                          </div>
+                        ) : !searchingSupplier && (
+                          <div className="p-4 text-center">
+                            <p className={cn('text-sm mb-3', theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}>No se encontraron proveedores</p>
+                          </div>
+                        )}
+
+                        <motion.button
+                          whileHover={{ backgroundColor: theme === 'dark' ? 'rgba(30, 64, 175, 0.2)' : 'rgba(219, 234, 254, 1)' }}
+                          onClick={() => { setNewSupplierData({ ...newSupplierData, name: supplierSearch }); setShowNewSupplierModal(true) }}
+                          className={cn('w-full p-4 flex items-center gap-3 text-blue-600 dark:text-blue-400', theme === 'dark' ? 'bg-blue-900/20' : 'bg-blue-50')}
+                        >
+                          <Plus className="w-5 h-5" />
+                          <span className="font-medium">Crear nuevo proveedor &quot;{supplierSearch}&quot;</span>
+                        </motion.button>
+                      </motion.div>
+                    )}
+                  </div>
+
+                  {/* Selected Supplier Card */}
+                  {selectedSupplier && (
+                    <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className={cn('p-6 rounded-xl border-2', theme === 'dark' ? 'bg-green-900/20 border-green-500/50' : 'bg-green-50 border-green-200')}>
+                      <div className="flex items-start justify-between">
+                        <div className="flex items-start gap-4">
+                          <div className="w-14 h-14 rounded-full bg-gradient-to-br from-green-500 to-emerald-600 flex items-center justify-center">
+                            <Building2 className="w-7 h-7 text-white" />
+                          </div>
+                          <div>
+                            <div className="flex items-center gap-2 mb-1">
+                              <h3 className={cn('text-lg font-bold', theme === 'dark' ? 'text-white' : 'text-gray-900')}>{selectedSupplier.name}</h3>
+                              <span className="text-xs px-2 py-0.5 rounded-full bg-green-100 text-green-600 dark:bg-green-900/30 dark:text-green-400">{selectedSupplier.supplierCode}</span>
+                            </div>
+                            {selectedSupplier.phone && <p className={cn('flex items-center gap-2 text-sm', theme === 'dark' ? 'text-gray-300' : 'text-gray-600')}><Phone className="w-4 h-4" />{selectedSupplier.phone}</p>}
+                            {selectedSupplier.fullAddress && <p className={cn('flex items-center gap-2 text-sm mt-1', theme === 'dark' ? 'text-gray-300' : 'text-gray-600')}><MapPin className="w-4 h-4" />{selectedSupplier.fullAddress}</p>}
+                          </div>
+                        </div>
+                        <motion.button whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }} onClick={() => setSelectedSupplier(null)} className={cn('px-4 py-2 rounded-lg text-sm font-medium', theme === 'dark' ? 'bg-gray-700 hover:bg-gray-600 text-gray-200' : 'bg-white hover:bg-gray-50 text-gray-700 shadow-sm')}>
+                          Cambiar
+                        </motion.button>
+                      </div>
+                    </motion.div>
+                  )}
+
+                  {errors.supplier && <p className="text-red-500 text-sm flex items-center gap-2"><AlertTriangle className="w-4 h-4" />{errors.supplier}</p>}
+                </motion.div>
+              )}
+
+              {/* Step 2: Warehouse */}
+              {currentStep === 'warehouse' && (
+                <motion.div key="warehouse" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="space-y-6">
+                  <div className="flex items-center gap-3 mb-6">
+                    <div className="w-10 h-10 rounded-full bg-gradient-to-br from-purple-500 to-purple-600 flex items-center justify-center">
+                      <Warehouse className="w-5 h-5 text-white" />
+                    </div>
+                    <div>
+                      <h2 className={cn('text-xl font-bold', theme === 'dark' ? 'text-white' : 'text-gray-900')}>Almacén de Recepción</h2>
+                      <p className={cn('text-sm', theme === 'dark' ? 'text-gray-400' : 'text-gray-600')}>¿Dónde recibirás la mercancía?</p>
+                    </div>
+                  </div>
+
+                  {loadingWarehouses ? (
+                    <div className="flex items-center justify-center py-12"><Loader2 className="w-8 h-8 animate-spin text-purple-500" /></div>
+                  ) : warehouses.length === 0 ? (
+                    <div className={cn('text-center py-12 rounded-xl border-2 border-dashed', theme === 'dark' ? 'border-gray-700' : 'border-gray-300')}>
+                      <Warehouse className={cn('w-12 h-12 mx-auto mb-4', theme === 'dark' ? 'text-gray-600' : 'text-gray-400')} />
+                      <p className={cn('text-lg font-medium mb-2', theme === 'dark' ? 'text-gray-400' : 'text-gray-600')}>No hay almacenes registrados</p>
+                      <p className={cn('text-sm', theme === 'dark' ? 'text-gray-500' : 'text-gray-500')}>Crea un almacén primero para poder recibir compras</p>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {warehouses.map((warehouse) => (
+                        <motion.button
+                          key={warehouse.id}
+                          whileHover={{ scale: 1.02 }}
+                          whileTap={{ scale: 0.98 }}
+                          onClick={() => setSelectedWarehouse(warehouse)}
+                          className={cn('p-6 rounded-xl border-2 text-left transition-all relative overflow-hidden', selectedWarehouse?.id === warehouse.id ? (theme === 'dark' ? 'bg-purple-900/30 border-purple-500' : 'bg-purple-50 border-purple-400') : (theme === 'dark' ? 'bg-gray-800/50 border-gray-700 hover:border-gray-600' : 'bg-gray-50 border-gray-200 hover:border-gray-300'))}
+                        >
+                          {warehouse.isCentral && (
+                            <div className="absolute top-3 right-3">
+                              <span className="flex items-center gap-1 text-xs px-2 py-1 rounded-full bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400"><Star className="w-3 h-3" />Central</span>
+                            </div>
+                          )}
+                          <div className="flex items-start gap-4">
+                            <div className={cn('w-12 h-12 rounded-lg flex items-center justify-center', warehouse.isCentral ? 'bg-gradient-to-br from-amber-500 to-amber-600' : 'bg-gradient-to-br from-purple-500 to-purple-600')}>
+                              <Warehouse className="w-6 h-6 text-white" />
+                            </div>
+                            <div className="flex-1">
+                              <h3 className={cn('font-bold text-lg', theme === 'dark' ? 'text-white' : 'text-gray-900')}>{warehouse.name}</h3>
+                              <p className={cn('text-sm', theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}>{warehouse.code}</p>
+                              {warehouse.address && <p className={cn('flex items-center gap-1 text-sm mt-2', theme === 'dark' ? 'text-gray-400' : 'text-gray-600')}><MapPin className="w-4 h-4" />{[warehouse.address, warehouse.city, warehouse.state].filter(Boolean).join(', ')}</p>}
+                            </div>
+                          </div>
+                          {selectedWarehouse?.id === warehouse.id && (
+                            <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} className="absolute bottom-3 right-3">
+                              <div className="w-8 h-8 rounded-full bg-purple-500 flex items-center justify-center"><Check className="w-5 h-5 text-white" /></div>
+                            </motion.div>
+                          )}
+                        </motion.button>
+                      ))}
+                    </div>
+                  )}
+
+                  {errors.warehouse && <p className="text-red-500 text-sm flex items-center gap-2"><AlertTriangle className="w-4 h-4" />{errors.warehouse}</p>}
+                </motion.div>
+              )}
+
+              {/* Step 3: Products */}
+              {currentStep === 'products' && (
+                <motion.div key="products" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="space-y-6">
+                  <div className="flex items-center justify-between mb-6">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-full bg-gradient-to-br from-emerald-500 to-emerald-600 flex items-center justify-center">
+                        <Package className="w-5 h-5 text-white" />
+                      </div>
+                      <div>
+                        <h2 className={cn('text-xl font-bold', theme === 'dark' ? 'text-white' : 'text-gray-900')}>Productos de la Compra</h2>
+                        <p className={cn('text-sm', theme === 'dark' ? 'text-gray-400' : 'text-gray-600')}>Agrega los productos que vas a comprar</p>
+                      </div>
+                    </div>
+                    <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} onClick={() => setShowProductModal(true)} className="flex items-center gap-2 px-4 py-2 rounded-lg bg-gradient-to-r from-emerald-500 to-emerald-600 text-white font-medium shadow-lg">
+                      <Plus className="w-5 h-5" />Agregar Producto
+                    </motion.button>
+                  </div>
+
+                  {purchaseLines.length === 0 ? (
+                    <div className={cn('text-center py-16 rounded-xl border-2 border-dashed', theme === 'dark' ? 'border-gray-700' : 'border-gray-300')}>
+                      <Package className={cn('w-16 h-16 mx-auto mb-4', theme === 'dark' ? 'text-gray-600' : 'text-gray-400')} />
+                      <p className={cn('text-lg font-medium mb-2', theme === 'dark' ? 'text-gray-400' : 'text-gray-600')}>No hay productos agregados</p>
+                      <p className={cn('text-sm mb-4', theme === 'dark' ? 'text-gray-500' : 'text-gray-500')}>Haz clic en &quot;Agregar Producto&quot; para comenzar</p>
+                    </div>
+                  ) : (
+                    <div className={cn('rounded-xl border overflow-hidden', theme === 'dark' ? 'border-gray-700' : 'border-gray-200')}>
+                      <table className="w-full">
+                        <thead className={cn(theme === 'dark' ? 'bg-gray-800/50' : 'bg-gray-50')}>
+                          <tr>
+                            <th className={cn('px-4 py-3 text-left text-sm font-medium', theme === 'dark' ? 'text-gray-400' : 'text-gray-600')}>Producto</th>
+                            <th className={cn('px-4 py-3 text-center text-sm font-medium', theme === 'dark' ? 'text-gray-400' : 'text-gray-600')}>Cantidad</th>
+                            <th className={cn('px-4 py-3 text-center text-sm font-medium', theme === 'dark' ? 'text-gray-400' : 'text-gray-600')}>P. Unitario</th>
+                            <th className={cn('px-4 py-3 text-right text-sm font-medium', theme === 'dark' ? 'text-gray-400' : 'text-gray-600')}>Subtotal</th>
+                            <th className="px-4 py-3 w-12"></th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {purchaseLines.map((line, index) => (
+                            <motion.tr key={line.productId} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: index * 0.05 }} className={cn('border-t', theme === 'dark' ? 'border-gray-700' : 'border-gray-200')}>
+                              <td className="px-4 py-4">
+                                <div className="flex items-center gap-3">
+                                  {line.product.imageUrl ? <img src={line.product.imageUrl} alt={line.product.name} className="w-12 h-12 rounded-lg object-cover" /> : <div className={cn('w-12 h-12 rounded-lg flex items-center justify-center', theme === 'dark' ? 'bg-gray-700' : 'bg-gray-200')}><Package className="w-6 h-6 text-gray-400" /></div>}
+                                  <div>
+                                    <p className={cn('font-medium', theme === 'dark' ? 'text-white' : 'text-gray-900')}>{line.product.name}</p>
+                                    <p className={cn('text-sm', theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}>SKU: {line.product.sku}</p>
+                                  </div>
+                                </div>
+                              </td>
+                              <td className="px-4 py-4">
+                                <div className="flex items-center justify-center gap-2">
+                                  <button onClick={() => updateLineQuantity(line.productId, line.quantity - 1)} className={cn('w-8 h-8 rounded-lg flex items-center justify-center', theme === 'dark' ? 'bg-gray-700 hover:bg-gray-600 text-gray-300' : 'bg-gray-100 hover:bg-gray-200 text-gray-600')}>-</button>
+                                  <input type="number" value={line.quantity} onChange={(e) => updateLineQuantity(line.productId, parseInt(e.target.value) || 1)} className={cn('w-16 text-center rounded-lg py-2 border', theme === 'dark' ? 'bg-gray-700 text-white border-gray-600' : 'bg-gray-50 text-gray-900 border-gray-200')} />
+                                  <button onClick={() => updateLineQuantity(line.productId, line.quantity + 1)} className={cn('w-8 h-8 rounded-lg flex items-center justify-center', theme === 'dark' ? 'bg-gray-700 hover:bg-gray-600 text-gray-300' : 'bg-gray-100 hover:bg-gray-200 text-gray-600')}>+</button>
+                                </div>
+                              </td>
+                              <td className="px-4 py-4">
+                                <div className="flex items-center justify-center">
+                                  <span className={cn('text-sm mr-1', theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}>{CURRENCY_SYMBOLS[currency]}</span>
+                                  <input type="number" step="0.01" value={line.unitPrice} onChange={(e) => updateLinePrice(line.productId, parseFloat(e.target.value) || 0)} className={cn('w-24 text-center rounded-lg py-2 border', theme === 'dark' ? 'bg-gray-700 text-white border-gray-600' : 'bg-gray-50 text-gray-900 border-gray-200')} />
+                                </div>
+                              </td>
+                              <td className={cn('px-4 py-4 text-right font-medium', theme === 'dark' ? 'text-white' : 'text-gray-900')}>{CURRENCY_SYMBOLS[currency]}{line.totalPrice.toFixed(2)}</td>
+                              <td className="px-4 py-4"><button onClick={() => removeLine(line.productId)} className="p-2 rounded-lg text-red-500 hover:bg-red-500/10"><Trash2 className="w-4 h-4" /></button></td>
+                            </motion.tr>
+                          ))}
+                        </tbody>
+                      </table>
+                      <div className={cn('p-4 border-t', theme === 'dark' ? 'bg-gray-800/50 border-gray-700' : 'bg-gray-50 border-gray-200')}>
+                        <div className="flex justify-end">
+                          <div className="w-64 space-y-2">
+                            <div className="flex justify-between"><span className={theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}>Subtotal:</span><span className={theme === 'dark' ? 'text-white' : 'text-gray-900'}>{CURRENCY_SYMBOLS[currency]}{subtotal.toFixed(2)}</span></div>
+                            <div className={cn('flex justify-between pt-2 border-t font-bold text-lg', theme === 'dark' ? 'border-gray-600 text-white' : 'border-gray-300 text-gray-900')}><span>Total:</span><span>{CURRENCY_SYMBOLS[currency]}{total.toFixed(2)}</span></div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {errors.products && <p className="text-red-500 text-sm flex items-center gap-2"><AlertTriangle className="w-4 h-4" />{errors.products}</p>}
+                </motion.div>
+              )}
+
+              {/* Step 4: Lots */}
+              {currentStep === 'lots' && (
+                <motion.div key="lots" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="space-y-6">
+                  <div className="flex items-center gap-3 mb-6">
+                    <div className="w-10 h-10 rounded-full bg-gradient-to-br from-amber-500 to-amber-600 flex items-center justify-center">
+                      <Calendar className="w-5 h-5 text-white" />
+                    </div>
+                    <div>
+                      <h2 className={cn('text-xl font-bold', theme === 'dark' ? 'text-white' : 'text-gray-900')}>Lotes y Vencimientos</h2>
+                      <p className={cn('text-sm', theme === 'dark' ? 'text-gray-400' : 'text-gray-600')}>Información opcional de lotes y fechas de vencimiento</p>
+                    </div>
+                  </div>
+
+                  <div className={cn('p-4 rounded-xl flex items-start gap-3 mb-6', theme === 'dark' ? 'bg-amber-900/20 border border-amber-500/30' : 'bg-amber-50 border border-amber-200')}>
+                    <Clock className="w-5 h-5 text-amber-500 flex-shrink-0 mt-0.5" />
+                    <div>
+                      <p className={cn('text-sm font-medium', theme === 'dark' ? 'text-amber-300' : 'text-amber-800')}>Este paso es opcional</p>
+                      <p className={cn('text-sm', theme === 'dark' ? 'text-amber-400' : 'text-amber-700')}>Puedes agregar esta información cuando recibas la mercancía en el almacén.</p>
+                    </div>
+                  </div>
+
+                  <div className="space-y-4">
+                    {purchaseLines.map((line, index) => {
+                      const daysUntil = getDaysUntilExpiration(line.expirationDate)
+                      return (
+                        <motion.div key={line.productId} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: index * 0.05 }} className={cn('p-5 rounded-xl border', theme === 'dark' ? 'bg-gray-800/50 border-gray-700' : 'bg-gray-50 border-gray-200')}>
+                          <div className="flex items-center gap-3 mb-4">
+                            {line.product.imageUrl ? <img src={line.product.imageUrl} alt={line.product.name} className="w-10 h-10 rounded-lg object-cover" /> : <div className={cn('w-10 h-10 rounded-lg flex items-center justify-center', theme === 'dark' ? 'bg-gray-700' : 'bg-gray-200')}><Package className="w-5 h-5 text-gray-400" /></div>}
+                            <div>
+                              <p className={cn('font-medium', theme === 'dark' ? 'text-white' : 'text-gray-900')}>{line.product.name}</p>
+                              <p className={cn('text-sm', theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}>{line.quantity} unidades</p>
+                            </div>
+                          </div>
+                          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                            <div>
+                              <label className={cn('block text-sm font-medium mb-1', theme === 'dark' ? 'text-gray-400' : 'text-gray-600')}><Hash className="w-4 h-4 inline mr-1" />Número de Lote</label>
+                              <input type="text" placeholder="LOT-2024-XXXX" value={line.lotNumber} onChange={(e) => updateLotInfo(line.productId, 'lotNumber', e.target.value)} className={cn('w-full px-4 py-2 rounded-lg border', theme === 'dark' ? 'bg-gray-700 border-gray-600 text-white placeholder:text-gray-500' : 'bg-white border-gray-300 text-gray-900 placeholder:text-gray-400')} />
+                            </div>
+                            <div>
+                              <label className={cn('block text-sm font-medium mb-1', theme === 'dark' ? 'text-gray-400' : 'text-gray-600')}><Calendar className="w-4 h-4 inline mr-1" />Fecha de Vencimiento</label>
+                              <input type="date" value={line.expirationDate} onChange={(e) => updateLotInfo(line.productId, 'expirationDate', e.target.value)} className={cn('w-full px-4 py-2 rounded-lg border', theme === 'dark' ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900')} />
+                              {daysUntil !== null && <p className={cn('text-xs mt-1 flex items-center gap-1', daysUntil < 0 ? 'text-red-500' : daysUntil < 30 ? 'text-amber-500' : 'text-green-500')}>{daysUntil < 0 ? <><AlertTriangle className="w-3 h-3" />Vencido hace {Math.abs(daysUntil)} días</> : <><Check className="w-3 h-3" />Vence en {daysUntil} días</>}</p>}
+                            </div>
+                            <div>
+                              <label className={cn('block text-sm font-medium mb-1', theme === 'dark' ? 'text-gray-400' : 'text-gray-600')}><Calendar className="w-4 h-4 inline mr-1" />Fecha de Fabricación</label>
+                              <input type="date" value={line.manufacturingDate} onChange={(e) => updateLotInfo(line.productId, 'manufacturingDate', e.target.value)} className={cn('w-full px-4 py-2 rounded-lg border', theme === 'dark' ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900')} />
+                            </div>
+                          </div>
+                        </motion.div>
+                      )
+                    })}
+                  </div>
+                </motion.div>
+              )}
+
+              {/* Step 5: Review */}
+              {currentStep === 'review' && (
+                <motion.div key="review" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="space-y-6">
+                  <div className="flex items-center gap-3 mb-6">
+                    <div className="w-10 h-10 rounded-full bg-gradient-to-br from-green-500 to-green-600 flex items-center justify-center">
+                      <FileText className="w-5 h-5 text-white" />
+                    </div>
+                    <div>
+                      <h2 className={cn('text-xl font-bold', theme === 'dark' ? 'text-white' : 'text-gray-900')}>Resumen de la Compra</h2>
+                      <p className={cn('text-sm', theme === 'dark' ? 'text-gray-400' : 'text-gray-600')}>Revisa los datos antes de confirmar</p>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {/* Supplier Card */}
+                    <div className={cn('p-5 rounded-xl border', theme === 'dark' ? 'bg-gray-800/50 border-gray-700' : 'bg-gray-50 border-gray-200')}>
+                      <h3 className={cn('font-medium mb-3 flex items-center gap-2', theme === 'dark' ? 'text-gray-300' : 'text-gray-700')}><Truck className="w-4 h-4" />Proveedor</h3>
+                      <div className="flex items-start gap-3">
+                        <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center"><Building2 className="w-5 h-5 text-white" /></div>
+                        <div>
+                          <p className={cn('font-bold', theme === 'dark' ? 'text-white' : 'text-gray-900')}>{selectedSupplier?.name}</p>
+                          <p className={cn('text-sm', theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}>{selectedSupplier?.supplierCode}</p>
+                          {selectedSupplier?.phone && <p className={cn('text-sm flex items-center gap-1 mt-1', theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}><Phone className="w-3 h-3" />{selectedSupplier.phone}</p>}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Warehouse Card */}
+                    <div className={cn('p-5 rounded-xl border', theme === 'dark' ? 'bg-gray-800/50 border-gray-700' : 'bg-gray-50 border-gray-200')}>
+                      <h3 className={cn('font-medium mb-3 flex items-center gap-2', theme === 'dark' ? 'text-gray-300' : 'text-gray-700')}><Warehouse className="w-4 h-4" />Almacén de Recepción</h3>
+                      <div className="flex items-start gap-3">
+                        <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-purple-500 to-purple-600 flex items-center justify-center"><Warehouse className="w-5 h-5 text-white" /></div>
+                        <div>
+                          <p className={cn('font-bold', theme === 'dark' ? 'text-white' : 'text-gray-900')}>{selectedWarehouse?.name}</p>
+                          <p className={cn('text-sm', theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}>{selectedWarehouse?.code}</p>
+                          {selectedWarehouse?.address && <p className={cn('text-sm flex items-center gap-1 mt-1', theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}><MapPin className="w-3 h-3" />{[selectedWarehouse.address, selectedWarehouse.city].filter(Boolean).join(', ')}</p>}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Dates */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                      <label className={cn('block text-sm font-medium mb-2', theme === 'dark' ? 'text-gray-300' : 'text-gray-700')}><Calendar className="w-4 h-4 inline mr-1" />Fecha de Compra *</label>
+                      <input type="date" value={purchaseDate} onChange={(e) => setPurchaseDate(e.target.value)} className={cn('w-full px-4 py-3 rounded-lg border', theme === 'dark' ? 'bg-gray-800 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900')} />
+                    </div>
+                    <div>
+                      <label className={cn('block text-sm font-medium mb-2', theme === 'dark' ? 'text-gray-300' : 'text-gray-700')}><Calendar className="w-4 h-4 inline mr-1" />Entrega Esperada</label>
+                      <input type="date" value={expectedDate} onChange={(e) => setExpectedDate(e.target.value)} className={cn('w-full px-4 py-3 rounded-lg border', theme === 'dark' ? 'bg-gray-800 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900')} />
+                    </div>
+                  </div>
+
+                  {/* Notes */}
+                  <div>
+                    <label className={cn('block text-sm font-medium mb-2', theme === 'dark' ? 'text-gray-300' : 'text-gray-700')}><FileText className="w-4 h-4 inline mr-1" />Notas (opcional)</label>
+                    <textarea value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Agregar notas adicionales..." rows={3} className={cn('w-full px-4 py-3 rounded-lg border resize-none', theme === 'dark' ? 'bg-gray-800 border-gray-600 text-white placeholder:text-gray-500' : 'bg-white border-gray-300 text-gray-900 placeholder:text-gray-400')} />
+                  </div>
+
+                  {/* Products Summary */}
+                  <div className={cn('rounded-xl border overflow-hidden', theme === 'dark' ? 'border-gray-700' : 'border-gray-200')}>
+                    <div className={cn('px-5 py-3 border-b', theme === 'dark' ? 'bg-gray-800/50 border-gray-700' : 'bg-gray-50 border-gray-200')}>
+                      <h3 className={cn('font-medium flex items-center gap-2', theme === 'dark' ? 'text-white' : 'text-gray-900')}><Package className="w-4 h-4" />Productos ({purchaseLines.length})</h3>
+                    </div>
+                    <div className="divide-y divide-gray-200 dark:divide-gray-700">
+                      {purchaseLines.map((line) => (
+                        <div key={line.productId} className="p-4 flex items-center justify-between">
+                          <div className="flex items-center gap-3">
+                            {line.product.imageUrl ? <img src={line.product.imageUrl} alt={line.product.name} className="w-10 h-10 rounded-lg object-cover" /> : <div className={cn('w-10 h-10 rounded-lg flex items-center justify-center', theme === 'dark' ? 'bg-gray-700' : 'bg-gray-200')}><Package className="w-5 h-5 text-gray-400" /></div>}
+                            <div>
+                              <p className={cn('font-medium', theme === 'dark' ? 'text-white' : 'text-gray-900')}>{line.product.name}</p>
+                              <p className={cn('text-sm', theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}>x{line.quantity} @ {CURRENCY_SYMBOLS[currency]}{line.unitPrice.toFixed(2)}{line.lotNumber && ` • Lote: ${line.lotNumber}`}</p>
+                            </div>
+                          </div>
+                          <p className={cn('font-medium', theme === 'dark' ? 'text-white' : 'text-gray-900')}>{CURRENCY_SYMBOLS[currency]}{line.totalPrice.toFixed(2)}</p>
+                        </div>
+                      ))}
+                    </div>
+                    <div className={cn('p-4 border-t', theme === 'dark' ? 'bg-gray-800/50 border-gray-700' : 'bg-gray-50 border-gray-200')}>
+                      <div className="flex justify-end">
+                        <div className="w-64 space-y-2">
+                          <div className="flex justify-between"><span className={theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}>Subtotal:</span><span className={theme === 'dark' ? 'text-white' : 'text-gray-900'}>{CURRENCY_SYMBOLS[currency]}{subtotal.toFixed(2)}</span></div>
+                          <div className={cn('flex justify-between pt-2 border-t font-bold text-lg', theme === 'dark' ? 'border-gray-600 text-white' : 'border-gray-300 text-gray-900')}><span>Total:</span><span className="text-green-500">{CURRENCY_SYMBOLS[currency]}{total.toFixed(2)}</span></div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {errors.submit && <div className={cn('p-4 rounded-xl flex items-center gap-3', 'bg-red-500/10 border border-red-500/30')}><AlertTriangle className="w-5 h-5 text-red-500" /><p className="text-red-500">{errors.submit}</p></div>}
+                </motion.div>
+              )}
+            </AnimatePresence>
+
+            {/* Navigation Buttons */}
+            <div className="flex items-center justify-between mt-8 pt-6 border-t border-gray-200 dark:border-gray-700">
+              {currentStepIndex > 0 ? (
+                <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} onClick={prevStep} className={cn('flex items-center gap-2 px-6 py-3 rounded-xl font-medium', theme === 'dark' ? 'bg-gray-700 hover:bg-gray-600 text-gray-200' : 'bg-gray-100 hover:bg-gray-200 text-gray-700')}>
+                  <ArrowLeft className="w-5 h-5" />Anterior
+                </motion.button>
+              ) : <div />}
+
+              {currentStepIndex < STEPS.length - 1 ? (
+                <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} onClick={nextStep} className="flex items-center gap-2 px-6 py-3 rounded-xl font-medium bg-gradient-to-r from-blue-500 to-blue-600 text-white shadow-lg">
+                  Siguiente<ArrowRight className="w-5 h-5" />
+                </motion.button>
+              ) : (
+                <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} onClick={handleSubmit} disabled={loading} className="flex items-center gap-2 px-8 py-3 rounded-xl font-medium bg-gradient-to-r from-green-500 to-emerald-600 text-white shadow-lg disabled:opacity-50">
+                  {loading ? <><Loader2 className="w-5 h-5 animate-spin" />Creando...</> : <><Check className="w-5 h-5" />Crear Compra</>}
+                </motion.button>
+              )}
             </div>
           </motion.div>
 
           {/* Product Search Modal */}
           <AnimatePresence>
             {showProductModal && (
-              <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
-                onClick={() => setShowProductModal(false)}
-              >
-                <motion.div
-                  initial={{ scale: 0.95, opacity: 0, y: 20 }}
-                  animate={{ scale: 1, opacity: 1, y: 0 }}
-                  exit={{ scale: 0.95, opacity: 0, y: 20 }}
-                  onClick={e => e.stopPropagation()}
-                  className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl w-full max-w-2xl max-h-[80vh] flex flex-col"
-                >
-                  <div className="p-5 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
-                    <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-                      Seleccionar Producto
-                    </h3>
-                    <button
-                      onClick={() => setShowProductModal(false)}
-                      className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
-                    >
-                      <X className="w-5 h-5" />
-                    </button>
+              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50" onClick={() => setShowProductModal(false)}>
+                <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }} onClick={(e) => e.stopPropagation()} className={cn('w-full max-w-2xl rounded-2xl shadow-xl overflow-hidden', theme === 'dark' ? 'bg-gray-800' : 'bg-white')}>
+                  <div className={cn('p-4 border-b flex items-center justify-between', theme === 'dark' ? 'border-gray-700' : 'border-gray-200')}>
+                    <h3 className={cn('text-lg font-bold', theme === 'dark' ? 'text-white' : 'text-gray-900')}>Buscar Producto</h3>
+                    <button onClick={() => setShowProductModal(false)} className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700"><X className="w-5 h-5" /></button>
                   </div>
-
-                  <div className="p-4 border-b border-gray-200 dark:border-gray-700">
-                    <div className="relative">
-                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-                      <input
-                        type="text"
-                        value={productSearch}
-                        onChange={e => setProductSearch(e.target.value)}
-                        placeholder="Buscar por nombre o SKU..."
-                        autoFocus
-                        className="w-full pl-10 pr-4 py-2.5 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-green-600 focus:border-transparent"
-                      />
+                  <div className="p-4">
+                    <div className={cn('flex items-center gap-3 p-3 rounded-lg border', theme === 'dark' ? 'bg-gray-900 border-gray-600' : 'bg-gray-50 border-gray-200')}>
+                      <Search className="w-5 h-5 text-gray-400" />
+                      <input type="text" placeholder="Buscar por nombre, SKU o código de barras..." value={productSearch} onChange={(e) => setProductSearch(e.target.value)} autoFocus className={cn('flex-1 bg-transparent outline-none', theme === 'dark' ? 'text-white' : 'text-gray-900')} />
+                      {searchingProducts && <Loader2 className="w-5 h-5 animate-spin text-blue-500" />}
                     </div>
                   </div>
-
-                  <div className="flex-1 overflow-y-auto p-4">
-                    {loadingProducts ? (
-                      <div className="py-8 text-center text-gray-500">
-                        Cargando productos...
-                      </div>
-                    ) : filteredProducts.length === 0 ? (
-                      <div className="py-8 text-center text-gray-500">
-                        <Package className="w-12 h-12 mx-auto mb-3 opacity-50" />
-                        <p>No se encontraron productos</p>
-                      </div>
-                    ) : (
-                      <div className="space-y-2">
-                        {filteredProducts.map(product => (
-                          <button
-                            key={product.id}
-                            onClick={() => addLine(product)}
-                            className="w-full p-4 flex items-center gap-4 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors text-left border border-transparent hover:border-green-200 dark:hover:border-green-800"
-                          >
-                            <div className="w-12 h-12 bg-gray-100 dark:bg-gray-700 rounded-lg flex items-center justify-center flex-shrink-0">
-                              {product.imageUrl ? (
-                                <img
-                                  src={product.imageUrl}
-                                  alt={product.name}
-                                  className="w-full h-full object-cover rounded-lg"
-                                />
-                              ) : (
-                                <Package className="w-6 h-6 text-gray-400" />
-                              )}
+                  <div className="max-h-96 overflow-y-auto">
+                    {productResults.length > 0 ? (
+                      <div className="divide-y divide-gray-200 dark:divide-gray-700">
+                        {productResults.map((product) => (
+                          <motion.button key={product.id} whileHover={{ backgroundColor: theme === 'dark' ? 'rgba(55, 65, 81, 0.5)' : 'rgba(249, 250, 251, 1)' }} onClick={() => addProductToPurchase(product)} className="w-full p-4 flex items-center gap-4 text-left">
+                            {product.imageUrl ? <img src={product.imageUrl} alt={product.name} className="w-14 h-14 rounded-lg object-cover" /> : <div className={cn('w-14 h-14 rounded-lg flex items-center justify-center', theme === 'dark' ? 'bg-gray-700' : 'bg-gray-200')}><Package className="w-7 h-7 text-gray-400" /></div>}
+                            <div className="flex-1">
+                              <p className={cn('font-medium', theme === 'dark' ? 'text-white' : 'text-gray-900')}>{product.name}</p>
+                              <p className={cn('text-sm', theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}>SKU: {product.sku}{product.barcode && ` • ${product.barcode}`}</p>
+                              <p className={cn('text-sm', theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}>Stock: {product.quantityOnHand} unidades</p>
                             </div>
-                            <div className="flex-1 min-w-0">
-                              <p className="font-medium text-gray-900 dark:text-white truncate">
-                                {product.name}
-                              </p>
-                              <div className="flex items-center gap-3 text-sm text-gray-500 dark:text-gray-400">
-                                <span>{product.sku}</span>
-                                {product.category && (
-                                  <span className="px-2 py-0.5 bg-gray-100 dark:bg-gray-700 rounded text-xs">
-                                    {product.category}
-                                  </span>
-                                )}
-                              </div>
+                            <div className="text-right">
+                              <p className={cn('font-bold text-lg', theme === 'dark' ? 'text-white' : 'text-gray-900')}>{CURRENCY_SYMBOLS[product.currency]}{product.costPrice.toFixed(2)}</p>
+                              <p className={cn('text-xs', theme === 'dark' ? 'text-gray-500' : 'text-gray-400')}>Precio costo</p>
                             </div>
-                            <div className="text-right flex-shrink-0">
-                              <p className="font-semibold text-green-600 dark:text-green-400">
-                                ${product.costPrice.toFixed(2)}
-                              </p>
-                              <p className="text-xs text-gray-500 dark:text-gray-400">
-                                Stock: {product.quantityOnHand}
-                              </p>
-                            </div>
-                          </button>
+                          </motion.button>
                         ))}
                       </div>
+                    ) : productSearch.length >= 2 && !searchingProducts ? (
+                      <div className="p-8 text-center">
+                        <Package className={cn('w-12 h-12 mx-auto mb-3', theme === 'dark' ? 'text-gray-600' : 'text-gray-400')} />
+                        <p className={cn('text-sm', theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}>No se encontraron productos</p>
+                      </div>
+                    ) : (
+                      <div className="p-8 text-center">
+                        <Search className={cn('w-12 h-12 mx-auto mb-3', theme === 'dark' ? 'text-gray-600' : 'text-gray-400')} />
+                        <p className={cn('text-sm', theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}>Escribe para buscar productos</p>
+                      </div>
                     )}
+                  </div>
+                </motion.div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          {/* New Supplier Modal */}
+          <AnimatePresence>
+            {showNewSupplierModal && (
+              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50" onClick={() => setShowNewSupplierModal(false)}>
+                <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }} onClick={(e) => e.stopPropagation()} className={cn('w-full max-w-md rounded-2xl shadow-xl overflow-hidden', theme === 'dark' ? 'bg-gray-800' : 'bg-white')}>
+                  <div className={cn('p-4 border-b flex items-center justify-between', theme === 'dark' ? 'border-gray-700' : 'border-gray-200')}>
+                    <h3 className={cn('text-lg font-bold', theme === 'dark' ? 'text-white' : 'text-gray-900')}>Nuevo Proveedor</h3>
+                    <button onClick={() => setShowNewSupplierModal(false)} className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700"><X className="w-5 h-5" /></button>
+                  </div>
+                  <div className="p-4 space-y-4">
+                    <div>
+                      <label className={cn('block text-sm font-medium mb-1', theme === 'dark' ? 'text-gray-300' : 'text-gray-700')}>Nombre *</label>
+                      <input type="text" value={newSupplierData.name} onChange={(e) => setNewSupplierData(prev => ({ ...prev, name: e.target.value }))} className={cn('w-full px-4 py-2 rounded-lg border', theme === 'dark' ? 'bg-gray-900 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900')} />
+                    </div>
+                    <div>
+                      <label className={cn('block text-sm font-medium mb-1', theme === 'dark' ? 'text-gray-300' : 'text-gray-700')}>Teléfono</label>
+                      <input type="text" value={newSupplierData.phone} onChange={(e) => setNewSupplierData(prev => ({ ...prev, phone: e.target.value }))} className={cn('w-full px-4 py-2 rounded-lg border', theme === 'dark' ? 'bg-gray-900 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900')} />
+                    </div>
+                    <div>
+                      <label className={cn('block text-sm font-medium mb-1', theme === 'dark' ? 'text-gray-300' : 'text-gray-700')}>Dirección</label>
+                      <input type="text" value={newSupplierData.address} onChange={(e) => setNewSupplierData(prev => ({ ...prev, address: e.target.value }))} className={cn('w-full px-4 py-2 rounded-lg border', theme === 'dark' ? 'bg-gray-900 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900')} />
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className={cn('block text-sm font-medium mb-1', theme === 'dark' ? 'text-gray-300' : 'text-gray-700')}>Ciudad</label>
+                        <input type="text" value={newSupplierData.city} onChange={(e) => setNewSupplierData(prev => ({ ...prev, city: e.target.value }))} className={cn('w-full px-4 py-2 rounded-lg border', theme === 'dark' ? 'bg-gray-900 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900')} />
+                      </div>
+                      <div>
+                        <label className={cn('block text-sm font-medium mb-1', theme === 'dark' ? 'text-gray-300' : 'text-gray-700')}>Provincia</label>
+                        <input type="text" value={newSupplierData.state} onChange={(e) => setNewSupplierData(prev => ({ ...prev, state: e.target.value }))} className={cn('w-full px-4 py-2 rounded-lg border', theme === 'dark' ? 'bg-gray-900 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900')} />
+                      </div>
+                    </div>
+                  </div>
+                  <div className={cn('p-4 border-t flex justify-end gap-3', theme === 'dark' ? 'border-gray-700' : 'border-gray-200')}>
+                    <button onClick={() => setShowNewSupplierModal(false)} className={cn('px-4 py-2 rounded-lg font-medium', theme === 'dark' ? 'bg-gray-700 hover:bg-gray-600 text-gray-200' : 'bg-gray-100 hover:bg-gray-200 text-gray-700')}>Cancelar</button>
+                    <button onClick={handleCreateSupplier} disabled={!newSupplierData.name.trim() || creatingSupplier} className="px-4 py-2 rounded-lg font-medium bg-gradient-to-r from-blue-500 to-blue-600 text-white disabled:opacity-50">
+                      {creatingSupplier ? <Loader2 className="w-5 h-5 animate-spin" /> : 'Crear Proveedor'}
+                    </button>
+                  </div>
+                </motion.div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          {/* Cancel Modal */}
+          <AnimatePresence>
+            {showCancelModal && (
+              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50" onClick={() => setShowCancelModal(false)}>
+                <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }} onClick={(e) => e.stopPropagation()} className={cn('w-full max-w-md rounded-2xl shadow-xl overflow-hidden', theme === 'dark' ? 'bg-gray-800' : 'bg-white')}>
+                  <div className="p-6">
+                    <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center">
+                      <AlertTriangle className="w-8 h-8 text-amber-500" />
+                    </div>
+                    <h3 className={cn('text-xl font-bold text-center mb-2', theme === 'dark' ? 'text-white' : 'text-gray-900')}>¿Cancelar compra?</h3>
+                    <p className={cn('text-center', theme === 'dark' ? 'text-gray-400' : 'text-gray-600')}>Los datos ingresados se perderán y no podrás recuperarlos.</p>
+                  </div>
+                  <div className={cn('p-4 border-t flex justify-end gap-3', theme === 'dark' ? 'border-gray-700' : 'border-gray-200')}>
+                    <button onClick={() => setShowCancelModal(false)} className={cn('px-4 py-2 rounded-lg font-medium', theme === 'dark' ? 'bg-gray-700 hover:bg-gray-600 text-gray-200' : 'bg-gray-100 hover:bg-gray-200 text-gray-700')}>Continuar editando</button>
+                    <button onClick={() => router.push('/dashboard/market/purchases')} className="px-4 py-2 rounded-lg font-medium bg-red-500 hover:bg-red-600 text-white">Sí, cancelar</button>
                   </div>
                 </motion.div>
               </motion.div>

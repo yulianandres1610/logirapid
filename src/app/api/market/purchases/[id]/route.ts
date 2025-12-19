@@ -13,7 +13,7 @@ interface JWTPayload {
 
 /**
  * GET /api/market/purchases/[id]
- * Get purchase details with lines
+ * Get purchase details with lines, including lot/expiration info
  */
 export async function GET(
   request: NextRequest,
@@ -45,14 +45,16 @@ export async function GET(
     const companyId = payload.companyId
     const purchaseId = parseInt(id)
 
-    // Get purchase
+    // Get purchase with supplier and warehouse info
     const purchaseResult = await db.query(`
       SELECT
         mp.id,
         mp.purchase_number,
+        mp.supplier_id,
         mp.supplier_name,
         mp.supplier_contact,
         mp.supplier_address,
+        mp.warehouse_id,
         mp.subtotal,
         mp.tax_amount,
         mp.total_amount,
@@ -64,10 +66,18 @@ export async function GET(
         mp.notes,
         mp.created_at,
         mp.updated_at,
-        u1.name as created_by_name,
-        u2.name as confirmed_by_name,
-        u3.name as received_by_name
+        ms.name as supplier_registered_name,
+        ms.supplier_code,
+        ms.phone as supplier_phone,
+        ms.email as supplier_email,
+        mw.name as warehouse_name,
+        mw.address as warehouse_address,
+        COALESCE(u1.firstname || ' ' || u1.lastname, u1.email) as created_by_name,
+        COALESCE(u2.firstname || ' ' || u2.lastname, u2.email) as confirmed_by_name,
+        COALESCE(u3.firstname || ' ' || u3.lastname, u3.email) as received_by_name
       FROM market_purchases mp
+      LEFT JOIN market_suppliers ms ON mp.supplier_id = ms.id
+      LEFT JOIN market_warehouses mw ON mp.warehouse_id = mw.id
       LEFT JOIN users u1 ON mp.created_by = u1.id
       LEFT JOIN users u2 ON mp.confirmed_by = u2.id
       LEFT JOIN users u3 ON mp.received_by = u3.id
@@ -83,7 +93,7 @@ export async function GET(
 
     const purchase = purchaseResult.rows[0]
 
-    // Get lines
+    // Get lines with lot info
     const linesResult = await db.query(`
       SELECT
         mpl.id,
@@ -92,6 +102,9 @@ export async function GET(
         mpl.unit_price,
         mpl.total_price,
         mpl.quantity_received,
+        mpl.lot_number,
+        mpl.expiration_date,
+        mpl.manufacturing_date,
         mp.name as product_name,
         mp.sku as product_sku,
         mp.image_url as product_image
@@ -106,9 +119,16 @@ export async function GET(
       data: {
         id: purchase.id,
         purchaseNumber: purchase.purchase_number,
-        supplierName: purchase.supplier_name,
+        supplierId: purchase.supplier_id,
+        supplierCode: purchase.supplier_code,
+        supplierName: purchase.supplier_registered_name || purchase.supplier_name,
         supplierContact: purchase.supplier_contact,
+        supplierPhone: purchase.supplier_phone,
+        supplierEmail: purchase.supplier_email,
         supplierAddress: purchase.supplier_address,
+        warehouseId: purchase.warehouse_id,
+        warehouseName: purchase.warehouse_name,
+        warehouseAddress: purchase.warehouse_address,
         subtotal: parseFloat(purchase.subtotal) || 0,
         taxAmount: parseFloat(purchase.tax_amount) || 0,
         totalAmount: parseFloat(purchase.total_amount) || 0,
@@ -132,7 +152,10 @@ export async function GET(
           quantity: parseInt(line.quantity) || 0,
           unitPrice: parseFloat(line.unit_price) || 0,
           totalPrice: parseFloat(line.total_price) || 0,
-          quantityReceived: parseInt(line.quantity_received) || 0
+          quantityReceived: parseInt(line.quantity_received) || 0,
+          lotNumber: line.lot_number,
+          expirationDate: line.expiration_date,
+          manufacturingDate: line.manufacturing_date
         }))
       }
     })
@@ -148,7 +171,13 @@ export async function GET(
 
 /**
  * PUT /api/market/purchases/[id]
- * Update purchase (only draft) or change status
+ * Update purchase or change status
+ *
+ * Status flow:
+ * - draft → comprada (confirm)
+ * - comprada → pendiente (partial receive) | recibido (full receive)
+ * - pendiente → recibido (receive remaining)
+ * - any except recibido → cancelled
  */
 export async function PUT(
   request: NextRequest,
@@ -182,11 +211,11 @@ export async function PUT(
     const purchaseId = parseInt(id)
 
     const body = await request.json()
-    const { action, lines } = body
+    const { action, lines, receivedItems } = body
 
     // Get current purchase
     const purchaseResult = await db.query(`
-      SELECT id, status, company_id FROM market_purchases WHERE id = $1
+      SELECT id, status, company_id, warehouse_id FROM market_purchases WHERE id = $1
     `, [purchaseId])
 
     if (purchaseResult.rows.length === 0) {
@@ -216,7 +245,7 @@ export async function PUT(
 
       await db.query(`
         UPDATE market_purchases
-        SET status = 'confirmed',
+        SET status = 'comprada',
             confirmed_by = $1,
             updated_at = NOW()
         WHERE id = $2
@@ -228,79 +257,143 @@ export async function PUT(
       })
     }
 
-    if (action === 'receive') {
-      if (purchase.status !== 'confirmed') {
+    // Receive items (partial or complete)
+    if (action === 'receive' || action === 'receive_partial' || action === 'receive_complete') {
+      // Valid statuses for receiving: 'comprada', 'pendiente', 'confirmed' (legacy)
+      if (!['comprada', 'pendiente', 'confirmed'].includes(purchase.status)) {
         return NextResponse.json({
           success: false,
-          error: 'Solo se pueden recibir compras confirmadas'
+          error: 'Solo se pueden recibir compras en estado comprada o pendiente'
         }, { status: 400 })
       }
 
-      // Receive all items and update inventory
       await db.transaction(async (client) => {
-        // Get lines
+        // Get current lines
         const linesResult = await client.query(`
-          SELECT id, product_id, quantity FROM market_purchase_lines WHERE purchase_id = $1
+          SELECT id, product_id, quantity, quantity_received
+          FROM market_purchase_lines
+          WHERE purchase_id = $1
         `, [purchaseId])
 
-        // Update each product's inventory
-        for (const line of linesResult.rows) {
-          // Update product stock
-          await client.query(`
-            UPDATE market_products
-            SET quantity_on_hand = COALESCE(quantity_on_hand, 0) + $1,
-                quantity_expected = GREATEST(0, COALESCE(quantity_expected, 0) - $1),
-                updated_at = NOW()
-            WHERE id = $2
-          `, [line.quantity, line.product_id])
+        let allReceived = true
 
-          // Update line as received
-          await client.query(`
-            UPDATE market_purchase_lines
-            SET quantity_received = quantity
-            WHERE id = $1
-          `, [line.id])
+        // Process each line
+        for (const line of linesResult.rows) {
+          const lineId = line.id
+          const productId = line.product_id
+          const totalQuantity = parseInt(line.quantity)
+          const alreadyReceived = parseInt(line.quantity_received) || 0
+          const remaining = totalQuantity - alreadyReceived
+
+          // Check if this line has items to receive
+          let quantityToReceive = 0
+
+          if (receivedItems && receivedItems[lineId] !== undefined) {
+            // Specific quantity provided for this line
+            quantityToReceive = Math.min(receivedItems[lineId], remaining)
+          } else if (action === 'receive' || action === 'receive_complete') {
+            // Receive all remaining items
+            quantityToReceive = remaining
+          }
+
+          if (quantityToReceive > 0) {
+            const newReceived = alreadyReceived + quantityToReceive
+
+            // Update line quantity_received
+            await client.query(`
+              UPDATE market_purchase_lines
+              SET quantity_received = $1
+              WHERE id = $2
+            `, [newReceived, lineId])
+
+            // Update product inventory
+            await client.query(`
+              UPDATE market_products
+              SET quantity_on_hand = COALESCE(quantity_on_hand, 0) + $1,
+                  quantity_expected = GREATEST(0, COALESCE(quantity_expected, 0) - $1),
+                  updated_at = NOW()
+              WHERE id = $2
+            `, [quantityToReceive, productId])
+
+            // Create inventory movement
+            await client.query(`
+              INSERT INTO market_inventory_movements (
+                company_id, product_id, warehouse_id, movement_type,
+                quantity, reference_type, reference_id, notes, created_by, created_at
+              ) VALUES ($1, $2, $3, 'entrada', $4, 'purchase', $5, 'Recepción de compra', $6, NOW())
+            `, [
+              companyId,
+              productId,
+              purchase.warehouse_id,
+              quantityToReceive,
+              purchaseId,
+              userId
+            ])
+
+            // Update warehouse stock if warehouse is specified
+            if (purchase.warehouse_id) {
+              await client.query(`
+                INSERT INTO market_warehouse_stock (warehouse_id, product_id, quantity, created_at, updated_at)
+                VALUES ($1, $2, $3, NOW(), NOW())
+                ON CONFLICT (warehouse_id, product_id)
+                DO UPDATE SET quantity = market_warehouse_stock.quantity + $3, updated_at = NOW()
+              `, [purchase.warehouse_id, productId, quantityToReceive])
+            }
+
+            // Check if line is fully received
+            if (newReceived < totalQuantity) {
+              allReceived = false
+            }
+          } else if (alreadyReceived < totalQuantity) {
+            allReceived = false
+          }
         }
+
+        // Determine new status
+        const newStatus = allReceived ? 'recibido' : 'pendiente'
 
         // Update purchase status
         await client.query(`
           UPDATE market_purchases
-          SET status = 'received',
-              received_by = $1,
-              received_date = CURRENT_DATE,
+          SET status = $1,
+              received_by = $2,
+              received_date = CASE WHEN $1 = 'recibido' THEN CURRENT_DATE ELSE received_date END,
               updated_at = NOW()
-          WHERE id = $2
-        `, [userId, purchaseId])
+          WHERE id = $3
+        `, [newStatus, userId, purchaseId])
+
+        console.log('[Market Purchase] Reception:', purchaseId, 'new status:', newStatus)
       })
 
       return NextResponse.json({
         success: true,
-        message: 'Compra recibida exitosamente. Inventario actualizado.'
+        message: 'Recepción procesada exitosamente. Inventario actualizado.'
       })
     }
 
     if (action === 'cancel') {
-      if (purchase.status === 'received') {
+      if (purchase.status === 'recibido') {
         return NextResponse.json({
           success: false,
-          error: 'No se pueden cancelar compras ya recibidas'
+          error: 'No se pueden cancelar compras ya recibidas completamente'
         }, { status: 400 })
       }
 
       await db.transaction(async (client) => {
-        // If confirmed, revert expected quantities
-        if (purchase.status === 'confirmed' || purchase.status === 'draft') {
-          const linesResult = await client.query(`
-            SELECT product_id, quantity FROM market_purchase_lines WHERE purchase_id = $1
-          `, [purchaseId])
+        // Get lines and revert expected quantities (but not already received)
+        const linesResult = await client.query(`
+          SELECT product_id, quantity, quantity_received FROM market_purchase_lines WHERE purchase_id = $1
+        `, [purchaseId])
 
-          for (const line of linesResult.rows) {
+        for (const line of linesResult.rows) {
+          const remaining = parseInt(line.quantity) - (parseInt(line.quantity_received) || 0)
+          if (remaining > 0) {
             await client.query(`
               UPDATE market_products
               SET quantity_expected = GREATEST(0, COALESCE(quantity_expected, 0) - $1),
                   updated_at = NOW()
               WHERE id = $2
-            `, [line.quantity, line.product_id])
+            `, [remaining, line.product_id])
           }
         }
 
@@ -383,9 +476,20 @@ export async function PUT(
           subtotal += lineTotal
 
           await client.query(`
-            INSERT INTO market_purchase_lines (purchase_id, product_id, quantity, unit_price, total_price, quantity_received, created_at)
-            VALUES ($1, $2, $3, $4, $5, 0, NOW())
-          `, [purchaseId, line.productId, line.quantity, line.unitPrice, lineTotal])
+            INSERT INTO market_purchase_lines (
+              purchase_id, product_id, quantity, unit_price, total_price,
+              quantity_received, lot_number, expiration_date, manufacturing_date, created_at
+            ) VALUES ($1, $2, $3, $4, $5, 0, $6, $7, $8, NOW())
+          `, [
+            purchaseId,
+            line.productId,
+            line.quantity,
+            line.unitPrice,
+            lineTotal,
+            line.lotNumber || null,
+            line.expirationDate || null,
+            line.manufacturingDate || null
+          ])
 
           // Update expected quantity
           await client.query(`

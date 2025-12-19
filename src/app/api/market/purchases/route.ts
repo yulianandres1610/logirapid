@@ -49,9 +49,11 @@ export async function GET(request: NextRequest) {
       SELECT
         mp.id,
         mp.purchase_number,
+        mp.supplier_id,
         mp.supplier_name,
         mp.supplier_contact,
         mp.supplier_address,
+        mp.warehouse_id,
         mp.subtotal,
         mp.tax_amount,
         mp.total_amount,
@@ -63,12 +65,18 @@ export async function GET(request: NextRequest) {
         mp.notes,
         mp.created_at,
         mp.updated_at,
-        u1.name as created_by_name,
-        u2.name as confirmed_by_name,
-        u3.name as received_by_name,
+        ms.name as supplier_registered_name,
+        ms.supplier_code,
+        mw.name as warehouse_name,
+        COALESCE(u1.firstname || ' ' || u1.lastname, u1.email) as created_by_name,
+        COALESCE(u2.firstname || ' ' || u2.lastname, u2.email) as confirmed_by_name,
+        COALESCE(u3.firstname || ' ' || u3.lastname, u3.email) as received_by_name,
         (SELECT COUNT(*) FROM market_purchase_lines WHERE purchase_id = mp.id) as line_count,
-        (SELECT COALESCE(SUM(quantity), 0) FROM market_purchase_lines WHERE purchase_id = mp.id) as total_items
+        (SELECT COALESCE(SUM(quantity), 0) FROM market_purchase_lines WHERE purchase_id = mp.id) as total_items,
+        (SELECT COALESCE(SUM(quantity_received), 0) FROM market_purchase_lines WHERE purchase_id = mp.id) as total_received
       FROM market_purchases mp
+      LEFT JOIN market_suppliers ms ON mp.supplier_id = ms.id
+      LEFT JOIN market_warehouses mw ON mp.warehouse_id = mw.id
       LEFT JOIN users u1 ON mp.created_by = u1.id
       LEFT JOIN users u2 ON mp.confirmed_by = u2.id
       LEFT JOIN users u3 ON mp.received_by = u3.id
@@ -99,10 +107,11 @@ export async function GET(request: NextRequest) {
     const statsResult = await db.query(`
       SELECT
         COUNT(*) FILTER (WHERE status = 'draft') as draft_count,
-        COUNT(*) FILTER (WHERE status = 'confirmed') as confirmed_count,
-        COUNT(*) FILTER (WHERE status = 'received') as received_count,
+        COUNT(*) FILTER (WHERE status = 'comprada') as comprada_count,
+        COUNT(*) FILTER (WHERE status = 'pendiente') as pendiente_count,
+        COUNT(*) FILTER (WHERE status = 'recibido') as recibido_count,
         COUNT(*) FILTER (WHERE status = 'cancelled') as cancelled_count,
-        COALESCE(SUM(total_amount) FILTER (WHERE status = 'received'), 0) as total_received_amount
+        COALESCE(SUM(total_amount) FILTER (WHERE status = 'recibido'), 0) as total_received_amount
       FROM market_purchases
       WHERE company_id = $1
     `, [companyId])
@@ -115,9 +124,13 @@ export async function GET(request: NextRequest) {
         purchases: result.rows.map(row => ({
           id: row.id,
           purchaseNumber: row.purchase_number,
-          supplierName: row.supplier_name,
+          supplierId: row.supplier_id,
+          supplierName: row.supplier_registered_name || row.supplier_name,
+          supplierCode: row.supplier_code,
           supplierContact: row.supplier_contact,
           supplierAddress: row.supplier_address,
+          warehouseId: row.warehouse_id,
+          warehouseName: row.warehouse_name,
           subtotal: parseFloat(row.subtotal) || 0,
           taxAmount: parseFloat(row.tax_amount) || 0,
           totalAmount: parseFloat(row.total_amount) || 0,
@@ -133,12 +146,14 @@ export async function GET(request: NextRequest) {
           confirmedByName: row.confirmed_by_name,
           receivedByName: row.received_by_name,
           lineCount: parseInt(row.line_count) || 0,
-          totalItems: parseInt(row.total_items) || 0
+          totalItems: parseInt(row.total_items) || 0,
+          totalReceived: parseInt(row.total_received) || 0
         })),
         stats: {
           draft: parseInt(stats.draft_count) || 0,
-          confirmed: parseInt(stats.confirmed_count) || 0,
-          received: parseInt(stats.received_count) || 0,
+          comprada: parseInt(stats.comprada_count) || 0,
+          pendiente: parseInt(stats.pendiente_count) || 0,
+          recibido: parseInt(stats.recibido_count) || 0,
           cancelled: parseInt(stats.cancelled_count) || 0,
           totalReceivedAmount: parseFloat(stats.total_received_amount) || 0
         },
@@ -163,6 +178,7 @@ export async function GET(request: NextRequest) {
 /**
  * POST /api/market/purchases
  * Create a new purchase order
+ * Supports both legacy format (supplierName) and new wizard format (supplierId)
  */
 export async function POST(request: NextRequest) {
   try {
@@ -192,21 +208,69 @@ export async function POST(request: NextRequest) {
 
     const body = await request.json()
     const {
+      // New wizard format
+      supplierId,
+      warehouseId,
+      // Legacy format (still supported)
       supplierName,
       supplierContact,
       supplierAddress,
+      // Common fields
       purchaseDate,
       expectedDate,
       notes,
       currency = 'USD',
-      lines = []
+      lines = [],
+      saveAsDraft = false
     } = body
 
-    if (!supplierName) {
+    // Determine supplier info
+    let finalSupplierName = supplierName
+    let finalSupplierContact = supplierContact
+    let finalSupplierAddress = supplierAddress
+    let finalSupplierId = supplierId || null
+
+    // If supplierId is provided, fetch supplier details
+    if (supplierId) {
+      const supplierResult = await db.query(`
+        SELECT name, phone, address, city, state
+        FROM market_suppliers
+        WHERE id = $1 AND company_id = $2
+      `, [supplierId, companyId])
+
+      if (supplierResult.rows.length === 0) {
+        return NextResponse.json({
+          success: false,
+          error: 'Proveedor no encontrado'
+        }, { status: 404 })
+      }
+
+      const supplier = supplierResult.rows[0]
+      finalSupplierName = supplier.name
+      finalSupplierContact = supplier.phone
+      finalSupplierAddress = [supplier.address, supplier.city, supplier.state].filter(Boolean).join(', ')
+    }
+
+    if (!finalSupplierName) {
       return NextResponse.json({
         success: false,
-        error: 'El nombre del proveedor es requerido'
+        error: 'El proveedor es requerido'
       }, { status: 400 })
+    }
+
+    // Validate warehouse if provided
+    if (warehouseId) {
+      const warehouseResult = await db.query(`
+        SELECT id FROM market_warehouses
+        WHERE id = $1 AND company_id = $2
+      `, [warehouseId, companyId])
+
+      if (warehouseResult.rows.length === 0) {
+        return NextResponse.json({
+          success: false,
+          error: 'Almacén no encontrado'
+        }, { status: 404 })
+      }
     }
 
     if (!lines || lines.length === 0) {
@@ -221,7 +285,7 @@ export async function POST(request: NextRequest) {
       if (!line.productId || !line.quantity || !line.unitPrice) {
         return NextResponse.json({
           success: false,
-          error: 'Cada linea debe tener producto, cantidad y precio unitario'
+          error: 'Cada línea debe tener producto, cantidad y precio unitario'
         }, { status: 400 })
       }
     }
@@ -244,16 +308,21 @@ export async function POST(request: NextRequest) {
     const taxAmount = 0 // No tax for now
     const totalAmount = subtotal + taxAmount
 
+    // Determine initial status: 'draft' if saving as draft, 'comprada' otherwise
+    const initialStatus = saveAsDraft ? 'draft' : 'comprada'
+
     // Create purchase and lines in transaction
     const result = await db.transaction(async (client) => {
-      // Create purchase
+      // Create purchase with new fields (supplier_id, warehouse_id)
       const purchaseResult = await client.query(`
         INSERT INTO market_purchases (
           company_id,
           purchase_number,
+          supplier_id,
           supplier_name,
           supplier_contact,
           supplier_address,
+          warehouse_id,
           subtotal,
           tax_amount,
           total_amount,
@@ -265,18 +334,21 @@ export async function POST(request: NextRequest) {
           created_by,
           created_at,
           updated_at
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'draft', $10, $11, $12, $13, NOW(), NOW())
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, NOW(), NOW())
         RETURNING id
       `, [
         companyId,
         purchaseNumber,
-        supplierName,
-        supplierContact || null,
-        supplierAddress || null,
+        finalSupplierId,
+        finalSupplierName,
+        finalSupplierContact || null,
+        finalSupplierAddress || null,
+        warehouseId || null,
         subtotal,
         taxAmount,
         totalAmount,
         currency,
+        initialStatus,
         purchaseDate || new Date().toISOString().split('T')[0],
         expectedDate || null,
         notes || null,
@@ -285,7 +357,7 @@ export async function POST(request: NextRequest) {
 
       const purchaseId = purchaseResult.rows[0].id
 
-      // Create lines
+      // Create lines with lot info
       for (const line of lines) {
         const lineTotal = line.quantity * line.unitPrice
         await client.query(`
@@ -296,9 +368,21 @@ export async function POST(request: NextRequest) {
             unit_price,
             total_price,
             quantity_received,
+            lot_number,
+            expiration_date,
+            manufacturing_date,
             created_at
-          ) VALUES ($1, $2, $3, $4, $5, 0, NOW())
-        `, [purchaseId, line.productId, line.quantity, line.unitPrice, lineTotal])
+          ) VALUES ($1, $2, $3, $4, $5, 0, $6, $7, $8, NOW())
+        `, [
+          purchaseId,
+          line.productId,
+          line.quantity,
+          line.unitPrice,
+          lineTotal,
+          line.lotNumber || null,
+          line.expirationDate || null,
+          line.manufacturingDate || null
+        ])
 
         // Update product expected quantity
         await client.query(`
@@ -312,15 +396,18 @@ export async function POST(request: NextRequest) {
       return { purchaseId, purchaseNumber }
     })
 
+    console.log('[Market Purchases] Created purchase:', result.purchaseNumber, 'status:', initialStatus)
+
     return NextResponse.json({
       success: true,
       data: {
         id: result.purchaseId,
         purchaseNumber: result.purchaseNumber,
+        status: initialStatus,
         totalAmount,
         currency
       },
-      message: 'Orden de compra creada exitosamente'
+      message: saveAsDraft ? 'Borrador guardado exitosamente' : 'Orden de compra creada exitosamente'
     })
 
   } catch (error) {

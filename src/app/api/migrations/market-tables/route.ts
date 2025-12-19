@@ -454,13 +454,15 @@ export async function POST() {
         last_movement_at TIMESTAMP,
 
         created_at TIMESTAMP DEFAULT NOW(),
-        updated_at TIMESTAMP DEFAULT NOW(),
-
-        UNIQUE(warehouse_id, product_id, COALESCE(variant_id, 0))
+        updated_at TIMESTAMP DEFAULT NOW()
       )
     `)
     console.log('[Migration] Created market_warehouse_stock table')
 
+    await db.query(`
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_warehouse_stock_unique
+      ON market_warehouse_stock(warehouse_id, product_id, COALESCE(variant_id, 0))
+    `)
     await db.query(`
       CREATE INDEX IF NOT EXISTS idx_warehouse_stock_warehouse ON market_warehouse_stock(warehouse_id)
     `)
@@ -657,6 +659,106 @@ export async function POST() {
       CREATE INDEX IF NOT EXISTS idx_odoo_sync_logs_status ON odoo_sync_logs(status)
     `)
 
+    // 17. Create market_suppliers table
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS market_suppliers (
+        id SERIAL PRIMARY KEY,
+        company_id INTEGER NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+
+        -- Identificación
+        supplier_code VARCHAR(50),
+        name VARCHAR(255) NOT NULL,
+        legal_name VARCHAR(255),
+        tax_id VARCHAR(50),
+
+        -- Contacto principal
+        contact_person VARCHAR(255),
+        email VARCHAR(255),
+        phone VARCHAR(50),
+        mobile VARCHAR(50),
+
+        -- Dirección
+        address TEXT,
+        city VARCHAR(100),
+        state VARCHAR(100),
+        country VARCHAR(100) DEFAULT 'Cuba',
+        postal_code VARCHAR(20),
+
+        -- Información comercial
+        payment_terms VARCHAR(100),
+        credit_limit DECIMAL(12,2),
+        currency VARCHAR(10) DEFAULT 'USD',
+
+        -- Categorías que suministra
+        categories TEXT[],
+
+        -- Estado
+        is_active BOOLEAN DEFAULT true,
+        rating INTEGER DEFAULT 3,
+        notes TEXT,
+
+        -- Auditoría
+        created_by INTEGER REFERENCES users(id),
+        created_at TIMESTAMP DEFAULT NOW(),
+        updated_at TIMESTAMP DEFAULT NOW()
+      )
+    `)
+    console.log('[Migration] Created market_suppliers table')
+
+    await db.query(`
+      CREATE INDEX IF NOT EXISTS idx_market_suppliers_company ON market_suppliers(company_id)
+    `)
+    await db.query(`
+      CREATE INDEX IF NOT EXISTS idx_market_suppliers_code ON market_suppliers(company_id, supplier_code)
+    `)
+    await db.query(`
+      CREATE INDEX IF NOT EXISTS idx_market_suppliers_name ON market_suppliers(company_id, LOWER(name))
+    `)
+    await db.query(`
+      CREATE INDEX IF NOT EXISTS idx_market_suppliers_active ON market_suppliers(company_id, is_active)
+    `)
+
+    // 18. Add lot/expiration columns to market_purchase_lines
+    const purchaseLineColumns = [
+      { name: 'lot_number', type: 'VARCHAR(100)' },
+      { name: 'expiration_date', type: 'DATE' },
+      { name: 'manufacturing_date', type: 'DATE' }
+    ]
+
+    for (const col of purchaseLineColumns) {
+      try {
+        await db.query(`
+          ALTER TABLE market_purchase_lines
+          ADD COLUMN IF NOT EXISTS ${col.name} ${col.type}
+        `)
+        console.log(`[Migration] Added column ${col.name} to market_purchase_lines`)
+      } catch (e: any) {
+        if (!e.message.includes('already exists')) {
+          console.log(`[Migration] Note: ${col.name} - ${e.message}`)
+        }
+      }
+    }
+
+    // 19. Add supplier_id and warehouse_id to market_purchases
+    const purchaseColumns = [
+      { name: 'supplier_id', type: 'INTEGER REFERENCES market_suppliers(id)' },
+      { name: 'warehouse_id', type: 'INTEGER REFERENCES market_warehouses(id)' }
+    ]
+
+    for (const col of purchaseColumns) {
+      try {
+        await db.query(`
+          ALTER TABLE market_purchases
+          ADD COLUMN IF NOT EXISTS ${col.name} ${col.type}
+        `)
+        console.log(`[Migration] Added column ${col.name} to market_purchases`)
+      } catch (e: any) {
+        if (!e.message.includes('already exists')) {
+          console.log(`[Migration] Note: ${col.name} - ${e.message}`)
+        }
+      }
+    }
+
     // Get table stats
     const tables = [
       'market_products',
@@ -674,7 +776,8 @@ export async function POST() {
       'market_warehouse_operation_lines',
       'market_stock_movements',
       'odoo_product_mapping',
-      'odoo_sync_logs'
+      'odoo_sync_logs',
+      'market_suppliers'
     ]
     const tableStats = []
 
@@ -723,7 +826,8 @@ export async function GET() {
       'market_warehouse_operation_lines',
       'market_stock_movements',
       'odoo_product_mapping',
-      'odoo_sync_logs'
+      'odoo_sync_logs',
+      'market_suppliers'
     ]
     const tableStatus = []
 
