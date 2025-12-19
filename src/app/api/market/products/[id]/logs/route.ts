@@ -172,7 +172,7 @@ export async function GET(
         mim.reference_id,
         mim.notes,
         mim.created_at,
-        u.name as user_name,
+        COALESCE(u.firstname || ' ' || u.lastname, u.email) as user_name,
         u.email as user_email
       FROM market_inventory_movements mim
       LEFT JOIN users u ON mim.created_by = u.id
