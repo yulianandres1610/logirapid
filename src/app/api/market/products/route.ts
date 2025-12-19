@@ -67,6 +67,7 @@ export async function GET(request: NextRequest) {
         quantity_expected,
         minimum_stock,
         is_active,
+        unit_of_measure,
         odoo_product_id,
         odoo_last_sync,
         created_at,
@@ -155,6 +156,7 @@ export async function GET(request: NextRequest) {
           quantityExpected: parseInt(row.quantity_expected) || 0,
           minimumStock: parseInt(row.minimum_stock) || 0,
           isActive: row.is_active,
+          unitOfMeasure: row.unit_of_measure || 'unidad',
           odooProductId: row.odoo_product_id,
           odooLastSync: row.odoo_last_sync,
           createdAt: row.created_at,
@@ -222,6 +224,7 @@ export async function POST(request: NextRequest) {
       description,
       imageUrl,
       category,
+      unitOfMeasure = 'unidad',
       costPrice,
       sellingPrice,
       currency = 'USD',
@@ -249,20 +252,20 @@ export async function POST(request: NextRequest) {
 
     const result = await db.query(`
       INSERT INTO market_products (
-        company_id, name, description, image_url, category,
+        company_id, name, description, image_url, category, unit_of_measure,
         cost_price, selling_price, currency, sku, barcode,
         supplier_name, supplier_contact, supplier_reference,
         quantity_on_hand, quantity_expected, minimum_stock,
         is_active, created_by, created_at, updated_at
       ) VALUES (
-        $1, $2, $3, $4, $5,
-        $6, $7, $8, $9, $10,
-        $11, $12, $13,
-        0, 0, $14,
-        true, $15, NOW(), NOW()
+        $1, $2, $3, $4, $5, $6,
+        $7, $8, $9, $10, $11,
+        $12, $13, $14,
+        0, 0, $15,
+        true, $16, NOW(), NOW()
       ) RETURNING id
     `, [
-      companyId, name, description || null, imageUrl || null, category || null,
+      companyId, name, description || null, imageUrl || null, category || null, unitOfMeasure,
       costPrice, sellingPrice, currency, finalSku, finalBarcode,
       supplierName || null, supplierContact || null, supplierReference || null,
       minimumStock, userId

@@ -227,11 +227,15 @@ export default function CreateProductPage() {
 
     setLoading(true)
     try {
-      let imageUrl = formData.imageUrl
+      // Upload image if there's a file
+      let imageUrl: string | null = null
       if (formData.imageFile) {
         const uploadedUrl = await uploadImage()
         if (uploadedUrl) {
           imageUrl = uploadedUrl
+        } else {
+          // If upload failed, show error but continue
+          console.warn('Image upload failed, continuing without image')
         }
       }
 
