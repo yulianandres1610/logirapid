@@ -62,6 +62,7 @@ export async function POST(request: NextRequest) {
       LEFT JOIN user_companies uc ON u.id = uc.userid
       LEFT JOIN companies c ON uc.companyid = c.id
       WHERE LOWER(u.email) = LOWER($1)
+      ORDER BY uc.createdat ASC
       LIMIT 1
     `
 

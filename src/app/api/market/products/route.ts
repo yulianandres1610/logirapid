@@ -40,6 +40,8 @@ export async function GET(request: NextRequest) {
     }
 
     const companyId = payload.companyId
+    console.log('[Market Products] Fetching products for company:', companyId, 'User:', payload.email)
+
     const { searchParams } = new URL(request.url)
     const search = searchParams.get('search') || ''
     const category = searchParams.get('category')
@@ -115,6 +117,7 @@ export async function GET(request: NextRequest) {
     queryParams.push(limit, offset)
 
     const result = await db.query(query, queryParams)
+    console.log('[Market Products] Found', result.rows.length, 'products, total:', total)
 
     // Get categories for filters
     const categoriesResult = await db.query(`
