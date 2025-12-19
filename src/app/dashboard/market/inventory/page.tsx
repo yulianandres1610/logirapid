@@ -18,7 +18,9 @@ import {
   Image as ImageIcon,
   Eye,
   Warehouse,
-  TrendingUp
+  TrendingUp,
+  Barcode,
+  Printer
 } from 'lucide-react'
 import Link from 'next/link'
 import { DashboardLayout } from '@/components/layout/dashboard-layout'
@@ -141,6 +143,96 @@ export default function MarketInventoryPage() {
     return Math.round(((product.sellingPrice - product.costPrice) / product.costPrice) * 100)
   }
 
+  // Print barcode label function
+  const printBarcodeLabel = (product: Product) => {
+    const printWindow = window.open('', '_blank', 'width=400,height=300')
+    if (!printWindow) return
+
+    const symbol = CURRENCY_SYMBOLS[product.currency] || '$'
+
+    printWindow.document.write(`
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>Etiqueta - ${product.name}</title>
+        <style>
+          @page { size: 50mm 30mm; margin: 0; }
+          * { margin: 0; padding: 0; box-sizing: border-box; }
+          body {
+            font-family: Arial, sans-serif;
+            width: 50mm;
+            height: 30mm;
+            padding: 2mm;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+          }
+          .product-name {
+            font-size: 8pt;
+            font-weight: bold;
+            text-align: center;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            max-width: 100%;
+          }
+          .barcode-container {
+            text-align: center;
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+          }
+          .barcode {
+            font-family: 'Libre Barcode EAN13 Text', monospace;
+            font-size: 24pt;
+            letter-spacing: 0;
+          }
+          .barcode-number {
+            font-size: 7pt;
+            font-family: monospace;
+            margin-top: 1mm;
+          }
+          .price {
+            font-size: 10pt;
+            font-weight: bold;
+            text-align: center;
+          }
+          .sku {
+            font-size: 6pt;
+            text-align: center;
+            color: #666;
+          }
+          @media print {
+            body { -webkit-print-color-adjust: exact; }
+          }
+        </style>
+        <link href="https://fonts.googleapis.com/css2?family=Libre+Barcode+EAN13+Text&display=swap" rel="stylesheet">
+      </head>
+      <body>
+        <div class="product-name">${product.name}</div>
+        <div class="barcode-container">
+          ${product.barcode ? `
+            <div class="barcode">${product.barcode}</div>
+            <div class="barcode-number">${product.barcode}</div>
+          ` : `
+            <div class="sku">SKU: ${product.sku}</div>
+          `}
+        </div>
+        <div class="price">${symbol}${product.sellingPrice.toFixed(2)}</div>
+      </body>
+      </html>
+    `)
+
+    printWindow.document.close()
+
+    // Wait for font to load then print
+    setTimeout(() => {
+      printWindow.print()
+    }, 500)
+  }
+
   return (
     <ProtectedRoute>
       <DashboardLayout>
@@ -161,33 +253,16 @@ export default function MarketInventoryPage() {
                   Gestiona los productos de tu mercado
                 </p>
               </div>
-              <div className="flex items-center gap-3">
-                <Link href="/dashboard/market/warehouses">
-                  <motion.button
-                    whileHover={{ scale: 1.02 }}
-                    whileTap={{ scale: 0.98 }}
-                    className={cn(
-                      'flex items-center gap-2 px-5 py-2.5 rounded-xl transition-all',
-                      theme === 'dark'
-                        ? 'bg-gray-800 text-gray-300 hover:bg-gray-700'
-                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                    )}
-                  >
-                    <Warehouse className="w-5 h-5" />
-                    Almacenes
-                  </motion.button>
-                </Link>
-                <Link href="/dashboard/market/inventory/create">
-                  <motion.button
-                    whileHover={{ scale: 1.02 }}
-                    whileTap={{ scale: 0.98 }}
-                    className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-emerald-500 to-emerald-600 text-white rounded-xl hover:from-emerald-600 hover:to-emerald-700 transition-all shadow-lg shadow-emerald-500/25"
-                  >
-                    <Plus className="w-5 h-5" />
-                    Nuevo Producto
-                  </motion.button>
-                </Link>
-              </div>
+              <Link href="/dashboard/market/inventory/create">
+                <motion.button
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                  className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-emerald-500 to-emerald-600 text-white rounded-xl hover:from-emerald-600 hover:to-emerald-700 transition-all shadow-lg shadow-emerald-500/25"
+                >
+                  <Plus className="w-5 h-5" />
+                  Nuevo Producto
+                </motion.button>
+              </Link>
             </div>
 
             {/* Stats Cards - Estilo Pickup Orders */}
@@ -547,6 +622,7 @@ export default function MarketInventoryPage() {
                     )}>
                       <th className="text-left py-4 px-4 text-xs font-medium text-gray-500 uppercase tracking-wider">Producto</th>
                       <th className="text-left py-4 px-4 text-xs font-medium text-gray-500 uppercase tracking-wider">SKU</th>
+                      <th className="text-left py-4 px-4 text-xs font-medium text-gray-500 uppercase tracking-wider">Código de Barras</th>
                       <th className="text-right py-4 px-4 text-xs font-medium text-gray-500 uppercase tracking-wider">Costo</th>
                       <th className="text-right py-4 px-4 text-xs font-medium text-gray-500 uppercase tracking-wider">Venta</th>
                       <th className="text-right py-4 px-4 text-xs font-medium text-gray-500 uppercase tracking-wider">Margen</th>
@@ -559,7 +635,7 @@ export default function MarketInventoryPage() {
                     {loading ? (
                       [...Array(5)].map((_, i) => (
                         <tr key={i}>
-                          <td colSpan={8} className="py-4 px-4">
+                          <td colSpan={9} className="py-4 px-4">
                             <div className="animate-pulse flex items-center gap-3">
                               <div className="w-14 h-14 bg-gray-200 dark:bg-gray-700 rounded-xl" />
                               <div className="flex-1">
@@ -572,7 +648,7 @@ export default function MarketInventoryPage() {
                       ))
                     ) : products.length === 0 ? (
                       <tr>
-                        <td colSpan={8} className="py-12 text-center">
+                        <td colSpan={9} className="py-12 text-center">
                           <Package className="w-12 h-12 mx-auto mb-3 text-gray-400" />
                           <p className="text-gray-500 dark:text-gray-400">No hay productos</p>
                           <Link href="/dashboard/market/inventory/create">
@@ -626,6 +702,16 @@ export default function MarketInventoryPage() {
                             <td className="py-4 px-4">
                               <span className="text-sm text-gray-600 dark:text-gray-300 font-mono">{product.sku}</span>
                             </td>
+                            <td className="py-4 px-4">
+                              {product.barcode ? (
+                                <div className="flex items-center gap-2">
+                                  <Barcode className="w-4 h-4 text-gray-400" />
+                                  <span className="text-sm text-gray-600 dark:text-gray-300 font-mono">{product.barcode}</span>
+                                </div>
+                              ) : (
+                                <span className="text-xs text-gray-400">Sin código</span>
+                              )}
+                            </td>
                             <td className="py-4 px-4 text-right">
                               <span className="text-sm text-gray-600 dark:text-gray-300">
                                 {symbol}{product.costPrice.toLocaleString(undefined, { minimumFractionDigits: 2 })}
@@ -676,14 +762,25 @@ export default function MarketInventoryPage() {
                                   whileTap={{ scale: 0.9 }}
                                   onClick={() => setSelectedProduct(product)}
                                   className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                                  title="Ver detalles"
                                 >
                                   <Eye className="w-4 h-4 text-gray-500" />
+                                </motion.button>
+                                <motion.button
+                                  whileHover={{ scale: 1.1 }}
+                                  whileTap={{ scale: 0.9 }}
+                                  onClick={() => printBarcodeLabel(product)}
+                                  className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                                  title="Imprimir etiqueta"
+                                >
+                                  <Printer className="w-4 h-4 text-gray-500" />
                                 </motion.button>
                                 <Link href={`/dashboard/market/inventory/${product.id}/edit`}>
                                   <motion.button
                                     whileHover={{ scale: 1.1 }}
                                     whileTap={{ scale: 0.9 }}
                                     className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                                    title="Editar producto"
                                   >
                                     <Edit className="w-4 h-4 text-gray-500" />
                                   </motion.button>
@@ -794,6 +891,36 @@ export default function MarketInventoryPage() {
                         <X className="w-5 h-5 text-gray-500" />
                       </button>
                     </div>
+
+                    {/* Barcode Section */}
+                    {selectedProduct.barcode && (
+                      <div className={cn(
+                        'p-4 rounded-xl mb-4 flex items-center justify-between',
+                        theme === 'dark' ? 'bg-gray-800' : 'bg-gray-50'
+                      )}>
+                        <div className="flex items-center gap-3">
+                          <Barcode className="w-6 h-6 text-gray-400" />
+                          <div>
+                            <p className="text-xs text-gray-500 mb-1">Código de Barras EAN-13</p>
+                            <p className="font-mono text-lg font-bold text-gray-900 dark:text-white">{selectedProduct.barcode}</p>
+                          </div>
+                        </div>
+                        <motion.button
+                          whileHover={{ scale: 1.05 }}
+                          whileTap={{ scale: 0.95 }}
+                          onClick={() => printBarcodeLabel(selectedProduct)}
+                          className={cn(
+                            'flex items-center gap-2 px-4 py-2 rounded-lg transition-colors',
+                            theme === 'dark'
+                              ? 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                              : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                          )}
+                        >
+                          <Printer className="w-4 h-4" />
+                          Imprimir
+                        </motion.button>
+                      </div>
+                    )}
 
                     {selectedProduct.description && (
                       <p className="text-sm text-gray-600 dark:text-gray-300 mb-4">{selectedProduct.description}</p>
