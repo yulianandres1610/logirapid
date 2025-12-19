@@ -346,34 +346,196 @@ export default function ProductDetailPage() {
   }
 
   const printBarcodeLabel = (p: Product) => {
-    const printWindow = window.open('', '_blank', 'width=400,height=300')
+    const printWindow = window.open('', '_blank', 'width=500,height=400')
     if (!printWindow) return
     const symbol = CURRENCY_SYMBOLS[p.currency] || '$'
+    const priceWhole = Math.floor(p.sellingPrice)
+    const priceDecimal = Math.round((p.sellingPrice - priceWhole) * 100).toString().padStart(2, '0')
+
     printWindow.document.write(`
       <!DOCTYPE html>
       <html>
       <head>
         <title>Etiqueta - ${p.name}</title>
         <style>
-          @page { size: 50mm 30mm; margin: 0; }
+          @page { size: 60mm 40mm; margin: 0; }
+          @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Libre+Barcode+EAN13+Text&display=swap');
+
           * { margin: 0; padding: 0; box-sizing: border-box; }
-          body { font-family: Arial, sans-serif; width: 50mm; height: 30mm; padding: 2mm; display: flex; flex-direction: column; justify-content: space-between; }
-          .product-name { font-size: 8pt; font-weight: bold; text-align: center; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
-          .barcode-container { text-align: center; flex: 1; display: flex; flex-direction: column; justify-content: center; align-items: center; }
-          .barcode { font-family: 'Libre Barcode EAN13 Text', monospace; font-size: 24pt; letter-spacing: 0; }
-          .barcode-number { font-size: 7pt; font-family: monospace; margin-top: 1mm; }
-          .price { font-size: 10pt; font-weight: bold; text-align: center; }
-          .sku { font-size: 6pt; text-align: center; color: #666; }
-          @media print { body { -webkit-print-color-adjust: exact; } }
+
+          body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            width: 60mm;
+            height: 40mm;
+            background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
+            position: relative;
+            overflow: hidden;
+          }
+
+          .label-container {
+            width: 100%;
+            height: 100%;
+            padding: 2.5mm;
+            display: flex;
+            flex-direction: column;
+            position: relative;
+          }
+
+          /* Decorative corner accent */
+          .corner-accent {
+            position: absolute;
+            top: 0;
+            right: 0;
+            width: 12mm;
+            height: 12mm;
+            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+            clip-path: polygon(100% 0, 0 0, 100% 100%);
+          }
+
+          /* Product name - prominent at top */
+          .product-name {
+            font-size: 9pt;
+            font-weight: 700;
+            color: #1e293b;
+            text-align: left;
+            line-height: 1.2;
+            max-height: 8mm;
+            overflow: hidden;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            margin-bottom: 1.5mm;
+            padding-right: 10mm;
+            letter-spacing: -0.02em;
+          }
+
+          /* SKU badge */
+          .sku-badge {
+            display: inline-flex;
+            align-items: center;
+            background: linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 100%);
+            border: 0.3mm solid #cbd5e1;
+            border-radius: 1mm;
+            padding: 0.8mm 2mm;
+            font-size: 6pt;
+            font-weight: 600;
+            color: #475569;
+            font-family: 'SF Mono', 'Monaco', 'Inconsolata', monospace;
+            letter-spacing: 0.03em;
+            margin-bottom: 2mm;
+            width: fit-content;
+          }
+
+          .sku-label {
+            color: #94a3b8;
+            margin-right: 1mm;
+            font-weight: 500;
+          }
+
+          /* Barcode section */
+          .barcode-section {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            background: #ffffff;
+            border-radius: 1.5mm;
+            padding: 1.5mm;
+            border: 0.2mm solid #e2e8f0;
+          }
+
+          .barcode {
+            font-family: 'Libre Barcode EAN13 Text', monospace;
+            font-size: 28pt;
+            letter-spacing: 0;
+            color: #0f172a;
+            line-height: 1;
+          }
+
+          .barcode-number {
+            font-size: 6.5pt;
+            font-family: 'SF Mono', 'Monaco', 'Inconsolata', monospace;
+            color: #64748b;
+            margin-top: 0.5mm;
+            letter-spacing: 0.15em;
+            font-weight: 500;
+          }
+
+          /* Price section - eye-catching */
+          .price-section {
+            display: flex;
+            align-items: baseline;
+            justify-content: flex-end;
+            margin-top: 2mm;
+            padding-top: 1.5mm;
+            border-top: 0.3mm dashed #e2e8f0;
+          }
+
+          .currency-symbol {
+            font-size: 10pt;
+            font-weight: 700;
+            color: #10b981;
+            margin-right: 0.3mm;
+          }
+
+          .price-whole {
+            font-size: 16pt;
+            font-weight: 900;
+            color: #0f172a;
+            line-height: 1;
+            letter-spacing: -0.03em;
+          }
+
+          .price-decimal {
+            font-size: 9pt;
+            font-weight: 700;
+            color: #0f172a;
+            position: relative;
+            top: -3pt;
+            margin-left: 0.3mm;
+          }
+
+          .unit-label {
+            font-size: 6pt;
+            color: #94a3b8;
+            margin-left: 1.5mm;
+            font-weight: 500;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+          }
+
+          @media print {
+            body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+          }
         </style>
-        <link href="https://fonts.googleapis.com/css2?family=Libre+Barcode+EAN13+Text&display=swap" rel="stylesheet">
       </head>
       <body>
-        <div class="product-name">${p.name}</div>
-        <div class="barcode-container">
-          ${p.barcode ? `<div class="barcode">${p.barcode}</div><div class="barcode-number">${p.barcode}</div>` : `<div class="sku">SKU: ${p.sku}</div>`}
+        <div class="label-container">
+          <div class="corner-accent"></div>
+
+          <div class="product-name">${p.name}</div>
+
+          <div class="sku-badge">
+            <span class="sku-label">SKU</span>
+            <span>${p.sku}</span>
+          </div>
+
+          <div class="barcode-section">
+            ${p.barcode
+              ? `<div class="barcode">${p.barcode}</div>
+                 <div class="barcode-number">${p.barcode.replace(/(.{4})/g, '$1 ').trim()}</div>`
+              : `<div class="barcode-number" style="font-size: 8pt; color: #64748b;">Sin código de barras</div>`
+            }
+          </div>
+
+          <div class="price-section">
+            <span class="currency-symbol">${symbol}</span>
+            <span class="price-whole">${priceWhole}</span>
+            <span class="price-decimal">.${priceDecimal}</span>
+            <span class="unit-label">/ ${p.unitOfMeasure || 'unidad'}</span>
+          </div>
         </div>
-        <div class="price">${symbol}${Number(p.sellingPrice).toFixed(2)}</div>
       </body>
       </html>
     `)
