@@ -21,7 +21,11 @@ import {
   Edit3,
   Scale,
   Sparkles,
-  Wand2
+  Wand2,
+  Calendar,
+  Clock,
+  AlertTriangle,
+  Archive
 } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { DashboardLayout } from '@/components/layout/dashboard-layout'
@@ -29,7 +33,7 @@ import { ProtectedRoute } from '@/components/protected-route'
 import { useTheme } from '@/contexts/theme-context'
 import { cn } from '@/lib/utils'
 
-type Step = 'info' | 'image' | 'pricing' | 'variants' | 'review'
+type Step = 'info' | 'image' | 'pricing' | 'variants' | 'lots' | 'review'
 
 interface WizardStep {
   id: Step
@@ -43,6 +47,7 @@ const STEPS: WizardStep[] = [
   { id: 'image', title: 'Imagen', description: 'Foto del producto', icon: ImageIcon },
   { id: 'pricing', title: 'Precios', description: 'Costos y venta', icon: DollarSign },
   { id: 'variants', title: 'Variantes', description: 'Colores, tallas...', icon: Layers },
+  { id: 'lots', title: 'Lotes', description: 'Fechas de vencimiento', icon: Calendar },
   { id: 'review', title: 'Revisión', description: 'Confirmar datos', icon: Check }
 ]
 
@@ -102,6 +107,15 @@ interface VariantType {
   values: string[]
 }
 
+interface ProductLot {
+  id: string
+  lotNumber: string
+  expirationDate: string
+  manufacturingDate: string
+  quantity: string
+  notes: string
+}
+
 export default function CreateProductPage() {
   const { theme } = useTheme()
   const router = useRouter()
@@ -136,7 +150,8 @@ export default function CreateProductPage() {
     supplierContact: '',
     supplierReference: '',
     minimumStock: '5',
-    hasVariants: false
+    hasVariants: false,
+    hasLots: false
   })
 
   // Variant types (customizable)
@@ -149,6 +164,19 @@ export default function CreateProductPage() {
   const [variants, setVariants] = useState<Variant[]>([])
   const [showVariantModal, setShowVariantModal] = useState(false)
   const [editingVariant, setEditingVariant] = useState<Variant | null>(null)
+
+  // Lots (batches) with expiration dates
+  const [lots, setLots] = useState<ProductLot[]>([])
+  const [showLotModal, setShowLotModal] = useState(false)
+  const [editingLot, setEditingLot] = useState<ProductLot | null>(null)
+  const [newLot, setNewLot] = useState<ProductLot>({
+    id: '',
+    lotNumber: '',
+    expirationDate: '',
+    manufacturingDate: '',
+    quantity: '',
+    notes: ''
+  })
 
   const currentStepIndex = STEPS.findIndex(s => s.id === currentStep)
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -341,6 +369,14 @@ export default function CreateProductPage() {
             costPrice: parseFloat(v.costPrice) || 0,
             sellingPrice: parseFloat(v.sellingPrice) || 0,
             options: v.options
+          })) : [],
+          hasLots: formData.hasLots,
+          lots: formData.hasLots ? lots.map(l => ({
+            lotNumber: l.lotNumber,
+            expirationDate: l.expirationDate || null,
+            manufacturingDate: l.manufacturingDate || null,
+            quantity: parseInt(l.quantity) || 0,
+            notes: l.notes || null
           })) : []
         })
       })
@@ -451,6 +487,66 @@ export default function CreateProductPage() {
     if (variants.length <= 1) {
       setFormData(prev => ({ ...prev, hasVariants: false }))
     }
+  }
+
+  // Lot management functions
+  const addLot = () => {
+    if (!newLot.lotNumber.trim()) return
+
+    const lot: ProductLot = {
+      ...newLot,
+      id: `lot-${Date.now()}`
+    }
+    setLots([...lots, lot])
+    setNewLot({
+      id: '',
+      lotNumber: '',
+      expirationDate: '',
+      manufacturingDate: '',
+      quantity: '',
+      notes: ''
+    })
+    setShowLotModal(false)
+    if (!formData.hasLots) {
+      setFormData(prev => ({ ...prev, hasLots: true }))
+    }
+  }
+
+  const updateLot = () => {
+    if (!editingLot) return
+    setLots(lots.map(l => l.id === editingLot.id ? editingLot : l))
+    setEditingLot(null)
+    setShowLotModal(false)
+  }
+
+  const removeLot = (lotId: string) => {
+    setLots(lots.filter(l => l.id !== lotId))
+    if (lots.length <= 1) {
+      setFormData(prev => ({ ...prev, hasLots: false }))
+    }
+  }
+
+  const openEditLot = (lot: ProductLot) => {
+    setEditingLot(lot)
+    setShowLotModal(true)
+  }
+
+  const getDaysUntilExpiration = (expirationDate: string) => {
+    if (!expirationDate) return null
+    const exp = new Date(expirationDate)
+    const today = new Date()
+    const diffTime = exp.getTime() - today.getTime()
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
+    return diffDays
+  }
+
+  const getExpirationStatus = (expirationDate: string) => {
+    const days = getDaysUntilExpiration(expirationDate)
+    if (days === null) return 'unknown'
+    if (days < 0) return 'expired'
+    if (days <= 7) return 'critical'
+    if (days <= 30) return 'warning'
+    return 'good'
   }
 
   const symbol = CURRENCY_SYMBOLS[formData.currency] || '$'
@@ -1663,7 +1759,361 @@ export default function CreateProductPage() {
                   </motion.div>
                 )}
 
-                {/* Step 5: Review */}
+                {/* Step 5: Lots & Expiration */}
+                {currentStep === 'lots' && (
+                  <motion.div
+                    key="lots"
+                    initial={{ opacity: 0, x: 20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    exit={{ opacity: 0, x: -20 }}
+                    transition={{ duration: 0.3 }}
+                    className="space-y-6"
+                  >
+                    <h2 className={cn(
+                      "text-xl font-bold flex items-center gap-3",
+                      theme === 'dark' ? 'text-white' : 'text-gray-900'
+                    )}>
+                      <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center">
+                        <Calendar className="w-5 h-5 text-white" />
+                      </div>
+                      Lotes y Fechas de Vencimiento
+                    </h2>
+                    <p className={cn(
+                      "text-sm",
+                      theme === 'dark' ? 'text-gray-400' : 'text-gray-600'
+                    )}>
+                      Gestiona los lotes del producto y sus fechas de vencimiento para un mejor control de inventario.
+                    </p>
+
+                    {/* Toggle para activar lotes */}
+                    <div className={cn(
+                      "p-4 rounded-xl border-2 transition-all cursor-pointer",
+                      formData.hasLots
+                        ? theme === 'dark'
+                          ? 'border-amber-500 bg-amber-500/10'
+                          : 'border-amber-500 bg-amber-50'
+                        : theme === 'dark'
+                          ? 'border-gray-700 bg-gray-800/50 hover:border-gray-600'
+                          : 'border-gray-200 bg-white hover:border-gray-300'
+                    )}
+                    onClick={() => setFormData(prev => ({ ...prev, hasLots: !prev.hasLots }))}
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          <div className={cn(
+                            "w-10 h-10 rounded-lg flex items-center justify-center",
+                            formData.hasLots
+                              ? 'bg-amber-500 text-white'
+                              : theme === 'dark' ? 'bg-gray-700 text-gray-400' : 'bg-gray-100 text-gray-400'
+                          )}>
+                            <Archive className="w-5 h-5" />
+                          </div>
+                          <div>
+                            <p className={cn(
+                              "font-medium",
+                              theme === 'dark' ? 'text-white' : 'text-gray-900'
+                            )}>
+                              ¿Este producto tiene control de lotes?
+                            </p>
+                            <p className={cn(
+                              "text-sm",
+                              theme === 'dark' ? 'text-gray-400' : 'text-gray-500'
+                            )}>
+                              Activa si necesitas rastrear lotes con fechas de vencimiento
+                            </p>
+                          </div>
+                        </div>
+                        <div className={cn(
+                          "w-12 h-6 rounded-full transition-colors relative",
+                          formData.hasLots
+                            ? 'bg-amber-500'
+                            : theme === 'dark' ? 'bg-gray-600' : 'bg-gray-300'
+                        )}>
+                          <motion.div
+                            className="w-5 h-5 bg-white rounded-full absolute top-0.5 shadow-md"
+                            animate={{ left: formData.hasLots ? '26px' : '2px' }}
+                            transition={{ type: 'spring', stiffness: 500, damping: 30 }}
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Contenido de lotes */}
+                    <AnimatePresence>
+                      {formData.hasLots && (
+                        <motion.div
+                          initial={{ opacity: 0, height: 0 }}
+                          animate={{ opacity: 1, height: 'auto' }}
+                          exit={{ opacity: 0, height: 0 }}
+                          className="space-y-4"
+                        >
+                          {/* Botón agregar lote */}
+                          <motion.button
+                            whileHover={{ scale: 1.01 }}
+                            whileTap={{ scale: 0.99 }}
+                            onClick={() => {
+                              setEditingLot(null)
+                              setNewLot({
+                                id: '',
+                                lotNumber: '',
+                                expirationDate: '',
+                                manufacturingDate: '',
+                                quantity: '',
+                                notes: ''
+                              })
+                              setShowLotModal(true)
+                            }}
+                            className={cn(
+                              "w-full p-4 rounded-xl border-2 border-dashed flex items-center justify-center gap-2 transition-colors",
+                              theme === 'dark'
+                                ? 'border-gray-700 text-gray-400 hover:border-amber-500 hover:text-amber-400'
+                                : 'border-gray-300 text-gray-500 hover:border-amber-500 hover:text-amber-600'
+                            )}
+                          >
+                            <Plus className="w-5 h-5" />
+                            <span className="font-medium">Agregar Lote</span>
+                          </motion.button>
+
+                          {/* Lista de lotes */}
+                          {lots.length > 0 && (
+                            <div className="space-y-3">
+                              {lots.map((lot, index) => {
+                                const status = getExpirationStatus(lot.expirationDate)
+                                const daysLeft = getDaysUntilExpiration(lot.expirationDate)
+
+                                return (
+                                  <motion.div
+                                    key={lot.id}
+                                    initial={{ opacity: 0, y: 10 }}
+                                    animate={{ opacity: 1, y: 0 }}
+                                    transition={{ delay: index * 0.05 }}
+                                    className={cn(
+                                      "p-4 rounded-xl border-2 relative overflow-hidden",
+                                      theme === 'dark'
+                                        ? 'bg-gray-800/50 border-gray-700'
+                                        : 'bg-white border-gray-200'
+                                    )}
+                                  >
+                                    {/* Status indicator bar */}
+                                    <div className={cn(
+                                      "absolute left-0 top-0 bottom-0 w-1",
+                                      status === 'expired' && 'bg-red-500',
+                                      status === 'critical' && 'bg-orange-500',
+                                      status === 'warning' && 'bg-amber-500',
+                                      status === 'good' && 'bg-green-500',
+                                      status === 'unknown' && (theme === 'dark' ? 'bg-gray-600' : 'bg-gray-300')
+                                    )} />
+
+                                    <div className="pl-3 flex items-start justify-between gap-4">
+                                      <div className="flex-1 grid grid-cols-2 sm:grid-cols-4 gap-4">
+                                        {/* Número de lote */}
+                                        <div>
+                                          <p className={cn(
+                                            "text-xs uppercase tracking-wide mb-1",
+                                            theme === 'dark' ? 'text-gray-500' : 'text-gray-400'
+                                          )}>
+                                            Lote
+                                          </p>
+                                          <p className={cn(
+                                            "font-mono font-semibold",
+                                            theme === 'dark' ? 'text-white' : 'text-gray-900'
+                                          )}>
+                                            {lot.lotNumber}
+                                          </p>
+                                        </div>
+
+                                        {/* Fecha de vencimiento */}
+                                        <div>
+                                          <p className={cn(
+                                            "text-xs uppercase tracking-wide mb-1",
+                                            theme === 'dark' ? 'text-gray-500' : 'text-gray-400'
+                                          )}>
+                                            Vencimiento
+                                          </p>
+                                          <div className="flex items-center gap-2">
+                                            <p className={cn(
+                                              "font-medium",
+                                              status === 'expired' && 'text-red-500',
+                                              status === 'critical' && 'text-orange-500',
+                                              status === 'warning' && 'text-amber-500',
+                                              status === 'good' && (theme === 'dark' ? 'text-green-400' : 'text-green-600'),
+                                              status === 'unknown' && (theme === 'dark' ? 'text-gray-400' : 'text-gray-500')
+                                            )}>
+                                              {lot.expirationDate
+                                                ? new Date(lot.expirationDate).toLocaleDateString('es-ES', { day: '2-digit', month: 'short', year: 'numeric' })
+                                                : 'Sin fecha'
+                                              }
+                                            </p>
+                                            {status === 'expired' && (
+                                              <AlertTriangle className="w-4 h-4 text-red-500" />
+                                            )}
+                                            {status === 'critical' && (
+                                              <Clock className="w-4 h-4 text-orange-500 animate-pulse" />
+                                            )}
+                                          </div>
+                                          {daysLeft !== null && (
+                                            <p className={cn(
+                                              "text-xs mt-0.5",
+                                              status === 'expired' ? 'text-red-400' :
+                                              status === 'critical' ? 'text-orange-400' :
+                                              status === 'warning' ? 'text-amber-500' :
+                                              theme === 'dark' ? 'text-gray-500' : 'text-gray-400'
+                                            )}>
+                                              {daysLeft < 0
+                                                ? `Vencido hace ${Math.abs(daysLeft)} días`
+                                                : daysLeft === 0
+                                                  ? 'Vence hoy'
+                                                  : `${daysLeft} días restantes`
+                                              }
+                                            </p>
+                                          )}
+                                        </div>
+
+                                        {/* Cantidad */}
+                                        <div>
+                                          <p className={cn(
+                                            "text-xs uppercase tracking-wide mb-1",
+                                            theme === 'dark' ? 'text-gray-500' : 'text-gray-400'
+                                          )}>
+                                            Cantidad
+                                          </p>
+                                          <p className={cn(
+                                            "font-semibold",
+                                            theme === 'dark' ? 'text-white' : 'text-gray-900'
+                                          )}>
+                                            {lot.quantity || '—'} {selectedUnit?.abbr || 'u'}
+                                          </p>
+                                        </div>
+
+                                        {/* Fecha fabricación */}
+                                        <div>
+                                          <p className={cn(
+                                            "text-xs uppercase tracking-wide mb-1",
+                                            theme === 'dark' ? 'text-gray-500' : 'text-gray-400'
+                                          )}>
+                                            Fabricación
+                                          </p>
+                                          <p className={cn(
+                                            "font-medium",
+                                            theme === 'dark' ? 'text-gray-300' : 'text-gray-600'
+                                          )}>
+                                            {lot.manufacturingDate
+                                              ? new Date(lot.manufacturingDate).toLocaleDateString('es-ES', { day: '2-digit', month: 'short', year: 'numeric' })
+                                              : '—'
+                                            }
+                                          </p>
+                                        </div>
+                                      </div>
+
+                                      {/* Acciones */}
+                                      <div className="flex items-center gap-1">
+                                        <motion.button
+                                          whileHover={{ scale: 1.1 }}
+                                          whileTap={{ scale: 0.9 }}
+                                          onClick={() => openEditLot(lot)}
+                                          className={cn(
+                                            "p-2 rounded-lg transition-colors",
+                                            theme === 'dark'
+                                              ? 'text-gray-400 hover:text-amber-400 hover:bg-gray-700'
+                                              : 'text-gray-500 hover:text-amber-600 hover:bg-gray-100'
+                                          )}
+                                        >
+                                          <Edit3 className="w-4 h-4" />
+                                        </motion.button>
+                                        <motion.button
+                                          whileHover={{ scale: 1.1 }}
+                                          whileTap={{ scale: 0.9 }}
+                                          onClick={() => removeLot(lot.id)}
+                                          className={cn(
+                                            "p-2 rounded-lg transition-colors",
+                                            theme === 'dark'
+                                              ? 'text-gray-400 hover:text-red-400 hover:bg-gray-700'
+                                              : 'text-gray-500 hover:text-red-600 hover:bg-gray-100'
+                                          )}
+                                        >
+                                          <Trash2 className="w-4 h-4" />
+                                        </motion.button>
+                                      </div>
+                                    </div>
+
+                                    {/* Notas */}
+                                    {lot.notes && (
+                                      <p className={cn(
+                                        "pl-3 mt-2 text-sm italic",
+                                        theme === 'dark' ? 'text-gray-500' : 'text-gray-400'
+                                      )}>
+                                        {lot.notes}
+                                      </p>
+                                    )}
+                                  </motion.div>
+                                )
+                              })}
+                            </div>
+                          )}
+
+                          {/* Estado vacío */}
+                          {lots.length === 0 && (
+                            <div className={cn(
+                              "p-8 rounded-xl text-center",
+                              theme === 'dark' ? 'bg-gray-800/30' : 'bg-gray-50'
+                            )}>
+                              <Calendar className={cn(
+                                "w-12 h-12 mx-auto mb-3",
+                                theme === 'dark' ? 'text-gray-600' : 'text-gray-300'
+                              )} />
+                              <p className={cn(
+                                "font-medium",
+                                theme === 'dark' ? 'text-gray-400' : 'text-gray-500'
+                              )}>
+                                No hay lotes configurados
+                              </p>
+                              <p className={cn(
+                                "text-sm mt-1",
+                                theme === 'dark' ? 'text-gray-500' : 'text-gray-400'
+                              )}>
+                                Agrega lotes para controlar fechas de vencimiento
+                              </p>
+                            </div>
+                          )}
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+
+                    {/* Info cuando está desactivado */}
+                    {!formData.hasLots && (
+                      <div className={cn(
+                        "p-4 rounded-xl flex items-start gap-3",
+                        theme === 'dark' ? 'bg-gray-800/30' : 'bg-gray-50'
+                      )}>
+                        <div className={cn(
+                          "w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0",
+                          theme === 'dark' ? 'bg-gray-700' : 'bg-gray-200'
+                        )}>
+                          <AlertTriangle className={cn(
+                            "w-4 h-4",
+                            theme === 'dark' ? 'text-gray-400' : 'text-gray-500'
+                          )} />
+                        </div>
+                        <div>
+                          <p className={cn(
+                            "font-medium text-sm",
+                            theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
+                          )}>
+                            Control de lotes desactivado
+                          </p>
+                          <p className={cn(
+                            "text-sm mt-1",
+                            theme === 'dark' ? 'text-gray-500' : 'text-gray-500'
+                          )}>
+                            Este paso es opcional. Puedes continuar sin configurar lotes si el producto no tiene fecha de vencimiento o no requiere control por lotes.
+                          </p>
+                        </div>
+                      </div>
+                    )}
+                  </motion.div>
+                )}
+
+                {/* Step 6: Review */}
                 {currentStep === 'review' && (
                   <motion.div
                     key="review"
@@ -1832,6 +2282,67 @@ export default function CreateProductPage() {
                           </div>
                         </div>
                       )}
+
+                      {/* Lots summary */}
+                      {lots.length > 0 && (
+                        <div className={cn(
+                          "mt-6 pt-6 border-t",
+                          theme === 'dark' ? 'border-gray-700' : 'border-gray-200'
+                        )}>
+                          <h4 className={cn(
+                            "font-semibold mb-3 flex items-center gap-2",
+                            theme === 'dark' ? 'text-white' : 'text-gray-900'
+                          )}>
+                            <Calendar className="w-4 h-4 text-amber-500" />
+                            Lotes ({lots.length})
+                          </h4>
+                          <div className="space-y-2">
+                            {lots.map((l) => {
+                              const status = getExpirationStatus(l.expirationDate)
+                              return (
+                                <div
+                                  key={l.id}
+                                  className={cn(
+                                    "flex items-center justify-between text-sm px-3 py-2 rounded-lg",
+                                    theme === 'dark'
+                                      ? 'bg-gray-800/50'
+                                      : 'bg-gray-50'
+                                  )}
+                                >
+                                  <span className={cn(
+                                    "font-mono font-medium",
+                                    theme === 'dark' ? 'text-white' : 'text-gray-900'
+                                  )}>
+                                    {l.lotNumber}
+                                  </span>
+                                  <div className="flex items-center gap-3">
+                                    {l.quantity && (
+                                      <span className={cn(
+                                        "text-sm",
+                                        theme === 'dark' ? 'text-gray-400' : 'text-gray-500'
+                                      )}>
+                                        {l.quantity} {selectedUnit?.abbr || 'u'}
+                                      </span>
+                                    )}
+                                    {l.expirationDate && (
+                                      <span className={cn(
+                                        "text-sm font-medium",
+                                        status === 'expired' && 'text-red-500',
+                                        status === 'critical' && 'text-orange-500',
+                                        status === 'warning' && 'text-amber-500',
+                                        status === 'good' && (theme === 'dark' ? 'text-green-400' : 'text-green-600'),
+                                        status === 'unknown' && (theme === 'dark' ? 'text-gray-400' : 'text-gray-500')
+                                      )}>
+                                        Vence: {new Date(l.expirationDate).toLocaleDateString('es-ES', { day: '2-digit', month: 'short', year: 'numeric' })}
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+                              )
+                            })}
+                          </div>
+                        </div>
+                      )}
                     </div>
 
                     {errors.submit && (
@@ -1901,6 +2412,226 @@ export default function CreateProductPage() {
               )}
             </div>
           </div>
+
+          {/* Lot Modal */}
+          <AnimatePresence>
+            {showLotModal && (
+              <>
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  onClick={() => { setShowLotModal(false); setEditingLot(null); }}
+                  className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50"
+                />
+
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.95, y: 20 }}
+                  animate={{ opacity: 1, scale: 1, y: 0 }}
+                  exit={{ opacity: 0, scale: 0.95, y: 20 }}
+                  transition={{ type: "spring", duration: 0.3 }}
+                  className="fixed inset-0 z-50 flex items-center justify-center p-4"
+                >
+                  <div
+                    className={cn(
+                      "w-full max-w-lg rounded-2xl shadow-2xl border",
+                      theme === 'dark'
+                        ? 'bg-gray-800 border-gray-700'
+                        : 'bg-white border-gray-200'
+                    )}
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <div className="p-6 pb-4">
+                      <div className="flex items-start gap-4">
+                        <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center flex-shrink-0">
+                          <Archive className="w-6 h-6 text-white" />
+                        </div>
+                        <div className="flex-1">
+                          <h3 className={cn(
+                            "text-xl font-bold mb-1",
+                            theme === 'dark' ? 'text-white' : 'text-gray-900'
+                          )}>
+                            {editingLot ? 'Editar Lote' : 'Nuevo Lote'}
+                          </h3>
+                          <p className={cn(
+                            "text-sm",
+                            theme === 'dark' ? 'text-gray-400' : 'text-gray-600'
+                          )}>
+                            Ingresa la información del lote
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="px-6 pb-6 space-y-4">
+                      {/* Número de lote */}
+                      <div>
+                        <label className={cn(
+                          "block text-sm font-medium mb-2",
+                          theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
+                        )}>
+                          Número de Lote <span className="text-red-500">*</span>
+                        </label>
+                        <input
+                          type="text"
+                          value={editingLot ? editingLot.lotNumber : newLot.lotNumber}
+                          onChange={(e) => editingLot
+                            ? setEditingLot({ ...editingLot, lotNumber: e.target.value })
+                            : setNewLot({ ...newLot, lotNumber: e.target.value })
+                          }
+                          placeholder="Ej: LOT-2025-001"
+                          className={cn(
+                            "w-full px-4 py-3 rounded-xl border-2 transition-colors font-mono",
+                            theme === 'dark'
+                              ? 'bg-gray-900 border-gray-700 text-white placeholder-gray-500 focus:border-amber-500'
+                              : 'bg-white border-gray-200 text-gray-900 placeholder-gray-400 focus:border-amber-500'
+                          )}
+                        />
+                      </div>
+
+                      {/* Fechas */}
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <label className={cn(
+                            "block text-sm font-medium mb-2",
+                            theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
+                          )}>
+                            Fecha de Vencimiento
+                          </label>
+                          <input
+                            type="date"
+                            value={editingLot ? editingLot.expirationDate : newLot.expirationDate}
+                            onChange={(e) => editingLot
+                              ? setEditingLot({ ...editingLot, expirationDate: e.target.value })
+                              : setNewLot({ ...newLot, expirationDate: e.target.value })
+                            }
+                            className={cn(
+                              "w-full px-4 py-3 rounded-xl border-2 transition-colors",
+                              theme === 'dark'
+                                ? 'bg-gray-900 border-gray-700 text-white focus:border-amber-500'
+                                : 'bg-white border-gray-200 text-gray-900 focus:border-amber-500'
+                            )}
+                          />
+                        </div>
+                        <div>
+                          <label className={cn(
+                            "block text-sm font-medium mb-2",
+                            theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
+                          )}>
+                            Fecha de Fabricación
+                          </label>
+                          <input
+                            type="date"
+                            value={editingLot ? editingLot.manufacturingDate : newLot.manufacturingDate}
+                            onChange={(e) => editingLot
+                              ? setEditingLot({ ...editingLot, manufacturingDate: e.target.value })
+                              : setNewLot({ ...newLot, manufacturingDate: e.target.value })
+                            }
+                            className={cn(
+                              "w-full px-4 py-3 rounded-xl border-2 transition-colors",
+                              theme === 'dark'
+                                ? 'bg-gray-900 border-gray-700 text-white focus:border-amber-500'
+                                : 'bg-white border-gray-200 text-gray-900 focus:border-amber-500'
+                            )}
+                          />
+                        </div>
+                      </div>
+
+                      {/* Cantidad */}
+                      <div>
+                        <label className={cn(
+                          "block text-sm font-medium mb-2",
+                          theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
+                        )}>
+                          Cantidad en este lote
+                        </label>
+                        <div className="relative">
+                          <input
+                            type="number"
+                            min="0"
+                            value={editingLot ? editingLot.quantity : newLot.quantity}
+                            onChange={(e) => editingLot
+                              ? setEditingLot({ ...editingLot, quantity: e.target.value })
+                              : setNewLot({ ...newLot, quantity: e.target.value })
+                            }
+                            placeholder="0"
+                            className={cn(
+                              "w-full px-4 py-3 pr-16 rounded-xl border-2 transition-colors",
+                              theme === 'dark'
+                                ? 'bg-gray-900 border-gray-700 text-white placeholder-gray-500 focus:border-amber-500'
+                                : 'bg-white border-gray-200 text-gray-900 placeholder-gray-400 focus:border-amber-500'
+                            )}
+                          />
+                          <span className={cn(
+                            "absolute right-4 top-1/2 -translate-y-1/2 text-sm",
+                            theme === 'dark' ? 'text-gray-500' : 'text-gray-400'
+                          )}>
+                            {selectedUnit?.abbr || 'u'}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Notas */}
+                      <div>
+                        <label className={cn(
+                          "block text-sm font-medium mb-2",
+                          theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
+                        )}>
+                          Notas (opcional)
+                        </label>
+                        <textarea
+                          value={editingLot ? editingLot.notes : newLot.notes}
+                          onChange={(e) => editingLot
+                            ? setEditingLot({ ...editingLot, notes: e.target.value })
+                            : setNewLot({ ...newLot, notes: e.target.value })
+                          }
+                          placeholder="Información adicional del lote..."
+                          rows={2}
+                          className={cn(
+                            "w-full px-4 py-3 rounded-xl border-2 transition-colors resize-none",
+                            theme === 'dark'
+                              ? 'bg-gray-900 border-gray-700 text-white placeholder-gray-500 focus:border-amber-500'
+                              : 'bg-white border-gray-200 text-gray-900 placeholder-gray-400 focus:border-amber-500'
+                          )}
+                        />
+                      </div>
+
+                      {/* Botones */}
+                      <div className="flex gap-3 pt-2">
+                        <motion.button
+                          whileHover={{ scale: 1.02 }}
+                          whileTap={{ scale: 0.98 }}
+                          onClick={() => { setShowLotModal(false); setEditingLot(null); }}
+                          className={cn(
+                            "flex-1 py-3 px-4 rounded-xl font-medium transition-colors",
+                            theme === 'dark'
+                              ? 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                              : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                          )}
+                        >
+                          Cancelar
+                        </motion.button>
+                        <motion.button
+                          whileHover={{ scale: 1.02 }}
+                          whileTap={{ scale: 0.98 }}
+                          onClick={() => editingLot ? updateLot() : addLot()}
+                          disabled={!(editingLot ? editingLot.lotNumber : newLot.lotNumber).trim()}
+                          className={cn(
+                            "flex-1 py-3 px-4 rounded-xl font-medium bg-gradient-to-r from-amber-500 to-orange-600 text-white transition-all",
+                            !(editingLot ? editingLot.lotNumber : newLot.lotNumber).trim()
+                              ? 'opacity-50 cursor-not-allowed'
+                              : 'hover:from-amber-600 hover:to-orange-700 shadow-lg shadow-amber-500/25'
+                          )}
+                        >
+                          {editingLot ? 'Guardar Cambios' : 'Agregar Lote'}
+                        </motion.button>
+                      </div>
+                    </div>
+                  </div>
+                </motion.div>
+              </>
+            )}
+          </AnimatePresence>
 
           {/* Cancel Modal */}
           <AnimatePresence>

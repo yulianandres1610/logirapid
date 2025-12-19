@@ -174,7 +174,7 @@ export async function PUT(
     let userEmail = ''
     if (authToken) {
       try {
-        const secret = process.env.JWT_SECRET || 'your-secret-key'
+        const secret = process.env.JWT_SECRET || 'fallback-secret-change-in-production'
         const payload = jwt.verify(authToken, secret) as JWTPayload
         userId = payload.userId
         userEmail = payload.email
@@ -398,7 +398,8 @@ export async function DELETE(
     let userRole = ''
 
     try {
-      const secret = process.env.JWT_SECRET || 'your-secret-key'
+      // Use the same fallback as login route for consistency
+      const secret = process.env.JWT_SECRET || 'fallback-secret-change-in-production'
       const payload = jwt.verify(authToken, secret) as JWTPayload
       userId = payload.userId
       userEmail = payload.email
@@ -406,7 +407,8 @@ export async function DELETE(
 
       const userResult = await db.query('SELECT name FROM users WHERE id = $1', [userId])
       userName = userResult.rows[0]?.name || payload.email
-    } catch {
+    } catch (err) {
+      console.error('[Product Delete] JWT verification error:', err)
       return NextResponse.json({ success: false, error: 'Token inválido' }, { status: 401 })
     }
 
@@ -465,6 +467,7 @@ export async function DELETE(
       // Product-specific tables
       { table: 'market_product_variants', column: 'product_id' },
       { table: 'market_product_suppliers', column: 'product_id' },
+      { table: 'market_product_lots', column: 'product_id' },
       // Odoo mapping
       { table: 'odoo_product_mapping', column: 'local_product_id' },
       // Change logs (don't delete, but set product_id to NULL or skip)
