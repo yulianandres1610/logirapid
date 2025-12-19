@@ -1,12 +1,12 @@
 'use client'
 
-import { useState, useRef } from 'react'
+import React, { useState, useRef, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   Package,
   Image as ImageIcon,
   DollarSign,
-  Truck,
+  Layers,
   Check,
   ArrowLeft,
   ArrowRight,
@@ -14,7 +14,12 @@ import {
   X,
   Loader2,
   Barcode,
-  Tag
+  Tag,
+  Truck,
+  Plus,
+  Trash2,
+  Edit3,
+  Scale
 } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
@@ -23,14 +28,21 @@ import { ProtectedRoute } from '@/components/protected-route'
 import { useTheme } from '@/contexts/theme-context'
 import { cn } from '@/lib/utils'
 
-type Step = 'info' | 'image' | 'pricing' | 'supplier' | 'review'
+type Step = 'info' | 'image' | 'pricing' | 'variants' | 'review'
 
-const STEPS: { id: Step; title: string; icon: any }[] = [
-  { id: 'info', title: 'Información', icon: Package },
-  { id: 'image', title: 'Imagen', icon: ImageIcon },
-  { id: 'pricing', title: 'Precios', icon: DollarSign },
-  { id: 'supplier', title: 'Proveedor', icon: Truck },
-  { id: 'review', title: 'Revisión', icon: Check }
+interface WizardStep {
+  id: Step
+  title: string
+  description: string
+  icon: any
+}
+
+const STEPS: WizardStep[] = [
+  { id: 'info', title: 'Información', description: 'Datos básicos', icon: Package },
+  { id: 'image', title: 'Imagen', description: 'Foto del producto', icon: ImageIcon },
+  { id: 'pricing', title: 'Precios', description: 'Costos y venta', icon: DollarSign },
+  { id: 'variants', title: 'Variantes', description: 'Colores, tallas...', icon: Layers },
+  { id: 'review', title: 'Revisión', description: 'Confirmar datos', icon: Check }
 ]
 
 const CATEGORIES = [
@@ -49,11 +61,44 @@ const CATEGORIES = [
   'Otros'
 ]
 
+const UNITS_OF_MEASURE = [
+  { id: 'unidad', name: 'Unidad', abbr: 'u' },
+  { id: 'kg', name: 'Kilogramo', abbr: 'kg' },
+  { id: 'lb', name: 'Libra', abbr: 'lb' },
+  { id: 'g', name: 'Gramo', abbr: 'g' },
+  { id: 'oz', name: 'Onza', abbr: 'oz' },
+  { id: 'lt', name: 'Litro', abbr: 'lt' },
+  { id: 'gal', name: 'Galón', abbr: 'gal' },
+  { id: 'ml', name: 'Mililitro', abbr: 'ml' },
+  { id: 'docena', name: 'Docena', abbr: 'doc' },
+  { id: 'caja', name: 'Caja', abbr: 'cj' },
+  { id: 'paquete', name: 'Paquete', abbr: 'paq' },
+  { id: 'par', name: 'Par', abbr: 'par' },
+  { id: 'metro', name: 'Metro', abbr: 'm' },
+  { id: 'yarda', name: 'Yarda', abbr: 'yd' }
+]
+
 const CURRENCY_SYMBOLS: Record<string, string> = {
   USD: '$',
   CUP: '₱',
   EUR: '€',
   MLC: '$'
+}
+
+interface Variant {
+  id: string
+  name: string
+  sku: string
+  barcode: string
+  costPrice: string
+  sellingPrice: string
+  options: { type: string; value: string }[]
+}
+
+interface VariantType {
+  id: string
+  name: string
+  values: string[]
 }
 
 export default function CreateProductPage() {
@@ -63,11 +108,13 @@ export default function CreateProductPage() {
   const [loading, setLoading] = useState(false)
   const [uploadingImage, setUploadingImage] = useState(false)
   const [errors, setErrors] = useState<Record<string, string>>({})
+  const [showCancelModal, setShowCancelModal] = useState(false)
 
   const [formData, setFormData] = useState({
     name: '',
     description: '',
     category: '',
+    unitOfMeasure: 'unidad',
     imageUrl: '',
     imageFile: null as File | null,
     costPrice: '',
@@ -78,8 +125,20 @@ export default function CreateProductPage() {
     supplierName: '',
     supplierContact: '',
     supplierReference: '',
-    minimumStock: '5'
+    minimumStock: '5',
+    hasVariants: false
   })
+
+  // Variant types (customizable)
+  const [variantTypes, setVariantTypes] = useState<VariantType[]>([])
+  const [newTypeName, setNewTypeName] = useState('')
+  const [newTypeValue, setNewTypeValue] = useState('')
+  const [editingTypeId, setEditingTypeId] = useState<string | null>(null)
+
+  // Variants
+  const [variants, setVariants] = useState<Variant[]>([])
+  const [showVariantModal, setShowVariantModal] = useState(false)
+  const [editingVariant, setEditingVariant] = useState<Variant | null>(null)
 
   const currentStepIndex = STEPS.findIndex(s => s.id === currentStep)
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -168,7 +227,6 @@ export default function CreateProductPage() {
 
     setLoading(true)
     try {
-      // Upload image if provided
       let imageUrl = formData.imageUrl
       if (formData.imageFile) {
         const uploadedUrl = await uploadImage()
@@ -184,6 +242,7 @@ export default function CreateProductPage() {
           name: formData.name,
           description: formData.description,
           category: formData.category,
+          unitOfMeasure: formData.unitOfMeasure,
           imageUrl: imageUrl || null,
           costPrice: parseFloat(formData.costPrice),
           sellingPrice: parseFloat(formData.sellingPrice),
@@ -193,7 +252,16 @@ export default function CreateProductPage() {
           supplierName: formData.supplierName || undefined,
           supplierContact: formData.supplierContact || undefined,
           supplierReference: formData.supplierReference || undefined,
-          minimumStock: parseInt(formData.minimumStock) || 5
+          minimumStock: parseInt(formData.minimumStock) || 5,
+          hasVariants: formData.hasVariants,
+          variants: formData.hasVariants ? variants.map(v => ({
+            name: v.name,
+            sku: v.sku,
+            barcode: v.barcode,
+            costPrice: parseFloat(v.costPrice) || 0,
+            sellingPrice: parseFloat(v.sellingPrice) || 0,
+            options: v.options
+          })) : []
         })
       })
 
@@ -218,618 +286,1399 @@ export default function CreateProductPage() {
     return Math.round(((sell - cost) / cost) * 100)
   }
 
+  const addVariantType = () => {
+    if (!newTypeName.trim()) return
+    const newType: VariantType = {
+      id: `type-${Date.now()}`,
+      name: newTypeName.trim(),
+      values: []
+    }
+    setVariantTypes([...variantTypes, newType])
+    setNewTypeName('')
+    setEditingTypeId(newType.id)
+  }
+
+  const addValueToType = (typeId: string) => {
+    if (!newTypeValue.trim()) return
+    setVariantTypes(types =>
+      types.map(t =>
+        t.id === typeId
+          ? { ...t, values: [...t.values, newTypeValue.trim()] }
+          : t
+      )
+    )
+    setNewTypeValue('')
+  }
+
+  const removeValueFromType = (typeId: string, value: string) => {
+    setVariantTypes(types =>
+      types.map(t =>
+        t.id === typeId
+          ? { ...t, values: t.values.filter(v => v !== value) }
+          : t
+      )
+    )
+  }
+
+  const removeVariantType = (typeId: string) => {
+    setVariantTypes(types => types.filter(t => t.id !== typeId))
+  }
+
+  const generateVariants = () => {
+    if (variantTypes.length === 0) return
+
+    // Generate all combinations
+    const generateCombinations = (types: VariantType[]): { type: string; value: string }[][] => {
+      if (types.length === 0) return [[]]
+      const [first, ...rest] = types
+      const restCombinations = generateCombinations(rest)
+      const result: { type: string; value: string }[][] = []
+
+      for (const value of first.values) {
+        for (const combo of restCombinations) {
+          result.push([{ type: first.name, value }, ...combo])
+        }
+      }
+
+      return result
+    }
+
+    const combinations = generateCombinations(variantTypes)
+    const newVariants: Variant[] = combinations.map((combo, index) => ({
+      id: `var-${Date.now()}-${index}`,
+      name: combo.map(c => c.value).join(' - '),
+      sku: '',
+      barcode: '',
+      costPrice: formData.costPrice,
+      sellingPrice: formData.sellingPrice,
+      options: combo
+    }))
+
+    setVariants(newVariants)
+    setFormData(prev => ({ ...prev, hasVariants: true }))
+  }
+
+  const updateVariant = (variantId: string, field: keyof Variant, value: string) => {
+    setVariants(vars =>
+      vars.map(v =>
+        v.id === variantId ? { ...v, [field]: value } : v
+      )
+    )
+  }
+
+  const removeVariant = (variantId: string) => {
+    setVariants(vars => vars.filter(v => v.id !== variantId))
+    if (variants.length <= 1) {
+      setFormData(prev => ({ ...prev, hasVariants: false }))
+    }
+  }
+
   const symbol = CURRENCY_SYMBOLS[formData.currency] || '$'
+  const selectedUnit = UNITS_OF_MEASURE.find(u => u.id === formData.unitOfMeasure)
 
   return (
     <ProtectedRoute>
       <DashboardLayout>
-        <div className="p-4 md:p-6 max-w-4xl mx-auto">
-          {/* Header */}
-          <motion.div
-            initial={{ opacity: 0, y: -10 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="mb-6"
-          >
-            <Link href="/dashboard/market/inventory" className="inline-flex items-center gap-2 text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 mb-4">
-              <ArrowLeft className="w-4 h-4" />
-              Volver al inventario
-            </Link>
-            <h1 className="text-2xl md:text-3xl font-bold text-gray-900 dark:text-white">
-              Nuevo Producto
-            </h1>
-          </motion.div>
+        <div className={cn(
+          "min-h-screen pt-12 sm:pt-16 lg:pt-20 pb-20 px-4 sm:px-6 lg:px-8",
+          theme === 'dark' ? 'bg-gray-900' : 'bg-gray-50'
+        )}>
+          <div className="max-w-4xl xl:max-w-5xl mx-auto space-y-6 sm:space-y-8 relative">
 
-          {/* Progress Steps */}
-          <motion.div
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.1 }}
-            className="mb-8"
-          >
-            <div className="flex items-center justify-between">
-              {STEPS.map((step, index) => {
-                const isActive = step.id === currentStep
-                const isCompleted = index < currentStepIndex
+            {/* Close Button */}
+            <motion.button
+              onClick={() => setShowCancelModal(true)}
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+              className={cn(
+                "absolute -top-14 -right-2 sm:-top-12 sm:right-0 z-10 w-8 h-8 rounded-full flex items-center justify-center",
+                "transition-colors duration-200",
+                theme === 'dark'
+                  ? 'text-gray-400 hover:text-gray-200 hover:bg-gray-800'
+                  : 'text-gray-500 hover:text-gray-700 hover:bg-gray-200'
+              )}
+            >
+              <X className="w-4 h-4" />
+            </motion.button>
 
-                return (
-                  <div key={step.id} className="flex-1 flex items-center">
-                    <div className="flex flex-col items-center relative">
-                      <div className={cn(
-                        'w-10 h-10 rounded-full flex items-center justify-center transition-all',
-                        isActive
-                          ? 'bg-blue-500 text-white shadow-lg shadow-blue-500/30'
-                          : isCompleted
-                            ? 'bg-green-500 text-white'
-                            : theme === 'dark'
-                              ? 'bg-gray-700 text-gray-400'
-                              : 'bg-gray-200 text-gray-500'
-                      )}>
-                        {isCompleted ? <Check className="w-5 h-5" /> : <step.icon className="w-5 h-5" />}
-                      </div>
-                      <span className={cn(
-                        'mt-2 text-xs font-medium absolute -bottom-6 whitespace-nowrap',
-                        isActive ? 'text-blue-500' : 'text-gray-500'
-                      )}>
-                        {step.title}
-                      </span>
-                    </div>
-                    {index < STEPS.length - 1 && (
-                      <div className={cn(
-                        'flex-1 h-1 mx-2 rounded-full transition-all',
-                        isCompleted
-                          ? 'bg-green-500'
-                          : theme === 'dark'
-                            ? 'bg-gray-700'
-                            : 'bg-gray-200'
-                      )} />
-                    )}
-                  </div>
-                )
-              })}
+            {/* Header */}
+            <div className="text-center mb-4">
+              <Link
+                href="/dashboard/market/inventory"
+                className={cn(
+                  "inline-flex items-center gap-2 text-sm mb-4 transition-colors",
+                  theme === 'dark'
+                    ? 'text-gray-400 hover:text-gray-200'
+                    : 'text-gray-500 hover:text-gray-700'
+                )}
+              >
+                <ArrowLeft className="w-4 h-4" />
+                Volver al inventario
+              </Link>
+              <h1 className={cn(
+                "text-2xl sm:text-3xl font-bold",
+                theme === 'dark' ? 'text-white' : 'text-gray-900'
+              )}>
+                Nuevo Producto
+              </h1>
             </div>
-          </motion.div>
 
-          {/* Form Content */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.2 }}
-            className={cn(
-              'rounded-2xl border p-6 mt-10',
-              theme === 'dark'
-                ? 'bg-[#1e1e2f] border-gray-700/50'
-                : 'bg-white border-gray-200'
-            )}
-          >
-            <AnimatePresence mode="wait">
-              {/* Step 1: Information */}
-              {currentStep === 'info' && (
-                <motion.div
-                  key="info"
-                  initial={{ opacity: 0, x: 20 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  exit={{ opacity: 0, x: -20 }}
-                  className="space-y-6"
-                >
-                  <h2 className="text-xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
-                    <Package className="w-6 h-6 text-blue-500" />
-                    Información del Producto
-                  </h2>
+            {/* Progress Indicator */}
+            <div className="mb-8 sm:mb-12">
+              <div className="flex items-center justify-between">
+                {STEPS.map((step, index) => (
+                  <React.Fragment key={step.id}>
+                    <div className="flex flex-col items-center">
+                      <div className="relative w-14 h-14">
+                        {/* Pulsing ring for active step */}
+                        {currentStep === step.id && (
+                          <motion.div
+                            className="absolute inset-0 rounded-full"
+                            animate={{
+                              scale: [1, 1.2, 1],
+                              opacity: [0.5, 0, 0.5]
+                            }}
+                            transition={{
+                              duration: 2,
+                              repeat: Infinity,
+                              ease: "easeInOut"
+                            }}
+                            style={{
+                              background: theme === 'dark'
+                                ? 'rgba(59, 130, 246, 0.5)'
+                                : 'rgba(37, 99, 235, 0.5)'
+                            }}
+                          />
+                        )}
 
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                      Nombre del Producto *
-                    </label>
-                    <input
-                      type="text"
-                      value={formData.name}
-                      onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                      placeholder="Ej: Arroz Premium 5kg"
-                      className={cn(
-                        'w-full px-4 py-3 rounded-xl border focus:outline-none focus:ring-2 transition-all',
-                        errors.name
-                          ? 'border-red-500 bg-red-50 dark:bg-red-900/20'
-                          : theme === 'dark'
-                            ? 'bg-gray-800/50 border-gray-700 text-white focus:border-blue-500 focus:ring-blue-500/20'
-                            : 'bg-gray-50 border-gray-200 text-gray-900 focus:border-blue-500 focus:ring-blue-500/20'
-                      )}
-                    />
-                    {errors.name && <p className="text-red-500 text-xs mt-1">{errors.name}</p>}
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                      Descripción
-                    </label>
-                    <textarea
-                      value={formData.description}
-                      onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                      placeholder="Describe el producto..."
-                      rows={3}
-                      className={cn(
-                        'w-full px-4 py-3 rounded-xl border focus:outline-none focus:ring-2 transition-all resize-none',
-                        theme === 'dark'
-                          ? 'bg-gray-800/50 border-gray-700 text-white focus:border-blue-500 focus:ring-blue-500/20'
-                          : 'bg-gray-50 border-gray-200 text-gray-900 focus:border-blue-500 focus:ring-blue-500/20'
-                      )}
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                      Categoría
-                    </label>
-                    <select
-                      value={formData.category}
-                      onChange={(e) => setFormData({ ...formData, category: e.target.value })}
-                      className={cn(
-                        'w-full px-4 py-3 rounded-xl border focus:outline-none focus:ring-2 transition-all',
-                        theme === 'dark'
-                          ? 'bg-gray-800/50 border-gray-700 text-white focus:border-blue-500 focus:ring-blue-500/20'
-                          : 'bg-gray-50 border-gray-200 text-gray-900 focus:border-blue-500 focus:ring-blue-500/20'
-                      )}
-                    >
-                      <option value="">Seleccionar categoría</option>
-                      {CATEGORIES.map(cat => (
-                        <option key={cat} value={cat}>{cat}</option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                      Stock Mínimo
-                    </label>
-                    <input
-                      type="number"
-                      value={formData.minimumStock}
-                      onChange={(e) => setFormData({ ...formData, minimumStock: e.target.value })}
-                      placeholder="5"
-                      min="0"
-                      className={cn(
-                        'w-full px-4 py-3 rounded-xl border focus:outline-none focus:ring-2 transition-all',
-                        theme === 'dark'
-                          ? 'bg-gray-800/50 border-gray-700 text-white focus:border-blue-500 focus:ring-blue-500/20'
-                          : 'bg-gray-50 border-gray-200 text-gray-900 focus:border-blue-500 focus:ring-blue-500/20'
-                      )}
-                    />
-                    <p className="text-xs text-gray-500 mt-1">Se te alertará cuando el stock baje de esta cantidad</p>
-                  </div>
-                </motion.div>
-              )}
-
-              {/* Step 2: Image */}
-              {currentStep === 'image' && (
-                <motion.div
-                  key="image"
-                  initial={{ opacity: 0, x: 20 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  exit={{ opacity: 0, x: -20 }}
-                  className="space-y-6"
-                >
-                  <h2 className="text-xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
-                    <ImageIcon className="w-6 h-6 text-blue-500" />
-                    Imagen del Producto
-                  </h2>
-
-                  <div
-                    onClick={() => fileInputRef.current?.click()}
-                    className={cn(
-                      'border-2 border-dashed rounded-xl p-8 text-center cursor-pointer transition-all',
-                      theme === 'dark'
-                        ? 'border-gray-700 hover:border-gray-600'
-                        : 'border-gray-300 hover:border-gray-400'
-                    )}
-                  >
-                    <input
-                      ref={fileInputRef}
-                      type="file"
-                      accept="image/*"
-                      onChange={handleFileChange}
-                      className="hidden"
-                    />
-                    {formData.imageUrl ? (
-                      <div className="relative inline-block">
-                        <img
-                          src={formData.imageUrl}
-                          alt="Preview"
-                          className="max-w-xs max-h-48 rounded-lg mx-auto object-contain"
-                        />
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            setFormData({ ...formData, imageUrl: '', imageFile: null })
+                        <motion.div
+                          initial={false}
+                          animate={{
+                            scale: currentStep === step.id ? 1.1 : 1,
+                            backgroundColor: currentStep === step.id
+                              ? theme === 'dark' ? '#3B82F6' : '#2563EB'
+                              : currentStepIndex > index
+                                ? theme === 'dark' ? '#10B981' : '#059669'
+                                : theme === 'dark' ? '#374151' : '#E5E7EB'
                           }}
-                          className="absolute -top-2 -right-2 w-6 h-6 bg-red-500 text-white rounded-full flex items-center justify-center"
+                          transition={{
+                            scale: { duration: 0.3 },
+                            backgroundColor: { duration: 0.3 }
+                          }}
+                          whileHover={{ scale: currentStepIndex >= index ? 1.15 : 1.05 }}
+                          className={cn(
+                            "w-14 h-14 rounded-full flex items-center justify-center relative z-10",
+                            "transition-shadow duration-300",
+                            currentStep === step.id && (
+                              theme === 'dark'
+                                ? 'shadow-lg shadow-blue-500/50'
+                                : 'shadow-lg shadow-blue-400/50'
+                            ),
+                            currentStepIndex > index && (
+                              theme === 'dark'
+                                ? 'shadow-md shadow-green-500/30'
+                                : 'shadow-md shadow-green-400/30'
+                            )
+                          )}
                         >
-                          <X className="w-4 h-4" />
-                        </button>
+                          {currentStepIndex > index ? (
+                            <motion.div
+                              initial={{ scale: 0 }}
+                              animate={{ scale: 1 }}
+                              transition={{ type: "spring", stiffness: 200, damping: 15 }}
+                            >
+                              <Check className="w-7 h-7 text-white" />
+                            </motion.div>
+                          ) : (
+                            <step.icon className={cn(
+                              "w-7 h-7",
+                              currentStep === step.id ? 'text-white' : theme === 'dark' ? 'text-gray-500' : 'text-gray-400'
+                            )} />
+                          )}
+                        </motion.div>
                       </div>
-                    ) : (
-                      <div className="space-y-3">
-                        <Upload className="w-12 h-12 mx-auto text-gray-400" />
-                        <div>
-                          <p className="text-gray-700 dark:text-gray-300 font-medium">
-                            Haz clic para seleccionar una imagen
-                          </p>
-                          <p className="text-sm text-gray-500">PNG, JPG o WEBP hasta 5MB</p>
-                        </div>
+
+                      <div className="mt-3 text-center">
+                        <p className={cn(
+                          "text-xs sm:text-sm font-semibold",
+                          currentStep === step.id
+                            ? theme === 'dark' ? 'text-blue-400' : 'text-blue-600'
+                            : currentStepIndex > index
+                              ? theme === 'dark' ? 'text-green-400' : 'text-green-600'
+                              : theme === 'dark' ? 'text-gray-500' : 'text-gray-400'
+                        )}>
+                          {step.title}
+                        </p>
+                        <p className={cn(
+                          "text-xs hidden sm:block mt-0.5",
+                          theme === 'dark' ? 'text-gray-600' : 'text-gray-500'
+                        )}>
+                          {step.description}
+                        </p>
+                      </div>
+                    </div>
+
+                    {index < STEPS.length - 1 && (
+                      <div className="flex-1 h-0.5 mx-2 sm:mx-3 mb-8 sm:mb-10 relative">
+                        <div className={cn(
+                          "absolute inset-0 rounded-full",
+                          theme === 'dark' ? 'bg-gray-700' : 'bg-gray-200'
+                        )} />
+                        <motion.div
+                          initial={false}
+                          animate={{
+                            scaleX: currentStepIndex > index ? 1 : 0
+                          }}
+                          transition={{ duration: 0.5, ease: "easeInOut" }}
+                          className={cn(
+                            "h-full origin-left rounded-full",
+                            theme === 'dark' ? 'bg-green-500' : 'bg-green-600'
+                          )}
+                        />
                       </div>
                     )}
-                  </div>
-                  {errors.image && <p className="text-red-500 text-xs mt-1 text-center">{errors.image}</p>}
+                  </React.Fragment>
+                ))}
+              </div>
+            </div>
 
-                  <p className="text-sm text-gray-500 text-center">
-                    Este paso es opcional. Puedes agregar la imagen después.
-                  </p>
-                </motion.div>
+            {/* Step Content */}
+            <motion.div
+              className={cn(
+                "rounded-2xl border p-6 sm:p-8 shadow-lg",
+                theme === 'dark'
+                  ? 'bg-gray-800/95 border-gray-700/50 backdrop-blur-sm'
+                  : 'bg-white border-gray-200 backdrop-blur-sm'
               )}
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.5 }}
+            >
+              <AnimatePresence mode="wait">
+                {/* Step 1: Information */}
+                {currentStep === 'info' && (
+                  <motion.div
+                    key="info"
+                    initial={{ opacity: 0, x: 20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    exit={{ opacity: 0, x: -20 }}
+                    transition={{ duration: 0.3 }}
+                    className="space-y-6"
+                  >
+                    <h2 className={cn(
+                      "text-xl font-bold flex items-center gap-3",
+                      theme === 'dark' ? 'text-white' : 'text-gray-900'
+                    )}>
+                      <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center">
+                        <Package className="w-5 h-5 text-white" />
+                      </div>
+                      Información del Producto
+                    </h2>
 
-              {/* Step 3: Pricing */}
-              {currentStep === 'pricing' && (
-                <motion.div
-                  key="pricing"
-                  initial={{ opacity: 0, x: 20 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  exit={{ opacity: 0, x: -20 }}
-                  className="space-y-6"
-                >
-                  <h2 className="text-xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
-                    <DollarSign className="w-6 h-6 text-blue-500" />
-                    Precios
-                  </h2>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      <div className="md:col-span-2">
+                        <label className={cn(
+                          "block text-sm font-medium mb-2",
+                          theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
+                        )}>
+                          Nombre del Producto *
+                        </label>
+                        <input
+                          type="text"
+                          value={formData.name}
+                          onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                          placeholder="Ej: Arroz Premium 5kg"
+                          className={cn(
+                            'w-full px-4 py-3 rounded-xl border focus:outline-none focus:ring-2 transition-all',
+                            errors.name
+                              ? 'border-red-500 bg-red-50 dark:bg-red-900/20'
+                              : theme === 'dark'
+                                ? 'bg-gray-900/50 border-gray-600 text-white focus:border-blue-500 focus:ring-blue-500/20'
+                                : 'bg-gray-50 border-gray-200 text-gray-900 focus:border-blue-500 focus:ring-blue-500/20'
+                          )}
+                        />
+                        {errors.name && <p className="text-red-500 text-xs mt-1">{errors.name}</p>}
+                      </div>
 
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                      Moneda
-                    </label>
-                    <select
-                      value={formData.currency}
-                      onChange={(e) => setFormData({ ...formData, currency: e.target.value })}
+                      <div className="md:col-span-2">
+                        <label className={cn(
+                          "block text-sm font-medium mb-2",
+                          theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
+                        )}>
+                          Descripción
+                        </label>
+                        <textarea
+                          value={formData.description}
+                          onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                          placeholder="Describe el producto..."
+                          rows={3}
+                          className={cn(
+                            'w-full px-4 py-3 rounded-xl border focus:outline-none focus:ring-2 transition-all resize-none',
+                            theme === 'dark'
+                              ? 'bg-gray-900/50 border-gray-600 text-white focus:border-blue-500 focus:ring-blue-500/20'
+                              : 'bg-gray-50 border-gray-200 text-gray-900 focus:border-blue-500 focus:ring-blue-500/20'
+                          )}
+                        />
+                      </div>
+
+                      <div>
+                        <label className={cn(
+                          "block text-sm font-medium mb-2",
+                          theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
+                        )}>
+                          Categoría
+                        </label>
+                        <select
+                          value={formData.category}
+                          onChange={(e) => setFormData({ ...formData, category: e.target.value })}
+                          className={cn(
+                            'w-full px-4 py-3 rounded-xl border focus:outline-none focus:ring-2 transition-all',
+                            theme === 'dark'
+                              ? 'bg-gray-900/50 border-gray-600 text-white focus:border-blue-500 focus:ring-blue-500/20'
+                              : 'bg-gray-50 border-gray-200 text-gray-900 focus:border-blue-500 focus:ring-blue-500/20'
+                          )}
+                        >
+                          <option value="">Seleccionar categoría</option>
+                          {CATEGORIES.map(cat => (
+                            <option key={cat} value={cat}>{cat}</option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className={cn(
+                          "block text-sm font-medium mb-2 flex items-center gap-2",
+                          theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
+                        )}>
+                          <Scale className="w-4 h-4" />
+                          Unidad de Medida
+                        </label>
+                        <select
+                          value={formData.unitOfMeasure}
+                          onChange={(e) => setFormData({ ...formData, unitOfMeasure: e.target.value })}
+                          className={cn(
+                            'w-full px-4 py-3 rounded-xl border focus:outline-none focus:ring-2 transition-all',
+                            theme === 'dark'
+                              ? 'bg-gray-900/50 border-gray-600 text-white focus:border-blue-500 focus:ring-blue-500/20'
+                              : 'bg-gray-50 border-gray-200 text-gray-900 focus:border-blue-500 focus:ring-blue-500/20'
+                          )}
+                        >
+                          {UNITS_OF_MEASURE.map(unit => (
+                            <option key={unit.id} value={unit.id}>
+                              {unit.name} ({unit.abbr})
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className={cn(
+                          "block text-sm font-medium mb-2 flex items-center gap-2",
+                          theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
+                        )}>
+                          <Tag className="w-4 h-4" />
+                          SKU (Referencia Interna)
+                        </label>
+                        <input
+                          type="text"
+                          value={formData.sku}
+                          onChange={(e) => setFormData({ ...formData, sku: e.target.value.toUpperCase() })}
+                          placeholder="Se generará automáticamente"
+                          className={cn(
+                            'w-full px-4 py-3 rounded-xl border focus:outline-none focus:ring-2 transition-all font-mono',
+                            theme === 'dark'
+                              ? 'bg-gray-900/50 border-gray-600 text-white focus:border-blue-500 focus:ring-blue-500/20'
+                              : 'bg-gray-50 border-gray-200 text-gray-900 focus:border-blue-500 focus:ring-blue-500/20'
+                          )}
+                        />
+                      </div>
+
+                      <div>
+                        <label className={cn(
+                          "block text-sm font-medium mb-2 flex items-center gap-2",
+                          theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
+                        )}>
+                          <Barcode className="w-4 h-4" />
+                          Código de Barras
+                        </label>
+                        <input
+                          type="text"
+                          value={formData.barcode}
+                          onChange={(e) => setFormData({ ...formData, barcode: e.target.value })}
+                          placeholder="Se generará automáticamente"
+                          className={cn(
+                            'w-full px-4 py-3 rounded-xl border focus:outline-none focus:ring-2 transition-all font-mono',
+                            theme === 'dark'
+                              ? 'bg-gray-900/50 border-gray-600 text-white focus:border-blue-500 focus:ring-blue-500/20'
+                              : 'bg-gray-50 border-gray-200 text-gray-900 focus:border-blue-500 focus:ring-blue-500/20'
+                          )}
+                        />
+                      </div>
+
+                      <div>
+                        <label className={cn(
+                          "block text-sm font-medium mb-2",
+                          theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
+                        )}>
+                          Stock Mínimo de Alerta
+                        </label>
+                        <input
+                          type="number"
+                          value={formData.minimumStock}
+                          onChange={(e) => setFormData({ ...formData, minimumStock: e.target.value })}
+                          placeholder="5"
+                          min="0"
+                          className={cn(
+                            'w-full px-4 py-3 rounded-xl border focus:outline-none focus:ring-2 transition-all',
+                            theme === 'dark'
+                              ? 'bg-gray-900/50 border-gray-600 text-white focus:border-blue-500 focus:ring-blue-500/20'
+                              : 'bg-gray-50 border-gray-200 text-gray-900 focus:border-blue-500 focus:ring-blue-500/20'
+                          )}
+                        />
+                      </div>
+
+                      <div>
+                        <label className={cn(
+                          "block text-sm font-medium mb-2 flex items-center gap-2",
+                          theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
+                        )}>
+                          <Truck className="w-4 h-4" />
+                          Proveedor
+                        </label>
+                        <input
+                          type="text"
+                          value={formData.supplierName}
+                          onChange={(e) => setFormData({ ...formData, supplierName: e.target.value })}
+                          placeholder="Nombre del proveedor (opcional)"
+                          className={cn(
+                            'w-full px-4 py-3 rounded-xl border focus:outline-none focus:ring-2 transition-all',
+                            theme === 'dark'
+                              ? 'bg-gray-900/50 border-gray-600 text-white focus:border-blue-500 focus:ring-blue-500/20'
+                              : 'bg-gray-50 border-gray-200 text-gray-900 focus:border-blue-500 focus:ring-blue-500/20'
+                          )}
+                        />
+                      </div>
+                    </div>
+                  </motion.div>
+                )}
+
+                {/* Step 2: Image */}
+                {currentStep === 'image' && (
+                  <motion.div
+                    key="image"
+                    initial={{ opacity: 0, x: 20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    exit={{ opacity: 0, x: -20 }}
+                    transition={{ duration: 0.3 }}
+                    className="space-y-6"
+                  >
+                    <h2 className={cn(
+                      "text-xl font-bold flex items-center gap-3",
+                      theme === 'dark' ? 'text-white' : 'text-gray-900'
+                    )}>
+                      <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-purple-500 to-purple-600 flex items-center justify-center">
+                        <ImageIcon className="w-5 h-5 text-white" />
+                      </div>
+                      Imagen del Producto
+                    </h2>
+
+                    <motion.div
+                      onClick={() => fileInputRef.current?.click()}
+                      whileHover={{ scale: 1.01 }}
+                      whileTap={{ scale: 0.99 }}
                       className={cn(
-                        'w-full px-4 py-3 rounded-xl border focus:outline-none focus:ring-2 transition-all',
+                        'border-2 border-dashed rounded-2xl p-12 text-center cursor-pointer transition-all',
                         theme === 'dark'
-                          ? 'bg-gray-800/50 border-gray-700 text-white focus:border-blue-500 focus:ring-blue-500/20'
-                          : 'bg-gray-50 border-gray-200 text-gray-900 focus:border-blue-500 focus:ring-blue-500/20'
+                          ? 'border-gray-600 hover:border-purple-500/50 hover:bg-purple-500/5'
+                          : 'border-gray-300 hover:border-purple-400 hover:bg-purple-50'
                       )}
                     >
-                      <option value="USD">USD - Dólar</option>
-                      <option value="EUR">EUR - Euro</option>
-                      <option value="CUP">CUP - Peso Cubano</option>
-                      <option value="MLC">MLC</option>
-                    </select>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                        Precio de Costo *
-                      </label>
-                      <div className="relative">
-                        <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500">{symbol}</span>
-                        <input
-                          type="number"
-                          value={formData.costPrice}
-                          onChange={(e) => setFormData({ ...formData, costPrice: e.target.value })}
-                          placeholder="0.00"
-                          step="0.01"
-                          min="0"
-                          className={cn(
-                            'w-full pl-8 pr-4 py-3 rounded-xl border focus:outline-none focus:ring-2 transition-all',
-                            errors.costPrice
-                              ? 'border-red-500 bg-red-50 dark:bg-red-900/20'
-                              : theme === 'dark'
-                                ? 'bg-gray-800/50 border-gray-700 text-white focus:border-blue-500 focus:ring-blue-500/20'
-                                : 'bg-gray-50 border-gray-200 text-gray-900 focus:border-blue-500 focus:ring-blue-500/20'
-                          )}
-                        />
-                      </div>
-                      {errors.costPrice && <p className="text-red-500 text-xs mt-1">{errors.costPrice}</p>}
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                        Precio de Venta *
-                      </label>
-                      <div className="relative">
-                        <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500">{symbol}</span>
-                        <input
-                          type="number"
-                          value={formData.sellingPrice}
-                          onChange={(e) => setFormData({ ...formData, sellingPrice: e.target.value })}
-                          placeholder="0.00"
-                          step="0.01"
-                          min="0"
-                          className={cn(
-                            'w-full pl-8 pr-4 py-3 rounded-xl border focus:outline-none focus:ring-2 transition-all',
-                            errors.sellingPrice
-                              ? 'border-red-500 bg-red-50 dark:bg-red-900/20'
-                              : theme === 'dark'
-                                ? 'bg-gray-800/50 border-gray-700 text-white focus:border-blue-500 focus:ring-blue-500/20'
-                                : 'bg-gray-50 border-gray-200 text-gray-900 focus:border-blue-500 focus:ring-blue-500/20'
-                          )}
-                        />
-                      </div>
-                      {errors.sellingPrice && <p className="text-red-500 text-xs mt-1">{errors.sellingPrice}</p>}
-                    </div>
-                  </div>
-
-                  {/* Margin Preview */}
-                  {formData.costPrice && formData.sellingPrice && (
-                    <div className={cn(
-                      'p-4 rounded-xl',
-                      getMargin() >= 30
-                        ? 'bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800'
-                        : getMargin() >= 15
-                          ? 'bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800'
-                          : 'bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800'
-                    )}>
-                      <div className="flex items-center justify-between">
-                        <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Margen de Ganancia</span>
-                        <span className={cn(
-                          'text-2xl font-bold',
-                          getMargin() >= 30 ? 'text-green-600' : getMargin() >= 15 ? 'text-amber-600' : 'text-red-600'
-                        )}>
-                          {getMargin()}%
-                        </span>
-                      </div>
-                      <p className="text-xs text-gray-500 mt-1">
-                        Ganancia: {symbol}{(parseFloat(formData.sellingPrice) - parseFloat(formData.costPrice)).toFixed(2)} por unidad
-                      </p>
-                    </div>
-                  )}
-                </motion.div>
-              )}
-
-              {/* Step 4: Supplier */}
-              {currentStep === 'supplier' && (
-                <motion.div
-                  key="supplier"
-                  initial={{ opacity: 0, x: 20 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  exit={{ opacity: 0, x: -20 }}
-                  className="space-y-6"
-                >
-                  <h2 className="text-xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
-                    <Truck className="w-6 h-6 text-blue-500" />
-                    Datos del Proveedor
-                  </h2>
-
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                        <Tag className="w-4 h-4 inline mr-1" />
-                        Referencia Interna (SKU)
-                      </label>
                       <input
-                        type="text"
-                        value={formData.sku}
-                        onChange={(e) => setFormData({ ...formData, sku: e.target.value.toUpperCase() })}
-                        placeholder="Se generará automáticamente"
-                        className={cn(
-                          'w-full px-4 py-3 rounded-xl border focus:outline-none focus:ring-2 transition-all font-mono',
-                          theme === 'dark'
-                            ? 'bg-gray-800/50 border-gray-700 text-white focus:border-blue-500 focus:ring-blue-500/20'
-                            : 'bg-gray-50 border-gray-200 text-gray-900 focus:border-blue-500 focus:ring-blue-500/20'
-                        )}
+                        ref={fileInputRef}
+                        type="file"
+                        accept="image/*"
+                        onChange={handleFileChange}
+                        className="hidden"
                       />
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                        <Barcode className="w-4 h-4 inline mr-1" />
-                        Código de Barras
-                      </label>
-                      <input
-                        type="text"
-                        value={formData.barcode}
-                        onChange={(e) => setFormData({ ...formData, barcode: e.target.value })}
-                        placeholder="Se generará automáticamente"
-                        className={cn(
-                          'w-full px-4 py-3 rounded-xl border focus:outline-none focus:ring-2 transition-all font-mono',
-                          theme === 'dark'
-                            ? 'bg-gray-800/50 border-gray-700 text-white focus:border-blue-500 focus:ring-blue-500/20'
-                            : 'bg-gray-50 border-gray-200 text-gray-900 focus:border-blue-500 focus:ring-blue-500/20'
-                        )}
-                      />
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                      Nombre del Proveedor
-                    </label>
-                    <input
-                      type="text"
-                      value={formData.supplierName}
-                      onChange={(e) => setFormData({ ...formData, supplierName: e.target.value })}
-                      placeholder="Ej: Distribuidora XYZ"
-                      className={cn(
-                        'w-full px-4 py-3 rounded-xl border focus:outline-none focus:ring-2 transition-all',
-                        theme === 'dark'
-                          ? 'bg-gray-800/50 border-gray-700 text-white focus:border-blue-500 focus:ring-blue-500/20'
-                          : 'bg-gray-50 border-gray-200 text-gray-900 focus:border-blue-500 focus:ring-blue-500/20'
-                      )}
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                      Contacto del Proveedor
-                    </label>
-                    <input
-                      type="text"
-                      value={formData.supplierContact}
-                      onChange={(e) => setFormData({ ...formData, supplierContact: e.target.value })}
-                      placeholder="Teléfono o email"
-                      className={cn(
-                        'w-full px-4 py-3 rounded-xl border focus:outline-none focus:ring-2 transition-all',
-                        theme === 'dark'
-                          ? 'bg-gray-800/50 border-gray-700 text-white focus:border-blue-500 focus:ring-blue-500/20'
-                          : 'bg-gray-50 border-gray-200 text-gray-900 focus:border-blue-500 focus:ring-blue-500/20'
-                      )}
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                      Referencia del Proveedor
-                    </label>
-                    <input
-                      type="text"
-                      value={formData.supplierReference}
-                      onChange={(e) => setFormData({ ...formData, supplierReference: e.target.value })}
-                      placeholder="Código del producto en el proveedor"
-                      className={cn(
-                        'w-full px-4 py-3 rounded-xl border focus:outline-none focus:ring-2 transition-all',
-                        theme === 'dark'
-                          ? 'bg-gray-800/50 border-gray-700 text-white focus:border-blue-500 focus:ring-blue-500/20'
-                          : 'bg-gray-50 border-gray-200 text-gray-900 focus:border-blue-500 focus:ring-blue-500/20'
-                      )}
-                    />
-                  </div>
-
-                  <p className="text-sm text-gray-500 text-center">
-                    Todos los campos de esta sección son opcionales.
-                  </p>
-                </motion.div>
-              )}
-
-              {/* Step 5: Review */}
-              {currentStep === 'review' && (
-                <motion.div
-                  key="review"
-                  initial={{ opacity: 0, x: 20 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  exit={{ opacity: 0, x: -20 }}
-                  className="space-y-6"
-                >
-                  <h2 className="text-xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
-                    <Check className="w-6 h-6 text-green-500" />
-                    Revisión del Producto
-                  </h2>
-
-                  <div className={cn(
-                    'rounded-xl p-6',
-                    theme === 'dark' ? 'bg-gray-800/50' : 'bg-gray-50'
-                  )}>
-                    <div className="flex gap-6">
-                      {/* Image */}
-                      <div className={cn(
-                        'w-32 h-32 rounded-xl overflow-hidden flex items-center justify-center flex-shrink-0',
-                        theme === 'dark' ? 'bg-gray-700' : 'bg-gray-200'
-                      )}>
-                        {formData.imageUrl ? (
+                      {formData.imageUrl ? (
+                        <div className="relative inline-block">
                           <img
                             src={formData.imageUrl}
-                            alt={formData.name}
-                            className="w-full h-full object-cover"
+                            alt="Preview"
+                            className="max-w-xs max-h-64 rounded-xl mx-auto object-contain shadow-lg"
                           />
-                        ) : (
-                          <ImageIcon className="w-10 h-10 text-gray-400" />
-                        )}
-                      </div>
-
-                      {/* Details */}
-                      <div className="flex-1 space-y-4">
-                        <div>
-                          <h3 className="text-xl font-bold text-gray-900 dark:text-white">{formData.name || 'Sin nombre'}</h3>
-                          {formData.category && (
-                            <span className="text-sm text-blue-500">{formData.category}</span>
-                          )}
-                          {formData.description && (
-                            <p className="text-sm text-gray-500 mt-1">{formData.description}</p>
-                          )}
+                          <motion.button
+                            whileHover={{ scale: 1.1 }}
+                            whileTap={{ scale: 0.9 }}
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              setFormData({ ...formData, imageUrl: '', imageFile: null })
+                            }}
+                            className="absolute -top-3 -right-3 w-8 h-8 bg-red-500 text-white rounded-full flex items-center justify-center shadow-lg"
+                          >
+                            <X className="w-4 h-4" />
+                          </motion.button>
                         </div>
-
-                        <div className="grid grid-cols-3 gap-4">
-                          <div>
-                            <p className="text-xs text-gray-500">Precio de Costo</p>
-                            <p className="font-bold text-gray-900 dark:text-white">
-                              {symbol}{parseFloat(formData.costPrice || '0').toFixed(2)}
-                            </p>
+                      ) : (
+                        <div className="space-y-4">
+                          <div className={cn(
+                            "w-20 h-20 mx-auto rounded-2xl flex items-center justify-center",
+                            theme === 'dark' ? 'bg-gray-700' : 'bg-gray-100'
+                          )}>
+                            <Upload className="w-10 h-10 text-gray-400" />
                           </div>
                           <div>
-                            <p className="text-xs text-gray-500">Precio de Venta</p>
-                            <p className="font-bold text-green-600">
-                              {symbol}{parseFloat(formData.sellingPrice || '0').toFixed(2)}
-                            </p>
-                          </div>
-                          <div>
-                            <p className="text-xs text-gray-500">Margen</p>
                             <p className={cn(
-                              'font-bold',
-                              getMargin() >= 30 ? 'text-green-600' : getMargin() >= 15 ? 'text-amber-600' : 'text-red-600'
+                              "font-medium",
+                              theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
                             )}>
-                              {getMargin()}%
+                              Haz clic para seleccionar una imagen
+                            </p>
+                            <p className={cn(
+                              "text-sm mt-1",
+                              theme === 'dark' ? 'text-gray-500' : 'text-gray-500'
+                            )}>
+                              PNG, JPG o WEBP hasta 5MB
                             </p>
                           </div>
                         </div>
+                      )}
+                    </motion.div>
+                    {errors.image && <p className="text-red-500 text-sm text-center">{errors.image}</p>}
 
-                        {formData.supplierName && (
-                          <div>
-                            <p className="text-xs text-gray-500">Proveedor</p>
-                            <p className="text-sm text-gray-700 dark:text-gray-300">{formData.supplierName}</p>
-                          </div>
-                        )}
+                    <p className={cn(
+                      "text-sm text-center",
+                      theme === 'dark' ? 'text-gray-500' : 'text-gray-500'
+                    )}>
+                      Este paso es opcional. Puedes agregar la imagen después.
+                    </p>
+                  </motion.div>
+                )}
 
-                        <div>
-                          <p className="text-xs text-gray-500">Stock Mínimo de Alerta</p>
-                          <p className="text-sm text-gray-700 dark:text-gray-300">{formData.minimumStock} unidades</p>
+                {/* Step 3: Pricing */}
+                {currentStep === 'pricing' && (
+                  <motion.div
+                    key="pricing"
+                    initial={{ opacity: 0, x: 20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    exit={{ opacity: 0, x: -20 }}
+                    transition={{ duration: 0.3 }}
+                    className="space-y-6"
+                  >
+                    <h2 className={cn(
+                      "text-xl font-bold flex items-center gap-3",
+                      theme === 'dark' ? 'text-white' : 'text-gray-900'
+                    )}>
+                      <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-500 to-emerald-600 flex items-center justify-center">
+                        <DollarSign className="w-5 h-5 text-white" />
+                      </div>
+                      Precios y Costos
+                    </h2>
+
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                      <div>
+                        <label className={cn(
+                          "block text-sm font-medium mb-2",
+                          theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
+                        )}>
+                          Moneda
+                        </label>
+                        <select
+                          value={formData.currency}
+                          onChange={(e) => setFormData({ ...formData, currency: e.target.value })}
+                          className={cn(
+                            'w-full px-4 py-3 rounded-xl border focus:outline-none focus:ring-2 transition-all',
+                            theme === 'dark'
+                              ? 'bg-gray-900/50 border-gray-600 text-white focus:border-blue-500 focus:ring-blue-500/20'
+                              : 'bg-gray-50 border-gray-200 text-gray-900 focus:border-blue-500 focus:ring-blue-500/20'
+                          )}
+                        >
+                          <option value="USD">USD - Dólar</option>
+                          <option value="EUR">EUR - Euro</option>
+                          <option value="CUP">CUP - Peso Cubano</option>
+                          <option value="MLC">MLC</option>
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className={cn(
+                          "block text-sm font-medium mb-2",
+                          theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
+                        )}>
+                          Precio de Costo *
+                        </label>
+                        <div className="relative">
+                          <span className={cn(
+                            "absolute left-4 top-1/2 -translate-y-1/2",
+                            theme === 'dark' ? 'text-gray-400' : 'text-gray-500'
+                          )}>{symbol}</span>
+                          <input
+                            type="number"
+                            value={formData.costPrice}
+                            onChange={(e) => setFormData({ ...formData, costPrice: e.target.value })}
+                            placeholder="0.00"
+                            step="0.01"
+                            min="0"
+                            className={cn(
+                              'w-full pl-8 pr-4 py-3 rounded-xl border focus:outline-none focus:ring-2 transition-all',
+                              errors.costPrice
+                                ? 'border-red-500 bg-red-50 dark:bg-red-900/20'
+                                : theme === 'dark'
+                                  ? 'bg-gray-900/50 border-gray-600 text-white focus:border-blue-500 focus:ring-blue-500/20'
+                                  : 'bg-gray-50 border-gray-200 text-gray-900 focus:border-blue-500 focus:ring-blue-500/20'
+                            )}
+                          />
                         </div>
+                        {errors.costPrice && <p className="text-red-500 text-xs mt-1">{errors.costPrice}</p>}
+                      </div>
+
+                      <div>
+                        <label className={cn(
+                          "block text-sm font-medium mb-2",
+                          theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
+                        )}>
+                          Precio de Venta *
+                        </label>
+                        <div className="relative">
+                          <span className={cn(
+                            "absolute left-4 top-1/2 -translate-y-1/2",
+                            theme === 'dark' ? 'text-gray-400' : 'text-gray-500'
+                          )}>{symbol}</span>
+                          <input
+                            type="number"
+                            value={formData.sellingPrice}
+                            onChange={(e) => setFormData({ ...formData, sellingPrice: e.target.value })}
+                            placeholder="0.00"
+                            step="0.01"
+                            min="0"
+                            className={cn(
+                              'w-full pl-8 pr-4 py-3 rounded-xl border focus:outline-none focus:ring-2 transition-all',
+                              errors.sellingPrice
+                                ? 'border-red-500 bg-red-50 dark:bg-red-900/20'
+                                : theme === 'dark'
+                                  ? 'bg-gray-900/50 border-gray-600 text-white focus:border-blue-500 focus:ring-blue-500/20'
+                                  : 'bg-gray-50 border-gray-200 text-gray-900 focus:border-blue-500 focus:ring-blue-500/20'
+                            )}
+                          />
+                        </div>
+                        {errors.sellingPrice && <p className="text-red-500 text-xs mt-1">{errors.sellingPrice}</p>}
                       </div>
                     </div>
-                  </div>
 
-                  {errors.submit && (
-                    <div className="p-4 rounded-xl bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800">
-                      <p className="text-red-600 text-sm">{errors.submit}</p>
+                    {/* Margin Preview */}
+                    {formData.costPrice && formData.sellingPrice && (
+                      <motion.div
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        className={cn(
+                          'p-6 rounded-2xl border',
+                          getMargin() >= 30
+                            ? 'bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800'
+                            : getMargin() >= 15
+                              ? 'bg-amber-50 dark:bg-amber-900/20 border-amber-200 dark:border-amber-800'
+                              : 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800'
+                        )}>
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <span className={cn(
+                              "text-sm font-medium",
+                              theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
+                            )}>Margen de Ganancia</span>
+                            <p className={cn(
+                              "text-xs mt-1",
+                              theme === 'dark' ? 'text-gray-500' : 'text-gray-500'
+                            )}>
+                              Ganancia: {symbol}{(parseFloat(formData.sellingPrice) - parseFloat(formData.costPrice)).toFixed(2)} por {selectedUnit?.abbr}
+                            </p>
+                          </div>
+                          <span className={cn(
+                            'text-4xl font-bold',
+                            getMargin() >= 30 ? 'text-green-600' : getMargin() >= 15 ? 'text-amber-600' : 'text-red-600'
+                          )}>
+                            {getMargin()}%
+                          </span>
+                        </div>
+
+                        {/* Progress bar */}
+                        <div className={cn(
+                          "mt-4 h-2 rounded-full overflow-hidden",
+                          theme === 'dark' ? 'bg-gray-700' : 'bg-gray-200'
+                        )}>
+                          <motion.div
+                            initial={{ width: 0 }}
+                            animate={{ width: `${Math.min(getMargin(), 100)}%` }}
+                            transition={{ duration: 0.5 }}
+                            className={cn(
+                              "h-full rounded-full",
+                              getMargin() >= 30 ? 'bg-green-500' : getMargin() >= 15 ? 'bg-amber-500' : 'bg-red-500'
+                            )}
+                          />
+                        </div>
+                      </motion.div>
+                    )}
+                  </motion.div>
+                )}
+
+                {/* Step 4: Variants */}
+                {currentStep === 'variants' && (
+                  <motion.div
+                    key="variants"
+                    initial={{ opacity: 0, x: 20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    exit={{ opacity: 0, x: -20 }}
+                    transition={{ duration: 0.3 }}
+                    className="space-y-6"
+                  >
+                    <h2 className={cn(
+                      "text-xl font-bold flex items-center gap-3",
+                      theme === 'dark' ? 'text-white' : 'text-gray-900'
+                    )}>
+                      <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-500 to-amber-600 flex items-center justify-center">
+                        <Layers className="w-5 h-5 text-white" />
+                      </div>
+                      Variantes del Producto
+                    </h2>
+
+                    <p className={cn(
+                      "text-sm",
+                      theme === 'dark' ? 'text-gray-400' : 'text-gray-600'
+                    )}>
+                      Las variantes te permiten vender un mismo producto con diferentes opciones (colores, tallas, materiales, etc.).
+                      Este paso es opcional.
+                    </p>
+
+                    {/* Add variant type */}
+                    <div className={cn(
+                      "p-4 rounded-xl border",
+                      theme === 'dark' ? 'bg-gray-900/50 border-gray-700' : 'bg-gray-50 border-gray-200'
+                    )}>
+                      <label className={cn(
+                        "block text-sm font-medium mb-3",
+                        theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
+                      )}>
+                        Crear tipo de variante
+                      </label>
+                      <div className="flex gap-3">
+                        <input
+                          type="text"
+                          value={newTypeName}
+                          onChange={(e) => setNewTypeName(e.target.value)}
+                          placeholder="Ej: Color, Talla, Material..."
+                          className={cn(
+                            'flex-1 px-4 py-2.5 rounded-xl border focus:outline-none focus:ring-2 transition-all',
+                            theme === 'dark'
+                              ? 'bg-gray-800 border-gray-600 text-white focus:border-amber-500 focus:ring-amber-500/20'
+                              : 'bg-white border-gray-200 text-gray-900 focus:border-amber-500 focus:ring-amber-500/20'
+                          )}
+                          onKeyDown={(e) => e.key === 'Enter' && addVariantType()}
+                        />
+                        <motion.button
+                          whileHover={{ scale: 1.02 }}
+                          whileTap={{ scale: 0.98 }}
+                          onClick={addVariantType}
+                          disabled={!newTypeName.trim()}
+                          className={cn(
+                            "px-4 py-2.5 rounded-xl font-medium transition-all flex items-center gap-2",
+                            "disabled:opacity-50 disabled:cursor-not-allowed",
+                            theme === 'dark'
+                              ? 'bg-amber-600 hover:bg-amber-700 text-white'
+                              : 'bg-amber-500 hover:bg-amber-600 text-white'
+                          )}
+                        >
+                          <Plus className="w-4 h-4" />
+                          Agregar
+                        </motion.button>
+                      </div>
                     </div>
-                  )}
-                </motion.div>
-              )}
-            </AnimatePresence>
+
+                    {/* Variant types list */}
+                    {variantTypes.length > 0 && (
+                      <div className="space-y-4">
+                        {variantTypes.map((type) => (
+                          <motion.div
+                            key={type.id}
+                            initial={{ opacity: 0, y: 10 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            className={cn(
+                              "p-4 rounded-xl border",
+                              theme === 'dark' ? 'bg-gray-900/30 border-gray-700' : 'bg-white border-gray-200'
+                            )}
+                          >
+                            <div className="flex items-center justify-between mb-3">
+                              <span className={cn(
+                                "font-semibold",
+                                theme === 'dark' ? 'text-white' : 'text-gray-900'
+                              )}>
+                                {type.name}
+                              </span>
+                              <button
+                                onClick={() => removeVariantType(type.id)}
+                                className="text-red-500 hover:text-red-600 p-1"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            </div>
+
+                            {/* Values */}
+                            <div className="flex flex-wrap gap-2 mb-3">
+                              {type.values.map((value) => (
+                                <motion.span
+                                  key={value}
+                                  initial={{ scale: 0 }}
+                                  animate={{ scale: 1 }}
+                                  className={cn(
+                                    "px-3 py-1 rounded-full text-sm flex items-center gap-1",
+                                    theme === 'dark'
+                                      ? 'bg-amber-900/30 text-amber-300 border border-amber-700'
+                                      : 'bg-amber-100 text-amber-700 border border-amber-200'
+                                  )}
+                                >
+                                  {value}
+                                  <button
+                                    onClick={() => removeValueFromType(type.id, value)}
+                                    className="hover:text-red-500 ml-1"
+                                  >
+                                    <X className="w-3 h-3" />
+                                  </button>
+                                </motion.span>
+                              ))}
+                            </div>
+
+                            {/* Add value */}
+                            {editingTypeId === type.id && (
+                              <div className="flex gap-2">
+                                <input
+                                  type="text"
+                                  value={newTypeValue}
+                                  onChange={(e) => setNewTypeValue(e.target.value)}
+                                  placeholder={`Agregar ${type.name.toLowerCase()}...`}
+                                  className={cn(
+                                    'flex-1 px-3 py-2 rounded-lg border text-sm focus:outline-none focus:ring-2 transition-all',
+                                    theme === 'dark'
+                                      ? 'bg-gray-800 border-gray-600 text-white focus:border-amber-500 focus:ring-amber-500/20'
+                                      : 'bg-gray-50 border-gray-200 text-gray-900 focus:border-amber-500 focus:ring-amber-500/20'
+                                  )}
+                                  onKeyDown={(e) => e.key === 'Enter' && addValueToType(type.id)}
+                                  autoFocus
+                                />
+                                <button
+                                  onClick={() => addValueToType(type.id)}
+                                  disabled={!newTypeValue.trim()}
+                                  className={cn(
+                                    "px-3 py-2 rounded-lg text-sm font-medium transition-all",
+                                    "disabled:opacity-50",
+                                    theme === 'dark'
+                                      ? 'bg-gray-700 hover:bg-gray-600 text-white'
+                                      : 'bg-gray-200 hover:bg-gray-300 text-gray-700'
+                                  )}
+                                >
+                                  <Plus className="w-4 h-4" />
+                                </button>
+                              </div>
+                            )}
+
+                            {editingTypeId !== type.id && (
+                              <button
+                                onClick={() => setEditingTypeId(type.id)}
+                                className={cn(
+                                  "text-sm flex items-center gap-1 transition-colors",
+                                  theme === 'dark'
+                                    ? 'text-gray-400 hover:text-amber-400'
+                                    : 'text-gray-500 hover:text-amber-600'
+                                )}
+                              >
+                                <Plus className="w-3 h-3" />
+                                Agregar valor
+                              </button>
+                            )}
+                          </motion.div>
+                        ))}
+
+                        {/* Generate variants button */}
+                        {variantTypes.some(t => t.values.length > 0) && (
+                          <motion.button
+                            whileHover={{ scale: 1.02 }}
+                            whileTap={{ scale: 0.98 }}
+                            onClick={generateVariants}
+                            className={cn(
+                              "w-full py-3 rounded-xl font-medium transition-all flex items-center justify-center gap-2",
+                              theme === 'dark'
+                                ? 'bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-700 hover:to-orange-700 text-white shadow-lg shadow-amber-500/25'
+                                : 'bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white shadow-lg shadow-amber-400/25'
+                            )}
+                          >
+                            <Layers className="w-5 h-5" />
+                            Generar Variantes
+                          </motion.button>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Generated variants */}
+                    {variants.length > 0 && (
+                      <div className="space-y-4">
+                        <div className="flex items-center justify-between">
+                          <h3 className={cn(
+                            "font-semibold",
+                            theme === 'dark' ? 'text-white' : 'text-gray-900'
+                          )}>
+                            Variantes Generadas ({variants.length})
+                          </h3>
+                          <button
+                            onClick={() => {
+                              setVariants([])
+                              setFormData(prev => ({ ...prev, hasVariants: false }))
+                            }}
+                            className="text-red-500 hover:text-red-600 text-sm flex items-center gap-1"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                            Eliminar todas
+                          </button>
+                        </div>
+
+                        <div className="grid gap-3">
+                          {variants.map((variant, index) => (
+                            <motion.div
+                              key={variant.id}
+                              initial={{ opacity: 0, x: -10 }}
+                              animate={{ opacity: 1, x: 0 }}
+                              transition={{ delay: index * 0.05 }}
+                              className={cn(
+                                "p-4 rounded-xl border",
+                                theme === 'dark' ? 'bg-gray-900/30 border-gray-700' : 'bg-white border-gray-200'
+                              )}
+                            >
+                              <div className="flex items-start gap-4">
+                                <div className="flex-1 grid grid-cols-1 sm:grid-cols-4 gap-3">
+                                  <div className="sm:col-span-2">
+                                    <label className="block text-xs text-gray-500 mb-1">Nombre</label>
+                                    <p className={cn(
+                                      "font-medium",
+                                      theme === 'dark' ? 'text-white' : 'text-gray-900'
+                                    )}>
+                                      {variant.name}
+                                    </p>
+                                    <div className="flex gap-1 mt-1">
+                                      {variant.options.map((opt, i) => (
+                                        <span
+                                          key={i}
+                                          className={cn(
+                                            "text-xs px-2 py-0.5 rounded-full",
+                                            theme === 'dark'
+                                              ? 'bg-gray-700 text-gray-300'
+                                              : 'bg-gray-100 text-gray-600'
+                                          )}
+                                        >
+                                          {opt.value}
+                                        </span>
+                                      ))}
+                                    </div>
+                                  </div>
+                                  <div>
+                                    <label className="block text-xs text-gray-500 mb-1">Costo</label>
+                                    <div className="relative">
+                                      <span className="absolute left-2 top-1/2 -translate-y-1/2 text-xs text-gray-500">{symbol}</span>
+                                      <input
+                                        type="number"
+                                        value={variant.costPrice}
+                                        onChange={(e) => updateVariant(variant.id, 'costPrice', e.target.value)}
+                                        className={cn(
+                                          'w-full pl-6 pr-2 py-1.5 rounded-lg border text-sm focus:outline-none',
+                                          theme === 'dark'
+                                            ? 'bg-gray-800 border-gray-600 text-white'
+                                            : 'bg-gray-50 border-gray-200 text-gray-900'
+                                        )}
+                                      />
+                                    </div>
+                                  </div>
+                                  <div>
+                                    <label className="block text-xs text-gray-500 mb-1">Venta</label>
+                                    <div className="relative">
+                                      <span className="absolute left-2 top-1/2 -translate-y-1/2 text-xs text-gray-500">{symbol}</span>
+                                      <input
+                                        type="number"
+                                        value={variant.sellingPrice}
+                                        onChange={(e) => updateVariant(variant.id, 'sellingPrice', e.target.value)}
+                                        className={cn(
+                                          'w-full pl-6 pr-2 py-1.5 rounded-lg border text-sm focus:outline-none',
+                                          theme === 'dark'
+                                            ? 'bg-gray-800 border-gray-600 text-white'
+                                            : 'bg-gray-50 border-gray-200 text-gray-900'
+                                        )}
+                                      />
+                                    </div>
+                                  </div>
+                                </div>
+                                <button
+                                  onClick={() => removeVariant(variant.id)}
+                                  className="text-red-500 hover:text-red-600 p-1 mt-4"
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </button>
+                              </div>
+                            </motion.div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {variantTypes.length === 0 && variants.length === 0 && (
+                      <div className={cn(
+                        "text-center py-12 rounded-xl border-2 border-dashed",
+                        theme === 'dark' ? 'border-gray-700' : 'border-gray-200'
+                      )}>
+                        <Layers className={cn(
+                          "w-12 h-12 mx-auto mb-3",
+                          theme === 'dark' ? 'text-gray-600' : 'text-gray-400'
+                        )} />
+                        <p className={cn(
+                          "font-medium",
+                          theme === 'dark' ? 'text-gray-400' : 'text-gray-600'
+                        )}>
+                          No hay variantes configuradas
+                        </p>
+                        <p className={cn(
+                          "text-sm mt-1",
+                          theme === 'dark' ? 'text-gray-500' : 'text-gray-500'
+                        )}>
+                          Puedes continuar sin variantes o agregar tipos arriba
+                        </p>
+                      </div>
+                    )}
+                  </motion.div>
+                )}
+
+                {/* Step 5: Review */}
+                {currentStep === 'review' && (
+                  <motion.div
+                    key="review"
+                    initial={{ opacity: 0, x: 20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    exit={{ opacity: 0, x: -20 }}
+                    transition={{ duration: 0.3 }}
+                    className="space-y-6"
+                  >
+                    <h2 className={cn(
+                      "text-xl font-bold flex items-center gap-3",
+                      theme === 'dark' ? 'text-white' : 'text-gray-900'
+                    )}>
+                      <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-green-500 to-green-600 flex items-center justify-center">
+                        <Check className="w-5 h-5 text-white" />
+                      </div>
+                      Revisión del Producto
+                    </h2>
+
+                    <div className={cn(
+                      'rounded-2xl p-6',
+                      theme === 'dark' ? 'bg-gray-900/50' : 'bg-gray-50'
+                    )}>
+                      <div className="flex gap-6">
+                        {/* Image */}
+                        <motion.div
+                          whileHover={{ scale: 1.02 }}
+                          className={cn(
+                            'w-32 h-32 rounded-xl overflow-hidden flex items-center justify-center flex-shrink-0 shadow-lg',
+                            theme === 'dark' ? 'bg-gray-800' : 'bg-white'
+                          )}
+                        >
+                          {formData.imageUrl ? (
+                            <img
+                              src={formData.imageUrl}
+                              alt={formData.name}
+                              className="w-full h-full object-cover"
+                            />
+                          ) : (
+                            <ImageIcon className="w-10 h-10 text-gray-400" />
+                          )}
+                        </motion.div>
+
+                        {/* Details */}
+                        <div className="flex-1 space-y-4">
+                          <div>
+                            <h3 className={cn(
+                              "text-xl font-bold",
+                              theme === 'dark' ? 'text-white' : 'text-gray-900'
+                            )}>
+                              {formData.name || 'Sin nombre'}
+                            </h3>
+                            <div className="flex items-center gap-2 mt-1">
+                              {formData.category && (
+                                <span className={cn(
+                                  "text-sm px-2 py-0.5 rounded-full",
+                                  theme === 'dark'
+                                    ? 'bg-blue-900/50 text-blue-300'
+                                    : 'bg-blue-100 text-blue-700'
+                                )}>
+                                  {formData.category}
+                                </span>
+                              )}
+                              <span className={cn(
+                                "text-sm px-2 py-0.5 rounded-full",
+                                theme === 'dark'
+                                  ? 'bg-gray-700 text-gray-300'
+                                  : 'bg-gray-200 text-gray-600'
+                              )}>
+                                {selectedUnit?.name}
+                              </span>
+                            </div>
+                            {formData.description && (
+                              <p className={cn(
+                                "text-sm mt-2",
+                                theme === 'dark' ? 'text-gray-400' : 'text-gray-600'
+                              )}>
+                                {formData.description}
+                              </p>
+                            )}
+                          </div>
+
+                          <div className="grid grid-cols-3 gap-4">
+                            <div className={cn(
+                              "p-3 rounded-xl",
+                              theme === 'dark' ? 'bg-gray-800' : 'bg-white'
+                            )}>
+                              <p className="text-xs text-gray-500">Precio de Costo</p>
+                              <p className={cn(
+                                "font-bold text-lg",
+                                theme === 'dark' ? 'text-white' : 'text-gray-900'
+                              )}>
+                                {symbol}{parseFloat(formData.costPrice || '0').toFixed(2)}
+                              </p>
+                            </div>
+                            <div className={cn(
+                              "p-3 rounded-xl",
+                              theme === 'dark' ? 'bg-gray-800' : 'bg-white'
+                            )}>
+                              <p className="text-xs text-gray-500">Precio de Venta</p>
+                              <p className="font-bold text-lg text-green-600">
+                                {symbol}{parseFloat(formData.sellingPrice || '0').toFixed(2)}
+                              </p>
+                            </div>
+                            <div className={cn(
+                              "p-3 rounded-xl",
+                              theme === 'dark' ? 'bg-gray-800' : 'bg-white'
+                            )}>
+                              <p className="text-xs text-gray-500">Margen</p>
+                              <p className={cn(
+                                'font-bold text-lg',
+                                getMargin() >= 30 ? 'text-green-600' : getMargin() >= 15 ? 'text-amber-600' : 'text-red-600'
+                              )}>
+                                {getMargin()}%
+                              </p>
+                            </div>
+                          </div>
+
+                          {formData.supplierName && (
+                            <div className={cn(
+                              "p-3 rounded-xl flex items-center gap-3",
+                              theme === 'dark' ? 'bg-gray-800' : 'bg-white'
+                            )}>
+                              <Truck className="w-5 h-5 text-gray-400" />
+                              <div>
+                                <p className="text-xs text-gray-500">Proveedor</p>
+                                <p className={cn(
+                                  "text-sm font-medium",
+                                  theme === 'dark' ? 'text-white' : 'text-gray-900'
+                                )}>
+                                  {formData.supplierName}
+                                </p>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Variants summary */}
+                      {variants.length > 0 && (
+                        <div className={cn(
+                          "mt-6 pt-6 border-t",
+                          theme === 'dark' ? 'border-gray-700' : 'border-gray-200'
+                        )}>
+                          <h4 className={cn(
+                            "font-semibold mb-3 flex items-center gap-2",
+                            theme === 'dark' ? 'text-white' : 'text-gray-900'
+                          )}>
+                            <Layers className="w-4 h-4 text-amber-500" />
+                            Variantes ({variants.length})
+                          </h4>
+                          <div className="flex flex-wrap gap-2">
+                            {variants.map((v) => (
+                              <span
+                                key={v.id}
+                                className={cn(
+                                  "text-sm px-3 py-1 rounded-full",
+                                  theme === 'dark'
+                                    ? 'bg-amber-900/30 text-amber-300'
+                                    : 'bg-amber-100 text-amber-700'
+                                )}
+                              >
+                                {v.name}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    {errors.submit && (
+                      <div className="p-4 rounded-xl bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800">
+                        <p className="text-red-600 text-sm">{errors.submit}</p>
+                      </div>
+                    )}
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </motion.div>
 
             {/* Navigation Buttons */}
-            <div className="flex items-center justify-between mt-8 pt-6 border-t border-gray-200 dark:border-gray-700">
-              {currentStepIndex > 0 ? (
-                <button
-                  onClick={goToPrevStep}
-                  className={cn(
-                    'flex items-center gap-2 px-5 py-2.5 rounded-xl transition-all',
-                    theme === 'dark'
-                      ? 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                  )}
-                >
-                  <ArrowLeft className="w-4 h-4" />
-                  Anterior
-                </button>
-              ) : (
-                <div />
-              )}
+            <div className="flex justify-between items-center gap-4">
+              <motion.button
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+                onClick={goToPrevStep}
+                disabled={currentStepIndex === 0}
+                className={cn(
+                  "flex items-center gap-2 px-6 py-3 rounded-xl font-medium transition-all",
+                  "disabled:opacity-50 disabled:cursor-not-allowed",
+                  theme === 'dark'
+                    ? 'bg-gray-700 hover:bg-gray-600 text-white shadow-lg'
+                    : 'bg-gray-200 hover:bg-gray-300 text-gray-900 shadow-md'
+                )}
+              >
+                <ArrowLeft className="w-5 h-5" />
+                Anterior
+              </motion.button>
 
               {currentStep === 'review' ? (
-                <button
+                <motion.button
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
                   onClick={handleSubmit}
                   disabled={loading || uploadingImage}
-                  className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-gradient-to-r from-green-500 to-green-600 text-white hover:from-green-600 hover:to-green-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-green-500/25"
+                  className={cn(
+                    "flex items-center gap-2 px-6 py-3 rounded-xl font-medium transition-all",
+                    "disabled:opacity-50 disabled:cursor-not-allowed",
+                    theme === 'dark'
+                      ? 'bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 shadow-lg shadow-green-500/30'
+                      : 'bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600 shadow-lg shadow-green-400/30',
+                    'text-white'
+                  )}
                 >
-                  {(loading || uploadingImage) && <Loader2 className="w-4 h-4 animate-spin" />}
-                  <Check className="w-4 h-4" />
+                  {(loading || uploadingImage) && <Loader2 className="w-5 h-5 animate-spin" />}
+                  <Check className="w-5 h-5" />
                   Crear Producto
-                </button>
+                </motion.button>
               ) : (
-                <button
+                <motion.button
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
                   onClick={goToNextStep}
-                  className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-gradient-to-r from-blue-500 to-blue-600 text-white hover:from-blue-600 hover:to-blue-700 transition-all shadow-lg shadow-blue-500/25"
+                  className={cn(
+                    "flex items-center gap-2 px-6 py-3 rounded-xl font-medium transition-all",
+                    theme === 'dark'
+                      ? 'bg-blue-600 hover:bg-blue-700 shadow-lg shadow-blue-500/30'
+                      : 'bg-blue-500 hover:bg-blue-600 shadow-lg shadow-blue-400/30',
+                    'text-white'
+                  )}
                 >
                   Siguiente
-                  <ArrowRight className="w-4 h-4" />
-                </button>
+                  <ArrowRight className="w-5 h-5" />
+                </motion.button>
               )}
             </div>
-          </motion.div>
+          </div>
+
+          {/* Cancel Modal */}
+          <AnimatePresence>
+            {showCancelModal && (
+              <>
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  onClick={() => setShowCancelModal(false)}
+                  className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50"
+                />
+
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.95, y: 20 }}
+                  animate={{ opacity: 1, scale: 1, y: 0 }}
+                  exit={{ opacity: 0, scale: 0.95, y: 20 }}
+                  transition={{ type: "spring", duration: 0.3 }}
+                  className="fixed inset-0 z-50 flex items-center justify-center p-4"
+                >
+                  <div
+                    className={cn(
+                      "w-full max-w-md rounded-2xl shadow-2xl border",
+                      theme === 'dark'
+                        ? 'bg-gray-800 border-gray-700'
+                        : 'bg-white border-gray-200'
+                    )}
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <div className="p-6 pb-4">
+                      <div className="flex items-start gap-4">
+                        <div className={cn(
+                          "w-12 h-12 rounded-full flex items-center justify-center flex-shrink-0",
+                          theme === 'dark' ? 'bg-red-900/30' : 'bg-red-100'
+                        )}>
+                          <X className={cn(
+                            "w-6 h-6",
+                            theme === 'dark' ? 'text-red-400' : 'text-red-600'
+                          )} />
+                        </div>
+                        <div className="flex-1">
+                          <h3 className={cn(
+                            "text-xl font-bold mb-2",
+                            theme === 'dark' ? 'text-white' : 'text-gray-900'
+                          )}>
+                            ¿Cancelar creación?
+                          </h3>
+                          <p className={cn(
+                            "text-sm",
+                            theme === 'dark' ? 'text-gray-400' : 'text-gray-600'
+                          )}>
+                            Se perderá toda la información ingresada y no podrás recuperarla.
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className={cn(
+                      "flex gap-3 p-6 pt-4 border-t",
+                      theme === 'dark' ? 'border-gray-700' : 'border-gray-200'
+                    )}>
+                      <motion.button
+                        whileHover={{ scale: 1.02 }}
+                        whileTap={{ scale: 0.98 }}
+                        onClick={() => setShowCancelModal(false)}
+                        className={cn(
+                          "flex-1 px-4 py-3 rounded-xl font-medium transition-all",
+                          theme === 'dark'
+                            ? 'bg-gray-700 hover:bg-gray-600 text-white'
+                            : 'bg-gray-100 hover:bg-gray-200 text-gray-900'
+                        )}
+                      >
+                        Continuar editando
+                      </motion.button>
+                      <motion.button
+                        whileHover={{ scale: 1.02 }}
+                        whileTap={{ scale: 0.98 }}
+                        onClick={() => router.push('/dashboard/market/inventory')}
+                        className={cn(
+                          "flex-1 px-4 py-3 rounded-xl font-medium transition-all text-white",
+                          theme === 'dark'
+                            ? 'bg-red-600 hover:bg-red-700'
+                            : 'bg-red-500 hover:bg-red-600'
+                        )}
+                      >
+                        Sí, cancelar
+                      </motion.button>
+                    </div>
+                  </div>
+                </motion.div>
+              </>
+            )}
+          </AnimatePresence>
         </div>
       </DashboardLayout>
     </ProtectedRoute>

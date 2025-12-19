@@ -307,15 +307,384 @@ export async function POST() {
       CREATE INDEX IF NOT EXISTS idx_market_inventory_movements_company ON market_inventory_movements(company_id)
     `)
 
+    // 6. Add unit_of_measure column to market_products
+    try {
+      await db.query(`
+        ALTER TABLE market_products
+        ADD COLUMN IF NOT EXISTS unit_of_measure VARCHAR(20) DEFAULT 'unidad'
+      `)
+      console.log('[Migration] Added unit_of_measure column to market_products')
+    } catch (e: any) {
+      if (!e.message.includes('already exists')) {
+        console.log(`[Migration] Note: unit_of_measure - ${e.message}`)
+      }
+    }
+
+    // 7. Create market_variant_types table (tipos personalizables por empresa)
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS market_variant_types (
+        id SERIAL PRIMARY KEY,
+        company_id INTEGER NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+        type_name VARCHAR(50) NOT NULL,
+        possible_values TEXT[],
+        is_active BOOLEAN DEFAULT true,
+        created_at TIMESTAMP DEFAULT NOW(),
+        UNIQUE(company_id, type_name)
+      )
+    `)
+    console.log('[Migration] Created market_variant_types table')
+
+    await db.query(`
+      CREATE INDEX IF NOT EXISTS idx_market_variant_types_company ON market_variant_types(company_id)
+    `)
+
+    // 8. Create market_product_variants table
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS market_product_variants (
+        id SERIAL PRIMARY KEY,
+        product_id INTEGER NOT NULL REFERENCES market_products(id) ON DELETE CASCADE,
+        variant_name VARCHAR(100) NOT NULL,
+        sku VARCHAR(100),
+        barcode VARCHAR(100),
+        cost_price DECIMAL(10,2),
+        selling_price DECIMAL(10,2),
+        quantity_on_hand INTEGER DEFAULT 0,
+        image_url TEXT,
+        is_active BOOLEAN DEFAULT true,
+        created_at TIMESTAMP DEFAULT NOW(),
+        updated_at TIMESTAMP DEFAULT NOW()
+      )
+    `)
+    console.log('[Migration] Created market_product_variants table')
+
+    await db.query(`
+      CREATE INDEX IF NOT EXISTS idx_market_product_variants_product ON market_product_variants(product_id)
+    `)
+    await db.query(`
+      CREATE INDEX IF NOT EXISTS idx_market_product_variants_sku ON market_product_variants(sku)
+    `)
+    await db.query(`
+      CREATE INDEX IF NOT EXISTS idx_market_product_variants_barcode ON market_product_variants(barcode)
+    `)
+
+    // 9. Create market_variant_options table
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS market_variant_options (
+        id SERIAL PRIMARY KEY,
+        variant_id INTEGER NOT NULL REFERENCES market_product_variants(id) ON DELETE CASCADE,
+        option_type VARCHAR(50) NOT NULL,
+        option_value VARCHAR(100) NOT NULL,
+        created_at TIMESTAMP DEFAULT NOW()
+      )
+    `)
+    console.log('[Migration] Created market_variant_options table')
+
+    await db.query(`
+      CREATE INDEX IF NOT EXISTS idx_market_variant_options_variant ON market_variant_options(variant_id)
+    `)
+
+    // 10. Create market_warehouses table
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS market_warehouses (
+        id SERIAL PRIMARY KEY,
+        company_id INTEGER NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+        code VARCHAR(20) NOT NULL,
+        name VARCHAR(255) NOT NULL,
+
+        -- Tipo
+        is_central BOOLEAN DEFAULT false,
+        warehouse_type VARCHAR(50) DEFAULT 'storage',
+
+        -- Ubicación completa (estilo empresa/broker)
+        address TEXT,
+        address_line2 TEXT,
+        city VARCHAR(100),
+        state VARCHAR(100),
+        municipality VARCHAR(100),
+        postal_code VARCHAR(20),
+        country VARCHAR(100) DEFAULT 'Cuba',
+
+        -- Coordenadas para rutas (Mapbox)
+        latitude DECIMAL(10,8),
+        longitude DECIMAL(11,8),
+
+        -- Contacto
+        manager_name VARCHAR(255),
+        phone VARCHAR(50),
+        email VARCHAR(255),
+
+        -- Config
+        is_active BOOLEAN DEFAULT true,
+        allow_negative_stock BOOLEAN DEFAULT false,
+
+        created_by INTEGER REFERENCES users(id),
+        created_at TIMESTAMP DEFAULT NOW(),
+        updated_at TIMESTAMP DEFAULT NOW(),
+
+        UNIQUE(company_id, code)
+      )
+    `)
+    console.log('[Migration] Created market_warehouses table')
+
+    await db.query(`
+      CREATE INDEX IF NOT EXISTS idx_market_warehouses_company ON market_warehouses(company_id)
+    `)
+    await db.query(`
+      CREATE INDEX IF NOT EXISTS idx_market_warehouses_central ON market_warehouses(company_id, is_central)
+    `)
+    await db.query(`
+      CREATE INDEX IF NOT EXISTS idx_market_warehouses_location ON market_warehouses(latitude, longitude)
+    `)
+
+    // 11. Create market_warehouse_stock table
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS market_warehouse_stock (
+        id SERIAL PRIMARY KEY,
+        warehouse_id INTEGER NOT NULL REFERENCES market_warehouses(id) ON DELETE CASCADE,
+        product_id INTEGER NOT NULL REFERENCES market_products(id) ON DELETE CASCADE,
+        variant_id INTEGER REFERENCES market_product_variants(id) ON DELETE CASCADE,
+
+        quantity_on_hand INTEGER DEFAULT 0,
+        quantity_reserved INTEGER DEFAULT 0,
+
+        -- Ubicación dentro del almacén (opcional)
+        location_code VARCHAR(50),
+
+        last_counted_at TIMESTAMP,
+        last_movement_at TIMESTAMP,
+
+        created_at TIMESTAMP DEFAULT NOW(),
+        updated_at TIMESTAMP DEFAULT NOW(),
+
+        UNIQUE(warehouse_id, product_id, COALESCE(variant_id, 0))
+      )
+    `)
+    console.log('[Migration] Created market_warehouse_stock table')
+
+    await db.query(`
+      CREATE INDEX IF NOT EXISTS idx_warehouse_stock_warehouse ON market_warehouse_stock(warehouse_id)
+    `)
+    await db.query(`
+      CREATE INDEX IF NOT EXISTS idx_warehouse_stock_product ON market_warehouse_stock(product_id)
+    `)
+
+    // 12. Create market_warehouse_operations table
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS market_warehouse_operations (
+        id SERIAL PRIMARY KEY,
+        company_id INTEGER NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+        operation_number VARCHAR(50) NOT NULL,
+
+        -- Tipo de operación: transfer, reception, picking, scrap, adjustment
+        operation_type VARCHAR(50) NOT NULL,
+
+        -- Almacenes involucrados
+        source_warehouse_id INTEGER REFERENCES market_warehouses(id),
+        destination_warehouse_id INTEGER REFERENCES market_warehouses(id),
+
+        -- Referencias
+        reference_type VARCHAR(50),
+        reference_id INTEGER,
+
+        -- Estado: draft, confirmed, in_progress, done, cancelled
+        status VARCHAR(50) DEFAULT 'draft',
+
+        -- Fechas
+        scheduled_date DATE,
+        started_at TIMESTAMP,
+        completed_at TIMESTAMP,
+
+        -- Notas
+        notes TEXT,
+        internal_notes TEXT,
+
+        -- Auditoría
+        created_by INTEGER REFERENCES users(id),
+        confirmed_by INTEGER REFERENCES users(id),
+        completed_by INTEGER REFERENCES users(id),
+        created_at TIMESTAMP DEFAULT NOW(),
+        updated_at TIMESTAMP DEFAULT NOW(),
+
+        UNIQUE(company_id, operation_number)
+      )
+    `)
+    console.log('[Migration] Created market_warehouse_operations table')
+
+    await db.query(`
+      CREATE INDEX IF NOT EXISTS idx_warehouse_operations_company ON market_warehouse_operations(company_id)
+    `)
+    await db.query(`
+      CREATE INDEX IF NOT EXISTS idx_warehouse_operations_type ON market_warehouse_operations(operation_type)
+    `)
+    await db.query(`
+      CREATE INDEX IF NOT EXISTS idx_warehouse_operations_status ON market_warehouse_operations(status)
+    `)
+
+    // 13. Create market_warehouse_operation_lines table
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS market_warehouse_operation_lines (
+        id SERIAL PRIMARY KEY,
+        operation_id INTEGER NOT NULL REFERENCES market_warehouse_operations(id) ON DELETE CASCADE,
+
+        product_id INTEGER NOT NULL REFERENCES market_products(id),
+        variant_id INTEGER REFERENCES market_product_variants(id),
+
+        -- Cantidades
+        quantity_planned INTEGER NOT NULL,
+        quantity_done INTEGER DEFAULT 0,
+
+        -- Para picking: ubicación
+        source_location VARCHAR(50),
+        destination_location VARCHAR(50),
+
+        -- Lote/Serie (opcional futuro)
+        lot_number VARCHAR(100),
+        serial_number VARCHAR(100),
+
+        -- Scrap: motivo
+        scrap_reason VARCHAR(255),
+
+        -- Estado de la línea: pending, partial, done
+        line_status VARCHAR(50) DEFAULT 'pending',
+
+        -- Escaneo
+        scanned_at TIMESTAMP,
+        scanned_by INTEGER REFERENCES users(id),
+
+        created_at TIMESTAMP DEFAULT NOW()
+      )
+    `)
+    console.log('[Migration] Created market_warehouse_operation_lines table')
+
+    await db.query(`
+      CREATE INDEX IF NOT EXISTS idx_operation_lines_operation ON market_warehouse_operation_lines(operation_id)
+    `)
+    await db.query(`
+      CREATE INDEX IF NOT EXISTS idx_operation_lines_product ON market_warehouse_operation_lines(product_id)
+    `)
+
+    // 14. Create market_stock_movements table
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS market_stock_movements (
+        id SERIAL PRIMARY KEY,
+        company_id INTEGER NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+
+        -- Producto
+        product_id INTEGER NOT NULL REFERENCES market_products(id),
+        variant_id INTEGER REFERENCES market_product_variants(id),
+
+        -- Tipo de movimiento: in, out, transfer, adjustment, scrap
+        movement_type VARCHAR(50) NOT NULL,
+
+        -- Almacenes
+        from_warehouse_id INTEGER REFERENCES market_warehouses(id),
+        to_warehouse_id INTEGER REFERENCES market_warehouses(id),
+
+        -- Cantidades
+        quantity INTEGER NOT NULL,
+        quantity_before INTEGER,
+        quantity_after INTEGER,
+
+        -- Referencia
+        operation_id INTEGER REFERENCES market_warehouse_operations(id),
+        reference_type VARCHAR(50),
+        reference_id INTEGER,
+
+        -- Auditoría
+        notes TEXT,
+        created_by INTEGER REFERENCES users(id),
+        created_at TIMESTAMP DEFAULT NOW()
+      )
+    `)
+    console.log('[Migration] Created market_stock_movements table')
+
+    await db.query(`
+      CREATE INDEX IF NOT EXISTS idx_stock_movements_product ON market_stock_movements(product_id)
+    `)
+    await db.query(`
+      CREATE INDEX IF NOT EXISTS idx_stock_movements_warehouse ON market_stock_movements(from_warehouse_id, to_warehouse_id)
+    `)
+    await db.query(`
+      CREATE INDEX IF NOT EXISTS idx_stock_movements_date ON market_stock_movements(created_at DESC)
+    `)
+
+    // 15. Create odoo_product_mapping table
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS odoo_product_mapping (
+        id SERIAL PRIMARY KEY,
+        company_id INTEGER NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+        local_product_id INTEGER NOT NULL REFERENCES market_products(id) ON DELETE CASCADE,
+        odoo_product_id INTEGER NOT NULL,
+        odoo_variant_id INTEGER,
+        last_sync_at TIMESTAMP,
+        sync_direction VARCHAR(20) DEFAULT 'both',
+        sync_status VARCHAR(20) DEFAULT 'synced',
+        created_at TIMESTAMP DEFAULT NOW(),
+
+        UNIQUE(company_id, local_product_id),
+        UNIQUE(company_id, odoo_product_id)
+      )
+    `)
+    console.log('[Migration] Created odoo_product_mapping table')
+
+    await db.query(`
+      CREATE INDEX IF NOT EXISTS idx_odoo_mapping_company ON odoo_product_mapping(company_id)
+    `)
+
+    // 16. Create odoo_sync_logs table
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS odoo_sync_logs (
+        id SERIAL PRIMARY KEY,
+        company_id INTEGER NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+        sync_type VARCHAR(50) NOT NULL,
+        direction VARCHAR(20) NOT NULL,
+        products_imported INTEGER DEFAULT 0,
+        products_exported INTEGER DEFAULT 0,
+        products_updated INTEGER DEFAULT 0,
+        errors JSONB,
+        started_at TIMESTAMP DEFAULT NOW(),
+        completed_at TIMESTAMP,
+        status VARCHAR(20) DEFAULT 'in_progress',
+        triggered_by INTEGER REFERENCES users(id)
+      )
+    `)
+    console.log('[Migration] Created odoo_sync_logs table')
+
+    await db.query(`
+      CREATE INDEX IF NOT EXISTS idx_odoo_sync_logs_company ON odoo_sync_logs(company_id)
+    `)
+    await db.query(`
+      CREATE INDEX IF NOT EXISTS idx_odoo_sync_logs_status ON odoo_sync_logs(status)
+    `)
+
     // Get table stats
-    const tables = ['market_products', 'market_purchases', 'market_purchase_lines', 'market_orders', 'market_order_lines', 'market_inventory_movements']
+    const tables = [
+      'market_products',
+      'market_purchases',
+      'market_purchase_lines',
+      'market_orders',
+      'market_order_lines',
+      'market_inventory_movements',
+      'market_variant_types',
+      'market_product_variants',
+      'market_variant_options',
+      'market_warehouses',
+      'market_warehouse_stock',
+      'market_warehouse_operations',
+      'market_warehouse_operation_lines',
+      'market_stock_movements',
+      'odoo_product_mapping',
+      'odoo_sync_logs'
+    ]
     const tableStats = []
 
     for (const table of tables) {
-      const result = await db.query(`
-        SELECT COUNT(*) as count FROM ${table}
-      `)
-      tableStats.push({ table, count: result.rows[0].count })
+      try {
+        const result = await db.query(`SELECT COUNT(*) as count FROM ${table}`)
+        tableStats.push({ table, count: result.rows[0].count })
+      } catch (e) {
+        tableStats.push({ table, count: 0, error: 'Table not found' })
+      }
     }
 
     console.log('[Migration] Market tables migration completed')
@@ -338,7 +707,24 @@ export async function POST() {
 export async function GET() {
   try {
     // Check current state of market tables
-    const tables = ['market_products', 'market_purchases', 'market_purchase_lines', 'market_orders', 'market_order_lines', 'market_inventory_movements']
+    const tables = [
+      'market_products',
+      'market_purchases',
+      'market_purchase_lines',
+      'market_orders',
+      'market_order_lines',
+      'market_inventory_movements',
+      'market_variant_types',
+      'market_product_variants',
+      'market_variant_options',
+      'market_warehouses',
+      'market_warehouse_stock',
+      'market_warehouse_operations',
+      'market_warehouse_operation_lines',
+      'market_stock_movements',
+      'odoo_product_mapping',
+      'odoo_sync_logs'
+    ]
     const tableStatus = []
 
     for (const table of tables) {

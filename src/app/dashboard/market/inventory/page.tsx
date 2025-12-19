@@ -6,20 +6,19 @@ import {
   Package,
   Plus,
   Search,
-  Filter,
   AlertTriangle,
   AlertCircle,
   CheckCircle,
-  MoreVertical,
   Edit,
-  Trash2,
   RefreshCw,
   Boxes,
   ChevronLeft,
   ChevronRight,
   X,
   Image as ImageIcon,
-  Eye
+  Eye,
+  Warehouse,
+  TrendingUp
 } from 'lucide-react'
 import Link from 'next/link'
 import { DashboardLayout } from '@/components/layout/dashboard-layout'
@@ -45,6 +44,7 @@ interface Product {
   quantityExpected: number
   minimumStock: number
   isActive: boolean
+  unitOfMeasure: string
   createdAt: string
   updatedAt: string
 }
@@ -82,7 +82,6 @@ export default function MarketInventoryPage() {
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null)
   const [stockFilter, setStockFilter] = useState<string | null>(null)
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null)
-  const [showFilters, setShowFilters] = useState(false)
 
   useEffect(() => {
     fetchProducts()
@@ -145,137 +144,376 @@ export default function MarketInventoryPage() {
   return (
     <ProtectedRoute>
       <DashboardLayout>
-        <div className="p-4 md:p-6 space-y-6 max-w-7xl mx-auto">
-          {/* Header */}
+        <div className="min-h-screen p-6">
           <motion.div
-            initial={{ opacity: 0, y: -10 }}
+            initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            className="flex flex-col sm:flex-row sm:items-center justify-between gap-4"
+            className="space-y-6"
           >
-            <div>
-              <h1 className="text-2xl md:text-3xl font-bold text-gray-900 dark:text-white flex items-center gap-3">
-                <Boxes className="w-8 h-8 text-emerald-500" />
-                Inventario
-              </h1>
-              <p className="text-gray-500 dark:text-gray-400 mt-1">
-                Gestiona los productos de tu mercado
-              </p>
+            {/* Header */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div>
+                <h1 className="text-2xl md:text-3xl font-bold text-gray-900 dark:text-white flex items-center gap-3">
+                  <Boxes className="w-8 h-8 text-emerald-500" />
+                  Inventario
+                </h1>
+                <p className="text-gray-500 dark:text-gray-400 mt-1">
+                  Gestiona los productos de tu mercado
+                </p>
+              </div>
+              <div className="flex items-center gap-3">
+                <Link href="/dashboard/market/warehouses">
+                  <motion.button
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
+                    className={cn(
+                      'flex items-center gap-2 px-5 py-2.5 rounded-xl transition-all',
+                      theme === 'dark'
+                        ? 'bg-gray-800 text-gray-300 hover:bg-gray-700'
+                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                    )}
+                  >
+                    <Warehouse className="w-5 h-5" />
+                    Almacenes
+                  </motion.button>
+                </Link>
+                <Link href="/dashboard/market/inventory/create">
+                  <motion.button
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
+                    className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-emerald-500 to-emerald-600 text-white rounded-xl hover:from-emerald-600 hover:to-emerald-700 transition-all shadow-lg shadow-emerald-500/25"
+                  >
+                    <Plus className="w-5 h-5" />
+                    Nuevo Producto
+                  </motion.button>
+                </Link>
+              </div>
             </div>
-            <Link href="/dashboard/market/inventory/create">
-              <motion.button
-                whileHover={{ scale: 1.02 }}
-                whileTap={{ scale: 0.98 }}
-                className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-emerald-500 to-emerald-600 text-white rounded-xl hover:from-emerald-600 hover:to-emerald-700 transition-all shadow-lg shadow-emerald-500/25"
-              >
-                <Plus className="w-5 h-5" />
-                Nuevo Producto
-              </motion.button>
-            </Link>
-          </motion.div>
 
-          {/* Stats Cards */}
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-            {[
-              { label: 'Total Productos', value: stats.total, color: 'blue', icon: Package },
-              { label: 'En Stock', value: stats.inStock, color: 'green', icon: CheckCircle },
-              { label: 'Stock Bajo', value: stats.lowStock, color: 'amber', icon: AlertTriangle },
-              { label: 'Sin Stock', value: stats.outOfStock, color: 'red', icon: AlertCircle }
-            ].map((stat, i) => (
+            {/* Stats Cards - Estilo Pickup Orders */}
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-5">
+              {/* Total Productos */}
               <motion.div
-                key={stat.label}
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: i * 0.05 }}
-                onClick={() => {
-                  if (stat.label === 'Stock Bajo') setStockFilter(stockFilter === 'low-stock' ? null : 'low-stock')
-                  else if (stat.label === 'Sin Stock') setStockFilter(stockFilter === 'out-of-stock' ? null : 'out-of-stock')
-                  else if (stat.label === 'En Stock') setStockFilter(stockFilter === 'in-stock' ? null : 'in-stock')
-                  else setStockFilter(null)
-                }}
+                transition={{ delay: 0.1 }}
+                onClick={() => setStockFilter(null)}
                 className={cn(
-                  'p-4 rounded-xl border cursor-pointer transition-all',
-                  stockFilter === 'low-stock' && stat.label === 'Stock Bajo' ? 'ring-2 ring-amber-500' :
-                  stockFilter === 'out-of-stock' && stat.label === 'Sin Stock' ? 'ring-2 ring-red-500' :
-                  stockFilter === 'in-stock' && stat.label === 'En Stock' ? 'ring-2 ring-green-500' : '',
+                  'relative overflow-hidden cursor-pointer',
                   theme === 'dark'
-                    ? 'bg-[#1e1e2f] border-gray-700/50 hover:border-gray-600'
-                    : 'bg-white border-gray-200 hover:border-gray-300'
+                    ? 'bg-gradient-to-br from-gray-800 to-gray-900 border-gray-700'
+                    : 'bg-gradient-to-br from-slate-50 to-white border-slate-200',
+                  'rounded-2xl border shadow-xl',
+                  stockFilter === null && 'ring-2 ring-blue-500'
                 )}
               >
-                <div className="flex items-center gap-3">
-                  <div className={cn(
-                    'p-2 rounded-lg',
-                    stat.color === 'blue' && 'bg-blue-100 dark:bg-blue-900/30 text-blue-600',
-                    stat.color === 'green' && 'bg-green-100 dark:bg-green-900/30 text-green-600',
-                    stat.color === 'amber' && 'bg-amber-100 dark:bg-amber-900/30 text-amber-600',
-                    stat.color === 'red' && 'bg-red-100 dark:bg-red-900/30 text-red-600'
-                  )}>
-                    <stat.icon className="w-5 h-5" />
+                <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-400 to-blue-600"></div>
+                <div className="p-6">
+                  <div className="flex items-start justify-between mb-4">
+                    <div className="flex items-center gap-3">
+                      <div className={cn(
+                        'p-3 rounded-xl shadow-sm',
+                        theme === 'dark'
+                          ? 'bg-blue-900/30 border border-blue-800/50'
+                          : 'bg-gradient-to-br from-blue-50 to-blue-100 border border-blue-200'
+                      )}>
+                        <Package className="w-6 h-6 text-blue-600" />
+                      </div>
+                      <div>
+                        <p className={cn(
+                          'text-sm font-medium',
+                          theme === 'dark' ? 'text-gray-400' : 'text-black'
+                        )}>Total Productos</p>
+                        <p className={cn(
+                          'text-3xl font-bold mt-1',
+                          theme === 'dark' ? 'text-white' : 'text-slate-900'
+                        )}>{stats.total}</p>
+                      </div>
+                    </div>
                   </div>
-                  <div>
-                    <p className="text-2xl font-bold text-gray-900 dark:text-white">{stat.value}</p>
-                    <p className="text-xs text-gray-500 dark:text-gray-400">{stat.label}</p>
+                  <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-1">
+                      <div className="w-2 h-2 bg-blue-400 rounded-full animate-pulse"></div>
+                      <span className={cn(
+                        'text-xs font-medium',
+                        theme === 'dark' ? 'text-gray-500' : 'text-black'
+                      )}>En inventario</span>
+                    </div>
                   </div>
                 </div>
               </motion.div>
-            ))}
-          </div>
 
-          {/* Filters */}
-          <motion.div
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.2 }}
-            className={cn(
-              'p-4 rounded-xl border',
-              theme === 'dark'
-                ? 'bg-[#1e1e2f] border-gray-700/50'
-                : 'bg-white border-gray-200'
-            )}
-          >
-            <div className="flex flex-col sm:flex-row gap-4">
-              {/* Search */}
-              <div className="flex-1 relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-                <input
-                  type="text"
-                  placeholder="Buscar por nombre, SKU o código de barras..."
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  className={cn(
-                    'w-full pl-10 pr-4 py-2.5 rounded-xl border focus:outline-none focus:ring-2 transition-all',
-                    theme === 'dark'
-                      ? 'bg-gray-800/50 border-gray-700 text-white focus:border-blue-500 focus:ring-blue-500/20'
-                      : 'bg-gray-50 border-gray-200 text-gray-900 focus:border-blue-500 focus:ring-blue-500/20'
-                  )}
-                />
-              </div>
-
-              {/* Category Filter */}
-              <select
-                value={selectedCategory || ''}
-                onChange={(e) => setSelectedCategory(e.target.value || null)}
+              {/* En Stock */}
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.2 }}
+                onClick={() => setStockFilter(stockFilter === 'in-stock' ? null : 'in-stock')}
                 className={cn(
-                  'px-4 py-2.5 rounded-xl border focus:outline-none focus:ring-2 transition-all min-w-[180px]',
+                  'relative overflow-hidden cursor-pointer',
                   theme === 'dark'
-                    ? 'bg-gray-800/50 border-gray-700 text-white focus:border-blue-500 focus:ring-blue-500/20'
-                    : 'bg-gray-50 border-gray-200 text-gray-900 focus:border-blue-500 focus:ring-blue-500/20'
+                    ? 'bg-gradient-to-br from-gray-800 to-gray-900 border-gray-700'
+                    : 'bg-gradient-to-br from-slate-50 to-white border-slate-200',
+                  'rounded-2xl border shadow-xl',
+                  stockFilter === 'in-stock' && 'ring-2 ring-emerald-500'
                 )}
               >
-                <option value="">Todas las categorías</option>
-                {categories.map(cat => (
-                  <option key={cat} value={cat}>{cat}</option>
-                ))}
-              </select>
+                <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-emerald-400 to-green-600"></div>
+                <div className="p-6">
+                  <div className="flex items-start justify-between mb-4">
+                    <div className="flex items-center gap-3">
+                      <div className={cn(
+                        'p-3 rounded-xl shadow-sm',
+                        theme === 'dark'
+                          ? 'bg-emerald-900/30 border border-emerald-800/50'
+                          : 'bg-gradient-to-br from-emerald-50 to-green-100 border border-emerald-200'
+                      )}>
+                        <CheckCircle className="w-6 h-6 text-emerald-600" />
+                      </div>
+                      <div>
+                        <p className={cn(
+                          'text-sm font-medium',
+                          theme === 'dark' ? 'text-gray-400' : 'text-black'
+                        )}>En Stock</p>
+                        <p className={cn(
+                          'text-3xl font-bold mt-1',
+                          theme === 'dark' ? 'text-white' : 'text-slate-900'
+                        )}>{stats.inStock}</p>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-1">
+                        <div className="w-2 h-2 bg-emerald-400 rounded-full"></div>
+                        <span className={cn(
+                          'text-xs font-medium',
+                          theme === 'dark' ? 'text-gray-500' : 'text-black'
+                        )}>Disponibles</span>
+                      </div>
+                      <span className={cn(
+                        'text-xs font-bold',
+                        theme === 'dark' ? 'text-emerald-400' : 'text-emerald-600'
+                      )}>
+                        {stats.total > 0 ? Math.round((stats.inStock / stats.total) * 100) : 0}%
+                      </span>
+                    </div>
+                    <div className="w-full bg-emerald-100 dark:bg-emerald-900/30 rounded-full h-2">
+                      <div
+                        className="bg-gradient-to-r from-emerald-400 to-green-500 h-2 rounded-full transition-all duration-500"
+                        style={{ width: `${stats.total > 0 ? (stats.inStock / stats.total) * 100 : 0}%` }}
+                      ></div>
+                    </div>
+                  </div>
+                </div>
+              </motion.div>
 
-              {/* Clear Filters */}
-              {(search || selectedCategory || stockFilter) && (
-                <button
-                  onClick={() => {
-                    setSearch('')
-                    setSelectedCategory(null)
-                    setStockFilter(null)
-                  }}
+              {/* Stock Bajo */}
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.3 }}
+                onClick={() => setStockFilter(stockFilter === 'low-stock' ? null : 'low-stock')}
+                className={cn(
+                  'relative overflow-hidden cursor-pointer',
+                  theme === 'dark'
+                    ? 'bg-gradient-to-br from-gray-800 to-gray-900 border-gray-700'
+                    : 'bg-gradient-to-br from-slate-50 to-white border-slate-200',
+                  'rounded-2xl border shadow-xl',
+                  stockFilter === 'low-stock' && 'ring-2 ring-amber-500'
+                )}
+              >
+                <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-amber-400 to-orange-600"></div>
+                <div className="p-6">
+                  <div className="flex items-start justify-between mb-4">
+                    <div className="flex items-center gap-3">
+                      <div className={cn(
+                        'p-3 rounded-xl shadow-sm',
+                        theme === 'dark'
+                          ? 'bg-amber-900/30 border border-amber-800/50'
+                          : 'bg-gradient-to-br from-amber-50 to-orange-100 border border-amber-200'
+                      )}>
+                        <AlertTriangle className="w-6 h-6 text-amber-600" />
+                      </div>
+                      <div>
+                        <p className={cn(
+                          'text-sm font-medium',
+                          theme === 'dark' ? 'text-gray-400' : 'text-black'
+                        )}>Stock Bajo</p>
+                        <p className={cn(
+                          'text-3xl font-bold mt-1',
+                          theme === 'dark' ? 'text-white' : 'text-slate-900'
+                        )}>{stats.lowStock}</p>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-1">
+                        <div className="w-2 h-2 bg-amber-400 rounded-full animate-pulse"></div>
+                        <span className={cn(
+                          'text-xs font-medium',
+                          theme === 'dark' ? 'text-gray-500' : 'text-black'
+                        )}>Requieren atención</span>
+                      </div>
+                      <span className={cn(
+                        'text-xs font-bold',
+                        theme === 'dark' ? 'text-amber-400' : 'text-amber-600'
+                      )}>
+                        {stats.total > 0 ? Math.round((stats.lowStock / stats.total) * 100) : 0}%
+                      </span>
+                    </div>
+                    <div className="w-full bg-amber-100 dark:bg-amber-900/30 rounded-full h-2">
+                      <div
+                        className="bg-gradient-to-r from-amber-400 to-orange-500 h-2 rounded-full transition-all duration-500"
+                        style={{ width: `${stats.total > 0 ? (stats.lowStock / stats.total) * 100 : 0}%` }}
+                      ></div>
+                    </div>
+                  </div>
+                </div>
+              </motion.div>
+
+              {/* Sin Stock */}
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.4 }}
+                onClick={() => setStockFilter(stockFilter === 'out-of-stock' ? null : 'out-of-stock')}
+                className={cn(
+                  'relative overflow-hidden cursor-pointer',
+                  theme === 'dark'
+                    ? 'bg-gradient-to-br from-gray-800 to-gray-900 border-gray-700'
+                    : 'bg-gradient-to-br from-slate-50 to-white border-slate-200',
+                  'rounded-2xl border shadow-xl',
+                  stockFilter === 'out-of-stock' && 'ring-2 ring-red-500'
+                )}
+              >
+                <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-red-400 to-rose-600"></div>
+                <div className="p-6">
+                  <div className="flex items-start justify-between mb-4">
+                    <div className="flex items-center gap-3">
+                      <div className={cn(
+                        'p-3 rounded-xl shadow-sm',
+                        theme === 'dark'
+                          ? 'bg-red-900/30 border border-red-800/50'
+                          : 'bg-gradient-to-br from-red-50 to-rose-100 border border-red-200'
+                      )}>
+                        <AlertCircle className="w-6 h-6 text-red-600" />
+                      </div>
+                      <div>
+                        <p className={cn(
+                          'text-sm font-medium',
+                          theme === 'dark' ? 'text-gray-400' : 'text-black'
+                        )}>Sin Stock</p>
+                        <p className={cn(
+                          'text-3xl font-bold mt-1',
+                          theme === 'dark' ? 'text-white' : 'text-slate-900'
+                        )}>{stats.outOfStock}</p>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-1">
+                        <div className="w-2 h-2 bg-red-400 rounded-full animate-pulse"></div>
+                        <span className={cn(
+                          'text-xs font-medium',
+                          theme === 'dark' ? 'text-gray-500' : 'text-black'
+                        )}>Agotados</span>
+                      </div>
+                      <span className={cn(
+                        'text-xs font-bold',
+                        theme === 'dark' ? 'text-red-400' : 'text-red-600'
+                      )}>
+                        {stats.total > 0 ? Math.round((stats.outOfStock / stats.total) * 100) : 0}%
+                      </span>
+                    </div>
+                    <div className="w-full bg-red-100 dark:bg-red-900/30 rounded-full h-2">
+                      <div
+                        className="bg-gradient-to-r from-red-400 to-rose-500 h-2 rounded-full transition-all duration-500"
+                        style={{ width: `${stats.total > 0 ? (stats.outOfStock / stats.total) * 100 : 0}%` }}
+                      ></div>
+                    </div>
+                  </div>
+                </div>
+              </motion.div>
+            </div>
+
+            {/* Filters */}
+            <motion.div
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.5 }}
+              className={cn(
+                'p-4 rounded-2xl border shadow-xl',
+                theme === 'dark'
+                  ? 'bg-gradient-to-br from-gray-800 to-gray-900 border-gray-700'
+                  : 'bg-gradient-to-br from-slate-50 to-white border-slate-200'
+              )}
+            >
+              <div className="flex flex-col sm:flex-row gap-4">
+                {/* Search */}
+                <div className="flex-1 relative">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                  <input
+                    type="text"
+                    placeholder="Buscar por nombre, SKU o código de barras..."
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                    className={cn(
+                      'w-full pl-10 pr-4 py-2.5 rounded-xl border focus:outline-none focus:ring-2 transition-all',
+                      theme === 'dark'
+                        ? 'bg-gray-800/50 border-gray-700 text-white focus:border-blue-500 focus:ring-blue-500/20'
+                        : 'bg-white border-gray-200 text-gray-900 focus:border-blue-500 focus:ring-blue-500/20'
+                    )}
+                  />
+                </div>
+
+                {/* Category Filter */}
+                <select
+                  value={selectedCategory || ''}
+                  onChange={(e) => setSelectedCategory(e.target.value || null)}
+                  className={cn(
+                    'px-4 py-2.5 rounded-xl border focus:outline-none focus:ring-2 transition-all min-w-[180px]',
+                    theme === 'dark'
+                      ? 'bg-gray-800/50 border-gray-700 text-white focus:border-blue-500 focus:ring-blue-500/20'
+                      : 'bg-white border-gray-200 text-gray-900 focus:border-blue-500 focus:ring-blue-500/20'
+                  )}
+                >
+                  <option value="">Todas las categorías</option>
+                  {categories.map(cat => (
+                    <option key={cat} value={cat}>{cat}</option>
+                  ))}
+                </select>
+
+                {/* Clear Filters */}
+                {(search || selectedCategory || stockFilter) && (
+                  <motion.button
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
+                    onClick={() => {
+                      setSearch('')
+                      setSelectedCategory(null)
+                      setStockFilter(null)
+                    }}
+                    className={cn(
+                      'flex items-center gap-2 px-4 py-2.5 rounded-xl transition-all',
+                      theme === 'dark'
+                        ? 'bg-gray-800 text-gray-300 hover:bg-gray-700'
+                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                    )}
+                  >
+                    <X className="w-4 h-4" />
+                    Limpiar
+                  </motion.button>
+                )}
+
+                {/* Refresh */}
+                <motion.button
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                  onClick={fetchProducts}
+                  disabled={loading}
                   className={cn(
                     'flex items-center gap-2 px-4 py-2.5 rounded-xl transition-all',
                     theme === 'dark'
@@ -283,353 +521,361 @@ export default function MarketInventoryPage() {
                       : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                   )}
                 >
-                  <X className="w-4 h-4" />
-                  Limpiar
-                </button>
+                  <RefreshCw className={cn('w-4 h-4', loading && 'animate-spin')} />
+                </motion.button>
+              </div>
+            </motion.div>
+
+            {/* Products Table */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.6 }}
+              className={cn(
+                'rounded-2xl border shadow-xl overflow-hidden',
+                theme === 'dark'
+                  ? 'bg-gradient-to-br from-gray-800 to-gray-900 border-gray-700'
+                  : 'bg-gradient-to-br from-slate-50 to-white border-slate-200'
               )}
-
-              {/* Refresh */}
-              <button
-                onClick={fetchProducts}
-                disabled={loading}
-                className={cn(
-                  'flex items-center gap-2 px-4 py-2.5 rounded-xl transition-all',
-                  theme === 'dark'
-                    ? 'bg-gray-800 text-gray-300 hover:bg-gray-700'
-                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                )}
-              >
-                <RefreshCw className={cn('w-4 h-4', loading && 'animate-spin')} />
-              </button>
-            </div>
-          </motion.div>
-
-          {/* Products Table */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.3 }}
-            className={cn(
-              'rounded-xl border overflow-hidden',
-              theme === 'dark'
-                ? 'bg-[#1e1e2f] border-gray-700/50'
-                : 'bg-white border-gray-200'
-            )}
-          >
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead>
-                  <tr className={cn(
-                    'border-b',
-                    theme === 'dark' ? 'border-gray-700 bg-gray-800/50' : 'border-gray-200 bg-gray-50'
-                  )}>
-                    <th className="text-left py-3 px-4 text-xs font-medium text-gray-500 uppercase tracking-wider">Producto</th>
-                    <th className="text-left py-3 px-4 text-xs font-medium text-gray-500 uppercase tracking-wider">SKU</th>
-                    <th className="text-right py-3 px-4 text-xs font-medium text-gray-500 uppercase tracking-wider">Costo</th>
-                    <th className="text-right py-3 px-4 text-xs font-medium text-gray-500 uppercase tracking-wider">Venta</th>
-                    <th className="text-right py-3 px-4 text-xs font-medium text-gray-500 uppercase tracking-wider">Margen</th>
-                    <th className="text-center py-3 px-4 text-xs font-medium text-gray-500 uppercase tracking-wider">Stock</th>
-                    <th className="text-center py-3 px-4 text-xs font-medium text-gray-500 uppercase tracking-wider">Estado</th>
-                    <th className="text-center py-3 px-4 text-xs font-medium text-gray-500 uppercase tracking-wider">Acciones</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
-                  {loading ? (
-                    [...Array(5)].map((_, i) => (
-                      <tr key={i}>
-                        <td colSpan={8} className="py-4 px-4">
-                          <div className="animate-pulse flex items-center gap-3">
-                            <div className="w-12 h-12 bg-gray-200 dark:bg-gray-700 rounded-lg" />
-                            <div className="flex-1">
-                              <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-3/4" />
-                              <div className="h-3 bg-gray-200 dark:bg-gray-700 rounded w-1/2 mt-2" />
+            >
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead>
+                    <tr className={cn(
+                      'border-b',
+                      theme === 'dark' ? 'border-gray-700 bg-gray-800/50' : 'border-gray-200 bg-gray-50'
+                    )}>
+                      <th className="text-left py-4 px-4 text-xs font-medium text-gray-500 uppercase tracking-wider">Producto</th>
+                      <th className="text-left py-4 px-4 text-xs font-medium text-gray-500 uppercase tracking-wider">SKU</th>
+                      <th className="text-right py-4 px-4 text-xs font-medium text-gray-500 uppercase tracking-wider">Costo</th>
+                      <th className="text-right py-4 px-4 text-xs font-medium text-gray-500 uppercase tracking-wider">Venta</th>
+                      <th className="text-right py-4 px-4 text-xs font-medium text-gray-500 uppercase tracking-wider">Margen</th>
+                      <th className="text-center py-4 px-4 text-xs font-medium text-gray-500 uppercase tracking-wider">Stock</th>
+                      <th className="text-center py-4 px-4 text-xs font-medium text-gray-500 uppercase tracking-wider">Estado</th>
+                      <th className="text-center py-4 px-4 text-xs font-medium text-gray-500 uppercase tracking-wider">Acciones</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
+                    {loading ? (
+                      [...Array(5)].map((_, i) => (
+                        <tr key={i}>
+                          <td colSpan={8} className="py-4 px-4">
+                            <div className="animate-pulse flex items-center gap-3">
+                              <div className="w-14 h-14 bg-gray-200 dark:bg-gray-700 rounded-xl" />
+                              <div className="flex-1">
+                                <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-3/4" />
+                                <div className="h-3 bg-gray-200 dark:bg-gray-700 rounded w-1/2 mt-2" />
+                              </div>
                             </div>
-                          </div>
+                          </td>
+                        </tr>
+                      ))
+                    ) : products.length === 0 ? (
+                      <tr>
+                        <td colSpan={8} className="py-12 text-center">
+                          <Package className="w-12 h-12 mx-auto mb-3 text-gray-400" />
+                          <p className="text-gray-500 dark:text-gray-400">No hay productos</p>
+                          <Link href="/dashboard/market/inventory/create">
+                            <button className="mt-3 text-sm text-emerald-500 hover:text-emerald-600">
+                              Crear primer producto
+                            </button>
+                          </Link>
                         </td>
                       </tr>
-                    ))
-                  ) : products.length === 0 ? (
-                    <tr>
-                      <td colSpan={8} className="py-12 text-center">
-                        <Package className="w-12 h-12 mx-auto mb-3 text-gray-400" />
-                        <p className="text-gray-500 dark:text-gray-400">No hay productos</p>
-                        <Link href="/dashboard/market/inventory/create">
-                          <button className="mt-3 text-sm text-blue-500 hover:text-blue-600">
-                            Crear primer producto
-                          </button>
-                        </Link>
-                      </td>
-                    </tr>
-                  ) : (
-                    products.map((product, index) => {
-                      const status = getStockStatus(product)
-                      const margin = getMargin(product)
-                      const symbol = CURRENCY_SYMBOLS[product.currency] || '$'
+                    ) : (
+                      products.map((product, index) => {
+                        const status = getStockStatus(product)
+                        const margin = getMargin(product)
+                        const symbol = CURRENCY_SYMBOLS[product.currency] || '$'
 
-                      return (
-                        <motion.tr
-                          key={product.id}
-                          initial={{ opacity: 0, y: 10 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          transition={{ delay: index * 0.02 }}
-                          className={cn(
-                            'group transition-colors',
-                            theme === 'dark' ? 'hover:bg-gray-800/50' : 'hover:bg-gray-50'
-                          )}
-                        >
-                          <td className="py-3 px-4">
-                            <div className="flex items-center gap-3">
-                              <div className={cn(
-                                'w-12 h-12 rounded-lg overflow-hidden flex items-center justify-center',
-                                theme === 'dark' ? 'bg-gray-700' : 'bg-gray-100'
-                              )}>
-                                {product.imageUrl ? (
-                                  <img
-                                    src={product.imageUrl}
-                                    alt={product.name}
-                                    className="w-full h-full object-cover"
-                                  />
-                                ) : (
-                                  <ImageIcon className="w-6 h-6 text-gray-400" />
-                                )}
-                              </div>
-                              <div>
-                                <p className="font-medium text-gray-900 dark:text-white">{product.name}</p>
-                                {product.category && (
-                                  <p className="text-xs text-gray-500 dark:text-gray-400">{product.category}</p>
-                                )}
-                              </div>
-                            </div>
-                          </td>
-                          <td className="py-3 px-4">
-                            <span className="text-sm text-gray-600 dark:text-gray-300 font-mono">{product.sku}</span>
-                          </td>
-                          <td className="py-3 px-4 text-right">
-                            <span className="text-sm text-gray-600 dark:text-gray-300">
-                              {symbol}{product.costPrice.toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                            </span>
-                          </td>
-                          <td className="py-3 px-4 text-right">
-                            <span className="text-sm font-medium text-gray-900 dark:text-white">
-                              {symbol}{product.sellingPrice.toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                            </span>
-                          </td>
-                          <td className="py-3 px-4 text-right">
-                            <span className={cn(
-                              'text-sm font-medium',
-                              margin >= 30 ? 'text-green-600' : margin >= 15 ? 'text-amber-600' : 'text-red-600'
-                            )}>
-                              {margin}%
-                            </span>
-                          </td>
-                          <td className="py-3 px-4 text-center">
-                            <span className="text-sm font-bold text-gray-900 dark:text-white">
-                              {product.quantityOnHand}
-                            </span>
-                            {product.quantityExpected > 0 && (
-                              <span className="text-xs text-blue-500 ml-1">(+{product.quantityExpected})</span>
+                        return (
+                          <motion.tr
+                            key={product.id}
+                            initial={{ opacity: 0, y: 10 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ delay: index * 0.02 }}
+                            className={cn(
+                              'group transition-colors',
+                              theme === 'dark' ? 'hover:bg-gray-800/50' : 'hover:bg-gray-50'
                             )}
-                          </td>
-                          <td className="py-3 px-4 text-center">
-                            <span className={cn(
-                              'inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium',
-                              status.color === 'green' && 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400',
-                              status.color === 'amber' && 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400',
-                              status.color === 'red' && 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'
-                            )}>
-                              <status.icon className="w-3 h-3" />
-                              {status.label}
-                            </span>
-                          </td>
-                          <td className="py-3 px-4 text-center">
-                            <div className="flex items-center justify-center gap-1">
-                              <button
-                                onClick={() => setSelectedProduct(product)}
-                                className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-                              >
-                                <Eye className="w-4 h-4 text-gray-500" />
-                              </button>
-                              <Link href={`/dashboard/market/inventory/${product.id}/edit`}>
-                                <button className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
-                                  <Edit className="w-4 h-4 text-gray-500" />
-                                </button>
-                              </Link>
-                            </div>
-                          </td>
-                        </motion.tr>
-                      )
-                    })
-                  )}
-                </tbody>
-              </table>
-            </div>
-
-            {/* Pagination */}
-            {pagination.totalPages > 1 && (
-              <div className={cn(
-                'flex items-center justify-between px-4 py-3 border-t',
-                theme === 'dark' ? 'border-gray-700 bg-gray-800/50' : 'border-gray-200 bg-gray-50'
-              )}>
-                <p className="text-sm text-gray-500">
-                  Mostrando {((pagination.page - 1) * pagination.limit) + 1} - {Math.min(pagination.page * pagination.limit, pagination.total)} de {pagination.total}
-                </p>
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => setPagination(p => ({ ...p, page: p.page - 1 }))}
-                    disabled={pagination.page === 1}
-                    className={cn(
-                      'p-2 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed',
-                      theme === 'dark'
-                        ? 'hover:bg-gray-700 text-gray-300'
-                        : 'hover:bg-gray-200 text-gray-600'
+                          >
+                            <td className="py-4 px-4">
+                              <div className="flex items-center gap-3">
+                                <div className={cn(
+                                  'w-14 h-14 rounded-xl overflow-hidden flex items-center justify-center shadow-sm border',
+                                  theme === 'dark' ? 'bg-gray-700 border-gray-600' : 'bg-gray-100 border-gray-200'
+                                )}>
+                                  {product.imageUrl ? (
+                                    <img
+                                      src={product.imageUrl}
+                                      alt={product.name}
+                                      className="w-full h-full object-cover"
+                                    />
+                                  ) : (
+                                    <ImageIcon className="w-6 h-6 text-gray-400" />
+                                  )}
+                                </div>
+                                <div>
+                                  <p className="font-medium text-gray-900 dark:text-white">{product.name}</p>
+                                  {product.category && (
+                                    <p className="text-xs text-gray-500 dark:text-gray-400">{product.category}</p>
+                                  )}
+                                </div>
+                              </div>
+                            </td>
+                            <td className="py-4 px-4">
+                              <span className="text-sm text-gray-600 dark:text-gray-300 font-mono">{product.sku}</span>
+                            </td>
+                            <td className="py-4 px-4 text-right">
+                              <span className="text-sm text-gray-600 dark:text-gray-300">
+                                {symbol}{product.costPrice.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                              </span>
+                            </td>
+                            <td className="py-4 px-4 text-right">
+                              <span className="text-sm font-medium text-gray-900 dark:text-white">
+                                {symbol}{product.sellingPrice.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                              </span>
+                            </td>
+                            <td className="py-4 px-4 text-right">
+                              <div className="flex items-center justify-end gap-1">
+                                <TrendingUp className={cn(
+                                  'w-4 h-4',
+                                  margin >= 30 ? 'text-green-600' : margin >= 15 ? 'text-amber-600' : 'text-red-600'
+                                )} />
+                                <span className={cn(
+                                  'text-sm font-bold',
+                                  margin >= 30 ? 'text-green-600' : margin >= 15 ? 'text-amber-600' : 'text-red-600'
+                                )}>
+                                  {margin}%
+                                </span>
+                              </div>
+                            </td>
+                            <td className="py-4 px-4 text-center">
+                              <span className="text-sm font-bold text-gray-900 dark:text-white">
+                                {product.quantityOnHand}
+                              </span>
+                              {product.quantityExpected > 0 && (
+                                <span className="text-xs text-blue-500 ml-1">(+{product.quantityExpected})</span>
+                              )}
+                            </td>
+                            <td className="py-4 px-4 text-center">
+                              <span className={cn(
+                                'inline-flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-medium',
+                                status.color === 'green' && 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400',
+                                status.color === 'amber' && 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400',
+                                status.color === 'red' && 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'
+                              )}>
+                                <status.icon className="w-3.5 h-3.5" />
+                                {status.label}
+                              </span>
+                            </td>
+                            <td className="py-4 px-4 text-center">
+                              <div className="flex items-center justify-center gap-1">
+                                <motion.button
+                                  whileHover={{ scale: 1.1 }}
+                                  whileTap={{ scale: 0.9 }}
+                                  onClick={() => setSelectedProduct(product)}
+                                  className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                                >
+                                  <Eye className="w-4 h-4 text-gray-500" />
+                                </motion.button>
+                                <Link href={`/dashboard/market/inventory/${product.id}/edit`}>
+                                  <motion.button
+                                    whileHover={{ scale: 1.1 }}
+                                    whileTap={{ scale: 0.9 }}
+                                    className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                                  >
+                                    <Edit className="w-4 h-4 text-gray-500" />
+                                  </motion.button>
+                                </Link>
+                              </div>
+                            </td>
+                          </motion.tr>
+                        )
+                      })
                     )}
-                  >
-                    <ChevronLeft className="w-5 h-5" />
-                  </button>
-                  <span className="text-sm text-gray-600 dark:text-gray-300">
-                    {pagination.page} / {pagination.totalPages}
-                  </span>
-                  <button
-                    onClick={() => setPagination(p => ({ ...p, page: p.page + 1 }))}
-                    disabled={pagination.page === pagination.totalPages}
-                    className={cn(
-                      'p-2 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed',
-                      theme === 'dark'
-                        ? 'hover:bg-gray-700 text-gray-300'
-                        : 'hover:bg-gray-200 text-gray-600'
-                    )}
-                  >
-                    <ChevronRight className="w-5 h-5" />
-                  </button>
-                </div>
+                  </tbody>
+                </table>
               </div>
-            )}
-          </motion.div>
 
-          {/* Product Detail Modal */}
-          <AnimatePresence>
-            {selectedProduct && (
-              <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
-                onClick={() => setSelectedProduct(null)}
-              >
-                <motion.div
-                  initial={{ scale: 0.9, opacity: 0 }}
-                  animate={{ scale: 1, opacity: 1 }}
-                  exit={{ scale: 0.9, opacity: 0 }}
-                  onClick={(e) => e.stopPropagation()}
-                  className={cn(
-                    'w-full max-w-lg rounded-2xl p-6',
-                    theme === 'dark' ? 'bg-[#1e1e2f]' : 'bg-white'
-                  )}
-                >
-                  <div className="flex items-start gap-4 mb-4">
-                    <div className={cn(
-                      'w-20 h-20 rounded-xl overflow-hidden flex items-center justify-center',
-                      theme === 'dark' ? 'bg-gray-700' : 'bg-gray-100'
-                    )}>
-                      {selectedProduct.imageUrl ? (
-                        <img
-                          src={selectedProduct.imageUrl}
-                          alt={selectedProduct.name}
-                          className="w-full h-full object-cover"
-                        />
-                      ) : (
-                        <ImageIcon className="w-8 h-8 text-gray-400" />
-                      )}
-                    </div>
-                    <div className="flex-1">
-                      <h3 className="text-xl font-bold text-gray-900 dark:text-white">{selectedProduct.name}</h3>
-                      {selectedProduct.category && (
-                        <p className="text-sm text-gray-500">{selectedProduct.category}</p>
-                      )}
-                      <p className="text-xs text-gray-400 mt-1">SKU: {selectedProduct.sku}</p>
-                    </div>
-                    <button
-                      onClick={() => setSelectedProduct(null)}
-                      className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700"
-                    >
-                      <X className="w-5 h-5 text-gray-500" />
-                    </button>
-                  </div>
-
-                  {selectedProduct.description && (
-                    <p className="text-sm text-gray-600 dark:text-gray-300 mb-4">{selectedProduct.description}</p>
-                  )}
-
-                  <div className="grid grid-cols-2 gap-4 mb-4">
-                    <div className={cn(
-                      'p-3 rounded-xl',
-                      theme === 'dark' ? 'bg-gray-800' : 'bg-gray-50'
-                    )}>
-                      <p className="text-xs text-gray-500">Precio de Costo</p>
-                      <p className="text-lg font-bold text-gray-900 dark:text-white">
-                        {CURRENCY_SYMBOLS[selectedProduct.currency] || '$'}{selectedProduct.costPrice.toFixed(2)}
-                      </p>
-                    </div>
-                    <div className={cn(
-                      'p-3 rounded-xl',
-                      theme === 'dark' ? 'bg-gray-800' : 'bg-gray-50'
-                    )}>
-                      <p className="text-xs text-gray-500">Precio de Venta</p>
-                      <p className="text-lg font-bold text-green-600">
-                        {CURRENCY_SYMBOLS[selectedProduct.currency] || '$'}{selectedProduct.sellingPrice.toFixed(2)}
-                      </p>
-                    </div>
-                    <div className={cn(
-                      'p-3 rounded-xl',
-                      theme === 'dark' ? 'bg-gray-800' : 'bg-gray-50'
-                    )}>
-                      <p className="text-xs text-gray-500">Stock Actual</p>
-                      <p className="text-lg font-bold text-gray-900 dark:text-white">{selectedProduct.quantityOnHand}</p>
-                    </div>
-                    <div className={cn(
-                      'p-3 rounded-xl',
-                      theme === 'dark' ? 'bg-gray-800' : 'bg-gray-50'
-                    )}>
-                      <p className="text-xs text-gray-500">Stock Mínimo</p>
-                      <p className="text-lg font-bold text-gray-900 dark:text-white">{selectedProduct.minimumStock}</p>
-                    </div>
-                  </div>
-
-                  {selectedProduct.supplierName && (
-                    <div className={cn(
-                      'p-3 rounded-xl mb-4',
-                      theme === 'dark' ? 'bg-gray-800' : 'bg-gray-50'
-                    )}>
-                      <p className="text-xs text-gray-500 mb-1">Proveedor</p>
-                      <p className="font-medium text-gray-900 dark:text-white">{selectedProduct.supplierName}</p>
-                      {selectedProduct.supplierContact && (
-                        <p className="text-sm text-gray-500">{selectedProduct.supplierContact}</p>
-                      )}
-                    </div>
-                  )}
-
-                  <div className="flex gap-3">
-                    <Link href={`/dashboard/market/inventory/${selectedProduct.id}/edit`} className="flex-1">
-                      <button className="w-full py-2.5 rounded-xl bg-blue-500 text-white hover:bg-blue-600 transition-colors font-medium">
-                        Editar Producto
-                      </button>
-                    </Link>
-                    <button
-                      onClick={() => setSelectedProduct(null)}
+              {/* Pagination */}
+              {pagination.totalPages > 1 && (
+                <div className={cn(
+                  'flex items-center justify-between px-4 py-3 border-t',
+                  theme === 'dark' ? 'border-gray-700 bg-gray-800/50' : 'border-gray-200 bg-gray-50'
+                )}>
+                  <p className="text-sm text-gray-500">
+                    Mostrando {((pagination.page - 1) * pagination.limit) + 1} - {Math.min(pagination.page * pagination.limit, pagination.total)} de {pagination.total}
+                  </p>
+                  <div className="flex items-center gap-2">
+                    <motion.button
+                      whileHover={{ scale: 1.05 }}
+                      whileTap={{ scale: 0.95 }}
+                      onClick={() => setPagination(p => ({ ...p, page: p.page - 1 }))}
+                      disabled={pagination.page === 1}
                       className={cn(
-                        'px-6 py-2.5 rounded-xl transition-colors font-medium',
+                        'p-2 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed',
                         theme === 'dark'
-                          ? 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-                          : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                          ? 'hover:bg-gray-700 text-gray-300'
+                          : 'hover:bg-gray-200 text-gray-600'
                       )}
                     >
-                      Cerrar
-                    </button>
+                      <ChevronLeft className="w-5 h-5" />
+                    </motion.button>
+                    <span className="text-sm text-gray-600 dark:text-gray-300">
+                      {pagination.page} / {pagination.totalPages}
+                    </span>
+                    <motion.button
+                      whileHover={{ scale: 1.05 }}
+                      whileTap={{ scale: 0.95 }}
+                      onClick={() => setPagination(p => ({ ...p, page: p.page + 1 }))}
+                      disabled={pagination.page === pagination.totalPages}
+                      className={cn(
+                        'p-2 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed',
+                        theme === 'dark'
+                          ? 'hover:bg-gray-700 text-gray-300'
+                          : 'hover:bg-gray-200 text-gray-600'
+                      )}
+                    >
+                      <ChevronRight className="w-5 h-5" />
+                    </motion.button>
                   </div>
+                </div>
+              )}
+            </motion.div>
+
+            {/* Product Detail Modal */}
+            <AnimatePresence>
+              {selectedProduct && (
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4"
+                  onClick={() => setSelectedProduct(null)}
+                >
+                  <motion.div
+                    initial={{ scale: 0.9, opacity: 0, y: 20 }}
+                    animate={{ scale: 1, opacity: 1, y: 0 }}
+                    exit={{ scale: 0.9, opacity: 0, y: 20 }}
+                    transition={{ type: 'spring', duration: 0.3 }}
+                    onClick={(e) => e.stopPropagation()}
+                    className={cn(
+                      'w-full max-w-lg rounded-2xl p-6 shadow-2xl',
+                      theme === 'dark' ? 'bg-gray-900' : 'bg-white'
+                    )}
+                  >
+                    <div className="flex items-start gap-4 mb-4">
+                      <div className={cn(
+                        'w-20 h-20 rounded-xl overflow-hidden flex items-center justify-center shadow-lg border',
+                        theme === 'dark' ? 'bg-gray-700 border-gray-600' : 'bg-gray-100 border-gray-200'
+                      )}>
+                        {selectedProduct.imageUrl ? (
+                          <img
+                            src={selectedProduct.imageUrl}
+                            alt={selectedProduct.name}
+                            className="w-full h-full object-cover"
+                          />
+                        ) : (
+                          <ImageIcon className="w-8 h-8 text-gray-400" />
+                        )}
+                      </div>
+                      <div className="flex-1">
+                        <h3 className="text-xl font-bold text-gray-900 dark:text-white">{selectedProduct.name}</h3>
+                        {selectedProduct.category && (
+                          <p className="text-sm text-gray-500">{selectedProduct.category}</p>
+                        )}
+                        <p className="text-xs text-gray-400 mt-1">SKU: {selectedProduct.sku}</p>
+                      </div>
+                      <button
+                        onClick={() => setSelectedProduct(null)}
+                        className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700"
+                      >
+                        <X className="w-5 h-5 text-gray-500" />
+                      </button>
+                    </div>
+
+                    {selectedProduct.description && (
+                      <p className="text-sm text-gray-600 dark:text-gray-300 mb-4">{selectedProduct.description}</p>
+                    )}
+
+                    <div className="grid grid-cols-2 gap-4 mb-4">
+                      <div className={cn(
+                        'p-4 rounded-xl',
+                        theme === 'dark' ? 'bg-gray-800' : 'bg-gray-50'
+                      )}>
+                        <p className="text-xs text-gray-500 mb-1">Precio de Costo</p>
+                        <p className="text-xl font-bold text-gray-900 dark:text-white">
+                          {CURRENCY_SYMBOLS[selectedProduct.currency] || '$'}{selectedProduct.costPrice.toFixed(2)}
+                        </p>
+                      </div>
+                      <div className={cn(
+                        'p-4 rounded-xl',
+                        theme === 'dark' ? 'bg-gray-800' : 'bg-gray-50'
+                      )}>
+                        <p className="text-xs text-gray-500 mb-1">Precio de Venta</p>
+                        <p className="text-xl font-bold text-emerald-600">
+                          {CURRENCY_SYMBOLS[selectedProduct.currency] || '$'}{selectedProduct.sellingPrice.toFixed(2)}
+                        </p>
+                      </div>
+                      <div className={cn(
+                        'p-4 rounded-xl',
+                        theme === 'dark' ? 'bg-gray-800' : 'bg-gray-50'
+                      )}>
+                        <p className="text-xs text-gray-500 mb-1">Stock Actual</p>
+                        <p className="text-xl font-bold text-gray-900 dark:text-white">{selectedProduct.quantityOnHand}</p>
+                      </div>
+                      <div className={cn(
+                        'p-4 rounded-xl',
+                        theme === 'dark' ? 'bg-gray-800' : 'bg-gray-50'
+                      )}>
+                        <p className="text-xs text-gray-500 mb-1">Stock Mínimo</p>
+                        <p className="text-xl font-bold text-gray-900 dark:text-white">{selectedProduct.minimumStock}</p>
+                      </div>
+                    </div>
+
+                    {selectedProduct.supplierName && (
+                      <div className={cn(
+                        'p-4 rounded-xl mb-4',
+                        theme === 'dark' ? 'bg-gray-800' : 'bg-gray-50'
+                      )}>
+                        <p className="text-xs text-gray-500 mb-1">Proveedor</p>
+                        <p className="font-medium text-gray-900 dark:text-white">{selectedProduct.supplierName}</p>
+                        {selectedProduct.supplierContact && (
+                          <p className="text-sm text-gray-500">{selectedProduct.supplierContact}</p>
+                        )}
+                      </div>
+                    )}
+
+                    <div className="flex gap-3">
+                      <Link href={`/dashboard/market/inventory/${selectedProduct.id}/edit`} className="flex-1">
+                        <motion.button
+                          whileHover={{ scale: 1.02 }}
+                          whileTap={{ scale: 0.98 }}
+                          className="w-full py-2.5 rounded-xl bg-gradient-to-r from-emerald-500 to-emerald-600 text-white hover:from-emerald-600 hover:to-emerald-700 transition-all font-medium shadow-lg shadow-emerald-500/25"
+                        >
+                          Editar Producto
+                        </motion.button>
+                      </Link>
+                      <motion.button
+                        whileHover={{ scale: 1.02 }}
+                        whileTap={{ scale: 0.98 }}
+                        onClick={() => setSelectedProduct(null)}
+                        className={cn(
+                          'px-6 py-2.5 rounded-xl transition-colors font-medium',
+                          theme === 'dark'
+                            ? 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                            : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                        )}
+                      >
+                        Cerrar
+                      </motion.button>
+                    </div>
+                  </motion.div>
                 </motion.div>
-              </motion.div>
-            )}
-          </AnimatePresence>
+              )}
+            </AnimatePresence>
+          </motion.div>
         </div>
       </DashboardLayout>
     </ProtectedRoute>
