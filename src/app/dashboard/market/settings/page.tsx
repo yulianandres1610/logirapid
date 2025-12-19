@@ -41,6 +41,7 @@ import { cn } from '@/lib/utils'
 interface OdooConfig {
   url: string
   database: string
+  username: string
   apiKey: string
   enabled: boolean
   syncFrequency: 'manual' | 'hourly' | 'daily'
@@ -112,6 +113,7 @@ export default function MarketSettingsPage() {
   const [odooConfig, setOdooConfig] = useState<OdooConfig>({
     url: '',
     database: '',
+    username: '',
     apiKey: '',
     enabled: false,
     syncFrequency: 'manual',
@@ -157,6 +159,7 @@ export default function MarketSettingsPage() {
           setOdooConfig({
             url: odooData.data.odooUrl || '',
             database: odooData.data.odooDatabase || '',
+            username: odooData.data.odooUsername || '',
             apiKey: odooData.data.odooApiKey || '',
             enabled: odooData.data.odooEnabled || false,
             syncFrequency: odooData.data.syncFrequency || 'manual',
@@ -183,8 +186,8 @@ export default function MarketSettingsPage() {
   }
 
   const testConnection = async () => {
-    if (!odooConfig.url || !odooConfig.apiKey) {
-      setMessage({ type: 'error', text: 'Completa la URL y API Key primero' })
+    if (!odooConfig.url || !odooConfig.apiKey || !odooConfig.database) {
+      setMessage({ type: 'error', text: 'Completa la URL, Base de datos y API Key primero' })
       return
     }
 
@@ -199,6 +202,7 @@ export default function MarketSettingsPage() {
         body: JSON.stringify({
           url: odooConfig.url,
           database: odooConfig.database,
+          username: odooConfig.username || undefined,
           apiKey: odooConfig.apiKey
         })
       })
@@ -639,8 +643,19 @@ export default function MarketSettingsPage() {
                       <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-purple-500 to-purple-600 flex items-center justify-center">
                         <Link2 className="w-5 h-5 text-white" />
                       </div>
-                      Conexión Odoo 16
+                      Conexión Odoo (16+/18)
                     </h2>
+
+                    {/* Help text for API key */}
+                    <div className={cn(
+                      "p-3 rounded-xl mb-4 text-sm",
+                      theme === 'dark' ? 'bg-blue-900/20 border border-blue-800 text-blue-300' : 'bg-blue-50 border border-blue-200 text-blue-800'
+                    )}>
+                      <p className="font-medium mb-1">¿Cómo obtener el API Key?</p>
+                      <p className="text-xs opacity-80">
+                        En Odoo: Configuración → Usuarios → Tu usuario → Pestaña "Claves de API" → Crear nueva clave
+                      </p>
+                    </div>
 
                     <div className="space-y-4">
                       {/* URL */}
@@ -687,6 +702,35 @@ export default function MarketSettingsPage() {
                               : 'bg-gray-50 border-gray-200 text-gray-900 focus:border-purple-500 focus:ring-purple-500/20'
                           )}
                         />
+                      </div>
+
+                      {/* Username (for Odoo 16+) */}
+                      <div>
+                        <label className={cn(
+                          "block text-sm font-medium mb-2",
+                          theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
+                        )}>
+                          <Mail className="w-4 h-4 inline mr-2" />
+                          Usuario de Odoo
+                        </label>
+                        <input
+                          type="text"
+                          value={odooConfig.username}
+                          onChange={(e) => setOdooConfig({ ...odooConfig, username: e.target.value })}
+                          placeholder="admin o email@ejemplo.com"
+                          className={cn(
+                            'w-full px-4 py-2.5 rounded-xl border focus:outline-none focus:ring-2 transition-all',
+                            theme === 'dark'
+                              ? 'bg-gray-900/50 border-gray-600 text-white focus:border-purple-500 focus:ring-purple-500/20'
+                              : 'bg-gray-50 border-gray-200 text-gray-900 focus:border-purple-500 focus:ring-purple-500/20'
+                          )}
+                        />
+                        <p className={cn(
+                          "text-xs mt-1",
+                          theme === 'dark' ? 'text-gray-500' : 'text-gray-500'
+                        )}>
+                          El login del usuario que generó el API Key
+                        </p>
                       </div>
 
                       {/* API Key */}

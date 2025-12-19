@@ -15,6 +15,7 @@ export async function GET() {
       SELECT
         odoo_url as "odooUrl",
         odoo_database as "odooDatabase",
+        odoo_username as "odooUsername",
         odoo_api_key as "odooApiKey",
         odoo_enabled as "odooEnabled",
         odoo_sync_frequency as "syncFrequency",
@@ -55,6 +56,7 @@ export async function PUT(request: Request) {
     const {
       url,
       database,
+      username,
       apiKey,
       enabled,
       syncFrequency,
@@ -67,6 +69,7 @@ export async function PUT(request: Request) {
     try {
       await db.query(`ALTER TABLE companies ADD COLUMN IF NOT EXISTS odoo_url VARCHAR(255)`)
       await db.query(`ALTER TABLE companies ADD COLUMN IF NOT EXISTS odoo_database VARCHAR(100)`)
+      await db.query(`ALTER TABLE companies ADD COLUMN IF NOT EXISTS odoo_username VARCHAR(100)`)
       await db.query(`ALTER TABLE companies ADD COLUMN IF NOT EXISTS odoo_api_key VARCHAR(255)`)
       await db.query(`ALTER TABLE companies ADD COLUMN IF NOT EXISTS odoo_enabled BOOLEAN DEFAULT false`)
       await db.query(`ALTER TABLE companies ADD COLUMN IF NOT EXISTS odoo_sync_frequency VARCHAR(20) DEFAULT 'manual'`)
@@ -81,16 +84,18 @@ export async function PUT(request: Request) {
       UPDATE companies SET
         odoo_url = $1,
         odoo_database = $2,
-        odoo_api_key = $3,
-        odoo_enabled = $4,
-        odoo_sync_frequency = $5,
-        odoo_sync_direction = $6,
-        odoo_sync_variants = $7,
-        odoo_sync_stock = $8
-      WHERE id = $9
+        odoo_username = $3,
+        odoo_api_key = $4,
+        odoo_enabled = $5,
+        odoo_sync_frequency = $6,
+        odoo_sync_direction = $7,
+        odoo_sync_variants = $8,
+        odoo_sync_stock = $9
+      WHERE id = $10
     `, [
       url || null,
       database || null,
+      username || null,
       apiKey || null,
       enabled || false,
       syncFrequency || 'manual',

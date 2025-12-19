@@ -21,6 +21,7 @@ export async function POST(request: Request) {
       SELECT
         odoo_url as "odooUrl",
         odoo_database as "odooDatabase",
+        odoo_username as "odooUsername",
         odoo_api_key as "odooApiKey",
         odoo_enabled as "odooEnabled"
       FROM companies
@@ -40,7 +41,8 @@ export async function POST(request: Request) {
     const client = createOdooClient({
       url: config.odooUrl,
       database: config.odooDatabase,
-      apiKey: config.odooApiKey
+      apiKey: config.odooApiKey,
+      username: config.odooUsername || undefined
     })
 
     // Ensure mapping table exists
