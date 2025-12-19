@@ -1,13 +1,12 @@
 'use client'
 
-import { useEffect, useState, use } from 'react'
+import { useEffect, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   Package,
   ArrowLeft,
   Warehouse,
   TrendingUp,
-  Users,
   Clock,
   Edit,
   Barcode,
@@ -25,6 +24,7 @@ import {
   History
 } from 'lucide-react'
 import Link from 'next/link'
+import { useParams } from 'next/navigation'
 import { DashboardLayout } from '@/components/layout/dashboard-layout'
 import { ProtectedRoute } from '@/components/protected-route'
 import { useTheme } from '@/contexts/theme-context'
@@ -122,9 +122,9 @@ const CURRENCY_SYMBOLS: Record<string, string> = {
   MLC: '$'
 }
 
-export default function ProductDetailPage({ params }: { params: Promise<{ id: string }> }) {
-  const resolvedParams = use(params)
-  const productId = resolvedParams.id
+export default function ProductDetailPage() {
+  const params = useParams()
+  const productId = params.id as string
   const { theme } = useTheme()
   const [activeTab, setActiveTab] = useState<TabType>('overview')
   const [product, setProduct] = useState<Product | null>(null)
