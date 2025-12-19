@@ -1,6 +1,57 @@
 import { NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
+import jwt from 'jsonwebtoken'
 import { db } from '@/lib/database'
+
+interface JWTPayload {
+  userId: number
+  email: string
+  role: string
+  companyId: number
+  companyName: string
+}
+
+// Utility function to log product changes
+async function logProductChange(
+  productId: number,
+  companyId: number,
+  action: string,
+  fieldName: string | null,
+  oldValue: string | null,
+  newValue: string | null,
+  userId: number,
+  userName: string,
+  userEmail: string
+) {
+  try {
+    // Ensure table exists
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS market_product_change_logs (
+        id SERIAL PRIMARY KEY,
+        product_id INTEGER NOT NULL,
+        company_id INTEGER NOT NULL,
+        action VARCHAR(50) NOT NULL,
+        field_name VARCHAR(100),
+        old_value TEXT,
+        new_value TEXT,
+        user_id INTEGER,
+        user_name VARCHAR(255),
+        user_email VARCHAR(255),
+        notes TEXT,
+        ip_address VARCHAR(50),
+        created_at TIMESTAMP DEFAULT NOW()
+      )
+    `)
+    await db.query(`
+      INSERT INTO market_product_change_logs (
+        product_id, company_id, action, field_name, old_value, new_value,
+        user_id, user_name, user_email, created_at
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW())
+    `, [productId, companyId, action, fieldName, oldValue, newValue, userId, userName, userEmail])
+  } catch (error) {
+    console.error('Error logging product change:', error)
+  }
+}
 
 export async function GET(
   request: Request,
@@ -97,9 +148,29 @@ export async function PUT(
   try {
     const cookieStore = await cookies()
     const companyId = cookieStore.get('user-company-id')?.value
+    const authToken = cookieStore.get('auth-token')?.value
 
     if (!companyId) {
       return NextResponse.json({ success: false, error: 'Sin empresa asignada' }, { status: 403 })
+    }
+
+    // Get user info from token
+    let userId = 0
+    let userName = 'Sistema'
+    let userEmail = ''
+    if (authToken) {
+      try {
+        const secret = process.env.JWT_SECRET || 'your-secret-key'
+        const payload = jwt.verify(authToken, secret) as JWTPayload
+        userId = payload.userId
+        userEmail = payload.email
+
+        // Get user name from database
+        const userResult = await db.query('SELECT name FROM users WHERE id = $1', [userId])
+        userName = userResult.rows[0]?.name || payload.email
+      } catch {
+        // Token invalid, continue with default values
+      }
     }
 
     const { id } = await params
@@ -109,15 +180,22 @@ export async function PUT(
       return NextResponse.json({ success: false, error: 'ID inválido' }, { status: 400 })
     }
 
-    // Verify product belongs to company
-    const checkResult = await db.query(
-      'SELECT id FROM market_products WHERE id = $1 AND company_id = $2',
-      [productId, parseInt(companyId)]
-    )
+    // Get current product state for change logging
+    const currentResult = await db.query(`
+      SELECT
+        name, description, category, unit_of_measure,
+        image_url, cost_price, selling_price, currency,
+        sku, barcode, supplier_name, supplier_contact,
+        supplier_reference, minimum_stock, is_active
+      FROM market_products
+      WHERE id = $1 AND company_id = $2
+    `, [productId, parseInt(companyId)])
 
-    if (checkResult.rows.length === 0) {
+    if (currentResult.rows.length === 0) {
       return NextResponse.json({ success: false, error: 'Producto no encontrado' }, { status: 404 })
     }
+
+    const current = currentResult.rows[0]
 
     const body = await request.json()
     const {
@@ -203,9 +281,64 @@ export async function PUT(
       parseInt(companyId)
     ])
 
+    // Log changes for each modified field
+    const fieldMappings: Record<string, { dbField: string, newValue: any }> = {
+      name: { dbField: 'name', newValue: name },
+      description: { dbField: 'description', newValue: description },
+      category: { dbField: 'category', newValue: category },
+      unit_of_measure: { dbField: 'unit_of_measure', newValue: unitOfMeasure },
+      cost_price: { dbField: 'cost_price', newValue: costPrice },
+      selling_price: { dbField: 'selling_price', newValue: sellingPrice },
+      currency: { dbField: 'currency', newValue: currency },
+      sku: { dbField: 'sku', newValue: sku },
+      barcode: { dbField: 'barcode', newValue: barcode },
+      supplier_name: { dbField: 'supplier_name', newValue: supplierName },
+      minimum_stock: { dbField: 'minimum_stock', newValue: minimumStock },
+      is_active: { dbField: 'is_active', newValue: isActive }
+    }
+
+    const changedFields: string[] = []
+    for (const [field, mapping] of Object.entries(fieldMappings)) {
+      const oldVal = current[field]
+      const newVal = mapping.newValue
+      // Compare values (handle nulls and type differences)
+      const oldStr = oldVal === null || oldVal === undefined ? '' : String(oldVal)
+      const newStr = newVal === null || newVal === undefined ? '' : String(newVal)
+      if (oldStr !== newStr) {
+        changedFields.push(field)
+        await logProductChange(
+          productId,
+          parseInt(companyId),
+          'updated',
+          field,
+          oldStr || null,
+          newStr || null,
+          userId,
+          userName,
+          userEmail
+        )
+      }
+    }
+
+    // Check if image changed
+    if ((current.image_url || '') !== (imageUrl || '')) {
+      await logProductChange(
+        productId,
+        parseInt(companyId),
+        'image_updated',
+        'image_url',
+        current.image_url ? 'Imagen anterior' : null,
+        imageUrl ? 'Nueva imagen' : null,
+        userId,
+        userName,
+        userEmail
+      )
+    }
+
     return NextResponse.json({
       success: true,
-      message: 'Producto actualizado correctamente'
+      message: 'Producto actualizado correctamente',
+      changedFields
     })
   } catch (error) {
     console.error('Error updating product:', error)
@@ -223,9 +356,28 @@ export async function DELETE(
   try {
     const cookieStore = await cookies()
     const companyId = cookieStore.get('user-company-id')?.value
+    const authToken = cookieStore.get('auth-token')?.value
 
     if (!companyId) {
       return NextResponse.json({ success: false, error: 'Sin empresa asignada' }, { status: 403 })
+    }
+
+    // Get user info from token
+    let userId = 0
+    let userName = 'Sistema'
+    let userEmail = ''
+    if (authToken) {
+      try {
+        const secret = process.env.JWT_SECRET || 'your-secret-key'
+        const payload = jwt.verify(authToken, secret) as JWTPayload
+        userId = payload.userId
+        userEmail = payload.email
+
+        const userResult = await db.query('SELECT name FROM users WHERE id = $1', [userId])
+        userName = userResult.rows[0]?.name || payload.email
+      } catch {
+        // Token invalid
+      }
     }
 
     const { id } = await params
@@ -235,15 +387,30 @@ export async function DELETE(
       return NextResponse.json({ success: false, error: 'ID inválido' }, { status: 400 })
     }
 
-    // Verify product belongs to company
+    // Get product info before deleting
     const checkResult = await db.query(
-      'SELECT id FROM market_products WHERE id = $1 AND company_id = $2',
+      'SELECT id, name FROM market_products WHERE id = $1 AND company_id = $2',
       [productId, parseInt(companyId)]
     )
 
     if (checkResult.rows.length === 0) {
       return NextResponse.json({ success: false, error: 'Producto no encontrado' }, { status: 404 })
     }
+
+    const productName = checkResult.rows[0].name
+
+    // Log deletion before actually deleting
+    await logProductChange(
+      productId,
+      parseInt(companyId),
+      'deleted',
+      null,
+      productName,
+      null,
+      userId,
+      userName,
+      userEmail
+    )
 
     // Delete variants first
     try {

@@ -31,6 +31,7 @@
     "bcryptjs": "^3.0.2",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.0.0",
+    "date-fns": "^4.1.0",
     "framer-motion": "^11.0.0",
     "html2canvas": "^1.4.1",
     "jose": "^6.1.2",
