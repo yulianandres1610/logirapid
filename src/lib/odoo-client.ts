@@ -179,49 +179,93 @@ class OdooClient {
 
   /**
    * Call a model method via JSON-RPC
+   * Uses XML-RPC style if session is not available
    */
   private async call(model: string, method: string, args: any[] = [], kwargs: any = {}): Promise<any> {
-    return this.jsonRpc('/web/dataset/call_kw', 'call', {
-      model,
-      method,
-      args,
-      kwargs,
-    })
+    // If we have a session, use the web endpoint
+    if (this.sessionId) {
+      return this.jsonRpc('/web/dataset/call_kw', 'call', {
+        model,
+        method,
+        args,
+        kwargs,
+      })
+    }
+
+    // Otherwise use XML-RPC style with execute_kw
+    // This requires: db, uid, password, model, method, args, kwargs
+    if (!this.uid) {
+      await this.authenticate()
+    }
+
+    if (!this.uid) {
+      throw new Error('No authenticated. Call authenticate() first.')
+    }
+
+    console.log(`[Odoo Client] Using XML-RPC execute_kw for ${model}.${method}`)
+
+    const result = await this.jsonRpc('/jsonrpc', 'call', {
+      service: 'object',
+      method: 'execute_kw',
+      args: [
+        this.database,
+        this.uid,
+        this.apiKey,
+        model,
+        method,
+        args,
+        kwargs
+      ]
+    }, false)
+
+    return result
   }
 
   /**
    * Authenticate with Odoo
-   * For Odoo 16+: API key in header is preferred (no explicit auth needed)
-   * Falls back to session-based auth if API key header doesn't work
+   * Priority order:
+   * 1. XML-RPC style authentication (most reliable, no rate limiting)
+   * 2. Session-based authentication (may have rate limiting)
+   * 3. API key in header (Odoo 16+ only)
    */
   async authenticate(): Promise<boolean> {
     try {
       console.log('[Odoo Client] Authenticating with Odoo...')
       console.log('[Odoo Client] Database:', this.database)
+      console.log('[Odoo Client] Username:', this.username || '(not provided)')
       console.log('[Odoo Client] API Key length:', this.apiKey?.length || 0)
 
-      // If using API key header, just verify it works by getting session info
-      if (this.useApiKeyHeader) {
-        try {
-          console.log('[Odoo Client] Testing API key header authentication...')
-          const sessionInfo = await this.jsonRpc('/web/session/get_session_info', 'call', {}, false)
+      // Determine which usernames to try
+      const usernamesToTry = this.username
+        ? [this.username]
+        : ['admin', this.apiKey.includes('@') ? this.apiKey : null].filter(Boolean) as string[]
 
-          if (sessionInfo && sessionInfo.uid) {
-            this.uid = sessionInfo.uid
-            console.log('[Odoo Client] API key authentication successful, uid:', this.uid)
+      // Method 1 (PREFERRED): Try XML-RPC style authentication first
+      // This method works best and typically doesn't have rate limiting issues
+      for (const login of usernamesToTry) {
+        try {
+          console.log(`[Odoo Client] Trying XML-RPC auth with login: ${login}`)
+          const xmlRpcResult = await this.jsonRpc('/jsonrpc', 'call', {
+            service: 'common',
+            method: 'authenticate',
+            args: [this.database, login, this.apiKey, {}]
+          }, false)
+
+          if (xmlRpcResult && typeof xmlRpcResult === 'number' && xmlRpcResult > 0) {
+            this.uid = xmlRpcResult
+            this.useApiKeyHeader = false
+            console.log('[Odoo Client] XML-RPC auth successful, uid:', this.uid)
             return true
+          } else if (xmlRpcResult === false) {
+            console.log(`[Odoo Client] XML-RPC auth failed for ${login}: Invalid credentials`)
           }
-        } catch (apiKeyError) {
-          console.log('[Odoo Client] API key header test failed, will try session auth')
+        } catch (xmlRpcError) {
+          console.log(`[Odoo Client] XML-RPC auth error for ${login}:`, xmlRpcError instanceof Error ? xmlRpcError.message : 'Unknown error')
         }
       }
 
-      // Method 2: Standard web session authenticate with API key as password
-      // Use provided username or try common defaults
-      const usernamesToTry = this.username
-        ? [this.username]
-        : ['admin', 'administrator', this.apiKey.includes('@') ? this.apiKey : null].filter(Boolean) as string[]
-
+      // Method 2: Try session-based authentication
+      // This might have rate limiting on some servers
       for (const login of usernamesToTry) {
         try {
           console.log(`[Odoo Client] Trying session auth with login: ${login}`)
@@ -233,32 +277,35 @@ class OdooClient {
 
           if (result && result.uid) {
             this.uid = result.uid
-            this.useApiKeyHeader = false // Session auth worked, use it
+            this.useApiKeyHeader = false
             console.log('[Odoo Client] Session authentication successful, uid:', this.uid)
             return true
           }
         } catch (authError) {
-          console.log(`[Odoo Client] Auth failed for ${login}:`, authError instanceof Error ? authError.message : 'Unknown error')
+          const errorMsg = authError instanceof Error ? authError.message : 'Unknown error'
+          console.log(`[Odoo Client] Session auth failed for ${login}:`, errorMsg)
+          // If rate limited, don't try more usernames
+          if (errorMsg.toLowerCase().includes('intentos') || errorMsg.toLowerCase().includes('attempts')) {
+            console.log('[Odoo Client] Rate limited, stopping session auth attempts')
+            break
+          }
         }
       }
 
-      // Method 3: Try XML-RPC style authentication
-      try {
-        console.log('[Odoo Client] Trying XML-RPC style authentication...')
-        const altResult = await this.jsonRpc('/jsonrpc', 'call', {
-          service: 'common',
-          method: 'authenticate',
-          args: [this.database, 'admin', this.apiKey, {}]
-        }, false)
+      // Method 3: If using API key header mode, verify it works
+      if (this.useApiKeyHeader) {
+        try {
+          console.log('[Odoo Client] Testing API key header authentication...')
+          const sessionInfo = await this.jsonRpc('/web/session/get_session_info', 'call', {}, false)
 
-        if (altResult && typeof altResult === 'number') {
-          this.uid = altResult
-          this.useApiKeyHeader = false
-          console.log('[Odoo Client] XML-RPC auth successful, uid:', this.uid)
-          return true
+          if (sessionInfo && sessionInfo.uid) {
+            this.uid = sessionInfo.uid
+            console.log('[Odoo Client] API key header auth successful, uid:', this.uid)
+            return true
+          }
+        } catch (apiKeyError) {
+          console.log('[Odoo Client] API key header auth failed')
         }
-      } catch (altError) {
-        console.error('[Odoo Client] XML-RPC auth error:', altError)
       }
 
       console.log('[Odoo Client] All authentication methods failed')
