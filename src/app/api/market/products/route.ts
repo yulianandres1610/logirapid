@@ -250,6 +250,13 @@ export async function POST(request: NextRequest) {
     // Generate barcode if not provided (EAN-13 format)
     const finalBarcode = barcode || generateBarcode()
 
+    // Ensure unit_of_measure column exists
+    try {
+      await db.query(`ALTER TABLE market_products ADD COLUMN IF NOT EXISTS unit_of_measure VARCHAR(20) DEFAULT 'unidad'`)
+    } catch {
+      // Column may already exist
+    }
+
     const result = await db.query(`
       INSERT INTO market_products (
         company_id, name, description, image_url, category, unit_of_measure,
@@ -265,7 +272,7 @@ export async function POST(request: NextRequest) {
         true, $16, NOW(), NOW()
       ) RETURNING id
     `, [
-      companyId, name, description || null, imageUrl || null, category || null, unitOfMeasure,
+      companyId, name, description || null, imageUrl || null, category || null, unitOfMeasure || 'unidad',
       costPrice, sellingPrice, currency, finalSku, finalBarcode,
       supplierName || null, supplierContact || null, supplierReference || null,
       minimumStock, userId
