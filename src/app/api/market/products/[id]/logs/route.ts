@@ -125,23 +125,40 @@ export async function GET(
       'supplier_name': 'Proveedor',
       'image_url': 'Imagen',
       'is_active': 'Estado activo',
-      'unit_of_measure': 'Unidad de medida'
+      'unit_of_measure': 'Unidad de medida',
+      'currency': 'Moneda'
     }
 
-    const logs = logsResult.rows.map(row => ({
-      id: row.id,
-      action: row.action,
-      actionLabel: actionLabels[row.action] || row.action,
-      fieldName: row.field_name,
-      fieldLabel: row.field_name ? (fieldLabels[row.field_name] || row.field_name) : null,
-      oldValue: row.old_value,
-      newValue: row.new_value,
-      userId: row.user_id,
-      userName: row.user_name,
-      userEmail: row.user_email,
-      notes: row.notes,
-      createdAt: row.created_at
-    }))
+    const logs = logsResult.rows.map(row => {
+      let newValueDisplay = row.new_value
+      let productDetails = null
+
+      // For 'created' action, parse the JSON details if available
+      if (row.action === 'created' && row.new_value) {
+        try {
+          productDetails = JSON.parse(row.new_value)
+          newValueDisplay = `${productDetails.name} - ${productDetails.sku}`
+        } catch {
+          // Not JSON, use as is
+        }
+      }
+
+      return {
+        id: row.id,
+        action: row.action,
+        actionLabel: actionLabels[row.action] || row.action,
+        fieldName: row.field_name,
+        fieldLabel: row.field_name ? (fieldLabels[row.field_name] || row.field_name) : null,
+        oldValue: row.old_value,
+        newValue: newValueDisplay,
+        productDetails, // Include parsed details for creation events
+        userId: row.user_id,
+        userName: row.user_name,
+        userEmail: row.user_email,
+        notes: row.notes,
+        createdAt: row.created_at
+      }
+    })
 
     // Also get inventory movements for this product
     const movementsResult = await db.query(`

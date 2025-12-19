@@ -87,6 +87,19 @@ interface Supplier {
   lastPurchaseDate: string
 }
 
+interface ProductCreationDetails {
+  name: string
+  category: string | null
+  costPrice: number
+  sellingPrice: number
+  currency: string
+  sku: string
+  barcode: string
+  unitOfMeasure: string
+  supplierName: string | null
+  minimumStock: number
+}
+
 interface ChangeLog {
   id: number
   action: string
@@ -95,6 +108,8 @@ interface ChangeLog {
   fieldLabel: string | null
   oldValue: string | null
   newValue: string | null
+  productDetails: ProductCreationDetails | null
+  notes: string | null
   userName: string | null
   userEmail: string | null
   createdAt: string
@@ -1263,18 +1278,87 @@ export default function ProductDetailPage() {
                                     key={log.id}
                                     className={cn(
                                       'p-4 rounded-xl border',
-                                      theme === 'dark' ? 'bg-gray-700/50 border-gray-600' : 'bg-gray-50 border-gray-200'
+                                      log.action === 'created'
+                                        ? (theme === 'dark' ? 'bg-emerald-900/20 border-emerald-800' : 'bg-emerald-50 border-emerald-200')
+                                        : (theme === 'dark' ? 'bg-gray-700/50 border-gray-600' : 'bg-gray-50 border-gray-200')
                                     )}
                                   >
                                     <div className="flex items-start justify-between">
-                                      <div>
-                                        <p className="font-medium text-gray-900 dark:text-white">{log.actionLabel}</p>
-                                        {log.fieldLabel && (
+                                      <div className="flex-1">
+                                        <div className="flex items-center gap-2">
+                                          {log.action === 'created' && (
+                                            <div className={cn(
+                                              'p-1.5 rounded-lg',
+                                              theme === 'dark' ? 'bg-emerald-900/50' : 'bg-emerald-100'
+                                            )}>
+                                              <Package className="w-4 h-4 text-emerald-600" />
+                                            </div>
+                                          )}
+                                          <p className={cn(
+                                            'font-medium',
+                                            log.action === 'created'
+                                              ? 'text-emerald-700 dark:text-emerald-400'
+                                              : 'text-gray-900 dark:text-white'
+                                          )}>
+                                            {log.actionLabel}
+                                          </p>
+                                        </div>
+
+                                        {/* Show creation details */}
+                                        {log.action === 'created' && log.productDetails && (
+                                          <div className={cn(
+                                            'mt-3 p-3 rounded-lg grid grid-cols-2 md:grid-cols-4 gap-3 text-sm',
+                                            theme === 'dark' ? 'bg-gray-800/50' : 'bg-white/80'
+                                          )}>
+                                            <div>
+                                              <p className="text-xs text-gray-500 uppercase tracking-wide">SKU</p>
+                                              <p className="font-mono font-medium text-gray-900 dark:text-white">{log.productDetails.sku}</p>
+                                            </div>
+                                            <div>
+                                              <p className="text-xs text-gray-500 uppercase tracking-wide">Categoría</p>
+                                              <p className="font-medium text-gray-900 dark:text-white">{log.productDetails.category || '—'}</p>
+                                            </div>
+                                            <div>
+                                              <p className="text-xs text-gray-500 uppercase tracking-wide">Precio Costo</p>
+                                              <p className="font-medium text-gray-900 dark:text-white">
+                                                {CURRENCY_SYMBOLS[log.productDetails.currency] || '$'}{Number(log.productDetails.costPrice).toFixed(2)}
+                                              </p>
+                                            </div>
+                                            <div>
+                                              <p className="text-xs text-gray-500 uppercase tracking-wide">Precio Venta</p>
+                                              <p className="font-medium text-emerald-600">
+                                                {CURRENCY_SYMBOLS[log.productDetails.currency] || '$'}{Number(log.productDetails.sellingPrice).toFixed(2)}
+                                              </p>
+                                            </div>
+                                            {log.productDetails.supplierName && (
+                                              <div className="col-span-2">
+                                                <p className="text-xs text-gray-500 uppercase tracking-wide">Proveedor</p>
+                                                <p className="font-medium text-gray-900 dark:text-white">{log.productDetails.supplierName}</p>
+                                              </div>
+                                            )}
+                                            <div>
+                                              <p className="text-xs text-gray-500 uppercase tracking-wide">Unidad</p>
+                                              <p className="font-medium text-gray-900 dark:text-white">{log.productDetails.unitOfMeasure}</p>
+                                            </div>
+                                            <div>
+                                              <p className="text-xs text-gray-500 uppercase tracking-wide">Stock Mín.</p>
+                                              <p className="font-medium text-gray-900 dark:text-white">{log.productDetails.minimumStock}</p>
+                                            </div>
+                                          </div>
+                                        )}
+
+                                        {/* Show notes for creation */}
+                                        {log.notes && (
+                                          <p className="text-sm text-gray-500 mt-2 italic">{log.notes}</p>
+                                        )}
+
+                                        {/* Show field changes for updates */}
+                                        {log.action !== 'created' && log.fieldLabel && (
                                           <p className="text-sm text-gray-500">
                                             Campo: <span className="font-medium">{log.fieldLabel}</span>
                                           </p>
                                         )}
-                                        {log.oldValue && log.newValue && (
+                                        {log.action !== 'created' && log.oldValue && log.newValue && (
                                           <p className="text-sm text-gray-500 mt-1">
                                             <span className="text-red-500 line-through">{log.oldValue}</span>
                                             {' → '}
@@ -1282,9 +1366,14 @@ export default function ProductDetailPage() {
                                           </p>
                                         )}
                                       </div>
-                                      <div className="text-right text-xs text-gray-500">
+                                      <div className="text-right text-xs text-gray-500 ml-4">
                                         <p>{formatDate(log.createdAt)}</p>
-                                        {log.userName && <p className="mt-1">Por: {log.userName}</p>}
+                                        {log.userName && (
+                                          <p className="mt-1 flex items-center justify-end gap-1">
+                                            <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                                            {log.userName}
+                                          </p>
+                                        )}
                                       </div>
                                     </div>
                                   </div>

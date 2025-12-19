@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
 import jwt from 'jsonwebtoken'
 import { db } from '@/lib/database'
+import { createClient } from '@supabase/supabase-js'
 
 interface JWTPayload {
   userId: number
@@ -427,9 +428,9 @@ export async function DELETE(
       return NextResponse.json({ success: false, error: 'ID inválido' }, { status: 400 })
     }
 
-    // Get product info before deleting
+    // Get product info before deleting (including image_url)
     const checkResult = await db.query(
-      'SELECT id, name FROM market_products WHERE id = $1 AND company_id = $2',
+      'SELECT id, name, image_url FROM market_products WHERE id = $1 AND company_id = $2',
       [productId, parseInt(companyId)]
     )
 
@@ -438,6 +439,47 @@ export async function DELETE(
     }
 
     const productName = checkResult.rows[0].name
+    const imageUrl = checkResult.rows[0].image_url
+
+    // Delete image from Supabase Storage if exists
+    if (imageUrl && imageUrl.includes('supabase')) {
+      try {
+        const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+        const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+
+        if (supabaseUrl && supabaseServiceKey) {
+          const supabase = createClient(supabaseUrl, supabaseServiceKey, {
+            auth: {
+              autoRefreshToken: false,
+              persistSession: false
+            }
+          })
+
+          // Extract the path from the URL
+          // URL format: https://xxx.supabase.co/storage/v1/object/public/company-documents/images/img-xxx.jpg
+          const urlParts = imageUrl.split('/storage/v1/object/public/')
+          if (urlParts.length === 2) {
+            const fullPath = urlParts[1] // e.g., "company-documents/images/img-xxx.jpg"
+            const pathParts = fullPath.split('/')
+            const bucket = pathParts[0] // "company-documents"
+            const filePath = pathParts.slice(1).join('/') // "images/img-xxx.jpg"
+
+            const { error: deleteError } = await supabase.storage
+              .from(bucket)
+              .remove([filePath])
+
+            if (deleteError) {
+              console.warn(`[Product Delete] Could not delete image from Supabase:`, deleteError.message)
+            } else {
+              console.log(`[Product Delete] Successfully deleted image from Supabase: ${filePath}`)
+            }
+          }
+        }
+      } catch (imageError) {
+        console.warn('[Product Delete] Error deleting image from storage:', imageError)
+        // Continue with product deletion even if image deletion fails
+      }
+    }
 
     // Log deletion before actually deleting
     await logProductChange(

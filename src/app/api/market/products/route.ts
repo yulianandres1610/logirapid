@@ -260,6 +260,17 @@ export async function POST(request: NextRequest) {
       // Column may already exist
     }
 
+    // Get user name for logging
+    let userName = payload.email
+    try {
+      const userResult = await db.query('SELECT name FROM users WHERE id = $1', [userId])
+      if (userResult.rows[0]?.name) {
+        userName = userResult.rows[0].name
+      }
+    } catch {
+      // Use email as fallback
+    }
+
     const result = await db.query(`
       INSERT INTO market_products (
         company_id, name, description, image_url, category, unit_of_measure,
@@ -282,6 +293,62 @@ export async function POST(request: NextRequest) {
     ])
 
     const productId = result.rows[0].id
+
+    // Log the product creation
+    try {
+      // Ensure the change logs table exists
+      await db.query(`
+        CREATE TABLE IF NOT EXISTS market_product_change_logs (
+          id SERIAL PRIMARY KEY,
+          product_id INTEGER NOT NULL,
+          company_id INTEGER NOT NULL,
+          action VARCHAR(50) NOT NULL,
+          field_name VARCHAR(100),
+          old_value TEXT,
+          new_value TEXT,
+          user_id INTEGER,
+          user_name VARCHAR(255),
+          user_email VARCHAR(255),
+          notes TEXT,
+          ip_address VARCHAR(50),
+          created_at TIMESTAMP DEFAULT NOW()
+        )
+      `)
+
+      // Insert creation log with product details
+      const productDetails = JSON.stringify({
+        name,
+        category: category || null,
+        costPrice,
+        sellingPrice,
+        currency,
+        sku: finalSku,
+        barcode: finalBarcode,
+        unitOfMeasure: unitOfMeasure || 'unidad',
+        supplierName: supplierName || null,
+        minimumStock
+      })
+
+      await db.query(`
+        INSERT INTO market_product_change_logs (
+          product_id, company_id, action, field_name, old_value, new_value,
+          user_id, user_name, user_email, notes, created_at
+        ) VALUES ($1, $2, 'created', NULL, NULL, $3, $4, $5, $6, $7, NOW())
+      `, [
+        productId,
+        companyId,
+        productDetails,
+        userId,
+        userName,
+        payload.email,
+        `Producto "${name}" creado con SKU: ${finalSku}`
+      ])
+
+      console.log('[Market Products] Product creation logged for product:', productId, 'by user:', userName)
+    } catch (logError) {
+      console.error('[Market Products] Error logging product creation:', logError)
+      // Don't fail the product creation if logging fails
+    }
 
     return NextResponse.json({
       success: true,
