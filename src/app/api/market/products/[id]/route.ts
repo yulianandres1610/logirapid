@@ -24,7 +24,7 @@ async function logProductChange(
   userEmail: string
 ) {
   try {
-    // Ensure table exists
+    // Ensure table exists with proper structure
     await db.query(`
       CREATE TABLE IF NOT EXISTS market_product_change_logs (
         id SERIAL PRIMARY KEY,
@@ -42,14 +42,28 @@ async function logProductChange(
         created_at TIMESTAMP DEFAULT NOW()
       )
     `)
+
+    // Create index if not exists
     await db.query(`
+      CREATE INDEX IF NOT EXISTS idx_product_change_logs_product
+      ON market_product_change_logs(product_id)
+    `)
+
+    console.log('[Product Change Log] Logging change:', {
+      productId, action, fieldName, oldValue, newValue, userId, userName
+    })
+
+    const result = await db.query(`
       INSERT INTO market_product_change_logs (
         product_id, company_id, action, field_name, old_value, new_value,
         user_id, user_name, user_email, created_at
       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW())
+      RETURNING id
     `, [productId, companyId, action, fieldName, oldValue, newValue, userId, userName, userEmail])
+
+    console.log('[Product Change Log] Inserted log with id:', result.rows[0]?.id)
   } catch (error) {
-    console.error('Error logging product change:', error)
+    console.error('[Product Change Log] Error logging product change:', error)
   }
 }
 
@@ -297,6 +311,12 @@ export async function PUT(
       is_active: { dbField: 'is_active', newValue: isActive }
     }
 
+    console.log('[Product Update] Current values from DB:', current)
+    console.log('[Product Update] New values from request:', {
+      name, description, category, unitOfMeasure, costPrice, sellingPrice,
+      currency, sku, barcode, supplierName, minimumStock, isActive
+    })
+
     const changedFields: string[] = []
     for (const [field, mapping] of Object.entries(fieldMappings)) {
       const oldVal = current[field]
@@ -304,6 +324,9 @@ export async function PUT(
       // Compare values (handle nulls and type differences)
       const oldStr = oldVal === null || oldVal === undefined ? '' : String(oldVal)
       const newStr = newVal === null || newVal === undefined ? '' : String(newVal)
+
+      console.log(`[Product Update] Comparing field "${field}": old="${oldStr}" vs new="${newStr}" -> changed: ${oldStr !== newStr}`)
+
       if (oldStr !== newStr) {
         changedFields.push(field)
         await logProductChange(
@@ -319,6 +342,8 @@ export async function PUT(
         )
       }
     }
+
+    console.log('[Product Update] Changed fields:', changedFields)
 
     // Check if image changed
     if ((current.image_url || '') !== (imageUrl || '')) {
