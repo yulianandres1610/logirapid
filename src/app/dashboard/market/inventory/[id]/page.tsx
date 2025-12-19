@@ -287,7 +287,7 @@ export default function ProductDetailPage() {
         <div class="barcode-container">
           ${p.barcode ? `<div class="barcode">${p.barcode}</div><div class="barcode-number">${p.barcode}</div>` : `<div class="sku">SKU: ${p.sku}</div>`}
         </div>
-        <div class="price">${symbol}${p.sellingPrice.toFixed(2)}</div>
+        <div class="price">${symbol}${Number(p.sellingPrice).toFixed(2)}</div>
       </body>
       </html>
     `)
@@ -461,7 +461,7 @@ export default function ProductDetailPage() {
                   </div>
                   <div>
                     <p className="text-xs text-gray-500">Precio Costo</p>
-                    <p className="text-lg font-bold text-gray-900 dark:text-white">{symbol}{product.costPrice.toFixed(2)}</p>
+                    <p className="text-lg font-bold text-gray-900 dark:text-white">{symbol}{Number(product.costPrice).toFixed(2)}</p>
                   </div>
                 </div>
               </motion.div>
@@ -484,7 +484,7 @@ export default function ProductDetailPage() {
                   </div>
                   <div>
                     <p className="text-xs text-gray-500">Precio Venta</p>
-                    <p className="text-lg font-bold text-emerald-600">{symbol}{product.sellingPrice.toFixed(2)}</p>
+                    <p className="text-lg font-bold text-emerald-600">{symbol}{Number(product.sellingPrice).toFixed(2)}</p>
                   </div>
                 </div>
               </motion.div>
@@ -658,7 +658,7 @@ export default function ProductDetailPage() {
                               theme === 'dark' ? 'bg-gray-700/50' : 'bg-gray-50'
                             )}>
                               <p className="text-xs text-gray-500 mb-1">Ingresos Totales</p>
-                              <p className="text-2xl font-bold text-emerald-600">{symbol}{getTotalRevenue().toFixed(2)}</p>
+                              <p className="text-2xl font-bold text-emerald-600">{symbol}{Number(getTotalRevenue()).toFixed(2)}</p>
                             </div>
                             <div className={cn(
                               'p-4 rounded-xl',
@@ -694,7 +694,7 @@ export default function ProductDetailPage() {
                                   )}>
                                     <td className="py-3 px-4 text-sm font-medium text-gray-900 dark:text-white">{sale.period}</td>
                                     <td className="py-3 px-4 text-sm text-right text-gray-600 dark:text-gray-300">{sale.quantity}</td>
-                                    <td className="py-3 px-4 text-sm text-right font-medium text-emerald-600">{symbol}{sale.revenue.toFixed(2)}</td>
+                                    <td className="py-3 px-4 text-sm text-right font-medium text-emerald-600">{symbol}{Number(sale.revenue).toFixed(2)}</td>
                                     <td className="py-3 px-4 text-sm text-right text-gray-600 dark:text-gray-300">{sale.orders}</td>
                                   </tr>
                                 ))}
@@ -821,21 +821,21 @@ export default function ProductDetailPage() {
                                 </div>
                                 <div className="text-right">
                                   <p className="text-xs text-gray-500">Último precio</p>
-                                  <p className="text-xl font-bold text-emerald-600">{symbol}{supplier.lastPrice.toFixed(2)}</p>
+                                  <p className="text-xl font-bold text-emerald-600">{symbol}{Number(supplier.lastPrice).toFixed(2)}</p>
                                 </div>
                               </div>
                               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                                 <div>
                                   <p className="text-xs text-gray-500">Precio Promedio</p>
-                                  <p className="font-medium text-gray-900 dark:text-white">{symbol}{supplier.avgPrice.toFixed(2)}</p>
+                                  <p className="font-medium text-gray-900 dark:text-white">{symbol}{Number(supplier.avgPrice).toFixed(2)}</p>
                                 </div>
                                 <div>
                                   <p className="text-xs text-gray-500">Precio Mínimo</p>
-                                  <p className="font-medium text-green-600">{symbol}{supplier.minPrice.toFixed(2)}</p>
+                                  <p className="font-medium text-green-600">{symbol}{Number(supplier.minPrice).toFixed(2)}</p>
                                 </div>
                                 <div>
                                   <p className="text-xs text-gray-500">Precio Máximo</p>
-                                  <p className="font-medium text-red-600">{symbol}{supplier.maxPrice.toFixed(2)}</p>
+                                  <p className="font-medium text-red-600">{symbol}{Number(supplier.maxPrice).toFixed(2)}</p>
                                 </div>
                                 <div>
                                   <p className="text-xs text-gray-500">Total Comprado</p>
