@@ -11,7 +11,6 @@ import {
   CheckCircle,
   Edit,
   RefreshCw,
-  Boxes,
   ChevronLeft,
   ChevronRight,
   X,
@@ -282,17 +281,6 @@ export default function MarketInventoryPage() {
             animate={{ opacity: 1, y: 0 }}
             className="space-y-6"
           >
-            {/* Header */}
-            <div>
-              <h1 className="text-2xl md:text-3xl font-bold text-gray-900 dark:text-white flex items-center gap-3">
-                <Boxes className="w-8 h-8 text-emerald-500" />
-                Inventario
-              </h1>
-              <p className="text-gray-500 dark:text-gray-400 mt-1">
-                Gestiona los productos de tu mercado
-              </p>
-            </div>
-
             {/* Stats Cards - Estilo Pickup Orders */}
             <div className="grid grid-cols-1 md:grid-cols-4 gap-5">
               {/* Total Productos */}
