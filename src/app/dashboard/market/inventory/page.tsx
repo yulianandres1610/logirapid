@@ -756,15 +756,16 @@ export default function MarketInventoryPage() {
                             </td>
                             <td className="py-4 px-4 text-center">
                               <div className="flex items-center justify-center gap-1">
-                                <motion.button
-                                  whileHover={{ scale: 1.1 }}
-                                  whileTap={{ scale: 0.9 }}
-                                  onClick={() => setSelectedProduct(product)}
-                                  className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-                                  title="Ver detalles"
-                                >
-                                  <Eye className="w-4 h-4 text-gray-500" />
-                                </motion.button>
+                                <Link href={`/dashboard/market/inventory/${product.id}`}>
+                                  <motion.button
+                                    whileHover={{ scale: 1.1 }}
+                                    whileTap={{ scale: 0.9 }}
+                                    className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                                    title="Ver detalles completos"
+                                  >
+                                    <Eye className="w-4 h-4 text-blue-500" />
+                                  </motion.button>
+                                </Link>
                                 <motion.button
                                   whileHover={{ scale: 1.1 }}
                                   whileTap={{ scale: 0.9 }}
@@ -781,7 +782,7 @@ export default function MarketInventoryPage() {
                                     className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
                                     title="Editar producto"
                                   >
-                                    <Edit className="w-4 h-4 text-gray-500" />
+                                    <Edit className="w-4 h-4 text-amber-500" />
                                   </motion.button>
                                 </Link>
                               </div>

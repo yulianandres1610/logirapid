@@ -21,101 +21,93 @@ export async function GET(
       return NextResponse.json({ success: false, error: 'ID inválido' }, { status: 400 })
     }
 
-    // Get current date info
+    // Get period from query params
+    const { searchParams } = new URL(request.url)
+    const period = searchParams.get('period') || 'month'
+
     const now = new Date()
-    const startOfWeek = new Date(now)
-    startOfWeek.setDate(now.getDate() - now.getDay())
-    startOfWeek.setHours(0, 0, 0, 0)
-
-    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1)
-    const startOfYear = new Date(now.getFullYear(), 0, 1)
-
-    // Previous periods for trend calculation
-    const prevWeekStart = new Date(startOfWeek)
-    prevWeekStart.setDate(prevWeekStart.getDate() - 7)
-    const prevMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1)
-    const prevYearStart = new Date(now.getFullYear() - 1, 0, 1)
-
-    // Try to get sales data from market_order_items if exists
-    let weekData = { total: 0, quantity: 0, trend: 0 }
-    let monthData = { total: 0, quantity: 0, trend: 0 }
-    let yearData = { total: 0, quantity: 0, trend: 0 }
+    const sales: { period: string; quantity: number; revenue: number; orders: number }[] = []
 
     try {
-      // This week's sales
-      const weekResult = await db.query(`
-        SELECT COALESCE(SUM(quantity), 0) as quantity, COALESCE(SUM(total), 0) as total
-        FROM market_order_items moi
-        JOIN market_orders mo ON moi.order_id = mo.id
-        WHERE moi.product_id = $1 AND mo.company_id = $2
-        AND mo.created_at >= $3 AND mo.status != 'cancelled'
-      `, [productId, parseInt(companyId), startOfWeek.toISOString()])
+      if (period === 'week') {
+        // Get daily data for the last 7 days
+        for (let i = 6; i >= 0; i--) {
+          const date = new Date(now)
+          date.setDate(date.getDate() - i)
+          const startOfDay = new Date(date.getFullYear(), date.getMonth(), date.getDate())
+          const endOfDay = new Date(date.getFullYear(), date.getMonth(), date.getDate() + 1)
 
-      // Previous week for trend
-      const prevWeekResult = await db.query(`
-        SELECT COALESCE(SUM(quantity), 0) as quantity
-        FROM market_order_items moi
-        JOIN market_orders mo ON moi.order_id = mo.id
-        WHERE moi.product_id = $1 AND mo.company_id = $2
-        AND mo.created_at >= $3 AND mo.created_at < $4 AND mo.status != 'cancelled'
-      `, [productId, parseInt(companyId), prevWeekStart.toISOString(), startOfWeek.toISOString()])
+          const result = await db.query(`
+            SELECT
+              COALESCE(SUM(moi.quantity), 0) as quantity,
+              COALESCE(SUM(moi.total), 0) as total,
+              COUNT(DISTINCT mo.id) as orders
+            FROM market_order_items moi
+            JOIN market_orders mo ON moi.order_id = mo.id
+            WHERE moi.product_id = $1 AND mo.company_id = $2
+            AND mo.created_at >= $3 AND mo.created_at < $4 AND mo.status != 'cancelled'
+          `, [productId, parseInt(companyId), startOfDay.toISOString(), endOfDay.toISOString()])
 
-      weekData = {
-        total: parseFloat(weekResult.rows[0]?.total) || 0,
-        quantity: parseInt(weekResult.rows[0]?.quantity) || 0,
-        trend: prevWeekResult.rows[0]?.quantity > 0
-          ? Math.round(((weekResult.rows[0]?.quantity - prevWeekResult.rows[0]?.quantity) / prevWeekResult.rows[0]?.quantity) * 100)
-          : 0
-      }
+          const dayNames = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb']
+          sales.push({
+            period: dayNames[date.getDay()],
+            quantity: parseInt(result.rows[0]?.quantity) || 0,
+            revenue: parseFloat(result.rows[0]?.total) || 0,
+            orders: parseInt(result.rows[0]?.orders) || 0
+          })
+        }
+      } else if (period === 'month') {
+        // Get weekly data for the last 4 weeks
+        for (let i = 3; i >= 0; i--) {
+          const weekStart = new Date(now)
+          weekStart.setDate(weekStart.getDate() - (i * 7) - weekStart.getDay())
+          weekStart.setHours(0, 0, 0, 0)
+          const weekEnd = new Date(weekStart)
+          weekEnd.setDate(weekEnd.getDate() + 7)
 
-      // This month's sales
-      const monthResult = await db.query(`
-        SELECT COALESCE(SUM(quantity), 0) as quantity, COALESCE(SUM(total), 0) as total
-        FROM market_order_items moi
-        JOIN market_orders mo ON moi.order_id = mo.id
-        WHERE moi.product_id = $1 AND mo.company_id = $2
-        AND mo.created_at >= $3 AND mo.status != 'cancelled'
-      `, [productId, parseInt(companyId), startOfMonth.toISOString()])
+          const result = await db.query(`
+            SELECT
+              COALESCE(SUM(moi.quantity), 0) as quantity,
+              COALESCE(SUM(moi.total), 0) as total,
+              COUNT(DISTINCT mo.id) as orders
+            FROM market_order_items moi
+            JOIN market_orders mo ON moi.order_id = mo.id
+            WHERE moi.product_id = $1 AND mo.company_id = $2
+            AND mo.created_at >= $3 AND mo.created_at < $4 AND mo.status != 'cancelled'
+          `, [productId, parseInt(companyId), weekStart.toISOString(), weekEnd.toISOString()])
 
-      const prevMonthResult = await db.query(`
-        SELECT COALESCE(SUM(quantity), 0) as quantity
-        FROM market_order_items moi
-        JOIN market_orders mo ON moi.order_id = mo.id
-        WHERE moi.product_id = $1 AND mo.company_id = $2
-        AND mo.created_at >= $3 AND mo.created_at < $4 AND mo.status != 'cancelled'
-      `, [productId, parseInt(companyId), prevMonthStart.toISOString(), startOfMonth.toISOString()])
+          sales.push({
+            period: `Sem ${4 - i}`,
+            quantity: parseInt(result.rows[0]?.quantity) || 0,
+            revenue: parseFloat(result.rows[0]?.total) || 0,
+            orders: parseInt(result.rows[0]?.orders) || 0
+          })
+        }
+      } else if (period === 'year') {
+        // Get monthly data for the last 12 months
+        const monthNames = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic']
+        for (let i = 11; i >= 0; i--) {
+          const monthStart = new Date(now.getFullYear(), now.getMonth() - i, 1)
+          const monthEnd = new Date(now.getFullYear(), now.getMonth() - i + 1, 1)
 
-      monthData = {
-        total: parseFloat(monthResult.rows[0]?.total) || 0,
-        quantity: parseInt(monthResult.rows[0]?.quantity) || 0,
-        trend: prevMonthResult.rows[0]?.quantity > 0
-          ? Math.round(((monthResult.rows[0]?.quantity - prevMonthResult.rows[0]?.quantity) / prevMonthResult.rows[0]?.quantity) * 100)
-          : 0
-      }
+          const result = await db.query(`
+            SELECT
+              COALESCE(SUM(moi.quantity), 0) as quantity,
+              COALESCE(SUM(moi.total), 0) as total,
+              COUNT(DISTINCT mo.id) as orders
+            FROM market_order_items moi
+            JOIN market_orders mo ON moi.order_id = mo.id
+            WHERE moi.product_id = $1 AND mo.company_id = $2
+            AND mo.created_at >= $3 AND mo.created_at < $4 AND mo.status != 'cancelled'
+          `, [productId, parseInt(companyId), monthStart.toISOString(), monthEnd.toISOString()])
 
-      // This year's sales
-      const yearResult = await db.query(`
-        SELECT COALESCE(SUM(quantity), 0) as quantity, COALESCE(SUM(total), 0) as total
-        FROM market_order_items moi
-        JOIN market_orders mo ON moi.order_id = mo.id
-        WHERE moi.product_id = $1 AND mo.company_id = $2
-        AND mo.created_at >= $3 AND mo.status != 'cancelled'
-      `, [productId, parseInt(companyId), startOfYear.toISOString()])
-
-      const prevYearResult = await db.query(`
-        SELECT COALESCE(SUM(quantity), 0) as quantity
-        FROM market_order_items moi
-        JOIN market_orders mo ON moi.order_id = mo.id
-        WHERE moi.product_id = $1 AND mo.company_id = $2
-        AND mo.created_at >= $3 AND mo.created_at < $4 AND mo.status != 'cancelled'
-      `, [productId, parseInt(companyId), prevYearStart.toISOString(), startOfYear.toISOString()])
-
-      yearData = {
-        total: parseFloat(yearResult.rows[0]?.total) || 0,
-        quantity: parseInt(yearResult.rows[0]?.quantity) || 0,
-        trend: prevYearResult.rows[0]?.quantity > 0
-          ? Math.round(((yearResult.rows[0]?.quantity - prevYearResult.rows[0]?.quantity) / prevYearResult.rows[0]?.quantity) * 100)
-          : 0
+          sales.push({
+            period: monthNames[monthStart.getMonth()],
+            quantity: parseInt(result.rows[0]?.quantity) || 0,
+            revenue: parseFloat(result.rows[0]?.total) || 0,
+            orders: parseInt(result.rows[0]?.orders) || 0
+          })
+        }
       }
     } catch {
       // Tables may not exist, return empty data
@@ -124,10 +116,8 @@ export async function GET(
     return NextResponse.json({
       success: true,
       data: {
-        week: weekData,
-        month: monthData,
-        year: yearData,
-        chartData: [] // Could add daily chart data here
+        sales,
+        period
       }
     })
   } catch (error) {

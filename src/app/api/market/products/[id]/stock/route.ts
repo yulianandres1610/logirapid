@@ -76,7 +76,7 @@ export async function GET(
     return NextResponse.json({
       success: true,
       data: {
-        stockByWarehouse,
+        warehouses: stockByWarehouse,
         totals,
         warehouseCount: warehousesResult.rows.length
       }

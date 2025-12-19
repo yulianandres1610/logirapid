@@ -86,8 +86,7 @@ export async function PUT(request: Request) {
         odoo_sync_frequency = $5,
         odoo_sync_direction = $6,
         odoo_sync_variants = $7,
-        odoo_sync_stock = $8,
-        updated_at = NOW()
+        odoo_sync_stock = $8
       WHERE id = $9
     `, [
       url || null,
