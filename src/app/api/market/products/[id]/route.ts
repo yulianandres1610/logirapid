@@ -181,8 +181,11 @@ export async function PUT(
         userEmail = payload.email
 
         // Get user name from database
-        const userResult = await db.query('SELECT name FROM users WHERE id = $1', [userId])
-        userName = userResult.rows[0]?.name || payload.email
+        const userResult = await db.query(
+          'SELECT COALESCE(firstname || \' \' || lastname, email) as fullname FROM users WHERE id = $1',
+          [userId]
+        )
+        userName = userResult.rows[0]?.fullname || payload.email
       } catch {
         // Token invalid, continue with default values
       }
@@ -406,8 +409,11 @@ export async function DELETE(
       userEmail = payload.email
       userRole = payload.role
 
-      const userResult = await db.query('SELECT name FROM users WHERE id = $1', [userId])
-      userName = userResult.rows[0]?.name || payload.email
+      const userResult = await db.query(
+        'SELECT COALESCE(firstname || \' \' || lastname, email) as fullname FROM users WHERE id = $1',
+        [userId]
+      )
+      userName = userResult.rows[0]?.fullname || payload.email
     } catch (err) {
       console.error('[Product Delete] JWT verification error:', err)
       return NextResponse.json({ success: false, error: 'Token inválido' }, { status: 401 })

@@ -263,9 +263,12 @@ export async function POST(request: NextRequest) {
     // Get user name for logging
     let userName = payload.email
     try {
-      const userResult = await db.query('SELECT name FROM users WHERE id = $1', [userId])
-      if (userResult.rows[0]?.name) {
-        userName = userResult.rows[0].name
+      const userResult = await db.query(
+        'SELECT COALESCE(firstname || \' \' || lastname, email) as fullname FROM users WHERE id = $1',
+        [userId]
+      )
+      if (userResult.rows[0]?.fullname) {
+        userName = userResult.rows[0].fullname
       }
     } catch {
       // Use email as fallback
