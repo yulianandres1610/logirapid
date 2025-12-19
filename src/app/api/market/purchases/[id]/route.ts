@@ -33,7 +33,7 @@ export async function GET(
 
     let payload: JWTPayload
     try {
-      const secret = process.env.JWT_SECRET || 'your-secret-key'
+      const secret = process.env.JWT_SECRET || 'fallback-secret-change-in-production'
       payload = jwt.verify(authToken, secret) as JWTPayload
     } catch {
       return NextResponse.json({
@@ -168,7 +168,7 @@ export async function PUT(
 
     let payload: JWTPayload
     try {
-      const secret = process.env.JWT_SECRET || 'your-secret-key'
+      const secret = process.env.JWT_SECRET || 'fallback-secret-change-in-production'
       payload = jwt.verify(authToken, secret) as JWTPayload
     } catch {
       return NextResponse.json({
@@ -440,7 +440,7 @@ export async function DELETE(
 
     let payload: JWTPayload
     try {
-      const secret = process.env.JWT_SECRET || 'your-secret-key'
+      const secret = process.env.JWT_SECRET || 'fallback-secret-change-in-production'
       payload = jwt.verify(authToken, secret) as JWTPayload
     } catch {
       return NextResponse.json({

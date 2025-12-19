@@ -21,7 +21,13 @@ import {
   Image as ImageIcon,
   RefreshCw,
   Truck,
-  History
+  History,
+  Calendar,
+  Archive,
+  Globe,
+  ExternalLink,
+  Tag,
+  Scale
 } from 'lucide-react'
 import Link from 'next/link'
 import { useParams } from 'next/navigation'
@@ -106,11 +112,27 @@ interface InventoryMovement {
   createdAt: string
 }
 
-type TabType = 'overview' | 'stock' | 'suppliers' | 'history'
+interface ProductLot {
+  id: number
+  lotNumber: string
+  expirationDate: string | null
+  manufacturingDate: string | null
+  quantity: number
+  quantityAvailable: number
+  notes: string | null
+  purchaseNumber: string | null
+  purchaseDate: string | null
+  supplierName: string | null
+  isActive: boolean
+  createdAt: string
+}
+
+type TabType = 'overview' | 'stock' | 'lots' | 'suppliers' | 'history'
 
 const TABS: { id: TabType; label: string; icon: React.ElementType }[] = [
   { id: 'overview', label: 'Resumen', icon: TrendingUp },
   { id: 'stock', label: 'Stock por Almacén', icon: Warehouse },
+  { id: 'lots', label: 'Lotes', icon: Archive },
   { id: 'suppliers', label: 'Proveedores', icon: Truck },
   { id: 'history', label: 'Historial', icon: History }
 ]
@@ -139,6 +161,8 @@ export default function ProductDetailPage() {
   const [changeLogs, setChangeLogs] = useState<ChangeLog[]>([])
   const [movements, setMovements] = useState<InventoryMovement[]>([])
   const [historyLoading, setHistoryLoading] = useState(false)
+  const [lots, setLots] = useState<ProductLot[]>([])
+  const [lotsLoading, setLotsLoading] = useState(false)
 
   useEffect(() => {
     fetchProduct()
@@ -150,6 +174,8 @@ export default function ProductDetailPage() {
         fetchSalesData()
       } else if (activeTab === 'stock') {
         fetchWarehouseStock()
+      } else if (activeTab === 'lots') {
+        fetchLots()
       } else if (activeTab === 'suppliers') {
         fetchSuppliers()
       } else if (activeTab === 'history') {
@@ -243,6 +269,51 @@ export default function ProductDetailPage() {
       setHistoryLoading(false)
     }
   }
+
+  const fetchLots = async () => {
+    setLotsLoading(true)
+    try {
+      const response = await fetch(`/api/market/products/${productId}/lots`)
+      if (response.ok) {
+        const data = await response.json()
+        if (data.success) {
+          setLots(data.data.lots || [])
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching lots:', error)
+    } finally {
+      setLotsLoading(false)
+    }
+  }
+
+  const getDaysUntilExpiration = (expirationDate: string | null) => {
+    if (!expirationDate) return null
+    const exp = new Date(expirationDate)
+    const today = new Date()
+    const diffTime = exp.getTime() - today.getTime()
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
+    return diffDays
+  }
+
+  const getLotExpirationStatus = (expirationDate: string | null) => {
+    const days = getDaysUntilExpiration(expirationDate)
+    if (days === null) return { status: 'unknown', color: 'gray', label: 'Sin fecha' }
+    if (days < 0) return { status: 'expired', color: 'red', label: 'Vencido' }
+    if (days <= 7) return { status: 'critical', color: 'orange', label: 'Crítico' }
+    if (days <= 30) return { status: 'warning', color: 'amber', label: 'Próximo' }
+    return { status: 'good', color: 'green', label: 'Vigente' }
+  }
+
+  const getActiveLots = () => lots.filter(l => l.isActive && l.quantityAvailable > 0)
+  const getExpiredLots = () => lots.filter(l => {
+    const days = getDaysUntilExpiration(l.expirationDate)
+    return days !== null && days < 0
+  })
+  const getCriticalLots = () => lots.filter(l => {
+    const days = getDaysUntilExpiration(l.expirationDate)
+    return days !== null && days >= 0 && days <= 7
+  })
 
   const getStockStatus = (p: Product) => {
     if (p.quantityOnHand === 0) {
@@ -545,6 +616,123 @@ export default function ProductDetailPage() {
               </motion.div>
             </div>
 
+            {/* Web Preview Card */}
+            <motion.div
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.25 }}
+              className={cn(
+                'rounded-2xl border shadow-xl overflow-hidden',
+                theme === 'dark' ? 'bg-gray-800/50 border-gray-700' : 'bg-white border-gray-200'
+              )}
+            >
+              <div className={cn(
+                'px-6 py-4 flex items-center justify-between border-b',
+                theme === 'dark' ? 'border-gray-700 bg-gray-800' : 'border-gray-200 bg-gray-50'
+              )}>
+                <div className="flex items-center gap-3">
+                  <Globe className="w-5 h-5 text-emerald-500" />
+                  <h3 className="font-semibold text-gray-900 dark:text-white">Vista Previa Web</h3>
+                </div>
+                <span className="text-xs text-gray-500">Así se verá en la tienda online</span>
+              </div>
+              <div className="p-6">
+                <div className="max-w-md mx-auto">
+                  {/* Product Card Preview */}
+                  <div className={cn(
+                    'rounded-2xl border overflow-hidden transition-transform hover:scale-[1.02]',
+                    theme === 'dark' ? 'bg-gray-900 border-gray-700' : 'bg-white border-gray-200 shadow-lg'
+                  )}>
+                    {/* Product Image */}
+                    <div className="aspect-square relative overflow-hidden bg-gradient-to-br from-gray-100 to-gray-200 dark:from-gray-800 dark:to-gray-700">
+                      {product.imageUrl ? (
+                        <img
+                          src={product.imageUrl}
+                          alt={product.name}
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center">
+                          <ImageIcon className="w-20 h-20 text-gray-300 dark:text-gray-600" />
+                        </div>
+                      )}
+                      {/* Category Badge */}
+                      {product.category && (
+                        <span className={cn(
+                          'absolute top-4 left-4 px-3 py-1 rounded-full text-xs font-medium backdrop-blur-sm',
+                          theme === 'dark'
+                            ? 'bg-gray-900/70 text-gray-200 border border-gray-700'
+                            : 'bg-white/80 text-gray-700 border border-gray-200'
+                        )}>
+                          <Tag className="w-3 h-3 inline mr-1" />
+                          {product.category}
+                        </span>
+                      )}
+                      {/* Stock Badge */}
+                      <span className={cn(
+                        'absolute top-4 right-4 px-3 py-1 rounded-full text-xs font-medium',
+                        status.color === 'green' && 'bg-green-500 text-white',
+                        status.color === 'amber' && 'bg-amber-500 text-white',
+                        status.color === 'red' && 'bg-red-500 text-white'
+                      )}>
+                        {status.label}
+                      </span>
+                    </div>
+
+                    {/* Product Info */}
+                    <div className="p-5 space-y-4">
+                      <div>
+                        <h4 className="text-lg font-bold text-gray-900 dark:text-white line-clamp-2">
+                          {product.name}
+                        </h4>
+                        {product.description && (
+                          <p className="text-sm text-gray-500 mt-1 line-clamp-2">
+                            {product.description}
+                          </p>
+                        )}
+                      </div>
+
+                      {/* Price & Unit */}
+                      <div className="flex items-end justify-between">
+                        <div>
+                          <div className="flex items-baseline gap-2">
+                            <span className="text-3xl font-bold text-emerald-600">
+                              {symbol}{Number(product.sellingPrice).toFixed(2)}
+                            </span>
+                            <span className="text-sm text-gray-400">/ {product.unitOfMeasure}</span>
+                          </div>
+                          {product.costPrice > 0 && (
+                            <div className="flex items-center gap-2 mt-1">
+                              <span className="text-xs text-gray-400 line-through">
+                                {symbol}{(Number(product.sellingPrice) * 1.15).toFixed(2)}
+                              </span>
+                              <span className="text-xs font-medium text-emerald-500 bg-emerald-50 dark:bg-emerald-900/30 px-2 py-0.5 rounded">
+                                -15%
+                              </span>
+                            </div>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-2 text-xs text-gray-400">
+                          <Scale className="w-4 h-4" />
+                          {product.quantityOnHand} disponibles
+                        </div>
+                      </div>
+
+                      {/* Add to Cart Button (Preview) */}
+                      <button className={cn(
+                        'w-full py-3 px-4 rounded-xl font-semibold text-white transition-all',
+                        status.color === 'red'
+                          ? 'bg-gray-400 cursor-not-allowed'
+                          : 'bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 shadow-lg shadow-emerald-500/25'
+                      )} disabled={status.color === 'red'}>
+                        {status.color === 'red' ? 'Sin Stock' : 'Añadir al Carrito'}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </motion.div>
+
             {/* Barcode Section */}
             {product.barcode && (
               <motion.div
@@ -776,6 +964,197 @@ export default function ProductDetailPage() {
                               )}
                             </div>
                           ))}
+                        </div>
+                      )}
+                    </motion.div>
+                  )}
+
+                  {/* Lots Tab */}
+                  {activeTab === 'lots' && (
+                    <motion.div
+                      key="lots"
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -10 }}
+                      className="space-y-6"
+                    >
+                      <div className="flex items-center justify-between flex-wrap gap-4">
+                        <h3 className="text-lg font-bold text-gray-900 dark:text-white">Lotes y Fechas de Vencimiento</h3>
+                        {lots.length > 0 && (
+                          <div className="flex items-center gap-3">
+                            {getActiveLots().length > 0 && (
+                              <div className={cn(
+                                'px-3 py-1.5 rounded-lg flex items-center gap-2 text-sm',
+                                theme === 'dark' ? 'bg-green-900/30 text-green-400' : 'bg-green-100 text-green-700'
+                              )}>
+                                <CheckCircle className="w-4 h-4" />
+                                {getActiveLots().length} activos
+                              </div>
+                            )}
+                            {getCriticalLots().length > 0 && (
+                              <div className={cn(
+                                'px-3 py-1.5 rounded-lg flex items-center gap-2 text-sm',
+                                theme === 'dark' ? 'bg-orange-900/30 text-orange-400' : 'bg-orange-100 text-orange-700'
+                              )}>
+                                <AlertTriangle className="w-4 h-4" />
+                                {getCriticalLots().length} por vencer
+                              </div>
+                            )}
+                            {getExpiredLots().length > 0 && (
+                              <div className={cn(
+                                'px-3 py-1.5 rounded-lg flex items-center gap-2 text-sm',
+                                theme === 'dark' ? 'bg-red-900/30 text-red-400' : 'bg-red-100 text-red-700'
+                              )}>
+                                <AlertCircle className="w-4 h-4" />
+                                {getExpiredLots().length} vencidos
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+
+                      {lotsLoading ? (
+                        <div className="flex items-center justify-center py-12">
+                          <RefreshCw className="w-6 h-6 animate-spin text-gray-400" />
+                        </div>
+                      ) : lots.length === 0 ? (
+                        <div className="text-center py-12">
+                          <Archive className="w-12 h-12 mx-auto mb-3 text-gray-400" />
+                          <p className="text-gray-500 font-medium">No hay lotes registrados</p>
+                          <p className="text-sm text-gray-400 mt-1">Los lotes se crean al recibir compras de proveedores</p>
+                        </div>
+                      ) : (
+                        <div className="space-y-4">
+                          {lots.map((lot, idx) => {
+                            const expStatus = getLotExpirationStatus(lot.expirationDate)
+                            const daysLeft = getDaysUntilExpiration(lot.expirationDate)
+
+                            return (
+                              <motion.div
+                                key={lot.id}
+                                initial={{ opacity: 0, y: 10 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                transition={{ delay: idx * 0.05 }}
+                                className={cn(
+                                  'p-4 rounded-xl border relative overflow-hidden',
+                                  theme === 'dark'
+                                    ? 'bg-gray-700/50 border-gray-600'
+                                    : 'bg-white border-gray-200 shadow-sm'
+                                )}
+                              >
+                                {/* Status bar */}
+                                <div className={cn(
+                                  'absolute left-0 top-0 bottom-0 w-1',
+                                  expStatus.color === 'green' && 'bg-green-500',
+                                  expStatus.color === 'amber' && 'bg-amber-500',
+                                  expStatus.color === 'orange' && 'bg-orange-500',
+                                  expStatus.color === 'red' && 'bg-red-500',
+                                  expStatus.color === 'gray' && (theme === 'dark' ? 'bg-gray-600' : 'bg-gray-300')
+                                )} />
+
+                                <div className="pl-4 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 flex-1">
+                                    {/* Número de lote */}
+                                    <div>
+                                      <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">Lote</p>
+                                      <p className="font-mono font-bold text-gray-900 dark:text-white">{lot.lotNumber}</p>
+                                    </div>
+
+                                    {/* Fecha de vencimiento */}
+                                    <div>
+                                      <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">Vencimiento</p>
+                                      <div className="flex items-center gap-2">
+                                        <p className={cn(
+                                          'font-medium',
+                                          expStatus.color === 'green' && 'text-green-600',
+                                          expStatus.color === 'amber' && 'text-amber-600',
+                                          expStatus.color === 'orange' && 'text-orange-600',
+                                          expStatus.color === 'red' && 'text-red-600',
+                                          expStatus.color === 'gray' && 'text-gray-500'
+                                        )}>
+                                          {lot.expirationDate
+                                            ? new Date(lot.expirationDate).toLocaleDateString('es-ES', { day: '2-digit', month: 'short', year: 'numeric' })
+                                            : 'Sin fecha'
+                                          }
+                                        </p>
+                                        {expStatus.status === 'expired' && <AlertCircle className="w-4 h-4 text-red-500" />}
+                                        {expStatus.status === 'critical' && <Clock className="w-4 h-4 text-orange-500 animate-pulse" />}
+                                      </div>
+                                      {daysLeft !== null && (
+                                        <p className={cn(
+                                          'text-xs mt-0.5',
+                                          daysLeft < 0 ? 'text-red-500' :
+                                          daysLeft <= 7 ? 'text-orange-500' :
+                                          daysLeft <= 30 ? 'text-amber-500' :
+                                          'text-gray-400'
+                                        )}>
+                                          {daysLeft < 0
+                                            ? `Vencido hace ${Math.abs(daysLeft)} días`
+                                            : daysLeft === 0
+                                              ? 'Vence hoy'
+                                              : `${daysLeft} días restantes`
+                                          }
+                                        </p>
+                                      )}
+                                    </div>
+
+                                    {/* Cantidad */}
+                                    <div>
+                                      <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">Cantidad</p>
+                                      <p className="font-bold text-gray-900 dark:text-white">
+                                        {lot.quantityAvailable} <span className="font-normal text-gray-500">/ {lot.quantity}</span>
+                                      </p>
+                                      <p className="text-xs text-gray-400">{product?.unitOfMeasure || 'unidad'}</p>
+                                    </div>
+
+                                    {/* Proveedor */}
+                                    <div>
+                                      <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">Proveedor</p>
+                                      {lot.supplierName ? (
+                                        <p className="font-medium text-gray-900 dark:text-white">{lot.supplierName}</p>
+                                      ) : (
+                                        <p className="text-gray-400 italic">—</p>
+                                      )}
+                                      {lot.purchaseNumber && (
+                                        <p className="text-xs text-gray-400">#{lot.purchaseNumber}</p>
+                                      )}
+                                    </div>
+                                  </div>
+
+                                  {/* Estado */}
+                                  <div className="flex items-center gap-2">
+                                    <span className={cn(
+                                      'px-3 py-1.5 rounded-full text-xs font-medium',
+                                      expStatus.color === 'green' && 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400',
+                                      expStatus.color === 'amber' && 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400',
+                                      expStatus.color === 'orange' && 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400',
+                                      expStatus.color === 'red' && 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400',
+                                      expStatus.color === 'gray' && 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400'
+                                    )}>
+                                      {expStatus.label}
+                                    </span>
+                                  </div>
+                                </div>
+
+                                {/* Notas y fechas adicionales */}
+                                {(lot.notes || lot.manufacturingDate) && (
+                                  <div className="pl-4 mt-3 pt-3 border-t border-gray-100 dark:border-gray-700">
+                                    <div className="flex items-center gap-4 text-xs text-gray-500">
+                                      {lot.manufacturingDate && (
+                                        <span>Fabricación: {new Date(lot.manufacturingDate).toLocaleDateString('es-ES')}</span>
+                                      )}
+                                      {lot.purchaseDate && (
+                                        <span>Compra: {new Date(lot.purchaseDate).toLocaleDateString('es-ES')}</span>
+                                      )}
+                                    </div>
+                                    {lot.notes && (
+                                      <p className="text-sm text-gray-500 italic mt-1">{lot.notes}</p>
+                                    )}
+                                  </div>
+                                )}
+                              </motion.div>
+                            )
+                          })}
                         </div>
                       )}
                     </motion.div>

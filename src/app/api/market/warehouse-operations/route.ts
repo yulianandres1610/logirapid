@@ -29,7 +29,7 @@ export async function GET(request: NextRequest) {
 
     let payload: JWTPayload
     try {
-      const secret = process.env.JWT_SECRET || 'your-secret-key'
+      const secret = process.env.JWT_SECRET || 'fallback-secret-change-in-production'
       payload = jwt.verify(authToken, secret) as JWTPayload
     } catch {
       return NextResponse.json({
@@ -204,7 +204,7 @@ export async function POST(request: NextRequest) {
 
     let payload: JWTPayload
     try {
-      const secret = process.env.JWT_SECRET || 'your-secret-key'
+      const secret = process.env.JWT_SECRET || 'fallback-secret-change-in-production'
       payload = jwt.verify(authToken, secret) as JWTPayload
     } catch {
       return NextResponse.json({

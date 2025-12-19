@@ -30,7 +30,7 @@ export async function GET(request: NextRequest) {
 
     let payload: JWTPayload
     try {
-      const secret = process.env.JWT_SECRET || 'your-secret-key'
+      const secret = process.env.JWT_SECRET || 'fallback-secret-change-in-production'
       payload = jwt.verify(authToken, secret) as JWTPayload
     } catch {
       return NextResponse.json({
@@ -236,9 +236,7 @@ export async function POST(request: NextRequest) {
       supplierName,
       supplierContact,
       supplierReference,
-      minimumStock = 0,
-      hasLots = false,
-      lots = []
+      minimumStock = 0
     } = body
 
     // Validate required fields
@@ -285,67 +283,12 @@ export async function POST(request: NextRequest) {
 
     const productId = result.rows[0].id
 
-    // Handle lots if provided
-    if (hasLots && lots.length > 0) {
-      // Ensure lots table exists
-      try {
-        await db.query(`
-          CREATE TABLE IF NOT EXISTS market_product_lots (
-            id SERIAL PRIMARY KEY,
-            product_id INTEGER NOT NULL REFERENCES market_products(id) ON DELETE CASCADE,
-            company_id INTEGER NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
-            lot_number VARCHAR(100) NOT NULL,
-            expiration_date DATE,
-            manufacturing_date DATE,
-            quantity INTEGER DEFAULT 0,
-            notes TEXT,
-            is_active BOOLEAN DEFAULT true,
-            created_by INTEGER REFERENCES users(id),
-            created_at TIMESTAMP DEFAULT NOW(),
-            updated_at TIMESTAMP DEFAULT NOW()
-          )
-        `)
-
-        await db.query(`
-          CREATE INDEX IF NOT EXISTS idx_market_product_lots_product ON market_product_lots(product_id)
-        `)
-
-        await db.query(`
-          CREATE INDEX IF NOT EXISTS idx_market_product_lots_expiration ON market_product_lots(expiration_date)
-        `)
-      } catch (e) {
-        console.log('[Market Products API] Lots table may already exist')
-      }
-
-      // Insert lots
-      for (const lot of lots) {
-        await db.query(`
-          INSERT INTO market_product_lots (
-            product_id, company_id, lot_number, expiration_date, manufacturing_date,
-            quantity, notes, is_active, created_by, created_at
-          ) VALUES ($1, $2, $3, $4, $5, $6, $7, true, $8, NOW())
-        `, [
-          productId,
-          companyId,
-          lot.lotNumber,
-          lot.expirationDate || null,
-          lot.manufacturingDate || null,
-          lot.quantity || 0,
-          lot.notes || null,
-          userId
-        ])
-      }
-
-      console.log(`[Market Products API] Created ${lots.length} lots for product ${productId}`)
-    }
-
     return NextResponse.json({
       success: true,
       data: {
         id: productId,
         sku: finalSku,
-        barcode: finalBarcode,
-        lotsCreated: hasLots ? lots.length : 0
+        barcode: finalBarcode
       },
       message: 'Producto creado exitosamente'
     })
