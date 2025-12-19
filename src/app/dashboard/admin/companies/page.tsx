@@ -1581,13 +1581,24 @@ export default function CompaniesPage() {
                         "block text-sm font-medium mb-2",
                         theme === 'dark' ? "text-gray-300" : "text-gray-700"
                       )}>
-                        {formData.companyType === 'broker' ? 'Carnet de Identidad *' : 'EIN / Número de Identificación *'}
+                        {formData.companyType === 'broker'
+                          ? 'Carnet de Identidad *'
+                          : formData.companyType === 'market'
+                            ? 'NIT (11 dígitos) *'
+                            : 'EIN / Número de Identificación *'}
                       </label>
                       <input
-                        type="text"
+                        type={formData.companyType === 'market' ? 'text' : 'text'}
+                        inputMode={formData.companyType === 'market' ? 'numeric' : 'text'}
+                        maxLength={formData.companyType === 'market' ? 11 : undefined}
                         value={formData.einNumber}
                         onChange={(e) => {
-                          setFormData({...formData, einNumber: e.target.value})
+                          let value = e.target.value
+                          // Para mercados, solo permitir números
+                          if (formData.companyType === 'market') {
+                            value = value.replace(/\D/g, '').slice(0, 11)
+                          }
+                          setFormData({...formData, einNumber: value})
                           if (formErrors.einNumber) setFormErrors({...formErrors, einNumber: false})
                         }}
                         className={cn(
@@ -1598,10 +1609,20 @@ export default function CompaniesPage() {
                               ? "bg-gray-800/50 border-gray-700 text-white focus:border-blue-500 focus:ring-blue-500/20"
                               : "bg-white border-gray-300 text-black focus:border-blue-500 focus:ring-blue-500/20"
                         )}
-                        placeholder={formData.companyType === 'broker' ? "85010112345" : "CU-12345678"}
+                        placeholder={
+                          formData.companyType === 'broker'
+                            ? "85010112345"
+                            : formData.companyType === 'market'
+                              ? "12345678901"
+                              : "CU-12345678"
+                        }
                       />
                       {formErrors.einNumber && (
-                        <p className="text-red-500 text-xs mt-1">Este campo es obligatorio</p>
+                        <p className="text-red-500 text-xs mt-1">
+                          {formData.companyType === 'market'
+                            ? 'El NIT debe tener 11 dígitos numéricos'
+                            : 'Este campo es obligatorio'}
+                        </p>
                       )}
                     </div>
 
