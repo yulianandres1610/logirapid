@@ -22,7 +22,6 @@ import {
   Scale
 } from 'lucide-react'
 import { useRouter } from 'next/navigation'
-import Link from 'next/link'
 import { DashboardLayout } from '@/components/layout/dashboard-layout'
 import { ProtectedRoute } from '@/components/protected-route'
 import { useTheme } from '@/contexts/theme-context'
@@ -404,28 +403,6 @@ export default function CreateProductPage() {
             >
               <X className="w-4 h-4" />
             </motion.button>
-
-            {/* Header */}
-            <div className="text-center mb-4">
-              <Link
-                href="/dashboard/market/inventory"
-                className={cn(
-                  "inline-flex items-center gap-2 text-sm mb-4 transition-colors",
-                  theme === 'dark'
-                    ? 'text-gray-400 hover:text-gray-200'
-                    : 'text-gray-500 hover:text-gray-700'
-                )}
-              >
-                <ArrowLeft className="w-4 h-4" />
-                Volver al inventario
-              </Link>
-              <h1 className={cn(
-                "text-2xl sm:text-3xl font-bold",
-                theme === 'dark' ? 'text-white' : 'text-gray-900'
-              )}>
-                Nuevo Producto
-              </h1>
-            </div>
 
             {/* Progress Indicator */}
             <div className="mb-8 sm:mb-12">
