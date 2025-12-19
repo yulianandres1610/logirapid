@@ -27,7 +27,9 @@ import {
   Globe,
   ExternalLink,
   Tag,
-  Scale
+  Scale,
+  Trash2,
+  Edit3
 } from 'lucide-react'
 import Link from 'next/link'
 import { useParams } from 'next/navigation'
@@ -346,28 +348,32 @@ export default function ProductDetailPage() {
   }
 
   const printBarcodeLabel = (p: Product) => {
-    const printWindow = window.open('', '_blank', 'width=500,height=400')
+    const printWindow = window.open('', '_blank', 'width=400,height=200')
     if (!printWindow) return
     const symbol = CURRENCY_SYMBOLS[p.currency] || '$'
     const priceWhole = Math.floor(p.sellingPrice)
     const priceDecimal = Math.round((p.sellingPrice - priceWhole) * 100).toString().padStart(2, '0')
 
+    // Label size: 3.54" x 1.57" = 90mm x 40mm (optimized for thermal printers)
     printWindow.document.write(`
       <!DOCTYPE html>
       <html>
       <head>
         <title>Etiqueta - ${p.name}</title>
         <style>
-          @page { size: 60mm 40mm; margin: 0; }
+          @page {
+            size: 90mm 40mm;
+            margin: 0;
+          }
           @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Libre+Barcode+EAN13+Text&display=swap');
 
           * { margin: 0; padding: 0; box-sizing: border-box; }
 
           body {
-            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-            width: 60mm;
+            font-family: 'Inter', Arial, sans-serif;
+            width: 90mm;
             height: 40mm;
-            background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
+            background: #ffffff;
             position: relative;
             overflow: hidden;
           }
@@ -375,165 +381,167 @@ export default function ProductDetailPage() {
           .label-container {
             width: 100%;
             height: 100%;
-            padding: 2.5mm;
+            padding: 2mm;
             display: flex;
             flex-direction: column;
-            position: relative;
           }
 
-          /* Decorative corner accent */
-          .corner-accent {
-            position: absolute;
-            top: 0;
-            right: 0;
-            width: 12mm;
-            height: 12mm;
-            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
-            clip-path: polygon(100% 0, 0 0, 100% 100%);
+          /* Top section - Name, SKU and Price */
+          .top-section {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 2mm;
+            flex: 1;
           }
 
-          /* Product name - prominent at top */
+          /* Left - Product info */
+          .info-section {
+            flex: 1;
+            min-width: 0;
+          }
+
+          /* Product name */
           .product-name {
-            font-size: 9pt;
-            font-weight: 700;
-            color: #1e293b;
+            font-size: 11pt;
+            font-weight: 800;
+            color: #000000;
             text-align: left;
-            line-height: 1.2;
-            max-height: 8mm;
+            line-height: 1.1;
+            max-height: 9mm;
             overflow: hidden;
             display: -webkit-box;
             -webkit-line-clamp: 2;
             -webkit-box-orient: vertical;
-            margin-bottom: 1.5mm;
-            padding-right: 10mm;
+            text-transform: uppercase;
             letter-spacing: -0.02em;
           }
 
-          /* SKU badge */
-          .sku-badge {
-            display: inline-flex;
-            align-items: center;
-            background: linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 100%);
-            border: 0.3mm solid #cbd5e1;
-            border-radius: 1mm;
-            padding: 0.8mm 2mm;
-            font-size: 6pt;
+          /* SKU line */
+          .sku-line {
+            font-size: 7pt;
             font-weight: 600;
-            color: #475569;
-            font-family: 'SF Mono', 'Monaco', 'Inconsolata', monospace;
+            color: #6b7280;
+            font-family: 'Courier New', monospace;
             letter-spacing: 0.03em;
-            margin-bottom: 2mm;
-            width: fit-content;
+            margin-top: 1mm;
           }
 
-          .sku-label {
-            color: #94a3b8;
-            margin-right: 1mm;
-            font-weight: 500;
-          }
-
-          /* Barcode section */
-          .barcode-section {
-            flex: 1;
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            align-items: center;
-            background: #ffffff;
+          /* Right - Price box */
+          .price-box {
+            background: #000000;
             border-radius: 1.5mm;
-            padding: 1.5mm;
-            border: 0.2mm solid #e2e8f0;
+            padding: 1.5mm 3mm;
+            text-align: center;
+            min-width: 22mm;
           }
 
-          .barcode {
-            font-family: 'Libre Barcode EAN13 Text', monospace;
-            font-size: 28pt;
-            letter-spacing: 0;
-            color: #0f172a;
-            line-height: 1;
-          }
-
-          .barcode-number {
-            font-size: 6.5pt;
-            font-family: 'SF Mono', 'Monaco', 'Inconsolata', monospace;
-            color: #64748b;
-            margin-top: 0.5mm;
-            letter-spacing: 0.15em;
-            font-weight: 500;
-          }
-
-          /* Price section - eye-catching */
-          .price-section {
+          .price-main {
             display: flex;
-            align-items: baseline;
-            justify-content: flex-end;
-            margin-top: 2mm;
-            padding-top: 1.5mm;
-            border-top: 0.3mm dashed #e2e8f0;
+            align-items: flex-start;
+            justify-content: center;
           }
 
           .currency-symbol {
             font-size: 10pt;
             font-weight: 700;
-            color: #10b981;
+            color: #ffffff;
             margin-right: 0.3mm;
           }
 
           .price-whole {
-            font-size: 16pt;
+            font-size: 18pt;
             font-weight: 900;
-            color: #0f172a;
+            color: #ffffff;
             line-height: 1;
             letter-spacing: -0.03em;
           }
 
           .price-decimal {
             font-size: 9pt;
-            font-weight: 700;
-            color: #0f172a;
-            position: relative;
-            top: -3pt;
-            margin-left: 0.3mm;
+            font-weight: 800;
+            color: #ffffff;
+            margin-top: 0.5mm;
           }
 
           .unit-label {
-            font-size: 6pt;
-            color: #94a3b8;
-            margin-left: 1.5mm;
-            font-weight: 500;
+            font-size: 5pt;
+            color: #9ca3af;
+            font-weight: 600;
             text-transform: uppercase;
             letter-spacing: 0.05em;
+            margin-top: 0.5mm;
           }
 
+          /* Bottom - Barcode spanning full width */
+          .barcode-section {
+            width: 100%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            border-top: 0.3mm solid #e5e7eb;
+            padding-top: 1.5mm;
+            margin-top: 1mm;
+          }
+
+          .barcode {
+            font-family: 'Libre Barcode EAN13 Text', monospace;
+            font-size: 36pt;
+            letter-spacing: 0;
+            color: #000000;
+            line-height: 0.85;
+            width: 100%;
+            text-align: center;
+          }
+
+          .barcode-number {
+            font-size: 7pt;
+            font-family: 'Courier New', monospace;
+            color: #374151;
+            letter-spacing: 0.25em;
+            font-weight: 600;
+            text-align: center;
+          }
+
+          /* Thermal printer optimizations */
           @media print {
-            body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+            body {
+              -webkit-print-color-adjust: exact;
+              print-color-adjust: exact;
+            }
+            .price-box {
+              background: #000000 !important;
+              -webkit-print-color-adjust: exact;
+              print-color-adjust: exact;
+            }
           }
         </style>
       </head>
       <body>
         <div class="label-container">
-          <div class="corner-accent"></div>
+          <div class="top-section">
+            <div class="info-section">
+              <div class="product-name">${p.name}</div>
+              <div class="sku-line">SKU: ${p.sku}</div>
+            </div>
 
-          <div class="product-name">${p.name}</div>
-
-          <div class="sku-badge">
-            <span class="sku-label">SKU</span>
-            <span>${p.sku}</span>
+            <div class="price-box">
+              <div class="price-main">
+                <span class="currency-symbol">${symbol}</span>
+                <span class="price-whole">${priceWhole}</span>
+                <span class="price-decimal">.${priceDecimal}</span>
+              </div>
+              <div class="unit-label">${p.unitOfMeasure || 'UNIDAD'}</div>
+            </div>
           </div>
 
           <div class="barcode-section">
             ${p.barcode
               ? `<div class="barcode">${p.barcode}</div>
-                 <div class="barcode-number">${p.barcode.replace(/(.{4})/g, '$1 ').trim()}</div>`
-              : `<div class="barcode-number" style="font-size: 8pt; color: #64748b;">Sin código de barras</div>`
+                 <div class="barcode-number">${p.barcode}</div>`
+              : `<div class="barcode-number">SIN CÓDIGO DE BARRAS</div>`
             }
-          </div>
-
-          <div class="price-section">
-            <span class="currency-symbol">${symbol}</span>
-            <span class="price-whole">${priceWhole}</span>
-            <span class="price-decimal">.${priceDecimal}</span>
-            <span class="unit-label">/ ${p.unitOfMeasure || 'unidad'}</span>
           </div>
         </div>
       </body>
@@ -1434,109 +1442,158 @@ export default function ProductDetailPage() {
                                 <p className="text-gray-500">No hay cambios registrados</p>
                               </div>
                             ) : (
-                              <div className="space-y-3">
+                              <div className="space-y-4">
                                 {changeLogs.map((log) => (
                                   <div
                                     key={log.id}
                                     className={cn(
-                                      'p-4 rounded-xl border',
+                                      'rounded-2xl border overflow-hidden',
                                       log.action === 'created'
                                         ? (theme === 'dark' ? 'bg-emerald-900/20 border-emerald-800' : 'bg-emerald-50 border-emerald-200')
                                         : (theme === 'dark' ? 'bg-gray-700/50 border-gray-600' : 'bg-gray-50 border-gray-200')
                                     )}
                                   >
-                                    <div className="flex items-start justify-between">
-                                      <div className="flex-1">
-                                        <div className="flex items-center gap-2">
-                                          {log.action === 'created' && (
-                                            <div className={cn(
-                                              'p-1.5 rounded-lg',
-                                              theme === 'dark' ? 'bg-emerald-900/50' : 'bg-emerald-100'
-                                            )}>
-                                              <Package className="w-4 h-4 text-emerald-600" />
-                                            </div>
-                                          )}
+                                    {/* Header with user and date - PROMINENT */}
+                                    <div className={cn(
+                                      'px-4 py-3 border-b flex items-center justify-between',
+                                      log.action === 'created'
+                                        ? (theme === 'dark' ? 'bg-emerald-900/30 border-emerald-700' : 'bg-emerald-100/50 border-emerald-200')
+                                        : (theme === 'dark' ? 'bg-gray-800/50 border-gray-600' : 'bg-gray-100/50 border-gray-200')
+                                    )}>
+                                      <div className="flex items-center gap-3">
+                                        {/* User Avatar */}
+                                        <div className={cn(
+                                          'w-10 h-10 rounded-full flex items-center justify-center text-white font-bold text-sm',
+                                          log.action === 'created'
+                                            ? 'bg-gradient-to-br from-emerald-500 to-emerald-600'
+                                            : 'bg-gradient-to-br from-blue-500 to-blue-600'
+                                        )}>
+                                          {log.userName ? log.userName.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2) : 'US'}
+                                        </div>
+                                        <div>
+                                          <p className="font-semibold text-gray-900 dark:text-white">
+                                            {log.userName || 'Usuario desconocido'}
+                                          </p>
+                                          <p className="text-xs text-gray-500">{log.userEmail || ''}</p>
+                                        </div>
+                                      </div>
+                                      <div className="text-right">
+                                        <p className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                                          {formatDate(log.createdAt)}
+                                        </p>
+                                      </div>
+                                    </div>
+
+                                    {/* Action Content */}
+                                    <div className="p-4">
+                                      <div className="flex items-center gap-2 mb-3">
+                                        {log.action === 'created' && (
+                                          <div className={cn(
+                                            'p-2 rounded-lg',
+                                            theme === 'dark' ? 'bg-emerald-900/50' : 'bg-emerald-100'
+                                          )}>
+                                            <Package className="w-5 h-5 text-emerald-600" />
+                                          </div>
+                                        )}
+                                        {log.action === 'updated' && (
+                                          <div className={cn(
+                                            'p-2 rounded-lg',
+                                            theme === 'dark' ? 'bg-blue-900/50' : 'bg-blue-100'
+                                          )}>
+                                            <Edit3 className="w-5 h-5 text-blue-600" />
+                                          </div>
+                                        )}
+                                        {log.action === 'deleted' && (
+                                          <div className={cn(
+                                            'p-2 rounded-lg',
+                                            theme === 'dark' ? 'bg-red-900/50' : 'bg-red-100'
+                                          )}>
+                                            <Trash2 className="w-5 h-5 text-red-600" />
+                                          </div>
+                                        )}
+                                        <div>
                                           <p className={cn(
-                                            'font-medium',
+                                            'font-bold text-lg',
                                             log.action === 'created'
                                               ? 'text-emerald-700 dark:text-emerald-400'
+                                              : log.action === 'deleted'
+                                              ? 'text-red-700 dark:text-red-400'
                                               : 'text-gray-900 dark:text-white'
                                           )}>
                                             {log.actionLabel}
                                           </p>
                                         </div>
+                                      </div>
 
-                                        {/* Show creation details */}
-                                        {log.action === 'created' && log.productDetails && (
-                                          <div className={cn(
-                                            'mt-3 p-3 rounded-lg grid grid-cols-2 md:grid-cols-4 gap-3 text-sm',
-                                            theme === 'dark' ? 'bg-gray-800/50' : 'bg-white/80'
-                                          )}>
-                                            <div>
-                                              <p className="text-xs text-gray-500 uppercase tracking-wide">SKU</p>
-                                              <p className="font-mono font-medium text-gray-900 dark:text-white">{log.productDetails.sku}</p>
-                                            </div>
-                                            <div>
-                                              <p className="text-xs text-gray-500 uppercase tracking-wide">Categoría</p>
-                                              <p className="font-medium text-gray-900 dark:text-white">{log.productDetails.category || '—'}</p>
-                                            </div>
-                                            <div>
-                                              <p className="text-xs text-gray-500 uppercase tracking-wide">Precio Costo</p>
-                                              <p className="font-medium text-gray-900 dark:text-white">
-                                                {CURRENCY_SYMBOLS[log.productDetails.currency] || '$'}{Number(log.productDetails.costPrice).toFixed(2)}
-                                              </p>
-                                            </div>
-                                            <div>
-                                              <p className="text-xs text-gray-500 uppercase tracking-wide">Precio Venta</p>
-                                              <p className="font-medium text-emerald-600">
-                                                {CURRENCY_SYMBOLS[log.productDetails.currency] || '$'}{Number(log.productDetails.sellingPrice).toFixed(2)}
-                                              </p>
-                                            </div>
-                                            {log.productDetails.supplierName && (
-                                              <div className="col-span-2">
-                                                <p className="text-xs text-gray-500 uppercase tracking-wide">Proveedor</p>
-                                                <p className="font-medium text-gray-900 dark:text-white">{log.productDetails.supplierName}</p>
-                                              </div>
-                                            )}
-                                            <div>
-                                              <p className="text-xs text-gray-500 uppercase tracking-wide">Unidad</p>
-                                              <p className="font-medium text-gray-900 dark:text-white">{log.productDetails.unitOfMeasure}</p>
-                                            </div>
-                                            <div>
-                                              <p className="text-xs text-gray-500 uppercase tracking-wide">Stock Mín.</p>
-                                              <p className="font-medium text-gray-900 dark:text-white">{log.productDetails.minimumStock}</p>
-                                            </div>
+                                      {/* Show creation details */}
+                                      {log.action === 'created' && log.productDetails && (
+                                        <div className={cn(
+                                          'p-4 rounded-xl grid grid-cols-2 md:grid-cols-4 gap-4 text-sm',
+                                          theme === 'dark' ? 'bg-gray-800/50' : 'bg-white/80 border border-gray-100'
+                                        )}>
+                                          <div>
+                                            <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">SKU</p>
+                                            <p className="font-mono font-semibold text-gray-900 dark:text-white">{log.productDetails.sku}</p>
                                           </div>
-                                        )}
+                                          <div>
+                                            <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">Categoría</p>
+                                            <p className="font-semibold text-gray-900 dark:text-white">{log.productDetails.category || '—'}</p>
+                                          </div>
+                                          <div>
+                                            <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">Precio Costo</p>
+                                            <p className="font-semibold text-gray-900 dark:text-white">
+                                              {CURRENCY_SYMBOLS[log.productDetails.currency] || '$'}{Number(log.productDetails.costPrice).toFixed(2)}
+                                            </p>
+                                          </div>
+                                          <div>
+                                            <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">Precio Venta</p>
+                                            <p className="font-bold text-emerald-600 text-lg">
+                                              {CURRENCY_SYMBOLS[log.productDetails.currency] || '$'}{Number(log.productDetails.sellingPrice).toFixed(2)}
+                                            </p>
+                                          </div>
+                                          {log.productDetails.supplierName && (
+                                            <div className="col-span-2">
+                                              <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">Proveedor</p>
+                                              <p className="font-semibold text-gray-900 dark:text-white">{log.productDetails.supplierName}</p>
+                                            </div>
+                                          )}
+                                          <div>
+                                            <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">Unidad</p>
+                                            <p className="font-semibold text-gray-900 dark:text-white">{log.productDetails.unitOfMeasure}</p>
+                                          </div>
+                                          <div>
+                                            <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">Stock Mín.</p>
+                                            <p className="font-semibold text-gray-900 dark:text-white">{log.productDetails.minimumStock}</p>
+                                          </div>
+                                        </div>
+                                      )}
 
-                                        {/* Show notes for creation */}
-                                        {log.notes && (
-                                          <p className="text-sm text-gray-500 mt-2 italic">{log.notes}</p>
-                                        )}
+                                      {/* Show notes for creation */}
+                                      {log.notes && (
+                                        <p className="text-sm text-gray-600 dark:text-gray-400 mt-3 p-3 rounded-lg bg-gray-100 dark:bg-gray-800/50 italic">
+                                          {log.notes}
+                                        </p>
+                                      )}
 
-                                        {/* Show field changes for updates */}
-                                        {log.action !== 'created' && log.fieldLabel && (
+                                      {/* Show field changes for updates */}
+                                      {log.action !== 'created' && log.fieldLabel && (
+                                        <div className="mt-2">
                                           <p className="text-sm text-gray-500">
-                                            Campo: <span className="font-medium">{log.fieldLabel}</span>
+                                            Campo modificado: <span className="font-semibold text-gray-900 dark:text-white">{log.fieldLabel}</span>
                                           </p>
-                                        )}
-                                        {log.action !== 'created' && log.oldValue && log.newValue && (
-                                          <p className="text-sm text-gray-500 mt-1">
-                                            <span className="text-red-500 line-through">{log.oldValue}</span>
-                                            {' → '}
-                                            <span className="text-green-500">{log.newValue}</span>
-                                          </p>
-                                        )}
-                                      </div>
-                                      <div className="text-right text-xs text-gray-500 ml-4">
-                                        <p>{formatDate(log.createdAt)}</p>
-                                        {log.userName && (
-                                          <p className="mt-1 flex items-center justify-end gap-1">
-                                            <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
-                                            {log.userName}
-                                          </p>
-                                        )}
-                                      </div>
+                                        </div>
+                                      )}
+                                      {log.action !== 'created' && log.oldValue && log.newValue && (
+                                        <div className="mt-2 flex items-center gap-2">
+                                          <span className="px-2 py-1 rounded bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400 text-sm line-through">
+                                            {log.oldValue}
+                                          </span>
+                                          <span className="text-gray-400">→</span>
+                                          <span className="px-2 py-1 rounded bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 text-sm font-medium">
+                                            {log.newValue}
+                                          </span>
+                                        </div>
+                                      )}
                                     </div>
                                   </div>
                                 ))}
