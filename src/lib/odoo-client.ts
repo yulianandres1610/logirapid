@@ -67,6 +67,7 @@ class OdooClient {
   private database: string
   private apiKey: string
   private uid: number | null = null
+  private sessionId: string | null = null
 
   constructor(config: OdooConfig) {
     this.url = config.url.replace(/\/$/, '') // Remove trailing slash
@@ -77,13 +78,26 @@ class OdooClient {
   /**
    * Make a JSON-RPC call to Odoo
    */
-  private async jsonRpc(endpoint: string, method: string, params: any): Promise<any> {
+  private async jsonRpc(endpoint: string, method: string, params: any, requiresAuth = true): Promise<any> {
+    // If authentication is required and we don't have a session, authenticate first
+    if (requiresAuth && !this.sessionId && !endpoint.includes('authenticate') && !endpoint.includes('version_info')) {
+      await this.authenticate()
+    }
+
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+    }
+
+    // Add session cookie if available
+    if (this.sessionId) {
+      headers['Cookie'] = `session_id=${this.sessionId}`
+    }
+
+    console.log(`[Odoo Client] Making request to ${this.url}${endpoint}`)
+
     const response = await fetch(`${this.url}${endpoint}`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${this.apiKey}`,
-      },
+      headers,
       body: JSON.stringify({
         jsonrpc: '2.0',
         method: method,
@@ -92,14 +106,38 @@ class OdooClient {
       }),
     })
 
+    // Extract session cookie from response
+    const setCookie = response.headers.get('set-cookie')
+    if (setCookie) {
+      const sessionMatch = setCookie.match(/session_id=([^;]+)/)
+      if (sessionMatch) {
+        this.sessionId = sessionMatch[1]
+      }
+    }
+
     if (!response.ok) {
+      const errorText = await response.text()
+      console.error('[Odoo Client] HTTP Error:', response.status, errorText)
       throw new Error(`HTTP error: ${response.status} ${response.statusText}`)
     }
 
     const data = await response.json()
 
     if (data.error) {
-      throw new Error(data.error.data?.message || data.error.message || 'Odoo error')
+      console.error('[Odoo Client] Odoo Error:', data.error)
+      const errorMessage = data.error.data?.message || data.error.message || 'Odoo error'
+
+      // If session expired, try to re-authenticate
+      if (errorMessage.toLowerCase().includes('session') || errorMessage.toLowerCase().includes('expired')) {
+        console.log('[Odoo Client] Session expired, re-authenticating...')
+        this.sessionId = null
+        this.uid = null
+        await this.authenticate()
+        // Retry the request
+        return this.jsonRpc(endpoint, method, params, false)
+      }
+
+      throw new Error(errorMessage)
     }
 
     return data.result
@@ -118,23 +156,50 @@ class OdooClient {
   }
 
   /**
-   * Authenticate with Odoo
+   * Authenticate with Odoo using API key
    */
   async authenticate(): Promise<boolean> {
     try {
+      console.log('[Odoo Client] Authenticating with Odoo...')
+
+      // Try multiple authentication methods
+
+      // Method 1: Standard web session authenticate
       const result = await this.jsonRpc('/web/session/authenticate', 'call', {
         db: this.database,
-        login: 'api', // API key acts as the credential
+        login: this.apiKey.includes('@') ? this.apiKey : 'admin', // Use API key as login if it looks like email
         password: this.apiKey,
-      })
+      }, false)
 
       if (result && result.uid) {
         this.uid = result.uid
+        console.log('[Odoo Client] Authentication successful, uid:', this.uid)
         return true
       }
+
+      console.log('[Odoo Client] Authentication failed, no uid returned')
       return false
     } catch (error) {
-      console.error('Odoo authentication error:', error)
+      console.error('[Odoo Client] Authentication error:', error)
+
+      // Try alternative: xmlrpc style authentication
+      try {
+        console.log('[Odoo Client] Trying alternative authentication...')
+        const altResult = await this.jsonRpc('/jsonrpc', 'call', {
+          service: 'common',
+          method: 'authenticate',
+          args: [this.database, 'admin', this.apiKey, {}]
+        }, false)
+
+        if (altResult) {
+          this.uid = altResult
+          console.log('[Odoo Client] Alternative auth successful, uid:', this.uid)
+          return true
+        }
+      } catch (altError) {
+        console.error('[Odoo Client] Alternative auth error:', altError)
+      }
+
       return false
     }
   }
@@ -144,13 +209,27 @@ class OdooClient {
    */
   async testConnection(): Promise<{ success: boolean; message: string; version?: string }> {
     try {
-      const versionInfo = await this.jsonRpc('/web/webclient/version_info', 'call', {})
+      // First try to get version info (doesn't require auth)
+      const versionInfo = await this.jsonRpc('/web/webclient/version_info', 'call', {}, false)
+
+      // Then try to authenticate
+      const authSuccess = await this.authenticate()
+
+      if (!authSuccess) {
+        return {
+          success: false,
+          message: 'Servidor encontrado pero autenticación falló. Verifica tu API Key.',
+          version: versionInfo?.server_version,
+        }
+      }
+
       return {
         success: true,
-        message: 'Conexión exitosa',
-        version: versionInfo.server_version,
+        message: 'Conexión y autenticación exitosa',
+        version: versionInfo?.server_version,
       }
     } catch (error) {
+      console.error('[Odoo Client] Connection test error:', error)
       return {
         success: false,
         message: error instanceof Error ? error.message : 'Error de conexión',
