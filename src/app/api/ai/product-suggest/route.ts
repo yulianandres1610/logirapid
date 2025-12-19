@@ -33,6 +33,7 @@ interface ZAIResponse {
 interface ProductSuggestion {
   category: string
   description: string
+  imageUrl?: string
 }
 
 // Fallback categorization based on keywords with word boundary matching
@@ -110,19 +111,30 @@ export async function POST(request: NextRequest) {
 
     console.log('[AI Suggest] Processing product:', productName)
 
-    // Build a simple, direct prompt
-    const systemPrompt = `Clasifica productos para inventario. Responde SOLO con JSON válido.`
+    // Build a detailed prompt for rich descriptions
+    const systemPrompt = `Eres un experto en productos de tienda/mercado. Tu trabajo es clasificar productos y escribir descripciones comerciales atractivas y detalladas para el inventario. Responde ÚNICAMENTE con JSON válido, sin texto adicional.`
 
-    const userPrompt = `Producto: "${productName.trim()}"
+    const userPrompt = `Analiza este producto y genera una ficha completa:
 
-Categorías válidas: ${CATEGORIES.join(', ')}
+Producto: "${productName.trim()}"
 
-Responde exactamente así (JSON):
-{"category": "CATEGORIA", "description": "descripción corta"}
+CATEGORÍAS DISPONIBLES (usa exactamente una):
+${CATEGORIES.join(', ')}
+
+INSTRUCCIONES:
+1. Selecciona la categoría más apropiada de la lista
+2. Escribe una descripción comercial DETALLADA (150-250 caracteres) que incluya:
+   - Características principales del producto
+   - Beneficios o usos comunes
+   - Información relevante (tamaño, marca si aplica)
+   - Lenguaje atractivo para ventas
+
+FORMATO DE RESPUESTA (JSON válido):
+{"category": "Categoría", "description": "Descripción detallada y comercial del producto..."}
 
 JSON:`
 
-    // Call Z.ai API
+    // Call Z.ai API for category and description
     const response = await fetch(ZAI_API_URL, {
       method: 'POST',
       headers: {
@@ -135,10 +147,10 @@ JSON:`
           { role: 'system', content: systemPrompt },
           { role: 'user', content: userPrompt }
         ],
-        temperature: 0.1, // Very low for consistent JSON output
-        max_tokens: 150,
+        temperature: 0.3, // Slightly higher for creative descriptions
+        max_tokens: 300,
         stream: false,
-        thinking: { type: 'disabled' } // Disable reasoning mode to get direct response
+        thinking: { type: 'disabled' }
       })
     })
 
@@ -238,18 +250,85 @@ JSON:`
       suggestion.category = 'Otros'
     }
 
-    // Truncate description if too long
-    if (suggestion.description && suggestion.description.length > 150) {
-      suggestion.description = suggestion.description.substring(0, 147) + '...'
+    // Truncate description if too long (max 300 chars for detailed descriptions)
+    if (suggestion.description && suggestion.description.length > 300) {
+      suggestion.description = suggestion.description.substring(0, 297) + '...'
     }
 
-    console.log('[AI Suggest] Final suggestion:', suggestion)
+    console.log('[AI Suggest] Category and description:', suggestion)
+
+    // Now search for a product image using web search
+    let imageUrl: string | null = null
+    try {
+      console.log('[AI Suggest] Searching for product image...')
+
+      const imageSearchResponse = await fetch(ZAI_API_URL, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${ZAI_API_KEY}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          model: ZAI_MODEL,
+          messages: [
+            {
+              role: 'system',
+              content: 'Eres un asistente que busca imágenes de productos. Usa la herramienta de búsqueda web para encontrar una imagen del producto y devuelve SOLO la URL de la imagen en formato JSON.'
+            },
+            {
+              role: 'user',
+              content: `Busca una imagen de producto para: "${productName.trim()}". Necesito una URL directa a una imagen (jpg, png, webp) de este producto. Responde SOLO con JSON: {"imageUrl": "https://..."}`
+            }
+          ],
+          temperature: 0.1,
+          max_tokens: 200,
+          stream: false,
+          thinking: { type: 'disabled' },
+          tools: [
+            {
+              type: 'web_search',
+              web_search: {
+                enable: true,
+                search_engine: 'search_pro_jina',
+                search_result_count: 5
+              }
+            }
+          ]
+        })
+      })
+
+      if (imageSearchResponse.ok) {
+        const imageData = await imageSearchResponse.json()
+        const imageContent = imageData.choices?.[0]?.message?.content || ''
+        console.log('[AI Suggest] Image search response:', imageContent)
+
+        // Try to extract image URL from response
+        const imageUrlMatch = imageContent.match(/"imageUrl"\s*:\s*"([^"]+)"/) ||
+                              imageContent.match(/https?:\/\/[^\s"<>]+\.(?:jpg|jpeg|png|webp|gif)/i)
+
+        if (imageUrlMatch) {
+          imageUrl = imageUrlMatch[1] || imageUrlMatch[0]
+          // Validate it looks like an image URL
+          if (imageUrl && /\.(jpg|jpeg|png|webp|gif)/i.test(imageUrl)) {
+            console.log('[AI Suggest] Found image URL:', imageUrl)
+          } else {
+            imageUrl = null
+          }
+        }
+      }
+    } catch (imageError) {
+      console.error('[AI Suggest] Image search error:', imageError)
+      // Continue without image - it's optional
+    }
+
+    console.log('[AI Suggest] Final suggestion:', { ...suggestion, imageUrl })
 
     return NextResponse.json({
       success: true,
       data: {
         category: suggestion.category,
         description: suggestion.description,
+        imageUrl: imageUrl,
         productName: productName.trim()
       }
     })

@@ -116,6 +116,7 @@ export default function CreateProductPage() {
   const [aiSuggestion, setAiSuggestion] = useState<{
     category: string
     description: string
+    imageUrl?: string | null
   } | null>(null)
   const [showAiSuggestion, setShowAiSuggestion] = useState(false)
 
@@ -173,7 +174,8 @@ export default function CreateProductPage() {
       if (data.success && data.data) {
         setAiSuggestion({
           category: data.data.category,
-          description: data.data.description
+          description: data.data.description,
+          imageUrl: data.data.imageUrl || null
         })
         setShowAiSuggestion(true)
       } else {
@@ -199,12 +201,19 @@ export default function CreateProductPage() {
     }
   }
 
+  const applyAiImage = () => {
+    if (aiSuggestion?.imageUrl) {
+      setFormData(prev => ({ ...prev, imageUrl: aiSuggestion.imageUrl || '' }))
+    }
+  }
+
   const applyAllAiSuggestions = () => {
     if (aiSuggestion) {
       setFormData(prev => ({
         ...prev,
         category: aiSuggestion.category || prev.category,
-        description: aiSuggestion.description || prev.description
+        description: aiSuggestion.description || prev.description,
+        imageUrl: aiSuggestion.imageUrl || prev.imageUrl
       }))
       setShowAiSuggestion(false)
     }
@@ -818,6 +827,71 @@ export default function CreateProductPage() {
                                     )}
                                   </motion.button>
                                 </div>
+
+                                {/* Image suggestion */}
+                                {aiSuggestion.imageUrl && (
+                                  <div className={cn(
+                                    "flex items-center justify-between p-3 rounded-lg gap-3",
+                                    theme === 'dark' ? 'bg-gray-800/50' : 'bg-white/80'
+                                  )}>
+                                    <div className="flex items-center gap-3 flex-1">
+                                      <div className="w-12 h-12 rounded-lg overflow-hidden bg-gray-200 dark:bg-gray-700 flex-shrink-0">
+                                        <img
+                                          src={aiSuggestion.imageUrl}
+                                          alt="Imagen sugerida"
+                                          className="w-full h-full object-cover"
+                                          onError={(e) => {
+                                            (e.target as HTMLImageElement).style.display = 'none'
+                                          }}
+                                        />
+                                      </div>
+                                      <div className="flex-1 min-w-0">
+                                        <div className="flex items-center gap-1">
+                                          <ImageIcon className={cn(
+                                            "w-4 h-4 flex-shrink-0",
+                                            theme === 'dark' ? 'text-green-400' : 'text-green-600'
+                                          )} />
+                                          <span className={cn(
+                                            "text-sm font-medium",
+                                            theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
+                                          )}>
+                                            Imagen encontrada
+                                          </span>
+                                        </div>
+                                        <p className={cn(
+                                          "text-xs truncate mt-0.5",
+                                          theme === 'dark' ? 'text-gray-500' : 'text-gray-400'
+                                        )}>
+                                          {aiSuggestion.imageUrl.substring(0, 50)}...
+                                        </p>
+                                      </div>
+                                    </div>
+                                    <motion.button
+                                      type="button"
+                                      onClick={applyAiImage}
+                                      whileHover={{ scale: 1.05 }}
+                                      whileTap={{ scale: 0.95 }}
+                                      className={cn(
+                                        "px-3 py-1 text-xs font-medium rounded-full transition-colors flex-shrink-0",
+                                        formData.imageUrl === aiSuggestion.imageUrl
+                                          ? theme === 'dark'
+                                            ? 'bg-green-900/50 text-green-300'
+                                            : 'bg-green-100 text-green-700'
+                                          : theme === 'dark'
+                                            ? 'bg-violet-600 hover:bg-violet-700 text-white'
+                                            : 'bg-violet-500 hover:bg-violet-600 text-white'
+                                      )}
+                                    >
+                                      {formData.imageUrl === aiSuggestion.imageUrl ? (
+                                        <span className="flex items-center gap-1">
+                                          <Check className="w-3 h-3" /> Aplicado
+                                        </span>
+                                      ) : (
+                                        'Aplicar'
+                                      )}
+                                    </motion.button>
+                                  </div>
+                                )}
                               </div>
 
                               {/* Apply All Button */}
