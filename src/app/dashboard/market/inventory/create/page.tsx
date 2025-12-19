@@ -19,7 +19,9 @@ import {
   Plus,
   Trash2,
   Edit3,
-  Scale
+  Scale,
+  Sparkles,
+  Wand2
 } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { DashboardLayout } from '@/components/layout/dashboard-layout'
@@ -109,6 +111,14 @@ export default function CreateProductPage() {
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [showCancelModal, setShowCancelModal] = useState(false)
 
+  // AI Suggestion states
+  const [aiLoading, setAiLoading] = useState(false)
+  const [aiSuggestion, setAiSuggestion] = useState<{
+    category: string
+    description: string
+  } | null>(null)
+  const [showAiSuggestion, setShowAiSuggestion] = useState(false)
+
   const [formData, setFormData] = useState({
     name: '',
     description: '',
@@ -141,6 +151,64 @@ export default function CreateProductPage() {
 
   const currentStepIndex = STEPS.findIndex(s => s.id === currentStep)
   const fileInputRef = useRef<HTMLInputElement>(null)
+
+  // AI Suggestion function
+  const fetchAiSuggestion = async () => {
+    if (!formData.name.trim() || formData.name.trim().length < 2) {
+      return
+    }
+
+    setAiLoading(true)
+    setShowAiSuggestion(false)
+
+    try {
+      const response = await fetch('/api/ai/product-suggest', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ productName: formData.name.trim() })
+      })
+
+      const data = await response.json()
+
+      if (data.success && data.data) {
+        setAiSuggestion({
+          category: data.data.category,
+          description: data.data.description
+        })
+        setShowAiSuggestion(true)
+      } else {
+        console.error('AI Suggestion error:', data.error)
+      }
+    } catch (error) {
+      console.error('AI Suggestion fetch error:', error)
+    } finally {
+      setAiLoading(false)
+    }
+  }
+
+  // Apply AI suggestions
+  const applyAiCategory = () => {
+    if (aiSuggestion?.category) {
+      setFormData(prev => ({ ...prev, category: aiSuggestion.category }))
+    }
+  }
+
+  const applyAiDescription = () => {
+    if (aiSuggestion?.description) {
+      setFormData(prev => ({ ...prev, description: aiSuggestion.description }))
+    }
+  }
+
+  const applyAllAiSuggestions = () => {
+    if (aiSuggestion) {
+      setFormData(prev => ({
+        ...prev,
+        category: aiSuggestion.category || prev.category,
+        description: aiSuggestion.description || prev.description
+      }))
+      setShowAiSuggestion(false)
+    }
+  }
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -564,21 +632,213 @@ export default function CreateProductPage() {
                         )}>
                           Nombre del Producto *
                         </label>
-                        <input
-                          type="text"
-                          value={formData.name}
-                          onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                          placeholder="Ej: Arroz Premium 5kg"
-                          className={cn(
-                            'w-full px-4 py-3 rounded-xl border focus:outline-none focus:ring-2 transition-all',
-                            errors.name
-                              ? 'border-red-500 bg-red-50 dark:bg-red-900/20'
-                              : theme === 'dark'
-                                ? 'bg-gray-900/50 border-gray-600 text-white focus:border-blue-500 focus:ring-blue-500/20'
-                                : 'bg-gray-50 border-gray-200 text-gray-900 focus:border-blue-500 focus:ring-blue-500/20'
-                          )}
-                        />
+                        <div className="flex gap-2">
+                          <input
+                            type="text"
+                            value={formData.name}
+                            onChange={(e) => {
+                              setFormData({ ...formData, name: e.target.value })
+                              setShowAiSuggestion(false)
+                            }}
+                            placeholder="Ej: Arroz Premium 5kg"
+                            className={cn(
+                              'flex-1 px-4 py-3 rounded-xl border focus:outline-none focus:ring-2 transition-all',
+                              errors.name
+                                ? 'border-red-500 bg-red-50 dark:bg-red-900/20'
+                                : theme === 'dark'
+                                  ? 'bg-gray-900/50 border-gray-600 text-white focus:border-blue-500 focus:ring-blue-500/20'
+                                  : 'bg-gray-50 border-gray-200 text-gray-900 focus:border-blue-500 focus:ring-blue-500/20'
+                            )}
+                          />
+                          <motion.button
+                            type="button"
+                            onClick={fetchAiSuggestion}
+                            disabled={aiLoading || !formData.name.trim() || formData.name.trim().length < 2}
+                            whileHover={{ scale: 1.02 }}
+                            whileTap={{ scale: 0.98 }}
+                            className={cn(
+                              "px-4 py-3 rounded-xl font-medium transition-all flex items-center gap-2",
+                              "disabled:opacity-50 disabled:cursor-not-allowed",
+                              theme === 'dark'
+                                ? 'bg-gradient-to-r from-violet-600 to-purple-600 hover:from-violet-700 hover:to-purple-700 text-white shadow-lg shadow-violet-500/25'
+                                : 'bg-gradient-to-r from-violet-500 to-purple-500 hover:from-violet-600 hover:to-purple-600 text-white shadow-lg shadow-violet-400/25'
+                            )}
+                          >
+                            {aiLoading ? (
+                              <>
+                                <Loader2 className="w-4 h-4 animate-spin" />
+                                <span className="hidden sm:inline">Pensando...</span>
+                              </>
+                            ) : (
+                              <>
+                                <Sparkles className="w-4 h-4" />
+                                <span className="hidden sm:inline">IA</span>
+                              </>
+                            )}
+                          </motion.button>
+                        </div>
                         {errors.name && <p className="text-red-500 text-xs mt-1">{errors.name}</p>}
+
+                        {/* AI Suggestion Panel */}
+                        <AnimatePresence>
+                          {showAiSuggestion && aiSuggestion && (
+                            <motion.div
+                              initial={{ opacity: 0, y: -10, height: 0 }}
+                              animate={{ opacity: 1, y: 0, height: 'auto' }}
+                              exit={{ opacity: 0, y: -10, height: 0 }}
+                              transition={{ duration: 0.3 }}
+                              className={cn(
+                                "mt-4 p-4 rounded-xl border-2 border-dashed relative overflow-hidden",
+                                theme === 'dark'
+                                  ? 'bg-gradient-to-br from-violet-900/20 to-purple-900/20 border-violet-500/50'
+                                  : 'bg-gradient-to-br from-violet-50 to-purple-50 border-violet-300'
+                              )}
+                            >
+                              {/* Sparkle decoration */}
+                              <div className="absolute top-2 right-2">
+                                <motion.div
+                                  animate={{ rotate: 360 }}
+                                  transition={{ duration: 4, repeat: Infinity, ease: "linear" }}
+                                >
+                                  <Wand2 className={cn(
+                                    "w-5 h-5",
+                                    theme === 'dark' ? 'text-violet-400' : 'text-violet-500'
+                                  )} />
+                                </motion.div>
+                              </div>
+
+                              <div className="flex items-center gap-2 mb-3">
+                                <Sparkles className={cn(
+                                  "w-4 h-4",
+                                  theme === 'dark' ? 'text-violet-400' : 'text-violet-600'
+                                )} />
+                                <span className={cn(
+                                  "text-sm font-semibold",
+                                  theme === 'dark' ? 'text-violet-300' : 'text-violet-700'
+                                )}>
+                                  Sugerencias de IA
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() => setShowAiSuggestion(false)}
+                                  className={cn(
+                                    "ml-auto p-1 rounded-full transition-colors",
+                                    theme === 'dark'
+                                      ? 'hover:bg-gray-700 text-gray-400'
+                                      : 'hover:bg-gray-200 text-gray-500'
+                                  )}
+                                >
+                                  <X className="w-4 h-4" />
+                                </button>
+                              </div>
+
+                              <div className="space-y-3">
+                                {/* Category suggestion */}
+                                <div className={cn(
+                                  "flex items-center justify-between p-3 rounded-lg",
+                                  theme === 'dark' ? 'bg-gray-800/50' : 'bg-white/80'
+                                )}>
+                                  <div className="flex items-center gap-2">
+                                    <Package className={cn(
+                                      "w-4 h-4",
+                                      theme === 'dark' ? 'text-blue-400' : 'text-blue-600'
+                                    )} />
+                                    <span className={cn(
+                                      "text-sm",
+                                      theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
+                                    )}>
+                                      Categoría: <strong>{aiSuggestion.category}</strong>
+                                    </span>
+                                  </div>
+                                  <motion.button
+                                    type="button"
+                                    onClick={applyAiCategory}
+                                    whileHover={{ scale: 1.05 }}
+                                    whileTap={{ scale: 0.95 }}
+                                    className={cn(
+                                      "px-3 py-1 text-xs font-medium rounded-full transition-colors",
+                                      formData.category === aiSuggestion.category
+                                        ? theme === 'dark'
+                                          ? 'bg-green-900/50 text-green-300'
+                                          : 'bg-green-100 text-green-700'
+                                        : theme === 'dark'
+                                          ? 'bg-violet-600 hover:bg-violet-700 text-white'
+                                          : 'bg-violet-500 hover:bg-violet-600 text-white'
+                                    )}
+                                  >
+                                    {formData.category === aiSuggestion.category ? (
+                                      <span className="flex items-center gap-1">
+                                        <Check className="w-3 h-3" /> Aplicado
+                                      </span>
+                                    ) : (
+                                      'Aplicar'
+                                    )}
+                                  </motion.button>
+                                </div>
+
+                                {/* Description suggestion */}
+                                <div className={cn(
+                                  "flex items-start justify-between p-3 rounded-lg gap-3",
+                                  theme === 'dark' ? 'bg-gray-800/50' : 'bg-white/80'
+                                )}>
+                                  <div className="flex items-start gap-2 flex-1">
+                                    <Edit3 className={cn(
+                                      "w-4 h-4 mt-0.5 flex-shrink-0",
+                                      theme === 'dark' ? 'text-amber-400' : 'text-amber-600'
+                                    )} />
+                                    <span className={cn(
+                                      "text-sm",
+                                      theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
+                                    )}>
+                                      {aiSuggestion.description}
+                                    </span>
+                                  </div>
+                                  <motion.button
+                                    type="button"
+                                    onClick={applyAiDescription}
+                                    whileHover={{ scale: 1.05 }}
+                                    whileTap={{ scale: 0.95 }}
+                                    className={cn(
+                                      "px-3 py-1 text-xs font-medium rounded-full transition-colors flex-shrink-0",
+                                      formData.description === aiSuggestion.description
+                                        ? theme === 'dark'
+                                          ? 'bg-green-900/50 text-green-300'
+                                          : 'bg-green-100 text-green-700'
+                                        : theme === 'dark'
+                                          ? 'bg-violet-600 hover:bg-violet-700 text-white'
+                                          : 'bg-violet-500 hover:bg-violet-600 text-white'
+                                    )}
+                                  >
+                                    {formData.description === aiSuggestion.description ? (
+                                      <span className="flex items-center gap-1">
+                                        <Check className="w-3 h-3" /> Aplicado
+                                      </span>
+                                    ) : (
+                                      'Aplicar'
+                                    )}
+                                  </motion.button>
+                                </div>
+                              </div>
+
+                              {/* Apply All Button */}
+                              <motion.button
+                                type="button"
+                                onClick={applyAllAiSuggestions}
+                                whileHover={{ scale: 1.02 }}
+                                whileTap={{ scale: 0.98 }}
+                                className={cn(
+                                  "w-full mt-4 py-2.5 rounded-lg font-medium text-sm transition-all flex items-center justify-center gap-2",
+                                  theme === 'dark'
+                                    ? 'bg-gradient-to-r from-violet-600 to-purple-600 hover:from-violet-700 hover:to-purple-700 text-white'
+                                    : 'bg-gradient-to-r from-violet-500 to-purple-500 hover:from-violet-600 hover:to-purple-600 text-white'
+                                )}
+                              >
+                                <Sparkles className="w-4 h-4" />
+                                Aplicar Todo
+                              </motion.button>
+                            </motion.div>
+                          )}
+                        </AnimatePresence>
                       </div>
 
                       <div className="md:col-span-2">
