@@ -117,6 +117,30 @@ export async function GET(request: NextRequest) {
 
     const countResult = await db.query(countQuery, countParams)
 
+    // Get payments for all orders
+    const orderIds = result.rows.map(r => r.id)
+    let paymentsMap: Record<number, { method: string; amount: number; currency: string }[]> = {}
+
+    if (orderIds.length > 0) {
+      const paymentsResult = await db.query(`
+        SELECT order_id, payment_method, amount, currency
+        FROM market_pos_payments
+        WHERE order_id = ANY($1)
+        ORDER BY order_id, id
+      `, [orderIds])
+
+      for (const p of paymentsResult.rows) {
+        if (!paymentsMap[p.order_id]) {
+          paymentsMap[p.order_id] = []
+        }
+        paymentsMap[p.order_id].push({
+          method: p.payment_method,
+          amount: parseFloat(p.amount) || 0,
+          currency: p.currency || 'USD'
+        })
+      }
+    }
+
     return NextResponse.json({
       success: true,
       data: {
@@ -139,7 +163,8 @@ export async function GET(request: NextRequest) {
           syncedAt: row.synced_at,
           createdBy: row.created_by,
           createdByName: row.created_by_name,
-          createdAt: row.created_at
+          createdAt: row.created_at,
+          payments: paymentsMap[row.id] || []
         })),
         total: parseInt(countResult.rows[0].count)
       }

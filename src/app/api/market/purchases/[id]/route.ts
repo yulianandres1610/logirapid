@@ -325,17 +325,27 @@ export async function PUT(
               WHERE id = $2
             `, [quantityToReceive, productId])
 
+            // Get updated quantity for movement record (after the UPDATE above)
+            const currentQty = await client.query(
+              'SELECT quantity_on_hand FROM market_products WHERE id = $1',
+              [productId]
+            )
+            const qtyAfter = parseInt(currentQty.rows[0]?.quantity_on_hand) || 0
+            const qtyBefore = qtyAfter - quantityToReceive
+
             // Create inventory movement
             await client.query(`
               INSERT INTO market_inventory_movements (
-                company_id, product_id, warehouse_id, movement_type,
-                quantity, reference_type, reference_id, notes, created_by, created_at
-              ) VALUES ($1, $2, $3, 'entrada', $4, 'purchase', $5, 'Recepción de compra', $6, NOW())
+                company_id, product_id, movement_type,
+                quantity, quantity_before, quantity_after,
+                reference_type, reference_id, notes, created_by, created_at
+              ) VALUES ($1, $2, 'purchase_in', $3, $4, $5, 'purchase', $6, 'Recepción de compra', $7, NOW())
             `, [
               companyId,
               productId,
-              targetWarehouseId,
               quantityToReceive,
+              qtyBefore,
+              qtyAfter,
               purchaseId,
               userId
             ])
