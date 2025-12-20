@@ -77,6 +77,27 @@ export default function MarketPOSPage() {
   const [openingSession, setOpeningSession] = useState(false)
   const [openingCash, setOpeningCash] = useState({ usd: 0, cup: 0, mlc: 0 })
   const [openingNotes, setOpeningNotes] = useState('')
+  const [useDenominations, setUseDenominations] = useState(true)
+  const [selectedCurrency, setSelectedCurrency] = useState<'USD' | 'CUP' | 'MLC'>('USD')
+  const [denominations, setDenominations] = useState({
+    USD: { 100: 0, 50: 0, 20: 0, 10: 0, 5: 0, 1: 0 },
+    CUP: { 1000: 0, 500: 0, 200: 0, 100: 0, 50: 0, 20: 0, 10: 0 },
+    MLC: { 50: 0, 20: 0, 10: 0, 5: 0 }
+  })
+
+  // Calculate totals from denominations
+  const denominationTotals = {
+    usd: Object.entries(denominations.USD).reduce((sum, [denom, count]) => sum + (parseInt(denom) * count), 0),
+    cup: Object.entries(denominations.CUP).reduce((sum, [denom, count]) => sum + (parseInt(denom) * count), 0),
+    mlc: Object.entries(denominations.MLC).reduce((sum, [denom, count]) => sum + (parseInt(denom) * count), 0)
+  }
+
+  // Update opening cash when denominations change
+  useEffect(() => {
+    if (useDenominations) {
+      setOpeningCash(denominationTotals)
+    }
+  }, [denominationTotals.usd, denominationTotals.cup, denominationTotals.mlc, useDenominations])
 
   const isAdmin = user?.role === 'ADMIN' || user?.role === 'SUPER_ADMIN'
 
@@ -187,7 +208,8 @@ export default function MarketPOSPage() {
           openingCashUsd: openingCash.usd,
           openingCashCup: openingCash.cup,
           openingCashMlc: openingCash.mlc,
-          openingNotes: openingNotes || null
+          openingNotes: openingNotes || null,
+          openingDenominations: useDenominations ? denominations : null
         })
       })
 
@@ -922,61 +944,204 @@ export default function MarketPOSPage() {
                     </div>
 
                     <div className="space-y-4 mb-6">
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                          Efectivo Inicial
+                      {/* Toggle between denomination and manual entry */}
+                      <div className="flex items-center justify-between mb-4">
+                        <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                          Contar por denominación
                         </label>
-                        <div className="grid grid-cols-3 gap-3">
-                          <div>
-                            <label className="block text-xs text-gray-500 mb-1">USD</label>
-                            <input
-                              type="number"
-                              min="0"
-                              step="0.01"
-                              value={openingCash.usd}
-                              onChange={(e) => setOpeningCash(prev => ({ ...prev, usd: parseFloat(e.target.value) || 0 }))}
-                              className={cn(
-                                'w-full px-3 py-2 rounded-xl border focus:outline-none focus:ring-2 transition-all',
-                                theme === 'dark'
-                                  ? 'bg-gray-800 border-gray-700 text-white focus:border-blue-500 focus:ring-blue-500/20'
-                                  : 'bg-white border-gray-200 focus:border-blue-500 focus:ring-blue-500/20'
-                              )}
-                            />
+                        <button
+                          type="button"
+                          onClick={() => setUseDenominations(!useDenominations)}
+                          className={cn(
+                            'relative w-12 h-6 rounded-full transition-colors',
+                            useDenominations ? 'bg-blue-500' : 'bg-gray-300 dark:bg-gray-600'
+                          )}
+                        >
+                          <span
+                            className={cn(
+                              'absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full transition-transform shadow-sm',
+                              useDenominations && 'translate-x-6'
+                            )}
+                          />
+                        </button>
+                      </div>
+
+                      {useDenominations ? (
+                        <>
+                          {/* Currency Tabs */}
+                          <div className="flex gap-2 mb-4">
+                            {(['USD', 'CUP', 'MLC'] as const).map((curr) => (
+                              <button
+                                key={curr}
+                                onClick={() => setSelectedCurrency(curr)}
+                                className={cn(
+                                  'flex-1 py-2 rounded-lg font-medium transition-all',
+                                  selectedCurrency === curr
+                                    ? 'bg-blue-500 text-white'
+                                    : theme === 'dark'
+                                      ? 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                                )}
+                              >
+                                {curr}
+                              </button>
+                            ))}
                           </div>
-                          <div>
-                            <label className="block text-xs text-gray-500 mb-1">CUP</label>
-                            <input
-                              type="number"
-                              min="0"
-                              step="1"
-                              value={openingCash.cup}
-                              onChange={(e) => setOpeningCash(prev => ({ ...prev, cup: parseFloat(e.target.value) || 0 }))}
-                              className={cn(
-                                'w-full px-3 py-2 rounded-xl border focus:outline-none focus:ring-2 transition-all',
-                                theme === 'dark'
-                                  ? 'bg-gray-800 border-gray-700 text-white focus:border-blue-500 focus:ring-blue-500/20'
-                                  : 'bg-white border-gray-200 focus:border-blue-500 focus:ring-blue-500/20'
-                              )}
-                            />
+
+                          {/* Denomination Grid */}
+                          <div className={cn(
+                            'rounded-xl p-4 max-h-48 overflow-y-auto',
+                            theme === 'dark' ? 'bg-gray-800' : 'bg-gray-50'
+                          )}>
+                            <div className="grid grid-cols-3 gap-2 text-xs font-medium text-gray-500 mb-2">
+                              <span>Denominación</span>
+                              <span className="text-center">Cantidad</span>
+                              <span className="text-right">Subtotal</span>
+                            </div>
+                            {Object.keys(denominations[selectedCurrency])
+                              .sort((a, b) => parseInt(b) - parseInt(a))
+                              .map((denom) => {
+                                const denomNum = parseInt(denom)
+                                const count = denominations[selectedCurrency][denomNum as keyof typeof denominations[typeof selectedCurrency]]
+                                return (
+                                  <div key={denom} className="grid grid-cols-3 gap-2 items-center py-1.5 border-b border-gray-200 dark:border-gray-700 last:border-0">
+                                    <span className="font-medium">
+                                      {selectedCurrency === 'MLC' ? '€' : '$'}{denomNum.toLocaleString()}
+                                    </span>
+                                    <div className="flex items-center justify-center gap-1">
+                                      <button
+                                        type="button"
+                                        onClick={() => setDenominations(prev => ({
+                                          ...prev,
+                                          [selectedCurrency]: {
+                                            ...prev[selectedCurrency],
+                                            [denomNum]: Math.max(0, count - 1)
+                                          }
+                                        }))}
+                                        className="w-7 h-7 rounded-lg bg-gray-200 dark:bg-gray-600 hover:bg-gray-300 dark:hover:bg-gray-500 font-bold"
+                                      >
+                                        -
+                                      </button>
+                                      <input
+                                        type="number"
+                                        min="0"
+                                        value={count}
+                                        onChange={(e) => setDenominations(prev => ({
+                                          ...prev,
+                                          [selectedCurrency]: {
+                                            ...prev[selectedCurrency],
+                                            [denomNum]: Math.max(0, parseInt(e.target.value) || 0)
+                                          }
+                                        }))}
+                                        className={cn(
+                                          'w-14 text-center py-1 rounded-lg border font-medium',
+                                          theme === 'dark'
+                                            ? 'bg-gray-700 border-gray-600 text-white'
+                                            : 'bg-white border-gray-200'
+                                        )}
+                                      />
+                                      <button
+                                        type="button"
+                                        onClick={() => setDenominations(prev => ({
+                                          ...prev,
+                                          [selectedCurrency]: {
+                                            ...prev[selectedCurrency],
+                                            [denomNum]: count + 1
+                                          }
+                                        }))}
+                                        className="w-7 h-7 rounded-lg bg-gray-200 dark:bg-gray-600 hover:bg-gray-300 dark:hover:bg-gray-500 font-bold"
+                                      >
+                                        +
+                                      </button>
+                                    </div>
+                                    <span className="text-right font-medium">
+                                      {selectedCurrency === 'MLC' ? '€' : '$'}{(denomNum * count).toLocaleString()}
+                                    </span>
+                                  </div>
+                                )
+                              })}
                           </div>
-                          <div>
-                            <label className="block text-xs text-gray-500 mb-1">MLC</label>
-                            <input
-                              type="number"
-                              min="0"
-                              step="0.01"
-                              value={openingCash.mlc}
-                              onChange={(e) => setOpeningCash(prev => ({ ...prev, mlc: parseFloat(e.target.value) || 0 }))}
-                              className={cn(
-                                'w-full px-3 py-2 rounded-xl border focus:outline-none focus:ring-2 transition-all',
-                                theme === 'dark'
-                                  ? 'bg-gray-800 border-gray-700 text-white focus:border-blue-500 focus:ring-blue-500/20'
-                                  : 'bg-white border-gray-200 focus:border-blue-500 focus:ring-blue-500/20'
-                              )}
-                            />
+
+                          {/* Currency Totals */}
+                          <div className={cn(
+                            'rounded-xl p-4 mt-4',
+                            theme === 'dark' ? 'bg-gray-800' : 'bg-gray-50'
+                          )}>
+                            <h4 className="text-sm font-medium text-gray-500 mb-2">Totales por Moneda</h4>
+                            <div className="grid grid-cols-3 gap-4">
+                              <div className="text-center">
+                                <p className="text-xs text-gray-500">USD</p>
+                                <p className="font-bold text-lg">${denominationTotals.usd.toLocaleString()}</p>
+                              </div>
+                              <div className="text-center">
+                                <p className="text-xs text-gray-500">CUP</p>
+                                <p className="font-bold text-lg">${denominationTotals.cup.toLocaleString()}</p>
+                              </div>
+                              <div className="text-center">
+                                <p className="text-xs text-gray-500">MLC</p>
+                                <p className="font-bold text-lg">€{denominationTotals.mlc.toLocaleString()}</p>
+                              </div>
+                            </div>
+                          </div>
+                        </>
+                      ) : (
+                        /* Manual Entry */
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                            Efectivo Inicial (entrada manual)
+                          </label>
+                          <div className="grid grid-cols-3 gap-3">
+                            <div>
+                              <label className="block text-xs text-gray-500 mb-1">USD</label>
+                              <input
+                                type="number"
+                                min="0"
+                                step="0.01"
+                                value={openingCash.usd}
+                                onChange={(e) => setOpeningCash(prev => ({ ...prev, usd: parseFloat(e.target.value) || 0 }))}
+                                className={cn(
+                                  'w-full px-3 py-2 rounded-xl border focus:outline-none focus:ring-2 transition-all',
+                                  theme === 'dark'
+                                    ? 'bg-gray-800 border-gray-700 text-white focus:border-blue-500 focus:ring-blue-500/20'
+                                    : 'bg-white border-gray-200 focus:border-blue-500 focus:ring-blue-500/20'
+                                )}
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-xs text-gray-500 mb-1">CUP</label>
+                              <input
+                                type="number"
+                                min="0"
+                                step="1"
+                                value={openingCash.cup}
+                                onChange={(e) => setOpeningCash(prev => ({ ...prev, cup: parseFloat(e.target.value) || 0 }))}
+                                className={cn(
+                                  'w-full px-3 py-2 rounded-xl border focus:outline-none focus:ring-2 transition-all',
+                                  theme === 'dark'
+                                    ? 'bg-gray-800 border-gray-700 text-white focus:border-blue-500 focus:ring-blue-500/20'
+                                    : 'bg-white border-gray-200 focus:border-blue-500 focus:ring-blue-500/20'
+                                )}
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-xs text-gray-500 mb-1">MLC</label>
+                              <input
+                                type="number"
+                                min="0"
+                                step="0.01"
+                                value={openingCash.mlc}
+                                onChange={(e) => setOpeningCash(prev => ({ ...prev, mlc: parseFloat(e.target.value) || 0 }))}
+                                className={cn(
+                                  'w-full px-3 py-2 rounded-xl border focus:outline-none focus:ring-2 transition-all',
+                                  theme === 'dark'
+                                    ? 'bg-gray-800 border-gray-700 text-white focus:border-blue-500 focus:ring-blue-500/20'
+                                    : 'bg-white border-gray-200 focus:border-blue-500 focus:ring-blue-500/20'
+                                )}
+                              />
+                            </div>
                           </div>
                         </div>
-                      </div>
+                      )}
 
                       <div>
                         <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">

@@ -358,31 +358,55 @@ export async function POST(request: NextRequest) {
         line.promotionName || null
       ])
 
-      // Update inventory if warehouse specified
-      if (warehouseId && line.productId) {
-        // Try to update warehouse stock first
-        const stockResult = await db.query(`
-          UPDATE market_warehouse_stock
-          SET quantity_on_hand = quantity_on_hand - $1, updated_at = NOW()
-          WHERE product_id = $2 AND warehouse_id = $3
-          RETURNING id
-        `, [line.quantity || 1, line.productId, warehouseId])
+      // Update inventory - ALWAYS reduce stock when selling
+      if (line.productId) {
+        const quantityToReduce = line.quantity || 1
 
-        // If no warehouse stock record, update main product quantity
-        if (stockResult.rows.length === 0) {
-          await db.query(`
-            UPDATE market_products
-            SET quantity_on_hand = quantity_on_hand - $1, updated_at = NOW()
-            WHERE id = $2
-          `, [line.quantity || 1, line.productId])
+        console.log('[POS Orders] Reducing stock for product:', {
+          productId: line.productId,
+          quantity: quantityToReduce,
+          warehouseId
+        })
+
+        // Get current stock before update
+        const currentStockResult = await db.query(`
+          SELECT quantity_on_hand FROM market_products WHERE id = $1
+        `, [line.productId])
+
+        const quantityBefore = currentStockResult.rows[0]?.quantity_on_hand || 0
+
+        // If warehouse specified, also update warehouse stock
+        if (warehouseId) {
+          const warehouseStockResult = await db.query(`
+            UPDATE market_warehouse_stock
+            SET quantity_on_hand = GREATEST(0, quantity_on_hand - $1), updated_at = NOW()
+            WHERE product_id = $2 AND warehouse_id = $3
+            RETURNING id, quantity_on_hand
+          `, [quantityToReduce, line.productId, warehouseId])
+
+          console.log('[POS Orders] Warehouse stock update:', warehouseStockResult.rows)
         }
-      } else if (line.productId) {
-        // No warehouse specified, update main product quantity
-        await db.query(`
+
+        // ALWAYS update main product stock
+        const productResult = await db.query(`
           UPDATE market_products
-          SET quantity_on_hand = quantity_on_hand - $1, updated_at = NOW()
+          SET quantity_on_hand = GREATEST(0, quantity_on_hand - $1), updated_at = NOW()
           WHERE id = $2
-        `, [line.quantity || 1, line.productId])
+          RETURNING id, quantity_on_hand
+        `, [quantityToReduce, line.productId])
+
+        const quantityAfter = productResult.rows[0]?.quantity_on_hand || 0
+        console.log('[POS Orders] Product stock update:', productResult.rows)
+
+        // Register inventory movement for traceability
+        await db.query(`
+          INSERT INTO market_inventory_movements (
+            product_id, company_id, movement_type, quantity,
+            quantity_before, quantity_after, reference, notes, created_at
+          )
+          SELECT $1, company_id, 'sale', $2, $3, $4, $5, 'Venta POS', NOW()
+          FROM market_products WHERE id = $1
+        `, [line.productId, -quantityToReduce, quantityBefore, quantityAfter, orderNumber])
       }
     }
 

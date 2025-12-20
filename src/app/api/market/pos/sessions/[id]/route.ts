@@ -250,7 +250,8 @@ export async function PUT(
         closingCashUsd,
         closingCashCup,
         closingCashMlc,
-        closingNotes
+        closingNotes,
+        closingDenominations
       } = body
 
       // Calculate totals from orders
@@ -308,8 +309,9 @@ export async function PUT(
           total_refunds = $6,
           total_orders = $7,
           cash_difference = $8,
-          closing_notes = $9
-        WHERE id = $10
+          closing_notes = $9,
+          closing_denominations = $10
+        WHERE id = $11
       `, [
         userId,
         reportedUsd,
@@ -320,6 +322,7 @@ export async function PUT(
         parseInt(totals.total_orders) || 0,
         Math.round(differenceUsd * 100) / 100,
         closingNotes || null,
+        closingDenominations ? JSON.stringify(closingDenominations) : null,
         sessionId
       ])
 

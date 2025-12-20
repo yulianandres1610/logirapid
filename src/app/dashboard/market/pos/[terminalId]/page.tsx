@@ -703,7 +703,26 @@ export default function POSTerminalPage() {
                 Vaciar
               </button>
               <button
-                onClick={() => setShowPaymentModal(true)}
+                onClick={() => {
+                  if (cart.length === 0 || !session) return
+                  // Prepare cart data for payment page
+                  const cartData = cart.map(item => ({
+                    productId: item.product.id,
+                    productName: item.product.name,
+                    productSku: item.product.sku,
+                    quantity: item.quantity,
+                    unitPrice: item.unitPrice,
+                    discountPercent: item.discountPercent,
+                    discountAmount: item.discountAmount,
+                    total: item.total
+                  }))
+                  const params = new URLSearchParams({
+                    cart: encodeURIComponent(JSON.stringify(cartData)),
+                    sessionId: session.id.toString(),
+                    warehouseId: terminal?.warehouseId?.toString() || ''
+                  })
+                  router.push(`/dashboard/market/pos/${terminalId}/payment?${params.toString()}`)
+                }}
                 disabled={cart.length === 0}
                 className={cn(
                   'flex-[2] py-3 rounded-xl font-bold flex items-center justify-center gap-2 transition-all shadow-lg',

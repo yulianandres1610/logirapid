@@ -197,7 +197,8 @@ export async function POST(request: NextRequest) {
       openingCashUsd,
       openingCashCup,
       openingCashMlc,
-      openingNotes
+      openingNotes,
+      openingDenominations
     } = body
 
     if (!terminalId) {
@@ -263,14 +264,22 @@ export async function POST(request: NextRequest) {
     const count = parseInt(countResult.rows[0].count) + 1
     const sessionCode = `SESS-${year}-${String(count).padStart(5, '0')}`
 
+    // Ensure denominations columns exist
+    try {
+      await db.query(`ALTER TABLE market_pos_sessions ADD COLUMN IF NOT EXISTS opening_denominations JSONB`)
+      await db.query(`ALTER TABLE market_pos_sessions ADD COLUMN IF NOT EXISTS closing_denominations JSONB`)
+    } catch {
+      // Columns may already exist
+    }
+
     // Create session
     const result = await db.query(`
       INSERT INTO market_pos_sessions (
         company_id, pos_terminal_id, session_code,
         opened_by, opened_at,
         opening_cash_usd, opening_cash_cup, opening_cash_mlc,
-        opening_notes, status, created_at
-      ) VALUES ($1, $2, $3, $4, NOW(), $5, $6, $7, $8, 'open', NOW())
+        opening_notes, opening_denominations, status, created_at
+      ) VALUES ($1, $2, $3, $4, NOW(), $5, $6, $7, $8, $9, 'open', NOW())
       RETURNING id
     `, [
       companyId,
@@ -280,7 +289,8 @@ export async function POST(request: NextRequest) {
       openingCashUsd || 0,
       openingCashCup || 0,
       openingCashMlc || 0,
-      openingNotes || null
+      openingNotes || null,
+      openingDenominations ? JSON.stringify(openingDenominations) : null
     ])
 
     console.log('[POS Sessions] Opened session:', sessionCode, 'Terminal:', terminalId)
