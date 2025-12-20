@@ -37,7 +37,8 @@ import {
   Truck,
   Percent,
   Banknote,
-  Globe
+  Globe,
+  Monitor
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
@@ -472,6 +473,7 @@ export function Sidebar({ isCollapsed, onToggle }: SidebarProps) {
     { icon: Warehouse, label: "Almacenes", href: "/dashboard/market/warehouses" },
     { icon: FileText, label: "Compras", href: "/dashboard/market/purchases" },
     { icon: ShoppingCart, label: "Órdenes Recibidas", href: "/dashboard/market/orders" },
+    { icon: Monitor, label: "Punto de Venta", href: "/dashboard/market/pos" },
     { icon: Wallet, label: "Mi Wallet", href: "/dashboard/market/wallet" },
     { icon: Truck, label: "Entregas", href: "/dashboard/market/deliveries" },
     { icon: Settings, label: "Configuración", href: "/dashboard/market/settings" },
