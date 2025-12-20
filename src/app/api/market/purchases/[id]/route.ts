@@ -211,7 +211,7 @@ export async function PUT(
     const purchaseId = parseInt(id)
 
     const body = await request.json()
-    const { action, lines, receivedItems } = body
+    const { action, lines, receivedItems, warehouseId } = body
 
     // Get current purchase
     const purchaseResult = await db.query(`
@@ -265,6 +265,16 @@ export async function PUT(
           success: false,
           error: 'Solo se pueden recibir compras en estado comprada o pendiente'
         }, { status: 400 })
+      }
+
+      // Use warehouseId from request body if provided, otherwise use the one from purchase
+      const targetWarehouseId = warehouseId || purchase.warehouse_id
+
+      // If warehouse provided, update the purchase with the warehouse_id
+      if (warehouseId && !purchase.warehouse_id) {
+        await db.query(`
+          UPDATE market_purchases SET warehouse_id = $1 WHERE id = $2
+        `, [warehouseId, purchaseId])
       }
 
       await db.transaction(async (client) => {
@@ -324,20 +334,20 @@ export async function PUT(
             `, [
               companyId,
               productId,
-              purchase.warehouse_id,
+              targetWarehouseId,
               quantityToReceive,
               purchaseId,
               userId
             ])
 
             // Update warehouse stock if warehouse is specified
-            if (purchase.warehouse_id) {
+            if (targetWarehouseId) {
               await client.query(`
                 INSERT INTO market_warehouse_stock (warehouse_id, product_id, quantity, created_at, updated_at)
                 VALUES ($1, $2, $3, NOW(), NOW())
                 ON CONFLICT (warehouse_id, product_id)
                 DO UPDATE SET quantity = market_warehouse_stock.quantity + $3, updated_at = NOW()
-              `, [purchase.warehouse_id, productId, quantityToReceive])
+              `, [targetWarehouseId, productId, quantityToReceive])
             }
 
             // Check if line is fully received

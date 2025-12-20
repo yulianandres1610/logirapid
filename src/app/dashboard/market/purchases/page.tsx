@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
@@ -28,7 +28,7 @@ interface Purchase {
   supplierContact: string | null
   totalAmount: number
   currency: string
-  status: 'draft' | 'confirmed' | 'received' | 'cancelled'
+  status: 'draft' | 'confirmed' | 'comprada' | 'pendiente' | 'received' | 'recibido' | 'cancelled'
   purchaseDate: string
   expectedDate: string | null
   createdAt: string
@@ -44,10 +44,13 @@ interface Stats {
   totalReceivedAmount: number
 }
 
-const STATUS_CONFIG = {
+const STATUS_CONFIG: Record<string, { label: string; color: string; icon: React.ElementType }> = {
   draft: { label: 'Borrador', color: 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300', icon: FileText },
   confirmed: { label: 'Confirmada', color: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400', icon: CheckCircle },
+  comprada: { label: 'Comprada', color: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400', icon: CheckCircle },
+  pendiente: { label: 'Pendiente', color: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400', icon: Package },
   received: { label: 'Recibida', color: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400', icon: Package },
+  recibido: { label: 'Recibida', color: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400', icon: Package },
   cancelled: { label: 'Cancelada', color: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400', icon: XCircle }
 }
 
@@ -324,7 +327,8 @@ export default function MarketPurchasesPage() {
                   </thead>
                   <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
                     {filteredPurchases.map((purchase, index) => {
-                      const StatusIcon = STATUS_CONFIG[purchase.status].icon
+                      const statusConfig = STATUS_CONFIG[purchase.status] || STATUS_CONFIG.draft
+                      const StatusIcon = statusConfig.icon
                       return (
                         <motion.tr
                           key={purchase.id}
@@ -367,9 +371,9 @@ export default function MarketPurchasesPage() {
                             </p>
                           </td>
                           <td className="px-4 py-3">
-                            <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium ${STATUS_CONFIG[purchase.status].color}`}>
+                            <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium ${statusConfig.color}`}>
                               <StatusIcon className="w-3.5 h-3.5" />
-                              {STATUS_CONFIG[purchase.status].label}
+                              {statusConfig.label}
                             </span>
                           </td>
                           <td className="px-4 py-3 text-right">
@@ -390,10 +394,9 @@ export default function MarketPurchasesPage() {
                                   <MoreVertical className="w-4 h-4 text-gray-500" />
                                 </button>
                               )}
-                              {purchase.status === 'confirmed' && (
+                              {(purchase.status === 'confirmed' || purchase.status === 'comprada' || purchase.status === 'pendiente') && (
                                 <button
-                                  onClick={() => handleAction(purchase.id, 'receive')}
-                                  disabled={actionLoading}
+                                  onClick={() => router.push(`/dashboard/market/purchases/${purchase.id}/receive`)}
                                   className="px-3 py-1.5 bg-green-600 text-white text-xs rounded-lg hover:opacity-90 transition-colors flex items-center gap-1.5"
                                 >
                                   <Truck className="w-3.5 h-3.5" />
