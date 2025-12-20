@@ -268,12 +268,12 @@ export async function PUT(
       // Get cash payments to calculate expected
       const cashPayments = await db.query(`
         SELECT
-          currency,
-          SUM(amount) as total
+          p.currency,
+          SUM(p.amount) as total
         FROM market_pos_payments p
         JOIN market_pos_orders o ON p.order_id = o.id
         WHERE o.pos_session_id = $1 AND o.status = 'paid' AND p.payment_method = 'cash'
-        GROUP BY currency
+        GROUP BY p.currency
       `, [sessionId])
 
       const cashByurrency: Record<string, number> = {}
