@@ -13,11 +13,14 @@ import {
   AlertCircle,
   Send,
   Copy,
-  Check
+  Check,
+  WifiOff,
+  Clock
 } from 'lucide-react'
 import { useRouter, useParams, useSearchParams } from 'next/navigation'
 import { useTheme } from '@/contexts/theme-context'
 import { cn } from '@/lib/utils'
+import { getPendingOrders } from '@/lib/pos-db'
 
 interface OrderLine {
   id: number
@@ -58,6 +61,8 @@ export default function ReceiptPage() {
   const terminalId = params.terminalId as string
   const orderId = searchParams.get('orderId')
   const orderNumber = searchParams.get('orderNumber')
+  const offlineId = searchParams.get('offlineId')
+  const isOfflineOrder = searchParams.get('offline') === 'true'
 
   // State
   const [order, setOrder] = useState<Order | null>(null)
@@ -67,10 +72,74 @@ export default function ReceiptPage() {
   const [sendingReceipt, setSendingReceipt] = useState(false)
   const [receiptSent, setReceiptSent] = useState(false)
   const [copiedLink, setCopiedLink] = useState(false)
+  const [isOnline, setIsOnline] = useState(true)
 
-  // Fetch order details
+  // Monitor online status
+  useEffect(() => {
+    const handleOnline = () => setIsOnline(true)
+    const handleOffline = () => setIsOnline(false)
+
+    window.addEventListener('online', handleOnline)
+    window.addEventListener('offline', handleOffline)
+    setIsOnline(navigator.onLine)
+
+    return () => {
+      window.removeEventListener('online', handleOnline)
+      window.removeEventListener('offline', handleOffline)
+    }
+  }, [])
+
+  // Fetch order details (online or offline)
   useEffect(() => {
     const fetchOrder = async () => {
+      // OFFLINE ORDER: Load from IndexedDB
+      if (isOfflineOrder && offlineId) {
+        try {
+          const pendingOrders = await getPendingOrders()
+          const offlineOrder = pendingOrders.find(o => o.offlineId === offlineId)
+
+          if (offlineOrder) {
+            // Convert offline order format to Order format
+            const convertedOrder: Order = {
+              id: 0,
+              orderNumber: orderNumber || offlineOrder.offlineId,
+              customerName: offlineOrder.customerName,
+              subtotal: offlineOrder.lines.reduce((sum, l) => sum + (l.quantity * l.unitPrice), 0),
+              discountAmount: offlineOrder.lines.reduce((sum, l) => sum + (l.discountAmount || 0), 0),
+              totalAmount: offlineOrder.total,
+              currency: offlineOrder.currency,
+              status: 'pending_sync',
+              createdAt: offlineOrder.createdAt,
+              createdByName: 'Usuario',
+              lines: offlineOrder.lines.map((l, idx) => ({
+                id: idx,
+                productName: l.productName,
+                productSku: l.productSku || '',
+                quantity: l.quantity,
+                unitPrice: l.unitPrice,
+                discountAmount: l.discountAmount || 0,
+                total: (l.quantity * l.unitPrice) - (l.discountAmount || 0)
+              })),
+              payments: offlineOrder.payments.map(p => ({
+                method: p.method,
+                amount: p.amount,
+                currency: p.currency
+              }))
+            }
+            setOrder(convertedOrder)
+          } else {
+            setError('Orden offline no encontrada')
+          }
+        } catch (e) {
+          console.error('Error loading offline order:', e)
+          setError('Error al cargar orden offline')
+        } finally {
+          setLoading(false)
+        }
+        return
+      }
+
+      // ONLINE ORDER: Fetch from API
       if (!orderId) {
         setError('ID de orden no especificado')
         setLoading(false)
@@ -95,7 +164,7 @@ export default function ReceiptPage() {
     }
 
     fetchOrder()
-  }, [orderId])
+  }, [orderId, offlineId, isOfflineOrder, orderNumber])
 
   // Format currency
   const formatCurrency = (amount: number) => {
@@ -314,6 +383,21 @@ ${order.payments.map(p =>
         >
           Orden #{order?.orderNumber}
         </motion.p>
+
+        {/* Offline Order Badge */}
+        {isOfflineOrder && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 0.4 }}
+            className="mt-4 inline-flex items-center gap-2 px-4 py-2 rounded-full bg-yellow-500/10 border border-yellow-500/30"
+          >
+            <Clock className="w-4 h-4 text-yellow-500" />
+            <span className="text-sm text-yellow-600 dark:text-yellow-400">
+              Pendiente de sincronizar
+            </span>
+          </motion.div>
+        )}
       </div>
 
       <div className="flex-1 overflow-auto px-4 pb-4">
@@ -407,6 +491,16 @@ ${order.payments.map(p =>
           >
             <h2 className="text-lg font-semibold mb-4">Enviar Recibo</h2>
 
+            {/* Offline Warning */}
+            {!isOnline && (
+              <div className="mb-4 p-3 rounded-lg bg-yellow-500/10 border border-yellow-500/30 flex items-center gap-2">
+                <WifiOff className="w-5 h-5 text-yellow-500" />
+                <span className="text-sm text-yellow-600 dark:text-yellow-400">
+                  Sin conexión. El envío de recibos no está disponible.
+                </span>
+              </div>
+            )}
+
             <div className="mb-4">
               <label className="text-sm text-gray-500 mb-2 block">Teléfono del cliente</label>
               <div className="flex gap-2">
@@ -415,8 +509,10 @@ ${order.payments.map(p =>
                   value={phoneNumber}
                   onChange={(e) => setPhoneNumber(e.target.value)}
                   placeholder="+53 5XXXXXXX"
+                  disabled={!isOnline}
                   className={cn(
                     'flex-1 px-4 py-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500',
+                    !isOnline && 'opacity-50 cursor-not-allowed',
                     theme === 'dark'
                       ? 'bg-gray-700 text-white placeholder-gray-400'
                       : 'bg-gray-100 text-gray-900 placeholder-gray-500'
@@ -428,10 +524,10 @@ ${order.payments.map(p =>
             <div className="grid grid-cols-2 gap-3">
               <button
                 onClick={sendSMS}
-                disabled={!phoneNumber || sendingReceipt}
+                disabled={!phoneNumber || sendingReceipt || !isOnline}
                 className={cn(
                   'p-4 rounded-lg flex items-center justify-center gap-2 font-medium transition-all',
-                  phoneNumber && !sendingReceipt
+                  phoneNumber && !sendingReceipt && isOnline
                     ? 'bg-blue-500 text-white hover:bg-blue-600'
                     : 'bg-gray-300 text-gray-500 cursor-not-allowed'
                 )}
@@ -446,10 +542,10 @@ ${order.payments.map(p =>
 
               <button
                 onClick={sendWhatsApp}
-                disabled={!phoneNumber}
+                disabled={!phoneNumber || !isOnline}
                 className={cn(
                   'p-4 rounded-lg flex items-center justify-center gap-2 font-medium transition-all',
-                  phoneNumber
+                  phoneNumber && isOnline
                     ? 'bg-green-500 text-white hover:bg-green-600'
                     : 'bg-gray-300 text-gray-500 cursor-not-allowed'
                 )}

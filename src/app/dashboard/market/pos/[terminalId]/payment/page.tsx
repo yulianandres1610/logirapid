@@ -15,11 +15,14 @@ import {
   Loader2,
   AlertCircle,
   Calculator,
-  RefreshCw
+  RefreshCw,
+  WifiOff,
+  Wifi
 } from 'lucide-react'
 import { useRouter, useParams, useSearchParams } from 'next/navigation'
 import { useTheme } from '@/contexts/theme-context'
 import { cn } from '@/lib/utils'
+import { generateOfflineId, savePendingOrder } from '@/lib/pos-db'
 
 interface CartItem {
   productId: number
@@ -89,6 +92,22 @@ export default function PaymentPage() {
   const [rates, setRates] = useState<ExchangeRates>(DEFAULT_RATES)
   const [processing, setProcessing] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [isOnline, setIsOnline] = useState(true)
+
+  // Monitor online status
+  useEffect(() => {
+    const handleOnline = () => setIsOnline(true)
+    const handleOffline = () => setIsOnline(false)
+
+    window.addEventListener('online', handleOnline)
+    window.addEventListener('offline', handleOffline)
+    setIsOnline(navigator.onLine)
+
+    return () => {
+      window.removeEventListener('online', handleOnline)
+      window.removeEventListener('offline', handleOffline)
+    }
+  }, [])
 
   // Parse cart data on mount
   useEffect(() => {
@@ -211,28 +230,61 @@ export default function PaymentPage() {
     setError(null)
 
     try {
+      const orderLines = cart.map(item => ({
+        productId: item.productId,
+        productName: item.productName,
+        productSku: item.productSku,
+        quantity: item.quantity,
+        unitPrice: item.unitPrice,
+        discountPercent: item.discountPercent,
+        discountAmount: item.discountAmount
+      }))
+
+      const orderPayments = payments.map(p => ({
+        method: p.method,
+        amount: p.amountInUSD,
+        currency: p.currency,
+        amountTendered: p.method === 'cash' ? p.amount : null,
+        changeAmount: changeAmount > 0 ? (changeCurrency === 'USD' ? changeAmount : changeAmount / rates.CUP) : null,
+        reference: p.reference
+      }))
+
+      // OFFLINE MODE: Save to IndexedDB
+      if (!isOnline) {
+        console.log('[Payment] Offline mode - saving to IndexedDB')
+
+        const offlineId = generateOfflineId()
+        const offlineOrder = {
+          offlineId,
+          terminalId: parseInt(terminalId),
+          sessionId: parseInt(sessionId),
+          warehouseId: warehouseId ? parseInt(warehouseId) : null,
+          customerId: null,
+          customerName: null,
+          currency: 'USD',
+          lines: orderLines,
+          payments: orderPayments,
+          total: totals.total,
+          createdAt: new Date().toISOString(),
+          synced: false
+        }
+
+        await savePendingOrder(offlineOrder)
+
+        // Navigate to receipt with offline ID
+        const offlineOrderNumber = `OFFLINE-${Date.now().toString(36).toUpperCase()}`
+        router.push(`/dashboard/market/pos/${terminalId}/receipt?offlineId=${offlineId}&orderNumber=${offlineOrderNumber}&offline=true`)
+        return
+      }
+
+      // ONLINE MODE: Send to API
       const orderData = {
         sessionId: parseInt(sessionId),
         terminalId: parseInt(terminalId),
         warehouseId: warehouseId ? parseInt(warehouseId) : null,
         currency: 'USD',
-        lines: cart.map(item => ({
-          productId: item.productId,
-          productName: item.productName,
-          productSku: item.productSku,
-          quantity: item.quantity,
-          unitPrice: item.unitPrice,
-          discountPercent: item.discountPercent,
-          discountAmount: item.discountAmount
-        })),
-        payments: payments.map(p => ({
-          method: p.method,
-          amount: p.amountInUSD,
-          currency: p.currency,
-          amountTendered: p.method === 'cash' ? p.amount : null,
-          changeAmount: changeAmount > 0 ? (changeCurrency === 'USD' ? changeAmount : changeAmount / rates.CUP) : null,
-          reference: p.reference
-        }))
+        lines: orderLines,
+        payments: orderPayments
       }
 
       const response = await fetch('/api/market/pos/orders', {
@@ -251,7 +303,12 @@ export default function PaymentPage() {
       }
     } catch (e) {
       console.error('Error processing payment:', e)
-      setError('Error de conexión')
+      // If error and offline, try to save offline
+      if (!navigator.onLine) {
+        setError('Sin conexión. La orden se guardará localmente.')
+      } else {
+        setError('Error de conexión')
+      }
     } finally {
       setProcessing(false)
     }
@@ -322,7 +379,19 @@ export default function PaymentPage() {
           <span>Volver al POS</span>
         </button>
         <h1 className="text-lg font-semibold">Cobrar</h1>
-        <div className="w-24" />
+        <div className="w-24 flex items-center justify-end">
+          {isOnline ? (
+            <div className="flex items-center gap-1 text-green-500">
+              <Wifi className="w-4 h-4" />
+              <span className="text-xs">Online</span>
+            </div>
+          ) : (
+            <div className="flex items-center gap-1 text-yellow-500">
+              <WifiOff className="w-4 h-4" />
+              <span className="text-xs">Offline</span>
+            </div>
+          )}
+        </div>
       </header>
 
       <div className="flex-1 overflow-auto p-4">
@@ -466,23 +535,39 @@ export default function PaymentPage() {
             >
               <h2 className="text-lg font-semibold mb-4">Agregar Pago</h2>
 
+              {/* Offline Warning */}
+              {!isOnline && (
+                <div className="mb-4 p-3 rounded-lg bg-yellow-500/10 border border-yellow-500/30 flex items-center gap-2">
+                  <WifiOff className="w-5 h-5 text-yellow-500" />
+                  <div className="text-sm">
+                    <span className="font-medium text-yellow-500">Modo Offline</span>
+                    <span className="text-gray-500 ml-2">Solo efectivo disponible. Se sincronizará al reconectar.</span>
+                  </div>
+                </div>
+              )}
+
               {/* Payment Method */}
               <div className="mb-4">
                 <label className="text-sm text-gray-500 mb-2 block">Método de Pago</label>
                 <div className="grid grid-cols-4 gap-2">
                   {PAYMENT_METHODS.map((method) => {
                     const Icon = method.icon
+                    // Disable card and transfer when offline
+                    const isDisabled = !isOnline && (method.id === 'card' || method.id === 'transfer')
                     return (
                       <button
                         key={method.id}
-                        onClick={() => setSelectedMethod(method.id as Payment['method'])}
+                        onClick={() => !isDisabled && setSelectedMethod(method.id as Payment['method'])}
+                        disabled={isDisabled}
                         className={cn(
                           'p-3 rounded-lg flex flex-col items-center gap-1 transition-all',
-                          selectedMethod === method.id
-                            ? 'bg-blue-500 text-white'
-                            : theme === 'dark'
-                              ? 'bg-gray-700 hover:bg-gray-600'
-                              : 'bg-gray-100 hover:bg-gray-200'
+                          isDisabled
+                            ? 'bg-gray-300 dark:bg-gray-700 text-gray-400 cursor-not-allowed opacity-50'
+                            : selectedMethod === method.id
+                              ? 'bg-blue-500 text-white'
+                              : theme === 'dark'
+                                ? 'bg-gray-700 hover:bg-gray-600'
+                                : 'bg-gray-100 hover:bg-gray-200'
                         )}
                       >
                         <Icon className="w-5 h-5" />

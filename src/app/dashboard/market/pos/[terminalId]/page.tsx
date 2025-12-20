@@ -37,6 +37,14 @@ import { useRouter, useParams, useSearchParams } from 'next/navigation'
 import { useTheme } from '@/contexts/theme-context'
 import { useAuth } from '@/hooks/useAuth'
 import { cn } from '@/lib/utils'
+import {
+  saveProducts,
+  saveCategories,
+  getProducts as getCachedProducts,
+  getCategories as getCachedCategories,
+  getUnsyncedOrders
+} from '@/lib/pos-db'
+import { usePOSOffline } from '@/hooks/usePOSOffline'
 
 interface Product {
   id: number
@@ -124,48 +132,129 @@ export default function POSTerminalPage() {
   const [showPaymentModal, setShowPaymentModal] = useState(false)
   const [showCloseSessionModal, setShowCloseSessionModal] = useState(false)
   const [processingPayment, setProcessingPayment] = useState(false)
+  const [pendingOrdersCount, setPendingOrdersCount] = useState(0)
+  const [isSyncing, setIsSyncing] = useState(false)
 
   // Payment state
   const [paymentMethod, setPaymentMethod] = useState<string>('cash')
   const [paymentCurrency, setPaymentCurrency] = useState<string>('USD')
   const [amountTendered, setAmountTendered] = useState<string>('')
 
-  // Fetch terminal, session and products
+  // Fetch terminal, session and products (with offline support)
   useEffect(() => {
     const fetchData = async () => {
       setLoading(true)
       try {
-        // Fetch products with terminal config
-        const productsRes = await fetch(`/api/market/pos/products?terminalId=${terminalId}`)
-        const productsData = await productsRes.json()
+        // Check if online
+        if (navigator.onLine) {
+          // ONLINE: Fetch from API and cache
+          const productsRes = await fetch(`/api/market/pos/products?terminalId=${terminalId}`)
+          const productsData = await productsRes.json()
 
-        if (!productsData.success) {
-          throw new Error(productsData.error || 'Error loading products')
-        }
+          if (!productsData.success) {
+            throw new Error(productsData.error || 'Error loading products')
+          }
 
-        setProducts(productsData.data.products)
-        setCategories(productsData.data.categories)
-        setTerminal(productsData.data.terminal)
+          setProducts(productsData.data.products)
+          setCategories(productsData.data.categories)
+          setTerminal(productsData.data.terminal)
 
-        // Check for open session
-        const sessionsRes = await fetch(`/api/market/pos/sessions?terminalId=${terminalId}&status=open`)
-        const sessionsData = await sessionsRes.json()
+          // Cache products and categories for offline use
+          try {
+            await saveProducts(productsData.data.products)
+            await saveCategories(productsData.data.categories)
+            console.log('[POS] Products and categories cached for offline use')
+          } catch (cacheError) {
+            console.error('[POS] Error caching products:', cacheError)
+          }
 
-        if (sessionsData.success && sessionsData.data.sessions.length > 0) {
-          const openSession = sessionsData.data.sessions[0]
-          setSession({
-            id: openSession.id,
-            sessionCode: openSession.sessionCode,
-            openedAt: openSession.openedAt,
-            openingCash: openSession.openingCash
-          })
-          setPaymentCurrency(productsData.data.terminal?.defaultCurrency || 'USD')
+          // Check for open session
+          const sessionsRes = await fetch(`/api/market/pos/sessions?terminalId=${terminalId}&status=open`)
+          const sessionsData = await sessionsRes.json()
+
+          if (sessionsData.success && sessionsData.data.sessions.length > 0) {
+            const openSession = sessionsData.data.sessions[0]
+            setSession({
+              id: openSession.id,
+              sessionCode: openSession.sessionCode,
+              openedAt: openSession.openedAt,
+              openingCash: openSession.openingCash
+            })
+            setPaymentCurrency(productsData.data.terminal?.defaultCurrency || 'USD')
+          } else {
+            // No open session, redirect back
+            router.push('/dashboard/market/pos')
+          }
         } else {
-          // No open session, redirect back
-          router.push('/dashboard/market/pos')
+          // OFFLINE: Load from cache
+          console.log('[POS] Offline mode - loading from cache')
+          const cachedProducts = await getCachedProducts()
+          const cachedCategories = await getCachedCategories()
+
+          if (cachedProducts.length > 0) {
+            // Convert cached format to Product format
+            setProducts(cachedProducts.map(p => ({
+              id: p.id,
+              name: p.name,
+              description: '',
+              sku: p.sku,
+              barcode: p.barcode,
+              categoryId: p.categoryId,
+              unit: 'unit',
+              basePrice: p.price,
+              price: p.price,
+              costPrice: 0,
+              taxRate: 0,
+              imageUrl: p.imageUrl,
+              stock: p.stock,
+              trackInventory: p.trackInventory
+            })))
+            setCategories(cachedCategories.map(c => ({
+              id: c.id,
+              name: c.name,
+              parentId: c.parentId,
+              icon: null,
+              color: null
+            })))
+            // Use cached session info - get from localStorage if available
+            const cachedSession = localStorage.getItem('pos_session')
+            if (cachedSession) {
+              try {
+                setSession(JSON.parse(cachedSession))
+              } catch {
+                setError('No hay sesión activa guardada. Conéctate a internet para abrir una sesión.')
+              }
+            } else {
+              setError('No hay sesión activa guardada. Conéctate a internet para abrir una sesión.')
+            }
+          } else {
+            setError('No hay productos en caché. Conéctate a internet para cargar productos.')
+          }
         }
 
       } catch (err) {
+        // Try loading from cache on error
+        if (!navigator.onLine) {
+          const cachedProducts = await getCachedProducts()
+          if (cachedProducts.length > 0) {
+            setProducts(cachedProducts.map(p => ({
+              id: p.id,
+              name: p.name,
+              description: '',
+              sku: p.sku,
+              barcode: p.barcode,
+              categoryId: p.categoryId,
+              unit: 'unit',
+              basePrice: p.price,
+              price: p.price,
+              costPrice: 0,
+              taxRate: 0,
+              imageUrl: p.imageUrl,
+              stock: p.stock,
+              trackInventory: p.trackInventory
+            })))
+          }
+        }
         setError(err instanceof Error ? err.message : 'Error loading POS')
       } finally {
         setLoading(false)
@@ -174,6 +263,13 @@ export default function POSTerminalPage() {
 
     fetchData()
   }, [terminalId, router])
+
+  // Cache session info when it changes
+  useEffect(() => {
+    if (session) {
+      localStorage.setItem('pos_session', JSON.stringify(session))
+    }
+  }, [session])
 
   // Restore cart from URL params (when returning from payment page)
   useEffect(() => {
@@ -208,18 +304,76 @@ export default function POSTerminalPage() {
     }
   }, [searchParams, products, terminalId, router])
 
-  // Online status
+  // Online status and pending orders
   useEffect(() => {
-    const handleOnline = () => setIsOnline(true)
+    const handleOnline = () => {
+      setIsOnline(true)
+      // Try to sync when back online
+      syncPendingOrders()
+    }
     const handleOffline = () => setIsOnline(false)
     window.addEventListener('online', handleOnline)
     window.addEventListener('offline', handleOffline)
     setIsOnline(navigator.onLine)
+
+    // Load pending orders count
+    loadPendingOrdersCount()
+
     return () => {
       window.removeEventListener('online', handleOnline)
       window.removeEventListener('offline', handleOffline)
     }
   }, [])
+
+  // Load pending orders count from IndexedDB
+  const loadPendingOrdersCount = async () => {
+    try {
+      const unsyncedOrders = await getUnsyncedOrders()
+      const sessionOrders = session ? unsyncedOrders.filter(o => o.sessionId === session.id) : unsyncedOrders
+      setPendingOrdersCount(sessionOrders.length)
+    } catch (e) {
+      console.error('[POS] Error loading pending orders count:', e)
+    }
+  }
+
+  // Sync pending orders to server
+  const syncPendingOrders = async () => {
+    if (!isOnline || !session || isSyncing) return
+
+    setIsSyncing(true)
+    try {
+      const unsyncedOrders = await getUnsyncedOrders()
+      const sessionOrders = unsyncedOrders.filter(o => o.sessionId === session.id)
+
+      if (sessionOrders.length === 0) {
+        setIsSyncing(false)
+        return
+      }
+
+      console.log(`[POS] Syncing ${sessionOrders.length} pending orders...`)
+
+      const response = await fetch('/api/market/pos/sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          sessionId: session.id,
+          orders: sessionOrders
+        })
+      })
+
+      const data = await response.json()
+
+      if (data.success) {
+        console.log('[POS] Sync completed:', data.data)
+        // Reload pending count after sync
+        loadPendingOrdersCount()
+      }
+    } catch (e) {
+      console.error('[POS] Error syncing orders:', e)
+    } finally {
+      setIsSyncing(false)
+    }
+  }
 
   // Fullscreen handling
   useEffect(() => {
@@ -505,7 +659,26 @@ export default function POSTerminalPage() {
           )}>
             {isOnline ? <Wifi className="w-4 h-4" /> : <WifiOff className="w-4 h-4" />}
             {isOnline ? 'Online' : 'Offline'}
+            {isSyncing && <Loader2 className="w-3 h-3 animate-spin" />}
           </div>
+
+          {/* Pending Orders Badge */}
+          {pendingOrdersCount > 0 && (
+            <button
+              onClick={syncPendingOrders}
+              disabled={!isOnline || isSyncing}
+              className={cn(
+                'flex items-center gap-2 px-3 py-1.5 rounded-full text-sm transition-all',
+                isOnline
+                  ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400 hover:bg-yellow-200 dark:hover:bg-yellow-900/50'
+                  : 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400 cursor-not-allowed'
+              )}
+            >
+              <Clock className="w-4 h-4" />
+              {pendingOrdersCount} pendiente{pendingOrdersCount !== 1 ? 's' : ''}
+              {isOnline && !isSyncing && <span className="text-xs">(Sincronizar)</span>}
+            </button>
+          )}
 
           {/* Time */}
           <div className="flex items-center gap-2 text-gray-500">
