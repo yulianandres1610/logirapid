@@ -387,14 +387,24 @@ export async function PUT(
         const newStatus = allReceived ? 'recibido' : 'pendiente'
 
         // Update purchase status
-        await client.query(`
-          UPDATE market_purchases
-          SET status = $1,
-              received_by = $2,
-              received_date = CASE WHEN $1 = 'recibido' THEN CURRENT_DATE ELSE received_date END,
-              updated_at = NOW()
-          WHERE id = $3
-        `, [newStatus, userId, purchaseId])
+        if (newStatus === 'recibido') {
+          await client.query(`
+            UPDATE market_purchases
+            SET status = $1,
+                received_by = $2,
+                received_date = CURRENT_DATE,
+                updated_at = NOW()
+            WHERE id = $3
+          `, [newStatus, userId, purchaseId])
+        } else {
+          await client.query(`
+            UPDATE market_purchases
+            SET status = $1,
+                received_by = $2,
+                updated_at = NOW()
+            WHERE id = $3
+          `, [newStatus, userId, purchaseId])
+        }
 
         console.log('[Market Purchase] Reception:', purchaseId, 'new status:', newStatus)
       })
