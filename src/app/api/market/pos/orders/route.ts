@@ -402,11 +402,11 @@ export async function POST(request: NextRequest) {
         await db.query(`
           INSERT INTO market_inventory_movements (
             product_id, company_id, movement_type, quantity,
-            quantity_before, quantity_after, reference, notes, created_at
+            quantity_before, quantity_after, reference_type, reference_id, notes, created_at
           )
-          SELECT $1, company_id, 'sale', $2, $3, $4, $5, 'Venta POS', NOW()
+          SELECT $1, company_id, 'sale_out', $2, $3, $4, 'pos_order', $5, $6, NOW()
           FROM market_products WHERE id = $1
-        `, [line.productId, -quantityToReduce, quantityBefore, quantityAfter, orderNumber])
+        `, [line.productId, -quantityToReduce, quantityBefore, quantityAfter, orderId, `Venta POS: ${orderNumber}`])
       }
     }
 
