@@ -308,7 +308,14 @@ export default function PaymentPage() {
         theme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'
       )}>
         <button
-          onClick={() => router.back()}
+          onClick={() => {
+            // Navigate back to POS with cart data preserved
+            const cartParams = new URLSearchParams({
+              restoreCart: encodeURIComponent(JSON.stringify(cart)),
+              sessionId: sessionId || ''
+            })
+            router.push(`/dashboard/market/pos/${terminalId}?${cartParams.toString()}`)
+          }}
           className="flex items-center gap-2 text-gray-500 hover:text-gray-700"
         >
           <ChevronLeft className="w-5 h-5" />

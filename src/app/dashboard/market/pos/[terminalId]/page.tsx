@@ -33,7 +33,7 @@ import {
   Printer,
   ChevronLeft
 } from 'lucide-react'
-import { useRouter, useParams } from 'next/navigation'
+import { useRouter, useParams, useSearchParams } from 'next/navigation'
 import { useTheme } from '@/contexts/theme-context'
 import { useAuth } from '@/hooks/useAuth'
 import { cn } from '@/lib/utils'
@@ -99,6 +99,7 @@ export default function POSTerminalPage() {
   const { user } = useAuth()
   const router = useRouter()
   const params = useParams()
+  const searchParams = useSearchParams()
   const terminalId = params.terminalId as string
 
   // Data state
@@ -173,6 +174,39 @@ export default function POSTerminalPage() {
 
     fetchData()
   }, [terminalId, router])
+
+  // Restore cart from URL params (when returning from payment page)
+  useEffect(() => {
+    const restoreCartData = searchParams.get('restoreCart')
+    if (restoreCartData && products.length > 0) {
+      try {
+        const cartItems = JSON.parse(decodeURIComponent(restoreCartData))
+        const restoredCart: CartItem[] = []
+
+        for (const item of cartItems) {
+          const product = products.find(p => p.id === item.productId)
+          if (product) {
+            restoredCart.push({
+              product,
+              quantity: item.quantity,
+              unitPrice: item.unitPrice,
+              discountPercent: item.discountPercent,
+              discountAmount: item.discountAmount,
+              total: item.total
+            })
+          }
+        }
+
+        if (restoredCart.length > 0) {
+          setCart(restoredCart)
+          // Clear the URL params to avoid restoring again on refresh
+          router.replace(`/dashboard/market/pos/${terminalId}`, { scroll: false })
+        }
+      } catch (e) {
+        console.error('Error restoring cart:', e)
+      }
+    }
+  }, [searchParams, products, terminalId, router])
 
   // Online status
   useEffect(() => {
