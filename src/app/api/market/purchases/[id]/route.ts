@@ -353,10 +353,10 @@ export async function PUT(
             // Update warehouse stock if warehouse is specified
             if (targetWarehouseId) {
               await client.query(`
-                INSERT INTO market_warehouse_stock (warehouse_id, product_id, quantity, created_at, updated_at)
+                INSERT INTO market_warehouse_stock (warehouse_id, product_id, quantity_on_hand, created_at, updated_at)
                 VALUES ($1, $2, $3, NOW(), NOW())
                 ON CONFLICT (warehouse_id, product_id)
-                DO UPDATE SET quantity = market_warehouse_stock.quantity + $3, updated_at = NOW()
+                DO UPDATE SET quantity_on_hand = market_warehouse_stock.quantity_on_hand + $3, updated_at = NOW()
               `, [targetWarehouseId, productId, quantityToReceive])
             }
 
