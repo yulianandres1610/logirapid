@@ -759,6 +759,273 @@ export async function POST() {
       }
     }
 
+    // ========================================
+    // POINT OF SALE (POS) TABLES
+    // ========================================
+
+    // 20. Create market_pricelists table
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS market_pricelists (
+        id SERIAL PRIMARY KEY,
+        company_id INTEGER NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+        name VARCHAR(255) NOT NULL,
+        code VARCHAR(50),
+        type VARCHAR(20) DEFAULT 'fixed',
+        currency VARCHAR(10) DEFAULT 'USD',
+        valid_from DATE,
+        valid_until DATE,
+        is_active BOOLEAN DEFAULT true,
+        is_default BOOLEAN DEFAULT false,
+        created_at TIMESTAMP DEFAULT NOW(),
+        updated_at TIMESTAMP DEFAULT NOW()
+      )
+    `)
+    console.log('[Migration] Created market_pricelists table')
+
+    await db.query(`
+      CREATE INDEX IF NOT EXISTS idx_market_pricelists_company ON market_pricelists(company_id)
+    `)
+
+    // 21. Create market_pricelist_items table
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS market_pricelist_items (
+        id SERIAL PRIMARY KEY,
+        pricelist_id INTEGER NOT NULL REFERENCES market_pricelists(id) ON DELETE CASCADE,
+        product_id INTEGER REFERENCES market_products(id),
+        category_id INTEGER,
+        price_type VARCHAR(20) DEFAULT 'fixed',
+        fixed_price DECIMAL(12,2),
+        discount_percent DECIMAL(5,2),
+        discount_amount DECIMAL(12,2),
+        min_quantity INTEGER DEFAULT 1,
+        created_at TIMESTAMP DEFAULT NOW()
+      )
+    `)
+    console.log('[Migration] Created market_pricelist_items table')
+
+    await db.query(`
+      CREATE INDEX IF NOT EXISTS idx_pricelist_items_pricelist ON market_pricelist_items(pricelist_id)
+    `)
+
+    // 22. Create market_pos_terminals table
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS market_pos_terminals (
+        id SERIAL PRIMARY KEY,
+        company_id INTEGER NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+        code VARCHAR(50) NOT NULL,
+        name VARCHAR(255) NOT NULL,
+        warehouse_id INTEGER REFERENCES market_warehouses(id),
+        pricelist_id INTEGER REFERENCES market_pricelists(id),
+        allow_price_edit BOOLEAN DEFAULT false,
+        allow_discount BOOLEAN DEFAULT true,
+        max_discount_percent DECIMAL(5,2) DEFAULT 100,
+        require_customer BOOLEAN DEFAULT false,
+        default_currency VARCHAR(10) DEFAULT 'USD',
+        accepted_currencies TEXT[] DEFAULT '{"USD","CUP","MLC"}',
+        is_active BOOLEAN DEFAULT true,
+        created_by INTEGER REFERENCES users(id),
+        created_at TIMESTAMP DEFAULT NOW(),
+        updated_at TIMESTAMP DEFAULT NOW(),
+        UNIQUE(company_id, code)
+      )
+    `)
+    console.log('[Migration] Created market_pos_terminals table')
+
+    await db.query(`
+      CREATE INDEX IF NOT EXISTS idx_pos_terminals_company ON market_pos_terminals(company_id)
+    `)
+    await db.query(`
+      CREATE INDEX IF NOT EXISTS idx_pos_terminals_warehouse ON market_pos_terminals(warehouse_id)
+    `)
+
+    // 23. Create market_pos_users table
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS market_pos_users (
+        id SERIAL PRIMARY KEY,
+        pos_terminal_id INTEGER NOT NULL REFERENCES market_pos_terminals(id) ON DELETE CASCADE,
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        can_open_session BOOLEAN DEFAULT true,
+        can_close_session BOOLEAN DEFAULT true,
+        can_void_orders BOOLEAN DEFAULT false,
+        can_give_discount BOOLEAN DEFAULT true,
+        can_refund BOOLEAN DEFAULT false,
+        created_at TIMESTAMP DEFAULT NOW(),
+        UNIQUE(pos_terminal_id, user_id)
+      )
+    `)
+    console.log('[Migration] Created market_pos_users table')
+
+    await db.query(`
+      CREATE INDEX IF NOT EXISTS idx_pos_users_terminal ON market_pos_users(pos_terminal_id)
+    `)
+    await db.query(`
+      CREATE INDEX IF NOT EXISTS idx_pos_users_user ON market_pos_users(user_id)
+    `)
+
+    // 24. Create market_pos_sessions table
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS market_pos_sessions (
+        id SERIAL PRIMARY KEY,
+        company_id INTEGER NOT NULL REFERENCES companies(id),
+        pos_terminal_id INTEGER NOT NULL REFERENCES market_pos_terminals(id),
+        session_code VARCHAR(50),
+        opened_by INTEGER REFERENCES users(id),
+        closed_by INTEGER REFERENCES users(id),
+        opened_at TIMESTAMP DEFAULT NOW(),
+        closed_at TIMESTAMP,
+        opening_cash_usd DECIMAL(12,2) DEFAULT 0,
+        opening_cash_cup DECIMAL(12,2) DEFAULT 0,
+        opening_cash_mlc DECIMAL(12,2) DEFAULT 0,
+        closing_cash_usd DECIMAL(12,2),
+        closing_cash_cup DECIMAL(12,2),
+        closing_cash_mlc DECIMAL(12,2),
+        total_sales DECIMAL(12,2) DEFAULT 0,
+        total_refunds DECIMAL(12,2) DEFAULT 0,
+        total_orders INTEGER DEFAULT 0,
+        cash_difference DECIMAL(12,2),
+        status VARCHAR(20) DEFAULT 'open',
+        opening_notes TEXT,
+        closing_notes TEXT,
+        created_at TIMESTAMP DEFAULT NOW()
+      )
+    `)
+    console.log('[Migration] Created market_pos_sessions table')
+
+    await db.query(`
+      CREATE INDEX IF NOT EXISTS idx_pos_sessions_terminal ON market_pos_sessions(pos_terminal_id)
+    `)
+    await db.query(`
+      CREATE INDEX IF NOT EXISTS idx_pos_sessions_status ON market_pos_sessions(status)
+    `)
+    await db.query(`
+      CREATE INDEX IF NOT EXISTS idx_pos_sessions_company ON market_pos_sessions(company_id)
+    `)
+
+    // 25. Create market_pos_orders table
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS market_pos_orders (
+        id SERIAL PRIMARY KEY,
+        company_id INTEGER NOT NULL REFERENCES companies(id),
+        pos_session_id INTEGER REFERENCES market_pos_sessions(id),
+        pos_terminal_id INTEGER NOT NULL REFERENCES market_pos_terminals(id),
+        warehouse_id INTEGER REFERENCES market_warehouses(id),
+        order_number VARCHAR(50),
+        customer_id INTEGER,
+        customer_name VARCHAR(255),
+        subtotal DECIMAL(12,2) DEFAULT 0,
+        discount_amount DECIMAL(12,2) DEFAULT 0,
+        tax_amount DECIMAL(12,2) DEFAULT 0,
+        total_amount DECIMAL(12,2) DEFAULT 0,
+        currency VARCHAR(10) DEFAULT 'USD',
+        status VARCHAR(20) DEFAULT 'draft',
+        offline_id VARCHAR(100),
+        synced_at TIMESTAMP,
+        created_by INTEGER REFERENCES users(id),
+        created_at TIMESTAMP DEFAULT NOW(),
+        updated_at TIMESTAMP DEFAULT NOW()
+      )
+    `)
+    console.log('[Migration] Created market_pos_orders table')
+
+    await db.query(`
+      CREATE INDEX IF NOT EXISTS idx_pos_orders_session ON market_pos_orders(pos_session_id)
+    `)
+    await db.query(`
+      CREATE INDEX IF NOT EXISTS idx_pos_orders_status ON market_pos_orders(status)
+    `)
+    await db.query(`
+      CREATE INDEX IF NOT EXISTS idx_pos_orders_offline ON market_pos_orders(offline_id)
+    `)
+    await db.query(`
+      CREATE INDEX IF NOT EXISTS idx_pos_orders_terminal ON market_pos_orders(pos_terminal_id)
+    `)
+
+    // 26. Create market_pos_order_lines table
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS market_pos_order_lines (
+        id SERIAL PRIMARY KEY,
+        order_id INTEGER NOT NULL REFERENCES market_pos_orders(id) ON DELETE CASCADE,
+        product_id INTEGER REFERENCES market_products(id),
+        product_name VARCHAR(255),
+        product_sku VARCHAR(100),
+        quantity DECIMAL(12,3) DEFAULT 1,
+        unit_price DECIMAL(12,2),
+        discount_percent DECIMAL(5,2) DEFAULT 0,
+        discount_amount DECIMAL(12,2) DEFAULT 0,
+        subtotal DECIMAL(12,2),
+        tax_amount DECIMAL(12,2) DEFAULT 0,
+        total DECIMAL(12,2),
+        promotion_id INTEGER,
+        promotion_name VARCHAR(255),
+        created_at TIMESTAMP DEFAULT NOW()
+      )
+    `)
+    console.log('[Migration] Created market_pos_order_lines table')
+
+    await db.query(`
+      CREATE INDEX IF NOT EXISTS idx_pos_order_lines_order ON market_pos_order_lines(order_id)
+    `)
+
+    // 27. Create market_pos_payments table
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS market_pos_payments (
+        id SERIAL PRIMARY KEY,
+        order_id INTEGER NOT NULL REFERENCES market_pos_orders(id) ON DELETE CASCADE,
+        payment_method VARCHAR(50),
+        amount DECIMAL(12,2),
+        currency VARCHAR(10) DEFAULT 'USD',
+        amount_tendered DECIMAL(12,2),
+        change_amount DECIMAL(12,2),
+        reference VARCHAR(100),
+        created_at TIMESTAMP DEFAULT NOW()
+      )
+    `)
+    console.log('[Migration] Created market_pos_payments table')
+
+    await db.query(`
+      CREATE INDEX IF NOT EXISTS idx_pos_payments_order ON market_pos_payments(order_id)
+    `)
+
+    // 28. Create market_promotions table
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS market_promotions (
+        id SERIAL PRIMARY KEY,
+        company_id INTEGER NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+        name VARCHAR(255) NOT NULL,
+        code VARCHAR(50),
+        type VARCHAR(50),
+        discount_percent DECIMAL(5,2),
+        discount_amount DECIMAL(12,2),
+        min_quantity INTEGER,
+        min_amount DECIMAL(12,2),
+        buy_quantity INTEGER,
+        get_quantity INTEGER,
+        applies_to VARCHAR(50),
+        product_ids INTEGER[],
+        category_ids INTEGER[],
+        pos_terminal_ids INTEGER[],
+        valid_from TIMESTAMP,
+        valid_until TIMESTAMP,
+        max_uses INTEGER,
+        current_uses INTEGER DEFAULT 0,
+        max_uses_per_customer INTEGER,
+        is_active BOOLEAN DEFAULT true,
+        created_at TIMESTAMP DEFAULT NOW(),
+        updated_at TIMESTAMP DEFAULT NOW()
+      )
+    `)
+    console.log('[Migration] Created market_promotions table')
+
+    await db.query(`
+      CREATE INDEX IF NOT EXISTS idx_promotions_company ON market_promotions(company_id)
+    `)
+    await db.query(`
+      CREATE INDEX IF NOT EXISTS idx_promotions_active ON market_promotions(is_active, valid_from, valid_until)
+    `)
+    await db.query(`
+      CREATE INDEX IF NOT EXISTS idx_promotions_code ON market_promotions(code)
+    `)
+
     // Get table stats
     const tables = [
       'market_products',
@@ -777,7 +1044,16 @@ export async function POST() {
       'market_stock_movements',
       'odoo_product_mapping',
       'odoo_sync_logs',
-      'market_suppliers'
+      'market_suppliers',
+      'market_pricelists',
+      'market_pricelist_items',
+      'market_pos_terminals',
+      'market_pos_users',
+      'market_pos_sessions',
+      'market_pos_orders',
+      'market_pos_order_lines',
+      'market_pos_payments',
+      'market_promotions'
     ]
     const tableStats = []
 
@@ -827,7 +1103,16 @@ export async function GET() {
       'market_stock_movements',
       'odoo_product_mapping',
       'odoo_sync_logs',
-      'market_suppliers'
+      'market_suppliers',
+      'market_pricelists',
+      'market_pricelist_items',
+      'market_pos_terminals',
+      'market_pos_users',
+      'market_pos_sessions',
+      'market_pos_orders',
+      'market_pos_order_lines',
+      'market_pos_payments',
+      'market_promotions'
     ]
     const tableStatus = []
 
