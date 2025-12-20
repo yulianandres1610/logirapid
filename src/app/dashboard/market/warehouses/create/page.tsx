@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useEffect, useMemo } from 'react'
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   Warehouse,
@@ -18,7 +18,8 @@ import {
   Store,
   Package,
   ChevronDown,
-  Map as MapIcon
+  Map as MapIcon,
+  Navigation
 } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
@@ -26,6 +27,10 @@ import { DashboardLayout } from '@/components/layout/dashboard-layout'
 import { ProtectedRoute } from '@/components/protected-route'
 import { useTheme } from '@/contexts/theme-context'
 import { cn } from '@/lib/utils'
+import mapboxgl from 'mapbox-gl'
+import 'mapbox-gl/dist/mapbox-gl.css'
+
+const MAPBOX_TOKEN = process.env.NEXT_PUBLIC_MAPBOX_TOKEN || 'pk.eyJ1IjoieXVsaWFuYW5kcmVzMTYxMCIsImEiOiJjbWgycTlsZGsxM200YnNvbnN2d2wwcHJ5In0.wlU7-bazAs2eYjknx7H97Q'
 
 type Step = 'info' | 'location' | 'manager' | 'review'
 
@@ -251,6 +256,173 @@ const PROVINCES = [
     { id: 'nueva-gerona', name: 'Nueva Gerona', coords: [-82.8000, 21.8833] },
   ]},
 ]
+
+// Componente del Mapa para seleccionar ubicación del Almacén
+interface WarehouseMapPickerProps {
+  theme: string
+  provinceId: string
+  municipalityId: string
+  latitude: number | null
+  longitude: number | null
+  onLocationChange: (lat: number, lng: number) => void
+}
+
+function WarehouseMapPicker({ theme, provinceId, municipalityId, latitude, longitude, onLocationChange }: WarehouseMapPickerProps) {
+  const mapContainerRef = useRef<HTMLDivElement>(null)
+  const mapInstanceRef = useRef<mapboxgl.Map | null>(null)
+  const markerInstanceRef = useRef<mapboxgl.Marker | null>(null)
+  const isInitializedRef = useRef(false)
+  const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading')
+
+  // Obtener coordenadas del municipio (prioridad) o provincia
+  const provinceData = PROVINCES.find(p => p.id === provinceId)
+  const municipalityData = provinceData?.municipalities.find(m => m.id === municipalityId)
+
+  // Usar coordenadas del municipio si están disponibles, sino de la provincia
+  const getTargetCoords = useCallback((): [number, number] => {
+    if (municipalityData?.coords) {
+      return municipalityData.coords as [number, number]
+    }
+    if (provinceData?.coords) {
+      return provinceData.coords as [number, number]
+    }
+    return [-82.3666, 23.1136] // Centro de Cuba por defecto
+  }, [municipalityData, provinceData])
+
+  // Inicializar mapa solo una vez
+  useEffect(() => {
+    if (isInitializedRef.current || !mapContainerRef.current) return
+    isInitializedRef.current = true
+
+    const initMap = async () => {
+      try {
+        mapboxgl.accessToken = MAPBOX_TOKEN
+
+        const initialCenter = getTargetCoords()
+
+        const map = new mapboxgl.Map({
+          container: mapContainerRef.current!,
+          style: 'mapbox://styles/mapbox/streets-v12',
+          center: initialCenter,
+          zoom: 14
+        })
+
+        mapInstanceRef.current = map
+
+        map.on('load', () => {
+          setStatus('ready')
+          map.addControl(new mapboxgl.NavigationControl(), 'top-right')
+
+          // Agregar marcador inicial si hay coordenadas
+          if (latitude && longitude) {
+            addMarker(map, longitude, latitude)
+          }
+        })
+
+        map.on('click', (e) => {
+          addMarker(map, e.lngLat.lng, e.lngLat.lat)
+          onLocationChange(e.lngLat.lat, e.lngLat.lng)
+        })
+
+      } catch (err) {
+        console.error('Map init error:', err)
+        setStatus('error')
+      }
+    }
+
+    const addMarker = (map: mapboxgl.Map, lng: number, lat: number) => {
+      if (markerInstanceRef.current) {
+        markerInstanceRef.current.setLngLat([lng, lat])
+      } else {
+        const marker = new mapboxgl.Marker({ color: '#10B981', draggable: true })
+          .setLngLat([lng, lat])
+          .addTo(map)
+
+        marker.on('dragend', () => {
+          const pos = marker.getLngLat()
+          onLocationChange(pos.lat, pos.lng)
+        })
+
+        markerInstanceRef.current = marker
+      }
+    }
+
+    initMap()
+
+    return () => {
+      if (mapInstanceRef.current) {
+        mapInstanceRef.current.remove()
+        mapInstanceRef.current = null
+        markerInstanceRef.current = null
+        isInitializedRef.current = false
+      }
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // Actualizar centro cuando cambia el municipio o provincia
+  useEffect(() => {
+    if (mapInstanceRef.current && status === 'ready') {
+      const targetCoords = getTargetCoords()
+      mapInstanceRef.current.flyTo({
+        center: targetCoords,
+        zoom: 14,
+        duration: 1000
+      })
+
+      // Si no hay marcador, agregar uno en el centro del municipio
+      if (!markerInstanceRef.current && mapInstanceRef.current) {
+        const marker = new mapboxgl.Marker({ color: '#10B981', draggable: true })
+          .setLngLat(targetCoords)
+          .addTo(mapInstanceRef.current)
+
+        marker.on('dragend', () => {
+          const pos = marker.getLngLat()
+          onLocationChange(pos.lat, pos.lng)
+        })
+
+        markerInstanceRef.current = marker
+        onLocationChange(targetCoords[1], targetCoords[0])
+      }
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [municipalityId, provinceId, status])
+
+  return (
+    <div className="space-y-3">
+      <div
+        ref={mapContainerRef}
+        className={cn(
+          "w-full h-[300px] rounded-xl overflow-hidden border-2 transition-all",
+          theme === 'dark' ? 'border-gray-700' : 'border-gray-200'
+        )}
+      />
+      {status === 'loading' && (
+        <div className={cn(
+          "absolute inset-0 flex items-center justify-center rounded-xl",
+          theme === 'dark' ? 'bg-gray-800' : 'bg-gray-100'
+        )}>
+          <Loader2 className="w-8 h-8 animate-spin text-emerald-500" />
+        </div>
+      )}
+      {status === 'error' && (
+        <div className={cn(
+          "p-4 rounded-xl text-center",
+          theme === 'dark' ? 'bg-red-900/20 text-red-400' : 'bg-red-50 text-red-600'
+        )}>
+          Error al cargar el mapa
+        </div>
+      )}
+      <p className={cn(
+        "text-xs flex items-center gap-2",
+        theme === 'dark' ? 'text-gray-400' : 'text-gray-500'
+      )}>
+        <Navigation className="w-4 h-4" />
+        Haz clic en el mapa o arrastra el pin para ajustar la ubicación exacta del almacén
+      </p>
+    </div>
+  )
+}
 
 export default function CreateMarketWarehousePage() {
   const { theme } = useTheme()
@@ -938,13 +1110,43 @@ export default function CreateMarketWarehousePage() {
                       </div>
                     </div>
 
+                    {/* Mapa para seleccionar ubicación con pin */}
+                    {formData.provinceId && formData.municipalityId && (
+                      <motion.div
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        className="md:col-span-2"
+                      >
+                        <label className={cn(
+                          "block text-sm font-medium mb-2",
+                          theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
+                        )}>
+                          Ubicación en el Mapa - Haz clic para colocar el pin
+                        </label>
+                        <WarehouseMapPicker
+                          theme={theme}
+                          provinceId={formData.provinceId}
+                          municipalityId={formData.municipalityId}
+                          latitude={formData.latitude}
+                          longitude={formData.longitude}
+                          onLocationChange={(lat: number, lng: number) => {
+                            setFormData(prev => ({
+                              ...prev,
+                              latitude: lat,
+                              longitude: lng
+                            }))
+                          }}
+                        />
+                      </motion.div>
+                    )}
+
                     {/* Coordinates Display */}
                     {formData.latitude && formData.longitude && (
                       <motion.div
                         initial={{ opacity: 0, y: 10 }}
                         animate={{ opacity: 1, y: 0 }}
                         className={cn(
-                          "flex items-center gap-4 p-4 rounded-xl border",
+                          "flex items-center gap-4 p-4 rounded-xl border md:col-span-2",
                           theme === 'dark'
                             ? 'bg-emerald-900/20 border-emerald-800'
                             : 'bg-emerald-50 border-emerald-200'
@@ -961,7 +1163,7 @@ export default function CreateMarketWarehousePage() {
                             "font-medium text-sm",
                             theme === 'dark' ? 'text-emerald-300' : 'text-emerald-700'
                           )}>
-                            Coordenadas del municipio obtenidas
+                            Coordenadas seleccionadas
                           </p>
                           <p className="text-xs text-emerald-600">
                             Lat: {formData.latitude.toFixed(6)}, Lng: {formData.longitude.toFixed(6)}
@@ -977,7 +1179,7 @@ export default function CreateMarketWarehousePage() {
                         initial={{ opacity: 0, y: 10 }}
                         animate={{ opacity: 1, y: 0 }}
                         className={cn(
-                          "p-4 rounded-xl border",
+                          "p-4 rounded-xl border md:col-span-2",
                           theme === 'dark'
                             ? 'bg-gray-900/50 border-gray-700'
                             : 'bg-gray-50 border-gray-200'
