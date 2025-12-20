@@ -335,11 +335,29 @@ export async function POST(request: NextRequest) {
 
       // Update inventory if warehouse specified
       if (warehouseId && line.productId) {
-        await db.query(`
-          UPDATE market_inventory
-          SET quantity = quantity - $1, updated_at = NOW()
+        // Try to update warehouse stock first
+        const stockResult = await db.query(`
+          UPDATE market_warehouse_stock
+          SET quantity_on_hand = quantity_on_hand - $1, updated_at = NOW()
           WHERE product_id = $2 AND warehouse_id = $3
+          RETURNING id
         `, [line.quantity || 1, line.productId, warehouseId])
+
+        // If no warehouse stock record, update main product quantity
+        if (stockResult.rows.length === 0) {
+          await db.query(`
+            UPDATE market_products
+            SET quantity_on_hand = quantity_on_hand - $1, updated_at = NOW()
+            WHERE id = $2
+          `, [line.quantity || 1, line.productId])
+        }
+      } else if (line.productId) {
+        // No warehouse specified, update main product quantity
+        await db.query(`
+          UPDATE market_products
+          SET quantity_on_hand = quantity_on_hand - $1, updated_at = NOW()
+          WHERE id = $2
+        `, [line.quantity || 1, line.productId])
       }
     }
 

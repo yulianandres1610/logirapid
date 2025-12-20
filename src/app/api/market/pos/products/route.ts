@@ -66,63 +66,63 @@ export async function GET(request: NextRequest) {
     const effectivePricelistId = pricelistId ? parseInt(pricelistId) : terminalConfig?.pricelist_id
 
     // Get products with inventory for the specified warehouse
-    let productsQuery = `
-      SELECT
-        p.id,
-        p.name,
-        p.description,
-        p.sku,
-        p.barcode,
-        p.category_id,
-        p.unit,
-        p.sale_price,
-        p.cost_price,
-        p.tax_rate,
-        p.image_url,
-        p.is_active,
-        p.track_inventory,
-        COALESCE(i.quantity, 0) as stock
-      FROM market_products p
-      LEFT JOIN market_inventory i ON p.id = i.product_id
-    `
-
     const params: (number | null)[] = [companyId]
 
+    let productsQuery: string
     if (effectiveWarehouseId) {
-      productsQuery += ` AND i.warehouse_id = $2`
       params.push(effectiveWarehouseId)
+      productsQuery = `
+        SELECT
+          p.id,
+          p.name,
+          p.description,
+          p.sku,
+          p.barcode,
+          p.category,
+          p.unit_of_measure as unit,
+          p.selling_price as sale_price,
+          p.cost_price,
+          0 as tax_rate,
+          p.image_url,
+          p.is_active,
+          true as track_inventory,
+          COALESCE(ws.quantity_on_hand, p.quantity_on_hand, 0) as stock
+        FROM market_products p
+        LEFT JOIN market_warehouse_stock ws ON p.id = ws.product_id AND ws.warehouse_id = $2
+        WHERE p.company_id = $1 AND p.is_active = true
+        ORDER BY p.name ASC
+      `
+    } else {
+      productsQuery = `
+        SELECT
+          p.id,
+          p.name,
+          p.description,
+          p.sku,
+          p.barcode,
+          p.category,
+          p.unit_of_measure as unit,
+          p.selling_price as sale_price,
+          p.cost_price,
+          0 as tax_rate,
+          p.image_url,
+          p.is_active,
+          true as track_inventory,
+          p.quantity_on_hand as stock
+        FROM market_products p
+        WHERE p.company_id = $1 AND p.is_active = true
+        ORDER BY p.name ASC
+      `
     }
-
-    productsQuery = `
-      SELECT
-        p.id,
-        p.name,
-        p.description,
-        p.sku,
-        p.barcode,
-        p.category_id,
-        p.unit,
-        p.sale_price,
-        p.cost_price,
-        p.tax_rate,
-        p.image_url,
-        p.is_active,
-        p.track_inventory,
-        COALESCE(i.quantity, 0) as stock
-      FROM market_products p
-      LEFT JOIN market_inventory i ON p.id = i.product_id ${effectiveWarehouseId ? 'AND i.warehouse_id = $2' : ''}
-      WHERE p.company_id = $1 AND p.is_active = true
-      ORDER BY p.name ASC
-    `
 
     const productsResult = await db.query(productsQuery, params)
 
-    // Get categories
+    // Get categories from products (using distinct category values)
     const categoriesResult = await db.query(`
-      SELECT id, name, parent_id, icon, color
-      FROM market_categories
-      WHERE company_id = $1 AND is_active = true
-      ORDER BY name ASC
+      SELECT DISTINCT category as name
+      FROM market_products
+      WHERE company_id = $1 AND category IS NOT NULL AND category != ''
+      ORDER BY category ASC
     `, [companyId])
 
     // Get pricelist items if a pricelist is specified
@@ -204,12 +204,12 @@ export async function GET(request: NextRequest) {
       success: true,
       data: {
         products,
-        categories: categoriesResult.rows.map(c => ({
-          id: c.id,
+        categories: categoriesResult.rows.map((c, index) => ({
+          id: index + 1,
           name: c.name,
-          parentId: c.parent_id,
-          icon: c.icon,
-          color: c.color
+          parentId: null,
+          icon: null,
+          color: null
         })),
         promotions: promotions.map(p => ({
           id: p.id,

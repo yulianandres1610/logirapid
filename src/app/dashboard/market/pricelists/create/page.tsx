@@ -87,14 +87,14 @@ export default function CreatePricelistPage() {
   useEffect(() => {
     const fetchProducts = async () => {
       try {
-        const response = await fetch('/api/market/inventory')
+        const response = await fetch('/api/market/products?limit=1000')
         const data = await response.json()
         if (data.success) {
           setProducts(data.data.products.map((p: any) => ({
             id: p.id,
             name: p.name,
-            sku: p.sku,
-            sellingPrice: p.sellingPrice
+            sku: p.sku || '',
+            sellingPrice: p.sellingPrice || 0
           })))
         }
       } catch (err) {
@@ -440,58 +440,82 @@ export default function CreatePricelistPage() {
                       Precios Especiales
                     </h2>
 
-                    {/* Search Products */}
-                    <div className="relative">
-                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-                      <input
-                        type="text"
-                        placeholder="Buscar productos para agregar..."
-                        value={productSearch}
-                        onChange={(e) => setProductSearch(e.target.value)}
-                        className={cn(
-                          'w-full pl-10 pr-4 py-3 rounded-xl border focus:outline-none focus:ring-2 transition-all',
-                          theme === 'dark'
-                            ? 'bg-gray-900/50 border-gray-600 text-white focus:ring-blue-500/20'
-                            : 'bg-gray-50 border-gray-200 focus:ring-blue-500/20'
-                        )}
-                      />
-                    </div>
-
-                    {/* Available Products */}
-                    {productSearch && (
-                      <div className={cn(
-                        'max-h-40 overflow-y-auto rounded-xl border divide-y',
-                        theme === 'dark' ? 'border-gray-700 divide-gray-700' : 'border-gray-200 divide-gray-200'
-                      )}>
-                        {filteredProducts.slice(0, 5).map(product => (
-                          <motion.button
-                            key={product.id}
-                            onClick={() => addProduct(product)}
-                            whileHover={{ scale: 1.01 }}
-                            className={cn(
-                              'w-full flex items-center justify-between p-3 text-left transition-colors',
-                              theme === 'dark' ? 'hover:bg-gray-700' : 'hover:bg-gray-50'
-                            )}
-                          >
-                            <div>
-                              <p className={cn(
-                                'font-medium',
-                                theme === 'dark' ? 'text-white' : 'text-gray-900'
-                              )}>
-                                {product.name}
-                              </p>
-                              <p className="text-xs text-gray-500">{product.sku}</p>
-                            </div>
-                            <div className="flex items-center gap-3">
-                              <span className="text-sm font-medium">${product.sellingPrice.toFixed(2)}</span>
-                              <Plus className="w-5 h-5 text-blue-500" />
-                            </div>
-                          </motion.button>
-                        ))}
-                        {filteredProducts.length === 0 && (
-                          <p className="p-3 text-center text-gray-500">No se encontraron productos</p>
-                        )}
+                    {/* Loading Products */}
+                    {loadingProducts ? (
+                      <div className="flex items-center justify-center py-8">
+                        <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
+                        <span className="ml-3 text-gray-500">Cargando productos...</span>
                       </div>
+                    ) : products.length === 0 ? (
+                      <div className={cn(
+                        'text-center py-8 rounded-xl border-2 border-dashed',
+                        theme === 'dark' ? 'border-gray-700' : 'border-gray-200'
+                      )}>
+                        <Package className="w-12 h-12 mx-auto text-gray-400 mb-3" />
+                        <p className={cn('font-medium mb-1', theme === 'dark' ? 'text-white' : 'text-gray-900')}>
+                          No hay productos registrados
+                        </p>
+                        <p className="text-sm text-gray-500">
+                          Primero debes crear productos en el inventario
+                        </p>
+                      </div>
+                    ) : (
+                      <>
+                        {/* Search Products */}
+                        <div className="relative">
+                          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                          <input
+                            type="text"
+                            placeholder="Buscar productos para agregar..."
+                            value={productSearch}
+                            onChange={(e) => setProductSearch(e.target.value)}
+                            className={cn(
+                              'w-full pl-10 pr-4 py-3 rounded-xl border focus:outline-none focus:ring-2 transition-all',
+                              theme === 'dark'
+                                ? 'bg-gray-900/50 border-gray-600 text-white focus:ring-blue-500/20'
+                                : 'bg-gray-50 border-gray-200 focus:ring-blue-500/20'
+                            )}
+                          />
+                        </div>
+
+                        {/* Available Products - Show all when no search, or filtered results */}
+                        <div className={cn(
+                          'max-h-48 overflow-y-auto rounded-xl border divide-y',
+                          theme === 'dark' ? 'border-gray-700 divide-gray-700 bg-gray-900/30' : 'border-gray-200 divide-gray-200 bg-gray-50'
+                        )}>
+                          {filteredProducts.length > 0 ? (
+                            filteredProducts.slice(0, productSearch ? 10 : 50).map(product => (
+                              <motion.button
+                                key={product.id}
+                                onClick={() => addProduct(product)}
+                                whileHover={{ scale: 1.01 }}
+                                className={cn(
+                                  'w-full flex items-center justify-between p-3 text-left transition-colors',
+                                  theme === 'dark' ? 'hover:bg-gray-700' : 'hover:bg-white'
+                                )}
+                              >
+                                <div>
+                                  <p className={cn(
+                                    'font-medium',
+                                    theme === 'dark' ? 'text-white' : 'text-gray-900'
+                                  )}>
+                                    {product.name}
+                                  </p>
+                                  <p className="text-xs text-gray-500">{product.sku}</p>
+                                </div>
+                                <div className="flex items-center gap-3">
+                                  <span className="text-sm font-medium">${product.sellingPrice.toFixed(2)}</span>
+                                  <Plus className="w-5 h-5 text-blue-500" />
+                                </div>
+                              </motion.button>
+                            ))
+                          ) : (
+                            <p className="p-4 text-center text-gray-500">
+                              {productSearch ? 'No se encontraron productos' : 'Todos los productos ya han sido agregados'}
+                            </p>
+                          )}
+                        </div>
+                      </>
                     )}
 
                     {/* Selected Products */}

@@ -308,11 +308,26 @@ export async function PUT(
 
       for (const line of lines.rows) {
         if (line.product_id && order.warehouse_id) {
-          await db.query(`
-            UPDATE market_inventory
-            SET quantity = quantity + $1, updated_at = NOW()
+          const stockResult = await db.query(`
+            UPDATE market_warehouse_stock
+            SET quantity_on_hand = quantity_on_hand + $1, updated_at = NOW()
             WHERE product_id = $2 AND warehouse_id = $3
+            RETURNING id
           `, [line.quantity, line.product_id, order.warehouse_id])
+
+          if (stockResult.rows.length === 0) {
+            await db.query(`
+              UPDATE market_products
+              SET quantity_on_hand = quantity_on_hand + $1, updated_at = NOW()
+              WHERE id = $2
+            `, [line.quantity, line.product_id])
+          }
+        } else if (line.product_id) {
+          await db.query(`
+            UPDATE market_products
+            SET quantity_on_hand = quantity_on_hand + $1, updated_at = NOW()
+            WHERE id = $2
+          `, [line.quantity, line.product_id])
         }
       }
 
@@ -354,17 +369,32 @@ export async function PUT(
       }
 
       // Restore inventory
-      const lines = await db.query(`
+      const refundLines = await db.query(`
         SELECT product_id, quantity FROM market_pos_order_lines WHERE order_id = $1
       `, [orderId])
 
-      for (const line of lines.rows) {
+      for (const line of refundLines.rows) {
         if (line.product_id && order.warehouse_id) {
-          await db.query(`
-            UPDATE market_inventory
-            SET quantity = quantity + $1, updated_at = NOW()
+          const stockResult = await db.query(`
+            UPDATE market_warehouse_stock
+            SET quantity_on_hand = quantity_on_hand + $1, updated_at = NOW()
             WHERE product_id = $2 AND warehouse_id = $3
+            RETURNING id
           `, [line.quantity, line.product_id, order.warehouse_id])
+
+          if (stockResult.rows.length === 0) {
+            await db.query(`
+              UPDATE market_products
+              SET quantity_on_hand = quantity_on_hand + $1, updated_at = NOW()
+              WHERE id = $2
+            `, [line.quantity, line.product_id])
+          }
+        } else if (line.product_id) {
+          await db.query(`
+            UPDATE market_products
+            SET quantity_on_hand = quantity_on_hand + $1, updated_at = NOW()
+            WHERE id = $2
+          `, [line.quantity, line.product_id])
         }
       }
 
@@ -453,17 +483,32 @@ export async function DELETE(
     }
 
     // Restore inventory before deleting
-    const lines = await db.query(`
+    const deleteLines = await db.query(`
       SELECT product_id, quantity FROM market_pos_order_lines WHERE order_id = $1
     `, [orderId])
 
-    for (const line of lines.rows) {
+    for (const line of deleteLines.rows) {
       if (line.product_id && order.warehouse_id) {
-        await db.query(`
-          UPDATE market_inventory
-          SET quantity = quantity + $1, updated_at = NOW()
+        const stockResult = await db.query(`
+          UPDATE market_warehouse_stock
+          SET quantity_on_hand = quantity_on_hand + $1, updated_at = NOW()
           WHERE product_id = $2 AND warehouse_id = $3
+          RETURNING id
         `, [line.quantity, line.product_id, order.warehouse_id])
+
+        if (stockResult.rows.length === 0) {
+          await db.query(`
+            UPDATE market_products
+            SET quantity_on_hand = quantity_on_hand + $1, updated_at = NOW()
+            WHERE id = $2
+          `, [line.quantity, line.product_id])
+        }
+      } else if (line.product_id) {
+        await db.query(`
+          UPDATE market_products
+          SET quantity_on_hand = quantity_on_hand + $1, updated_at = NOW()
+          WHERE id = $2
+        `, [line.quantity, line.product_id])
       }
     }
 
