@@ -352,12 +352,26 @@ export async function PUT(
 
             // Update warehouse stock if warehouse is specified
             if (targetWarehouseId) {
-              await client.query(`
-                INSERT INTO market_warehouse_stock (warehouse_id, product_id, quantity_on_hand, created_at, updated_at)
-                VALUES ($1, $2, $3, NOW(), NOW())
-                ON CONFLICT (warehouse_id, product_id)
-                DO UPDATE SET quantity_on_hand = market_warehouse_stock.quantity_on_hand + $3, updated_at = NOW()
-              `, [targetWarehouseId, productId, quantityToReceive])
+              // Check if stock record exists
+              const existingStock = await client.query(`
+                SELECT id, quantity_on_hand FROM market_warehouse_stock
+                WHERE warehouse_id = $1 AND product_id = $2 AND variant_id IS NULL
+              `, [targetWarehouseId, productId])
+
+              if (existingStock.rows.length > 0) {
+                // Update existing stock
+                await client.query(`
+                  UPDATE market_warehouse_stock
+                  SET quantity_on_hand = quantity_on_hand + $1, updated_at = NOW()
+                  WHERE warehouse_id = $2 AND product_id = $3 AND variant_id IS NULL
+                `, [quantityToReceive, targetWarehouseId, productId])
+              } else {
+                // Insert new stock record
+                await client.query(`
+                  INSERT INTO market_warehouse_stock (warehouse_id, product_id, variant_id, quantity_on_hand, created_at, updated_at)
+                  VALUES ($1, $2, NULL, $3, NOW(), NOW())
+                `, [targetWarehouseId, productId, quantityToReceive])
+              }
             }
 
             // Check if line is fully received
