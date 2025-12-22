@@ -165,7 +165,7 @@ export default function InventoryCountPage() {
         const countRes = await fetch(`/api/market/pos/inventory-count?sessionId=${openSession.id}`)
         const countData = await countRes.json()
         if (countData.success && countData.data && countData.data.lines) {
-          setCountedProducts(countData.data.lines.map((l: {
+          const loadedProducts = countData.data.lines.map((l: {
             productId: number
             productName: string
             productSku?: string
@@ -183,7 +183,10 @@ export default function InventoryCountPage() {
             unitPrice: l.unitPrice || 0,
             countedQuantity: l.countedQuantity || 0,
             expectedQuantity: l.expectedQuantity || 0
-          })))
+          }))
+          setCountedProducts(loadedProducts)
+          // Mark as already saved so deletions will trigger auto-save
+          lastSavedRef.current = JSON.stringify(loadedProducts)
         }
 
       } catch (err) {
@@ -247,12 +250,15 @@ export default function InventoryCountPage() {
 
   // Auto-save effect - debounced save when countedProducts changes
   useEffect(() => {
-    if (!session || countedProducts.length === 0) return
+    if (!session) return
 
     const currentState = JSON.stringify(countedProducts)
 
     // Don't save if nothing changed
     if (currentState === lastSavedRef.current) return
+
+    // Don't save empty array if we never had anything (initial state)
+    if (countedProducts.length === 0 && lastSavedRef.current === '') return
 
     // Clear any pending save
     if (autoSaveTimeoutRef.current) {
@@ -413,7 +419,7 @@ export default function InventoryCountPage() {
   }, [selectedProduct, handleNumpad])
 
   // Remove counted product
-  const removeCountedProduct = useCallback((index: number) => {
+  const removeCountedProduct = useCallback(async (index: number) => {
     const productToRemove = countedProducts[index]
 
     // If this product is currently selected/being edited, clear selection
@@ -423,7 +429,31 @@ export default function InventoryCountPage() {
       setEditingIndex(null)
     }
 
-    setCountedProducts(prev => prev.filter((_, i) => i !== index))
+    const newProducts = countedProducts.filter((_, i) => i !== index)
+    setCountedProducts(newProducts)
+
+    // Save immediately after deletion (don't wait for debounce)
+    if (session) {
+      try {
+        const response = await fetch('/api/market/pos/inventory-count', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            sessionId: session.id,
+            warehouseId: session.warehouseId,
+            lines: newProducts,
+            action: 'save'
+          })
+        })
+        const data = await response.json()
+        if (data.success) {
+          lastSavedRef.current = JSON.stringify(newProducts)
+          console.log('[Delete] Producto eliminado y guardado')
+        }
+      } catch (err) {
+        console.error('[Delete] Error al guardar:', err)
+      }
+    }
 
     // Focus search input after deletion
     setTimeout(() => {
@@ -434,7 +464,7 @@ export default function InventoryCountPage() {
         searchInputRef.current.focus()
       }
     }, 100)
-  }, [countedProducts, selectedProduct])
+  }, [countedProducts, selectedProduct, session])
 
   // Edit counted product
   const editCountedProduct = useCallback((index: number) => {
