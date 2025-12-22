@@ -92,7 +92,13 @@ export default function PaymentPage() {
   const [rates, setRates] = useState<ExchangeRates>(DEFAULT_RATES)
   const [processing, setProcessing] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [isOnline, setIsOnline] = useState(true)
+  // Initialize isOnline based on navigator.onLine to avoid flash of wrong state
+  const [isOnline, setIsOnline] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return navigator.onLine
+    }
+    return true
+  })
 
   // Monitor online status
   useEffect(() => {
@@ -114,17 +120,29 @@ export default function PaymentPage() {
     if (cartData) {
       try {
         const parsed = JSON.parse(decodeURIComponent(cartData))
-        setCart(parsed)
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          setCart(parsed)
+        } else {
+          setError('El carrito está vacío')
+        }
       } catch (e) {
         console.error('Error parsing cart data:', e)
         setError('Error al cargar datos del carrito')
       }
+    } else {
+      setError('No se recibieron datos del carrito')
     }
   }, [cartData])
 
-  // Fetch exchange rates
+  // Fetch exchange rates (only when online)
   useEffect(() => {
     const fetchRates = async () => {
+      // Skip if offline - use default rates
+      if (!navigator.onLine) {
+        console.log('[Payment] Offline - using default exchange rates')
+        return
+      }
+
       try {
         const res = await fetch('/api/agency-rates')
         const data = await res.json()
@@ -136,6 +154,7 @@ export default function PaymentPage() {
         }
       } catch (e) {
         console.error('Error fetching rates:', e)
+        // Use default rates on error - don't crash
       }
     }
     fetchRates()
@@ -253,28 +272,35 @@ export default function PaymentPage() {
       if (!isOnline) {
         console.log('[Payment] Offline mode - saving to IndexedDB')
 
-        const offlineId = generateOfflineId()
-        const offlineOrder = {
-          offlineId,
-          terminalId: parseInt(terminalId),
-          sessionId: parseInt(sessionId),
-          warehouseId: warehouseId ? parseInt(warehouseId) : null,
-          customerId: null,
-          customerName: null,
-          currency: 'USD',
-          lines: orderLines,
-          payments: orderPayments,
-          total: totals.total,
-          createdAt: new Date().toISOString(),
-          synced: false
+        try {
+          const offlineId = generateOfflineId()
+          const offlineOrder = {
+            offlineId,
+            terminalId: parseInt(terminalId),
+            sessionId: parseInt(sessionId),
+            warehouseId: warehouseId ? parseInt(warehouseId) : null,
+            customerId: null,
+            customerName: null,
+            currency: 'USD',
+            lines: orderLines,
+            payments: orderPayments,
+            total: totals.total,
+            createdAt: new Date().toISOString(),
+            synced: false
+          }
+
+          await savePendingOrder(offlineOrder)
+
+          // Navigate to receipt with offline ID
+          const offlineOrderNumber = `OFFLINE-${Date.now().toString(36).toUpperCase()}`
+          router.push(`/dashboard/market/pos/${terminalId}/receipt?offlineId=${offlineId}&orderNumber=${offlineOrderNumber}&offline=true`)
+          return
+        } catch (offlineError) {
+          console.error('[Payment] Error saving offline order:', offlineError)
+          setError('Error al guardar la orden offline. Verifica el almacenamiento del navegador.')
+          setProcessing(false)
+          return
         }
-
-        await savePendingOrder(offlineOrder)
-
-        // Navigate to receipt with offline ID
-        const offlineOrderNumber = `OFFLINE-${Date.now().toString(36).toUpperCase()}`
-        router.push(`/dashboard/market/pos/${terminalId}/receipt?offlineId=${offlineId}&orderNumber=${offlineOrderNumber}&offline=true`)
-        return
       }
 
       // ONLINE MODE: Send to API
