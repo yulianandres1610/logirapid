@@ -83,6 +83,13 @@ export default function InventoryCountPage() {
   // Mobile: toggle between list view and input view
   const [mobileView, setMobileView] = useState<'input' | 'list'>('input')
 
+  // Modal for pending products
+  const [showPendingModal, setShowPendingModal] = useState(false)
+
+  // Auto-save timer ref
+  const autoSaveTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+  const lastSavedRef = useRef<string>('')
+
   // Online status
   useEffect(() => {
     setIsOnline(navigator.onLine)
@@ -224,6 +231,57 @@ export default function InventoryCountPage() {
       isComplete
     }
   }, [products, countedProducts])
+
+  // Calculate pending products (not yet counted)
+  const pendingProducts = useMemo(() => {
+    const countedProductIds = new Set(countedProducts.map(cp => cp.productId))
+    return products.filter(p => !countedProductIds.has(p.id))
+  }, [products, countedProducts])
+
+  // Auto-save effect - debounced save when countedProducts changes
+  useEffect(() => {
+    if (!session || countedProducts.length === 0) return
+
+    const currentState = JSON.stringify(countedProducts)
+
+    // Don't save if nothing changed
+    if (currentState === lastSavedRef.current) return
+
+    // Clear any pending save
+    if (autoSaveTimeoutRef.current) {
+      clearTimeout(autoSaveTimeoutRef.current)
+    }
+
+    // Schedule auto-save after 2 seconds of inactivity
+    autoSaveTimeoutRef.current = setTimeout(async () => {
+      try {
+        const response = await fetch('/api/market/pos/inventory-count', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            sessionId: session.id,
+            warehouseId: session.warehouseId,
+            lines: countedProducts,
+            action: 'save'
+          })
+        })
+
+        const data = await response.json()
+        if (data.success) {
+          lastSavedRef.current = currentState
+          console.log('[AutoSave] Conteo guardado automáticamente')
+        }
+      } catch (err) {
+        console.error('[AutoSave] Error:', err)
+      }
+    }, 2000)
+
+    return () => {
+      if (autoSaveTimeoutRef.current) {
+        clearTimeout(autoSaveTimeoutRef.current)
+      }
+    }
+  }, [session, countedProducts])
 
   // Handle product selection from search
   const selectProduct = useCallback((product: Product) => {
@@ -442,21 +500,21 @@ export default function InventoryCountPage() {
 
   return (
     <div className="min-h-screen flex flex-col bg-gray-900 text-white">
-      {/* Header - Compact */}
+      {/* Header */}
       <header className="bg-gray-800 border-b border-gray-700">
-        <div className="flex items-center justify-between px-3 sm:px-4 py-3 lg:py-2">
-          <div className="flex items-center gap-3">
+        <div className="flex items-center justify-between px-4 sm:px-6 py-3 lg:py-4">
+          <div className="flex items-center gap-3 lg:gap-4">
             <motion.button
               onClick={goBack}
-              className="p-2.5 lg:p-2 hover:bg-gray-700 rounded-xl lg:rounded-lg transition-colors bg-gray-700/50 lg:bg-transparent"
+              className="p-2.5 hover:bg-gray-700 rounded-xl transition-colors bg-gray-700/50 lg:bg-gray-700/30"
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
             >
-              <ChevronLeft className="w-5 h-5" />
+              <ChevronLeft className="w-5 h-5 lg:w-6 lg:h-6" />
             </motion.button>
             <div>
-              <h1 className="font-semibold text-base lg:text-sm">Conteo de Inventario</h1>
-              <p className="text-xs text-gray-400">{session?.warehouseName}</p>
+              <h1 className="font-semibold text-base lg:text-lg">Conteo de Inventario</h1>
+              <p className="text-xs lg:text-sm text-gray-400">{session?.warehouseName}</p>
             </div>
           </div>
 
@@ -775,16 +833,29 @@ export default function InventoryCountPage() {
 
       {/* Footer */}
       <footer className="px-3 sm:px-4 py-3 bg-gray-800 border-t border-gray-700">
-        {/* Progress bar */}
+        {/* Progress bar - clickable to show pending products */}
         <div className="mb-3">
-          <div className="w-full h-4 bg-gray-700 rounded-full overflow-hidden">
+          <button
+            onClick={() => setShowPendingModal(true)}
+            className="w-full h-5 bg-gray-700 rounded-full overflow-hidden relative group cursor-pointer hover:ring-2 hover:ring-blue-500/50 transition-all"
+            title={`${countingProgress.remaining} productos pendientes - Toca para ver`}
+          >
             <motion.div
               initial={{ width: 0 }}
               animate={{ width: `${countingProgress.percentage}%` }}
               transition={{ duration: 0.5, ease: 'easeOut' }}
               className={`h-full ${countingProgress.isComplete ? 'bg-gradient-to-r from-green-500 to-green-400' : 'bg-gradient-to-r from-blue-600 to-blue-400'}`}
             />
-          </div>
+            {/* Percentage label */}
+            <span className="absolute inset-0 flex items-center justify-center text-xs font-bold text-white drop-shadow-md">
+              {countingProgress.percentage}%
+            </span>
+          </button>
+          {countingProgress.remaining > 0 && (
+            <p className="text-xs text-center text-gray-500 mt-1">
+              Toca la barra para ver los {countingProgress.remaining} productos pendientes
+            </p>
+          )}
         </div>
 
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
@@ -818,6 +889,82 @@ export default function InventoryCountPage() {
           </div>
         </div>
       </footer>
+
+      {/* Pending Products Modal */}
+      <AnimatePresence>
+        {showPendingModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm"
+            onClick={() => setShowPendingModal(false)}
+          >
+            <motion.div
+              initial={{ y: '100%', opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              exit={{ y: '100%', opacity: 0 }}
+              transition={{ type: 'spring', damping: 25, stiffness: 300 }}
+              className="bg-gray-800 w-full sm:w-[500px] sm:max-w-[90vw] max-h-[80vh] rounded-t-2xl sm:rounded-2xl overflow-hidden"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Modal Header */}
+              <div className="flex items-center justify-between px-4 py-3 border-b border-gray-700 bg-gray-800/95 sticky top-0">
+                <div>
+                  <h3 className="font-semibold text-lg">Productos Pendientes</h3>
+                  <p className="text-sm text-gray-400">{pendingProducts.length} productos por contar</p>
+                </div>
+                <button
+                  onClick={() => setShowPendingModal(false)}
+                  className="p-2 hover:bg-gray-700 rounded-lg transition-colors"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              {/* Modal Content */}
+              <div className="overflow-auto max-h-[60vh] p-2">
+                {pendingProducts.length === 0 ? (
+                  <div className="text-center py-8 text-gray-500">
+                    <Check className="w-12 h-12 mx-auto mb-2 text-green-500" />
+                    <p className="font-medium text-green-400">¡Todos los productos contados!</p>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {pendingProducts.map((product) => (
+                      <motion.button
+                        key={product.id}
+                        onClick={() => {
+                          selectProduct(product)
+                          setShowPendingModal(false)
+                        }}
+                        className="w-full bg-gray-700/50 hover:bg-gray-700 rounded-xl p-3 flex items-center gap-3 transition-colors text-left"
+                        whileHover={{ scale: 1.01 }}
+                        whileTap={{ scale: 0.99 }}
+                      >
+                        <div className="w-12 h-12 flex-shrink-0 rounded-lg overflow-hidden bg-gray-600">
+                          {product.imageUrl ? (
+                            <img src={product.imageUrl} alt={product.name} className="w-full h-full object-cover" />
+                          ) : (
+                            <div className="w-full h-full flex items-center justify-center">
+                              <Package className="w-5 h-5 text-gray-500" />
+                            </div>
+                          )}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="font-medium truncate">{product.name}</p>
+                          <p className="text-xs text-gray-400 truncate">{product.sku || product.barcode || 'Sin código'}</p>
+                        </div>
+                        <ChevronRight className="w-5 h-5 text-gray-500 flex-shrink-0" />
+                      </motion.button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   )
 }

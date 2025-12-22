@@ -93,7 +93,7 @@ export async function GET(request: NextRequest) {
       FROM market_pos_order_lines ol
       JOIN market_pos_orders o ON ol.order_id = o.id
       JOIN market_products p ON ol.product_id = p.id
-      WHERE o.session_id = $1
+      WHERE o.pos_session_id = $1
         AND o.status IN ('paid', 'completed')
       GROUP BY ol.product_id, p.name, p.sku, p.barcode, p.selling_price
       ORDER BY total_sold DESC
