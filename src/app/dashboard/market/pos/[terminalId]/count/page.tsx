@@ -442,48 +442,43 @@ export default function InventoryCountPage() {
 
   return (
     <div className="min-h-screen flex flex-col bg-gray-900 text-white">
-      {/* Header with Search */}
-      <header className="bg-gray-800 border-b border-gray-700 relative z-50">
-        <div className="flex items-center gap-3 px-3 sm:px-4 py-2">
-          {/* Back button */}
-          <button
-            onClick={goBack}
-            className="p-2 hover:bg-gray-700 rounded-lg transition-colors flex-shrink-0"
-          >
-            <ChevronLeft className="w-5 h-5" />
-          </button>
-
-          {/* Search input - minimalista */}
-          <div className="flex-1 relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
-            <input
-              ref={searchInputRef}
-              type="text"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Buscar o escanear producto..."
-              className="w-full pl-9 pr-4 py-2 bg-gray-900 border border-gray-700 rounded-lg text-sm focus:outline-none focus:border-blue-500 transition-colors placeholder-gray-500"
-              disabled={!!selectedProduct}
-            />
-            {search && (
-              <button
-                onClick={() => setSearch('')}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-300"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            )}
+      {/* Header - Compact */}
+      <header className="bg-gray-800 border-b border-gray-700">
+        <div className="flex items-center justify-between px-3 sm:px-4 py-2">
+          <div className="flex items-center gap-2">
+            <button
+              onClick={goBack}
+              className="p-2 hover:bg-gray-700 rounded-lg transition-colors"
+            >
+              <ChevronLeft className="w-5 h-5" />
+            </button>
+            <div>
+              <h1 className="font-semibold text-sm">Conteo de Inventario</h1>
+              <p className="text-xs text-gray-400">{session?.warehouseName}</p>
+            </div>
           </div>
 
-          {/* Status indicators */}
-          <div className="flex items-center gap-2 flex-shrink-0">
+          <div className="flex items-center gap-2">
+            {/* Mobile search input */}
+            <div className="lg:hidden flex-1 relative max-w-[200px]">
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-500" />
+              <input
+                ref={searchInputRef}
+                type="text"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Buscar..."
+                className="w-full pl-8 pr-3 py-1.5 bg-gray-900 border border-gray-700 rounded-lg text-xs focus:outline-none focus:border-blue-500 placeholder-gray-500"
+                disabled={!!selectedProduct}
+              />
+            </div>
+
             {isOnline ? (
               <Wifi className="w-4 h-4 text-green-500" />
             ) : (
               <WifiOff className="w-4 h-4 text-yellow-500" />
             )}
 
-            {/* Mobile toggle button */}
             <button
               onClick={() => setMobileView(mobileView === 'input' ? 'list' : 'input')}
               className="lg:hidden p-2 bg-gray-700 rounded-lg relative"
@@ -498,9 +493,9 @@ export default function InventoryCountPage() {
           </div>
         </div>
 
-        {/* Search results dropdown */}
+        {/* Mobile search results dropdown */}
         {search && filteredProducts.length > 0 && !selectedProduct && (
-          <div className="absolute left-0 right-0 top-full z-50 mx-3 sm:mx-4 mt-1 bg-gray-800 rounded-xl border border-gray-700 shadow-2xl overflow-hidden max-h-64 overflow-auto">
+          <div className="lg:hidden absolute left-0 right-0 top-full z-50 mx-3 mt-1 bg-gray-800 rounded-xl border border-gray-700 shadow-2xl overflow-hidden max-h-64 overflow-auto">
             {filteredProducts.map(product => (
               <button
                 key={product.id}
@@ -540,12 +535,63 @@ export default function InventoryCountPage() {
       {/* Main content */}
       <div className="flex-1 flex overflow-hidden">
         {/* Left panel - Counted products (hidden on mobile when in input view) */}
-        <div className={`${mobileView === 'list' ? 'flex' : 'hidden'} lg:flex w-full lg:w-80 xl:w-96 border-r border-gray-700 flex-col bg-gray-850`}>
-          <div className="p-3 sm:p-4 border-b border-gray-700">
-            <h2 className="font-semibold flex items-center gap-2 text-sm sm:text-base">
-              <ClipboardList className="w-5 h-5" />
-              Productos Contados ({countedProducts.length})
+        <div className={`${mobileView === 'list' ? 'flex' : 'hidden'} lg:flex w-full lg:w-80 xl:w-96 border-r border-gray-700 flex-col bg-gray-850 relative`}>
+          {/* Desktop search - compact above sidebar */}
+          <div className="hidden lg:block p-3 border-b border-gray-700 relative">
+            <div className="relative">
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
+              <input
+                ref={searchInputRef}
+                type="text"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Buscar o escanear..."
+                className="w-full pl-9 pr-8 py-2 bg-gray-900 border border-gray-700 rounded-lg text-sm focus:outline-none focus:border-blue-500 placeholder-gray-500"
+                disabled={!!selectedProduct}
+              />
+              {search && (
+                <button
+                  onClick={() => setSearch('')}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-300"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              )}
+            </div>
+            {/* Desktop search results dropdown */}
+            {search && filteredProducts.length > 0 && !selectedProduct && (
+              <div className="absolute left-3 right-3 top-full mt-1 z-50 bg-gray-800 rounded-xl border border-gray-700 shadow-2xl overflow-hidden max-h-64 overflow-auto">
+                {filteredProducts.map(product => (
+                  <button
+                    key={product.id}
+                    onClick={() => selectProduct(product)}
+                    className="w-full px-3 py-2 flex items-center gap-2 hover:bg-gray-700 active:bg-gray-600 transition-colors border-b border-gray-700/50 last:border-0"
+                  >
+                    <div className="w-8 h-8 flex-shrink-0 rounded-md overflow-hidden bg-gray-700">
+                      {product.imageUrl ? (
+                        <img src={product.imageUrl} alt={product.name} className="w-full h-full object-cover" />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center">
+                          <Package className="w-3 h-3 text-gray-500" />
+                        </div>
+                      )}
+                    </div>
+                    <div className="text-left min-w-0 flex-1">
+                      <p className="font-medium truncate text-sm">{product.name}</p>
+                      <p className="text-xs text-gray-500 truncate">{product.sku || product.barcode}</p>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div className="p-3 border-b border-gray-700 flex items-center justify-between">
+            <h2 className="font-semibold flex items-center gap-2 text-sm">
+              <ClipboardList className="w-4 h-4" />
+              Contados
             </h2>
+            <span className="text-xs bg-gray-700 px-2 py-1 rounded-full">{countedProducts.length}</span>
           </div>
 
           <div className="flex-1 overflow-auto p-2 space-y-2">
