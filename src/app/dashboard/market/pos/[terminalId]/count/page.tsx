@@ -21,6 +21,7 @@ import {
   ChevronRight,
   List
 } from 'lucide-react'
+import { useBarcodeScan } from '@/hooks/useBarcodeScan'
 
 interface Product {
   id: number
@@ -206,7 +207,33 @@ export default function InventoryCountPage() {
     setSelectedProduct(product)
     setSearch('')
     setNumpadValue('')
+    setMobileView('input')
   }, [])
+
+  // Handle barcode scan - auto select product for counting
+  const handleBarcodeScan = useCallback((barcode: string) => {
+    // Search for product by exact barcode or SKU match
+    const product = products.find(p =>
+      p.barcode?.toLowerCase() === barcode.toLowerCase() ||
+      p.sku?.toLowerCase() === barcode.toLowerCase()
+    )
+
+    if (product) {
+      selectProduct(product)
+    } else {
+      setError(`Producto no encontrado: ${barcode}`)
+      setTimeout(() => setError(null), 3000)
+    }
+  }, [products, selectProduct])
+
+  // Barcode scanner detection hook
+  useBarcodeScan({
+    onScan: handleBarcodeScan,
+    onError: (error) => console.warn('Barcode scan:', error),
+    minLength: 3,
+    maxTimeBetweenKeys: 50,
+    enabled: !loading && !selectedProduct // Disable when product is selected (entering quantity)
+  })
 
   // Handle numpad input
   const handleNumpad = useCallback((key: string) => {
