@@ -448,7 +448,7 @@ export async function POST(request: NextRequest) {
             adjustmentOperationId,
             parseInt(line.product_id),
             line.variant_id ? parseInt(line.variant_id) : null,
-            parseInt(parseFloat(line.difference)) || 0
+            Math.round(Number(line.difference)) || 0
           ])
         }
       }
