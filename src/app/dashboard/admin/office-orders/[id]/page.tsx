@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { useParams } from 'next/navigation'
 import { motion } from 'framer-motion'
-import { Package, Users, MapPin, Loader2 } from 'lucide-react'
+import { Package, Users, MapPin, Loader2, Send, FileText, CheckCircle, XCircle, ExternalLink } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useTheme } from '@/contexts/theme-context'
 import { DashboardLayout } from '@/components/layout/dashboard-layout'
@@ -31,6 +31,21 @@ interface OrderData {
   totalAmount: number
   createdAt: string
   officeOrderData: any
+  apacargoOrderId?: number
+  apacargoCode?: string
+  apacargoSyncedAt?: string
+  apacargoStatus?: string
+  apacargoError?: string
+}
+
+interface ApaCargoSyncStatus {
+  isSynced: boolean
+  apacargoOrderId?: number
+  apacargoCode?: string
+  apacargoSyncedAt?: string
+  apacargoStatus?: string
+  apacargoError?: string
+  isConfigured: boolean
 }
 
 export default function OfficeOrderDetailPage() {
@@ -42,9 +57,21 @@ export default function OfficeOrderDetailPage() {
   const [trazabilidadMap, setTrazabilidadMap] = useState<Map<number, any[]>>(new Map())
   const printFrameRef = useRef<HTMLIFrameElement>(null)
 
+  // ApaCargo states
+  const [apacargoStatus, setApacargoStatus] = useState<ApaCargoSyncStatus | null>(null)
+  const [apacargoLoading, setApacargoLoading] = useState(false)
+  const [apacargoSyncing, setApacargoSyncing] = useState(false)
+  const [showSyncModal, setShowSyncModal] = useState(false)
+
   useEffect(() => {
     fetchOrderDetails()
   }, [params.id])
+
+  useEffect(() => {
+    if (order?.id) {
+      fetchApacargoStatus()
+    }
+  }, [order?.id])
 
   const fetchOrderDetails = async () => {
     try {
@@ -120,6 +147,79 @@ export default function OfficeOrderDetailPage() {
       setTrazabilidadMap(trazMap)
     } catch (err) {
       console.error('Error fetching trazabilidad:', err)
+    }
+  }
+
+  // ApaCargo functions
+  const fetchApacargoStatus = async () => {
+    if (!order?.id) return
+
+    try {
+      setApacargoLoading(true)
+      const response = await fetch(`/api/office-orders/${order.id}/sync-apacargo`)
+      const data = await response.json()
+
+      if (data.success) {
+        setApacargoStatus(data.data)
+      }
+    } catch (err) {
+      console.error('Error fetching ApaCargo status:', err)
+    } finally {
+      setApacargoLoading(false)
+    }
+  }
+
+  const handleSyncToApaCargo = async () => {
+    if (!order?.id) return
+
+    try {
+      setApacargoSyncing(true)
+      const response = await fetch(`/api/office-orders/${order.id}/sync-apacargo`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({})
+      })
+
+      const data = await response.json()
+
+      if (data.success) {
+        // Update local state
+        setApacargoStatus({
+          isSynced: true,
+          apacargoOrderId: data.data.apacargoOrderId,
+          apacargoCode: data.data.apacargoCode,
+          apacargoStatus: data.data.apacargoStatus,
+          apacargoSyncedAt: new Date().toISOString(),
+          isConfigured: true
+        })
+        setShowSyncModal(false)
+        alert(`Orden sincronizada exitosamente. Codigo ApaCargo: ${data.data.apacargoCode}`)
+      } else {
+        alert(`Error al sincronizar: ${data.error}`)
+      }
+    } catch (err) {
+      console.error('Error syncing to ApaCargo:', err)
+      alert('Error al sincronizar con ApaCargo')
+    } finally {
+      setApacargoSyncing(false)
+    }
+  }
+
+  const handleDownloadApacargoLabel = async (type: 'emci' | 'aero') => {
+    if (!order?.id || !apacargoStatus?.apacargoCode) {
+      alert('La orden debe estar sincronizada con ApaCargo primero')
+      return
+    }
+
+    try {
+      const labelTypeName = type === 'emci' ? 'EMCI' : 'Aerovaradero'
+      const url = `/api/office-orders/${order.id}/apacargo-label?type=${type}`
+
+      // Open in new tab to display/print PDF
+      window.open(url, '_blank')
+    } catch (err) {
+      console.error('Error downloading ApaCargo label:', err)
+      alert('Error al descargar etiqueta de ApaCargo')
     }
   }
 
@@ -332,6 +432,214 @@ export default function OfficeOrderDetailPage() {
             onPrintInvoice={handlePrintInvoice}
             onPrintReceipt={handlePrintReceipt}
           />
+
+          {/* ApaCargo Integration Section */}
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className={cn(
+              'rounded-2xl border p-6 shadow-lg',
+              theme === 'dark'
+                ? 'bg-gray-800/95 border-gray-700/50 backdrop-blur-sm'
+                : 'bg-white border-gray-200'
+            )}
+          >
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-orange-500 to-red-600 flex items-center justify-center shadow-md">
+                  <ExternalLink className="w-5 h-5 text-white" />
+                </div>
+                <div>
+                  <h3 className={cn(
+                    'text-lg font-semibold',
+                    theme === 'dark' ? 'text-white' : 'text-gray-900'
+                  )}>
+                    Integracion ApaCargo
+                  </h3>
+                  <p className={cn(
+                    'text-sm',
+                    theme === 'dark' ? 'text-gray-400' : 'text-gray-600'
+                  )}>
+                    Transitaria para envios a Cuba
+                  </p>
+                </div>
+              </div>
+
+              {/* Status Badge */}
+              {apacargoLoading ? (
+                <div className="flex items-center gap-2">
+                  <Loader2 className="w-4 h-4 animate-spin text-gray-400" />
+                  <span className="text-sm text-gray-400">Verificando...</span>
+                </div>
+              ) : apacargoStatus?.isSynced ? (
+                <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-green-500/20 border border-green-500/30">
+                  <CheckCircle className="w-4 h-4 text-green-500" />
+                  <span className="text-sm font-medium text-green-500">
+                    Sincronizada: {apacargoStatus.apacargoCode}
+                  </span>
+                </div>
+              ) : apacargoStatus?.isConfigured === false ? (
+                <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-yellow-500/20 border border-yellow-500/30">
+                  <XCircle className="w-4 h-4 text-yellow-500" />
+                  <span className="text-sm font-medium text-yellow-500">
+                    No configurado
+                  </span>
+                </div>
+              ) : (
+                <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-gray-500/20 border border-gray-500/30">
+                  <span className={cn(
+                    'text-sm font-medium',
+                    theme === 'dark' ? 'text-gray-400' : 'text-gray-600'
+                  )}>
+                    No sincronizada
+                  </span>
+                </div>
+              )}
+            </div>
+
+            {/* Error message if any */}
+            {apacargoStatus?.apacargoError && (
+              <div className="mb-4 p-3 rounded-lg bg-red-500/10 border border-red-500/30">
+                <p className="text-sm text-red-500">
+                  <strong>Error anterior:</strong> {apacargoStatus.apacargoError}
+                </p>
+              </div>
+            )}
+
+            {/* Actions */}
+            <div className="flex flex-wrap gap-3">
+              {!apacargoStatus?.isSynced ? (
+                <button
+                  onClick={() => setShowSyncModal(true)}
+                  disabled={apacargoSyncing || apacargoStatus?.isConfigured === false}
+                  className={cn(
+                    'flex items-center gap-2 px-4 py-2.5 rounded-xl font-medium transition-all',
+                    'bg-gradient-to-r from-orange-500 to-red-600 text-white',
+                    'hover:from-orange-600 hover:to-red-700 hover:shadow-lg',
+                    'disabled:opacity-50 disabled:cursor-not-allowed'
+                  )}
+                >
+                  {apacargoSyncing ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <Send className="w-4 h-4" />
+                  )}
+                  Enviar a ApaCargo
+                </button>
+              ) : (
+                <>
+                  <button
+                    onClick={() => handleDownloadApacargoLabel('emci')}
+                    className={cn(
+                      'flex items-center gap-2 px-4 py-2.5 rounded-xl font-medium transition-all',
+                      'bg-gradient-to-r from-blue-500 to-blue-600 text-white',
+                      'hover:from-blue-600 hover:to-blue-700 hover:shadow-lg'
+                    )}
+                  >
+                    <FileText className="w-4 h-4" />
+                    Etiqueta EMCI
+                  </button>
+                  <button
+                    onClick={() => handleDownloadApacargoLabel('aero')}
+                    className={cn(
+                      'flex items-center gap-2 px-4 py-2.5 rounded-xl font-medium transition-all',
+                      'bg-gradient-to-r from-purple-500 to-purple-600 text-white',
+                      'hover:from-purple-600 hover:to-purple-700 hover:shadow-lg'
+                    )}
+                  >
+                    <FileText className="w-4 h-4" />
+                    Etiqueta Aerovaradero
+                  </button>
+                </>
+              )}
+            </div>
+
+            {/* Sync timestamp */}
+            {apacargoStatus?.apacargoSyncedAt && (
+              <p className={cn(
+                'mt-3 text-xs',
+                theme === 'dark' ? 'text-gray-500' : 'text-gray-400'
+              )}>
+                Sincronizada el {new Date(apacargoStatus.apacargoSyncedAt).toLocaleString('es-ES')}
+              </p>
+            )}
+          </motion.div>
+
+          {/* Sync Confirmation Modal */}
+          {showSyncModal && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+              <motion.div
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                className={cn(
+                  'w-full max-w-md mx-4 rounded-2xl p-6 shadow-2xl',
+                  theme === 'dark' ? 'bg-gray-800' : 'bg-white'
+                )}
+              >
+                <h3 className={cn(
+                  'text-xl font-bold mb-4',
+                  theme === 'dark' ? 'text-white' : 'text-gray-900'
+                )}>
+                  Confirmar sincronizacion
+                </h3>
+                <p className={cn(
+                  'mb-6',
+                  theme === 'dark' ? 'text-gray-400' : 'text-gray-600'
+                )}>
+                  Esta a punto de enviar esta orden a ApaCargo. Una vez sincronizada, podra imprimir las etiquetas de envio.
+                </p>
+                <div className={cn(
+                  'mb-6 p-4 rounded-lg',
+                  theme === 'dark' ? 'bg-gray-700/50' : 'bg-gray-100'
+                )}>
+                  <p className="text-sm">
+                    <strong>Orden:</strong> {order.orderNumber}
+                  </p>
+                  <p className="text-sm">
+                    <strong>Destinatario:</strong> {officeData.receiverName || 'N/A'}
+                  </p>
+                  <p className="text-sm">
+                    <strong>Cajas:</strong> {officeData.boxCount || 0}
+                  </p>
+                </div>
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => setShowSyncModal(false)}
+                    className={cn(
+                      'flex-1 px-4 py-2.5 rounded-xl font-medium transition-all',
+                      theme === 'dark'
+                        ? 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                        : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                    )}
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    onClick={handleSyncToApaCargo}
+                    disabled={apacargoSyncing}
+                    className={cn(
+                      'flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl font-medium transition-all',
+                      'bg-gradient-to-r from-orange-500 to-red-600 text-white',
+                      'hover:from-orange-600 hover:to-red-700',
+                      'disabled:opacity-50'
+                    )}
+                  >
+                    {apacargoSyncing ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        Sincronizando...
+                      </>
+                    ) : (
+                      <>
+                        <Send className="w-4 h-4" />
+                        Confirmar
+                      </>
+                    )}
+                  </button>
+                </div>
+              </motion.div>
+            </div>
+          )}
 
           {/* Overview Stats */}
           <motion.div
