@@ -1,10 +1,9 @@
 'use client'
 
-import React, { useState, useEffect, useMemo } from 'react'
+import React, { useState, useEffect, useMemo, Suspense } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   ChevronLeft,
-  DollarSign,
   CreditCard,
   Banknote,
   Smartphone,
@@ -14,15 +13,27 @@ import {
   CheckCircle,
   Loader2,
   AlertCircle,
-  Calculator,
-  RefreshCw,
   WifiOff,
   Wifi
 } from 'lucide-react'
 import { useRouter, useParams, useSearchParams } from 'next/navigation'
 import { useTheme } from '@/contexts/theme-context'
 import { cn } from '@/lib/utils'
-import { generateOfflineId, savePendingOrder } from '@/lib/pos-db'
+
+// Dynamic import for IndexedDB functions to avoid SSR issues
+const saveOrderOffline = async (order: PendingOrderData): Promise<void> => {
+  if (typeof window === 'undefined') return
+  const { savePendingOrder } = await import('@/lib/pos-db')
+  await savePendingOrder(order)
+}
+
+const getOfflineId = (): string => {
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+    const r = Math.random() * 16 | 0
+    const v = c === 'x' ? r : (r & 0x3 | 0x8)
+    return v.toString(16)
+  })
+}
 
 interface CartItem {
   productId: number
@@ -46,22 +57,52 @@ interface Payment {
   reference?: string
 }
 
-interface ExchangeRates {
-  CUP: number // USD to CUP
-  MLC: number // USD to MLC
+interface PendingOrderData {
+  offlineId: string
+  terminalId: number
+  sessionId: number
+  warehouseId: number | null
+  customerId: number | null
+  customerName: string | null
+  currency: string
+  lines: Array<{
+    productId: number
+    productName: string
+    productSku: string
+    quantity: number
+    unitPrice: number
+    discountPercent: number
+    discountAmount: number
+  }>
+  payments: Array<{
+    method: string
+    amount: number
+    currency: string
+    amountTendered: number | null
+    changeAmount: number | null
+    reference?: string
+  }>
+  total: number
+  createdAt: string
+  synced: boolean
 }
 
-// Default exchange rates (should be fetched from API)
+interface ExchangeRates {
+  CUP: number
+  MLC: number
+}
+
+// Default exchange rates
 const DEFAULT_RATES: ExchangeRates = {
   CUP: 250,
-  MLC: 0.91 // 1 USD = 0.91 MLC (approx €1 = $1.10)
+  MLC: 0.91
 }
 
 const PAYMENT_METHODS = [
-  { id: 'cash', label: 'Efectivo', icon: Banknote },
-  { id: 'card', label: 'Tarjeta', icon: CreditCard },
-  { id: 'transfer', label: 'Transferencia', icon: Smartphone },
-  { id: 'credit', label: 'Crédito', icon: FileText }
+  { id: 'cash', label: 'Efectivo', icon: Banknote, offlineEnabled: true },
+  { id: 'card', label: 'Tarjeta', icon: CreditCard, offlineEnabled: false },
+  { id: 'transfer', label: 'Transferencia', icon: Smartphone, offlineEnabled: true },
+  { id: 'credit', label: 'Crédito', icon: FileText, offlineEnabled: true }
 ]
 
 const CURRENCIES = [
@@ -70,17 +111,53 @@ const CURRENCIES = [
   { id: 'MLC', label: 'MLC', symbol: '€' }
 ]
 
-export default function PaymentPage() {
+// Safely decode cart data (handles double-encoding)
+function safeDecodeCart(cartData: string | null): CartItem[] {
+  if (!cartData) return []
+
+  try {
+    let decoded = cartData
+
+    // Try to decode multiple times if double-encoded
+    for (let i = 0; i < 3; i++) {
+      try {
+        const result = JSON.parse(decoded)
+        if (Array.isArray(result)) {
+          return result
+        }
+      } catch {
+        // Not valid JSON yet, try decoding
+        try {
+          decoded = decodeURIComponent(decoded)
+        } catch {
+          break
+        }
+      }
+    }
+
+    return []
+  } catch (e) {
+    console.error('[Payment] Error decoding cart:', e)
+    return []
+  }
+}
+
+// Payment content component
+function PaymentContent() {
   const { theme } = useTheme()
   const router = useRouter()
   const params = useParams()
   const searchParams = useSearchParams()
   const terminalId = params.terminalId as string
 
-  // Get cart data from URL params (passed from POS)
+  // Get cart data from URL params
   const cartData = searchParams.get('cart')
   const sessionId = searchParams.get('sessionId')
   const warehouseId = searchParams.get('warehouseId')
+
+  // Check online status safely
+  const [isOnline, setIsOnline] = useState(true)
+  const [isClient, setIsClient] = useState(false)
 
   // State
   const [cart, setCart] = useState<CartItem[]>([])
@@ -92,22 +169,17 @@ export default function PaymentPage() {
   const [rates, setRates] = useState<ExchangeRates>(DEFAULT_RATES)
   const [processing, setProcessing] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  // Initialize isOnline based on navigator.onLine to avoid flash of wrong state
-  const [isOnline, setIsOnline] = useState(() => {
-    if (typeof window !== 'undefined') {
-      return navigator.onLine
-    }
-    return true
-  })
 
-  // Monitor online status
+  // Initialize client-side only values
   useEffect(() => {
+    setIsClient(true)
+    setIsOnline(navigator.onLine)
+
     const handleOnline = () => setIsOnline(true)
     const handleOffline = () => setIsOnline(false)
 
     window.addEventListener('online', handleOnline)
     window.addEventListener('offline', handleOffline)
-    setIsOnline(navigator.onLine)
 
     return () => {
       window.removeEventListener('online', handleOnline)
@@ -118,16 +190,12 @@ export default function PaymentPage() {
   // Parse cart data on mount
   useEffect(() => {
     if (cartData) {
-      try {
-        const parsed = JSON.parse(decodeURIComponent(cartData))
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          setCart(parsed)
-        } else {
-          setError('El carrito está vacío')
-        }
-      } catch (e) {
-        console.error('Error parsing cart data:', e)
-        setError('Error al cargar datos del carrito')
+      const parsed = safeDecodeCart(cartData)
+      if (parsed.length > 0) {
+        setCart(parsed)
+        setError(null)
+      } else {
+        setError('Error al cargar el carrito')
       }
     } else {
       setError('No se recibieron datos del carrito')
@@ -136,10 +204,20 @@ export default function PaymentPage() {
 
   // Fetch exchange rates (only when online)
   useEffect(() => {
+    if (!isClient) return
+
     const fetchRates = async () => {
-      // Skip if offline - use default rates
       if (!navigator.onLine) {
-        console.log('[Payment] Offline - using default exchange rates')
+        console.log('[Payment] Offline - using default rates')
+        // Try to get cached rates from localStorage
+        try {
+          const cachedRates = localStorage.getItem('pos_exchange_rates')
+          if (cachedRates) {
+            setRates(JSON.parse(cachedRates))
+          }
+        } catch {
+          // Use defaults
+        }
         return
       }
 
@@ -147,18 +225,21 @@ export default function PaymentPage() {
         const res = await fetch('/api/agency-rates')
         const data = await res.json()
         if (data.success && data.rates) {
-          setRates({
+          const newRates = {
             CUP: data.rates.usd || DEFAULT_RATES.CUP,
             MLC: data.rates.mlc || DEFAULT_RATES.MLC
-          })
+          }
+          setRates(newRates)
+          // Cache rates for offline use
+          localStorage.setItem('pos_exchange_rates', JSON.stringify(newRates))
         }
       } catch (e) {
-        console.error('Error fetching rates:', e)
-        // Use default rates on error - don't crash
+        console.error('[Payment] Error fetching rates:', e)
       }
     }
+
     fetchRates()
-  }, [])
+  }, [isClient])
 
   // Calculate totals
   const totals = useMemo(() => {
@@ -174,7 +255,7 @@ export default function PaymentPage() {
   }, [payments])
 
   const remainingUSD = totals.total - totalPaidUSD
-  const isFullyPaid = remainingUSD <= 0.01 // Allow small rounding errors
+  const isFullyPaid = remainingUSD <= 0.01
 
   // Calculate change
   const changeAmount = useMemo(() => {
@@ -203,9 +284,7 @@ export default function PaymentPage() {
   // Add payment
   const addPayment = () => {
     const numAmount = parseFloat(amount)
-    if (isNaN(numAmount) || numAmount <= 0) {
-      return
-    }
+    if (isNaN(numAmount) || numAmount <= 0) return
 
     const amountInUSD = convertToUSD(numAmount, selectedCurrency)
 
@@ -241,9 +320,7 @@ export default function PaymentPage() {
 
   // Process payment
   const processPayment = async () => {
-    if (!isFullyPaid || !sessionId) {
-      return
-    }
+    if (!isFullyPaid || !sessionId) return
 
     setProcessing(true)
     setError(null)
@@ -270,11 +347,11 @@ export default function PaymentPage() {
 
       // OFFLINE MODE: Save to IndexedDB
       if (!isOnline) {
-        console.log('[Payment] Offline mode - saving to IndexedDB')
+        console.log('[Payment] Offline mode - saving locally')
 
         try {
-          const offlineId = generateOfflineId()
-          const offlineOrder = {
+          const offlineId = getOfflineId()
+          const offlineOrder: PendingOrderData = {
             offlineId,
             terminalId: parseInt(terminalId),
             sessionId: parseInt(sessionId),
@@ -289,15 +366,14 @@ export default function PaymentPage() {
             synced: false
           }
 
-          await savePendingOrder(offlineOrder)
+          await saveOrderOffline(offlineOrder)
 
-          // Navigate to receipt with offline ID
           const offlineOrderNumber = `OFFLINE-${Date.now().toString(36).toUpperCase()}`
           router.push(`/dashboard/market/pos/${terminalId}/receipt?offlineId=${offlineId}&orderNumber=${offlineOrderNumber}&offline=true`)
           return
         } catch (offlineError) {
-          console.error('[Payment] Error saving offline order:', offlineError)
-          setError('Error al guardar la orden offline. Verifica el almacenamiento del navegador.')
+          console.error('[Payment] Error saving offline:', offlineError)
+          setError('Error al guardar offline. Intente de nuevo.')
           setProcessing(false)
           return
         }
@@ -322,16 +398,54 @@ export default function PaymentPage() {
       const data = await response.json()
 
       if (data.success) {
-        // Navigate to receipt page
         router.push(`/dashboard/market/pos/${terminalId}/receipt?orderId=${data.data.id}&orderNumber=${data.data.orderNumber}`)
       } else {
         setError(data.error || 'Error al procesar pago')
       }
     } catch (e) {
-      console.error('Error processing payment:', e)
-      // If error and offline, try to save offline
+      console.error('[Payment] Error:', e)
+
+      // If failed and offline, save locally
       if (!navigator.onLine) {
-        setError('Sin conexión. La orden se guardará localmente.')
+        try {
+          const offlineId = getOfflineId()
+          const offlineOrder: PendingOrderData = {
+            offlineId,
+            terminalId: parseInt(terminalId),
+            sessionId: parseInt(sessionId),
+            warehouseId: warehouseId ? parseInt(warehouseId) : null,
+            customerId: null,
+            customerName: null,
+            currency: 'USD',
+            lines: cart.map(item => ({
+              productId: item.productId,
+              productName: item.productName,
+              productSku: item.productSku,
+              quantity: item.quantity,
+              unitPrice: item.unitPrice,
+              discountPercent: item.discountPercent,
+              discountAmount: item.discountAmount
+            })),
+            payments: payments.map(p => ({
+              method: p.method,
+              amount: p.amountInUSD,
+              currency: p.currency,
+              amountTendered: p.method === 'cash' ? p.amount : null,
+              changeAmount: null
+            })),
+            total: totals.total,
+            createdAt: new Date().toISOString(),
+            synced: false
+          }
+
+          await saveOrderOffline(offlineOrder)
+
+          const offlineOrderNumber = `OFFLINE-${Date.now().toString(36).toUpperCase()}`
+          router.push(`/dashboard/market/pos/${terminalId}/receipt?offlineId=${offlineId}&orderNumber=${offlineOrderNumber}&offline=true`)
+          return
+        } catch {
+          setError('Error de conexión')
+        }
       } else {
         setError('Error de conexión')
       }
@@ -360,7 +474,29 @@ export default function PaymentPage() {
     }
   }
 
-  if (error && !cart.length) {
+  // Navigate back to POS
+  const goBackToPOS = () => {
+    const cartParams = new URLSearchParams({
+      restoreCart: encodeURIComponent(JSON.stringify(cart)),
+      sessionId: sessionId || ''
+    })
+    router.push(`/dashboard/market/pos/${terminalId}?${cartParams.toString()}`)
+  }
+
+  // Show loading while not client
+  if (!isClient) {
+    return (
+      <div className={cn(
+        'min-h-screen flex items-center justify-center',
+        theme === 'dark' ? 'bg-gray-900' : 'bg-gray-100'
+      )}>
+        <Loader2 className="w-12 h-12 animate-spin text-blue-500" />
+      </div>
+    )
+  }
+
+  // Error state with no cart
+  if (error && cart.length === 0) {
     return (
       <div className={cn(
         'min-h-screen flex items-center justify-center',
@@ -370,10 +506,10 @@ export default function PaymentPage() {
           <AlertCircle className="w-12 h-12 mx-auto mb-4 text-red-500" />
           <p className="text-red-500 mb-4">{error}</p>
           <button
-            onClick={() => router.back()}
+            onClick={() => router.push(`/dashboard/market/pos/${terminalId}`)}
             className="px-4 py-2 bg-blue-500 text-white rounded-lg"
           >
-            Volver
+            Volver al POS
           </button>
         </div>
       </div>
@@ -391,14 +527,7 @@ export default function PaymentPage() {
         theme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'
       )}>
         <button
-          onClick={() => {
-            // Navigate back to POS with cart data preserved
-            const cartParams = new URLSearchParams({
-              restoreCart: encodeURIComponent(JSON.stringify(cart)),
-              sessionId: sessionId || ''
-            })
-            router.push(`/dashboard/market/pos/${terminalId}?${cartParams.toString()}`)
-          }}
+          onClick={goBackToPOS}
           className="flex items-center gap-2 text-gray-500 hover:text-gray-700"
         >
           <ChevronLeft className="w-5 h-5" />
@@ -564,10 +693,10 @@ export default function PaymentPage() {
               {/* Offline Warning */}
               {!isOnline && (
                 <div className="mb-4 p-3 rounded-lg bg-yellow-500/10 border border-yellow-500/30 flex items-center gap-2">
-                  <WifiOff className="w-5 h-5 text-yellow-500" />
+                  <WifiOff className="w-5 h-5 text-yellow-500 flex-shrink-0" />
                   <div className="text-sm">
                     <span className="font-medium text-yellow-500">Modo Offline</span>
-                    <span className="text-gray-500 ml-2">Solo efectivo disponible. Se sincronizará al reconectar.</span>
+                    <span className="text-gray-500 ml-2">Efectivo, transferencia y crédito disponibles.</span>
                   </div>
                 </div>
               )}
@@ -578,8 +707,8 @@ export default function PaymentPage() {
                 <div className="grid grid-cols-4 gap-2">
                   {PAYMENT_METHODS.map((method) => {
                     const Icon = method.icon
-                    // Disable card and transfer when offline
-                    const isDisabled = !isOnline && (method.id === 'card' || method.id === 'transfer')
+                    // Disable only card when offline
+                    const isDisabled = !isOnline && !method.offlineEnabled
                     return (
                       <button
                         key={method.id}
@@ -790,7 +919,7 @@ export default function PaymentPage() {
       )}>
         <div className="max-w-6xl mx-auto flex items-center justify-between">
           <button
-            onClick={() => router.back()}
+            onClick={goBackToPOS}
             className={cn(
               'px-6 py-3 rounded-lg font-medium',
               theme === 'dark' ? 'bg-gray-700 hover:bg-gray-600' : 'bg-gray-200 hover:bg-gray-300'
@@ -824,5 +953,23 @@ export default function PaymentPage() {
         </div>
       </footer>
     </div>
+  )
+}
+
+// Loading fallback
+function LoadingFallback() {
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-gray-900">
+      <Loader2 className="w-12 h-12 animate-spin text-blue-500" />
+    </div>
+  )
+}
+
+// Main page component with Suspense
+export default function PaymentPage() {
+  return (
+    <Suspense fallback={<LoadingFallback />}>
+      <PaymentContent />
+    </Suspense>
   )
 }
