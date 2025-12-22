@@ -446,9 +446,9 @@ export async function POST(request: NextRequest) {
             ) VALUES ($1, $2, $3, $4, 0, 'pending')
           `, [
             adjustmentOperationId,
-            line.product_id,
-            line.variant_id,
-            line.difference
+            parseInt(line.product_id),
+            line.variant_id ? parseInt(line.variant_id) : null,
+            parseInt(parseFloat(line.difference)) || 0
           ])
         }
       }
