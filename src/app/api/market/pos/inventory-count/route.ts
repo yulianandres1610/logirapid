@@ -387,9 +387,9 @@ export async function POST(request: NextRequest) {
           updated_at = NOW()
         WHERE id = $4
       `, [
-        totals.rows[0].total_products,
-        totals.rows[0].products_with_differences,
-        totals.rows[0].total_difference_value || 0,
+        parseInt(totals.rows[0].total_products) || 0,
+        parseInt(totals.rows[0].products_with_differences) || 0,
+        parseFloat(totals.rows[0].total_difference_value) || 0,
         countId
       ])
     }
