@@ -136,7 +136,8 @@ export default function InventoryCountPage() {
           const productsRes = await fetch(`/api/market/pos/products?warehouseId=${warehouseId}`)
           const productsData = await productsRes.json()
           if (productsData.success && productsData.data) {
-            const productsArray = Array.isArray(productsData.data) ? productsData.data : []
+            // La API devuelve { data: { products: [...], categories: [...], ... } }
+            const productsArray = Array.isArray(productsData.data.products) ? productsData.data.products : []
             setProducts(productsArray.map((p: { id: number; name: string; sku?: string; barcode?: string; price?: number; sellingPrice?: number; stock?: number }) => ({
               id: p.id,
               name: p.name || 'Sin nombre',
