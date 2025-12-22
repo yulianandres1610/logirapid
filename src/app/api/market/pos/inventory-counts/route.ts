@@ -77,7 +77,7 @@ export async function GET(request: NextRequest) {
       FROM market_inventory_counts c
       LEFT JOIN market_warehouses w ON c.warehouse_id = w.id
       LEFT JOIN market_pos_sessions s ON c.session_id = s.id
-      LEFT JOIN market_pos_terminals t ON s.terminal_id = t.id
+      LEFT JOIN market_pos_terminals t ON s.pos_terminal_id = t.id
       LEFT JOIN users u ON c.counted_by = u.id
       LEFT JOIN users ua ON c.approved_by = ua.id
       WHERE c.company_id = $1 ${statusFilter}
