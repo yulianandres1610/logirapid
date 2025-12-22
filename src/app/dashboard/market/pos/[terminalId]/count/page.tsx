@@ -394,6 +394,16 @@ export default function InventoryCountPage() {
         } else if (e.key === 'Escape') {
           setSelectedProduct(null)
           setNumpadValue('')
+          setEditingIndex(null)
+          // Focus search after ESC
+          setTimeout(() => {
+            const isMobile = window.innerWidth < 1024
+            if (isMobile && mobileSearchRef.current) {
+              mobileSearchRef.current.focus()
+            } else if (searchInputRef.current) {
+              searchInputRef.current.focus()
+            }
+          }, 100)
         }
       }
     }
@@ -404,8 +414,27 @@ export default function InventoryCountPage() {
 
   // Remove counted product
   const removeCountedProduct = useCallback((index: number) => {
+    const productToRemove = countedProducts[index]
+
+    // If this product is currently selected/being edited, clear selection
+    if (selectedProduct && productToRemove && selectedProduct.id === productToRemove.productId) {
+      setSelectedProduct(null)
+      setNumpadValue('')
+      setEditingIndex(null)
+    }
+
     setCountedProducts(prev => prev.filter((_, i) => i !== index))
-  }, [])
+
+    // Focus search input after deletion
+    setTimeout(() => {
+      const isMobile = window.innerWidth < 1024
+      if (isMobile && mobileSearchRef.current) {
+        mobileSearchRef.current.focus()
+      } else if (searchInputRef.current) {
+        searchInputRef.current.focus()
+      }
+    }, 100)
+  }, [countedProducts, selectedProduct])
 
   // Edit counted product
   const editCountedProduct = useCallback((index: number) => {
@@ -782,6 +811,15 @@ export default function InventoryCountPage() {
                           setSelectedProduct(null)
                           setNumpadValue('')
                           setEditingIndex(null)
+                          // Focus search after cancel
+                          setTimeout(() => {
+                            const isMobile = window.innerWidth < 1024
+                            if (isMobile && mobileSearchRef.current) {
+                              mobileSearchRef.current.focus()
+                            } else if (searchInputRef.current) {
+                              searchInputRef.current.focus()
+                            }
+                          }, 100)
                         }}
                         className="p-2 hover:bg-gray-700 rounded-lg flex-shrink-0 ml-2"
                       >
