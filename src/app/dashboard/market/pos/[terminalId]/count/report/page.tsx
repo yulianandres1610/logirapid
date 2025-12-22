@@ -156,7 +156,8 @@ export default function InventoryCountReportPage() {
       const data = await response.json()
       if (!data.success) throw new Error(data.error)
 
-      router.push(`/dashboard/market/pos/${terminalId}/close`)
+      // Go to count history after completing
+      router.push(`/dashboard/market/pos/${terminalId}/count/history?completed=${countData.countNumber}`)
 
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Error al completar conteo')
@@ -571,7 +572,7 @@ export default function InventoryCountReportPage() {
               ) : (
                 <FileCheck className="w-4 h-4 sm:w-5 sm:h-5" />
               )}
-              <span>Aprobar y Cerrar</span>
+              <span>Aprobar Conteo</span>
               <ArrowRight className="w-4 h-4 sm:w-5 sm:h-5" />
             </button>
           </div>

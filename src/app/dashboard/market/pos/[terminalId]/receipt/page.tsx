@@ -1,12 +1,77 @@
 'use client'
 
-import React, { useState, useEffect, Suspense } from 'react'
+import React, { useState, useEffect, Suspense, Component, ReactNode } from 'react'
 import { useRouter, useParams, useSearchParams } from 'next/navigation'
 
 // ============================================
 // INLINE EVERYTHING FOR OFFLINE SUPPORT
 // No external imports that could fail offline
 // ============================================
+
+// Error Boundary for catching any unhandled errors
+interface ErrorBoundaryState {
+  hasError: boolean
+  error: Error | null
+}
+
+interface ErrorBoundaryProps {
+  children: ReactNode
+  terminalId: string
+}
+
+class ReceiptErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
+  constructor(props: ErrorBoundaryProps) {
+    super(props)
+    this.state = { hasError: false, error: null }
+  }
+
+  static getDerivedStateFromError(error: Error): ErrorBoundaryState {
+    return { hasError: true, error }
+  }
+
+  componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
+    console.error('[Receipt ErrorBoundary] Error:', error, errorInfo)
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="min-h-screen flex items-center justify-center bg-gray-900 text-white">
+          <div className="text-center max-w-md p-6">
+            <svg className="w-16 h-16 mx-auto mb-4 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            <h2 className="text-xl font-bold mb-2">Error en la pagina</h2>
+            <p className="text-gray-400 mb-4">
+              {this.state.error?.message || 'Ha ocurrido un error inesperado'}
+            </p>
+            <div className="flex flex-col gap-2">
+              <button
+                onClick={() => {
+                  this.setState({ hasError: false, error: null })
+                  window.location.reload()
+                }}
+                className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600"
+              >
+                Reintentar
+              </button>
+              <button
+                onClick={() => {
+                  window.location.href = `/dashboard/market/pos/${this.props.terminalId}`
+                }}
+                className="px-4 py-2 bg-gray-700 text-white rounded-lg hover:bg-gray-600"
+              >
+                Volver al POS
+              </button>
+            </div>
+          </div>
+        </div>
+      )
+    }
+
+    return this.props.children
+  }
+}
 
 // IndexedDB constants
 const DB_NAME = 'market_pos_db'
@@ -578,11 +643,32 @@ function LoadingFallback() {
   )
 }
 
-// Main page with Suspense wrapper
-export default function ReceiptPage() {
+// Wrapper that extracts terminalId for error boundary
+function ReceiptPageWithErrorBoundary() {
+  const params = useParams()
+  const terminalId = (params.terminalId as string) || '1'
+
   return (
-    <Suspense fallback={<LoadingFallback />}>
-      <ReceiptContent />
-    </Suspense>
+    <ReceiptErrorBoundary terminalId={terminalId}>
+      <Suspense fallback={<LoadingFallback />}>
+        <ReceiptContent />
+      </Suspense>
+    </ReceiptErrorBoundary>
   )
+}
+
+// Main page export
+export default function ReceiptPage() {
+  // Use client-side only rendering to avoid hydration issues
+  const [mounted, setMounted] = useState(false)
+
+  useEffect(() => {
+    setMounted(true)
+  }, [])
+
+  if (!mounted) {
+    return <LoadingFallback />
+  }
+
+  return <ReceiptPageWithErrorBoundary />
 }
