@@ -46,6 +46,7 @@ import {
   getUnsyncedOrders
 } from '@/lib/pos-db'
 import { usePOSOffline } from '@/hooks/usePOSOffline'
+import { useBarcodeScan } from '@/hooks/useBarcodeScan'
 
 interface Product {
   id: number
@@ -584,6 +585,34 @@ export default function POSTerminalPage() {
     setNumpadValue('')
     setNumpadMode('quantity')
   }, [])
+
+  // Handle barcode scan - auto add to cart (like Odoo)
+  const handleBarcodeScan = useCallback((barcode: string) => {
+    // Search for product by exact barcode or SKU match
+    const product = products.find(p =>
+      p.barcode?.toLowerCase() === barcode.toLowerCase() ||
+      p.sku?.toLowerCase() === barcode.toLowerCase()
+    )
+
+    if (product) {
+      addToCart(product)
+      // Clear search field if it has text
+      setSearch('')
+    } else {
+      // Show error - product not found
+      setError(`Producto no encontrado: ${barcode}`)
+      setTimeout(() => setError(null), 3000)
+    }
+  }, [products, addToCart])
+
+  // Barcode scanner detection hook
+  useBarcodeScan({
+    onScan: handleBarcodeScan,
+    onError: (error) => console.warn('Barcode scan:', error),
+    minLength: 3,
+    maxTimeBetweenKeys: 50,
+    enabled: !showPaymentModal && !showCloseSessionModal && !loading
+  })
 
   // Update cart item
   const updateCartItem = useCallback((index: number, updates: Partial<CartItem>) => {
