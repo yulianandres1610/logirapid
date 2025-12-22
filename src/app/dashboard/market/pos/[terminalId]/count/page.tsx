@@ -207,6 +207,24 @@ export default function InventoryCountPage() {
     ).slice(0, 10)
   }, [products, search])
 
+  // Calculate counting progress
+  const countingProgress = useMemo(() => {
+    const totalProducts = products.length
+    const countedProductIds = new Set(countedProducts.map(cp => cp.productId))
+    const countedCount = countedProductIds.size
+    const remainingCount = totalProducts - countedCount
+    const percentage = totalProducts > 0 ? Math.round((countedCount / totalProducts) * 100) : 0
+    const isComplete = remainingCount === 0 && totalProducts > 0
+
+    return {
+      total: totalProducts,
+      counted: countedCount,
+      remaining: remainingCount,
+      percentage,
+      isComplete
+    }
+  }, [products, countedProducts])
+
   // Handle product selection from search
   const selectProduct = useCallback((product: Product) => {
     setSelectedProduct(product)
@@ -711,12 +729,36 @@ export default function InventoryCountPage() {
 
       {/* Footer */}
       <footer className="px-3 sm:px-4 py-3 bg-gray-800 border-t border-gray-700">
+        {/* Progress bar */}
+        <div className="mb-3">
+          <div className="flex items-center justify-between text-sm mb-1">
+            <span className="text-gray-400">
+              Progreso: <span className="text-white font-medium">{countingProgress.counted}</span> de <span className="text-white font-medium">{countingProgress.total}</span> productos
+            </span>
+            {countingProgress.remaining > 0 ? (
+              <span className="text-yellow-400 font-medium">
+                Faltan {countingProgress.remaining} productos
+              </span>
+            ) : countingProgress.total > 0 ? (
+              <span className="text-green-400 font-medium">
+                Conteo completo
+              </span>
+            ) : null}
+          </div>
+          <div className="w-full h-2 bg-gray-700 rounded-full overflow-hidden">
+            <div
+              className={`h-full transition-all duration-300 ${countingProgress.isComplete ? 'bg-green-500' : 'bg-blue-500'}`}
+              style={{ width: `${countingProgress.percentage}%` }}
+            />
+          </div>
+        </div>
+
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
           <div className="flex items-center gap-2 sm:gap-4 justify-center sm:justify-start">
             <Package className="w-5 h-5 text-gray-400" />
             <span>
-              <span className="font-bold text-lg sm:text-xl">{countedProducts.length}</span>
-              <span className="text-gray-400 ml-1 text-sm sm:text-base">productos</span>
+              <span className="font-bold text-lg sm:text-xl">{countingProgress.counted}</span>
+              <span className="text-gray-400 ml-1 text-sm sm:text-base">/ {countingProgress.total} productos</span>
             </span>
           </div>
 
@@ -732,7 +774,8 @@ export default function InventoryCountPage() {
 
             <button
               onClick={goToReport}
-              disabled={saving || countedProducts.length === 0}
+              disabled={saving || !countingProgress.isComplete}
+              title={!countingProgress.isComplete ? `Faltan ${countingProgress.remaining} productos por contar` : ''}
               className="flex-1 sm:flex-initial px-4 sm:px-6 py-2.5 bg-blue-600 rounded-xl font-semibold hover:bg-blue-500 active:bg-blue-400 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 text-sm sm:text-base"
             >
               Ir al Reporte
