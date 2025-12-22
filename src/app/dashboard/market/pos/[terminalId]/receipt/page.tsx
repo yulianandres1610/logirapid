@@ -1,26 +1,14 @@
 'use client'
 
 import React, { useState, useEffect, Suspense } from 'react'
-import { motion } from 'framer-motion'
-import {
-  CheckCircle,
-  Printer,
-  MessageSquare,
-  Phone,
-  ShoppingCart,
-  Home,
-  Loader2,
-  AlertCircle,
-  Copy,
-  Check,
-  WifiOff,
-  Clock
-} from 'lucide-react'
 import { useRouter, useParams, useSearchParams } from 'next/navigation'
-import { useTheme } from '@/contexts/theme-context'
-import { cn } from '@/lib/utils'
 
-// IndexedDB constants - inline to avoid module loading issues offline
+// ============================================
+// INLINE EVERYTHING FOR OFFLINE SUPPORT
+// No external imports that could fail offline
+// ============================================
+
+// IndexedDB constants
 const DB_NAME = 'market_pos_db'
 const DB_VERSION = 1
 const PENDING_ORDERS_STORE = 'pending_orders'
@@ -154,8 +142,45 @@ interface Order {
   payments: Payment[]
 }
 
+// Simple SVG icons inline (no lucide-react needed)
+const CheckIcon = () => (
+  <svg className="w-20 h-20 mx-auto mb-4 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+  </svg>
+)
+
+const PrinterIcon = () => (
+  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+  </svg>
+)
+
+const CartIcon = () => (
+  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" />
+  </svg>
+)
+
+const ClockIcon = () => (
+  <svg className="w-4 h-4 text-yellow-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+  </svg>
+)
+
+const LoaderIcon = () => (
+  <svg className="w-12 h-12 animate-spin text-blue-500" fill="none" viewBox="0 0 24 24">
+    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+  </svg>
+)
+
+const AlertIcon = () => (
+  <svg className="w-12 h-12 mx-auto mb-4 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+  </svg>
+)
+
 function ReceiptContent() {
-  const { theme } = useTheme()
   const router = useRouter()
   const params = useParams()
   const searchParams = useSearchParams()
@@ -165,45 +190,28 @@ function ReceiptContent() {
   const offlineId = searchParams.get('offlineId')
   const isOfflineOrder = searchParams.get('offline') === 'true'
 
-  // Track if we're on client
+  // State
   const [isClient, setIsClient] = useState(false)
+  const [order, setOrder] = useState<Order | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
+  // Initialize on client
   useEffect(() => {
     setIsClient(true)
   }, [])
 
-  // State
-  const [order, setOrder] = useState<Order | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-  const [phoneNumber, setPhoneNumber] = useState('')
-  const [sendingReceipt, setSendingReceipt] = useState(false)
-  const [receiptSent, setReceiptSent] = useState(false)
-  const [copiedLink, setCopiedLink] = useState(false)
-  const [isOnline, setIsOnline] = useState(true)
-
-  // Monitor online status
-  useEffect(() => {
-    const handleOnline = () => setIsOnline(true)
-    const handleOffline = () => setIsOnline(false)
-
-    window.addEventListener('online', handleOnline)
-    window.addEventListener('offline', handleOffline)
-    setIsOnline(navigator.onLine)
-
-    return () => {
-      window.removeEventListener('online', handleOnline)
-      window.removeEventListener('offline', handleOffline)
-    }
-  }, [])
-
   // Fetch order details (online or offline)
   useEffect(() => {
+    if (!isClient) return
+
     const fetchOrder = async () => {
       // OFFLINE ORDER: Load from IndexedDB
       if (isOfflineOrder && offlineId) {
         try {
+          console.log('[Receipt] Loading offline order:', offlineId)
           const pendingOrders = await getPendingOrdersFromDB()
+          console.log('[Receipt] Found pending orders:', pendingOrders.length)
           const offlineOrder = pendingOrders.find(o => o.offlineId === offlineId)
 
           if (offlineOrder) {
@@ -235,11 +243,52 @@ function ReceiptContent() {
               }))
             }
             setOrder(convertedOrder)
+            console.log('[Receipt] Loaded offline order successfully')
           } else {
+            // Even if not found, create a basic order from URL params
+            console.log('[Receipt] Order not found in IndexedDB, creating from localStorage')
+
+            // Try to get from localStorage as backup
+            const paymentDataStr = localStorage.getItem('pos_payment_data')
+            if (paymentDataStr) {
+              try {
+                const paymentData = JSON.parse(paymentDataStr)
+                if (paymentData.cart && Array.isArray(paymentData.cart)) {
+                  const backupOrder: Order = {
+                    id: 0,
+                    orderNumber: orderNumber || offlineId || 'OFFLINE',
+                    customerName: null,
+                    subtotal: paymentData.cart.reduce((sum: number, item: { quantity: number; unitPrice: number }) => sum + (item.quantity * item.unitPrice), 0),
+                    discountAmount: paymentData.cart.reduce((sum: number, item: { discountAmount?: number }) => sum + (item.discountAmount || 0), 0),
+                    totalAmount: paymentData.cart.reduce((sum: number, item: { total: number }) => sum + item.total, 0),
+                    currency: 'USD',
+                    status: 'pending_sync',
+                    createdAt: new Date().toISOString(),
+                    createdByName: 'Usuario',
+                    lines: paymentData.cart.map((item: { productName: string; productSku?: string; quantity: number; unitPrice: number; discountAmount?: number; total: number }, idx: number) => ({
+                      id: idx,
+                      productName: item.productName,
+                      productSku: item.productSku || '',
+                      quantity: item.quantity,
+                      unitPrice: item.unitPrice,
+                      discountAmount: item.discountAmount || 0,
+                      total: item.total
+                    })),
+                    payments: [{ method: 'cash', amount: paymentData.cart.reduce((sum: number, item: { total: number }) => sum + item.total, 0), currency: 'USD' }]
+                  }
+                  setOrder(backupOrder)
+                  setLoading(false)
+                  return
+                }
+              } catch (e) {
+                console.error('[Receipt] Error parsing localStorage:', e)
+              }
+            }
+
             setError('Orden offline no encontrada')
           }
         } catch (e) {
-          console.error('Error loading offline order:', e)
+          console.error('[Receipt] Error loading offline order:', e)
           setError('Error al cargar orden offline')
         } finally {
           setLoading(false)
@@ -264,7 +313,7 @@ function ReceiptContent() {
           setError(data.error || 'Error al cargar orden')
         }
       } catch (e) {
-        console.error('Error fetching order:', e)
+        console.error('[Receipt] Error fetching order:', e)
         setError('Error de conexión')
       } finally {
         setLoading(false)
@@ -272,7 +321,7 @@ function ReceiptContent() {
     }
 
     fetchOrder()
-  }, [orderId, offlineId, isOfflineOrder, orderNumber])
+  }, [isClient, orderId, offlineId, isOfflineOrder, orderNumber])
 
   // Format currency
   const formatCurrency = (amount: number) => {
@@ -281,14 +330,18 @@ function ReceiptContent() {
 
   // Format date
   const formatDate = (dateStr: string) => {
-    const date = new Date(dateStr)
-    return date.toLocaleString('es-ES', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    })
+    try {
+      const date = new Date(dateStr)
+      return date.toLocaleString('es-ES', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      })
+    } catch {
+      return dateStr
+    }
   }
 
   // Get payment method label
@@ -371,88 +424,36 @@ ${order.payments.map(p =>
     }
   }
 
-  // Send receipt via WhatsApp
-  const sendWhatsApp = () => {
-    if (!order || !phoneNumber) return
-
-    const message = encodeURIComponent(
-      `Recibo de Venta\n` +
-      `Ticket: ${order.orderNumber}\n` +
-      `Fecha: ${formatDate(order.createdAt)}\n` +
-      `Total: ${formatCurrency(order.totalAmount)}\n\n` +
-      `Gracias por su compra!`
-    )
-
-    // Clean phone number (remove spaces, dashes, etc)
-    const cleanPhone = phoneNumber.replace(/\D/g, '')
-
-    window.open(`https://wa.me/${cleanPhone}?text=${message}`, '_blank')
-    setReceiptSent(true)
-  }
-
-  // Send receipt via SMS (simulate - would need backend integration)
-  const sendSMS = async () => {
-    if (!order || !phoneNumber) return
-
-    setSendingReceipt(true)
-
-    // Simulate sending SMS
-    await new Promise(resolve => setTimeout(resolve, 1500))
-
-    setSendingReceipt(false)
-    setReceiptSent(true)
-
-    // In production, you would call an API to send SMS
-    // const res = await fetch('/api/sms/send', {
-    //   method: 'POST',
-    //   body: JSON.stringify({
-    //     phone: phoneNumber,
-    //     message: `Recibo ${order.orderNumber} - Total: ${formatCurrency(order.totalAmount)}`
-    //   })
-    // })
-  }
-
-  // Copy link to clipboard
-  const copyReceiptLink = () => {
-    const link = `${window.location.origin}/receipt/${orderId}`
-    navigator.clipboard.writeText(link)
-    setCopiedLink(true)
-    setTimeout(() => setCopiedLink(false), 2000)
-  }
-
   // Navigate back to POS
   const newOrder = () => {
+    // Clear payment data
+    try {
+      localStorage.removeItem('pos_payment_data')
+    } catch (e) {
+      console.error('[Receipt] Error clearing localStorage:', e)
+    }
     router.push(`/dashboard/market/pos/${terminalId}`)
   }
 
-  // Navigate to dashboard
-  const goToDashboard = () => {
-    router.push('/dashboard/market')
-  }
-
-  if (loading) {
+  // Show loading
+  if (!isClient || loading) {
     return (
-      <div className={cn(
-        'min-h-screen flex items-center justify-center',
-        theme === 'dark' ? 'bg-gray-900' : 'bg-gray-100'
-      )}>
-        <Loader2 className="w-12 h-12 animate-spin text-blue-500" />
+      <div className="min-h-screen flex items-center justify-center bg-gray-900">
+        <LoaderIcon />
       </div>
     )
   }
 
+  // Show error
   if (error) {
     return (
-      <div className={cn(
-        'min-h-screen flex items-center justify-center',
-        theme === 'dark' ? 'bg-gray-900' : 'bg-gray-100'
-      )}>
+      <div className="min-h-screen flex items-center justify-center bg-gray-900">
         <div className="text-center">
-          <AlertCircle className="w-12 h-12 mx-auto mb-4 text-red-500" />
+          <AlertIcon />
           <p className="text-red-500 mb-4">{error}</p>
           <button
             onClick={newOrder}
-            className="px-4 py-2 bg-blue-500 text-white rounded-lg"
+            className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600"
           >
             Volver al POS
           </button>
@@ -462,69 +463,32 @@ ${order.payments.map(p =>
   }
 
   return (
-    <div className={cn(
-      'min-h-screen flex flex-col',
-      theme === 'dark' ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-900'
-    )}>
+    <div className="min-h-screen flex flex-col bg-gray-900 text-white">
       {/* Success Header */}
       <div className="py-8 text-center">
-        <motion.div
-          initial={{ scale: 0 }}
-          animate={{ scale: 1 }}
-          transition={{ type: 'spring', duration: 0.5 }}
-        >
-          <CheckCircle className="w-20 h-20 mx-auto mb-4 text-green-500" />
-        </motion.div>
-        <motion.h1
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.2 }}
-          className="text-2xl font-bold mb-2"
-        >
-          Pago Completado
-        </motion.h1>
-        <motion.p
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ delay: 0.3 }}
-          className="text-gray-500"
-        >
-          Orden #{order?.orderNumber}
-        </motion.p>
+        <CheckIcon />
+        <h1 className="text-2xl font-bold mb-2">Pago Completado</h1>
+        <p className="text-gray-400">Orden #{order?.orderNumber}</p>
 
         {/* Offline Order Badge */}
         {isOfflineOrder && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ delay: 0.4 }}
-            className="mt-4 inline-flex items-center gap-2 px-4 py-2 rounded-full bg-yellow-500/10 border border-yellow-500/30"
-          >
-            <Clock className="w-4 h-4 text-yellow-500" />
-            <span className="text-sm text-yellow-600 dark:text-yellow-400">
+          <div className="mt-4 inline-flex items-center gap-2 px-4 py-2 rounded-full bg-yellow-500/10 border border-yellow-500/30">
+            <ClockIcon />
+            <span className="text-sm text-yellow-400">
               Pendiente de sincronizar
             </span>
-          </motion.div>
+          </div>
         )}
       </div>
 
       <div className="flex-1 overflow-auto px-4 pb-4">
         <div className="max-w-2xl mx-auto space-y-6">
           {/* Receipt Preview */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.4 }}
-            className={cn(
-              'rounded-xl shadow-lg overflow-hidden',
-              theme === 'dark' ? 'bg-gray-800' : 'bg-white'
-            )}
-          >
-            {/* Receipt Content */}
+          <div className="rounded-xl shadow-lg overflow-hidden bg-gray-800">
             <div className="p-6 font-mono text-sm">
               <div className="text-center mb-4">
                 <p className="font-bold text-lg">RECIBO DE VENTA</p>
-                <p className="text-gray-500">{formatDate(order?.createdAt || '')}</p>
+                <p className="text-gray-400">{formatDate(order?.createdAt || '')}</p>
               </div>
 
               <div className="flex justify-between mb-2">
@@ -536,14 +500,11 @@ ${order.payments.map(p =>
                 <span>{order?.createdByName}</span>
               </div>
 
-              <div className={cn(
-                'border-t border-b py-4 my-4 space-y-2',
-                theme === 'dark' ? 'border-gray-700' : 'border-gray-200'
-              )}>
+              <div className="border-t border-b border-gray-700 py-4 my-4 space-y-2">
                 {order?.lines.map((line, idx) => (
                   <div key={idx}>
                     <p className="font-medium">{line.productName}</p>
-                    <div className="flex justify-between text-gray-500">
+                    <div className="flex justify-between text-gray-400">
                       <span>{line.quantity} x {formatCurrency(line.unitPrice)}</span>
                       <span>{formatCurrency(line.total)}</span>
                     </div>
@@ -568,11 +529,8 @@ ${order.payments.map(p =>
                 </div>
               </div>
 
-              <div className={cn(
-                'border-t pt-4 mt-4',
-                theme === 'dark' ? 'border-gray-700' : 'border-gray-200'
-              )}>
-                <p className="text-gray-500 mb-2">Pagos:</p>
+              <div className="border-t border-gray-700 pt-4 mt-4">
+                <p className="text-gray-400 mb-2">Pagos:</p>
                 {order?.payments.map((payment, idx) => (
                   <div key={idx} className="flex justify-between">
                     <span>{getPaymentMethodLabel(payment.method)}:</span>
@@ -581,166 +539,30 @@ ${order.payments.map(p =>
                 ))}
               </div>
 
-              <p className="text-center text-gray-500 mt-6">
+              <p className="text-center text-gray-400 mt-6">
                 Gracias por su compra!
               </p>
             </div>
-          </motion.div>
-
-          {/* Send Receipt Options */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.5 }}
-            className={cn(
-              'rounded-xl p-6 shadow-lg',
-              theme === 'dark' ? 'bg-gray-800' : 'bg-white'
-            )}
-          >
-            <h2 className="text-lg font-semibold mb-4">Enviar Recibo</h2>
-
-            {/* Offline Warning */}
-            {!isOnline && (
-              <div className="mb-4 p-3 rounded-lg bg-yellow-500/10 border border-yellow-500/30 flex items-center gap-2">
-                <WifiOff className="w-5 h-5 text-yellow-500" />
-                <span className="text-sm text-yellow-600 dark:text-yellow-400">
-                  Sin conexión. El envío de recibos no está disponible.
-                </span>
-              </div>
-            )}
-
-            <div className="mb-4">
-              <label className="text-sm text-gray-500 mb-2 block">Teléfono del cliente</label>
-              <div className="flex gap-2">
-                <input
-                  type="tel"
-                  value={phoneNumber}
-                  onChange={(e) => setPhoneNumber(e.target.value)}
-                  placeholder="+53 5XXXXXXX"
-                  disabled={!isOnline}
-                  className={cn(
-                    'flex-1 px-4 py-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500',
-                    !isOnline && 'opacity-50 cursor-not-allowed',
-                    theme === 'dark'
-                      ? 'bg-gray-700 text-white placeholder-gray-400'
-                      : 'bg-gray-100 text-gray-900 placeholder-gray-500'
-                  )}
-                />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-3">
-              <button
-                onClick={sendSMS}
-                disabled={!phoneNumber || sendingReceipt || !isOnline}
-                className={cn(
-                  'p-4 rounded-lg flex items-center justify-center gap-2 font-medium transition-all',
-                  phoneNumber && !sendingReceipt && isOnline
-                    ? 'bg-blue-500 text-white hover:bg-blue-600'
-                    : 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                )}
-              >
-                {sendingReceipt ? (
-                  <Loader2 className="w-5 h-5 animate-spin" />
-                ) : (
-                  <Phone className="w-5 h-5" />
-                )}
-                Enviar SMS
-              </button>
-
-              <button
-                onClick={sendWhatsApp}
-                disabled={!phoneNumber || !isOnline}
-                className={cn(
-                  'p-4 rounded-lg flex items-center justify-center gap-2 font-medium transition-all',
-                  phoneNumber && isOnline
-                    ? 'bg-green-500 text-white hover:bg-green-600'
-                    : 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                )}
-              >
-                <MessageSquare className="w-5 h-5" />
-                WhatsApp
-              </button>
-            </div>
-
-            {receiptSent && (
-              <motion.div
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="mt-4 p-3 rounded-lg bg-green-100 text-green-700 flex items-center gap-2"
-              >
-                <Check className="w-5 h-5" />
-                Recibo enviado correctamente
-              </motion.div>
-            )}
-          </motion.div>
+          </div>
 
           {/* Action Buttons */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.6 }}
-            className="grid grid-cols-1 sm:grid-cols-3 gap-3"
-          >
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <button
               onClick={printReceipt}
-              className={cn(
-                'p-4 rounded-xl flex items-center justify-center gap-2 font-medium shadow-lg transition-all',
-                theme === 'dark'
-                  ? 'bg-gray-800 hover:bg-gray-700'
-                  : 'bg-white hover:bg-gray-50'
-              )}
+              className="p-4 rounded-xl flex items-center justify-center gap-2 font-medium shadow-lg bg-gray-800 hover:bg-gray-700"
             >
-              <Printer className="w-5 h-5" />
+              <PrinterIcon />
               Imprimir
             </button>
 
             <button
-              onClick={copyReceiptLink}
-              className={cn(
-                'p-4 rounded-xl flex items-center justify-center gap-2 font-medium shadow-lg transition-all',
-                theme === 'dark'
-                  ? 'bg-gray-800 hover:bg-gray-700'
-                  : 'bg-white hover:bg-gray-50'
-              )}
-            >
-              {copiedLink ? (
-                <>
-                  <Check className="w-5 h-5 text-green-500" />
-                  Copiado!
-                </>
-              ) : (
-                <>
-                  <Copy className="w-5 h-5" />
-                  Copiar Link
-                </>
-              )}
-            </button>
-
-            <button
               onClick={newOrder}
-              className="p-4 rounded-xl flex items-center justify-center gap-2 font-medium bg-blue-500 text-white hover:bg-blue-600 shadow-lg transition-all"
+              className="p-4 rounded-xl flex items-center justify-center gap-2 font-medium bg-blue-500 text-white hover:bg-blue-600 shadow-lg"
             >
-              <ShoppingCart className="w-5 h-5" />
+              <CartIcon />
               Nueva Orden
             </button>
-          </motion.div>
-
-          {/* Back to Dashboard */}
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ delay: 0.7 }}
-            className="text-center"
-          >
-            <button
-              onClick={goToDashboard}
-              className="text-gray-500 hover:text-gray-700 flex items-center justify-center gap-2 mx-auto"
-            >
-              <Home className="w-4 h-4" />
-              Volver al Dashboard
-            </button>
-          </motion.div>
+          </div>
         </div>
       </div>
     </div>
@@ -751,7 +573,7 @@ ${order.payments.map(p =>
 function LoadingFallback() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-900">
-      <Loader2 className="w-12 h-12 animate-spin text-blue-500" />
+      <LoaderIcon />
     </div>
   )
 }

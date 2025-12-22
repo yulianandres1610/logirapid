@@ -1,24 +1,12 @@
 'use client'
 
-import React, { useState, useEffect, useMemo, Suspense, useCallback } from 'react'
-import { motion, AnimatePresence } from 'framer-motion'
-import {
-  ChevronLeft,
-  CreditCard,
-  Banknote,
-  Smartphone,
-  FileText,
-  Trash2,
-  Plus,
-  CheckCircle,
-  Loader2,
-  AlertCircle,
-  WifiOff,
-  Wifi
-} from 'lucide-react'
+import React, { useState, useEffect, useMemo, Suspense } from 'react'
 import { useRouter, useParams } from 'next/navigation'
-import { useTheme } from '@/contexts/theme-context'
-import { cn } from '@/lib/utils'
+
+// ============================================
+// INLINE EVERYTHING FOR OFFLINE SUPPORT
+// No external imports that could fail offline
+// ============================================
 
 // Generate offline ID
 const getOfflineId = (): string => {
@@ -34,7 +22,7 @@ const DB_NAME = 'market_pos_db'
 const DB_VERSION = 1
 const PENDING_ORDERS_STORE = 'pending_orders'
 
-// Open IndexedDB directly (no dynamic import needed)
+// Open IndexedDB directly
 const openPOSDB = (): Promise<IDBDatabase> => {
   return new Promise((resolve, reject) => {
     if (typeof window === 'undefined' || !window.indexedDB) {
@@ -50,14 +38,12 @@ const openPOSDB = (): Promise<IDBDatabase> => {
     request.onupgradeneeded = (event) => {
       const db = (event.target as IDBOpenDBRequest).result
 
-      // Create pending_orders store if it doesn't exist
       if (!db.objectStoreNames.contains(PENDING_ORDERS_STORE)) {
         const ordersStore = db.createObjectStore(PENDING_ORDERS_STORE, { keyPath: 'offlineId' })
         ordersStore.createIndex('sessionId', 'sessionId', { unique: false })
         ordersStore.createIndex('synced', 'synced', { unique: false })
       }
 
-      // Create other stores if needed
       if (!db.objectStoreNames.contains('products')) {
         const productsStore = db.createObjectStore('products', { keyPath: 'id' })
         productsStore.createIndex('barcode', 'barcode', { unique: false })
@@ -79,7 +65,7 @@ const openPOSDB = (): Promise<IDBDatabase> => {
   })
 }
 
-// Save pending order directly to IndexedDB
+// Save pending order to IndexedDB
 const saveOrderToIndexedDB = async (order: PendingOrderData): Promise<void> => {
   if (typeof window === 'undefined') return
 
@@ -103,6 +89,7 @@ const saveOrderToIndexedDB = async (order: PendingOrderData): Promise<void> => {
   }
 }
 
+// Interfaces
 interface CartItem {
   productId: number
   productName: string
@@ -120,9 +107,6 @@ interface Payment {
   currency: 'USD' | 'CUP' | 'MLC'
   amount: number
   amountInUSD: number
-  amountTendered?: number
-  changeAmount?: number
-  reference?: string
 }
 
 interface PendingOrderData {
@@ -166,11 +150,92 @@ const DEFAULT_RATES: ExchangeRates = {
   MLC: 0.91
 }
 
+// Simple SVG icons inline
+const BackIcon = () => (
+  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+  </svg>
+)
+
+const CashIcon = () => (
+  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" />
+  </svg>
+)
+
+const CardIcon = () => (
+  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
+  </svg>
+)
+
+const TransferIcon = () => (
+  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z" />
+  </svg>
+)
+
+const CreditIcon = () => (
+  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+  </svg>
+)
+
+const TrashIcon = () => (
+  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+  </svg>
+)
+
+const PlusIcon = () => (
+  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+  </svg>
+)
+
+const CheckIcon = () => (
+  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+  </svg>
+)
+
+const LoaderIcon = () => (
+  <svg className="w-5 h-5 animate-spin" fill="none" viewBox="0 0 24 24">
+    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+  </svg>
+)
+
+const WifiIcon = () => (
+  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.111 16.404a5.5 5.5 0 017.778 0M12 20h.01m-7.08-7.071c3.904-3.905 10.236-3.905 14.141 0M1.394 9.393c5.857-5.857 15.355-5.857 21.213 0" />
+  </svg>
+)
+
+const WifiOffIcon = () => (
+  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 5.636a9 9 0 010 12.728m0 0l-2.829-2.829m2.829 2.829L21 21M15.536 8.464a5 5 0 010 7.072m0 0l-2.829-2.829m-4.243 2.829a4.978 4.978 0 01-1.414-2.83m-1.414 5.658a9 9 0 01-2.167-9.238m7.824 2.167a1 1 0 111.414 1.414m-1.414-1.414L3 3m8.293 8.293l1.414 1.414" />
+  </svg>
+)
+
+const AlertIcon = () => (
+  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+  </svg>
+)
+
+const BigLoaderIcon = () => (
+  <svg className="w-12 h-12 animate-spin text-blue-500" fill="none" viewBox="0 0 24 24">
+    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+  </svg>
+)
+
 const PAYMENT_METHODS = [
-  { id: 'cash', label: 'Efectivo', icon: Banknote, offlineEnabled: true },
-  { id: 'card', label: 'Tarjeta', icon: CreditCard, offlineEnabled: false },
-  { id: 'transfer', label: 'Transferencia', icon: Smartphone, offlineEnabled: true },
-  { id: 'credit', label: 'Crédito', icon: FileText, offlineEnabled: true }
+  { id: 'cash', label: 'Efectivo', Icon: CashIcon, offlineEnabled: true },
+  { id: 'card', label: 'Tarjeta', Icon: CardIcon, offlineEnabled: false },
+  { id: 'transfer', label: 'Transferencia', Icon: TransferIcon, offlineEnabled: true },
+  { id: 'credit', label: 'Crédito', Icon: CreditIcon, offlineEnabled: true }
 ]
 
 const CURRENCIES = [
@@ -179,53 +244,16 @@ const CURRENCIES = [
   { id: 'MLC', label: 'MLC', symbol: '€' }
 ]
 
-// Safely decode cart data (handles double-encoding)
-function safeDecodeCart(cartData: string | null): CartItem[] {
-  if (!cartData) return []
-
-  try {
-    let decoded = cartData
-
-    // Try to decode multiple times if double-encoded
-    for (let i = 0; i < 3; i++) {
-      try {
-        const result = JSON.parse(decoded)
-        if (Array.isArray(result)) {
-          return result
-        }
-      } catch {
-        // Not valid JSON yet, try decoding
-        try {
-          decoded = decodeURIComponent(decoded)
-        } catch {
-          break
-        }
-      }
-    }
-
-    return []
-  } catch (e) {
-    console.error('[Payment] Error decoding cart:', e)
-    return []
-  }
-}
-
-// Payment content component
 function PaymentContent() {
-  const { theme } = useTheme()
   const router = useRouter()
   const params = useParams()
   const terminalId = params.terminalId as string
 
-  // Check online status safely
-  const [isOnline, setIsOnline] = useState(true)
+  // State
   const [isClient, setIsClient] = useState(false)
-
-  // Payment data from localStorage
+  const [isOnline, setIsOnline] = useState(true)
   const [sessionId, setSessionId] = useState<string | null>(null)
   const [warehouseId, setWarehouseId] = useState<string | null>(null)
-
-  // State
   const [cart, setCart] = useState<CartItem[]>([])
   const [payments, setPayments] = useState<Payment[]>([])
   const [selectedMethod, setSelectedMethod] = useState<'cash' | 'card' | 'transfer' | 'credit'>('cash')
@@ -236,10 +264,10 @@ function PaymentContent() {
   const [processing, setProcessing] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  // Initialize client-side only values
+  // Initialize client-side
   useEffect(() => {
     setIsClient(true)
-    setIsOnline(navigator.onLine)
+    setIsOnline(typeof navigator !== 'undefined' ? navigator.onLine : true)
 
     const handleOnline = () => setIsOnline(true)
     const handleOffline = () => setIsOnline(false)
@@ -253,7 +281,7 @@ function PaymentContent() {
     }
   }, [])
 
-  // Load cart data from localStorage on mount
+  // Load cart data from localStorage
   useEffect(() => {
     if (!isClient) return
 
@@ -261,8 +289,6 @@ function PaymentContent() {
       const paymentDataStr = localStorage.getItem('pos_payment_data')
       if (paymentDataStr) {
         const paymentData = JSON.parse(paymentDataStr)
-
-        // Check if data is fresh (less than 1 hour old)
         const isDataFresh = paymentData.timestamp && (Date.now() - paymentData.timestamp) < 3600000
 
         if (paymentData.cart && Array.isArray(paymentData.cart) && paymentData.cart.length > 0 && isDataFresh) {
@@ -278,48 +304,41 @@ function PaymentContent() {
         setError('No hay datos del carrito')
       }
     } catch (e) {
-      console.error('[Payment] Error loading cart from localStorage:', e)
+      console.error('[Payment] Error loading cart:', e)
       setError('Error al cargar datos del carrito')
     }
   }, [isClient])
 
-  // Fetch exchange rates (only when online)
+  // Load exchange rates
   useEffect(() => {
     if (!isClient) return
 
-    const fetchRates = async () => {
-      if (!navigator.onLine) {
-        console.log('[Payment] Offline - using default rates')
-        // Try to get cached rates from localStorage
-        try {
-          const cachedRates = localStorage.getItem('pos_exchange_rates')
-          if (cachedRates) {
-            setRates(JSON.parse(cachedRates))
-          }
-        } catch {
-          // Use defaults
-        }
-        return
+    // Try to get cached rates first
+    try {
+      const cachedRates = localStorage.getItem('pos_exchange_rates')
+      if (cachedRates) {
+        setRates(JSON.parse(cachedRates))
       }
-
-      try {
-        const res = await fetch('/api/agency-rates')
-        const data = await res.json()
-        if (data.success && data.rates) {
-          const newRates = {
-            CUP: data.rates.usd || DEFAULT_RATES.CUP,
-            MLC: data.rates.mlc || DEFAULT_RATES.MLC
-          }
-          setRates(newRates)
-          // Cache rates for offline use
-          localStorage.setItem('pos_exchange_rates', JSON.stringify(newRates))
-        }
-      } catch (e) {
-        console.error('[Payment] Error fetching rates:', e)
-      }
+    } catch {
+      // Use defaults
     }
 
-    fetchRates()
+    // If online, fetch fresh rates
+    if (navigator.onLine) {
+      fetch('/api/agency-rates')
+        .then(res => res.json())
+        .then(data => {
+          if (data.success && data.rates) {
+            const newRates = {
+              CUP: data.rates.usd || DEFAULT_RATES.CUP,
+              MLC: data.rates.mlc || DEFAULT_RATES.MLC
+            }
+            setRates(newRates)
+            localStorage.setItem('pos_exchange_rates', JSON.stringify(newRates))
+          }
+        })
+        .catch(e => console.error('[Payment] Error fetching rates:', e))
+    }
   }, [isClient])
 
   // Calculate totals
@@ -353,12 +372,9 @@ function PaymentContent() {
   // Convert amount to USD
   const convertToUSD = (amount: number, currency: 'USD' | 'CUP' | 'MLC'): number => {
     switch (currency) {
-      case 'CUP':
-        return amount / rates.CUP
-      case 'MLC':
-        return amount / rates.MLC
-      default:
-        return amount
+      case 'CUP': return amount / rates.CUP
+      case 'MLC': return amount / rates.MLC
+      default: return amount
     }
   }
 
@@ -422,42 +438,34 @@ function PaymentContent() {
         amount: p.amountInUSD,
         currency: p.currency,
         amountTendered: p.method === 'cash' ? p.amount : null,
-        changeAmount: changeAmount > 0 ? (changeCurrency === 'USD' ? changeAmount : changeAmount / rates.CUP) : null,
-        reference: p.reference
+        changeAmount: changeAmount > 0 ? (changeCurrency === 'USD' ? changeAmount : changeAmount / rates.CUP) : null
       }))
 
       // OFFLINE MODE: Save to IndexedDB
       if (!isOnline) {
         console.log('[Payment] Offline mode - saving locally')
 
-        try {
-          const offlineId = getOfflineId()
-          const offlineOrder: PendingOrderData = {
-            offlineId,
-            terminalId: parseInt(terminalId),
-            sessionId: parseInt(sessionId),
-            warehouseId: warehouseId ? parseInt(warehouseId) : null,
-            customerId: null,
-            customerName: null,
-            currency: 'USD',
-            lines: orderLines,
-            payments: orderPayments,
-            total: totals.total,
-            createdAt: new Date().toISOString(),
-            synced: false
-          }
-
-          await saveOrderToIndexedDB(offlineOrder)
-
-          const offlineOrderNumber = `OFFLINE-${Date.now().toString(36).toUpperCase()}`
-          router.push(`/dashboard/market/pos/${terminalId}/receipt?offlineId=${offlineId}&orderNumber=${offlineOrderNumber}&offline=true`)
-          return
-        } catch (offlineError) {
-          console.error('[Payment] Error saving offline:', offlineError)
-          setError('Error al guardar offline. Intente de nuevo.')
-          setProcessing(false)
-          return
+        const offlineId = getOfflineId()
+        const offlineOrder: PendingOrderData = {
+          offlineId,
+          terminalId: parseInt(terminalId),
+          sessionId: parseInt(sessionId),
+          warehouseId: warehouseId ? parseInt(warehouseId) : null,
+          customerId: null,
+          customerName: null,
+          currency: 'USD',
+          lines: orderLines,
+          payments: orderPayments,
+          total: totals.total,
+          createdAt: new Date().toISOString(),
+          synced: false
         }
+
+        await saveOrderToIndexedDB(offlineOrder)
+
+        const offlineOrderNumber = `OFFLINE-${Date.now().toString(36).toUpperCase()}`
+        router.push(`/dashboard/market/pos/${terminalId}/receipt?offlineId=${offlineId}&orderNumber=${offlineOrderNumber}&offline=true`)
+        return
       }
 
       // ONLINE MODE: Send to API
@@ -557,7 +565,6 @@ function PaymentContent() {
 
   // Navigate back to POS
   const goBackToPOS = () => {
-    // Store cart back to localStorage so POS can restore it
     if (cart.length > 0) {
       const paymentData = {
         cart: cart,
@@ -571,31 +578,25 @@ function PaymentContent() {
     router.push(`/dashboard/market/pos/${terminalId}?restoreFromPayment=true`)
   }
 
-  // Show loading while not client
+  // Show loading
   if (!isClient) {
     return (
-      <div className={cn(
-        'min-h-screen flex items-center justify-center',
-        theme === 'dark' ? 'bg-gray-900' : 'bg-gray-100'
-      )}>
-        <Loader2 className="w-12 h-12 animate-spin text-blue-500" />
+      <div className="min-h-screen flex items-center justify-center bg-gray-900">
+        <BigLoaderIcon />
       </div>
     )
   }
 
-  // Error state with no cart
+  // Error with no cart
   if (error && cart.length === 0) {
     return (
-      <div className={cn(
-        'min-h-screen flex items-center justify-center',
-        theme === 'dark' ? 'bg-gray-900' : 'bg-gray-100'
-      )}>
+      <div className="min-h-screen flex items-center justify-center bg-gray-900">
         <div className="text-center">
-          <AlertCircle className="w-12 h-12 mx-auto mb-4 text-red-500" />
-          <p className="text-red-500 mb-4">{error}</p>
+          <AlertIcon />
+          <p className="text-red-500 mb-4 mt-4">{error}</p>
           <button
             onClick={() => router.push(`/dashboard/market/pos/${terminalId}`)}
-            className="px-4 py-2 bg-blue-500 text-white rounded-lg"
+            className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600"
           >
             Volver al POS
           </button>
@@ -605,32 +606,26 @@ function PaymentContent() {
   }
 
   return (
-    <div className={cn(
-      'min-h-screen flex flex-col',
-      theme === 'dark' ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-900'
-    )}>
+    <div className="min-h-screen flex flex-col bg-gray-900 text-white">
       {/* Header */}
-      <header className={cn(
-        'flex items-center justify-between px-4 py-3 border-b',
-        theme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'
-      )}>
+      <header className="flex items-center justify-between px-4 py-3 border-b bg-gray-800 border-gray-700">
         <button
           onClick={goBackToPOS}
-          className="flex items-center gap-2 text-gray-500 hover:text-gray-700"
+          className="flex items-center gap-2 text-gray-400 hover:text-gray-200"
         >
-          <ChevronLeft className="w-5 h-5" />
+          <BackIcon />
           <span>Volver al POS</span>
         </button>
         <h1 className="text-lg font-semibold">Cobrar</h1>
         <div className="w-24 flex items-center justify-end">
           {isOnline ? (
             <div className="flex items-center gap-1 text-green-500">
-              <Wifi className="w-4 h-4" />
+              <WifiIcon />
               <span className="text-xs">Online</span>
             </div>
           ) : (
             <div className="flex items-center gap-1 text-yellow-500">
-              <WifiOff className="w-4 h-4" />
+              <WifiOffIcon />
               <span className="text-xs">Offline</span>
             </div>
           )}
@@ -642,14 +637,7 @@ function PaymentContent() {
           {/* Left Column - Order Summary */}
           <div className="space-y-4">
             {/* Order Summary Card */}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              className={cn(
-                'rounded-xl p-4 shadow-sm',
-                theme === 'dark' ? 'bg-gray-800' : 'bg-white'
-              )}
-            >
+            <div className="rounded-xl p-4 shadow-sm bg-gray-800">
               <h2 className="text-lg font-semibold mb-4">Resumen de Orden</h2>
               <div className="space-y-2 max-h-48 overflow-auto">
                 {cart.map((item, idx) => (
@@ -661,10 +649,7 @@ function PaymentContent() {
                   </div>
                 ))}
               </div>
-              <div className={cn(
-                'mt-4 pt-4 border-t space-y-2',
-                theme === 'dark' ? 'border-gray-700' : 'border-gray-200'
-              )}>
+              <div className="mt-4 pt-4 border-t border-gray-700 space-y-2">
                 <div className="flex justify-between">
                   <span>Subtotal:</span>
                   <span>{formatCurrency(totals.subtotal)}</span>
@@ -680,79 +665,54 @@ function PaymentContent() {
                   <span>{formatCurrency(totals.total)}</span>
                 </div>
               </div>
-            </motion.div>
+            </div>
 
             {/* Payments List */}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.1 }}
-              className={cn(
-                'rounded-xl p-4 shadow-sm',
-                theme === 'dark' ? 'bg-gray-800' : 'bg-white'
-              )}
-            >
+            <div className="rounded-xl p-4 shadow-sm bg-gray-800">
               <h2 className="text-lg font-semibold mb-4">Pagos Realizados</h2>
 
               {payments.length === 0 ? (
                 <p className="text-gray-500 text-center py-4">No hay pagos agregados</p>
               ) : (
                 <div className="space-y-2">
-                  <AnimatePresence>
-                    {payments.map((payment) => (
-                      <motion.div
+                  {payments.map((payment) => {
+                    const method = PAYMENT_METHODS.find(m => m.id === payment.method)
+                    const MethodIcon = method?.Icon || CashIcon
+                    return (
+                      <div
                         key={payment.id}
-                        initial={{ opacity: 0, x: -20 }}
-                        animate={{ opacity: 1, x: 0 }}
-                        exit={{ opacity: 0, x: 20 }}
-                        className={cn(
-                          'flex items-center justify-between p-3 rounded-lg',
-                          theme === 'dark' ? 'bg-gray-700' : 'bg-gray-100'
-                        )}
+                        className="flex items-center justify-between p-3 rounded-lg bg-gray-700"
                       >
                         <div className="flex items-center gap-3">
-                          {payment.method === 'cash' && <Banknote className="w-5 h-5 text-green-500" />}
-                          {payment.method === 'card' && <CreditCard className="w-5 h-5 text-blue-500" />}
-                          {payment.method === 'transfer' && <Smartphone className="w-5 h-5 text-purple-500" />}
-                          {payment.method === 'credit' && <FileText className="w-5 h-5 text-orange-500" />}
+                          <MethodIcon />
                           <div>
-                            <p className="font-medium">
-                              {PAYMENT_METHODS.find(m => m.id === payment.method)?.label}
-                            </p>
-                            <p className="text-sm text-gray-500">
+                            <p className="font-medium">{method?.label}</p>
+                            <p className="text-sm text-gray-400">
                               {formatCurrency(payment.amount, payment.currency)}
                               {payment.currency !== 'USD' && (
-                                <span className="ml-1">
-                                  (≈{formatCurrency(payment.amountInUSD)})
-                                </span>
+                                <span className="ml-1">(≈{formatCurrency(payment.amountInUSD)})</span>
                               )}
                             </p>
                           </div>
                         </div>
                         <button
                           onClick={() => removePayment(payment.id)}
-                          className="p-2 text-red-500 hover:bg-red-100 rounded-lg"
+                          className="p-2 text-red-500 hover:bg-red-900/30 rounded-lg"
                         >
-                          <Trash2 className="w-4 h-4" />
+                          <TrashIcon />
                         </button>
-                      </motion.div>
-                    ))}
-                  </AnimatePresence>
+                      </div>
+                    )
+                  })}
                 </div>
               )}
 
-              <div className={cn(
-                'mt-4 pt-4 border-t space-y-2',
-                theme === 'dark' ? 'border-gray-700' : 'border-gray-200'
-              )}>
+              <div className="mt-4 pt-4 border-t border-gray-700 space-y-2">
                 <div className="flex justify-between">
                   <span>Total pagado:</span>
                   <span className="font-semibold">{formatCurrency(totalPaidUSD)}</span>
                 </div>
-                <div className={cn(
-                  'flex justify-between font-bold',
-                  remainingUSD > 0 ? 'text-red-500' : 'text-green-500'
-                )}>
+                <div className={`flex justify-between font-bold ${remainingUSD > 0 ? 'text-red-500' : 'text-green-500'}`}>
                   <span>{remainingUSD > 0 ? 'Pendiente:' : 'Cambio:'}</span>
                   <span>
                     {remainingUSD > 0
@@ -762,58 +722,46 @@ function PaymentContent() {
                   </span>
                 </div>
               </div>
-            </motion.div>
+            </div>
           </div>
 
           {/* Right Column - Add Payment */}
           <div className="space-y-4">
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.2 }}
-              className={cn(
-                'rounded-xl p-4 shadow-sm',
-                theme === 'dark' ? 'bg-gray-800' : 'bg-white'
-              )}
-            >
+            <div className="rounded-xl p-4 shadow-sm bg-gray-800">
               <h2 className="text-lg font-semibold mb-4">Agregar Pago</h2>
 
               {/* Offline Warning */}
               {!isOnline && (
                 <div className="mb-4 p-3 rounded-lg bg-yellow-500/10 border border-yellow-500/30 flex items-center gap-2">
-                  <WifiOff className="w-5 h-5 text-yellow-500 flex-shrink-0" />
+                  <WifiOffIcon />
                   <div className="text-sm">
                     <span className="font-medium text-yellow-500">Modo Offline</span>
-                    <span className="text-gray-500 ml-2">Efectivo, transferencia y crédito disponibles.</span>
+                    <span className="text-gray-400 ml-2">Efectivo, transferencia y crédito disponibles.</span>
                   </div>
                 </div>
               )}
 
               {/* Payment Method */}
               <div className="mb-4">
-                <label className="text-sm text-gray-500 mb-2 block">Método de Pago</label>
+                <label className="text-sm text-gray-400 mb-2 block">Método de Pago</label>
                 <div className="grid grid-cols-4 gap-2">
                   {PAYMENT_METHODS.map((method) => {
-                    const Icon = method.icon
-                    // Disable only card when offline
+                    const MethodIcon = method.Icon
                     const isDisabled = !isOnline && !method.offlineEnabled
                     return (
                       <button
                         key={method.id}
                         onClick={() => !isDisabled && setSelectedMethod(method.id as Payment['method'])}
                         disabled={isDisabled}
-                        className={cn(
-                          'p-3 rounded-lg flex flex-col items-center gap-1 transition-all',
+                        className={`p-3 rounded-lg flex flex-col items-center gap-1 transition-all ${
                           isDisabled
-                            ? 'bg-gray-300 dark:bg-gray-700 text-gray-400 cursor-not-allowed opacity-50'
+                            ? 'bg-gray-700 text-gray-500 cursor-not-allowed opacity-50'
                             : selectedMethod === method.id
                               ? 'bg-blue-500 text-white'
-                              : theme === 'dark'
-                                ? 'bg-gray-700 hover:bg-gray-600'
-                                : 'bg-gray-100 hover:bg-gray-200'
-                        )}
+                              : 'bg-gray-700 hover:bg-gray-600'
+                        }`}
                       >
-                        <Icon className="w-5 h-5" />
+                        <MethodIcon />
                         <span className="text-xs">{method.label}</span>
                       </button>
                     )
@@ -824,8 +772,8 @@ function PaymentContent() {
               {/* Currency */}
               <div className="mb-4">
                 <div className="flex items-center justify-between mb-2">
-                  <label className="text-sm text-gray-500">Moneda</label>
-                  <span className="text-xs text-gray-400">
+                  <label className="text-sm text-gray-400">Moneda</label>
+                  <span className="text-xs text-gray-500">
                     1 USD = {rates.CUP} CUP | {rates.MLC.toFixed(2)} MLC
                   </span>
                 </div>
@@ -834,14 +782,11 @@ function PaymentContent() {
                     <button
                       key={currency.id}
                       onClick={() => setSelectedCurrency(currency.id as Payment['currency'])}
-                      className={cn(
-                        'p-3 rounded-lg font-medium transition-all',
+                      className={`p-3 rounded-lg font-medium transition-all ${
                         selectedCurrency === currency.id
                           ? 'bg-blue-500 text-white'
-                          : theme === 'dark'
-                            ? 'bg-gray-700 hover:bg-gray-600'
-                            : 'bg-gray-100 hover:bg-gray-200'
-                      )}
+                          : 'bg-gray-700 hover:bg-gray-600'
+                      }`}
                     >
                       {currency.label}
                     </button>
@@ -851,11 +796,8 @@ function PaymentContent() {
 
               {/* Amount Input */}
               <div className="mb-4">
-                <label className="text-sm text-gray-500 mb-2 block">Monto</label>
-                <div className={cn(
-                  'relative rounded-lg',
-                  theme === 'dark' ? 'bg-gray-700' : 'bg-gray-100'
-                )}>
+                <label className="text-sm text-gray-400 mb-2 block">Monto</label>
+                <div className="relative rounded-lg bg-gray-700">
                   <span className="absolute left-4 top-1/2 -translate-y-1/2 text-2xl text-gray-400">
                     {CURRENCIES.find(c => c.id === selectedCurrency)?.symbol}
                   </span>
@@ -864,10 +806,7 @@ function PaymentContent() {
                     value={amount}
                     onChange={(e) => setAmount(e.target.value.replace(/[^0-9.]/g, ''))}
                     placeholder="0.00"
-                    className={cn(
-                      'w-full pl-10 pr-4 py-4 text-3xl font-bold text-right bg-transparent rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500',
-                      theme === 'dark' ? 'text-white' : 'text-gray-900'
-                    )}
+                    className="w-full pl-10 pr-4 py-4 text-3xl font-bold text-right bg-transparent rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-white"
                   />
                 </div>
               </div>
@@ -877,10 +816,7 @@ function PaymentContent() {
                 {remainingUSD > 0 && (
                   <button
                     onClick={setExactAmount}
-                    className={cn(
-                      'p-2 rounded-lg text-sm font-medium',
-                      theme === 'dark' ? 'bg-green-600 text-white' : 'bg-green-500 text-white'
-                    )}
+                    className="p-2 rounded-lg text-sm font-medium bg-green-600 text-white"
                   >
                     Exacto
                   </button>
@@ -889,10 +825,7 @@ function PaymentContent() {
                   <button
                     key={val}
                     onClick={() => setAmount(val.toString())}
-                    className={cn(
-                      'p-2 rounded-lg text-sm font-medium',
-                      theme === 'dark' ? 'bg-gray-700 hover:bg-gray-600' : 'bg-gray-200 hover:bg-gray-300'
-                    )}
+                    className="p-2 rounded-lg text-sm font-medium bg-gray-700 hover:bg-gray-600"
                   >
                     ${val}
                   </button>
@@ -901,10 +834,7 @@ function PaymentContent() {
                   <button
                     key={val}
                     onClick={() => setAmount(val.toString())}
-                    className={cn(
-                      'p-2 rounded-lg text-sm font-medium',
-                      theme === 'dark' ? 'bg-gray-700 hover:bg-gray-600' : 'bg-gray-200 hover:bg-gray-300'
-                    )}
+                    className="p-2 rounded-lg text-sm font-medium bg-gray-700 hover:bg-gray-600"
                   >
                     ${val.toLocaleString()}
                   </button>
@@ -917,14 +847,11 @@ function PaymentContent() {
                   <button
                     key={key}
                     onClick={() => handleNumpad(key)}
-                    className={cn(
-                      'p-4 rounded-lg text-xl font-bold transition-all active:scale-95',
+                    className={`p-4 rounded-lg text-xl font-bold transition-all active:scale-95 ${
                       key === 'C'
                         ? 'bg-red-500 text-white hover:bg-red-600'
-                        : theme === 'dark'
-                          ? 'bg-gray-700 hover:bg-gray-600'
-                          : 'bg-gray-200 hover:bg-gray-300'
-                    )}
+                        : 'bg-gray-700 hover:bg-gray-600'
+                    }`}
                   >
                     {key}
                   </button>
@@ -935,64 +862,46 @@ function PaymentContent() {
               <button
                 onClick={addPayment}
                 disabled={!amount || parseFloat(amount) <= 0}
-                className={cn(
-                  'w-full p-4 rounded-lg flex items-center justify-center gap-2 font-semibold transition-all',
+                className={`w-full p-4 rounded-lg flex items-center justify-center gap-2 font-semibold transition-all ${
                   amount && parseFloat(amount) > 0
                     ? 'bg-blue-500 text-white hover:bg-blue-600'
-                    : 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                )}
+                    : 'bg-gray-600 text-gray-400 cursor-not-allowed'
+                }`}
               >
-                <Plus className="w-5 h-5" />
+                <PlusIcon />
                 Agregar Pago
               </button>
-            </motion.div>
+            </div>
 
-            {/* Change Currency (when overpaid) */}
+            {/* Change Currency */}
             {remainingUSD < 0 && (
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                className={cn(
-                  'rounded-xl p-4 shadow-sm',
-                  theme === 'dark' ? 'bg-gray-800' : 'bg-white'
-                )}
-              >
+              <div className="rounded-xl p-4 shadow-sm bg-gray-800">
                 <h3 className="font-semibold mb-3">Devolver cambio en:</h3>
                 <div className="grid grid-cols-2 gap-2">
                   <button
                     onClick={() => setChangeCurrency('USD')}
-                    className={cn(
-                      'p-3 rounded-lg font-medium',
-                      changeCurrency === 'USD'
-                        ? 'bg-blue-500 text-white'
-                        : theme === 'dark'
-                          ? 'bg-gray-700'
-                          : 'bg-gray-100'
-                    )}
+                    className={`p-3 rounded-lg font-medium ${
+                      changeCurrency === 'USD' ? 'bg-blue-500 text-white' : 'bg-gray-700'
+                    }`}
                   >
                     USD ({formatCurrency(Math.abs(remainingUSD))})
                   </button>
                   <button
                     onClick={() => setChangeCurrency('CUP')}
-                    className={cn(
-                      'p-3 rounded-lg font-medium',
-                      changeCurrency === 'CUP'
-                        ? 'bg-blue-500 text-white'
-                        : theme === 'dark'
-                          ? 'bg-gray-700'
-                          : 'bg-gray-100'
-                    )}
+                    className={`p-3 rounded-lg font-medium ${
+                      changeCurrency === 'CUP' ? 'bg-blue-500 text-white' : 'bg-gray-700'
+                    }`}
                   >
                     CUP ({formatCurrency(Math.abs(remainingUSD) * rates.CUP, 'CUP')})
                   </button>
                 </div>
-              </motion.div>
+              </div>
             )}
 
             {/* Error Message */}
             {error && (
-              <div className="p-4 rounded-lg bg-red-100 text-red-700 flex items-center gap-2">
-                <AlertCircle className="w-5 h-5" />
+              <div className="p-4 rounded-lg bg-red-900/30 text-red-400 flex items-center gap-2">
+                <AlertIcon />
                 {error}
               </div>
             )}
@@ -1001,17 +910,11 @@ function PaymentContent() {
       </div>
 
       {/* Footer */}
-      <footer className={cn(
-        'p-4 border-t',
-        theme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'
-      )}>
+      <footer className="p-4 border-t bg-gray-800 border-gray-700">
         <div className="max-w-6xl mx-auto flex items-center justify-between">
           <button
             onClick={goBackToPOS}
-            className={cn(
-              'px-6 py-3 rounded-lg font-medium',
-              theme === 'dark' ? 'bg-gray-700 hover:bg-gray-600' : 'bg-gray-200 hover:bg-gray-300'
-            )}
+            className="px-6 py-3 rounded-lg font-medium bg-gray-700 hover:bg-gray-600"
           >
             Cancelar Venta
           </button>
@@ -1019,21 +922,20 @@ function PaymentContent() {
           <button
             onClick={processPayment}
             disabled={!isFullyPaid || processing}
-            className={cn(
-              'px-8 py-3 rounded-lg font-semibold flex items-center gap-2 transition-all',
+            className={`px-8 py-3 rounded-lg font-semibold flex items-center gap-2 transition-all ${
               isFullyPaid && !processing
                 ? 'bg-green-500 text-white hover:bg-green-600'
-                : 'bg-gray-300 text-gray-500 cursor-not-allowed'
-            )}
+                : 'bg-gray-600 text-gray-400 cursor-not-allowed'
+            }`}
           >
             {processing ? (
               <>
-                <Loader2 className="w-5 h-5 animate-spin" />
+                <LoaderIcon />
                 Procesando...
               </>
             ) : (
               <>
-                <CheckCircle className="w-5 h-5" />
+                <CheckIcon />
                 Confirmar Pago - {formatCurrency(totals.total)}
               </>
             )}
@@ -1048,12 +950,12 @@ function PaymentContent() {
 function LoadingFallback() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-900">
-      <Loader2 className="w-12 h-12 animate-spin text-blue-500" />
+      <BigLoaderIcon />
     </div>
   )
 }
 
-// Main page component with Suspense
+// Main page with Suspense wrapper
 export default function PaymentPage() {
   return (
     <Suspense fallback={<LoadingFallback />}>
