@@ -12,7 +12,10 @@ import {
   TrendingDown,
   Receipt,
   Clock,
-  ShoppingCart
+  ShoppingCart,
+  Package,
+  ClipboardCheck,
+  AlertTriangle
 } from 'lucide-react'
 import { useRouter, useParams } from 'next/navigation'
 import { DashboardLayout } from '@/components/layout/dashboard-layout'
@@ -43,6 +46,18 @@ interface SessionDetails {
   }>
 }
 
+interface InventoryCountSummary {
+  id: number
+  countNumber: string
+  status: string
+  warehouseName: string
+  totalProducts: number
+  productsWithDifferences: number
+  totalDifferenceValue: number
+  adjustmentOperationId: number | null
+  completedAt: string | null
+}
+
 export default function CloseSessionPage() {
   const { theme } = useTheme()
   const router = useRouter()
@@ -50,9 +65,11 @@ export default function CloseSessionPage() {
   const terminalId = params.terminalId as string
 
   const [session, setSession] = useState<SessionDetails | null>(null)
+  const [inventoryCount, setInventoryCount] = useState<InventoryCountSummary | null>(null)
   const [loading, setLoading] = useState(true)
   const [closing, setClosing] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [countMissing, setCountMissing] = useState(false)
 
   const [closingCash, setClosingCash] = useState({ usd: 0, cup: 0, mlc: 0 })
   const [closingNotes, setClosingNotes] = useState('')
@@ -70,6 +87,29 @@ export default function CloseSessionPage() {
         }
 
         const openSession = sessionsData.data.sessions[0]
+
+        // Check if inventory count was completed
+        const countRes = await fetch(`/api/market/pos/inventory-count?sessionId=${openSession.id}`)
+        const countData = await countRes.json()
+
+        if (!countData.success || !countData.data || countData.data.status !== 'completed') {
+          // No completed inventory count - redirect to count page
+          setCountMissing(true)
+          setLoading(false)
+          return
+        }
+
+        setInventoryCount({
+          id: countData.data.id,
+          countNumber: countData.data.countNumber,
+          status: countData.data.status,
+          warehouseName: countData.data.warehouseName,
+          totalProducts: countData.data.totalProducts || 0,
+          productsWithDifferences: countData.data.productsWithDifferences || 0,
+          totalDifferenceValue: countData.data.totalDifferenceValue || 0,
+          adjustmentOperationId: countData.data.adjustmentOperationId,
+          completedAt: countData.data.completedAt
+        })
 
         // Get full session details
         const detailsRes = await fetch(`/api/market/pos/sessions/${openSession.id}`)
@@ -141,6 +181,59 @@ export default function CloseSessionPage() {
               <Loader2 className="w-12 h-12 animate-spin mx-auto mb-4 text-blue-500" />
               <p className="text-gray-500">Cargando sesión...</p>
             </div>
+          </div>
+        </DashboardLayout>
+      </ProtectedRoute>
+    )
+  }
+
+  // Inventory count required but not completed
+  if (countMissing) {
+    return (
+      <ProtectedRoute>
+        <DashboardLayout>
+          <div className="min-h-screen flex items-center justify-center p-6">
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              className={cn(
+                'max-w-md w-full rounded-2xl border shadow-xl p-8 text-center',
+                theme === 'dark'
+                  ? 'bg-gradient-to-br from-gray-800 to-gray-900 border-gray-700'
+                  : 'bg-gradient-to-br from-amber-50 to-white border-amber-200'
+              )}
+            >
+              <div className={cn(
+                'w-16 h-16 rounded-full mx-auto mb-6 flex items-center justify-center',
+                theme === 'dark' ? 'bg-amber-900/30' : 'bg-amber-100'
+              )}>
+                <AlertTriangle className="w-8 h-8 text-amber-500" />
+              </div>
+              <h2 className="text-xl font-bold mb-2">Conteo de Inventario Requerido</h2>
+              <p className="text-gray-500 mb-6">
+                Antes de cerrar la caja, debes completar el conteo de inventario del almacén.
+              </p>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => router.push(`/dashboard/market/pos/${terminalId}`)}
+                  className={cn(
+                    'flex-1 py-2.5 rounded-xl font-medium',
+                    theme === 'dark'
+                      ? 'bg-gray-800 hover:bg-gray-700'
+                      : 'bg-gray-100 hover:bg-gray-200'
+                  )}
+                >
+                  Volver al POS
+                </button>
+                <button
+                  onClick={() => router.push(`/dashboard/market/pos/${terminalId}/count`)}
+                  className="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-blue-500 to-blue-600 text-white font-medium shadow-lg shadow-blue-500/25 hover:from-blue-600 hover:to-blue-700 flex items-center justify-center gap-2"
+                >
+                  <ClipboardCheck className="w-4 h-4" />
+                  Ir a Contar
+                </button>
+              </div>
+            </motion.div>
           </div>
         </DashboardLayout>
       </ProtectedRoute>
@@ -288,6 +381,100 @@ export default function CloseSessionPage() {
                 </div>
               )}
             </div>
+
+            {/* Inventory Count Summary */}
+            {inventoryCount && (
+              <div className={cn(
+                'rounded-2xl border shadow-xl p-6',
+                theme === 'dark'
+                  ? 'bg-gradient-to-br from-gray-800 to-gray-900 border-gray-700'
+                  : 'bg-gradient-to-br from-slate-50 to-white border-slate-200'
+              )}>
+                <div className="flex items-center justify-between mb-4">
+                  <h2 className="text-lg font-bold flex items-center gap-2">
+                    <ClipboardCheck className="w-5 h-5 text-green-500" />
+                    Conteo de Inventario Completado
+                  </h2>
+                  <span className="text-sm text-gray-500">{inventoryCount.countNumber}</span>
+                </div>
+
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  <div className={cn(
+                    'p-4 rounded-xl',
+                    theme === 'dark' ? 'bg-gray-700/50' : 'bg-gray-50'
+                  )}>
+                    <p className="text-sm text-gray-500 mb-1">Almacén</p>
+                    <p className="font-bold">{inventoryCount.warehouseName || 'N/A'}</p>
+                  </div>
+
+                  <div className={cn(
+                    'p-4 rounded-xl',
+                    theme === 'dark' ? 'bg-gray-700/50' : 'bg-gray-50'
+                  )}>
+                    <p className="text-sm text-gray-500 mb-1">Productos Contados</p>
+                    <p className="text-2xl font-bold">{inventoryCount.totalProducts}</p>
+                  </div>
+
+                  <div className={cn(
+                    'p-4 rounded-xl',
+                    inventoryCount.productsWithDifferences > 0
+                      ? theme === 'dark' ? 'bg-amber-900/30' : 'bg-amber-50'
+                      : theme === 'dark' ? 'bg-green-900/30' : 'bg-green-50'
+                  )}>
+                    <p className="text-sm text-gray-500 mb-1">Con Diferencias</p>
+                    <p className={cn(
+                      'text-2xl font-bold',
+                      inventoryCount.productsWithDifferences > 0 ? 'text-amber-500' : 'text-green-500'
+                    )}>
+                      {inventoryCount.productsWithDifferences}
+                    </p>
+                  </div>
+
+                  <div className={cn(
+                    'p-4 rounded-xl',
+                    inventoryCount.totalDifferenceValue === 0
+                      ? theme === 'dark' ? 'bg-green-900/30' : 'bg-green-50'
+                      : inventoryCount.totalDifferenceValue > 0
+                      ? theme === 'dark' ? 'bg-green-900/30' : 'bg-green-50'
+                      : theme === 'dark' ? 'bg-red-900/30' : 'bg-red-50'
+                  )}>
+                    <p className="text-sm text-gray-500 mb-1">Valor Diferencia</p>
+                    <p className={cn(
+                      'text-2xl font-bold',
+                      inventoryCount.totalDifferenceValue === 0
+                        ? 'text-green-500'
+                        : inventoryCount.totalDifferenceValue > 0
+                        ? 'text-green-500'
+                        : 'text-red-500'
+                    )}>
+                      ${inventoryCount.totalDifferenceValue.toFixed(2)}
+                    </p>
+                  </div>
+                </div>
+
+                {inventoryCount.adjustmentOperationId && (
+                  <div className={cn(
+                    'mt-4 p-3 rounded-lg flex items-center gap-2 text-sm',
+                    theme === 'dark' ? 'bg-blue-900/30 text-blue-300' : 'bg-blue-50 text-blue-700'
+                  )}>
+                    <Package className="w-4 h-4" />
+                    Se creó una operación de ajuste pendiente de aprobación
+                  </div>
+                )}
+
+                <button
+                  onClick={() => router.push(`/dashboard/market/pos/${terminalId}/count/report`)}
+                  className={cn(
+                    'mt-4 w-full py-2 rounded-lg text-sm font-medium transition-colors',
+                    theme === 'dark'
+                      ? 'bg-gray-700 hover:bg-gray-600'
+                      : 'bg-gray-100 hover:bg-gray-200'
+                  )}
+                >
+                  Ver Reporte Completo
+                </button>
+              </div>
+            )}
 
             {/* Cash Count */}
             <div className={cn(

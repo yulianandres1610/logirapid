@@ -1438,7 +1438,7 @@ export default function POSTerminalPage() {
               )}
 
               <p className="text-sm text-gray-600 dark:text-gray-400 mb-6">
-                Para cerrar la caja necesitarás hacer el arqueo de efectivo. ¿Deseas continuar?
+                Para cerrar la caja necesitarás realizar un conteo de inventario y luego el arqueo de efectivo. ¿Deseas continuar?
               </p>
 
               <div className="flex gap-3">
@@ -1454,10 +1454,10 @@ export default function POSTerminalPage() {
                   Cancelar
                 </button>
                 <button
-                  onClick={() => router.push(`/dashboard/market/pos/${terminalId}/close`)}
+                  onClick={() => router.push(`/dashboard/market/pos/${terminalId}/count`)}
                   className="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-red-500 to-red-600 text-white font-medium shadow-lg shadow-red-500/25 hover:from-red-600 hover:to-red-700"
                 >
-                  Cerrar Caja
+                  Iniciar Cierre
                 </button>
               </div>
             </motion.div>
