@@ -329,9 +329,16 @@ export async function POST(request: NextRequest) {
 
     // Insert order lines
     for (const line of lines) {
-      const lineSubtotal = (line.quantity || 1) * (line.unitPrice || 0)
-      const lineDiscount = line.discountAmount || (lineSubtotal * (line.discountPercent || 0) / 100)
-      const lineTotal = lineSubtotal - lineDiscount + (line.taxAmount || 0)
+      // Ensure numeric values are properly parsed
+      const quantity = parseFloat(line.quantity) || 1
+      const unitPrice = parseFloat(line.unitPrice) || 0
+      const discountPercent = parseFloat(line.discountPercent) || 0
+      const discountAmountInput = parseFloat(line.discountAmount) || 0
+      const taxAmount = parseFloat(line.taxAmount) || 0
+
+      const lineSubtotal = quantity * unitPrice
+      const lineDiscount = discountAmountInput || (lineSubtotal * discountPercent / 100)
+      const lineTotal = lineSubtotal - lineDiscount + taxAmount
 
       await db.query(`
         INSERT INTO market_pos_order_lines (
@@ -344,23 +351,23 @@ export async function POST(request: NextRequest) {
         ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, NOW())
       `, [
         orderId,
-        line.productId,
+        parseInt(line.productId) || null,
         line.productName,
         line.productSku || null,
-        line.quantity || 1,
-        line.unitPrice || 0,
-        line.discountPercent || 0,
+        quantity,
+        unitPrice,
+        discountPercent,
         lineDiscount,
         lineSubtotal,
-        line.taxAmount || 0,
+        taxAmount,
         lineTotal,
-        line.promotionId || null,
+        line.promotionId ? parseInt(line.promotionId) : null,
         line.promotionName || null
       ])
 
       // Update inventory - ALWAYS reduce stock when selling
       if (line.productId) {
-        const quantityToReduce = line.quantity || 1
+        const quantityToReduce = quantity // Use the already parsed quantity from above
 
         console.log('[POS Orders] Reducing stock for product:', {
           productId: line.productId,
@@ -373,7 +380,7 @@ export async function POST(request: NextRequest) {
           SELECT quantity_on_hand FROM market_products WHERE id = $1
         `, [line.productId])
 
-        const quantityBefore = currentStockResult.rows[0]?.quantity_on_hand || 0
+        const quantityBefore = parseFloat(currentStockResult.rows[0]?.quantity_on_hand) || 0
 
         // If warehouse specified, also update warehouse stock
         if (warehouseId) {
@@ -395,7 +402,7 @@ export async function POST(request: NextRequest) {
           RETURNING id, quantity_on_hand
         `, [quantityToReduce, line.productId])
 
-        const quantityAfter = productResult.rows[0]?.quantity_on_hand || 0
+        const quantityAfter = parseFloat(productResult.rows[0]?.quantity_on_hand) || 0
         console.log('[POS Orders] Product stock update:', productResult.rows)
 
         // Register inventory movement for traceability
