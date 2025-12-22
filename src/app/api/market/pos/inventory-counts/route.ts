@@ -1,0 +1,291 @@
+import { NextRequest, NextResponse } from 'next/server'
+import { cookies } from 'next/headers'
+import jwt from 'jsonwebtoken'
+import { db } from '@/lib/database'
+
+interface JWTPayload {
+  userId: number
+  email: string
+  role: string
+  companyId: number
+  companyName: string
+}
+
+/**
+ * GET /api/market/pos/inventory-counts
+ * Lista todos los conteos de inventario de la empresa
+ *
+ * Query params:
+ * - status: 'in_progress' | 'completed' | 'approved' | 'all'
+ * - page: número de página
+ * - limit: items por página
+ */
+export async function GET(request: NextRequest) {
+  try {
+    const cookieStore = await cookies()
+    const authToken = cookieStore.get('auth-token')?.value
+
+    if (!authToken) {
+      return NextResponse.json({
+        success: false,
+        error: 'No autorizado'
+      }, { status: 401 })
+    }
+
+    let payload: JWTPayload
+    try {
+      const secret = process.env.JWT_SECRET || 'fallback-secret-change-in-production'
+      payload = jwt.verify(authToken, secret) as JWTPayload
+    } catch {
+      return NextResponse.json({
+        success: false,
+        error: 'Token inválido'
+      }, { status: 401 })
+    }
+
+    const { searchParams } = new URL(request.url)
+    const status = searchParams.get('status') || 'all'
+    const page = parseInt(searchParams.get('page') || '1')
+    const limit = parseInt(searchParams.get('limit') || '20')
+    const offset = (page - 1) * limit
+
+    // Build query based on status filter
+    let statusFilter = ''
+    if (status !== 'all') {
+      statusFilter = `AND c.status = '${status}'`
+    }
+
+    // Get counts
+    const countsResult = await db.query(`
+      SELECT
+        c.id,
+        c.count_number,
+        c.status,
+        c.total_products,
+        c.products_with_differences,
+        c.total_difference_value,
+        c.notes,
+        c.created_at,
+        c.completed_at,
+        c.approved_at,
+        c.approved_by,
+        w.name as warehouse_name,
+        s.session_code,
+        t.name as terminal_name,
+        u.firstname || ' ' || u.lastname as counted_by_name,
+        ua.firstname || ' ' || ua.lastname as approved_by_name
+      FROM market_inventory_counts c
+      LEFT JOIN market_warehouses w ON c.warehouse_id = w.id
+      LEFT JOIN market_pos_sessions s ON c.session_id = s.id
+      LEFT JOIN market_pos_terminals t ON s.terminal_id = t.id
+      LEFT JOIN users u ON c.counted_by = u.id
+      LEFT JOIN users ua ON c.approved_by = ua.id
+      WHERE c.company_id = $1 ${statusFilter}
+      ORDER BY c.created_at DESC
+      LIMIT $2 OFFSET $3
+    `, [payload.companyId, limit, offset])
+
+    // Get total count for pagination
+    const totalResult = await db.query(`
+      SELECT COUNT(*) as total
+      FROM market_inventory_counts c
+      WHERE c.company_id = $1 ${statusFilter}
+    `, [payload.companyId])
+
+    const total = parseInt(totalResult.rows[0].total)
+
+    return NextResponse.json({
+      success: true,
+      data: {
+        counts: countsResult.rows.map(c => ({
+          id: c.id,
+          countNumber: c.count_number,
+          status: c.status,
+          totalProducts: parseInt(c.total_products) || 0,
+          productsWithDifferences: parseInt(c.products_with_differences) || 0,
+          totalDifferenceValue: parseFloat(c.total_difference_value) || 0,
+          notes: c.notes,
+          createdAt: c.created_at,
+          completedAt: c.completed_at,
+          approvedAt: c.approved_at,
+          warehouseName: c.warehouse_name,
+          sessionCode: c.session_code,
+          terminalName: c.terminal_name,
+          countedByName: c.counted_by_name,
+          approvedByName: c.approved_by_name
+        })),
+        pagination: {
+          page,
+          limit,
+          total,
+          totalPages: Math.ceil(total / limit)
+        }
+      }
+    })
+
+  } catch (error) {
+    console.error('[Inventory Counts API] Error:', error)
+    return NextResponse.json({
+      success: false,
+      error: error instanceof Error ? error.message : 'Error al obtener conteos'
+    }, { status: 500 })
+  }
+}
+
+/**
+ * POST /api/market/pos/inventory-counts
+ * Aprobar un conteo y ajustar inventario
+ */
+export async function POST(request: NextRequest) {
+  try {
+    const cookieStore = await cookies()
+    const authToken = cookieStore.get('auth-token')?.value
+
+    if (!authToken) {
+      return NextResponse.json({
+        success: false,
+        error: 'No autorizado'
+      }, { status: 401 })
+    }
+
+    let payload: JWTPayload
+    try {
+      const secret = process.env.JWT_SECRET || 'fallback-secret-change-in-production'
+      payload = jwt.verify(authToken, secret) as JWTPayload
+    } catch {
+      return NextResponse.json({
+        success: false,
+        error: 'Token inválido'
+      }, { status: 401 })
+    }
+
+    const body = await request.json()
+    const { countId, action } = body
+
+    if (!countId) {
+      return NextResponse.json({
+        success: false,
+        error: 'countId es requerido'
+      }, { status: 400 })
+    }
+
+    // Get count details
+    const countResult = await db.query(`
+      SELECT c.*, w.id as warehouse_id
+      FROM market_inventory_counts c
+      LEFT JOIN market_warehouses w ON c.warehouse_id = w.id
+      WHERE c.id = $1 AND c.company_id = $2
+    `, [countId, payload.companyId])
+
+    if (countResult.rows.length === 0) {
+      return NextResponse.json({
+        success: false,
+        error: 'Conteo no encontrado'
+      }, { status: 404 })
+    }
+
+    const count = countResult.rows[0]
+
+    if (count.status !== 'completed') {
+      return NextResponse.json({
+        success: false,
+        error: 'Solo se pueden aprobar conteos completados'
+      }, { status: 400 })
+    }
+
+    if (action === 'approve') {
+      // Get count lines with differences
+      const linesResult = await db.query(`
+        SELECT
+          cl.*,
+          p.name as product_name,
+          COALESCE(ws.quantity_on_hand, p.quantity_on_hand, 0) as current_stock
+        FROM market_inventory_count_lines cl
+        LEFT JOIN market_products p ON cl.product_id = p.id
+        LEFT JOIN market_warehouse_stock ws ON cl.product_id = ws.product_id AND ws.warehouse_id = $2
+        WHERE cl.count_id = $1
+      `, [countId, count.warehouse_id])
+
+      // Update inventory based on count
+      for (const line of linesResult.rows) {
+        const difference = parseInt(line.counted_quantity) - parseInt(line.current_stock || 0)
+
+        if (difference !== 0) {
+          // Check if warehouse stock record exists
+          const stockCheck = await db.query(`
+            SELECT id FROM market_warehouse_stock
+            WHERE product_id = $1 AND warehouse_id = $2
+          `, [line.product_id, count.warehouse_id])
+
+          if (stockCheck.rows.length > 0) {
+            // Update existing stock
+            await db.query(`
+              UPDATE market_warehouse_stock
+              SET quantity_on_hand = $1, updated_at = NOW()
+              WHERE product_id = $2 AND warehouse_id = $3
+            `, [line.counted_quantity, line.product_id, count.warehouse_id])
+          } else {
+            // Insert new stock record
+            await db.query(`
+              INSERT INTO market_warehouse_stock (product_id, warehouse_id, quantity_on_hand, created_at, updated_at)
+              VALUES ($1, $2, $3, NOW(), NOW())
+            `, [line.product_id, count.warehouse_id, line.counted_quantity])
+          }
+
+          // Also update main product stock
+          await db.query(`
+            UPDATE market_products
+            SET quantity_on_hand = $1, updated_at = NOW()
+            WHERE id = $2
+          `, [line.counted_quantity, line.product_id])
+        }
+      }
+
+      // Mark count as approved
+      await db.query(`
+        UPDATE market_inventory_counts
+        SET status = 'approved', approved_at = NOW(), approved_by = $1, updated_at = NOW()
+        WHERE id = $2
+      `, [payload.userId, countId])
+
+      return NextResponse.json({
+        success: true,
+        message: 'Conteo aprobado e inventario ajustado',
+        data: {
+          countId,
+          status: 'approved',
+          adjustedProducts: linesResult.rows.length
+        }
+      })
+
+    } else if (action === 'reject') {
+      // Mark count as rejected
+      await db.query(`
+        UPDATE market_inventory_counts
+        SET status = 'rejected', approved_at = NOW(), approved_by = $1, updated_at = NOW()
+        WHERE id = $2
+      `, [payload.userId, countId])
+
+      return NextResponse.json({
+        success: true,
+        message: 'Conteo rechazado',
+        data: {
+          countId,
+          status: 'rejected'
+        }
+      })
+    }
+
+    return NextResponse.json({
+      success: false,
+      error: 'Acción no válida. Use "approve" o "reject"'
+    }, { status: 400 })
+
+  } catch (error) {
+    console.error('[Inventory Counts API] Error:', error)
+    return NextResponse.json({
+      success: false,
+      error: error instanceof Error ? error.message : 'Error al procesar conteo'
+    }, { status: 500 })
+  }
+}

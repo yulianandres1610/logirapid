@@ -39,7 +39,8 @@ import {
   Banknote,
   Globe,
   Monitor,
-  Tag
+  Tag,
+  ClipboardList
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
@@ -474,7 +475,16 @@ export function Sidebar({ isCollapsed, onToggle }: SidebarProps) {
     { icon: Warehouse, label: "Almacenes", href: "/dashboard/market/warehouses" },
     { icon: FileText, label: "Compras", href: "/dashboard/market/purchases" },
     { icon: ShoppingCart, label: "Órdenes Recibidas", href: "/dashboard/market/orders" },
-    { icon: Monitor, label: "Punto de Venta", href: "/dashboard/market/pos" },
+    {
+      icon: Monitor,
+      label: "Punto de Venta",
+      href: "/dashboard/market/pos",
+      hasSubmenu: true,
+      submenuItems: [
+        { icon: Monitor, label: "Terminales", href: "/dashboard/market/pos" },
+        { icon: ClipboardList, label: "Conteos Inventario", href: "/dashboard/market/pos/inventory-counts" },
+      ]
+    },
     { icon: Tag, label: "Listas de Precios", href: "/dashboard/market/pricelists" },
     { icon: Wallet, label: "Mi Wallet", href: "/dashboard/market/wallet" },
     { icon: Truck, label: "Entregas", href: "/dashboard/market/deliveries" },
