@@ -30,6 +30,7 @@ interface Product {
   barcode: string
   sellingPrice: number
   stock: number
+  imageUrl: string | null
 }
 
 interface CountedProduct {
@@ -37,6 +38,7 @@ interface CountedProduct {
   productName: string
   productSku: string
   productBarcode: string
+  productImage: string | null
   unitPrice: number
   countedQuantity: number
   expectedQuantity: number
@@ -139,13 +141,14 @@ export default function InventoryCountPage() {
           if (productsData.success && productsData.data) {
             // La API devuelve { data: { products: [...], categories: [...], ... } }
             const productsArray = Array.isArray(productsData.data.products) ? productsData.data.products : []
-            setProducts(productsArray.map((p: { id: number; name: string; sku?: string; barcode?: string; price?: number; sellingPrice?: number; stock?: number }) => ({
+            setProducts(productsArray.map((p: { id: number; name: string; sku?: string; barcode?: string; price?: number; sellingPrice?: number; stock?: number; imageUrl?: string }) => ({
               id: p.id,
               name: p.name || 'Sin nombre',
               sku: p.sku || '',
               barcode: p.barcode || '',
               sellingPrice: p.price || p.sellingPrice || 0,
-              stock: p.stock || 0
+              stock: p.stock || 0,
+              imageUrl: p.imageUrl || null
             })))
           }
         }
@@ -159,6 +162,7 @@ export default function InventoryCountPage() {
             productName: string
             productSku?: string
             productBarcode?: string
+            productImage?: string
             unitPrice?: number
             countedQuantity: number
             expectedQuantity?: number
@@ -167,6 +171,7 @@ export default function InventoryCountPage() {
             productName: l.productName || 'Producto',
             productSku: l.productSku || '',
             productBarcode: l.productBarcode || '',
+            productImage: l.productImage || null,
             unitPrice: l.unitPrice || 0,
             countedQuantity: l.countedQuantity || 0,
             expectedQuantity: l.expectedQuantity || 0
@@ -263,6 +268,7 @@ export default function InventoryCountPage() {
               productName: selectedProduct.name,
               productSku: selectedProduct.sku,
               productBarcode: selectedProduct.barcode,
+              productImage: selectedProduct.imageUrl,
               unitPrice: selectedProduct.sellingPrice,
               countedQuantity: quantity,
               expectedQuantity: selectedProduct.stock
@@ -497,12 +503,27 @@ export default function InventoryCountPage() {
                   exit={{ opacity: 0, x: -20 }}
                   className="bg-gray-800 rounded-lg p-3"
                 >
-                  <div className="flex justify-between items-start">
+                  <div className="flex gap-3">
+                    {/* Product image */}
+                    <div className="w-14 h-14 flex-shrink-0 rounded-lg overflow-hidden bg-gray-700">
+                      {item.productImage ? (
+                        <img
+                          src={item.productImage}
+                          alt={item.productName}
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center">
+                          <Package className="w-6 h-6 text-gray-500" />
+                        </div>
+                      )}
+                    </div>
                     <div className="flex-1 min-w-0">
                       <p className="font-medium truncate text-sm sm:text-base">{item.productName}</p>
                       <p className="text-xs text-gray-400 truncate">{item.productSku || item.productBarcode || 'Sin código'}</p>
+                      <p className="text-xl font-bold text-blue-400 mt-1">{item.countedQuantity}</p>
                     </div>
-                    <div className="flex items-center gap-1 ml-2 flex-shrink-0">
+                    <div className="flex flex-col gap-1 flex-shrink-0">
                       <button
                         onClick={() => editCountedProduct(index)}
                         className="p-2 hover:bg-gray-700 rounded-lg text-blue-400 active:bg-gray-600"
@@ -516,14 +537,6 @@ export default function InventoryCountPage() {
                         <Trash2 className="w-4 h-4" />
                       </button>
                     </div>
-                  </div>
-                  <div className="mt-2 flex items-center justify-between">
-                    <span className="text-2xl font-bold text-blue-400">
-                      {item.countedQuantity}
-                    </span>
-                    <span className="text-sm text-gray-400">
-                      Stock: {item.expectedQuantity}
-                    </span>
                   </div>
                 </motion.div>
               ))}
@@ -573,14 +586,25 @@ export default function InventoryCountPage() {
                 <button
                   key={product.id}
                   onClick={() => selectProduct(product)}
-                  className="w-full px-3 sm:px-4 py-3 flex items-center justify-between hover:bg-gray-700 active:bg-gray-600 transition-colors border-b border-gray-700 last:border-0"
+                  className="w-full px-3 sm:px-4 py-3 flex items-center gap-3 hover:bg-gray-700 active:bg-gray-600 transition-colors border-b border-gray-700 last:border-0"
                 >
+                  {/* Product image */}
+                  <div className="w-12 h-12 flex-shrink-0 rounded-lg overflow-hidden bg-gray-700">
+                    {product.imageUrl ? (
+                      <img
+                        src={product.imageUrl}
+                        alt={product.name}
+                        className="w-full h-full object-cover"
+                      />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center">
+                        <Package className="w-5 h-5 text-gray-500" />
+                      </div>
+                    )}
+                  </div>
                   <div className="text-left min-w-0 flex-1">
                     <p className="font-medium truncate">{product.name}</p>
                     <p className="text-sm text-gray-400 truncate">{product.sku || product.barcode || 'Sin código'}</p>
-                  </div>
-                  <div className="text-right ml-2 flex-shrink-0">
-                    <p className="text-sm text-gray-400">Stock: {product.stock}</p>
                   </div>
                 </button>
               ))}
@@ -596,24 +620,39 @@ export default function InventoryCountPage() {
             >
               {/* Product info */}
               <div className="bg-gray-800 rounded-xl p-3 sm:p-4 mb-3 sm:mb-4">
-                <div className="flex justify-between items-start">
-                  <div className="min-w-0 flex-1">
-                    <h3 className="text-lg sm:text-xl font-semibold truncate">{selectedProduct.name}</h3>
-                    <p className="text-gray-400 text-sm truncate">{selectedProduct.sku || selectedProduct.barcode || 'Sin código'}</p>
+                <div className="flex gap-4">
+                  {/* Product image */}
+                  <div className="w-20 h-20 sm:w-24 sm:h-24 flex-shrink-0 rounded-xl overflow-hidden bg-gray-700">
+                    {selectedProduct.imageUrl ? (
+                      <img
+                        src={selectedProduct.imageUrl}
+                        alt={selectedProduct.name}
+                        className="w-full h-full object-cover"
+                      />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center">
+                        <Package className="w-10 h-10 text-gray-500" />
+                      </div>
+                    )}
                   </div>
-                  <button
-                    onClick={() => {
-                      setSelectedProduct(null)
-                      setNumpadValue('')
-                      setEditingIndex(null)
-                    }}
-                    className="p-2 hover:bg-gray-700 rounded-lg flex-shrink-0"
-                  >
-                    <X className="w-5 h-5" />
-                  </button>
-                </div>
-                <div className="mt-2 text-sm text-gray-400">
-                  Stock en sistema: <span className="text-white font-medium">{selectedProduct.stock}</span>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex justify-between items-start">
+                      <div className="min-w-0 flex-1">
+                        <h3 className="text-lg sm:text-xl font-semibold truncate">{selectedProduct.name}</h3>
+                        <p className="text-gray-400 text-sm truncate">{selectedProduct.sku || selectedProduct.barcode || 'Sin código'}</p>
+                      </div>
+                      <button
+                        onClick={() => {
+                          setSelectedProduct(null)
+                          setNumpadValue('')
+                          setEditingIndex(null)
+                        }}
+                        className="p-2 hover:bg-gray-700 rounded-lg flex-shrink-0 ml-2"
+                      >
+                        <X className="w-5 h-5" />
+                      </button>
+                    </div>
+                  </div>
                 </div>
               </div>
 
