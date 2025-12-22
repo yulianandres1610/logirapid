@@ -513,8 +513,8 @@ export default function InventoryCountPage() {
               <ChevronLeft className="w-5 h-5 lg:w-6 lg:h-6" />
             </motion.button>
             <div>
-              <h1 className="font-semibold text-base lg:text-lg">Conteo de Inventario</h1>
-              <p className="text-xs lg:text-sm text-gray-400">{session?.warehouseName}</p>
+              <h1 className="hidden lg:block font-semibold text-lg">Conteo de Inventario</h1>
+              <p className="text-sm lg:text-sm text-gray-400">{session?.warehouseName}</p>
             </div>
           </div>
 
