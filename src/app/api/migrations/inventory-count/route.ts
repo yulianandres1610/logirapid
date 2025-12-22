@@ -75,6 +75,13 @@ export async function GET(request: NextRequest) {
     `)
     console.log('[Migration] Tabla market_inventory_count_lines creada')
 
+    // Agregar columna product_image si no existe
+    await db.query(`
+      ALTER TABLE market_inventory_count_lines
+      ADD COLUMN IF NOT EXISTS product_image TEXT
+    `).catch(() => {})
+    console.log('[Migration] Columna product_image agregada')
+
     // Crear índices para la tabla de líneas
     await db.query(`
       CREATE INDEX IF NOT EXISTS idx_inventory_count_lines_count

@@ -63,6 +63,7 @@ export default function InventoryCountPage() {
   const params = useParams()
   const terminalId = params.terminalId as string
   const searchInputRef = useRef<HTMLInputElement>(null)
+  const mobileSearchRef = useRef<HTMLInputElement>(null)
 
   // State
   const [isOnline, setIsOnline] = useState(true)
@@ -196,10 +197,16 @@ export default function InventoryCountPage() {
     loadData()
   }, [terminalId])
 
-  // Auto-focus search input
+  // Auto-focus search input (desktop or mobile depending on viewport)
   useEffect(() => {
-    if (!loading && searchInputRef.current && !selectedProduct) {
-      searchInputRef.current.focus()
+    if (!loading && !selectedProduct) {
+      // Check if we're on mobile or desktop
+      const isMobile = window.innerWidth < 1024
+      if (isMobile && mobileSearchRef.current) {
+        mobileSearchRef.current.focus()
+      } else if (searchInputRef.current) {
+        searchInputRef.current.focus()
+      }
     }
   }, [loading, selectedProduct])
 
@@ -354,8 +361,15 @@ export default function InventoryCountPage() {
           setSelectedProduct(null)
           setNumpadValue('')
           setEditingIndex(null)
-          // Return focus to search
-          setTimeout(() => searchInputRef.current?.focus(), 100)
+          // Return focus to search (mobile or desktop)
+          setTimeout(() => {
+            const isMobile = window.innerWidth < 1024
+            if (isMobile && mobileSearchRef.current) {
+              mobileSearchRef.current.focus()
+            } else if (searchInputRef.current) {
+              searchInputRef.current.focus()
+            }
+          }, 100)
         }
       }
     } else if (key === '.' && !numpadValue.includes('.')) {
@@ -523,7 +537,7 @@ export default function InventoryCountPage() {
             <div className="lg:hidden flex-1 relative max-w-[200px]">
               <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-500" />
               <input
-                ref={searchInputRef}
+                ref={mobileSearchRef}
                 type="text"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
