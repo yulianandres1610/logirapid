@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useEffect, useMemo, Suspense } from 'react'
+import React, { useState, useEffect, useMemo, Suspense, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   ChevronLeft,
@@ -20,19 +20,87 @@ import { useRouter, useParams } from 'next/navigation'
 import { useTheme } from '@/contexts/theme-context'
 import { cn } from '@/lib/utils'
 
-// Dynamic import for IndexedDB functions to avoid SSR issues
-const saveOrderOffline = async (order: PendingOrderData): Promise<void> => {
-  if (typeof window === 'undefined') return
-  const { savePendingOrder } = await import('@/lib/pos-db')
-  await savePendingOrder(order)
-}
-
+// Generate offline ID
 const getOfflineId = (): string => {
   return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
     const r = Math.random() * 16 | 0
     const v = c === 'x' ? r : (r & 0x3 | 0x8)
     return v.toString(16)
   })
+}
+
+// IndexedDB constants
+const DB_NAME = 'market_pos_db'
+const DB_VERSION = 1
+const PENDING_ORDERS_STORE = 'pending_orders'
+
+// Open IndexedDB directly (no dynamic import needed)
+const openPOSDB = (): Promise<IDBDatabase> => {
+  return new Promise((resolve, reject) => {
+    if (typeof window === 'undefined' || !window.indexedDB) {
+      reject(new Error('IndexedDB not available'))
+      return
+    }
+
+    const request = indexedDB.open(DB_NAME, DB_VERSION)
+
+    request.onerror = () => reject(request.error)
+    request.onsuccess = () => resolve(request.result)
+
+    request.onupgradeneeded = (event) => {
+      const db = (event.target as IDBOpenDBRequest).result
+
+      // Create pending_orders store if it doesn't exist
+      if (!db.objectStoreNames.contains(PENDING_ORDERS_STORE)) {
+        const ordersStore = db.createObjectStore(PENDING_ORDERS_STORE, { keyPath: 'offlineId' })
+        ordersStore.createIndex('sessionId', 'sessionId', { unique: false })
+        ordersStore.createIndex('synced', 'synced', { unique: false })
+      }
+
+      // Create other stores if needed
+      if (!db.objectStoreNames.contains('products')) {
+        const productsStore = db.createObjectStore('products', { keyPath: 'id' })
+        productsStore.createIndex('barcode', 'barcode', { unique: false })
+        productsStore.createIndex('categoryId', 'categoryId', { unique: false })
+      }
+
+      if (!db.objectStoreNames.contains('categories')) {
+        db.createObjectStore('categories', { keyPath: 'id' })
+      }
+
+      if (!db.objectStoreNames.contains('promotions')) {
+        db.createObjectStore('promotions', { keyPath: 'id' })
+      }
+
+      if (!db.objectStoreNames.contains('sync_status')) {
+        db.createObjectStore('sync_status', { keyPath: 'id' })
+      }
+    }
+  })
+}
+
+// Save pending order directly to IndexedDB
+const saveOrderToIndexedDB = async (order: PendingOrderData): Promise<void> => {
+  if (typeof window === 'undefined') return
+
+  try {
+    const db = await openPOSDB()
+    const tx = db.transaction(PENDING_ORDERS_STORE, 'readwrite')
+    const store = tx.objectStore(PENDING_ORDERS_STORE)
+
+    store.put(order)
+
+    await new Promise<void>((resolve, reject) => {
+      tx.oncomplete = () => resolve()
+      tx.onerror = () => reject(tx.error)
+    })
+
+    db.close()
+    console.log('[Payment] Order saved to IndexedDB:', order.offlineId)
+  } catch (error) {
+    console.error('[Payment] Error saving to IndexedDB:', error)
+    throw error
+  }
 }
 
 interface CartItem {
@@ -379,7 +447,7 @@ function PaymentContent() {
             synced: false
           }
 
-          await saveOrderOffline(offlineOrder)
+          await saveOrderToIndexedDB(offlineOrder)
 
           const offlineOrderNumber = `OFFLINE-${Date.now().toString(36).toUpperCase()}`
           router.push(`/dashboard/market/pos/${terminalId}/receipt?offlineId=${offlineId}&orderNumber=${offlineOrderNumber}&offline=true`)
@@ -451,7 +519,7 @@ function PaymentContent() {
             synced: false
           }
 
-          await saveOrderOffline(offlineOrder)
+          await saveOrderToIndexedDB(offlineOrder)
 
           const offlineOrderNumber = `OFFLINE-${Date.now().toString(36).toUpperCase()}`
           router.push(`/dashboard/market/pos/${terminalId}/receipt?offlineId=${offlineId}&orderNumber=${offlineOrderNumber}&offline=true`)
