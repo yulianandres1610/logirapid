@@ -117,6 +117,7 @@ export default function POSTerminalPage() {
   const [session, setSession] = useState<Session | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [isClient, setIsClient] = useState(false)
 
   // Cart state
   const [cart, setCart] = useState<CartItem[]>([])
@@ -140,10 +141,20 @@ export default function POSTerminalPage() {
   const [paymentCurrency, setPaymentCurrency] = useState<string>('USD')
   const [amountTendered, setAmountTendered] = useState<string>('')
 
+  // Initialize client-side state
+  useEffect(() => {
+    setIsClient(true)
+    setIsOnline(navigator.onLine)
+  }, [])
+
   // Fetch terminal, session and products (with offline support)
   useEffect(() => {
+    if (!isClient) return
+
     const fetchData = async () => {
       setLoading(true)
+      setError(null)
+
       try {
         // Check if online
         if (navigator.onLine) {
@@ -159,11 +170,13 @@ export default function POSTerminalPage() {
           setCategories(productsData.data.categories)
           setTerminal(productsData.data.terminal)
 
-          // Cache products and categories for offline use
+          // Cache products, categories and terminal for offline use
           try {
             await saveProducts(productsData.data.products)
             await saveCategories(productsData.data.categories)
-            console.log('[POS] Products and categories cached for offline use')
+            // Cache terminal info
+            localStorage.setItem(`pos_terminal_${terminalId}`, JSON.stringify(productsData.data.terminal))
+            console.log('[POS] Products, categories and terminal cached for offline use')
           } catch (cacheError) {
             console.error('[POS] Error caching products:', cacheError)
           }
@@ -188,11 +201,120 @@ export default function POSTerminalPage() {
         } else {
           // OFFLINE: Load from cache
           console.log('[POS] Offline mode - loading from cache')
+
+          try {
+            const cachedProducts = await getCachedProducts()
+            const cachedCategories = await getCachedCategories()
+
+            if (cachedProducts.length > 0) {
+              // Convert cached format to Product format
+              setProducts(cachedProducts.map(p => ({
+                id: p.id,
+                name: p.name,
+                description: '',
+                sku: p.sku,
+                barcode: p.barcode,
+                categoryId: p.categoryId,
+                unit: 'unit',
+                basePrice: p.price,
+                price: p.price,
+                costPrice: 0,
+                taxRate: 0,
+                imageUrl: p.imageUrl,
+                stock: p.stock,
+                trackInventory: p.trackInventory
+              })))
+              setCategories(cachedCategories.map(c => ({
+                id: c.id,
+                name: c.name,
+                parentId: c.parentId,
+                icon: null,
+                color: null
+              })))
+
+              // Load terminal from localStorage
+              const cachedTerminal = localStorage.getItem(`pos_terminal_${terminalId}`)
+              if (cachedTerminal) {
+                try {
+                  setTerminal(JSON.parse(cachedTerminal))
+                } catch {
+                  // Use default terminal config
+                  setTerminal({
+                    id: parseInt(terminalId),
+                    name: 'Terminal Offline',
+                    warehouseId: 0,
+                    warehouseName: '',
+                    allowPriceEdit: false,
+                    allowDiscount: true,
+                    maxDiscountPercent: 100,
+                    requireCustomer: false,
+                    defaultCurrency: 'USD',
+                    acceptedCurrencies: ['USD', 'CUP', 'MLC']
+                  })
+                }
+              } else {
+                // Use default terminal config for offline
+                setTerminal({
+                  id: parseInt(terminalId),
+                  name: 'Terminal Offline',
+                  warehouseId: 0,
+                  warehouseName: '',
+                  allowPriceEdit: false,
+                  allowDiscount: true,
+                  maxDiscountPercent: 100,
+                  requireCustomer: false,
+                  defaultCurrency: 'USD',
+                  acceptedCurrencies: ['USD', 'CUP', 'MLC']
+                })
+              }
+
+              // Load session from localStorage
+              const cachedSession = localStorage.getItem('pos_session')
+              if (cachedSession) {
+                try {
+                  setSession(JSON.parse(cachedSession))
+                } catch {
+                  // Create offline session
+                  const offlineSession: Session = {
+                    id: Date.now(),
+                    sessionCode: `OFFLINE-${Date.now().toString(36).toUpperCase()}`,
+                    openedAt: new Date().toISOString(),
+                    openingCash: { usd: 0, cup: 0, mlc: 0 }
+                  }
+                  setSession(offlineSession)
+                  localStorage.setItem('pos_session', JSON.stringify(offlineSession))
+                }
+              } else {
+                // Create offline session if none exists
+                const offlineSession: Session = {
+                  id: Date.now(),
+                  sessionCode: `OFFLINE-${Date.now().toString(36).toUpperCase()}`,
+                  openedAt: new Date().toISOString(),
+                  openingCash: { usd: 0, cup: 0, mlc: 0 }
+                }
+                setSession(offlineSession)
+                localStorage.setItem('pos_session', JSON.stringify(offlineSession))
+              }
+
+              console.log('[POS] Offline mode ready with', cachedProducts.length, 'products')
+            } else {
+              setError('No hay productos en caché. Conéctate a internet primero para cargar productos.')
+            }
+          } catch (cacheError) {
+            console.error('[POS] Error loading from cache:', cacheError)
+            setError('Error al cargar datos offline.')
+          }
+        }
+
+      } catch (err) {
+        console.error('[POS] Error fetching data:', err)
+
+        // Try loading from cache on error
+        try {
           const cachedProducts = await getCachedProducts()
           const cachedCategories = await getCachedCategories()
 
           if (cachedProducts.length > 0) {
-            // Convert cached format to Product format
             setProducts(cachedProducts.map(p => ({
               id: p.id,
               name: p.name,
@@ -216,53 +338,56 @@ export default function POSTerminalPage() {
               icon: null,
               color: null
             })))
-            // Use cached session info - get from localStorage if available
+
+            // Load terminal
+            const cachedTerminal = localStorage.getItem(`pos_terminal_${terminalId}`)
+            if (cachedTerminal) {
+              setTerminal(JSON.parse(cachedTerminal))
+            } else {
+              setTerminal({
+                id: parseInt(terminalId),
+                name: 'Terminal Offline',
+                warehouseId: 0,
+                warehouseName: '',
+                allowPriceEdit: false,
+                allowDiscount: true,
+                maxDiscountPercent: 100,
+                requireCustomer: false,
+                defaultCurrency: 'USD',
+                acceptedCurrencies: ['USD', 'CUP', 'MLC']
+              })
+            }
+
+            // Load session
             const cachedSession = localStorage.getItem('pos_session')
             if (cachedSession) {
-              try {
-                setSession(JSON.parse(cachedSession))
-              } catch {
-                setError('No hay sesión activa guardada. Conéctate a internet para abrir una sesión.')
-              }
+              setSession(JSON.parse(cachedSession))
             } else {
-              setError('No hay sesión activa guardada. Conéctate a internet para abrir una sesión.')
+              const offlineSession: Session = {
+                id: Date.now(),
+                sessionCode: `OFFLINE-${Date.now().toString(36).toUpperCase()}`,
+                openedAt: new Date().toISOString(),
+                openingCash: { usd: 0, cup: 0, mlc: 0 }
+              }
+              setSession(offlineSession)
+              localStorage.setItem('pos_session', JSON.stringify(offlineSession))
             }
-          } else {
-            setError('No hay productos en caché. Conéctate a internet para cargar productos.')
-          }
-        }
 
-      } catch (err) {
-        // Try loading from cache on error
-        if (!navigator.onLine) {
-          const cachedProducts = await getCachedProducts()
-          if (cachedProducts.length > 0) {
-            setProducts(cachedProducts.map(p => ({
-              id: p.id,
-              name: p.name,
-              description: '',
-              sku: p.sku,
-              barcode: p.barcode,
-              categoryId: p.categoryId,
-              unit: 'unit',
-              basePrice: p.price,
-              price: p.price,
-              costPrice: 0,
-              taxRate: 0,
-              imageUrl: p.imageUrl,
-              stock: p.stock,
-              trackInventory: p.trackInventory
-            })))
+            console.log('[POS] Loaded from cache after error')
+            setError(null) // Clear error since we loaded from cache
+          } else {
+            setError('No hay productos en caché. Conéctate a internet primero.')
           }
+        } catch {
+          setError('Error al cargar el POS. Verifica tu conexión.')
         }
-        setError(err instanceof Error ? err.message : 'Error loading POS')
       } finally {
         setLoading(false)
       }
     }
 
     fetchData()
-  }, [terminalId, router])
+  }, [terminalId, router, isClient])
 
   // Cache session info when it changes
   useEffect(() => {
