@@ -54,7 +54,7 @@ export async function GET(
         s.session_code,
         w.name as warehouse_name,
         COALESCE(u.firstname || ' ' || u.lastname, u.email) as created_by_name,
-        c.name as customer_full_name,
+        COALESCE(c.firstname || ' ' || c.lastname, c.firstname, c.lastname) as customer_full_name,
         c.phone as customer_phone,
         c.email as customer_email
       FROM market_pos_orders o
