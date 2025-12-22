@@ -442,51 +442,88 @@ export default function InventoryCountPage() {
 
   return (
     <div className="min-h-screen flex flex-col bg-gray-900 text-white">
-      {/* Header */}
-      <header className="flex items-center justify-between px-3 sm:px-4 py-3 bg-gray-800 border-b border-gray-700">
-        <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+      {/* Header with Search */}
+      <header className="bg-gray-800 border-b border-gray-700 relative z-50">
+        <div className="flex items-center gap-3 px-3 sm:px-4 py-2">
+          {/* Back button */}
           <button
             onClick={goBack}
             className="p-2 hover:bg-gray-700 rounded-lg transition-colors flex-shrink-0"
           >
             <ChevronLeft className="w-5 h-5" />
           </button>
-          <div className="min-w-0">
-            <h1 className="font-semibold text-sm sm:text-base truncate">
-              <span className="hidden sm:inline">{terminal?.name} - </span>Conteo de Inventario
-            </h1>
-            <p className="text-xs text-gray-400 truncate">
-              {session?.warehouseName} | {session?.sessionCode}
-            </p>
+
+          {/* Search input - minimalista */}
+          <div className="flex-1 relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
+            <input
+              ref={searchInputRef}
+              type="text"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Buscar o escanear producto..."
+              className="w-full pl-9 pr-4 py-2 bg-gray-900 border border-gray-700 rounded-lg text-sm focus:outline-none focus:border-blue-500 transition-colors placeholder-gray-500"
+              disabled={!!selectedProduct}
+            />
+            {search && (
+              <button
+                onClick={() => setSearch('')}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-300"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            )}
+          </div>
+
+          {/* Status indicators */}
+          <div className="flex items-center gap-2 flex-shrink-0">
+            {isOnline ? (
+              <Wifi className="w-4 h-4 text-green-500" />
+            ) : (
+              <WifiOff className="w-4 h-4 text-yellow-500" />
+            )}
+
+            {/* Mobile toggle button */}
+            <button
+              onClick={() => setMobileView(mobileView === 'input' ? 'list' : 'input')}
+              className="lg:hidden p-2 bg-gray-700 rounded-lg relative"
+            >
+              <List className="w-5 h-5" />
+              {countedProducts.length > 0 && (
+                <span className="absolute -top-1 -right-1 bg-blue-500 text-white text-xs w-5 h-5 rounded-full flex items-center justify-center">
+                  {countedProducts.length}
+                </span>
+              )}
+            </button>
           </div>
         </div>
 
-        <div className="flex items-center gap-2 sm:gap-4 flex-shrink-0">
-          {isOnline ? (
-            <div className="flex items-center gap-1 text-green-500">
-              <Wifi className="w-4 h-4" />
-              <span className="text-xs hidden sm:inline">Online</span>
-            </div>
-          ) : (
-            <div className="flex items-center gap-1 text-yellow-500">
-              <WifiOff className="w-4 h-4" />
-              <span className="text-xs hidden sm:inline">Offline</span>
-            </div>
-          )}
-
-          {/* Mobile toggle button */}
-          <button
-            onClick={() => setMobileView(mobileView === 'input' ? 'list' : 'input')}
-            className="lg:hidden p-2 bg-gray-700 rounded-lg relative"
-          >
-            <List className="w-5 h-5" />
-            {countedProducts.length > 0 && (
-              <span className="absolute -top-1 -right-1 bg-blue-500 text-white text-xs w-5 h-5 rounded-full flex items-center justify-center">
-                {countedProducts.length}
-              </span>
-            )}
-          </button>
-        </div>
+        {/* Search results dropdown */}
+        {search && filteredProducts.length > 0 && !selectedProduct && (
+          <div className="absolute left-0 right-0 top-full z-50 mx-3 sm:mx-4 mt-1 bg-gray-800 rounded-xl border border-gray-700 shadow-2xl overflow-hidden max-h-64 overflow-auto">
+            {filteredProducts.map(product => (
+              <button
+                key={product.id}
+                onClick={() => selectProduct(product)}
+                className="w-full px-3 py-2.5 flex items-center gap-3 hover:bg-gray-700 active:bg-gray-600 transition-colors border-b border-gray-700/50 last:border-0"
+              >
+                <div className="w-10 h-10 flex-shrink-0 rounded-lg overflow-hidden bg-gray-700">
+                  {product.imageUrl ? (
+                    <img src={product.imageUrl} alt={product.name} className="w-full h-full object-cover" />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center">
+                      <Package className="w-4 h-4 text-gray-500" />
+                    </div>
+                  )}
+                </div>
+                <div className="text-left min-w-0 flex-1">
+                  <p className="font-medium truncate text-sm">{product.name}</p>
+                  <p className="text-xs text-gray-400 truncate">{product.sku || product.barcode || 'Sin código'}</p>
+                </div>
+              </button>
+            ))}
+          </div>
+        )}
       </header>
 
       {/* Error banner */}
@@ -581,54 +618,8 @@ export default function InventoryCountPage() {
           </div>
         </div>
 
-        {/* Right panel - Search and numpad (hidden on mobile when in list view) */}
+        {/* Right panel - Numpad (hidden on mobile when in list view) */}
         <div className={`${mobileView === 'input' ? 'flex' : 'hidden'} lg:flex flex-1 flex-col p-3 sm:p-4`}>
-          {/* Search input */}
-          <div className="relative mb-3 sm:mb-4">
-            <Search className="absolute left-3 sm:left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-            <input
-              ref={searchInputRef}
-              type="text"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Buscar o escanear producto..."
-              className="w-full pl-10 sm:pl-12 pr-4 py-3 sm:py-4 bg-gray-800 rounded-xl text-base sm:text-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-              disabled={!!selectedProduct}
-            />
-          </div>
-
-          {/* Search results */}
-          {search && filteredProducts.length > 0 && !selectedProduct && (
-            <div className="mb-3 sm:mb-4 bg-gray-800 rounded-xl overflow-hidden max-h-48 sm:max-h-64 overflow-auto">
-              {filteredProducts.map(product => (
-                <button
-                  key={product.id}
-                  onClick={() => selectProduct(product)}
-                  className="w-full px-3 sm:px-4 py-3 flex items-center gap-3 hover:bg-gray-700 active:bg-gray-600 transition-colors border-b border-gray-700 last:border-0"
-                >
-                  {/* Product image */}
-                  <div className="w-12 h-12 flex-shrink-0 rounded-lg overflow-hidden bg-gray-700">
-                    {product.imageUrl ? (
-                      <img
-                        src={product.imageUrl}
-                        alt={product.name}
-                        className="w-full h-full object-cover"
-                      />
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center">
-                        <Package className="w-5 h-5 text-gray-500" />
-                      </div>
-                    )}
-                  </div>
-                  <div className="text-left min-w-0 flex-1">
-                    <p className="font-medium truncate">{product.name}</p>
-                    <p className="text-sm text-gray-400 truncate">{product.sku || product.barcode || 'Sin código'}</p>
-                  </div>
-                </button>
-              ))}
-            </div>
-          )}
-
           {/* Selected product - Quantity input */}
           {selectedProduct && (
             <motion.div
@@ -715,12 +706,12 @@ export default function InventoryCountPage() {
           )}
 
           {/* Empty state when no product selected */}
-          {!selectedProduct && !search && (
+          {!selectedProduct && (
             <div className="flex-1 flex items-center justify-center text-gray-500">
-              <div className="text-center">
-                <Search className="w-12 h-12 sm:w-16 sm:h-16 mx-auto mb-4 opacity-30" />
-                <p className="text-base sm:text-lg">Busque o escanee un producto</p>
-                <p className="text-sm">para agregar al conteo</p>
+              <div className="text-center px-4">
+                <Package className="w-16 h-16 mx-auto mb-4 opacity-20" />
+                <p className="text-lg font-medium text-gray-400">Escanea o busca un producto</p>
+                <p className="text-sm mt-1">Usa el buscador de arriba para agregar productos al conteo</p>
               </div>
             </div>
           )}
