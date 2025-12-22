@@ -31,7 +31,8 @@ import {
   Loader2,
   Receipt,
   Printer,
-  ChevronLeft
+  ChevronLeft,
+  ClipboardList
 } from 'lucide-react'
 import { useRouter, useParams, useSearchParams } from 'next/navigation'
 import { useTheme } from '@/contexts/theme-context'
@@ -1438,26 +1439,34 @@ export default function POSTerminalPage() {
               )}
 
               <p className="text-sm text-gray-600 dark:text-gray-400 mb-6">
-                Para cerrar la caja necesitarás realizar un conteo de inventario y luego el arqueo de efectivo. ¿Deseas continuar?
+                Selecciona una opción para continuar:
               </p>
 
-              <div className="flex gap-3">
+              <div className="flex flex-col gap-3">
+                <button
+                  onClick={() => router.push(`/dashboard/market/pos/${terminalId}/count`)}
+                  className="w-full py-3 rounded-xl bg-gradient-to-r from-blue-500 to-blue-600 text-white font-medium shadow-lg shadow-blue-500/25 hover:from-blue-600 hover:to-blue-700 flex items-center justify-center gap-2"
+                >
+                  <ClipboardList className="w-5 h-5" />
+                  Iniciar Conteo de Inventario
+                </button>
+                <button
+                  onClick={() => router.push(`/dashboard/market/pos/${terminalId}/close`)}
+                  className="w-full py-3 rounded-xl bg-gradient-to-r from-red-500 to-red-600 text-white font-medium shadow-lg shadow-red-500/25 hover:from-red-600 hover:to-red-700 flex items-center justify-center gap-2"
+                >
+                  <LogOut className="w-5 h-5" />
+                  Cerrar Sesión (Arqueo)
+                </button>
                 <button
                   onClick={() => setShowCloseSessionModal(false)}
                   className={cn(
-                    'flex-1 py-2.5 rounded-xl font-medium',
+                    'w-full py-2.5 rounded-xl font-medium',
                     theme === 'dark'
                       ? 'bg-gray-800 hover:bg-gray-700'
                       : 'bg-gray-100 hover:bg-gray-200'
                   )}
                 >
                   Cancelar
-                </button>
-                <button
-                  onClick={() => router.push(`/dashboard/market/pos/${terminalId}/count`)}
-                  className="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-red-500 to-red-600 text-white font-medium shadow-lg shadow-red-500/25 hover:from-red-600 hover:to-red-700"
-                >
-                  Iniciar Cierre
                 </button>
               </div>
             </motion.div>

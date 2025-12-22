@@ -185,11 +185,17 @@ export default function ProductDetailPage() {
     fetchProduct()
   }, [productId])
 
+  // Always fetch sales data when product loads or period changes (needed for preview chart)
   useEffect(() => {
     if (product) {
-      if (activeTab === 'overview') {
-        fetchSalesData()
-      } else if (activeTab === 'stock') {
+      fetchSalesData()
+    }
+  }, [product, salesPeriod])
+
+  // Fetch tab-specific data
+  useEffect(() => {
+    if (product) {
+      if (activeTab === 'stock') {
         fetchWarehouseStock()
       } else if (activeTab === 'lots') {
         fetchLots()
@@ -199,7 +205,7 @@ export default function ProductDetailPage() {
         fetchHistory()
       }
     }
-  }, [activeTab, product, salesPeriod])
+  }, [activeTab, product])
 
   const fetchProduct = async () => {
     setLoading(true)
@@ -801,7 +807,7 @@ export default function ProductDetailPage() {
               </motion.div>
             </div>
 
-            {/* Web Preview Card */}
+            {/* Web Preview Card + Sales Chart */}
             <motion.div
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
@@ -817,102 +823,228 @@ export default function ProductDetailPage() {
               )}>
                 <div className="flex items-center gap-3">
                   <Globe className="w-5 h-5 text-emerald-500" />
-                  <h3 className="font-semibold text-gray-900 dark:text-white">Vista Previa Web</h3>
+                  <h3 className="font-semibold text-gray-900 dark:text-white">Vista Previa y Análisis de Ventas</h3>
                 </div>
-                <span className="text-xs text-gray-500">Así se verá en la tienda online</span>
               </div>
               <div className="p-6">
-                <div className="max-w-md mx-auto">
-                  {/* Product Card Preview */}
-                  <div className={cn(
-                    'rounded-2xl border overflow-hidden transition-transform hover:scale-[1.02]',
-                    theme === 'dark' ? 'bg-gray-900 border-gray-700' : 'bg-white border-gray-200 shadow-lg'
-                  )}>
-                    {/* Product Image */}
-                    <div className="aspect-square relative overflow-hidden bg-gradient-to-br from-gray-100 to-gray-200 dark:from-gray-800 dark:to-gray-700">
-                      {product.imageUrl ? (
-                        <img
-                          src={product.imageUrl}
-                          alt={product.name}
-                          className="w-full h-full object-cover"
-                        />
-                      ) : (
-                        <div className="w-full h-full flex items-center justify-center">
-                          <ImageIcon className="w-20 h-20 text-gray-300 dark:text-gray-600" />
-                        </div>
-                      )}
-                      {/* Category Badge */}
-                      {product.category && (
-                        <span className={cn(
-                          'absolute top-4 left-4 px-3 py-1 rounded-full text-xs font-medium backdrop-blur-sm',
-                          theme === 'dark'
-                            ? 'bg-gray-900/70 text-gray-200 border border-gray-700'
-                            : 'bg-white/80 text-gray-700 border border-gray-200'
-                        )}>
-                          <Tag className="w-3 h-3 inline mr-1" />
-                          {product.category}
-                        </span>
-                      )}
-                      {/* Stock Badge */}
-                      <span className={cn(
-                        'absolute top-4 right-4 px-3 py-1 rounded-full text-xs font-medium',
-                        status.color === 'green' && 'bg-green-500 text-white',
-                        status.color === 'amber' && 'bg-amber-500 text-white',
-                        status.color === 'red' && 'bg-red-500 text-white'
-                      )}>
-                        {status.label}
-                      </span>
-                    </div>
-
-                    {/* Product Info */}
-                    <div className="p-5 space-y-4">
-                      <div>
-                        <h4 className="text-lg font-bold text-gray-900 dark:text-white line-clamp-2">
-                          {product.name}
-                        </h4>
-                        {product.description && (
-                          <p className="text-sm text-gray-500 mt-1 line-clamp-2">
-                            {product.description}
-                          </p>
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  {/* Left - Product Card Preview */}
+                  <div>
+                    <p className="text-xs text-gray-500 mb-3 uppercase tracking-wide">Vista Tienda Online</p>
+                    <div className={cn(
+                      'rounded-2xl border overflow-hidden transition-transform hover:scale-[1.01]',
+                      theme === 'dark' ? 'bg-gray-900 border-gray-700' : 'bg-white border-gray-200 shadow-lg'
+                    )}>
+                      {/* Product Image */}
+                      <div className="aspect-square relative overflow-hidden bg-gradient-to-br from-gray-100 to-gray-200 dark:from-gray-800 dark:to-gray-700">
+                        {product.imageUrl ? (
+                          <img
+                            src={product.imageUrl}
+                            alt={product.name}
+                            className="w-full h-full object-cover"
+                          />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center">
+                            <ImageIcon className="w-20 h-20 text-gray-300 dark:text-gray-600" />
+                          </div>
                         )}
+                        {/* Category Badge */}
+                        {product.category && (
+                          <span className={cn(
+                            'absolute top-4 left-4 px-3 py-1 rounded-full text-xs font-medium backdrop-blur-sm',
+                            theme === 'dark'
+                              ? 'bg-gray-900/70 text-gray-200 border border-gray-700'
+                              : 'bg-white/80 text-gray-700 border border-gray-200'
+                          )}>
+                            <Tag className="w-3 h-3 inline mr-1" />
+                            {product.category}
+                          </span>
+                        )}
+                        {/* Stock Badge */}
+                        <span className={cn(
+                          'absolute top-4 right-4 px-3 py-1 rounded-full text-xs font-medium',
+                          status.color === 'green' && 'bg-green-500 text-white',
+                          status.color === 'amber' && 'bg-amber-500 text-white',
+                          status.color === 'red' && 'bg-red-500 text-white'
+                        )}>
+                          {status.label}
+                        </span>
                       </div>
 
-                      {/* Price & Unit */}
-                      <div className="flex items-end justify-between">
+                      {/* Product Info */}
+                      <div className="p-5 space-y-4">
                         <div>
-                          <div className="flex items-baseline gap-2">
-                            <span className="text-3xl font-bold text-emerald-600">
-                              {symbol}{Number(product.sellingPrice).toFixed(2)}
-                            </span>
-                            <span className="text-sm text-gray-400">/ {product.unitOfMeasure}</span>
-                          </div>
-                          {product.costPrice > 0 && (
-                            <div className="flex items-center gap-2 mt-1">
-                              <span className="text-xs text-gray-400 line-through">
-                                {symbol}{(Number(product.sellingPrice) * 1.15).toFixed(2)}
-                              </span>
-                              <span className="text-xs font-medium text-emerald-500 bg-emerald-50 dark:bg-emerald-900/30 px-2 py-0.5 rounded">
-                                -15%
-                              </span>
-                            </div>
+                          <h4 className="text-lg font-bold text-gray-900 dark:text-white line-clamp-2">
+                            {product.name}
+                          </h4>
+                          {product.description && (
+                            <p className="text-sm text-gray-500 mt-1 line-clamp-2">
+                              {product.description}
+                            </p>
                           )}
                         </div>
-                        <div className="flex items-center gap-2 text-xs text-gray-400">
-                          <Scale className="w-4 h-4" />
-                          {product.quantityOnHand} disponibles
+
+                        {/* Price & Unit */}
+                        <div className="flex items-end justify-between">
+                          <div>
+                            <div className="flex items-baseline gap-2">
+                              <span className="text-3xl font-bold text-emerald-600">
+                                {symbol}{Number(product.sellingPrice).toFixed(2)}
+                              </span>
+                              <span className="text-sm text-gray-400">/ {product.unitOfMeasure}</span>
+                            </div>
+                            {product.costPrice > 0 && (
+                              <div className="flex items-center gap-2 mt-1">
+                                <span className="text-xs text-gray-400 line-through">
+                                  {symbol}{(Number(product.sellingPrice) * 1.15).toFixed(2)}
+                                </span>
+                                <span className="text-xs font-medium text-emerald-500 bg-emerald-50 dark:bg-emerald-900/30 px-2 py-0.5 rounded">
+                                  -15%
+                                </span>
+                              </div>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-2 text-xs text-gray-400">
+                            <Scale className="w-4 h-4" />
+                            {product.quantityOnHand} disponibles
+                          </div>
+                        </div>
+
+                        {/* Add to Cart Button (Preview) */}
+                        <button className={cn(
+                          'w-full py-3 px-4 rounded-xl font-semibold text-white transition-all',
+                          status.color === 'red'
+                            ? 'bg-gray-400 cursor-not-allowed'
+                            : 'bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 shadow-lg shadow-emerald-500/25'
+                        )} disabled={status.color === 'red'}>
+                          {status.color === 'red' ? 'Sin Stock' : 'Añadir al Carrito'}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Right - Sales Chart */}
+                  <div className="flex flex-col">
+                    <div className="flex items-center justify-between mb-3">
+                      <p className="text-xs text-gray-500 uppercase tracking-wide">Análisis de Ventas</p>
+                      <div className="flex items-center gap-1">
+                        {(['week', 'month', 'year'] as const).map((period) => (
+                          <button
+                            key={period}
+                            onClick={() => setSalesPeriod(period)}
+                            className={cn(
+                              'px-2 py-1 rounded text-xs font-medium transition-all',
+                              salesPeriod === period
+                                ? 'bg-emerald-500 text-white'
+                                : theme === 'dark'
+                                  ? 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                            )}
+                          >
+                            {period === 'week' ? '7D' : period === 'month' ? '30D' : '12M'}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {salesLoading ? (
+                      <div className="flex-1 flex items-center justify-center">
+                        <RefreshCw className="w-6 h-6 animate-spin text-gray-400" />
+                      </div>
+                    ) : salesData.length === 0 ? (
+                      <div className={cn(
+                        'flex-1 flex flex-col items-center justify-center rounded-xl',
+                        theme === 'dark' ? 'bg-gray-700/30' : 'bg-gray-50'
+                      )}>
+                        <ShoppingCart className="w-12 h-12 mb-3 text-gray-400" />
+                        <p className="text-gray-500 text-sm">Sin datos de ventas</p>
+                        <p className="text-xs text-gray-400">para este período</p>
+                      </div>
+                    ) : (
+                      <div className="flex-1 flex flex-col">
+                        {/* Summary Stats */}
+                        <div className="grid grid-cols-3 gap-3 mb-4">
+                          <div className={cn(
+                            'p-3 rounded-xl text-center',
+                            theme === 'dark' ? 'bg-gray-700/50' : 'bg-gray-50'
+                          )}>
+                            <p className="text-xs text-gray-500 mb-1">Unidades</p>
+                            <p className="text-xl font-bold text-gray-900 dark:text-white">{getTotalSales()}</p>
+                          </div>
+                          <div className={cn(
+                            'p-3 rounded-xl text-center',
+                            theme === 'dark' ? 'bg-gray-700/50' : 'bg-gray-50'
+                          )}>
+                            <p className="text-xs text-gray-500 mb-1">Ingresos</p>
+                            <p className="text-xl font-bold text-emerald-600">{symbol}{Number(getTotalRevenue()).toFixed(0)}</p>
+                          </div>
+                          <div className={cn(
+                            'p-3 rounded-xl text-center',
+                            theme === 'dark' ? 'bg-gray-700/50' : 'bg-gray-50'
+                          )}>
+                            <p className="text-xs text-gray-500 mb-1">Órdenes</p>
+                            <p className="text-xl font-bold text-gray-900 dark:text-white">{getTotalOrders()}</p>
+                          </div>
+                        </div>
+
+                        {/* Bar Chart */}
+                        <div className={cn(
+                          'flex-1 rounded-xl p-4 min-h-[200px]',
+                          theme === 'dark' ? 'bg-gray-700/30' : 'bg-gray-50'
+                        )}>
+                          <div className="h-full flex flex-col">
+                            {/* Chart bars */}
+                            <div className="flex-1 flex items-end gap-1">
+                              {salesData.map((sale, idx) => {
+                                const maxQty = Math.max(...salesData.map(s => s.quantity))
+                                const heightPercent = maxQty > 0 ? (sale.quantity / maxQty) * 100 : 0
+                                return (
+                                  <div key={idx} className="flex-1 flex flex-col items-center justify-end h-full group">
+                                    {/* Tooltip on hover */}
+                                    <div className={cn(
+                                      'mb-2 px-2 py-1 rounded text-xs opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap',
+                                      theme === 'dark' ? 'bg-gray-800 text-white' : 'bg-gray-900 text-white'
+                                    )}>
+                                      {sale.quantity} uds | {symbol}{Number(sale.revenue).toFixed(0)}
+                                    </div>
+                                    {/* Bar */}
+                                    <motion.div
+                                      initial={{ height: 0 }}
+                                      animate={{ height: `${Math.max(heightPercent, 5)}%` }}
+                                      transition={{ delay: idx * 0.05, duration: 0.3 }}
+                                      className={cn(
+                                        'w-full rounded-t-md min-h-[8px] cursor-pointer transition-colors',
+                                        theme === 'dark'
+                                          ? 'bg-emerald-500 hover:bg-emerald-400'
+                                          : 'bg-emerald-500 hover:bg-emerald-600'
+                                      )}
+                                    />
+                                  </div>
+                                )
+                              })}
+                            </div>
+                            {/* X-axis labels */}
+                            <div className="flex gap-1 mt-2 border-t border-gray-200 dark:border-gray-600 pt-2">
+                              {salesData.map((sale, idx) => (
+                                <div key={idx} className="flex-1 text-center">
+                                  <span className="text-[10px] text-gray-400 truncate block">
+                                    {sale.period.length > 5 ? sale.period.slice(0, 5) : sale.period}
+                                  </span>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Legend */}
+                        <div className="flex items-center justify-center gap-4 mt-3 text-xs text-gray-500">
+                          <div className="flex items-center gap-1">
+                            <div className="w-3 h-3 rounded bg-emerald-500" />
+                            <span>Unidades Vendidas</span>
+                          </div>
                         </div>
                       </div>
-
-                      {/* Add to Cart Button (Preview) */}
-                      <button className={cn(
-                        'w-full py-3 px-4 rounded-xl font-semibold text-white transition-all',
-                        status.color === 'red'
-                          ? 'bg-gray-400 cursor-not-allowed'
-                          : 'bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 shadow-lg shadow-emerald-500/25'
-                      )} disabled={status.color === 'red'}>
-                        {status.color === 'red' ? 'Sin Stock' : 'Añadir al Carrito'}
-                      </button>
-                    </div>
+                    )}
                   </div>
                 </div>
               </div>
