@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, Suspense } from 'react'
 import { motion } from 'framer-motion'
 import {
   CheckCircle,
@@ -11,7 +11,6 @@ import {
   Home,
   Loader2,
   AlertCircle,
-  Send,
   Copy,
   Check,
   WifiOff,
@@ -20,7 +19,109 @@ import {
 import { useRouter, useParams, useSearchParams } from 'next/navigation'
 import { useTheme } from '@/contexts/theme-context'
 import { cn } from '@/lib/utils'
-import { getPendingOrders } from '@/lib/pos-db'
+
+// IndexedDB constants - inline to avoid module loading issues offline
+const DB_NAME = 'market_pos_db'
+const DB_VERSION = 1
+const PENDING_ORDERS_STORE = 'pending_orders'
+
+interface PendingOrder {
+  offlineId: string
+  terminalId: number
+  sessionId: number
+  warehouseId: number | null
+  customerId: number | null
+  customerName: string | null
+  currency: string
+  lines: Array<{
+    productId: number
+    productName: string
+    productSku: string | null
+    quantity: number
+    unitPrice: number
+    discountPercent: number
+    discountAmount: number
+  }>
+  payments: Array<{
+    method: string
+    amount: number
+    currency: string
+    amountTendered: number | null
+    changeAmount: number | null
+  }>
+  total: number
+  createdAt: string
+  synced: boolean
+}
+
+// Open IndexedDB directly
+const openPOSDB = (): Promise<IDBDatabase> => {
+  return new Promise((resolve, reject) => {
+    if (typeof window === 'undefined' || !window.indexedDB) {
+      reject(new Error('IndexedDB not available'))
+      return
+    }
+
+    const request = indexedDB.open(DB_NAME, DB_VERSION)
+
+    request.onerror = () => reject(request.error)
+    request.onsuccess = () => resolve(request.result)
+
+    request.onupgradeneeded = (event) => {
+      const db = (event.target as IDBOpenDBRequest).result
+
+      if (!db.objectStoreNames.contains(PENDING_ORDERS_STORE)) {
+        const ordersStore = db.createObjectStore(PENDING_ORDERS_STORE, { keyPath: 'offlineId' })
+        ordersStore.createIndex('sessionId', 'sessionId', { unique: false })
+        ordersStore.createIndex('synced', 'synced', { unique: false })
+      }
+
+      if (!db.objectStoreNames.contains('products')) {
+        const productsStore = db.createObjectStore('products', { keyPath: 'id' })
+        productsStore.createIndex('barcode', 'barcode', { unique: false })
+        productsStore.createIndex('categoryId', 'categoryId', { unique: false })
+      }
+
+      if (!db.objectStoreNames.contains('categories')) {
+        db.createObjectStore('categories', { keyPath: 'id' })
+      }
+
+      if (!db.objectStoreNames.contains('promotions')) {
+        db.createObjectStore('promotions', { keyPath: 'id' })
+      }
+
+      if (!db.objectStoreNames.contains('sync_status')) {
+        db.createObjectStore('sync_status', { keyPath: 'id' })
+      }
+    }
+  })
+}
+
+// Get pending orders from IndexedDB
+const getPendingOrdersFromDB = async (): Promise<PendingOrder[]> => {
+  if (typeof window === 'undefined') return []
+
+  try {
+    const db = await openPOSDB()
+    const tx = db.transaction(PENDING_ORDERS_STORE, 'readonly')
+    const store = tx.objectStore(PENDING_ORDERS_STORE)
+
+    return new Promise((resolve, reject) => {
+      const request = store.getAll()
+      request.onsuccess = () => {
+        db.close()
+        resolve(request.result as PendingOrder[])
+      }
+      request.onerror = () => {
+        db.close()
+        reject(request.error)
+      }
+    })
+  } catch (error) {
+    console.error('[Receipt] Error reading IndexedDB:', error)
+    return []
+  }
+}
 
 interface OrderLine {
   id: number
@@ -53,7 +154,7 @@ interface Order {
   payments: Payment[]
 }
 
-export default function ReceiptPage() {
+function ReceiptContent() {
   const { theme } = useTheme()
   const router = useRouter()
   const params = useParams()
@@ -63,6 +164,13 @@ export default function ReceiptPage() {
   const orderNumber = searchParams.get('orderNumber')
   const offlineId = searchParams.get('offlineId')
   const isOfflineOrder = searchParams.get('offline') === 'true'
+
+  // Track if we're on client
+  const [isClient, setIsClient] = useState(false)
+
+  useEffect(() => {
+    setIsClient(true)
+  }, [])
 
   // State
   const [order, setOrder] = useState<Order | null>(null)
@@ -95,7 +203,7 @@ export default function ReceiptPage() {
       // OFFLINE ORDER: Load from IndexedDB
       if (isOfflineOrder && offlineId) {
         try {
-          const pendingOrders = await getPendingOrders()
+          const pendingOrders = await getPendingOrdersFromDB()
           const offlineOrder = pendingOrders.find(o => o.offlineId === offlineId)
 
           if (offlineOrder) {
@@ -636,5 +744,23 @@ ${order.payments.map(p =>
         </div>
       </div>
     </div>
+  )
+}
+
+// Loading fallback
+function LoadingFallback() {
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-gray-900">
+      <Loader2 className="w-12 h-12 animate-spin text-blue-500" />
+    </div>
+  )
+}
+
+// Main page with Suspense wrapper
+export default function ReceiptPage() {
+  return (
+    <Suspense fallback={<LoadingFallback />}>
+      <ReceiptContent />
+    </Suspense>
   )
 }
