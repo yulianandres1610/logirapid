@@ -16,6 +16,7 @@ interface CountLine {
   productName?: string
   productSku?: string
   productBarcode?: string
+  productImage?: string
   unitPrice?: number
   countedQuantity: number
   notes?: string
@@ -156,6 +157,7 @@ export async function GET(request: NextRequest) {
           productName: line.product_name,
           productSku: line.product_sku,
           productBarcode: line.product_barcode,
+          productImage: line.product_image || null,
           unitPrice: parseFloat(line.unit_price) || 0,
           expectedQuantity: parseFloat(line.expected_quantity) || 0,
           countedQuantity: parseFloat(line.counted_quantity) || 0,
@@ -345,9 +347,9 @@ export async function POST(request: NextRequest) {
         await db.query(`
           INSERT INTO market_inventory_count_lines (
             count_id, product_id, variant_id, product_name, product_sku,
-            product_barcode, unit_price, expected_quantity, counted_quantity,
+            product_barcode, product_image, unit_price, expected_quantity, counted_quantity,
             difference, difference_value, sold_today, notes
-          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
         `, [
           countId,
           line.productId,
@@ -355,6 +357,7 @@ export async function POST(request: NextRequest) {
           line.productName || '',
           line.productSku || '',
           line.productBarcode || '',
+          line.productImage || null,
           unitPrice,
           expectedQuantity,
           countedQuantity,
