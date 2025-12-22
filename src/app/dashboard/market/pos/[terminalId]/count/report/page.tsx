@@ -86,11 +86,15 @@ export default function InventoryCountReportPage() {
         const sessionData = await sessionRes.json()
         if (!sessionData.success) throw new Error(sessionData.error)
 
-        if (!sessionData.data || sessionData.data.length === 0) {
+        // Handle both array and object with sessions property
+        const sessions = sessionData.data?.sessions || sessionData.data || []
+        const sessionsArray = Array.isArray(sessions) ? sessions : []
+
+        if (sessionsArray.length === 0) {
           throw new Error('No hay sesión abierta para este terminal')
         }
 
-        const openSession = sessionData.data[0]
+        const openSession = sessionsArray[0]
         setSessionId(openSession.id)
 
         // Load count data
