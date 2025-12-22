@@ -444,16 +444,18 @@ export default function InventoryCountPage() {
     <div className="min-h-screen flex flex-col bg-gray-900 text-white">
       {/* Header - Compact */}
       <header className="bg-gray-800 border-b border-gray-700">
-        <div className="flex items-center justify-between px-3 sm:px-4 py-2">
-          <div className="flex items-center gap-2">
-            <button
+        <div className="flex items-center justify-between px-3 sm:px-4 py-3 lg:py-2">
+          <div className="flex items-center gap-3">
+            <motion.button
               onClick={goBack}
-              className="p-2 hover:bg-gray-700 rounded-lg transition-colors"
+              className="p-2.5 lg:p-2 hover:bg-gray-700 rounded-xl lg:rounded-lg transition-colors bg-gray-700/50 lg:bg-transparent"
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
             >
               <ChevronLeft className="w-5 h-5" />
-            </button>
+            </motion.button>
             <div>
-              <h1 className="font-semibold text-sm">Conteo de Inventario</h1>
+              <h1 className="font-semibold text-base lg:text-sm">Conteo de Inventario</h1>
               <p className="text-xs text-gray-400">{session?.warehouseName}</p>
             </div>
           </div>
@@ -479,17 +481,24 @@ export default function InventoryCountPage() {
               <WifiOff className="w-4 h-4 text-yellow-500" />
             )}
 
-            <button
+            <motion.button
               onClick={() => setMobileView(mobileView === 'input' ? 'list' : 'input')}
-              className="lg:hidden p-2 bg-gray-700 rounded-lg relative"
+              className="lg:hidden p-2.5 bg-gray-700 rounded-xl relative shadow-lg border border-gray-600"
+              whileHover={{ scale: 1.05, backgroundColor: '#4B5563' }}
+              whileTap={{ scale: 0.95 }}
+              transition={{ type: 'spring', stiffness: 400, damping: 17 }}
             >
               <List className="w-5 h-5" />
               {countedProducts.length > 0 && (
-                <span className="absolute -top-1 -right-1 bg-blue-500 text-white text-xs w-5 h-5 rounded-full flex items-center justify-center">
+                <motion.span
+                  initial={{ scale: 0 }}
+                  animate={{ scale: 1 }}
+                  className="absolute -top-1.5 -right-1.5 bg-blue-500 text-white text-xs w-5 h-5 rounded-full flex items-center justify-center font-medium shadow-md"
+                >
                   {countedProducts.length}
-                </span>
+                </motion.span>
               )}
-            </button>
+            </motion.button>
           </div>
         </div>
 
@@ -768,24 +777,12 @@ export default function InventoryCountPage() {
       <footer className="px-3 sm:px-4 py-3 bg-gray-800 border-t border-gray-700">
         {/* Progress bar */}
         <div className="mb-3">
-          <div className="flex items-center justify-between text-sm mb-1">
-            <span className="text-gray-400">
-              Progreso: <span className="text-white font-medium">{countingProgress.counted}</span> de <span className="text-white font-medium">{countingProgress.total}</span> productos
-            </span>
-            {countingProgress.remaining > 0 ? (
-              <span className="text-yellow-400 font-medium">
-                Faltan {countingProgress.remaining} productos
-              </span>
-            ) : countingProgress.total > 0 ? (
-              <span className="text-green-400 font-medium">
-                Conteo completo
-              </span>
-            ) : null}
-          </div>
-          <div className="w-full h-2 bg-gray-700 rounded-full overflow-hidden">
-            <div
-              className={`h-full transition-all duration-300 ${countingProgress.isComplete ? 'bg-green-500' : 'bg-blue-500'}`}
-              style={{ width: `${countingProgress.percentage}%` }}
+          <div className="w-full h-4 bg-gray-700 rounded-full overflow-hidden">
+            <motion.div
+              initial={{ width: 0 }}
+              animate={{ width: `${countingProgress.percentage}%` }}
+              transition={{ duration: 0.5, ease: 'easeOut' }}
+              className={`h-full ${countingProgress.isComplete ? 'bg-gradient-to-r from-green-500 to-green-400' : 'bg-gradient-to-r from-blue-600 to-blue-400'}`}
             />
           </div>
         </div>
