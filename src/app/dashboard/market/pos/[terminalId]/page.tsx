@@ -396,38 +396,47 @@ export default function POSTerminalPage() {
     }
   }, [session])
 
-  // Restore cart from URL params (when returning from payment page)
+  // Restore cart from localStorage (when returning from payment page)
   useEffect(() => {
-    const restoreCartData = searchParams.get('restoreCart')
-    if (restoreCartData && products.length > 0) {
-      try {
-        const cartItems = JSON.parse(decodeURIComponent(restoreCartData))
-        const restoredCart: CartItem[] = []
+    if (!isClient || products.length === 0) return
 
-        for (const item of cartItems) {
-          const product = products.find(p => p.id === item.productId)
-          if (product) {
-            restoredCart.push({
-              product,
-              quantity: item.quantity,
-              unitPrice: item.unitPrice,
-              discountPercent: item.discountPercent,
-              discountAmount: item.discountAmount,
-              total: item.total
-            })
+    const restoreFromPayment = searchParams.get('restoreFromPayment')
+    if (restoreFromPayment === 'true') {
+      try {
+        const paymentDataStr = localStorage.getItem('pos_payment_data')
+        if (paymentDataStr) {
+          const paymentData = JSON.parse(paymentDataStr)
+
+          if (paymentData.cart && Array.isArray(paymentData.cart)) {
+            const restoredCart: CartItem[] = []
+
+            for (const item of paymentData.cart) {
+              const product = products.find(p => p.id === item.productId)
+              if (product) {
+                restoredCart.push({
+                  product,
+                  quantity: item.quantity,
+                  unitPrice: item.unitPrice,
+                  discountPercent: item.discountPercent,
+                  discountAmount: item.discountAmount,
+                  total: item.total
+                })
+              }
+            }
+
+            if (restoredCart.length > 0) {
+              setCart(restoredCart)
+              console.log('[POS] Restored cart from payment page:', restoredCart.length, 'items')
+            }
           }
         }
-
-        if (restoredCart.length > 0) {
-          setCart(restoredCart)
-          // Clear the URL params to avoid restoring again on refresh
-          router.replace(`/dashboard/market/pos/${terminalId}`, { scroll: false })
-        }
+        // Clear the URL param
+        router.replace(`/dashboard/market/pos/${terminalId}`, { scroll: false })
       } catch (e) {
-        console.error('Error restoring cart:', e)
+        console.error('[POS] Error restoring cart:', e)
       }
     }
-  }, [searchParams, products, terminalId, router])
+  }, [searchParams, products, terminalId, router, isClient])
 
   // Online status and pending orders
   useEffect(() => {
@@ -1037,7 +1046,7 @@ export default function POSTerminalPage() {
               <button
                 onClick={() => {
                   if (cart.length === 0 || !session) return
-                  // Prepare cart data for payment page
+                  // Store cart data in localStorage for payment page (avoids URL encoding issues)
                   const cartData = cart.map(item => ({
                     productId: item.product.id,
                     productName: item.product.name,
@@ -1048,12 +1057,15 @@ export default function POSTerminalPage() {
                     discountAmount: item.discountAmount,
                     total: item.total
                   }))
-                  const params = new URLSearchParams({
-                    cart: encodeURIComponent(JSON.stringify(cartData)),
-                    sessionId: session.id.toString(),
-                    warehouseId: terminal?.warehouseId?.toString() || ''
-                  })
-                  router.push(`/dashboard/market/pos/${terminalId}/payment?${params.toString()}`)
+                  const paymentData = {
+                    cart: cartData,
+                    sessionId: session.id,
+                    warehouseId: terminal?.warehouseId || null,
+                    terminalId: parseInt(terminalId),
+                    timestamp: Date.now()
+                  }
+                  localStorage.setItem('pos_payment_data', JSON.stringify(paymentData))
+                  router.push(`/dashboard/market/pos/${terminalId}/payment`)
                 }}
                 disabled={cart.length === 0}
                 className={cn(

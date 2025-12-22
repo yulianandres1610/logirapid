@@ -16,7 +16,7 @@ import {
   WifiOff,
   Wifi
 } from 'lucide-react'
-import { useRouter, useParams, useSearchParams } from 'next/navigation'
+import { useRouter, useParams } from 'next/navigation'
 import { useTheme } from '@/contexts/theme-context'
 import { cn } from '@/lib/utils'
 
@@ -147,17 +147,15 @@ function PaymentContent() {
   const { theme } = useTheme()
   const router = useRouter()
   const params = useParams()
-  const searchParams = useSearchParams()
   const terminalId = params.terminalId as string
-
-  // Get cart data from URL params
-  const cartData = searchParams.get('cart')
-  const sessionId = searchParams.get('sessionId')
-  const warehouseId = searchParams.get('warehouseId')
 
   // Check online status safely
   const [isOnline, setIsOnline] = useState(true)
   const [isClient, setIsClient] = useState(false)
+
+  // Payment data from localStorage
+  const [sessionId, setSessionId] = useState<string | null>(null)
+  const [warehouseId, setWarehouseId] = useState<string | null>(null)
 
   // State
   const [cart, setCart] = useState<CartItem[]>([])
@@ -187,20 +185,35 @@ function PaymentContent() {
     }
   }, [])
 
-  // Parse cart data on mount
+  // Load cart data from localStorage on mount
   useEffect(() => {
-    if (cartData) {
-      const parsed = safeDecodeCart(cartData)
-      if (parsed.length > 0) {
-        setCart(parsed)
-        setError(null)
+    if (!isClient) return
+
+    try {
+      const paymentDataStr = localStorage.getItem('pos_payment_data')
+      if (paymentDataStr) {
+        const paymentData = JSON.parse(paymentDataStr)
+
+        // Check if data is fresh (less than 1 hour old)
+        const isDataFresh = paymentData.timestamp && (Date.now() - paymentData.timestamp) < 3600000
+
+        if (paymentData.cart && Array.isArray(paymentData.cart) && paymentData.cart.length > 0 && isDataFresh) {
+          setCart(paymentData.cart)
+          setSessionId(paymentData.sessionId?.toString() || null)
+          setWarehouseId(paymentData.warehouseId?.toString() || null)
+          setError(null)
+          console.log('[Payment] Loaded cart from localStorage:', paymentData.cart.length, 'items')
+        } else {
+          setError('Datos del carrito expirados o inválidos')
+        }
       } else {
-        setError('Error al cargar el carrito')
+        setError('No hay datos del carrito')
       }
-    } else {
-      setError('No se recibieron datos del carrito')
+    } catch (e) {
+      console.error('[Payment] Error loading cart from localStorage:', e)
+      setError('Error al cargar datos del carrito')
     }
-  }, [cartData])
+  }, [isClient])
 
   // Fetch exchange rates (only when online)
   useEffect(() => {
@@ -476,11 +489,18 @@ function PaymentContent() {
 
   // Navigate back to POS
   const goBackToPOS = () => {
-    const cartParams = new URLSearchParams({
-      restoreCart: encodeURIComponent(JSON.stringify(cart)),
-      sessionId: sessionId || ''
-    })
-    router.push(`/dashboard/market/pos/${terminalId}?${cartParams.toString()}`)
+    // Store cart back to localStorage so POS can restore it
+    if (cart.length > 0) {
+      const paymentData = {
+        cart: cart,
+        sessionId: sessionId ? parseInt(sessionId) : null,
+        warehouseId: warehouseId ? parseInt(warehouseId) : null,
+        terminalId: parseInt(terminalId),
+        timestamp: Date.now()
+      }
+      localStorage.setItem('pos_payment_data', JSON.stringify(paymentData))
+    }
+    router.push(`/dashboard/market/pos/${terminalId}?restoreFromPayment=true`)
   }
 
   // Show loading while not client
