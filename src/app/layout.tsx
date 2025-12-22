@@ -15,6 +15,13 @@ const inter = Inter({ subsets: ['latin'] })
 export const metadata: Metadata = {
   title: 'LogiRapid - Plataforma de Logistica y Entrega',
   description: 'Plataforma integral de logistica, envios y entrega de paquetes con rastreo en tiempo real',
+  manifest: '/manifest.json',
+  themeColor: '#3b82f6',
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: 'default',
+    title: 'LogiRapid POS',
+  },
   icons: {
     icon: '/favicon.png',
     shortcut: '/favicon.png',

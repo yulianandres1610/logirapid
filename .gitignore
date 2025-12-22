@@ -141,3 +141,9 @@ blanco.png
 blanco_logo.png
 rojo.png
 rojo_logo.png
+
+# PWA generated files
+public/sw.js
+public/sw.js.map
+public/workbox-*.js
+public/workbox-*.js.map
