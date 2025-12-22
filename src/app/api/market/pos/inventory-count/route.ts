@@ -87,7 +87,8 @@ export async function GET(request: NextRequest) {
         WHERE c.id = $1
       `, [countId])
     } else {
-      // Buscar el conteo más reciente de la sesión
+      // Buscar el conteo más reciente de la sesión que NO esté completado
+      // Si ya está completado, no devolver nada para que el usuario pueda iniciar uno nuevo
       countResult = await db.query(`
         SELECT
           c.*,
@@ -98,7 +99,7 @@ export async function GET(request: NextRequest) {
         LEFT JOIN market_warehouses w ON c.warehouse_id = w.id
         LEFT JOIN market_pos_sessions s ON c.session_id = s.id
         LEFT JOIN users u ON c.counted_by = u.id
-        WHERE c.session_id = $1
+        WHERE c.session_id = $1 AND c.status = 'in_progress'
         ORDER BY c.created_at DESC
         LIMIT 1
       `, [sessionId])
@@ -241,10 +242,11 @@ export async function POST(request: NextRequest) {
       }, { status: 403 })
     }
 
-    // Buscar conteo existente para esta sesión
+    // Buscar conteo existente para esta sesión que esté EN PROGRESO
+    // Si ya hay un conteo completado, creamos uno nuevo
     const existingCount = await db.query(`
       SELECT id, status FROM market_inventory_counts
-      WHERE session_id = $1 AND status IN ('in_progress', 'completed')
+      WHERE session_id = $1 AND status = 'in_progress'
       ORDER BY created_at DESC LIMIT 1
     `, [sessionId])
 
@@ -252,14 +254,6 @@ export async function POST(request: NextRequest) {
     let countNumber: string
 
     if (existingCount.rows.length > 0) {
-      // Si ya está completado, no permitir modificaciones
-      if (existingCount.rows[0].status === 'completed' && action !== 'complete') {
-        return NextResponse.json({
-          success: false,
-          error: 'El conteo ya fue completado'
-        }, { status: 400 })
-      }
-
       countId = existingCount.rows[0].id
 
       // Actualizar conteo existente
