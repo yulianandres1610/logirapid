@@ -124,6 +124,38 @@ export async function GET(request: NextRequest) {
       $$ LANGUAGE plpgsql;
     `).catch(e => console.log('[Migration] Función generate_count_number ya existe o error:', e.message))
 
+    // Agregar campos de auto-aprobación a market_inventory_counts
+    await db.query(`
+      ALTER TABLE market_inventory_counts
+      ADD COLUMN IF NOT EXISTS auto_approved BOOLEAN DEFAULT FALSE
+    `).catch(() => {})
+    console.log('[Migration] Columna auto_approved agregada')
+
+    await db.query(`
+      ALTER TABLE market_inventory_counts
+      ADD COLUMN IF NOT EXISTS approved_by INTEGER
+    `).catch(() => {})
+    console.log('[Migration] Columna approved_by agregada')
+
+    await db.query(`
+      ALTER TABLE market_inventory_counts
+      ADD COLUMN IF NOT EXISTS approved_at TIMESTAMP
+    `).catch(() => {})
+    console.log('[Migration] Columna approved_at agregada')
+
+    // Agregar campo de faltante de inventario a market_pos_sessions
+    await db.query(`
+      ALTER TABLE market_pos_sessions
+      ADD COLUMN IF NOT EXISTS inventory_shortage_value DECIMAL(12,2) DEFAULT 0
+    `).catch(() => {})
+    console.log('[Migration] Columna inventory_shortage_value agregada a sessions')
+
+    // Crear índice para consultas de conteos pendientes de aprobación
+    await db.query(`
+      CREATE INDEX IF NOT EXISTS idx_inventory_counts_pending_approval
+      ON market_inventory_counts(company_id, status, products_with_differences)
+    `).catch(() => {})
+
     console.log('[Migration] Migración de conteo de inventario completada exitosamente')
 
     return NextResponse.json({

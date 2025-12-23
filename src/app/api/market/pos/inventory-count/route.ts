@@ -407,8 +407,15 @@ export async function POST(request: NextRequest) {
       `, [countId])
 
       let adjustmentOperationId = null
+      const hasDifferences = diffLines.rows.length > 0
 
-      if (diffLines.rows.length > 0) {
+      // Calcular valor total de faltantes (solo diferencias negativas)
+      const shortageLines = diffLines.rows.filter(line => parseFloat(line.difference) < 0)
+      const totalShortageValue = shortageLines.reduce((sum, line) => {
+        return sum + Math.abs(parseFloat(line.difference_value) || 0)
+      }, 0)
+
+      if (hasDifferences) {
         // Crear operación de ajuste
         const opYear = new Date().getFullYear()
         const opSeqResult = await db.query(`
@@ -455,14 +462,34 @@ export async function POST(request: NextRequest) {
             Math.round(Number(line.difference)) || 0
           ])
         }
+
+        // Si hay faltantes, registrar el valor en la sesión POS para el cuadre de caja
+        if (totalShortageValue > 0) {
+          await db.query(`
+            UPDATE market_pos_sessions
+            SET inventory_shortage_value = $1
+            WHERE id = $2
+          `, [totalShortageValue, sessionId])
+        }
       }
 
-      // Marcar conteo como completado
+      // Determinar estado final: auto-aprobar si NO hay diferencias
+      const finalStatus = hasDifferences ? 'completed' : 'approved'
+      const autoApproved = !hasDifferences
+
+      // Marcar conteo con estado apropiado
       await db.query(`
         UPDATE market_inventory_counts
-        SET status = 'completed', completed_at = NOW(), adjustment_operation_id = $1, updated_at = NOW()
-        WHERE id = $2
-      `, [adjustmentOperationId, countId])
+        SET
+          status = $1,
+          completed_at = NOW(),
+          adjustment_operation_id = $2,
+          auto_approved = $3,
+          approved_by = CASE WHEN $3 THEN $4 ELSE NULL END,
+          approved_at = CASE WHEN $3 THEN NOW() ELSE NULL END,
+          updated_at = NOW()
+        WHERE id = $5
+      `, [finalStatus, adjustmentOperationId, autoApproved, payload.userId, countId])
     }
 
     // Obtener el conteo actualizado

@@ -16,7 +16,8 @@ interface JWTPayload {
  * Lista todos los conteos de inventario de la empresa
  *
  * Query params:
- * - status: 'in_progress' | 'completed' | 'approved' | 'all'
+ * - status: 'in_progress' | 'completed' | 'approved' | 'rejected' | 'all'
+ * - requiresApproval: 'true' para obtener solo conteos que necesitan aprobación
  * - page: número de página
  * - limit: items por página
  */
@@ -45,17 +46,21 @@ export async function GET(request: NextRequest) {
 
     const { searchParams } = new URL(request.url)
     const status = searchParams.get('status') || 'all'
+    const requiresApproval = searchParams.get('requiresApproval') === 'true'
     const page = parseInt(searchParams.get('page') || '1')
     const limit = parseInt(searchParams.get('limit') || '20')
     const offset = (page - 1) * limit
 
-    // Build query based on status filter
+    // Build query based on filters
     let statusFilter = ''
-    if (status !== 'all') {
+    if (requiresApproval) {
+      // Solo conteos completados CON diferencias (pendientes de aprobación)
+      statusFilter = "AND c.status = 'completed' AND c.products_with_differences > 0"
+    } else if (status !== 'all') {
       statusFilter = `AND c.status = '${status}'`
     }
 
-    // Get counts
+    // Get counts with approval info
     const countsResult = await db.query(`
       SELECT
         c.id,
@@ -68,15 +73,20 @@ export async function GET(request: NextRequest) {
         c.created_at,
         c.completed_at,
         c.updated_at,
+        c.auto_approved,
+        c.approved_by,
+        c.approved_at,
         w.name as warehouse_name,
         s.session_code,
         t.name as terminal_name,
-        u.firstname || ' ' || u.lastname as counted_by_name
+        u.firstname || ' ' || u.lastname as counted_by_name,
+        ua.firstname || ' ' || ua.lastname as approved_by_name
       FROM market_inventory_counts c
       LEFT JOIN market_warehouses w ON c.warehouse_id = w.id
       LEFT JOIN market_pos_sessions s ON c.session_id = s.id
       LEFT JOIN market_pos_terminals t ON s.pos_terminal_id = t.id
       LEFT JOIN users u ON c.counted_by = u.id
+      LEFT JOIN users ua ON c.approved_by = ua.id
       WHERE c.company_id = $1 ${statusFilter}
       ORDER BY c.created_at DESC
       LIMIT $2 OFFSET $3
@@ -105,6 +115,10 @@ export async function GET(request: NextRequest) {
           createdAt: c.created_at,
           completedAt: c.completed_at,
           updatedAt: c.updated_at,
+          autoApproved: c.auto_approved || false,
+          approvedBy: c.approved_by,
+          approvedAt: c.approved_at,
+          approvedByName: c.approved_by_name,
           warehouseName: c.warehouse_name,
           sessionCode: c.session_code,
           terminalName: c.terminal_name,
@@ -237,12 +251,12 @@ export async function POST(request: NextRequest) {
         }
       }
 
-      // Mark count as approved
+      // Mark count as approved with approver info
       await db.query(`
         UPDATE market_inventory_counts
-        SET status = 'approved', updated_at = NOW()
-        WHERE id = $1
-      `, [countId])
+        SET status = 'approved', approved_by = $1, approved_at = NOW(), updated_at = NOW()
+        WHERE id = $2
+      `, [payload.userId, countId])
 
       return NextResponse.json({
         success: true,
