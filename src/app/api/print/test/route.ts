@@ -184,7 +184,10 @@ export async function GET(request: NextRequest) {
     }
 
     if (action === 'cleanup') {
-      // Mark stuck jobs as failed
+      // Mark stuck jobs as failed (including recent ones with force param)
+      const force = searchParams.get('force') === 'true'
+      const intervalClause = force ? '' : "AND created_at < NOW() - INTERVAL '1 hour'"
+
       const result = await db.query(`
         UPDATE print_jobs
         SET status = 'failed',
@@ -192,8 +195,8 @@ export async function GET(request: NextRequest) {
             completed_at = NOW()
         WHERE company_id = $1
           AND status IN ('printing', 'sent')
-          AND created_at < NOW() - INTERVAL '1 hour'
-        RETURNING id, job_number
+          ${intervalClause}
+        RETURNING id, job_number, document_type
       `, [companyId])
 
       return NextResponse.json({
@@ -205,10 +208,87 @@ export async function GET(request: NextRequest) {
       })
     }
 
+    if (action === 'print-sales-report') {
+      // Find an active service
+      const serviceResult = await db.query(`
+        SELECT ps.id as service_id, psp.id as printer_id, psp.printer_name
+        FROM print_services ps
+        JOIN print_service_printers psp ON psp.print_service_id = ps.id
+        WHERE ps.company_id = $1 AND ps.status = 'active'
+        ORDER BY psp.is_default DESC
+        LIMIT 1
+      `, [companyId])
+
+      if (serviceResult.rows.length === 0) {
+        return NextResponse.json({
+          success: false,
+          error: 'No hay servicios de impresión activos.'
+        })
+      }
+
+      const { service_id, printer_id, printer_name } = serviceResult.rows[0]
+
+      const jobNumber = `TEST-SR-${Date.now()}`
+      const testSalesData = {
+        companyName: 'LogiRapid Test',
+        terminalName: 'Terminal de Prueba',
+        warehouseName: 'Almacén Principal',
+        reportTitle: 'REPORTE DE VENTAS - PRUEBA',
+        reportDate: new Date().toLocaleDateString('es-ES'),
+        generatedAt: new Date().toLocaleString('es-ES'),
+        generatedBy: 'Sistema de Pruebas',
+        totalTransactions: 25,
+        totalProducts: 150,
+        grossSales: 5000.00,
+        discounts: 250.00,
+        taxes: 475.00,
+        netSales: 5225.00,
+        salesByPayment: [
+          { paymentMethod: 'Efectivo', transactionCount: 15, total: 3000.00 },
+          { paymentMethod: 'Tarjeta', transactionCount: 10, total: 2225.00 }
+        ],
+        topProducts: [
+          { name: 'Producto Popular 1', quantity: 50, total: 1500.00 },
+          { name: 'Producto Popular 2', quantity: 35, total: 1050.00 },
+          { name: 'Producto Popular 3', quantity: 30, total: 900.00 }
+        ],
+        notes: 'Este es un reporte de prueba generado automáticamente.'
+      }
+
+      const result = await db.query(`
+        INSERT INTO print_jobs (
+          job_number, company_id, print_service_id, printer_id,
+          document_type, source_type, document_data, copies,
+          status, created_at
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'pending', NOW())
+        RETURNING id
+      `, [
+        jobNumber,
+        companyId,
+        service_id,
+        printer_id,
+        'sales_report',
+        'test',
+        JSON.stringify(testSalesData),
+        1
+      ])
+
+      return NextResponse.json({
+        success: true,
+        message: 'Trabajo de reporte de ventas creado',
+        data: {
+          jobId: result.rows[0].id,
+          jobNumber,
+          documentType: 'sales_report',
+          printerName: printer_name
+        }
+      })
+    }
+
     return NextResponse.json({
       success: false,
       error: 'Acción no válida',
-      validActions: ['status', 'print-test', 'list-all', 'cleanup']
+      validActions: ['status', 'print-test', 'print-sales-report', 'list-all', 'cleanup']
     })
 
   } catch (error) {
