@@ -52,30 +52,38 @@ export async function GET(request: NextRequest) {
 
     let query = `
       SELECT
-        id,
-        name,
-        description,
-        image_url,
-        category,
-        cost_price,
-        selling_price,
-        currency,
-        sku,
-        barcode,
-        supplier_name,
-        supplier_contact,
-        supplier_reference,
-        quantity_on_hand,
-        quantity_expected,
-        minimum_stock,
-        is_active,
-        unit_of_measure,
-        odoo_product_id,
-        odoo_last_sync,
-        created_at,
-        updated_at
-      FROM market_products
-      WHERE company_id = $1
+        p.id,
+        p.name,
+        p.description,
+        p.image_url,
+        p.category,
+        p.cost_price,
+        p.selling_price,
+        p.currency,
+        p.sku,
+        p.barcode,
+        p.supplier_name,
+        p.supplier_contact,
+        p.supplier_reference,
+        COALESCE(stock_totals.total_on_hand, p.quantity_on_hand, 0) as quantity_on_hand,
+        COALESCE(stock_totals.total_expected, p.quantity_expected, 0) as quantity_expected,
+        p.minimum_stock,
+        p.is_active,
+        p.unit_of_measure,
+        p.odoo_product_id,
+        p.odoo_last_sync,
+        p.created_at,
+        p.updated_at
+      FROM market_products p
+      LEFT JOIN (
+        SELECT
+          product_id,
+          SUM(quantity_on_hand) as total_on_hand,
+          SUM(COALESCE(quantity_reserved, 0)) as total_expected
+        FROM market_warehouse_stock
+        GROUP BY product_id
+      ) stock_totals ON p.id = stock_totals.product_id
+      WHERE p.company_id = $1
     `
 
     const queryParams: (string | number)[] = [companyId]
@@ -83,29 +91,29 @@ export async function GET(request: NextRequest) {
 
     // Search filter
     if (search) {
-      query += ` AND (LOWER(name) LIKE $${paramIndex} OR LOWER(sku) LIKE $${paramIndex} OR LOWER(barcode) LIKE $${paramIndex})`
+      query += ` AND (LOWER(p.name) LIKE $${paramIndex} OR LOWER(p.sku) LIKE $${paramIndex} OR LOWER(p.barcode) LIKE $${paramIndex})`
       queryParams.push(`%${search.toLowerCase()}%`)
       paramIndex++
     }
 
     // Category filter
     if (category) {
-      query += ` AND category = $${paramIndex}`
+      query += ` AND p.category = $${paramIndex}`
       queryParams.push(category)
       paramIndex++
     }
 
-    // Stock filter
+    // Stock filter - uses COALESCE to handle products with/without warehouse stock
     if (stockFilter === 'low-stock') {
-      query += ` AND quantity_on_hand <= minimum_stock AND quantity_on_hand > 0`
+      query += ` AND COALESCE(stock_totals.total_on_hand, p.quantity_on_hand, 0) <= p.minimum_stock AND COALESCE(stock_totals.total_on_hand, p.quantity_on_hand, 0) > 0`
     } else if (stockFilter === 'out-of-stock') {
-      query += ` AND quantity_on_hand = 0`
+      query += ` AND COALESCE(stock_totals.total_on_hand, p.quantity_on_hand, 0) = 0`
     } else if (stockFilter === 'in-stock') {
-      query += ` AND quantity_on_hand > minimum_stock`
+      query += ` AND COALESCE(stock_totals.total_on_hand, p.quantity_on_hand, 0) > p.minimum_stock`
     }
 
     // Only active products by default
-    query += ` AND is_active = true`
+    query += ` AND p.is_active = true`
 
     // Count total
     const countQuery = query.replace(/SELECT[\s\S]+FROM/, 'SELECT COUNT(*) as total FROM')
@@ -113,7 +121,7 @@ export async function GET(request: NextRequest) {
     const total = parseInt(countResult.rows[0]?.total) || 0
 
     // Add pagination
-    query += ` ORDER BY name ASC LIMIT $${paramIndex} OFFSET $${paramIndex + 1}`
+    query += ` ORDER BY p.name ASC LIMIT $${paramIndex} OFFSET $${paramIndex + 1}`
     queryParams.push(limit, offset)
 
     const result = await db.query(query, queryParams)
@@ -127,15 +135,20 @@ export async function GET(request: NextRequest) {
       ORDER BY category
     `, [companyId])
 
-    // Calculate stock stats
+    // Calculate stock stats using warehouse stock
     const statsResult = await db.query(`
       SELECT
         COUNT(*) as total,
-        COUNT(*) FILTER (WHERE quantity_on_hand > minimum_stock) as in_stock,
-        COUNT(*) FILTER (WHERE quantity_on_hand <= minimum_stock AND quantity_on_hand > 0) as low_stock,
-        COUNT(*) FILTER (WHERE quantity_on_hand = 0) as out_of_stock
-      FROM market_products
-      WHERE company_id = $1 AND is_active = true
+        COUNT(*) FILTER (WHERE COALESCE(stock_totals.total_on_hand, p.quantity_on_hand, 0) > p.minimum_stock) as in_stock,
+        COUNT(*) FILTER (WHERE COALESCE(stock_totals.total_on_hand, p.quantity_on_hand, 0) <= p.minimum_stock AND COALESCE(stock_totals.total_on_hand, p.quantity_on_hand, 0) > 0) as low_stock,
+        COUNT(*) FILTER (WHERE COALESCE(stock_totals.total_on_hand, p.quantity_on_hand, 0) = 0) as out_of_stock
+      FROM market_products p
+      LEFT JOIN (
+        SELECT product_id, SUM(quantity_on_hand) as total_on_hand
+        FROM market_warehouse_stock
+        GROUP BY product_id
+      ) stock_totals ON p.id = stock_totals.product_id
+      WHERE p.company_id = $1 AND p.is_active = true
     `, [companyId])
 
     return NextResponse.json({
