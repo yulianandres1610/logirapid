@@ -87,26 +87,31 @@ class PrinterService {
     try {
       const printers: SystemPrinter[] = []
       let defaultPrinter = ''
+      const cupsNames = new Map<string, string>() // displayName -> cupsName
 
-      // Method 1: Use lpstat for CUPS printers
+      // Method 1: Use lpstat to get REAL CUPS printer names
       try {
         const { stdout } = await execAsync('lpstat -p -d 2>/dev/null', { encoding: 'utf8' })
         const lines = stdout.split('\n')
 
         for (const line of lines) {
           // Parse "printer PrinterName is idle." or similar
-          const printerMatch = line.match(/^printer\s+(\S+)\s+/)
+          const printerMatch = line.match(/^(?:la\s+)?(?:impresora\s+)?printer\s+(\S+)|^(?:la\s+)?impresora\s+(\S+)\s+/)
           if (printerMatch) {
+            const cupsName = printerMatch[1] || printerMatch[2]
+            const displayName = cupsName.replace(/_/g, ' ')
+            cupsNames.set(displayName, cupsName)
+
             printers.push({
-              name: printerMatch[1],
-              displayName: printerMatch[1].replace(/_/g, ' '),
+              name: cupsName, // Use CUPS name directly
+              displayName: displayName,
               isDefault: false,
-              status: line.includes('idle') ? 0 : 1
+              status: line.includes('idle') || line.includes('inactiva') ? 0 : 1
             })
           }
 
-          // Parse "system default destination: PrinterName"
-          const defaultMatch = line.match(/system default destination:\s*(\S+)/)
+          // Parse "system default destination: PrinterName" or Spanish equivalent
+          const defaultMatch = line.match(/(?:system default destination|destino por omisión del sistema):\s*(\S+)/)
           if (defaultMatch) {
             defaultPrinter = defaultMatch[1]
           }
@@ -115,7 +120,7 @@ class PrinterService {
         console.log('[Printer Service] lpstat failed, trying alternative methods')
       }
 
-      // Method 2: Use system_profiler for more comprehensive printer list
+      // Method 2: Enrich with system_profiler data (URI, driver info, etc.)
       try {
         const { stdout } = await execAsync(
           'system_profiler SPPrintersDataType -json 2>/dev/null',
@@ -126,31 +131,53 @@ class PrinterService {
           const data = JSON.parse(stdout)
           const printerData = data.SPPrintersDataType || []
 
-          for (const printer of printerData) {
-            const name = printer._name || ''
-            // Check if already added via lpstat
-            if (!printers.find(p => p.name === name || p.displayName === name)) {
-              const isNetwork = printer.uri?.startsWith('ipp://') ||
-                               printer.uri?.startsWith('ipps://') ||
-                               printer.uri?.startsWith('socket://') ||
-                               printer.uri?.includes('network')
+          for (const profilerPrinter of printerData) {
+            const profilerName = profilerPrinter._name || ''
+            const uri = profilerPrinter.uri || ''
+
+            // Find matching printer from lpstat
+            const existingPrinter = printers.find(p =>
+              p.displayName === profilerName ||
+              p.name === profilerName.replace(/[\s-]/g, '_')
+            )
+
+            // Detect connection type from URI
+            const isNetwork = uri.startsWith('ipp://') ||
+                             uri.startsWith('ipps://') ||
+                             uri.startsWith('dnssd://') ||
+                             uri.startsWith('socket://') ||
+                             uri.includes('._tcp.') ||
+                             uri.includes('._ipp') ||
+                             uri.includes('network')
+
+            if (existingPrinter) {
+              // Enrich existing printer with additional info
+              existingPrinter.description = profilerPrinter.ppd || profilerPrinter._name
+              existingPrinter.options = {
+                driverName: profilerPrinter.ppd || '',
+                portName: uri,
+                isNetwork: isNetwork ? 'true' : 'false'
+              }
+              if (profilerPrinter.default === 'yes' || profilerPrinter.default === 'Yes') {
+                existingPrinter.isDefault = true
+              }
+            } else if (printers.length === 0) {
+              // Fallback: if lpstat failed, use system_profiler
+              // Generate CUPS-compatible name (replace all non-alnum with _)
+              const cupsName = profilerName.replace(/[^a-zA-Z0-9]/g, '_')
 
               printers.push({
-                name: name.replace(/\s+/g, '_'),
-                displayName: name,
-                description: printer.ppd || printer._name,
-                isDefault: printer.default === 'Yes',
-                status: printer.status === 'idle' ? 0 : 1,
+                name: cupsName,
+                displayName: profilerName,
+                description: profilerPrinter.ppd || profilerName,
+                isDefault: profilerPrinter.default === 'yes' || profilerPrinter.default === 'Yes',
+                status: profilerPrinter.status === 'idle' ? 0 : 1,
                 options: {
-                  driverName: printer.ppd || '',
-                  portName: printer.uri || '',
+                  driverName: profilerPrinter.ppd || '',
+                  portName: uri,
                   isNetwork: isNetwork ? 'true' : 'false'
                 }
               })
-
-              if (printer.default === 'Yes') {
-                defaultPrinter = name.replace(/\s+/g, '_')
-              }
             }
           }
         }
@@ -158,15 +185,13 @@ class PrinterService {
         console.log('[Printer Service] system_profiler failed:', e)
       }
 
-      // Note: We removed lpinfo discovery because it shows unconfigured printers
-      // that cannot be used for printing. Only configured CUPS printers work.
-
       console.log(`[Printer Service] macOS: Found ${printers.length} printers`)
+      printers.forEach(p => console.log(`[Printer Service]   - ${p.name} (${p.displayName})`))
 
       // Mark default printer
       return printers.map(p => ({
         ...p,
-        isDefault: p.name === defaultPrinter || p.displayName === defaultPrinter
+        isDefault: p.name === defaultPrinter || p.isDefault
       }))
     } catch (error) {
       console.error('[Printer Service] macOS detection failed:', error)
