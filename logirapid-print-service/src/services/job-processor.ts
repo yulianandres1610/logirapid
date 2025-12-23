@@ -15,6 +15,7 @@ import { generatePosReceipt, ReceiptData } from '../documents/pos-receipt'
 import { generateShippingLabel, ShippingLabelData } from '../documents/shipping-label'
 import { generateProductLabel, ProductLabelData } from '../documents/product-label'
 import { generatePurchaseInvoice, PurchaseInvoiceData } from '../documents/purchase-invoice'
+import { generatePurchaseInvoicePdf } from '../documents/purchase-invoice-pdf'
 import { generateSalesReport, SalesReportData } from '../documents/sales-report'
 import { generateInventoryCountReport, InventoryCountReportData } from '../documents/inventory-count-report'
 import { generateCashRegisterReport, CashRegisterReportData } from '../documents/cash-register-report'
@@ -147,8 +148,8 @@ class JobProcessor {
         throw new Error('No suitable printer found')
       }
 
-      // Generate document
-      const documentBuffer = await this.generateDocument(job)
+      // Generate document (pass printer to determine format: PDF vs ESC/POS)
+      const documentBuffer = await this.generateDocument(job, printer)
       if (!documentBuffer) {
         throw new Error('Failed to generate document')
       }
@@ -205,11 +206,15 @@ class JobProcessor {
     }
   }
 
-  private async generateDocument(job: PrintJob): Promise<Buffer | null> {
+  private async generateDocument(job: PrintJob, printer: DetectedPrinter): Promise<Buffer | null> {
     const data = job.documentData as Record<string, unknown>
+    const usePdf = !printer.supportsEscpos || printer.printerType === 'standard'
+
+    console.log(`[Job Processor] Generating ${job.documentType} as ${usePdf ? 'PDF' : 'ESC/POS'} for printer ${printer.printerName}`)
 
     switch (job.documentType) {
       case 'pos_receipt':
+        // POS receipts are always ESC/POS (thermal printer required)
         return generatePosReceipt(data as unknown as ReceiptData)
 
       case 'shipping_label':
@@ -220,15 +225,22 @@ class JobProcessor {
 
       case 'purchase_invoice':
       case 'invoice':
+        // Use PDF for standard printers, ESC/POS for thermal
+        if (usePdf) {
+          return generatePurchaseInvoicePdf(data as unknown as PurchaseInvoiceData)
+        }
         return generatePurchaseInvoice(data as unknown as PurchaseInvoiceData)
 
       case 'sales_report':
+        // TODO: Add PDF version for standard printers
         return generateSalesReport(data as unknown as SalesReportData)
 
       case 'inventory_count_report':
+        // TODO: Add PDF version for standard printers
         return generateInventoryCountReport(data as unknown as InventoryCountReportData)
 
       case 'cash_register_report':
+        // TODO: Add PDF version for standard printers
         return generateCashRegisterReport(data as unknown as CashRegisterReportData)
 
       default:
@@ -244,22 +256,25 @@ class JobProcessor {
   ): Promise<void> {
     const copies = job.copies || 1
 
-    // Document types that use ESC/POS commands (for thermal printers)
-    const escposDocTypes = [
-      'pos_receipt',
-      'purchase_invoice',
-      'invoice',
-      'sales_report',
-      'inventory_count_report',
-      'cash_register_report'
-    ]
+    // Check if we should use ESC/POS (raw binary) or PDF printing
+    // ESC/POS is only for thermal printers that support it
+    const useEscPos = printer.supportsEscpos &&
+                      printer.printerType !== 'standard' &&
+                      ['pos_receipt'].includes(job.documentType) // Only POS receipts are always ESC/POS
+
+    // For purchase_invoice, invoice, reports: check if printer supports ESC/POS
+    // The document was already generated in the appropriate format by generateDocument()
+    const isReceiptOrReport = ['purchase_invoice', 'invoice', 'sales_report',
+                               'inventory_count_report', 'cash_register_report'].includes(job.documentType)
 
     for (let i = 0; i < copies; i++) {
-      if (printer.supportsEscpos && escposDocTypes.includes(job.documentType)) {
+      if (useEscPos || (isReceiptOrReport && printer.supportsEscpos && printer.printerType !== 'standard')) {
         // Direct ESC/POS printing for thermal printers
+        console.log(`[Job Processor] Printing via ESC/POS to ${printer.printerName}`)
         await this.printEscPos(printer, documentBuffer)
       } else {
-        // PDF printing through system for other printers/documents
+        // PDF printing through system for standard/network printers
+        console.log(`[Job Processor] Printing via PDF to ${printer.printerName}`)
         await this.printPdf(printer, documentBuffer)
       }
 

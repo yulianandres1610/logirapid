@@ -28,11 +28,28 @@ export async function GET(request: NextRequest) {
         ORDER BY ps.company_id, ps.created_at DESC
       `)
 
+      // Get printers details
+      const printers = await db.query(`
+        SELECT
+          psp.id,
+          psp.print_service_id,
+          psp.printer_name,
+          psp.printer_type,
+          psp.connection_type,
+          psp.is_online,
+          psp.is_default,
+          psp.supports_escpos,
+          psp.supported_document_types
+        FROM print_service_printers psp
+        ORDER BY psp.print_service_id
+      `)
+
       return NextResponse.json({
         success: true,
         data: {
           totalServices: allServices.rows.length,
-          services: allServices.rows
+          services: allServices.rows,
+          printers: printers.rows
         }
       })
     }
