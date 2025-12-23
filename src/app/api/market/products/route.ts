@@ -115,9 +115,45 @@ export async function GET(request: NextRequest) {
     // Only active products by default
     query += ` AND p.is_active = true`
 
-    // Count total
-    const countQuery = query.replace(/SELECT[\s\S]+FROM/, 'SELECT COUNT(*) as total FROM')
-    const countResult = await db.query(countQuery, queryParams)
+    // Count total - build a separate count query to avoid regex issues with subqueries
+    let countQuery = `
+      SELECT COUNT(*) as total
+      FROM market_products p
+      LEFT JOIN (
+        SELECT product_id, SUM(quantity_on_hand) as total_on_hand
+        FROM market_warehouse_stock
+        GROUP BY product_id
+      ) stock_totals ON p.id = stock_totals.product_id
+      WHERE p.company_id = $1
+    `
+
+    // Rebuild count query with same filters (but different param indexes)
+    const countParams: (string | number)[] = [companyId]
+    let countParamIndex = 2
+
+    if (search) {
+      countQuery += ` AND (LOWER(p.name) LIKE $${countParamIndex} OR LOWER(p.sku) LIKE $${countParamIndex} OR LOWER(p.barcode) LIKE $${countParamIndex})`
+      countParams.push(`%${search.toLowerCase()}%`)
+      countParamIndex++
+    }
+
+    if (category) {
+      countQuery += ` AND p.category = $${countParamIndex}`
+      countParams.push(category)
+      countParamIndex++
+    }
+
+    if (stockFilter === 'low-stock') {
+      countQuery += ` AND COALESCE(stock_totals.total_on_hand, p.quantity_on_hand, 0) <= p.minimum_stock AND COALESCE(stock_totals.total_on_hand, p.quantity_on_hand, 0) > 0`
+    } else if (stockFilter === 'out-of-stock') {
+      countQuery += ` AND COALESCE(stock_totals.total_on_hand, p.quantity_on_hand, 0) = 0`
+    } else if (stockFilter === 'in-stock') {
+      countQuery += ` AND COALESCE(stock_totals.total_on_hand, p.quantity_on_hand, 0) > p.minimum_stock`
+    }
+
+    countQuery += ` AND p.is_active = true`
+
+    const countResult = await db.query(countQuery, countParams)
     const total = parseInt(countResult.rows[0]?.total) || 0
 
     // Add pagination
