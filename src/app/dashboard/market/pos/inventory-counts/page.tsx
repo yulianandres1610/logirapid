@@ -10,7 +10,6 @@ import {
   XCircle,
   AlertTriangle,
   Loader2,
-  Eye,
   Check,
   X,
   Package,
@@ -73,10 +72,7 @@ export default function InventoryCountsPage() {
   const router = useRouter()
   const { theme } = useTheme()
 
-  // Tab state
   const [activeTab, setActiveTab] = useState<'pending' | 'history'>('pending')
-
-  // Data states
   const [loading, setLoading] = useState(true)
   const [pendingCounts, setPendingCounts] = useState<InventoryCount[]>([])
   const [historyCounts, setHistoryCounts] = useState<InventoryCount[]>([])
@@ -87,30 +83,25 @@ export default function InventoryCountsPage() {
     totalPages: 0
   })
 
-  // Modal state
   const [selectedCount, setSelectedCount] = useState<InventoryCount | null>(null)
   const [countLines, setCountLines] = useState<CountLine[]>([])
   const [loadingLines, setLoadingLines] = useState(false)
   const [showDetailModal, setShowDetailModal] = useState(false)
 
-  // Action states
   const [processing, setProcessing] = useState<number | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [successMessage, setSuccessMessage] = useState<string | null>(null)
 
-  // Fetch counts
   const fetchCounts = useCallback(async () => {
     try {
       setLoading(true)
       setError(null)
 
-      // Fetch pending counts (require approval)
       const pendingRes = await fetch(
         `/api/market/pos/inventory-counts?requiresApproval=true&page=1&limit=50`
       )
       const pendingData = await pendingRes.json()
 
-      // Fetch history (all counts)
       const historyRes = await fetch(
         `/api/market/pos/inventory-counts?status=all&page=${pagination.page}&limit=${pagination.limit}`
       )
@@ -134,7 +125,6 @@ export default function InventoryCountsPage() {
     fetchCounts()
   }, [fetchCounts])
 
-  // Fetch count lines for detail modal
   const fetchCountLines = async (countId: number) => {
     try {
       setLoadingLines(true)
@@ -151,14 +141,12 @@ export default function InventoryCountsPage() {
     }
   }
 
-  // Open detail modal
   const openDetailModal = (count: InventoryCount) => {
     setSelectedCount(count)
     setShowDetailModal(true)
     fetchCountLines(count.id)
   }
 
-  // Handle approve/reject
   const handleAction = async (countId: number, action: 'approve' | 'reject') => {
     try {
       setProcessing(countId)
@@ -197,250 +185,142 @@ export default function InventoryCountsPage() {
     })
   }
 
-  const getStatusBadge = (status: string, autoApproved?: boolean) => {
+  const formatShortDate = (dateStr: string) => {
+    const date = new Date(dateStr)
+    return date.toLocaleDateString('es-ES', {
+      day: '2-digit',
+      month: 'short',
+      hour: '2-digit',
+      minute: '2-digit'
+    })
+  }
+
+  const getStatusBadge = (status: string, autoApproved?: boolean, compact?: boolean) => {
     if (status === 'approved' && autoApproved) {
       return (
-        <span className="inline-flex items-center gap-1 px-2 py-1 bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 text-xs rounded-full">
-          <Zap className="w-3 h-3" />
-          Auto-aprobado
+        <span className={cn(
+          'inline-flex items-center gap-1 bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 rounded-full',
+          compact ? 'px-2 py-0.5 text-[10px]' : 'px-2 py-1 text-xs'
+        )}>
+          <Zap className={compact ? 'w-2.5 h-2.5' : 'w-3 h-3'} />
+          {compact ? 'Auto' : 'Auto-aprobado'}
         </span>
       )
     }
 
-    switch (status) {
-      case 'in_progress':
-        return (
-          <span className="inline-flex items-center gap-1 px-2 py-1 bg-yellow-500/20 text-yellow-600 dark:text-yellow-400 text-xs rounded-full">
-            <Clock className="w-3 h-3" />
-            En Progreso
-          </span>
-        )
-      case 'completed':
-        return (
-          <span className="inline-flex items-center gap-1 px-2 py-1 bg-amber-500/20 text-amber-600 dark:text-amber-400 text-xs rounded-full">
-            <AlertTriangle className="w-3 h-3" />
-            Requiere Aprobación
-          </span>
-        )
-      case 'approved':
-        return (
-          <span className="inline-flex items-center gap-1 px-2 py-1 bg-green-500/20 text-green-600 dark:text-green-400 text-xs rounded-full">
-            <CheckCircle2 className="w-3 h-3" />
-            Aprobado
-          </span>
-        )
-      case 'rejected':
-        return (
-          <span className="inline-flex items-center gap-1 px-2 py-1 bg-red-500/20 text-red-600 dark:text-red-400 text-xs rounded-full">
-            <XCircle className="w-3 h-3" />
-            Rechazado
-          </span>
-        )
-      default:
-        return null
+    const configs = {
+      in_progress: { bg: 'bg-yellow-500/20', text: 'text-yellow-600 dark:text-yellow-400', icon: Clock, label: compact ? 'Prog.' : 'En Progreso' },
+      completed: { bg: 'bg-amber-500/20', text: 'text-amber-600 dark:text-amber-400', icon: AlertTriangle, label: compact ? 'Pend.' : 'Pendiente' },
+      approved: { bg: 'bg-green-500/20', text: 'text-green-600 dark:text-green-400', icon: CheckCircle2, label: 'Aprobado' },
+      rejected: { bg: 'bg-red-500/20', text: 'text-red-600 dark:text-red-400', icon: XCircle, label: 'Rechazado' }
     }
+
+    const config = configs[status as keyof typeof configs]
+    if (!config) return null
+
+    const Icon = config.icon
+    return (
+      <span className={cn(
+        'inline-flex items-center gap-1 rounded-full',
+        config.bg, config.text,
+        compact ? 'px-2 py-0.5 text-[10px]' : 'px-2 py-1 text-xs'
+      )}>
+        <Icon className={compact ? 'w-2.5 h-2.5' : 'w-3 h-3'} />
+        {config.label}
+      </span>
+    )
   }
 
-  // Count Card Component
-  const CountCard = ({ count, showActions, clickable }: {
-    count: InventoryCount
-    showActions: boolean
-    clickable?: boolean
-  }) => (
+  // Card for pending approval
+  const PendingCard = ({ count }: { count: InventoryCount }) => (
     <motion.div
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
-      onClick={clickable ? () => openDetailModal(count) : undefined}
       className={cn(
-        'rounded-xl p-4 border transition-all',
-        theme === 'dark'
-          ? 'bg-gray-800 border-gray-700'
-          : 'bg-white border-gray-200',
-        clickable && 'cursor-pointer hover:border-blue-500 hover:shadow-lg'
+        'rounded-xl p-4 border',
+        theme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'
       )}
     >
-      {/* Header */}
-      <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-3 mb-4">
+      <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3 mb-4">
         <div>
-          <div className="flex items-center gap-2 mb-1 flex-wrap">
-            <span className="font-bold text-lg">{count.countNumber}</span>
+          <div className="flex items-center gap-2 mb-1">
+            <span className="font-bold">{count.countNumber}</span>
             {getStatusBadge(count.status, count.autoApproved)}
           </div>
           <div className="flex flex-wrap items-center gap-3 text-xs text-gray-500">
-            <span className="flex items-center gap-1">
-              <Calendar className="w-3 h-3" />
-              {formatDate(count.createdAt)}
-            </span>
-            <span className="flex items-center gap-1">
-              <Warehouse className="w-3 h-3" />
-              {count.warehouseName || 'N/A'}
-            </span>
-            {count.terminalName && (
-              <span className="flex items-center gap-1">
-                Terminal: {count.terminalName}
-              </span>
-            )}
-            <span className="flex items-center gap-1">
-              <User className="w-3 h-3" />
-              {count.countedByName || 'N/A'}
-            </span>
+            <span>{formatShortDate(count.createdAt)}</span>
+            <span>{count.terminalName}</span>
+            <span>{count.countedByName}</span>
           </div>
         </div>
 
-        {/* Actions for completed counts that need approval */}
-        {showActions && count.status === 'completed' && (
-          <div className="flex items-center gap-2">
-            <button
-              onClick={(e) => {
-                e.stopPropagation()
-                handleAction(count.id, 'reject')
-              }}
-              disabled={processing === count.id}
-              className={cn(
-                'px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 transition-all',
-                'bg-red-500/20 text-red-600 dark:text-red-400 hover:bg-red-500/30'
-              )}
-            >
-              {processing === count.id ? (
-                <Loader2 className="w-4 h-4 animate-spin" />
-              ) : (
-                <X className="w-4 h-4" />
-              )}
-              Rechazar
-            </button>
-            <button
-              onClick={(e) => {
-                e.stopPropagation()
-                handleAction(count.id, 'approve')
-              }}
-              disabled={processing === count.id}
-              className={cn(
-                'px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 transition-all',
-                'bg-green-500 text-white hover:bg-green-600'
-              )}
-            >
-              {processing === count.id ? (
-                <Loader2 className="w-4 h-4 animate-spin" />
-              ) : (
-                <Check className="w-4 h-4" />
-              )}
-              Aprobar y Ajustar
-            </button>
-          </div>
-        )}
-
-        {/* View button for history */}
-        {clickable && (
+        <div className="flex items-center gap-2">
           <button
-            onClick={(e) => {
-              e.stopPropagation()
-              openDetailModal(count)
-            }}
-            className={cn(
-              'px-3 py-2 rounded-lg text-sm font-medium flex items-center gap-2 transition-all',
-              theme === 'dark'
-                ? 'bg-gray-700 hover:bg-gray-600'
-                : 'bg-gray-100 hover:bg-gray-200'
-            )}
+            onClick={() => handleAction(count.id, 'reject')}
+            disabled={processing === count.id}
+            className="px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 bg-red-500/20 text-red-600 dark:text-red-400 hover:bg-red-500/30"
           >
-            <Eye className="w-4 h-4" />
-            Ver Detalle
+            {processing === count.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <X className="w-4 h-4" />}
+            Rechazar
           </button>
-        )}
+          <button
+            onClick={() => handleAction(count.id, 'approve')}
+            disabled={processing === count.id}
+            className="px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 bg-green-500 text-white hover:bg-green-600"
+          >
+            {processing === count.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+            Aprobar
+          </button>
+        </div>
       </div>
 
-      {/* Stats */}
-      <div className="grid grid-cols-3 gap-3">
-        <div className={cn(
-          'rounded-lg p-3 text-center',
-          theme === 'dark' ? 'bg-gray-700/50' : 'bg-gray-50'
-        )}>
-          <div className="flex items-center justify-center gap-1 mb-1">
-            <Package className="w-4 h-4 text-blue-500" />
-          </div>
-          <p className="text-2xl font-bold">{count.totalProducts}</p>
+      <div className="grid grid-cols-3 gap-3 text-center">
+        <div className={cn('rounded-lg p-2', theme === 'dark' ? 'bg-gray-700/50' : 'bg-gray-50')}>
+          <p className="text-xl font-bold">{count.totalProducts}</p>
           <p className="text-xs text-gray-500">Productos</p>
         </div>
-        <div className={cn(
-          'rounded-lg p-3 text-center',
-          theme === 'dark' ? 'bg-gray-700/50' : 'bg-gray-50'
-        )}>
-          <div className="flex items-center justify-center gap-1 mb-1">
-            <AlertTriangle className={cn(
-              'w-4 h-4',
-              count.productsWithDifferences > 0 ? 'text-amber-500' : 'text-green-500'
-            )} />
-          </div>
-          <p className={cn(
-            'text-2xl font-bold',
-            count.productsWithDifferences > 0 ? 'text-amber-500' : 'text-green-500'
-          )}>
+        <div className={cn('rounded-lg p-2', theme === 'dark' ? 'bg-gray-700/50' : 'bg-gray-50')}>
+          <p className={cn('text-xl font-bold', count.productsWithDifferences > 0 ? 'text-amber-500' : 'text-green-500')}>
             {count.productsWithDifferences}
           </p>
           <p className="text-xs text-gray-500">Diferencias</p>
         </div>
-        <div className={cn(
-          'rounded-lg p-3 text-center',
-          theme === 'dark' ? 'bg-gray-700/50' : 'bg-gray-50'
-        )}>
-          <div className="flex items-center justify-center gap-1 mb-1">
-            {count.totalDifferenceValue >= 0 ? (
-              <TrendingUp className="w-4 h-4 text-green-500" />
-            ) : (
-              <TrendingDown className="w-4 h-4 text-red-500" />
-            )}
-          </div>
-          <p className={cn(
-            'text-2xl font-bold',
-            count.totalDifferenceValue > 0 ? 'text-green-500' :
-            count.totalDifferenceValue < 0 ? 'text-red-500' : 'text-gray-500'
-          )}>
+        <div className={cn('rounded-lg p-2', theme === 'dark' ? 'bg-gray-700/50' : 'bg-gray-50')}>
+          <p className={cn('text-xl font-bold', count.totalDifferenceValue < 0 ? 'text-red-500' : count.totalDifferenceValue > 0 ? 'text-green-500' : '')}>
             ${Math.abs(count.totalDifferenceValue).toFixed(0)}
           </p>
-          <p className="text-xs text-gray-500">Valor Dif.</p>
+          <p className="text-xs text-gray-500">Valor</p>
         </div>
       </div>
-
-      {/* Approved info */}
-      {count.status === 'approved' && count.approvedByName && !count.autoApproved && (
-        <div className="mt-3 pt-3 border-t border-gray-200 dark:border-gray-700 text-xs text-gray-500">
-          Aprobado por {count.approvedByName} el {count.approvedAt ? formatDate(count.approvedAt) : 'N/A'}
-        </div>
-      )}
     </motion.div>
   )
 
   return (
     <ProtectedRoute>
       <DashboardLayout>
-        <div className="min-h-screen p-6">
+        <div className="min-h-screen p-4 md:p-6">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            className="space-y-6"
+            className="space-y-4"
           >
             {/* Header */}
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-              <div className="flex items-center gap-4">
-                <div className={cn(
-                  'p-3 rounded-xl',
-                  theme === 'dark' ? 'bg-blue-900/30' : 'bg-blue-50'
-                )}>
-                  <ClipboardList className="w-6 h-6 text-blue-500" />
+              <div className="flex items-center gap-3">
+                <div className={cn('p-2.5 rounded-xl', theme === 'dark' ? 'bg-blue-900/30' : 'bg-blue-50')}>
+                  <ClipboardList className="w-5 h-5 text-blue-500" />
                 </div>
                 <div>
-                  <h1 className="text-2xl font-bold">Conteos de Inventario</h1>
-                  <p className="text-sm text-gray-500">Gestionar conteos y ajustar inventario</p>
+                  <h1 className="text-xl font-bold">Conteos de Inventario</h1>
+                  <p className="text-xs text-gray-500">Gestionar y aprobar conteos</p>
                 </div>
               </div>
               <button
                 onClick={fetchCounts}
                 disabled={loading}
                 className={cn(
-                  'flex items-center gap-2 px-4 py-2 rounded-xl font-medium transition-all',
-                  theme === 'dark'
-                    ? 'bg-gray-700 hover:bg-gray-600'
-                    : 'bg-gray-100 hover:bg-gray-200'
+                  'flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium',
+                  theme === 'dark' ? 'bg-gray-700 hover:bg-gray-600' : 'bg-gray-100 hover:bg-gray-200'
                 )}
               >
                 <RefreshCw className={cn('w-4 h-4', loading && 'animate-spin')} />
@@ -448,62 +328,51 @@ export default function InventoryCountsPage() {
               </button>
             </div>
 
-            {/* Success Message */}
+            {/* Messages */}
             <AnimatePresence>
               {successMessage && (
                 <motion.div
-                  initial={{ opacity: 0, y: -20 }}
+                  initial={{ opacity: 0, y: -10 }}
                   animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -20 }}
-                  className="bg-green-500/20 border border-green-500/50 rounded-xl p-4 flex items-center gap-3"
+                  exit={{ opacity: 0 }}
+                  className="bg-green-500/20 border border-green-500/50 rounded-lg p-3 flex items-center gap-2 text-sm"
                 >
-                  <CheckCircle2 className="w-5 h-5 text-green-500" />
-                  <p className="text-green-700 dark:text-green-300">{successMessage}</p>
+                  <CheckCircle2 className="w-4 h-4 text-green-500" />
+                  <span className="text-green-700 dark:text-green-300">{successMessage}</span>
                 </motion.div>
               )}
-            </AnimatePresence>
-
-            {/* Error Message */}
-            <AnimatePresence>
               {error && (
                 <motion.div
-                  initial={{ opacity: 0, y: -20 }}
+                  initial={{ opacity: 0, y: -10 }}
                   animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -20 }}
-                  className="bg-red-500/20 border border-red-500/50 rounded-xl p-4 flex items-center gap-3"
+                  exit={{ opacity: 0 }}
+                  className="bg-red-500/20 border border-red-500/50 rounded-lg p-3 flex items-center gap-2 text-sm"
                 >
-                  <XCircle className="w-5 h-5 text-red-500" />
-                  <p className="text-red-700 dark:text-red-300">{error}</p>
-                  <button onClick={() => setError(null)} className="ml-auto">
-                    <X className="w-4 h-4" />
-                  </button>
+                  <XCircle className="w-4 h-4 text-red-500" />
+                  <span className="text-red-700 dark:text-red-300">{error}</span>
+                  <button onClick={() => setError(null)} className="ml-auto"><X className="w-4 h-4" /></button>
                 </motion.div>
               )}
             </AnimatePresence>
 
             {/* Tabs */}
             <div className={cn(
-              'p-1 rounded-xl border flex',
+              'p-1 rounded-lg border flex',
               theme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'
             )}>
               <button
                 onClick={() => setActiveTab('pending')}
                 className={cn(
-                  'flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg font-medium transition-all',
+                  'flex-1 flex items-center justify-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-all',
                   activeTab === 'pending'
-                    ? 'bg-amber-500 text-white shadow-lg shadow-amber-500/25'
-                    : theme === 'dark'
-                    ? 'text-gray-400 hover:text-white hover:bg-gray-700'
-                    : 'text-gray-500 hover:text-gray-900 hover:bg-gray-100'
+                    ? 'bg-amber-500 text-white'
+                    : theme === 'dark' ? 'text-gray-400 hover:bg-gray-700' : 'text-gray-500 hover:bg-gray-100'
                 )}
               >
                 <AlertTriangle className="w-4 h-4" />
                 Requieren Aprobación
                 {pendingCounts.length > 0 && (
-                  <span className={cn(
-                    'px-2 py-0.5 rounded-full text-xs font-bold',
-                    activeTab === 'pending' ? 'bg-white/20' : 'bg-amber-500 text-white'
-                  )}>
+                  <span className={cn('px-1.5 py-0.5 rounded-full text-[10px] font-bold', activeTab === 'pending' ? 'bg-white/20' : 'bg-amber-500 text-white')}>
                     {pendingCounts.length}
                   </span>
                 )}
@@ -511,16 +380,14 @@ export default function InventoryCountsPage() {
               <button
                 onClick={() => setActiveTab('history')}
                 className={cn(
-                  'flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg font-medium transition-all',
+                  'flex-1 flex items-center justify-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-all',
                   activeTab === 'history'
-                    ? 'bg-blue-500 text-white shadow-lg shadow-blue-500/25'
-                    : theme === 'dark'
-                    ? 'text-gray-400 hover:text-white hover:bg-gray-700'
-                    : 'text-gray-500 hover:text-gray-900 hover:bg-gray-100'
+                    ? 'bg-blue-500 text-white'
+                    : theme === 'dark' ? 'text-gray-400 hover:bg-gray-700' : 'text-gray-500 hover:bg-gray-100'
                 )}
               >
                 <History className="w-4 h-4" />
-                Historial de Conteos
+                Historial
               </button>
             </div>
 
@@ -530,88 +397,146 @@ export default function InventoryCountsPage() {
                 <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
               </div>
             ) : activeTab === 'pending' ? (
-              // Pending Approval Tab
               pendingCounts.length === 0 ? (
                 <div className={cn(
                   'text-center py-12 rounded-xl border',
                   theme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'
                 )}>
-                  <CheckCircle2 className="w-16 h-16 mx-auto mb-4 text-green-400" />
-                  <p className="text-lg text-gray-500">Sin conteos pendientes</p>
-                  <p className="text-sm text-gray-400">Todos los conteos con diferencias han sido revisados</p>
+                  <CheckCircle2 className="w-12 h-12 mx-auto mb-3 text-green-400" />
+                  <p className="text-gray-500">Sin conteos pendientes</p>
                 </div>
               ) : (
                 <div className="space-y-3">
-                  {pendingCounts.map((count) => (
-                    <CountCard
-                      key={count.id}
-                      count={count}
-                      showActions={true}
-                    />
-                  ))}
+                  {pendingCounts.map(count => <PendingCard key={count.id} count={count} />)}
                 </div>
               )
             ) : (
-              // History Tab
+              /* History Table */
               historyCounts.length === 0 ? (
                 <div className={cn(
                   'text-center py-12 rounded-xl border',
                   theme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'
                 )}>
-                  <ClipboardList className="w-16 h-16 mx-auto mb-4 text-gray-400" />
-                  <p className="text-lg text-gray-500">No hay conteos</p>
-                  <p className="text-sm text-gray-400">Los conteos de inventario aparecerán aquí</p>
+                  <ClipboardList className="w-12 h-12 mx-auto mb-3 text-gray-400" />
+                  <p className="text-gray-500">No hay conteos</p>
                 </div>
               ) : (
-                <>
-                  <div className="space-y-3">
-                    {historyCounts.map((count) => (
-                      <CountCard
-                        key={count.id}
-                        count={count}
-                        showActions={count.status === 'completed' && count.productsWithDifferences > 0}
-                        clickable={true}
-                      />
-                    ))}
+                <div className={cn(
+                  'rounded-xl border overflow-hidden',
+                  theme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'
+                )}>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className={cn(
+                          'border-b',
+                          theme === 'dark' ? 'bg-gray-900/50 border-gray-700' : 'bg-gray-50 border-gray-200'
+                        )}>
+                          <th className="text-left py-3 px-4 font-semibold">Conteo</th>
+                          <th className="text-left py-3 px-4 font-semibold hidden sm:table-cell">Fecha</th>
+                          <th className="text-left py-3 px-4 font-semibold hidden md:table-cell">Terminal</th>
+                          <th className="text-left py-3 px-4 font-semibold hidden lg:table-cell">Cajero</th>
+                          <th className="text-center py-3 px-4 font-semibold">Productos</th>
+                          <th className="text-center py-3 px-4 font-semibold">Dif.</th>
+                          <th className="text-right py-3 px-4 font-semibold">Valor</th>
+                          <th className="text-center py-3 px-4 font-semibold">Estado</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {historyCounts.map((count, idx) => (
+                          <tr
+                            key={count.id}
+                            onClick={() => openDetailModal(count)}
+                            className={cn(
+                              'border-b cursor-pointer transition-colors',
+                              theme === 'dark'
+                                ? 'border-gray-700 hover:bg-gray-700/50'
+                                : 'border-gray-100 hover:bg-gray-50',
+                              idx === historyCounts.length - 1 && 'border-b-0'
+                            )}
+                          >
+                            <td className="py-3 px-4">
+                              <span className="font-medium">{count.countNumber}</span>
+                              <span className="sm:hidden block text-xs text-gray-500 mt-0.5">
+                                {formatShortDate(count.createdAt)}
+                              </span>
+                            </td>
+                            <td className="py-3 px-4 text-gray-500 hidden sm:table-cell">
+                              {formatShortDate(count.createdAt)}
+                            </td>
+                            <td className="py-3 px-4 text-gray-500 hidden md:table-cell">
+                              {count.terminalName || '-'}
+                            </td>
+                            <td className="py-3 px-4 text-gray-500 hidden lg:table-cell">
+                              {count.countedByName || '-'}
+                            </td>
+                            <td className="py-3 px-4 text-center font-mono">
+                              {count.totalProducts}
+                            </td>
+                            <td className="py-3 px-4 text-center">
+                              <span className={cn(
+                                'font-mono font-medium',
+                                count.productsWithDifferences > 0 ? 'text-amber-500' : 'text-green-500'
+                              )}>
+                                {count.productsWithDifferences}
+                              </span>
+                            </td>
+                            <td className="py-3 px-4 text-right">
+                              <span className={cn(
+                                'font-mono font-medium',
+                                count.totalDifferenceValue > 0 ? 'text-green-500' :
+                                count.totalDifferenceValue < 0 ? 'text-red-500' : 'text-gray-500'
+                              )}>
+                                {count.totalDifferenceValue !== 0 && (count.totalDifferenceValue > 0 ? '+' : '-')}
+                                ${Math.abs(count.totalDifferenceValue).toFixed(0)}
+                              </span>
+                            </td>
+                            <td className="py-3 px-4 text-center">
+                              {getStatusBadge(count.status, count.autoApproved, true)}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
                   </div>
 
                   {/* Pagination */}
                   {pagination.totalPages > 1 && (
-                    <div className="flex items-center justify-center gap-2 mt-6">
-                      <button
-                        onClick={() => setPagination(prev => ({ ...prev, page: prev.page - 1 }))}
-                        disabled={pagination.page === 1}
-                        className={cn(
-                          'p-2 rounded-lg transition-all',
-                          pagination.page === 1
-                            ? 'opacity-50 cursor-not-allowed'
-                            : theme === 'dark'
-                            ? 'bg-gray-700 hover:bg-gray-600'
-                            : 'bg-gray-200 hover:bg-gray-300'
-                        )}
-                      >
-                        <ChevronLeft className="w-5 h-5" />
-                      </button>
-                      <span className="text-sm">
-                        Página {pagination.page} de {pagination.totalPages}
+                    <div className={cn(
+                      'flex items-center justify-between px-4 py-3 border-t',
+                      theme === 'dark' ? 'border-gray-700' : 'border-gray-200'
+                    )}>
+                      <span className="text-xs text-gray-500">
+                        {pagination.total} conteos
                       </span>
-                      <button
-                        onClick={() => setPagination(prev => ({ ...prev, page: prev.page + 1 }))}
-                        disabled={pagination.page === pagination.totalPages}
-                        className={cn(
-                          'p-2 rounded-lg transition-all',
-                          pagination.page === pagination.totalPages
-                            ? 'opacity-50 cursor-not-allowed'
-                            : theme === 'dark'
-                            ? 'bg-gray-700 hover:bg-gray-600'
-                            : 'bg-gray-200 hover:bg-gray-300'
-                        )}
-                      >
-                        <ChevronRight className="w-5 h-5" />
-                      </button>
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => setPagination(prev => ({ ...prev, page: prev.page - 1 }))}
+                          disabled={pagination.page === 1}
+                          className={cn(
+                            'p-1.5 rounded-lg',
+                            pagination.page === 1 ? 'opacity-40' : theme === 'dark' ? 'hover:bg-gray-700' : 'hover:bg-gray-100'
+                          )}
+                        >
+                          <ChevronLeft className="w-4 h-4" />
+                        </button>
+                        <span className="text-xs">
+                          {pagination.page} / {pagination.totalPages}
+                        </span>
+                        <button
+                          onClick={() => setPagination(prev => ({ ...prev, page: prev.page + 1 }))}
+                          disabled={pagination.page === pagination.totalPages}
+                          className={cn(
+                            'p-1.5 rounded-lg',
+                            pagination.page === pagination.totalPages ? 'opacity-40' : theme === 'dark' ? 'hover:bg-gray-700' : 'hover:bg-gray-100'
+                          )}
+                        >
+                          <ChevronRight className="w-4 h-4" />
+                        </button>
+                      </div>
                     </div>
                   )}
-                </>
+                </div>
               )
             )}
           </motion.div>
@@ -624,7 +549,7 @@ export default function InventoryCountsPage() {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
+              className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4"
               onClick={() => setShowDetailModal(false)}
             >
               <motion.div
@@ -633,169 +558,169 @@ export default function InventoryCountsPage() {
                 exit={{ scale: 0.95, opacity: 0 }}
                 onClick={e => e.stopPropagation()}
                 className={cn(
-                  'max-w-3xl w-full max-h-[90vh] overflow-auto rounded-2xl p-6',
+                  'max-w-2xl w-full max-h-[85vh] overflow-hidden rounded-2xl flex flex-col',
                   theme === 'dark' ? 'bg-gray-800' : 'bg-white'
                 )}
               >
                 {/* Modal Header */}
-                <div className="flex items-start justify-between mb-6">
-                  <div>
-                    <div className="flex items-center gap-2 mb-1">
-                      <h2 className="text-xl font-bold">{selectedCount.countNumber}</h2>
-                      {getStatusBadge(selectedCount.status, selectedCount.autoApproved)}
+                <div className={cn(
+                  'px-6 py-4 border-b flex-shrink-0',
+                  theme === 'dark' ? 'border-gray-700' : 'border-gray-200'
+                )}>
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <div className="flex items-center gap-2 mb-1">
+                        <h2 className="text-lg font-bold">{selectedCount.countNumber}</h2>
+                        {getStatusBadge(selectedCount.status, selectedCount.autoApproved)}
+                      </div>
+                      <div className="flex flex-wrap items-center gap-3 text-xs text-gray-500">
+                        <span className="flex items-center gap-1">
+                          <Calendar className="w-3 h-3" />
+                          {formatDate(selectedCount.createdAt)}
+                        </span>
+                        <span className="flex items-center gap-1">
+                          <Warehouse className="w-3 h-3" />
+                          {selectedCount.warehouseName}
+                        </span>
+                        <span className="flex items-center gap-1">
+                          <User className="w-3 h-3" />
+                          {selectedCount.countedByName}
+                        </span>
+                      </div>
                     </div>
-                    <div className="flex flex-wrap items-center gap-3 text-sm text-gray-500">
-                      <span className="flex items-center gap-1">
-                        <Calendar className="w-4 h-4" />
-                        {formatDate(selectedCount.createdAt)}
-                      </span>
-                      <span className="flex items-center gap-1">
-                        <Warehouse className="w-4 h-4" />
-                        {selectedCount.warehouseName}
-                      </span>
-                      <span className="flex items-center gap-1">
-                        <User className="w-4 h-4" />
-                        {selectedCount.countedByName}
-                      </span>
-                    </div>
+                    <button
+                      onClick={() => setShowDetailModal(false)}
+                      className={cn('p-1.5 rounded-lg', theme === 'dark' ? 'hover:bg-gray-700' : 'hover:bg-gray-100')}
+                    >
+                      <X className="w-5 h-5" />
+                    </button>
                   </div>
-                  <button
-                    onClick={() => setShowDetailModal(false)}
-                    className={cn(
-                      'p-2 rounded-lg transition-all',
-                      theme === 'dark' ? 'hover:bg-gray-700' : 'hover:bg-gray-100'
-                    )}
-                  >
-                    <X className="w-5 h-5" />
-                  </button>
                 </div>
 
-                {/* Summary Stats */}
-                <div className="grid grid-cols-3 gap-3 mb-6">
-                  <div className={cn(
-                    'rounded-lg p-4 text-center',
-                    theme === 'dark' ? 'bg-gray-700/50' : 'bg-gray-50'
-                  )}>
-                    <Package className="w-5 h-5 mx-auto mb-2 text-blue-500" />
-                    <p className="text-2xl font-bold">{selectedCount.totalProducts}</p>
-                    <p className="text-xs text-gray-500">Productos Contados</p>
+                {/* Summary */}
+                <div className={cn(
+                  'px-6 py-4 border-b grid grid-cols-3 gap-3 flex-shrink-0',
+                  theme === 'dark' ? 'border-gray-700 bg-gray-900/30' : 'border-gray-200 bg-gray-50'
+                )}>
+                  <div className="text-center">
+                    <Package className="w-5 h-5 mx-auto mb-1 text-blue-500" />
+                    <p className="text-xl font-bold">{selectedCount.totalProducts}</p>
+                    <p className="text-[10px] text-gray-500">Productos</p>
                   </div>
-                  <div className={cn(
-                    'rounded-lg p-4 text-center',
-                    theme === 'dark' ? 'bg-gray-700/50' : 'bg-gray-50'
-                  )}>
-                    <AlertTriangle className={cn(
-                      'w-5 h-5 mx-auto mb-2',
-                      selectedCount.productsWithDifferences > 0 ? 'text-amber-500' : 'text-green-500'
-                    )} />
-                    <p className={cn(
-                      'text-2xl font-bold',
-                      selectedCount.productsWithDifferences > 0 ? 'text-amber-500' : 'text-green-500'
-                    )}>
+                  <div className="text-center">
+                    <AlertTriangle className={cn('w-5 h-5 mx-auto mb-1', selectedCount.productsWithDifferences > 0 ? 'text-amber-500' : 'text-green-500')} />
+                    <p className={cn('text-xl font-bold', selectedCount.productsWithDifferences > 0 ? 'text-amber-500' : 'text-green-500')}>
                       {selectedCount.productsWithDifferences}
                     </p>
-                    <p className="text-xs text-gray-500">Con Diferencias</p>
+                    <p className="text-[10px] text-gray-500">Diferencias</p>
                   </div>
-                  <div className={cn(
-                    'rounded-lg p-4 text-center',
-                    theme === 'dark' ? 'bg-gray-700/50' : 'bg-gray-50'
-                  )}>
+                  <div className="text-center">
                     {selectedCount.totalDifferenceValue >= 0 ? (
-                      <TrendingUp className="w-5 h-5 mx-auto mb-2 text-green-500" />
+                      <TrendingUp className="w-5 h-5 mx-auto mb-1 text-green-500" />
                     ) : (
-                      <TrendingDown className="w-5 h-5 mx-auto mb-2 text-red-500" />
+                      <TrendingDown className="w-5 h-5 mx-auto mb-1 text-red-500" />
                     )}
                     <p className={cn(
-                      'text-2xl font-bold',
+                      'text-xl font-bold',
                       selectedCount.totalDifferenceValue > 0 ? 'text-green-500' :
                       selectedCount.totalDifferenceValue < 0 ? 'text-red-500' : ''
                     )}>
                       ${Math.abs(selectedCount.totalDifferenceValue).toFixed(2)}
                     </p>
-                    <p className="text-xs text-gray-500">Valor Diferencia</p>
+                    <p className="text-[10px] text-gray-500">Valor</p>
                   </div>
                 </div>
 
-                {/* Products List */}
-                <div>
-                  <h3 className="font-semibold mb-3">Detalle de Productos</h3>
+                {/* Products Table */}
+                <div className="flex-1 overflow-auto px-6 py-4">
+                  <h3 className="text-sm font-semibold mb-3">Detalle de Productos</h3>
                   {loadingLines ? (
                     <div className="flex items-center justify-center py-8">
                       <Loader2 className="w-6 h-6 animate-spin text-blue-500" />
                     </div>
                   ) : countLines.length === 0 ? (
-                    <p className="text-center py-8 text-gray-500">No hay productos en este conteo</p>
+                    <p className="text-center py-8 text-gray-500 text-sm">No hay productos</p>
                   ) : (
-                    <div className="space-y-2 max-h-[400px] overflow-y-auto">
-                      {countLines.map((line) => (
-                        <div
-                          key={line.id}
-                          className={cn(
-                            'flex items-center justify-between p-3 rounded-lg',
-                            theme === 'dark' ? 'bg-gray-700/50' : 'bg-gray-50',
-                            line.difference !== 0 && (
-                              line.difference > 0
-                                ? 'border-l-4 border-green-500'
-                                : 'border-l-4 border-red-500'
-                            )
-                          )}
-                        >
-                          <div className="flex-1">
-                            <p className="font-medium">{line.productName}</p>
-                            <p className="text-xs text-gray-500">
-                              SKU: {line.productSku} | Precio: ${line.unitPrice.toFixed(2)}
-                            </p>
-                          </div>
-                          <div className="text-right">
-                            <div className="flex items-center gap-4 text-sm">
-                              <div className="text-center">
-                                <p className="text-gray-500 text-xs">Sistema</p>
-                                <p className="font-mono">{line.expectedQuantity}</p>
-                              </div>
-                              <div className="text-center">
-                                <p className="text-gray-500 text-xs">Contado</p>
-                                <p className="font-mono">{line.countedQuantity}</p>
-                              </div>
-                              <div className="text-center min-w-[60px]">
-                                <p className="text-gray-500 text-xs">Dif.</p>
-                                <p className={cn(
-                                  'font-mono font-bold',
+                    <div className={cn(
+                      'rounded-lg border overflow-hidden',
+                      theme === 'dark' ? 'border-gray-700' : 'border-gray-200'
+                    )}>
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className={theme === 'dark' ? 'bg-gray-900/50' : 'bg-gray-50'}>
+                            <th className="text-left py-2 px-3 font-medium text-xs">Producto</th>
+                            <th className="text-center py-2 px-3 font-medium text-xs">Sistema</th>
+                            <th className="text-center py-2 px-3 font-medium text-xs">Contado</th>
+                            <th className="text-center py-2 px-3 font-medium text-xs">Dif.</th>
+                            <th className="text-right py-2 px-3 font-medium text-xs">Valor</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {countLines.map((line, idx) => (
+                            <tr
+                              key={line.id}
+                              className={cn(
+                                'border-t',
+                                theme === 'dark' ? 'border-gray-700' : 'border-gray-100',
+                                line.difference !== 0 && (
+                                  line.difference > 0
+                                    ? 'bg-green-500/5'
+                                    : 'bg-red-500/5'
+                                )
+                              )}
+                            >
+                              <td className="py-2 px-3">
+                                <p className="font-medium text-xs">{line.productName}</p>
+                                <p className="text-[10px] text-gray-500">SKU: {line.productSku}</p>
+                              </td>
+                              <td className="py-2 px-3 text-center font-mono text-xs">
+                                {line.expectedQuantity}
+                              </td>
+                              <td className="py-2 px-3 text-center font-mono text-xs">
+                                {line.countedQuantity}
+                              </td>
+                              <td className="py-2 px-3 text-center">
+                                <span className={cn(
+                                  'font-mono font-bold text-xs',
                                   line.difference > 0 ? 'text-green-500' :
-                                  line.difference < 0 ? 'text-red-500' : ''
+                                  line.difference < 0 ? 'text-red-500' : 'text-gray-500'
                                 )}>
                                   {line.difference > 0 ? '+' : ''}{line.difference}
-                                </p>
-                              </div>
-                              <div className="text-center min-w-[80px]">
-                                <p className="text-gray-500 text-xs">Valor</p>
-                                <p className={cn(
-                                  'font-mono',
+                                </span>
+                              </td>
+                              <td className="py-2 px-3 text-right">
+                                <span className={cn(
+                                  'font-mono text-xs',
                                   line.differenceValue > 0 ? 'text-green-500' :
-                                  line.differenceValue < 0 ? 'text-red-500' : ''
+                                  line.differenceValue < 0 ? 'text-red-500' : 'text-gray-500'
                                 )}>
                                   ${line.differenceValue.toFixed(2)}
-                                </p>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      ))}
+                                </span>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
                     </div>
                   )}
                 </div>
 
-                {/* Approval Info */}
-                {selectedCount.status === 'approved' && selectedCount.approvedByName && (
-                  <div className="mt-6 pt-4 border-t border-gray-200 dark:border-gray-700 text-sm text-gray-500">
+                {/* Footer */}
+                {selectedCount.status === 'approved' && (
+                  <div className={cn(
+                    'px-6 py-3 border-t text-xs text-gray-500 flex-shrink-0',
+                    theme === 'dark' ? 'border-gray-700 bg-gray-900/30' : 'border-gray-200 bg-gray-50'
+                  )}>
                     {selectedCount.autoApproved ? (
-                      <span className="flex items-center gap-2">
-                        <Zap className="w-4 h-4 text-emerald-500" />
-                        Auto-aprobado (sin diferencias) el {selectedCount.approvedAt ? formatDate(selectedCount.approvedAt) : 'N/A'}
+                      <span className="flex items-center gap-1">
+                        <Zap className="w-3 h-3 text-emerald-500" />
+                        Auto-aprobado (sin diferencias)
                       </span>
                     ) : (
-                      <span>
-                        Aprobado por {selectedCount.approvedByName} el {selectedCount.approvedAt ? formatDate(selectedCount.approvedAt) : 'N/A'}
-                      </span>
+                      <span>Aprobado por {selectedCount.approvedByName}</span>
+                    )}
+                    {selectedCount.approvedAt && (
+                      <span className="ml-1">• {formatDate(selectedCount.approvedAt)}</span>
                     )}
                   </div>
                 )}
