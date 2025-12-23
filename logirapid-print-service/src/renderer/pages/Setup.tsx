@@ -200,7 +200,7 @@ export default function SetupPage({ onComplete }: SetupPageProps) {
 
         {/* Footer */}
         <p className="text-center text-white/40 text-sm mt-6">
-          LogiRapid Print Service v1.0.0
+          LogiRapid Print Service v1.1.0
         </p>
       </div>
     </div>

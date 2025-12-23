@@ -153,6 +153,72 @@ function setupIpcHandlers(): void {
     serverUrl: string
   }) => {
     try {
+      // First, test the connection before saving
+      const axios = require('axios')
+
+      try {
+        // Test connection to the server
+        const testResponse = await axios.post(
+          `${data.serverUrl.replace(/\/$/, '')}/api/print/services/${data.serviceCode}/register`,
+          {
+            platform: process.platform,
+            hostname: require('os').hostname(),
+            version: '1.0.0',
+            printers: []
+          },
+          {
+            timeout: 15000,
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${data.apiKey}:${data.apiSecret}`
+            }
+          }
+        )
+
+        if (!testResponse.data?.success) {
+          return {
+            success: false,
+            error: testResponse.data?.error || 'Error de autenticación. Verifica las credenciales.'
+          }
+        }
+      } catch (axiosError: any) {
+        console.error('[Save Credentials] Connection test failed:', axiosError.message)
+
+        if (axiosError.code === 'ENOTFOUND' || axiosError.code === 'ECONNREFUSED') {
+          return {
+            success: false,
+            error: 'No se pudo conectar al servidor. Verifica la URL.'
+          }
+        }
+
+        if (axiosError.response?.status === 401) {
+          return {
+            success: false,
+            error: 'Credenciales inválidas. Verifica el API Key y API Secret.'
+          }
+        }
+
+        if (axiosError.response?.status === 404) {
+          return {
+            success: false,
+            error: 'Servicio no encontrado. Verifica el código del servicio.'
+          }
+        }
+
+        if (axiosError.code === 'ETIMEDOUT' || axiosError.code === 'ECONNABORTED') {
+          return {
+            success: false,
+            error: 'Tiempo de conexión agotado. Verifica tu conexión a internet.'
+          }
+        }
+
+        return {
+          success: false,
+          error: `Error de conexión: ${axiosError.message}`
+        }
+      }
+
+      // Connection successful, save credentials
       saveCredentials(data.serviceCode, data.apiKey, data.apiSecret, data.serverUrl)
 
       // Initialize API client and start service
@@ -163,9 +229,10 @@ function setupIpcHandlers(): void {
 
       return { success: true }
     } catch (error) {
+      console.error('[Save Credentials] Error:', error)
       return {
         success: false,
-        error: error instanceof Error ? error.message : 'Failed to save credentials'
+        error: error instanceof Error ? error.message : 'Error al guardar credenciales'
       }
     }
   })
