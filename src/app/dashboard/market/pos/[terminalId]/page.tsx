@@ -759,10 +759,22 @@ export default function POSTerminalPage() {
         'min-h-screen flex items-center justify-center',
         theme === 'dark' ? 'bg-gray-900' : 'bg-gray-100'
       )}>
-        <div className="text-center">
-          <Loader2 className="w-12 h-12 animate-spin mx-auto mb-4 text-blue-500" />
-          <p className="text-gray-500">Cargando punto de venta...</p>
-        </div>
+        <motion.div
+          initial={{ opacity: 0, scale: 0.9 }}
+          animate={{ opacity: 1, scale: 1 }}
+          className="text-center"
+        >
+          <div className={cn(
+            'w-20 h-20 rounded-2xl flex items-center justify-center mx-auto mb-4',
+            theme === 'dark' ? 'bg-gray-800' : 'bg-white shadow-lg'
+          )}>
+            <Loader2 className="w-10 h-10 animate-spin text-blue-500" />
+          </div>
+          <p className={cn(
+            'text-sm font-medium',
+            theme === 'dark' ? 'text-gray-400' : 'text-gray-500'
+          )}>Cargando punto de venta...</p>
+        </motion.div>
       </div>
     )
   }
@@ -773,27 +785,45 @@ export default function POSTerminalPage() {
         'min-h-screen flex items-center justify-center',
         theme === 'dark' ? 'bg-gray-900' : 'bg-gray-100'
       )}>
-        <div className="text-center">
-          <AlertCircle className="w-12 h-12 mx-auto mb-4 text-red-500" />
-          <p className="text-red-500 mb-4">{error}</p>
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="text-center"
+        >
+          <div className={cn(
+            'w-20 h-20 rounded-2xl flex items-center justify-center mx-auto mb-4',
+            theme === 'dark' ? 'bg-red-900/30' : 'bg-red-50'
+          )}>
+            <AlertCircle className="w-10 h-10 text-red-500" />
+          </div>
+          <p className="text-red-500 mb-4 max-w-sm mx-auto">{error}</p>
           <button
             onClick={() => router.push('/dashboard/market/pos')}
-            className="px-4 py-2 bg-blue-500 text-white rounded-lg"
+            className="px-6 py-2.5 bg-blue-500 text-white rounded-xl font-medium hover:bg-blue-600 transition-colors"
           >
             Volver
           </button>
-        </div>
+        </motion.div>
       </div>
     )
   }
 
   return (
-    <div className={cn(
-      'h-screen flex flex-col overflow-hidden',
-      theme === 'dark' ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-900'
-    )}>
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      transition={{ duration: 0.3 }}
+      className={cn(
+        'h-screen flex flex-col overflow-hidden',
+        theme === 'dark' ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-900'
+      )}
+    >
       {/* Header - Responsive */}
-      <header className={cn(
+      <motion.header
+        initial={{ y: -20, opacity: 0 }}
+        animate={{ y: 0, opacity: 1 }}
+        transition={{ delay: 0.1 }}
+        className={cn(
         'flex items-center justify-between px-2 sm:px-4 py-2 sm:py-3 border-b shadow-sm',
         theme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'
       )}>
@@ -882,10 +912,15 @@ export default function POSTerminalPage() {
             <span className="hidden sm:inline">Cerrar Caja</span>
           </button>
         </div>
-      </header>
+      </motion.header>
 
       {/* Main Content */}
-      <div className="flex-1 flex flex-col lg:flex-row overflow-hidden relative">
+      <motion.div
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.15 }}
+        className="flex-1 flex flex-col lg:flex-row overflow-hidden relative"
+      >
         {/* Left Panel - Cart (Desktop) / Bottom Sheet (Mobile) */}
         <div className={cn(
           // Desktop: sidebar
@@ -1291,7 +1326,7 @@ export default function POSTerminalPage() {
             onClick={() => setShowMobileCart(false)}
           />
         )}
-      </div>
+      </motion.div>
 
       {/* Payment Modal */}
       <AnimatePresence>
@@ -1546,6 +1581,6 @@ export default function POSTerminalPage() {
           </motion.div>
         )}
       </AnimatePresence>
-    </div>
+    </motion.div>
   )
 }

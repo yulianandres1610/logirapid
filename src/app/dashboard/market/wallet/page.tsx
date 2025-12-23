@@ -310,14 +310,86 @@ export default function MarketWalletPage() {
       <ProtectedRoute>
         <DashboardLayout>
           <div className="p-6">
-            <div className="animate-pulse space-y-6">
-              <div className="h-8 bg-gray-200 dark:bg-gray-700 rounded w-1/3"></div>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              className="space-y-6"
+            >
+              {/* Header skeleton */}
+              <div className="flex items-center justify-between">
+                <div className="space-y-2">
+                  <div className="h-8 w-32 bg-gray-200 dark:bg-gray-700 rounded-lg animate-pulse"></div>
+                  <div className="h-4 w-48 bg-gray-100 dark:bg-gray-800 rounded animate-pulse"></div>
+                </div>
+                <div className="flex gap-2">
+                  <div className="h-10 w-28 bg-gray-200 dark:bg-gray-700 rounded-lg animate-pulse"></div>
+                  <div className="h-10 w-28 bg-green-200 dark:bg-green-900/30 rounded-lg animate-pulse"></div>
+                </div>
+              </div>
+
+              {/* Main balance card skeleton */}
+              <div className="bg-gradient-to-br from-green-600/80 to-green-800/80 rounded-2xl p-8 animate-pulse">
+                <div className="space-y-4">
+                  <div className="h-4 w-32 bg-white/20 rounded"></div>
+                  <div className="h-12 w-48 bg-white/30 rounded-lg"></div>
+                  <div className="h-4 w-40 bg-white/20 rounded"></div>
+                </div>
+                <div className="grid grid-cols-2 gap-4 mt-6 pt-6 border-t border-white/20">
+                  <div className="space-y-2">
+                    <div className="h-3 w-20 bg-white/20 rounded"></div>
+                    <div className="h-6 w-28 bg-white/30 rounded"></div>
+                  </div>
+                  <div className="space-y-2">
+                    <div className="h-3 w-20 bg-white/20 rounded"></div>
+                    <div className="h-6 w-28 bg-white/30 rounded"></div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Currency cards skeleton */}
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 {[1, 2, 3, 4].map(i => (
-                  <div key={i} className="h-40 bg-gray-200 dark:bg-gray-700 rounded-xl"></div>
+                  <motion.div
+                    key={i}
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: i * 0.1 }}
+                    className="bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-200 dark:border-gray-700 animate-pulse"
+                  >
+                    <div className="flex items-center gap-2 mb-3">
+                      <div className="w-8 h-8 bg-gray-200 dark:bg-gray-700 rounded-lg"></div>
+                      <div className="h-4 w-12 bg-gray-200 dark:bg-gray-700 rounded"></div>
+                    </div>
+                    <div className="h-6 w-24 bg-gray-200 dark:bg-gray-700 rounded mb-2"></div>
+                    <div className="h-3 w-32 bg-gray-100 dark:bg-gray-800 rounded"></div>
+                  </motion.div>
                 ))}
               </div>
-            </div>
+
+              {/* Transactions skeleton */}
+              <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700">
+                <div className="p-5 border-b border-gray-200 dark:border-gray-700">
+                  <div className="h-6 w-48 bg-gray-200 dark:bg-gray-700 rounded animate-pulse"></div>
+                </div>
+                <div className="divide-y divide-gray-100 dark:divide-gray-700">
+                  {[1, 2, 3, 4, 5].map(i => (
+                    <div key={i} className="p-4 flex items-center justify-between animate-pulse">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 bg-gray-200 dark:bg-gray-700 rounded-full"></div>
+                        <div className="space-y-2">
+                          <div className="h-4 w-32 bg-gray-200 dark:bg-gray-700 rounded"></div>
+                          <div className="h-3 w-24 bg-gray-100 dark:bg-gray-800 rounded"></div>
+                        </div>
+                      </div>
+                      <div className="space-y-2 text-right">
+                        <div className="h-5 w-20 bg-gray-200 dark:bg-gray-700 rounded"></div>
+                        <div className="h-3 w-16 bg-gray-100 dark:bg-gray-800 rounded"></div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </motion.div>
           </div>
         </DashboardLayout>
       </ProtectedRoute>
@@ -330,9 +402,19 @@ export default function MarketWalletPage() {
   return (
     <ProtectedRoute>
       <DashboardLayout>
-        <div className="p-6 space-y-6">
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ duration: 0.3 }}
+          className="p-6 space-y-6"
+        >
           {/* Header */}
-          <div className="flex items-center justify-between">
+          <motion.div
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.1 }}
+            className="flex items-center justify-between"
+          >
             <div>
               <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
                 Mi Wallet
@@ -357,7 +439,7 @@ export default function MarketWalletPage() {
                 Depositar
               </button>
             </div>
-          </div>
+          </motion.div>
 
           {/* Main Balance Card */}
           <motion.div
@@ -899,7 +981,7 @@ export default function MarketWalletPage() {
               </motion.div>
             )}
           </AnimatePresence>
-        </div>
+        </motion.div>
       </DashboardLayout>
     </ProtectedRoute>
   )
