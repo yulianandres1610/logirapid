@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Printer, X, Loader2, CheckCircle, AlertCircle, Wifi, WifiOff, Minus, Plus, FileText, Receipt, Package, ShoppingCart } from 'lucide-react'
+import { Printer, X, Loader2, CheckCircle, AlertCircle, Wifi, WifiOff, Minus, Plus, FileText, Receipt, Package, ShoppingCart, Download } from 'lucide-react'
 import { useNotifications } from '@/contexts/NotificationContext'
 import { cn } from '@/lib/utils'
 
@@ -70,11 +70,15 @@ export function PrintDocumentModal({
 
   const [loading, setLoading] = useState(true)
   const [printing, setPrinting] = useState(false)
+  const [downloading, setDownloading] = useState(false)
   const [services, setServices] = useState<PrintService[]>([])
   const [selectedService, setSelectedService] = useState<PrintService | null>(null)
   const [selectedPrinter, setSelectedPrinter] = useState<PrinterInfo | null>(null)
   const [copies, setCopies] = useState(1)
   const [error, setError] = useState<string | null>(null)
+
+  // Document types that support PDF download
+  const supportsDownload = ['sales_report', 'cash_register_report', 'inventory_count_report', 'purchase_invoice'].includes(documentType)
 
   const docConfig = DOCUMENT_LABELS[documentType] || { label: 'Documento', icon: FileText }
   const DocIcon = docConfig.icon
@@ -177,6 +181,43 @@ export function PrintDocumentModal({
       showNotification('error', 'Error de impresión', errorMessage)
     } finally {
       setPrinting(false)
+    }
+  }
+
+  const handleDownload = async () => {
+    setDownloading(true)
+    try {
+      const response = await fetch('/api/print/download', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          documentType,
+          documentData
+        })
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.error || 'Error al generar PDF')
+      }
+
+      // Get the PDF blob and download it
+      const blob = await response.blob()
+      const url = window.URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = response.headers.get('Content-Disposition')?.split('filename="')[1]?.replace('"', '') || `documento-${Date.now()}.pdf`
+      document.body.appendChild(a)
+      a.click()
+      window.URL.revokeObjectURL(url)
+      document.body.removeChild(a)
+
+      showNotification('success', 'Descarga completada', 'El PDF se ha descargado correctamente')
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Error desconocido'
+      showNotification('error', 'Error de descarga', errorMessage)
+    } finally {
+      setDownloading(false)
     }
   }
 
@@ -369,31 +410,56 @@ export function PrintDocumentModal({
           </div>
 
           {/* Footer */}
-          {!loading && services.length > 0 && (
+          {!loading && (services.length > 0 || supportsDownload) && (
             <div className="px-6 py-4 border-t border-gray-700 bg-gray-800/50 flex gap-3">
               <button
                 onClick={onClose}
-                className="flex-1 py-3 rounded-xl font-medium bg-gray-700 text-gray-300 hover:bg-gray-600 transition-colors"
+                className="py-3 px-4 rounded-xl font-medium bg-gray-700 text-gray-300 hover:bg-gray-600 transition-colors"
               >
                 Cancelar
               </button>
-              <button
-                onClick={handlePrint}
-                disabled={printing || !selectedPrinter}
-                className={cn(
-                  'flex-1 py-3 rounded-xl font-medium flex items-center justify-center gap-2 transition-colors',
-                  'bg-gradient-to-r from-blue-500 to-blue-600 text-white',
-                  'hover:from-blue-600 hover:to-blue-700',
-                  'disabled:opacity-50 disabled:cursor-not-allowed'
-                )}
-              >
-                {printing ? (
-                  <Loader2 className="w-5 h-5 animate-spin" />
-                ) : (
-                  <Printer className="w-5 h-5" />
-                )}
-                {printing ? 'Enviando...' : `Imprimir ${copies > 1 ? `(${copies})` : ''}`}
-              </button>
+
+              {/* Download button - always available for supported document types */}
+              {supportsDownload && (
+                <button
+                  onClick={handleDownload}
+                  disabled={downloading}
+                  className={cn(
+                    'flex-1 py-3 rounded-xl font-medium flex items-center justify-center gap-2 transition-colors',
+                    'bg-gradient-to-r from-green-500 to-green-600 text-white',
+                    'hover:from-green-600 hover:to-green-700',
+                    'disabled:opacity-50 disabled:cursor-not-allowed'
+                  )}
+                >
+                  {downloading ? (
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                  ) : (
+                    <Download className="w-5 h-5" />
+                  )}
+                  {downloading ? 'Generando...' : 'Descargar PDF'}
+                </button>
+              )}
+
+              {/* Print button - only if printers available */}
+              {services.length > 0 && (
+                <button
+                  onClick={handlePrint}
+                  disabled={printing || !selectedPrinter}
+                  className={cn(
+                    'flex-1 py-3 rounded-xl font-medium flex items-center justify-center gap-2 transition-colors',
+                    'bg-gradient-to-r from-blue-500 to-blue-600 text-white',
+                    'hover:from-blue-600 hover:to-blue-700',
+                    'disabled:opacity-50 disabled:cursor-not-allowed'
+                  )}
+                >
+                  {printing ? (
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                  ) : (
+                    <Printer className="w-5 h-5" />
+                  )}
+                  {printing ? 'Enviando...' : `Imprimir ${copies > 1 ? `(${copies})` : ''}`}
+                </button>
+              )}
             </div>
           )}
         </motion.div>
