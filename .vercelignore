@@ -1,0 +1,27 @@
+# Electron Print Service App - Not needed for Vercel deployment
+logirapid-print-service/
+
+# Build artifacts
+logirapid-print-service/dist/
+logirapid-print-service/out/
+logirapid-print-service/release/
+logirapid-print-service/node_modules/
+
+# Documentation
+docs/
+*.md
+!README.md
+
+# Git
+.git/
+
+# IDE
+.idea/
+.vscode/
+
+# Test files
+*.test.ts
+*.test.tsx
+*.spec.ts
+*.spec.tsx
+__tests__/
