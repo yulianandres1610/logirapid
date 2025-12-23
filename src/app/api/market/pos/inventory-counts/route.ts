@@ -67,19 +67,16 @@ export async function GET(request: NextRequest) {
         c.notes,
         c.created_at,
         c.completed_at,
-        c.approved_at,
-        c.approved_by,
+        c.updated_at,
         w.name as warehouse_name,
         s.session_code,
         t.name as terminal_name,
-        u.firstname || ' ' || u.lastname as counted_by_name,
-        ua.firstname || ' ' || ua.lastname as approved_by_name
+        u.firstname || ' ' || u.lastname as counted_by_name
       FROM market_inventory_counts c
       LEFT JOIN market_warehouses w ON c.warehouse_id = w.id
       LEFT JOIN market_pos_sessions s ON c.session_id = s.id
       LEFT JOIN market_pos_terminals t ON s.pos_terminal_id = t.id
       LEFT JOIN users u ON c.counted_by = u.id
-      LEFT JOIN users ua ON c.approved_by = ua.id
       WHERE c.company_id = $1 ${statusFilter}
       ORDER BY c.created_at DESC
       LIMIT $2 OFFSET $3
@@ -107,12 +104,11 @@ export async function GET(request: NextRequest) {
           notes: c.notes,
           createdAt: c.created_at,
           completedAt: c.completed_at,
-          approvedAt: c.approved_at,
+          updatedAt: c.updated_at,
           warehouseName: c.warehouse_name,
           sessionCode: c.session_code,
           terminalName: c.terminal_name,
-          countedByName: c.counted_by_name,
-          approvedByName: c.approved_by_name
+          countedByName: c.counted_by_name
         })),
         pagination: {
           page,
@@ -244,9 +240,9 @@ export async function POST(request: NextRequest) {
       // Mark count as approved
       await db.query(`
         UPDATE market_inventory_counts
-        SET status = 'approved', approved_at = NOW(), approved_by = $1, updated_at = NOW()
-        WHERE id = $2
-      `, [payload.userId, countId])
+        SET status = 'approved', updated_at = NOW()
+        WHERE id = $1
+      `, [countId])
 
       return NextResponse.json({
         success: true,
@@ -262,9 +258,9 @@ export async function POST(request: NextRequest) {
       // Mark count as rejected
       await db.query(`
         UPDATE market_inventory_counts
-        SET status = 'rejected', approved_at = NOW(), approved_by = $1, updated_at = NOW()
-        WHERE id = $2
-      `, [payload.userId, countId])
+        SET status = 'rejected', updated_at = NOW()
+        WHERE id = $1
+      `, [countId])
 
       return NextResponse.json({
         success: true,
