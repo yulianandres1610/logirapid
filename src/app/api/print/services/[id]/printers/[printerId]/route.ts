@@ -199,10 +199,9 @@ export async function PUT(
         }, { status: 400 })
       }
 
-      // Format as PostgreSQL array literal
-      const pgArray = `{${body.supportedDocumentTypes.join(',')}}`
-      updates.push(`supported_document_types = $${paramIndex}::text[]`)
-      values.push(pgArray)
+      // Pass JavaScript array directly - pg driver handles conversion
+      updates.push(`supported_document_types = $${paramIndex}`)
+      values.push(body.supportedDocumentTypes)
       paramIndex++
     }
 
