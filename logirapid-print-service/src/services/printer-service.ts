@@ -158,44 +158,8 @@ class PrinterService {
         console.log('[Printer Service] system_profiler failed:', e)
       }
 
-      // Method 3: Use lpinfo to discover network printers (if available)
-      try {
-        const { stdout } = await execAsync('lpinfo -v 2>/dev/null | grep -E "(socket|ipp|ipps)" | head -20', { encoding: 'utf8' })
-        const lines = stdout.split('\n').filter(l => l.trim())
-
-        for (const line of lines) {
-          // Parse "network ipp://192.168.1.100/ipp/print"
-          const match = line.match(/^(network|direct)\s+(\S+)/)
-          if (match) {
-            const uri = match[2]
-            // Extract IP or hostname
-            const hostMatch = uri.match(/:\/\/([^\/]+)/)
-            if (hostMatch) {
-              const host = hostMatch[1].split(':')[0]
-              const printerName = `Network_${host.replace(/\./g, '_')}`
-
-              // Check if not already added
-              if (!printers.find(p => p.name.includes(host.replace(/\./g, '_')))) {
-                printers.push({
-                  name: printerName,
-                  displayName: `Impresora de Red (${host})`,
-                  description: uri,
-                  isDefault: false,
-                  status: 0,
-                  options: {
-                    portName: uri,
-                    isNetwork: 'true',
-                    networkAddress: host
-                  }
-                })
-              }
-            }
-          }
-        }
-      } catch (e) {
-        // lpinfo might not be available or have permissions
-        console.log('[Printer Service] lpinfo not available for network discovery')
-      }
+      // Note: We removed lpinfo discovery because it shows unconfigured printers
+      // that cannot be used for printing. Only configured CUPS printers work.
 
       console.log(`[Printer Service] macOS: Found ${printers.length} printers`)
 
