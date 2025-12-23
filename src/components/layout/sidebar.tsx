@@ -491,6 +491,7 @@ export function Sidebar({ isCollapsed, onToggle }: SidebarProps) {
     { icon: Tag, label: "Listas de Precios", href: "/dashboard/market/pricelists" },
     { icon: Wallet, label: "Mi Wallet", href: "/dashboard/market/wallet" },
     { icon: Truck, label: "Entregas", href: "/dashboard/market/deliveries" },
+    { icon: Printer, label: "Servicios Impresión", href: "/dashboard/market/print-services" },
     { icon: Settings, label: "Configuración", href: "/dashboard/market/settings" },
   ]
 
