@@ -141,19 +141,19 @@ function setupIpcHandlers(): void {
     if (!creds) return null
     // Don't send the secret to renderer
     return {
-      serviceId: creds.serviceId,
+      serviceCode: creds.serviceCode,
       serverUrl: creds.serverUrl
     }
   })
 
   ipcMain.handle('save-credentials', async (_, data: {
-    serviceId: number
+    serviceCode: string
     apiKey: string
     apiSecret: string
     serverUrl: string
   }) => {
     try {
-      saveCredentials(data.serviceId, data.apiKey, data.apiSecret, data.serverUrl)
+      saveCredentials(data.serviceCode, data.apiKey, data.apiSecret, data.serverUrl)
 
       // Initialize API client and start service
       if (apiClient.initialize()) {

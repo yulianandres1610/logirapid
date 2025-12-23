@@ -6,7 +6,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   isConfigured: () => ipcRenderer.invoke('is-configured'),
   getCredentials: () => ipcRenderer.invoke('get-credentials'),
   saveCredentials: (data: {
-    serviceId: number
+    serviceCode: string
     apiKey: string
     apiSecret: string
     serverUrl: string
@@ -43,9 +43,9 @@ declare global {
   interface Window {
     electronAPI: {
       isConfigured: () => Promise<boolean>
-      getCredentials: () => Promise<{ serviceId: number; serverUrl: string } | null>
+      getCredentials: () => Promise<{ serviceCode: string; serverUrl: string } | null>
       saveCredentials: (data: {
-        serviceId: number
+        serviceCode: string
         apiKey: string
         apiSecret: string
         serverUrl: string
