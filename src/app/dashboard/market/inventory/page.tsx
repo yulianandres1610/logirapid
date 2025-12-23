@@ -27,6 +27,7 @@ import { ProtectedRoute } from '@/components/protected-route'
 import { useTheme } from '@/contexts/theme-context'
 import { useAuth } from '@/hooks/useAuth'
 import { cn } from '@/lib/utils'
+import { PrintLabelModal } from '@/components/print/PrintLabelModal'
 
 interface Product {
   id: number
@@ -90,6 +91,7 @@ export default function MarketInventoryPage() {
   const [deleteError, setDeleteError] = useState<string | null>(null)
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null)
   const [isRefreshing, setIsRefreshing] = useState(false)
+  const [printProduct, setPrintProduct] = useState<Product | null>(null)
 
   // Check if user is admin
   const isAdmin = user?.role === 'ADMIN' || user?.role === 'SUPER_ADMIN'
@@ -171,96 +173,6 @@ export default function MarketInventoryPage() {
   const getMargin = (product: Product) => {
     if (product.costPrice === 0) return 0
     return Math.round(((product.sellingPrice - product.costPrice) / product.costPrice) * 100)
-  }
-
-  // Print barcode label function
-  const printBarcodeLabel = (product: Product) => {
-    const printWindow = window.open('', '_blank', 'width=400,height=300')
-    if (!printWindow) return
-
-    const symbol = CURRENCY_SYMBOLS[product.currency] || '$'
-
-    printWindow.document.write(`
-      <!DOCTYPE html>
-      <html>
-      <head>
-        <title>Etiqueta - ${product.name}</title>
-        <style>
-          @page { size: 50mm 30mm; margin: 0; }
-          * { margin: 0; padding: 0; box-sizing: border-box; }
-          body {
-            font-family: Arial, sans-serif;
-            width: 50mm;
-            height: 30mm;
-            padding: 2mm;
-            display: flex;
-            flex-direction: column;
-            justify-content: space-between;
-          }
-          .product-name {
-            font-size: 8pt;
-            font-weight: bold;
-            text-align: center;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            white-space: nowrap;
-            max-width: 100%;
-          }
-          .barcode-container {
-            text-align: center;
-            flex: 1;
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            align-items: center;
-          }
-          .barcode {
-            font-family: 'Libre Barcode EAN13 Text', monospace;
-            font-size: 24pt;
-            letter-spacing: 0;
-          }
-          .barcode-number {
-            font-size: 7pt;
-            font-family: monospace;
-            margin-top: 1mm;
-          }
-          .price {
-            font-size: 10pt;
-            font-weight: bold;
-            text-align: center;
-          }
-          .sku {
-            font-size: 6pt;
-            text-align: center;
-            color: #666;
-          }
-          @media print {
-            body { -webkit-print-color-adjust: exact; }
-          }
-        </style>
-        <link href="https://fonts.googleapis.com/css2?family=Libre+Barcode+EAN13+Text&display=swap" rel="stylesheet">
-      </head>
-      <body>
-        <div class="product-name">${product.name}</div>
-        <div class="barcode-container">
-          ${product.barcode ? `
-            <div class="barcode">${product.barcode}</div>
-            <div class="barcode-number">${product.barcode}</div>
-          ` : `
-            <div class="sku">SKU: ${product.sku}</div>
-          `}
-        </div>
-        <div class="price">${symbol}${product.sellingPrice.toFixed(2)}</div>
-      </body>
-      </html>
-    `)
-
-    printWindow.document.close()
-
-    // Wait for font to load then print
-    setTimeout(() => {
-      printWindow.print()
-    }, 500)
   }
 
   // Delete product function
@@ -835,7 +747,7 @@ export default function MarketInventoryPage() {
                                 <motion.button
                                   whileHover={{ scale: 1.1 }}
                                   whileTap={{ scale: 0.9 }}
-                                  onClick={() => printBarcodeLabel(product)}
+                                  onClick={() => setPrintProduct(product)}
                                   className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
                                   title="Imprimir etiqueta"
                                 >
@@ -985,7 +897,7 @@ export default function MarketInventoryPage() {
                         <motion.button
                           whileHover={{ scale: 1.05 }}
                           whileTap={{ scale: 0.95 }}
-                          onClick={() => printBarcodeLabel(selectedProduct)}
+                          onClick={() => selectedProduct && setPrintProduct(selectedProduct)}
                           className={cn(
                             'flex items-center gap-2 px-4 py-2 rounded-lg transition-colors',
                             theme === 'dark'
@@ -1195,6 +1107,28 @@ export default function MarketInventoryPage() {
             </AnimatePresence>
           </motion.div>
         </div>
+
+        {/* Print Label Modal */}
+        {printProduct && (
+          <PrintLabelModal
+            isOpen={!!printProduct}
+            onClose={() => setPrintProduct(null)}
+            productData={{
+              productName: printProduct.name,
+              sku: printProduct.sku,
+              barcode: printProduct.barcode,
+              price: printProduct.sellingPrice,
+              currency: printProduct.currency,
+              unitOfMeasure: printProduct.unitOfMeasure,
+              category: printProduct.category || undefined,
+              description: printProduct.description || undefined
+            }}
+            onPrintSuccess={(jobNumber) => {
+              console.log('Print job created:', jobNumber)
+              setPrintProduct(null)
+            }}
+          />
+        )}
       </DashboardLayout>
     </ProtectedRoute>
   )

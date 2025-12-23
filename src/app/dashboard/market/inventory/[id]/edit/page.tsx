@@ -25,6 +25,7 @@ import { DashboardLayout } from '@/components/layout/dashboard-layout'
 import { ProtectedRoute } from '@/components/protected-route'
 import { useTheme } from '@/contexts/theme-context'
 import { cn } from '@/lib/utils'
+import { PrintLabelModal } from '@/components/print/PrintLabelModal'
 
 const CATEGORIES = [
   'Alimentos',
@@ -98,6 +99,7 @@ export default function EditProductPage() {
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [showDeleteModal, setShowDeleteModal] = useState(false)
   const [deleting, setDeleting] = useState(false)
+  const [showPrintModal, setShowPrintModal] = useState(false)
 
   const [formData, setFormData] = useState({
     name: '',
@@ -282,93 +284,6 @@ export default function EditProductPage() {
     }
   }
 
-  const printBarcodeLabel = () => {
-    const printWindow = window.open('', '_blank', 'width=400,height=300')
-    if (!printWindow) return
-
-    const symbol = CURRENCY_SYMBOLS[formData.currency] || '$'
-
-    printWindow.document.write(`
-      <!DOCTYPE html>
-      <html>
-      <head>
-        <title>Etiqueta - ${formData.name}</title>
-        <style>
-          @page { size: 50mm 30mm; margin: 0; }
-          * { margin: 0; padding: 0; box-sizing: border-box; }
-          body {
-            font-family: Arial, sans-serif;
-            width: 50mm;
-            height: 30mm;
-            padding: 2mm;
-            display: flex;
-            flex-direction: column;
-            justify-content: space-between;
-          }
-          .product-name {
-            font-size: 8pt;
-            font-weight: bold;
-            text-align: center;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            white-space: nowrap;
-            max-width: 100%;
-          }
-          .barcode-container {
-            text-align: center;
-            flex: 1;
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            align-items: center;
-          }
-          .barcode {
-            font-family: 'Libre Barcode EAN13 Text', monospace;
-            font-size: 24pt;
-            letter-spacing: 0;
-          }
-          .barcode-number {
-            font-size: 7pt;
-            font-family: monospace;
-            margin-top: 1mm;
-          }
-          .price {
-            font-size: 10pt;
-            font-weight: bold;
-            text-align: center;
-          }
-          .sku {
-            font-size: 6pt;
-            text-align: center;
-            color: #666;
-          }
-          @media print {
-            body { -webkit-print-color-adjust: exact; }
-          }
-        </style>
-        <link href="https://fonts.googleapis.com/css2?family=Libre+Barcode+EAN13+Text&display=swap" rel="stylesheet">
-      </head>
-      <body>
-        <div class="product-name">${formData.name}</div>
-        <div class="barcode-container">
-          ${formData.barcode ? `
-            <div class="barcode">${formData.barcode}</div>
-            <div class="barcode-number">${formData.barcode}</div>
-          ` : `
-            <div class="sku">SKU: ${formData.sku}</div>
-          `}
-        </div>
-        <div class="price">${symbol}${parseFloat(formData.sellingPrice || '0').toFixed(2)}</div>
-      </body>
-      </html>
-    `)
-
-    printWindow.document.close()
-    setTimeout(() => {
-      printWindow.print()
-    }, 500)
-  }
-
   const getMargin = () => {
     const cost = parseFloat(formData.costPrice) || 0
     const sell = parseFloat(formData.sellingPrice) || 0
@@ -426,7 +341,7 @@ export default function EditProductPage() {
                   <motion.button
                     whileHover={{ scale: 1.02 }}
                     whileTap={{ scale: 0.98 }}
-                    onClick={printBarcodeLabel}
+                    onClick={() => setShowPrintModal(true)}
                     className={cn(
                       'flex items-center gap-2 px-4 py-2.5 rounded-xl transition-all',
                       theme === 'dark'
@@ -1061,6 +976,25 @@ export default function EditProductPage() {
             )}
           </AnimatePresence>
         </div>
+
+        {/* Print Label Modal */}
+        <PrintLabelModal
+          isOpen={showPrintModal}
+          onClose={() => setShowPrintModal(false)}
+          productData={{
+            productName: formData.name,
+            sku: formData.sku,
+            barcode: formData.barcode,
+            price: parseFloat(formData.sellingPrice) || 0,
+            currency: formData.currency,
+            unitOfMeasure: formData.unitOfMeasure,
+            category: formData.category || undefined,
+            description: formData.description || undefined
+          }}
+          onPrintSuccess={(jobNumber) => {
+            console.log('Print job created:', jobNumber)
+          }}
+        />
       </DashboardLayout>
     </ProtectedRoute>
   )
