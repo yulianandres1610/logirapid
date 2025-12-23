@@ -186,7 +186,16 @@ export async function POST(request: NextRequest) {
     }
 
     // Validate document type
-    const validDocTypes = ['pos_receipt', 'shipping_label', 'product_label', 'invoice']
+    const validDocTypes = [
+      'pos_receipt',           // Recibo de venta POS
+      'shipping_label',        // Etiqueta de envío
+      'product_label',         // Etiqueta de producto
+      'invoice',               // Factura general
+      'purchase_invoice',      // Factura de compra
+      'sales_report',          // Reporte de ventas
+      'inventory_count_report', // Reporte de conteo de inventario
+      'cash_register_report'   // Reporte de caja/arqueo
+    ]
     if (!validDocTypes.includes(documentType)) {
       return NextResponse.json({
         success: false,
