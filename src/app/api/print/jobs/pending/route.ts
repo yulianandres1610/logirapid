@@ -3,6 +3,28 @@ import crypto from 'crypto'
 import { db } from '@/lib/database'
 
 /**
+ * Find service by ID (numeric) or service_code (string like PRS-2025-0001)
+ */
+async function findService(idOrCode: string): Promise<number | null> {
+  // Try as numeric ID first
+  const numericId = parseInt(idOrCode)
+  if (!isNaN(numericId)) {
+    const result = await db.query('SELECT id FROM print_services WHERE id = $1', [numericId])
+    if (result.rows.length > 0) {
+      return result.rows[0].id
+    }
+  }
+
+  // Try as service_code (e.g., PRS-2025-0001)
+  const result = await db.query('SELECT id FROM print_services WHERE service_code = $1', [idOrCode])
+  if (result.rows.length > 0) {
+    return result.rows[0].id
+  }
+
+  return null
+}
+
+/**
  * Verify API credentials from Authorization header
  */
 async function verifyCredentials(
@@ -41,20 +63,22 @@ async function verifyCredentials(
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url)
-    const serviceIdParam = searchParams.get('serviceId')
+    // Accept both serviceId and serviceCode for backwards compatibility
+    const serviceIdParam = searchParams.get('serviceId') || searchParams.get('serviceCode')
     const limit = Math.min(parseInt(searchParams.get('limit') || '10'), 50)
 
     if (!serviceIdParam) {
       return NextResponse.json({
         success: false,
-        error: 'serviceId is required'
+        error: 'serviceId or serviceCode is required'
       }, { status: 400 })
     }
 
-    const serviceId = parseInt(serviceIdParam)
+    // Find service by ID or code
+    const serviceId = await findService(serviceIdParam)
 
-    if (isNaN(serviceId)) {
-      return NextResponse.json({ success: false, error: 'Invalid serviceId' }, { status: 400 })
+    if (!serviceId) {
+      return NextResponse.json({ success: false, error: 'Service not found' }, { status: 404 })
     }
 
     // Verify API credentials

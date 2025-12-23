@@ -7,8 +7,8 @@ interface SetupPageProps {
 export default function SetupPage({ onComplete }: SetupPageProps) {
   const [step, setStep] = useState<'welcome' | 'credentials' | 'connecting'>('welcome')
   const [formData, setFormData] = useState({
-    serverUrl: 'https://logirapid.com',
-    serviceId: '',
+    serverUrl: 'https://agencias.logirapid.com',
+    serviceCode: '',
     apiKey: '',
     apiSecret: ''
   })
@@ -17,35 +17,46 @@ export default function SetupPage({ onComplete }: SetupPageProps) {
   const handleConnect = async () => {
     setError('')
 
-    if (!formData.serverUrl || !formData.serviceId || !formData.apiKey || !formData.apiSecret) {
+    if (!formData.serverUrl || !formData.serviceCode || !formData.apiKey || !formData.apiSecret) {
       setError('Por favor complete todos los campos')
       return
     }
 
-    const serviceId = parseInt(formData.serviceId)
-    if (isNaN(serviceId)) {
-      setError('ID de servicio inválido')
+    // Validate service code format (PRS-YYYY-XXXX)
+    const serviceCodePattern = /^PRS-\d{4}-\d{4}$/
+    if (!serviceCodePattern.test(formData.serviceCode)) {
+      setError('Código de servicio inválido. Formato esperado: PRS-2025-0001')
       return
     }
 
     setStep('connecting')
 
     try {
+      console.log('[Setup] Calling saveCredentials with:', {
+        serviceCode: formData.serviceCode,
+        apiKey: formData.apiKey.substring(0, 10) + '...',
+        serverUrl: formData.serverUrl
+      })
+
       const result = await window.electronAPI.saveCredentials({
-        serviceId,
+        serviceCode: formData.serviceCode,
         apiKey: formData.apiKey,
         apiSecret: formData.apiSecret,
         serverUrl: formData.serverUrl
       })
 
+      console.log('[Setup] Result from saveCredentials:', result)
+
       if (result.success) {
         onComplete()
       } else {
+        console.error('[Setup] Error:', result.error)
         setError(result.error || 'Error al conectar')
         setStep('credentials')
       }
-    } catch (err) {
-      setError('Error de conexión')
+    } catch (err: any) {
+      console.error('[Setup] Exception caught:', err)
+      setError(`Error: ${err?.message || 'Error de conexión desconocido'}`)
       setStep('credentials')
     }
   }
@@ -131,14 +142,14 @@ export default function SetupPage({ onComplete }: SetupPageProps) {
 
               <div>
                 <label className="block text-sm font-medium text-white/80 mb-1">
-                  ID del Servicio
+                  Código del Servicio
                 </label>
                 <input
                   type="text"
-                  value={formData.serviceId}
-                  onChange={(e) => setFormData({ ...formData, serviceId: e.target.value })}
-                  placeholder="123"
-                  className="w-full px-4 py-2.5 bg-white/10 border border-white/20 rounded-lg text-white placeholder-white/40 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  value={formData.serviceCode}
+                  onChange={(e) => setFormData({ ...formData, serviceCode: e.target.value.toUpperCase() })}
+                  placeholder="PRS-2025-0001"
+                  className="w-full px-4 py-2.5 bg-white/10 border border-white/20 rounded-lg text-white placeholder-white/40 focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono"
                 />
               </div>
 
@@ -199,7 +210,7 @@ export default function SetupPage({ onComplete }: SetupPageProps) {
 
         {/* Footer */}
         <p className="text-center text-white/40 text-sm mt-6">
-          LogiRapid Print Service v1.0.0
+          LogiRapid Print Service v1.6.0
         </p>
       </div>
     </div>

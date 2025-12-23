@@ -2,7 +2,7 @@ import Store from 'electron-store'
 import { safeStorage } from 'electron'
 
 interface CredentialsData {
-  serviceId: number
+  serviceCode: string
   apiKey: string
   apiSecretEncrypted: string
   serverUrl: string
@@ -39,7 +39,7 @@ export function isConfigured(): boolean {
 }
 
 export function saveCredentials(
-  serviceId: number,
+  serviceCode: string,
   apiKey: string,
   apiSecret: string,
   serverUrl: string
@@ -50,7 +50,7 @@ export function saveCredentials(
     : Buffer.from(apiSecret).toString('base64')
 
   store.set('credentials', {
-    serviceId,
+    serviceCode,
     apiKey,
     apiSecretEncrypted: encryptedSecret,
     serverUrl: serverUrl.replace(/\/$/, ''), // Remove trailing slash
@@ -59,7 +59,7 @@ export function saveCredentials(
 }
 
 export function getCredentials(): {
-  serviceId: number
+  serviceCode: string
   apiKey: string
   apiSecret: string
   serverUrl: string
@@ -84,7 +84,7 @@ export function getCredentials(): {
   }
 
   return {
-    serviceId: credentials.serviceId,
+    serviceCode: credentials.serviceCode,
     apiKey: credentials.apiKey,
     apiSecret,
     serverUrl: credentials.serverUrl

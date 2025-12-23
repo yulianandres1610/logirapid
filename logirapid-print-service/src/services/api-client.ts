@@ -19,7 +19,7 @@ interface PrinterInfo {
 interface RegisterResponse {
   success: boolean
   data?: {
-    serviceId: number
+    serviceCode: string
     status: string
     configuration: {
       pollInterval: number
@@ -124,7 +124,7 @@ class ApiClient {
 
     try {
       const response = await this.client.post<RegisterResponse>(
-        `/api/print/services/${this.credentials.serviceId}/register`,
+        `/api/print/services/${this.credentials.serviceCode}/register`,
         {
           platform: process.platform,
           hostname: os.hostname(),
@@ -150,7 +150,7 @@ class ApiClient {
 
     try {
       const response = await this.client.post<HeartbeatResponse>(
-        `/api/print/services/${this.credentials.serviceId}/heartbeat`,
+        `/api/print/services/${this.credentials.serviceCode}/heartbeat`,
         { printerStatuses }
       )
 
@@ -174,7 +174,7 @@ class ApiClient {
         `/api/print/jobs/pending`,
         {
           params: {
-            serviceId: this.credentials.serviceId,
+            serviceCode: this.credentials.serviceCode,
             limit
           }
         }
@@ -231,7 +231,7 @@ class ApiClient {
     try {
       const payload = JSON.stringify({
         type: eventType,
-        serviceId: this.credentials.serviceId,
+        serviceCode: this.credentials.serviceCode,
         timestamp: new Date().toISOString(),
         data
       })
@@ -256,8 +256,8 @@ class ApiClient {
     }
   }
 
-  getServiceId(): number | null {
-    return this.credentials?.serviceId || null
+  getServiceCode(): string | null {
+    return this.credentials?.serviceCode || null
   }
 
   isInitialized(): boolean {

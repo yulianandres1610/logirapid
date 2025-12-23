@@ -74,6 +74,11 @@ export default function InventoryCountReportPage() {
   const [terminal, setTerminal] = useState<Terminal | null>(null)
   const [countData, setCountData] = useState<CountData | null>(null)
   const [sessionId, setSessionId] = useState<number | null>(null)
+  const [showPrintModal, setShowPrintModal] = useState(false)
+  const [printServices, setPrintServices] = useState<Array<{ id: number; serviceName: string; printers: Array<{ id: number; printerName: string; isOnline: boolean; isDefault: boolean; printerType: string }> }>>([])
+  const [selectedPrinter, setSelectedPrinter] = useState<{ serviceId: number; printerId: number } | null>(null)
+  const [printingWithService, setPrintingWithService] = useState(false)
+  const [copies, setCopies] = useState(1)
 
   // Load data
   useEffect(() => {
@@ -209,12 +214,94 @@ export default function InventoryCountReportPage() {
     router.push(`/dashboard/market/pos/${terminalId}/close`)
   }, [router, terminalId])
 
-  // Print function
-  const handlePrint = useCallback(() => {
+  // Fetch print services
+  const fetchPrintServices = async () => {
+    try {
+      const response = await fetch('/api/print/services?includeOffline=false')
+      const data = await response.json()
+      if (data.success && data.data?.services) {
+        const activeServices = data.data.services.filter(
+          (s: { status: string; printers?: unknown[] }) => s.status === 'active' && s.printers && s.printers.length > 0
+        )
+        setPrintServices(activeServices)
+
+        // Auto-select first printer
+        if (activeServices.length > 0 && activeServices[0].printers.length > 0) {
+          const firstPrinter = activeServices[0].printers.find((p: { isOnline: boolean }) => p.isOnline) || activeServices[0].printers[0]
+          setSelectedPrinter({ serviceId: activeServices[0].id, printerId: firstPrinter.id })
+        }
+      }
+    } catch (err) {
+      console.error('Error fetching print services:', err)
+    }
+  }
+
+  // Print with service
+  const printWithService = async () => {
+    if (!countData || !selectedPrinter) return
+
+    setPrintingWithService(true)
+    try {
+      const response = await fetch('/api/print/jobs', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          documentType: 'inventory_count_report',
+          documentData: {
+            countNumber: countData.countNumber,
+            countId: countData.id,
+            warehouseName: countData.warehouseName,
+            terminalName: terminal?.name,
+            totalProducts: countData.totalProducts,
+            productsWithDifferences: countData.productsWithDifferences,
+            totalDifferenceValue: countData.totalDifferenceValue,
+            startedAt: countData.startedAt,
+            status: countData.status,
+            lines: countData.lines.map(l => ({
+              productName: l.productName,
+              productSku: l.productSku,
+              expectedQuantity: l.expectedQuantity,
+              countedQuantity: l.countedQuantity,
+              difference: l.difference,
+              differenceValue: l.differenceValue
+            }))
+          },
+          copies,
+          printServiceId: selectedPrinter.serviceId,
+          printerId: selectedPrinter.printerId,
+          sourceType: 'inventory_count',
+          sourceId: countData.id
+        })
+      })
+
+      const data = await response.json()
+      if (data.success) {
+        setShowPrintModal(false)
+      } else {
+        throw new Error(data.error)
+      }
+    } catch (err) {
+      console.error('Error printing with service:', err)
+      // Fallback to browser print
+      printBrowser()
+      setShowPrintModal(false)
+    } finally {
+      setPrintingWithService(false)
+    }
+  }
+
+  // Browser print fallback
+  const printBrowser = useCallback(() => {
     setShowPrintPreview(true)
     setTimeout(() => {
       window.print()
     }, 300)
+  }, [])
+
+  // Handle print click
+  const handlePrint = useCallback(() => {
+    fetchPrintServices()
+    setShowPrintModal(true)
   }, [])
 
   // Calculate totals
@@ -749,6 +836,151 @@ export default function InventoryCountReportPage() {
           </div>
         </div>
       </div>
+
+      {/* Print Modal */}
+      <AnimatePresence>
+        {showPrintModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
+            onClick={() => setShowPrintModal(false)}
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              onClick={(e) => e.stopPropagation()}
+              className="w-full max-w-md rounded-2xl shadow-2xl overflow-hidden bg-gray-800"
+            >
+              {/* Header */}
+              <div className="px-6 py-4 border-b border-gray-700 bg-gray-800 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 rounded-lg bg-blue-900/30">
+                    <Package className="w-5 h-5 text-blue-400" />
+                  </div>
+                  <div>
+                    <h3 className="font-semibold text-white">Imprimir Reporte de Conteo</h3>
+                    <p className="text-xs text-gray-400">{countData.countNumber}</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setShowPrintModal(false)}
+                  className="p-2 rounded-lg hover:bg-gray-700 transition-colors"
+                >
+                  <X className="w-5 h-5 text-gray-400" />
+                </button>
+              </div>
+
+              {/* Content */}
+              <div className="p-6 space-y-6">
+                {printServices.length === 0 ? (
+                  <div className="text-center py-4">
+                    <AlertCircle className="w-12 h-12 mx-auto mb-3 text-amber-500" />
+                    <p className="text-gray-300 font-medium">No hay servicios de impresión disponibles</p>
+                    <p className="text-sm text-gray-500 mt-1">Se usará la impresión del navegador</p>
+                  </div>
+                ) : (
+                  <>
+                    {/* Printer Selector */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-300 mb-2">
+                        Seleccionar Impresora
+                      </label>
+                      <div className="space-y-2 max-h-48 overflow-y-auto">
+                        {printServices.map(service => (
+                          service.printers.map(printer => (
+                            <button
+                              key={`${service.id}-${printer.id}`}
+                              onClick={() => setSelectedPrinter({ serviceId: service.id, printerId: printer.id })}
+                              className={`w-full p-4 rounded-xl border-2 transition-all text-left flex items-center justify-between ${
+                                selectedPrinter?.printerId === printer.id
+                                  ? 'border-blue-500 bg-blue-900/20'
+                                  : 'border-gray-600 bg-gray-700/50 hover:border-gray-500'
+                              }`}
+                            >
+                              <div className="flex items-center gap-3">
+                                <Printer className={`w-5 h-5 ${selectedPrinter?.printerId === printer.id ? 'text-blue-400' : 'text-gray-400'}`} />
+                                <div>
+                                  <p className={`font-medium ${selectedPrinter?.printerId === printer.id ? 'text-blue-400' : 'text-white'}`}>
+                                    {printer.printerName}
+                                  </p>
+                                  <p className="text-xs text-gray-500">
+                                    {printer.printerType === 'thermal_80mm' ? 'Térmica 80mm' :
+                                     printer.printerType === 'label_4x6' ? 'Etiquetas 4x6' :
+                                     'Estándar'}
+                                    {printer.isDefault && ' • Predeterminada'}
+                                  </p>
+                                </div>
+                              </div>
+                              <div className={`flex items-center gap-1 ${printer.isOnline ? 'text-green-400' : 'text-gray-500'}`}>
+                                <div className={`w-2 h-2 rounded-full ${printer.isOnline ? 'bg-green-400' : 'bg-gray-500'}`} />
+                                <span className="text-xs">{printer.isOnline ? 'Online' : 'Offline'}</span>
+                              </div>
+                            </button>
+                          ))
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Copies Selector */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-300 mb-2">
+                        Cantidad de copias
+                      </label>
+                      <div className="flex items-center justify-center gap-4">
+                        <button
+                          onClick={() => setCopies(Math.max(1, copies - 1))}
+                          className="w-12 h-12 rounded-xl flex items-center justify-center bg-gray-700 hover:bg-gray-600 text-white"
+                        >
+                          <span className="text-xl font-bold">-</span>
+                        </button>
+                        <div className="w-20 h-12 rounded-xl flex items-center justify-center text-2xl font-bold bg-gray-700 text-white">
+                          {copies}
+                        </div>
+                        <button
+                          onClick={() => setCopies(Math.min(10, copies + 1))}
+                          className="w-12 h-12 rounded-xl flex items-center justify-center bg-gray-700 hover:bg-gray-600 text-white"
+                        >
+                          <span className="text-xl font-bold">+</span>
+                        </button>
+                      </div>
+                    </div>
+                  </>
+                )}
+              </div>
+
+              {/* Footer */}
+              <div className="px-6 py-4 border-t border-gray-700 bg-gray-800/50 flex gap-3">
+                <button
+                  onClick={() => {
+                    setShowPrintModal(false)
+                    printBrowser()
+                  }}
+                  className="flex-1 py-3 rounded-xl font-medium bg-gray-700 text-gray-300 hover:bg-gray-600 transition-colors"
+                >
+                  Imprimir (Navegador)
+                </button>
+                {printServices.length > 0 && selectedPrinter && (
+                  <button
+                    onClick={printWithService}
+                    disabled={printingWithService}
+                    className="flex-1 py-3 rounded-xl font-medium flex items-center justify-center gap-2 bg-gradient-to-r from-blue-500 to-blue-600 text-white hover:from-blue-600 hover:to-blue-700 disabled:opacity-50"
+                  >
+                    {printingWithService ? (
+                      <Loader2 className="w-5 h-5 animate-spin" />
+                    ) : (
+                      <Printer className="w-5 h-5" />
+                    )}
+                    {printingWithService ? 'Enviando...' : `Imprimir ${copies > 1 ? `(${copies})` : ''}`}
+                  </button>
+                )}
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </>
   )
 }

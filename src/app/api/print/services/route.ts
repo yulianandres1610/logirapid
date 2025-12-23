@@ -96,6 +96,49 @@ export async function GET(request: NextRequest) {
 
     const result = await db.query(query, params)
 
+    // Fetch printers for all services
+    const serviceIds = result.rows.map(row => row.id)
+    let printersMap: Record<number, Array<{
+      id: number
+      printerName: string
+      printerId: string
+      printerType: string
+      isOnline: boolean
+      isDefault: boolean
+    }>> = {}
+
+    if (serviceIds.length > 0) {
+      const printersResult = await db.query(`
+        SELECT
+          id,
+          print_service_id,
+          printer_name,
+          printer_id,
+          printer_type,
+          is_online,
+          is_default
+        FROM print_service_printers
+        WHERE print_service_id = ANY($1)
+        ORDER BY is_default DESC, printer_name ASC
+      `, [serviceIds])
+
+      // Group printers by service ID
+      for (const printer of printersResult.rows) {
+        const serviceId = printer.print_service_id
+        if (!printersMap[serviceId]) {
+          printersMap[serviceId] = []
+        }
+        printersMap[serviceId].push({
+          id: printer.id,
+          printerName: printer.printer_name,
+          printerId: printer.printer_id,
+          printerType: printer.printer_type,
+          isOnline: printer.is_online,
+          isDefault: printer.is_default
+        })
+      }
+    }
+
     // Check if services are offline (no heartbeat in 2 minutes)
     const services = result.rows.map(row => {
       const lastSeen = row.last_seen_at ? new Date(row.last_seen_at) : null
@@ -115,6 +158,7 @@ export async function GET(request: NextRequest) {
         hostname: row.hostname,
         printerCount: parseInt(row.printer_count) || 0,
         onlinePrinterCount: parseInt(row.online_printer_count) || 0,
+        printers: printersMap[row.id] || [],
         createdAt: row.created_at
       }
     })

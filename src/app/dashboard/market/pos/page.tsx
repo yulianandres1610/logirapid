@@ -21,7 +21,9 @@ import {
   DollarSign,
   ShoppingCart,
   Clock,
-  History
+  History,
+  Printer,
+  FileText
 } from 'lucide-react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
@@ -30,6 +32,7 @@ import { ProtectedRoute } from '@/components/protected-route'
 import { useTheme } from '@/contexts/theme-context'
 import { useAuth } from '@/hooks/useAuth'
 import { cn } from '@/lib/utils'
+import { PrintDocumentModal } from '@/components/print/PrintDocumentModal'
 
 interface Terminal {
   id: number
@@ -75,6 +78,7 @@ export default function MarketPOSPage() {
   const [deleteError, setDeleteError] = useState<string | null>(null)
   const [openSessionModal, setOpenSessionModal] = useState<Terminal | null>(null)
   const [openingSession, setOpeningSession] = useState(false)
+  const [printTerminal, setPrintTerminal] = useState<Terminal | null>(null)
   const [openingCash, setOpeningCash] = useState({ usd: 0, cup: 0, mlc: 0 })
   const [openingNotes, setOpeningNotes] = useState('')
   const [useDenominations, setUseDenominations] = useState(true)
@@ -691,6 +695,15 @@ export default function MarketPOSPage() {
                         {/* Actions dropdown */}
                         {isAdmin && (
                           <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <motion.button
+                              whileHover={{ scale: 1.1 }}
+                              whileTap={{ scale: 0.9 }}
+                              onClick={() => setPrintTerminal(terminal)}
+                              className="p-2 rounded-lg hover:bg-blue-50 dark:hover:bg-blue-900/20"
+                              title="Imprimir reporte de ventas"
+                            >
+                              <Printer className="w-4 h-4 text-blue-500" />
+                            </motion.button>
                             <Link href={`/dashboard/market/pos/${terminal.id}/settings`}>
                               <motion.button
                                 whileHover={{ scale: 1.1 }}
@@ -1205,6 +1218,28 @@ export default function MarketPOSPage() {
                 </motion.div>
               )}
             </AnimatePresence>
+
+            {/* Print Sales Report Modal */}
+            {printTerminal && (
+              <PrintDocumentModal
+                isOpen={!!printTerminal}
+                onClose={() => setPrintTerminal(null)}
+                documentType="sales_report"
+                documentTitle={`Reporte de Ventas - ${printTerminal.name}`}
+                documentData={{
+                  terminalId: printTerminal.id,
+                  terminalCode: printTerminal.code,
+                  terminalName: printTerminal.name,
+                  warehouseId: printTerminal.warehouseId,
+                  warehouseName: printTerminal.warehouseName,
+                  reportDate: new Date().toISOString(),
+                  reportType: 'daily_sales'
+                }}
+                sourceType="pos_terminal"
+                sourceId={printTerminal.id}
+                onPrintSuccess={() => setPrintTerminal(null)}
+              />
+            )}
           </motion.div>
         </div>
       </DashboardLayout>

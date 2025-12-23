@@ -16,8 +16,10 @@ import {
   FileText,
   ArrowRight,
   X,
-  Eye
+  Eye,
+  Printer
 } from 'lucide-react'
+import { PrintDocumentModal } from '@/components/print/PrintDocumentModal'
 
 interface CountHistory {
   id: number
@@ -48,6 +50,7 @@ export default function CountHistoryPage() {
   const [terminal, setTerminal] = useState<Terminal | null>(null)
   const [counts, setCounts] = useState<CountHistory[]>([])
   const [showSuccessMessage, setShowSuccessMessage] = useState(!!completedCount)
+  const [printCount, setPrintCount] = useState<CountHistory | null>(null)
 
   useEffect(() => {
     const loadData = async () => {
@@ -239,9 +242,18 @@ export default function CountHistoryPage() {
                       {formatDate(count.completedAt || count.startedAt)}
                     </p>
                   </div>
-                  <button className="p-2 hover:bg-gray-700 rounded-lg">
-                    <Eye className="w-4 h-4 text-gray-400" />
-                  </button>
+                  <div className="flex items-center gap-1">
+                    <button
+                      onClick={() => setPrintCount(count)}
+                      className="p-2 hover:bg-gray-700 rounded-lg"
+                      title="Imprimir reporte"
+                    >
+                      <Printer className="w-4 h-4 text-gray-400" />
+                    </button>
+                    <button className="p-2 hover:bg-gray-700 rounded-lg" title="Ver detalles">
+                      <Eye className="w-4 h-4 text-gray-400" />
+                    </button>
+                  </div>
                 </div>
 
                 <div className="grid grid-cols-3 gap-2 text-center">
@@ -270,6 +282,31 @@ export default function CountHistoryPage() {
           </div>
         )}
       </div>
+
+      {/* Print Modal */}
+      {printCount && (
+        <PrintDocumentModal
+          isOpen={!!printCount}
+          onClose={() => setPrintCount(null)}
+          documentType="inventory_count_report"
+          documentTitle={`Conteo ${printCount.countNumber}`}
+          documentData={{
+            countNumber: printCount.countNumber,
+            countId: printCount.id,
+            warehouseName: printCount.warehouseName,
+            terminalName: terminal?.name,
+            totalProducts: printCount.totalProducts,
+            productsWithDifferences: printCount.productsWithDifferences,
+            totalDifferenceValue: printCount.totalDifferenceValue,
+            startedAt: printCount.startedAt,
+            completedAt: printCount.completedAt,
+            status: printCount.status
+          }}
+          sourceType="inventory_count"
+          sourceId={printCount.id}
+          onPrintSuccess={() => setPrintCount(null)}
+        />
+      )}
     </div>
   )
 }

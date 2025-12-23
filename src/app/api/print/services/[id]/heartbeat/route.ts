@@ -12,6 +12,28 @@ interface HeartbeatRequest {
 }
 
 /**
+ * Find service by ID (numeric) or service_code (string like PRS-2025-0001)
+ */
+async function findService(idOrCode: string): Promise<number | null> {
+  // Try as numeric ID first
+  const numericId = parseInt(idOrCode)
+  if (!isNaN(numericId)) {
+    const result = await db.query('SELECT id FROM print_services WHERE id = $1', [numericId])
+    if (result.rows.length > 0) {
+      return result.rows[0].id
+    }
+  }
+
+  // Try as service_code (e.g., PRS-2025-0001)
+  const result = await db.query('SELECT id FROM print_services WHERE service_code = $1', [idOrCode])
+  if (result.rows.length > 0) {
+    return result.rows[0].id
+  }
+
+  return null
+}
+
+/**
  * Verify API credentials from Authorization header
  */
 async function verifyCredentials(
@@ -53,10 +75,12 @@ export async function POST(
 ) {
   try {
     const { id } = await params
-    const serviceId = parseInt(id)
 
-    if (isNaN(serviceId)) {
-      return NextResponse.json({ success: false, error: 'ID inválido' }, { status: 400 })
+    // Find service by ID or service_code
+    const serviceId = await findService(id)
+
+    if (!serviceId) {
+      return NextResponse.json({ success: false, error: 'Servicio no encontrado' }, { status: 404 })
     }
 
     // Verify API credentials

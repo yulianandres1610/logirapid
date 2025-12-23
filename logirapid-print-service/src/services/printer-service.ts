@@ -16,6 +16,7 @@ interface SystemPrinter {
 interface DetectedPrinter extends PrinterInfo {
   systemName: string
   isDefault: boolean
+  isOnline: boolean
 }
 
 class PrinterService {
@@ -84,36 +85,113 @@ class PrinterService {
 
   private async detectMacPrinters(): Promise<SystemPrinter[]> {
     try {
-      // Use lpstat to get printer list
-      const { stdout } = await execAsync('lpstat -p -d', { encoding: 'utf8' })
-
       const printers: SystemPrinter[] = []
       let defaultPrinter = ''
+      const cupsNames = new Map<string, string>() // displayName -> cupsName
 
-      const lines = stdout.split('\n')
-      for (const line of lines) {
-        // Parse "printer PrinterName is idle." or similar
-        const printerMatch = line.match(/^printer\s+(\S+)\s+/)
-        if (printerMatch) {
-          printers.push({
-            name: printerMatch[1],
-            displayName: printerMatch[1].replace(/_/g, ' '),
-            isDefault: false,
-            status: line.includes('idle') ? 0 : 1
-          })
-        }
+      // Method 1: Use lpstat to get REAL CUPS printer names
+      try {
+        const { stdout } = await execAsync('lpstat -p -d 2>/dev/null', { encoding: 'utf8' })
+        const lines = stdout.split('\n')
 
-        // Parse "system default destination: PrinterName"
-        const defaultMatch = line.match(/system default destination:\s*(\S+)/)
-        if (defaultMatch) {
-          defaultPrinter = defaultMatch[1]
+        for (const line of lines) {
+          // Parse "printer PrinterName is idle." or similar
+          const printerMatch = line.match(/^(?:la\s+)?(?:impresora\s+)?printer\s+(\S+)|^(?:la\s+)?impresora\s+(\S+)\s+/)
+          if (printerMatch) {
+            const cupsName = printerMatch[1] || printerMatch[2]
+            const displayName = cupsName.replace(/_/g, ' ')
+            cupsNames.set(displayName, cupsName)
+
+            printers.push({
+              name: cupsName, // Use CUPS name directly
+              displayName: displayName,
+              isDefault: false,
+              status: line.includes('idle') || line.includes('inactiva') ? 0 : 1
+            })
+          }
+
+          // Parse "system default destination: PrinterName" or Spanish equivalent
+          const defaultMatch = line.match(/(?:system default destination|destino por omisión del sistema):\s*(\S+)/)
+          if (defaultMatch) {
+            defaultPrinter = defaultMatch[1]
+          }
         }
+      } catch (e) {
+        console.log('[Printer Service] lpstat failed, trying alternative methods')
       }
+
+      // Method 2: Enrich with system_profiler data (URI, driver info, etc.)
+      try {
+        const { stdout } = await execAsync(
+          'system_profiler SPPrintersDataType -json 2>/dev/null',
+          { encoding: 'utf8' }
+        )
+
+        if (stdout.trim()) {
+          const data = JSON.parse(stdout)
+          const printerData = data.SPPrintersDataType || []
+
+          for (const profilerPrinter of printerData) {
+            const profilerName = profilerPrinter._name || ''
+            const uri = profilerPrinter.uri || ''
+
+            // Find matching printer from lpstat
+            const existingPrinter = printers.find(p =>
+              p.displayName === profilerName ||
+              p.name === profilerName.replace(/[\s-]/g, '_')
+            )
+
+            // Detect connection type from URI
+            const isNetwork = uri.startsWith('ipp://') ||
+                             uri.startsWith('ipps://') ||
+                             uri.startsWith('dnssd://') ||
+                             uri.startsWith('socket://') ||
+                             uri.includes('._tcp.') ||
+                             uri.includes('._ipp') ||
+                             uri.includes('network')
+
+            if (existingPrinter) {
+              // Enrich existing printer with additional info
+              existingPrinter.description = profilerPrinter.ppd || profilerPrinter._name
+              existingPrinter.options = {
+                driverName: profilerPrinter.ppd || '',
+                portName: uri,
+                isNetwork: isNetwork ? 'true' : 'false'
+              }
+              if (profilerPrinter.default === 'yes' || profilerPrinter.default === 'Yes') {
+                existingPrinter.isDefault = true
+              }
+            } else if (printers.length === 0) {
+              // Fallback: if lpstat failed, use system_profiler
+              // Generate CUPS-compatible name (replace all non-alnum with _)
+              const cupsName = profilerName.replace(/[^a-zA-Z0-9]/g, '_')
+
+              printers.push({
+                name: cupsName,
+                displayName: profilerName,
+                description: profilerPrinter.ppd || profilerName,
+                isDefault: profilerPrinter.default === 'yes' || profilerPrinter.default === 'Yes',
+                status: profilerPrinter.status === 'idle' ? 0 : 1,
+                options: {
+                  driverName: profilerPrinter.ppd || '',
+                  portName: uri,
+                  isNetwork: isNetwork ? 'true' : 'false'
+                }
+              })
+            }
+          }
+        }
+      } catch (e) {
+        console.log('[Printer Service] system_profiler failed:', e)
+      }
+
+      console.log(`[Printer Service] macOS: Found ${printers.length} printers`)
+      printers.forEach(p => console.log(`[Printer Service]   - ${p.name} (${p.displayName})`))
 
       // Mark default printer
       return printers.map(p => ({
         ...p,
-        isDefault: p.name === defaultPrinter
+        isDefault: p.name === defaultPrinter || p.isDefault
       }))
     } catch (error) {
       console.error('[Printer Service] macOS detection failed:', error)
@@ -159,7 +237,10 @@ class PrinterService {
 
   private enrichPrinterInfo(systemPrinter: SystemPrinter): DetectedPrinter {
     const name = systemPrinter.name.toLowerCase()
+    const displayName = (systemPrinter.displayName || '').toLowerCase()
     const desc = (systemPrinter.description || '').toLowerCase()
+    const portName = systemPrinter.options?.portName || ''
+    const isNetworkOption = systemPrinter.options?.isNetwork === 'true'
 
     // Detect printer type based on name/description
     let printerType: PrinterInfo['printerType'] = 'standard'
@@ -167,15 +248,39 @@ class PrinterService {
     let supportsEscpos = false
 
     // Thermal receipt printers (80mm)
-    if (
+    // Be specific about thermal printers - not all Epson printers are thermal!
+    const isThermalPrinter =
       name.includes('thermal') ||
-      name.includes('tm-t') || // Epson TM-T series
+      name.includes('tm-t') || // Epson TM-T series (thermal)
+      name.includes('tm-m') || // Epson TM-M series (thermal)
+      name.includes('tm-u') || // Epson TM-U series (thermal)
+      name.includes('tm-p') || // Epson TM-P series (portable thermal)
       name.includes('tsp') || // Star TSP series
-      name.includes('pos') ||
+      name.includes('sp700') || // Star SP700
       name.includes('receipt') ||
+      name.includes('ticket') ||
+      name.includes('termica') ||
       desc.includes('thermal') ||
-      desc.includes('pos')
-    ) {
+      desc.includes('receipt') ||
+      displayName.includes('thermal') ||
+      displayName.includes('tm-t') ||
+      displayName.includes('tm-m') ||
+      displayName.includes('tsp')
+
+    // Exclude regular inkjet/laser printers that might match other patterns
+    const isRegularPrinter =
+      name.includes('et-') || // Epson EcoTank (inkjet)
+      name.includes('wf-') || // Epson WorkForce (inkjet)
+      name.includes('xp-') || // Epson Expression (inkjet)
+      name.includes('l3') || // Epson L-series (inkjet)
+      name.includes('laserjet') ||
+      name.includes('inkjet') ||
+      name.includes('officejet') ||
+      name.includes('deskjet') ||
+      name.includes('pixma') || // Canon
+      name.includes('mfc-') // Brother MFC
+
+    if (isThermalPrinter && !isRegularPrinter) {
       printerType = 'thermal_80mm'
       paperWidthMm = 80
       supportsEscpos = true
@@ -187,9 +292,12 @@ class PrinterService {
       name.includes('zebra') ||
       name.includes('dymo') ||
       name.includes('brother ql') ||
-      name.includes('zd') // Zebra ZD series
+      name.includes('zd') || // Zebra ZD series
+      name.includes('etiqueta') ||
+      displayName.includes('label') ||
+      displayName.includes('zebra')
     ) {
-      if (name.includes('4x6') || name.includes('shipping')) {
+      if (name.includes('4x6') || name.includes('shipping') || name.includes('envio')) {
         printerType = 'label_4x6'
         paperWidthMm = 100 // ~4 inches
       } else {
@@ -200,20 +308,45 @@ class PrinterService {
 
     // Detect connection type
     let connectionType: PrinterInfo['connectionType'] = 'usb'
-    const portName = systemPrinter.options?.portName || ''
 
-    if (portName.includes('IP') || portName.includes(':') || name.includes('network')) {
+    // Check various indicators for network printers
+    if (
+      isNetworkOption ||
+      portName.includes('ipp://') ||
+      portName.includes('ipps://') ||
+      portName.includes('socket://') ||
+      portName.includes('http://') ||
+      portName.includes('IP') ||
+      name.includes('network') ||
+      name.includes('red') ||
+      systemPrinter.options?.networkAddress
+    ) {
       connectionType = 'network'
     } else if (name.includes('bluetooth') || name.includes('bt')) {
       connectionType = 'bluetooth'
     }
 
     // Extract network address if applicable
-    let networkAddress: string | undefined
-    const ipMatch = portName.match(/(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}(:\d+)?)/)
-    if (ipMatch) {
-      networkAddress = ipMatch[1]
+    let networkAddress: string | undefined = systemPrinter.options?.networkAddress
+
+    if (!networkAddress && connectionType === 'network') {
+      // Try to extract from port name
+      const ipMatch = portName.match(/\/\/([^\/\:]+)/)
+      if (ipMatch) {
+        networkAddress = ipMatch[1]
+      } else {
+        // Try simple IP pattern
+        const simpleIpMatch = portName.match(/(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})/)
+        if (simpleIpMatch) {
+          networkAddress = simpleIpMatch[1]
+        }
+      }
     }
+
+    // Determine if printer is online based on status
+    // Status 0 = idle (online), Status 1 = other status (may still be online)
+    // If no status info, assume online if printer was detected
+    const isOnline = systemPrinter.status === 0 || systemPrinter.status === undefined
 
     return {
       systemName: systemPrinter.name,
@@ -226,7 +359,8 @@ class PrinterService {
       supportsEscpos,
       supportsRaw: true, // Most modern printers support raw
       paperWidthMm,
-      isDefault: systemPrinter.isDefault
+      isDefault: systemPrinter.isDefault,
+      isOnline
     }
   }
 
@@ -265,14 +399,118 @@ class PrinterService {
         const status = parseInt(stdout.trim())
         return status === 0 || status === 3
       } else {
-        const { stdout } = await execAsync(
-          `lpstat -p "${printerName}" 2>/dev/null`,
-          { encoding: 'utf8' }
-        )
-        return stdout.includes('idle') || stdout.includes('enabled')
+        // Try lpstat first
+        try {
+          const { stdout } = await execAsync(
+            `lpstat -p "${printerName}" 2>/dev/null`,
+            { encoding: 'utf8' }
+          )
+          if (stdout.includes('idle') || stdout.includes('enabled') || stdout.includes('is ready')) {
+            return true
+          }
+        } catch {
+          // lpstat might fail, try alternative
+        }
+
+        // Try system_profiler as backup
+        try {
+          const { stdout } = await execAsync(
+            `system_profiler SPPrintersDataType -json 2>/dev/null`,
+            { encoding: 'utf8' }
+          )
+          const data = JSON.parse(stdout)
+          const printers = data.SPPrintersDataType || []
+          for (const printer of printers) {
+            const name = printer._name?.replace(/\s+/g, '_')
+            if (name === printerName || printer._name === printerName) {
+              // Check status - idle, ready, printing are all "online"
+              const status = (printer.status || '').toLowerCase()
+              return status === 'idle' || status === 'ready' || status === 'printing' || !status
+            }
+          }
+        } catch {
+          // system_profiler failed
+        }
+
+        // If we have the printer in our list, assume it's online
+        const printer = this.printers.find(p => p.systemName === printerName || p.printerName === printerName)
+        if (printer) {
+          return true // Assume online if detected
+        }
+
+        return false
       }
     } catch {
       return false
+    }
+  }
+
+  /**
+   * Print a test page to verify the printer is working
+   */
+  async printTestPage(printerName: string): Promise<{ success: boolean; error?: string }> {
+    try {
+      const printer = this.getPrinterByName(printerName)
+      if (!printer) {
+        return { success: false, error: 'Impresora no encontrada' }
+      }
+
+      console.log(`[Printer Service] Printing test page to: ${printerName}`)
+
+      if (process.platform === 'win32') {
+        // Windows: Use PowerShell to print a test page
+        await execAsync(
+          `powershell -Command "Start-Process -FilePath 'notepad' -ArgumentList '/p' -Wait"`,
+          { encoding: 'utf8' }
+        )
+      } else {
+        // macOS/Linux: Create a simple test file and print it
+        const testContent = `
+=====================================
+   PRUEBA DE IMPRESION
+   LogiRapid Print Service v1.6.0
+=====================================
+
+Fecha: ${new Date().toLocaleString('es-ES')}
+Impresora: ${printer.printerName}
+Tipo: ${printer.printerType}
+Conexion: ${printer.connectionType}
+${printer.networkAddress ? `IP: ${printer.networkAddress}` : ''}
+
+Esta es una pagina de prueba.
+Si puede ver este texto, la
+impresora esta funcionando
+correctamente.
+
+=====================================
+`
+        // Write to temp file
+        const fs = await import('fs').then(m => m.promises)
+        const tempFile = `/tmp/logirapid_test_print_${Date.now()}.txt`
+        await fs.writeFile(tempFile, testContent)
+
+        // Print using lp command
+        const systemName = printer.systemName.replace(/'/g, "'\\''")
+        await execAsync(`lp -d '${systemName}' '${tempFile}'`, { encoding: 'utf8' })
+
+        // Clean up temp file after a delay
+        setTimeout(async () => {
+          try {
+            await fs.unlink(tempFile)
+          } catch {
+            // Ignore cleanup errors
+          }
+        }, 5000)
+      }
+
+      console.log(`[Printer Service] Test page sent successfully to: ${printerName}`)
+      return { success: true }
+    } catch (error) {
+      console.error(`[Printer Service] Test print failed:`, error)
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Error al imprimir'
+      }
     }
   }
 

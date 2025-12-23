@@ -30,7 +30,19 @@ import {
   Globe,
   Palette,
   Store,
-  Truck
+  Truck,
+  Printer,
+  Plus,
+  Search,
+  Wifi,
+  WifiOff,
+  Trash2,
+  Copy,
+  MoreVertical,
+  Edit3,
+  RefreshCcw,
+  Info,
+  AlertCircle
 } from 'lucide-react'
 import { DashboardLayout } from '@/components/layout/dashboard-layout'
 import { ProtectedRoute } from '@/components/protected-route'
@@ -81,12 +93,13 @@ interface ConnectionStatus {
   lastChecked: Date
 }
 
-type TabType = 'general' | 'odoo' | 'delivery'
+type TabType = 'general' | 'odoo' | 'delivery' | 'print'
 
 const TABS: { id: TabType; label: string; icon: React.ElementType }[] = [
   { id: 'general', label: 'General', icon: Building },
   { id: 'odoo', label: 'Odoo', icon: Database },
-  { id: 'delivery', label: 'Entregas', icon: Truck }
+  { id: 'delivery', label: 'Entregas', icon: Truck },
+  { id: 'print', label: 'Impresión', icon: Printer }
 ]
 
 export default function MarketSettingsPage() {
@@ -1232,10 +1245,998 @@ export default function MarketSettingsPage() {
                   </div>
                 </motion.div>
               )}
+
+              {/* Print Tab */}
+              {activeTab === 'print' && (
+                <PrintServicesTab theme={theme} />
+              )}
             </AnimatePresence>
           </div>
         </div>
       </DashboardLayout>
     </ProtectedRoute>
+  )
+}
+
+// Print Services Tab Component
+function PrintServicesTab({ theme }: { theme: string }) {
+  const [services, setServices] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
+  const [showCreateModal, setShowCreateModal] = useState(false)
+  const [showCredentialsModal, setShowCredentialsModal] = useState(false)
+  const [showDetailsModal, setShowDetailsModal] = useState(false)
+  const [showEditModal, setShowEditModal] = useState(false)
+  const [selectedService, setSelectedService] = useState<any>(null)
+  const [newCredentials, setNewCredentials] = useState<{ serviceCode: string; apiKey: string; apiSecret: string } | null>(null)
+  const [creating, setCreating] = useState(false)
+  const [updating, setUpdating] = useState(false)
+  const [regenerating, setRegenerating] = useState(false)
+  const [serviceName, setServiceName] = useState('')
+  const [editServiceName, setEditServiceName] = useState('')
+  const [actionMenuOpen, setActionMenuOpen] = useState<number | null>(null)
+  const [copied, setCopied] = useState<string | null>(null)
+  const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
+
+  useEffect(() => {
+    fetchServices()
+  }, [])
+
+  useEffect(() => {
+    if (message) {
+      const timer = setTimeout(() => setMessage(null), 4000)
+      return () => clearTimeout(timer)
+    }
+  }, [message])
+
+  const fetchServices = async () => {
+    try {
+      setLoading(true)
+      const response = await fetch('/api/print/services')
+      if (response.ok) {
+        const data = await response.json()
+        setServices(data.data?.services || [])
+      }
+    } catch (error) {
+      console.error('Error fetching print services:', error)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const fetchServiceDetails = async (id: number) => {
+    try {
+      const response = await fetch(`/api/print/services/${id}`)
+      if (response.ok) {
+        const data = await response.json()
+        return data.data
+      }
+    } catch (error) {
+      console.error('Error fetching service details:', error)
+    }
+    return null
+  }
+
+  const handleCreateService = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!serviceName.trim()) return
+
+    setCreating(true)
+    try {
+      const response = await fetch('/api/print/services', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ serviceName })
+      })
+
+      const data = await response.json()
+
+      if (response.ok && data.success) {
+        setNewCredentials({
+          serviceCode: data.data.serviceCode,
+          apiKey: data.data.apiKey,
+          apiSecret: data.data.apiSecret
+        })
+        setShowCreateModal(false)
+        setShowCredentialsModal(true)
+        setServiceName('')
+        fetchServices()
+      } else {
+        setMessage({ type: 'error', text: data.error || 'Error al crear servicio' })
+      }
+    } catch (error) {
+      setMessage({ type: 'error', text: 'Error al crear servicio' })
+    } finally {
+      setCreating(false)
+    }
+  }
+
+  const handleViewDetails = async (service: any) => {
+    setActionMenuOpen(null)
+    const details = await fetchServiceDetails(service.id)
+    if (details) {
+      setSelectedService({ ...service, ...details.service, printers: details.printers })
+      setShowDetailsModal(true)
+    }
+  }
+
+  const handleEditService = (service: any) => {
+    setActionMenuOpen(null)
+    setSelectedService(service)
+    setEditServiceName(service.serviceName)
+    setShowEditModal(true)
+  }
+
+  const handleSaveEdit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!editServiceName.trim() || !selectedService) return
+
+    setUpdating(true)
+    try {
+      const response = await fetch(`/api/print/services/${selectedService.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ serviceName: editServiceName })
+      })
+
+      const data = await response.json()
+
+      if (response.ok && data.success) {
+        setMessage({ type: 'success', text: 'Servicio actualizado correctamente' })
+        setShowEditModal(false)
+        setSelectedService(null)
+        fetchServices()
+      } else {
+        setMessage({ type: 'error', text: data.error || 'Error al actualizar' })
+      }
+    } catch (error) {
+      setMessage({ type: 'error', text: 'Error al actualizar servicio' })
+    } finally {
+      setUpdating(false)
+    }
+  }
+
+  const handleRegenerateCredentials = async () => {
+    if (!selectedService) return
+    if (!confirm('¿Regenerar las credenciales? La app de impresión dejará de funcionar hasta que configures las nuevas credenciales.')) return
+
+    setRegenerating(true)
+    try {
+      const response = await fetch(`/api/print/services/${selectedService.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ regenerateCredentials: true })
+      })
+
+      const data = await response.json()
+
+      if (response.ok && data.success && data.data) {
+        setNewCredentials({
+          serviceCode: selectedService.serviceCode,
+          apiKey: data.data.apiKey,
+          apiSecret: data.data.apiSecret
+        })
+        setShowDetailsModal(false)
+        setShowCredentialsModal(true)
+        fetchServices()
+      } else {
+        setMessage({ type: 'error', text: data.error || 'Error al regenerar credenciales' })
+      }
+    } catch (error) {
+      setMessage({ type: 'error', text: 'Error al regenerar credenciales' })
+    } finally {
+      setRegenerating(false)
+    }
+  }
+
+  const handleDeleteService = async (id: number, name: string) => {
+    setActionMenuOpen(null)
+    if (!confirm(`¿Eliminar el servicio "${name}"? Esta acción no se puede deshacer.`)) return
+
+    try {
+      const response = await fetch(`/api/print/services/${id}`, { method: 'DELETE' })
+      const data = await response.json()
+      if (response.ok) {
+        setMessage({ type: 'success', text: 'Servicio eliminado' })
+        fetchServices()
+      } else {
+        setMessage({ type: 'error', text: data.error || 'Error al eliminar' })
+      }
+    } catch (error) {
+      setMessage({ type: 'error', text: 'Error al eliminar servicio' })
+    }
+  }
+
+  const copyToClipboard = (text: string, field: string) => {
+    navigator.clipboard.writeText(text)
+    setCopied(field)
+    setTimeout(() => setCopied(null), 2000)
+  }
+
+  const formatLastSeen = (date: string | null) => {
+    if (!date) return 'Nunca'
+    const d = new Date(date)
+    const diff = Date.now() - d.getTime()
+    if (diff < 60000) return 'Hace menos de 1 min'
+    if (diff < 3600000) return `Hace ${Math.floor(diff / 60000)} min`
+    if (diff < 86400000) return `Hace ${Math.floor(diff / 3600000)} horas`
+    return d.toLocaleDateString('es-ES', { day: '2-digit', month: 'short' })
+  }
+
+  const getStatusBadge = (status: string, lastSeenAt: string | null) => {
+    const isRecentlyActive = lastSeenAt && (Date.now() - new Date(lastSeenAt).getTime()) < 2 * 60 * 1000
+
+    if (status === 'active' && isRecentlyActive) {
+      return (
+        <span className={cn(
+          "inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-full",
+          theme === 'dark' ? 'bg-green-900/40 text-green-400 border border-green-800' : 'bg-green-100 text-green-800'
+        )}>
+          <Wifi className="w-3 h-3" />
+          En línea
+        </span>
+      )
+    } else if (status === 'pending') {
+      return (
+        <span className={cn(
+          "inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-full",
+          theme === 'dark' ? 'bg-amber-900/40 text-amber-400 border border-amber-800' : 'bg-amber-100 text-amber-800'
+        )}>
+          <Clock className="w-3 h-3" />
+          Pendiente
+        </span>
+      )
+    } else {
+      return (
+        <span className={cn(
+          "inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-full",
+          theme === 'dark' ? 'bg-gray-700 text-gray-300 border border-gray-600' : 'bg-gray-100 text-gray-600'
+        )}>
+          <WifiOff className="w-3 h-3" />
+          Desconectado
+        </span>
+      )
+    }
+  }
+
+  return (
+    <motion.div
+      key="print"
+      initial={{ opacity: 0, x: -20 }}
+      animate={{ opacity: 1, x: 0 }}
+      exit={{ opacity: 0, x: 20 }}
+      className="space-y-6"
+    >
+      {/* Message Toast */}
+      <AnimatePresence>
+        {message && (
+          <motion.div
+            initial={{ opacity: 0, y: -20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20 }}
+            className={cn(
+              "p-4 rounded-xl flex items-center gap-3",
+              message.type === 'success'
+                ? theme === 'dark' ? 'bg-green-900/40 border border-green-700 text-green-300' : 'bg-green-50 border border-green-200 text-green-800'
+                : theme === 'dark' ? 'bg-red-900/40 border border-red-700 text-red-300' : 'bg-red-50 border border-red-200 text-red-800'
+            )}
+          >
+            {message.type === 'success' ? <CheckCircle className="w-5 h-5" /> : <AlertCircle className="w-5 h-5" />}
+            <p className="text-sm">{message.text}</p>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <div className={cn(
+        "rounded-2xl border p-6 shadow-lg",
+        theme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'
+      )}>
+        <div className="flex items-center justify-between mb-6">
+          <h2 className={cn(
+            "text-lg font-bold flex items-center gap-3",
+            theme === 'dark' ? 'text-white' : 'text-gray-900'
+          )}>
+            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-purple-500 to-purple-600 flex items-center justify-center shadow-lg shadow-purple-500/25">
+              <Printer className="w-5 h-5 text-white" />
+            </div>
+            Servicios de Impresión
+          </h2>
+          <motion.button
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
+            onClick={() => setShowCreateModal(true)}
+            className={cn(
+              "flex items-center gap-2 px-4 py-2.5 rounded-xl font-medium text-sm transition-all shadow-lg",
+              theme === 'dark'
+                ? 'bg-purple-600 hover:bg-purple-500 text-white shadow-purple-600/25'
+                : 'bg-purple-500 hover:bg-purple-600 text-white shadow-purple-500/25'
+            )}
+          >
+            <Plus className="w-4 h-4" />
+            Nuevo Servicio
+          </motion.button>
+        </div>
+
+        {/* Info Card */}
+        <div className={cn(
+          "p-4 rounded-xl mb-6 border",
+          theme === 'dark' ? 'bg-blue-950/40 border-blue-800' : 'bg-blue-50 border-blue-200'
+        )}>
+          <div className="flex items-start gap-3">
+            <Server className={cn("w-5 h-5 mt-0.5 flex-shrink-0", theme === 'dark' ? 'text-blue-400' : 'text-blue-600')} />
+            <div>
+              <h3 className={cn("font-medium", theme === 'dark' ? 'text-blue-200' : 'text-blue-900')}>
+                Impresión silenciosa para tu POS
+              </h3>
+              <ol className={cn("text-sm mt-2 space-y-1 list-decimal list-inside", theme === 'dark' ? 'text-blue-300' : 'text-blue-700')}>
+                <li>Crea un servicio y guarda las credenciales</li>
+                <li>Descarga e instala LogiRapid Print Service</li>
+                <li>Configura las credenciales en la aplicación</li>
+                <li>Las impresoras se detectarán automáticamente</li>
+              </ol>
+            </div>
+          </div>
+        </div>
+
+        {/* Services List */}
+        {loading ? (
+          <div className="flex justify-center py-12">
+            <Loader2 className={cn("w-8 h-8 animate-spin", theme === 'dark' ? 'text-gray-500' : 'text-gray-400')} />
+          </div>
+        ) : services.length === 0 ? (
+          <div className={cn(
+            "text-center py-12 rounded-xl border-2 border-dashed",
+            theme === 'dark' ? 'border-gray-700' : 'border-gray-200'
+          )}>
+            <Printer className={cn("w-14 h-14 mx-auto mb-4", theme === 'dark' ? 'text-gray-600' : 'text-gray-300')} />
+            <p className={cn("text-base font-medium", theme === 'dark' ? 'text-gray-400' : 'text-gray-600')}>
+              No hay servicios de impresión
+            </p>
+            <p className={cn("text-sm mt-1", theme === 'dark' ? 'text-gray-500' : 'text-gray-500')}>
+              Crea un servicio para imprimir recibos automáticamente
+            </p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {services.map((service) => (
+              <div
+                key={service.id}
+                className={cn(
+                  "p-4 rounded-xl border transition-all hover:shadow-md",
+                  theme === 'dark'
+                    ? 'bg-gray-900/60 border-gray-700 hover:border-gray-600'
+                    : 'bg-white border-gray-200 hover:border-gray-300'
+                )}
+              >
+                <div className="flex items-start justify-between mb-3">
+                  <div className="flex items-center gap-3">
+                    <div className={cn(
+                      "w-10 h-10 rounded-lg flex items-center justify-center",
+                      service.status === 'active'
+                        ? theme === 'dark' ? "bg-green-900/40 border border-green-800" : "bg-green-100"
+                        : theme === 'dark' ? "bg-gray-800 border border-gray-700" : "bg-gray-100"
+                    )}>
+                      <Printer className={cn(
+                        "w-5 h-5",
+                        service.status === 'active'
+                          ? theme === 'dark' ? "text-green-400" : "text-green-600"
+                          : theme === 'dark' ? "text-gray-400" : "text-gray-500"
+                      )} />
+                    </div>
+                    <div>
+                      <h3 className={cn("font-semibold text-sm", theme === 'dark' ? 'text-white' : 'text-gray-900')}>
+                        {service.serviceName}
+                      </h3>
+                      <p className={cn("text-xs font-mono", theme === 'dark' ? 'text-gray-500' : 'text-gray-400')}>
+                        {service.serviceCode}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {getStatusBadge(service.status, service.lastSeenAt)}
+                    <div className="relative">
+                      <button
+                        onClick={() => setActionMenuOpen(actionMenuOpen === service.id ? null : service.id)}
+                        className={cn(
+                          "p-1.5 rounded-lg transition-colors",
+                          theme === 'dark'
+                            ? 'hover:bg-gray-700 text-gray-400'
+                            : 'hover:bg-gray-100 text-gray-500'
+                        )}
+                      >
+                        <MoreVertical className="w-4 h-4" />
+                      </button>
+
+                      {/* Action Menu */}
+                      {actionMenuOpen === service.id && (
+                        <div className={cn(
+                          "absolute right-0 top-8 w-48 rounded-lg shadow-xl border z-10 py-1",
+                          theme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'
+                        )}>
+                          <button
+                            onClick={() => handleViewDetails(service)}
+                            className={cn(
+                              "w-full px-4 py-2 text-sm text-left flex items-center gap-2",
+                              theme === 'dark' ? 'hover:bg-gray-700 text-gray-200' : 'hover:bg-gray-50 text-gray-700'
+                            )}
+                          >
+                            <Info className="w-4 h-4" />
+                            Ver credenciales
+                          </button>
+                          <button
+                            onClick={() => handleEditService(service)}
+                            className={cn(
+                              "w-full px-4 py-2 text-sm text-left flex items-center gap-2",
+                              theme === 'dark' ? 'hover:bg-gray-700 text-gray-200' : 'hover:bg-gray-50 text-gray-700'
+                            )}
+                          >
+                            <Edit3 className="w-4 h-4" />
+                            Editar nombre
+                          </button>
+                          <button
+                            onClick={() => handleDeleteService(service.id, service.serviceName)}
+                            className={cn(
+                              "w-full px-4 py-2 text-sm text-left flex items-center gap-2",
+                              theme === 'dark' ? 'hover:bg-red-900/30 text-red-400' : 'hover:bg-red-50 text-red-600'
+                            )}
+                          >
+                            <Trash2 className="w-4 h-4" />
+                            Eliminar
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                <div className={cn(
+                  "space-y-1.5 text-xs",
+                  theme === 'dark' ? 'text-gray-400' : 'text-gray-600'
+                )}>
+                  {service.hostname && (
+                    <p className="flex items-center gap-2">
+                      <span className={theme === 'dark' ? 'text-gray-500' : 'text-gray-400'}>Host:</span>
+                      {service.hostname}
+                    </p>
+                  )}
+                  <p className="flex items-center gap-2">
+                    <span className={theme === 'dark' ? 'text-gray-500' : 'text-gray-400'}>Última conexión:</span>
+                    {formatLastSeen(service.lastSeenAt)}
+                  </p>
+                  <p className="flex items-center gap-2">
+                    <span className={theme === 'dark' ? 'text-gray-500' : 'text-gray-400'}>Impresoras:</span>
+                    {service.printerCount || 0} detectada(s)
+                  </p>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Click outside to close menu */}
+      {actionMenuOpen !== null && (
+        <div className="fixed inset-0 z-0" onClick={() => setActionMenuOpen(null)} />
+      )}
+
+      {/* Create Modal */}
+      {showCreateModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className={cn(
+              "rounded-2xl p-6 w-full max-w-md mx-4 shadow-2xl",
+              theme === 'dark' ? 'bg-gray-800 border border-gray-700' : 'bg-white'
+            )}
+          >
+            <h2 className={cn(
+              "text-lg font-bold mb-4 flex items-center gap-3",
+              theme === 'dark' ? 'text-white' : 'text-gray-900'
+            )}>
+              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-purple-500 to-purple-600 flex items-center justify-center">
+                <Plus className="w-5 h-5 text-white" />
+              </div>
+              Nuevo Servicio de Impresión
+            </h2>
+            <form onSubmit={handleCreateService} className="space-y-4">
+              <div>
+                <label className={cn(
+                  "block text-sm font-medium mb-2",
+                  theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
+                )}>
+                  Nombre del servicio *
+                </label>
+                <input
+                  type="text"
+                  value={serviceName}
+                  onChange={(e) => setServiceName(e.target.value)}
+                  placeholder="ej: Impresora POS Terminal 1"
+                  className={cn(
+                    "w-full px-4 py-3 text-sm rounded-xl border focus:ring-2 focus:outline-none transition-all",
+                    theme === 'dark'
+                      ? 'bg-gray-900 border-gray-600 text-white focus:border-purple-500 focus:ring-purple-500/20'
+                      : 'bg-gray-50 border-gray-200 text-gray-900 focus:border-purple-500 focus:ring-purple-500/20'
+                  )}
+                  required
+                  autoFocus
+                />
+              </div>
+              <div className="flex gap-3 justify-end pt-2">
+                <button
+                  type="button"
+                  onClick={() => { setShowCreateModal(false); setServiceName(''); }}
+                  disabled={creating}
+                  className={cn(
+                    "px-5 py-2.5 rounded-xl text-sm font-medium transition-colors",
+                    theme === 'dark'
+                      ? 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  )}
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={creating || !serviceName.trim()}
+                  className={cn(
+                    "px-5 py-2.5 rounded-xl text-sm font-medium text-white flex items-center gap-2 transition-colors",
+                    creating || !serviceName.trim()
+                      ? 'bg-purple-400 cursor-not-allowed'
+                      : 'bg-purple-600 hover:bg-purple-700'
+                  )}
+                >
+                  {creating && <Loader2 className="w-4 h-4 animate-spin" />}
+                  {creating ? 'Creando...' : 'Crear Servicio'}
+                </button>
+              </div>
+            </form>
+          </motion.div>
+        </div>
+      )}
+
+      {/* Edit Modal */}
+      {showEditModal && selectedService && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className={cn(
+              "rounded-2xl p-6 w-full max-w-md mx-4 shadow-2xl",
+              theme === 'dark' ? 'bg-gray-800 border border-gray-700' : 'bg-white'
+            )}
+          >
+            <h2 className={cn(
+              "text-lg font-bold mb-4 flex items-center gap-3",
+              theme === 'dark' ? 'text-white' : 'text-gray-900'
+            )}>
+              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center">
+                <Edit3 className="w-5 h-5 text-white" />
+              </div>
+              Editar Servicio
+            </h2>
+            <form onSubmit={handleSaveEdit} className="space-y-4">
+              <div>
+                <label className={cn(
+                  "block text-sm font-medium mb-2",
+                  theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
+                )}>
+                  Nombre del servicio *
+                </label>
+                <input
+                  type="text"
+                  value={editServiceName}
+                  onChange={(e) => setEditServiceName(e.target.value)}
+                  placeholder="ej: Impresora POS Terminal 1"
+                  className={cn(
+                    "w-full px-4 py-3 text-sm rounded-xl border focus:ring-2 focus:outline-none transition-all",
+                    theme === 'dark'
+                      ? 'bg-gray-900 border-gray-600 text-white focus:border-blue-500 focus:ring-blue-500/20'
+                      : 'bg-gray-50 border-gray-200 text-gray-900 focus:border-blue-500 focus:ring-blue-500/20'
+                  )}
+                  required
+                  autoFocus
+                />
+              </div>
+              <div className="flex gap-3 justify-end pt-2">
+                <button
+                  type="button"
+                  onClick={() => { setShowEditModal(false); setSelectedService(null); }}
+                  disabled={updating}
+                  className={cn(
+                    "px-5 py-2.5 rounded-xl text-sm font-medium transition-colors",
+                    theme === 'dark'
+                      ? 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  )}
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={updating || !editServiceName.trim()}
+                  className={cn(
+                    "px-5 py-2.5 rounded-xl text-sm font-medium text-white flex items-center gap-2 transition-colors",
+                    updating || !editServiceName.trim()
+                      ? 'bg-blue-400 cursor-not-allowed'
+                      : 'bg-blue-600 hover:bg-blue-700'
+                  )}
+                >
+                  {updating && <Loader2 className="w-4 h-4 animate-spin" />}
+                  {updating ? 'Guardando...' : 'Guardar'}
+                </button>
+              </div>
+            </form>
+          </motion.div>
+        </div>
+      )}
+
+      {/* Details Modal */}
+      {showDetailsModal && selectedService && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className={cn(
+              "rounded-2xl p-6 w-full max-w-lg mx-4 shadow-2xl max-h-[90vh] overflow-y-auto",
+              theme === 'dark' ? 'bg-gray-800 border border-gray-700' : 'bg-white'
+            )}
+          >
+            <div className="flex items-center justify-between mb-6">
+              <h2 className={cn(
+                "text-lg font-bold flex items-center gap-3",
+                theme === 'dark' ? 'text-white' : 'text-gray-900'
+              )}>
+                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-purple-500 to-purple-600 flex items-center justify-center">
+                  <Key className="w-5 h-5 text-white" />
+                </div>
+                Credenciales del Servicio
+              </h2>
+              {getStatusBadge(selectedService.status, selectedService.lastSeenAt)}
+            </div>
+
+            <div className="space-y-4">
+              {/* Service Info */}
+              <div className={cn(
+                "p-4 rounded-xl",
+                theme === 'dark' ? 'bg-gray-900/60 border border-gray-700' : 'bg-gray-50'
+              )}>
+                <h3 className={cn("font-semibold mb-2", theme === 'dark' ? 'text-white' : 'text-gray-900')}>
+                  {selectedService.serviceName}
+                </h3>
+                <div className={cn("text-sm space-y-1", theme === 'dark' ? 'text-gray-400' : 'text-gray-600')}>
+                  {selectedService.hostname && <p>Host: {selectedService.hostname}</p>}
+                  {selectedService.platform && <p>Plataforma: {selectedService.platform}</p>}
+                  {selectedService.version && <p>Versión: {selectedService.version}</p>}
+                  <p>Creado: {new Date(selectedService.createdAt).toLocaleDateString('es-ES')}</p>
+                </div>
+              </div>
+
+              {/* Credentials */}
+              <div>
+                <label className={cn(
+                  "block text-sm font-medium mb-2",
+                  theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
+                )}>
+                  ID del Servicio (Service Code)
+                </label>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={selectedService.serviceCode}
+                    readOnly
+                    className={cn(
+                      "flex-1 px-4 py-2.5 text-sm font-mono font-bold rounded-xl border",
+                      theme === 'dark'
+                        ? 'bg-gray-900 border-gray-600 text-white'
+                        : 'bg-gray-100 border-gray-200 text-gray-900'
+                    )}
+                  />
+                  <button
+                    onClick={() => copyToClipboard(selectedService.serviceCode, 'serviceCode')}
+                    className={cn(
+                      "px-3 py-2.5 rounded-xl transition-colors flex items-center gap-1",
+                      copied === 'serviceCode'
+                        ? 'bg-green-500 text-white'
+                        : theme === 'dark' ? 'bg-gray-700 hover:bg-gray-600 text-gray-300' : 'bg-gray-200 hover:bg-gray-300 text-gray-700'
+                    )}
+                  >
+                    {copied === 'serviceCode' ? <CheckCircle className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+                  </button>
+                </div>
+              </div>
+
+              <div>
+                <label className={cn(
+                  "block text-sm font-medium mb-2",
+                  theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
+                )}>
+                  API Key
+                </label>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={selectedService.apiKey || 'No disponible'}
+                    readOnly
+                    className={cn(
+                      "flex-1 px-4 py-2.5 text-xs font-mono rounded-xl border",
+                      theme === 'dark'
+                        ? 'bg-gray-900 border-gray-600 text-white'
+                        : 'bg-gray-100 border-gray-200 text-gray-900'
+                    )}
+                  />
+                  {selectedService.apiKey && (
+                    <button
+                      onClick={() => copyToClipboard(selectedService.apiKey, 'apiKey')}
+                      className={cn(
+                        "px-3 py-2.5 rounded-xl transition-colors flex items-center gap-1",
+                        copied === 'apiKey'
+                          ? 'bg-green-500 text-white'
+                          : theme === 'dark' ? 'bg-gray-700 hover:bg-gray-600 text-gray-300' : 'bg-gray-200 hover:bg-gray-300 text-gray-700'
+                      )}
+                    >
+                      {copied === 'apiKey' ? <CheckCircle className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* API Secret Warning */}
+              <div className={cn(
+                "p-4 rounded-xl border",
+                theme === 'dark' ? 'bg-amber-950/40 border-amber-800' : 'bg-amber-50 border-amber-200'
+              )}>
+                <div className="flex items-start gap-3">
+                  <AlertTriangle className={cn("w-5 h-5 flex-shrink-0", theme === 'dark' ? 'text-amber-400' : 'text-amber-600')} />
+                  <div>
+                    <p className={cn("text-sm font-medium", theme === 'dark' ? 'text-amber-200' : 'text-amber-800')}>
+                      API Secret no disponible
+                    </p>
+                    <p className={cn("text-xs mt-1", theme === 'dark' ? 'text-amber-300/80' : 'text-amber-700')}>
+                      El API Secret solo se muestra al crear el servicio. Si lo perdiste, puedes regenerar las credenciales.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Printers */}
+              {selectedService.printers && selectedService.printers.length > 0 && (
+                <div>
+                  <label className={cn(
+                    "block text-sm font-medium mb-2",
+                    theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
+                  )}>
+                    Impresoras Detectadas ({selectedService.printers.length})
+                  </label>
+                  <div className="space-y-2">
+                    {selectedService.printers.map((printer: any) => (
+                      <div
+                        key={printer.id}
+                        className={cn(
+                          "p-3 rounded-xl border flex items-center gap-3",
+                          theme === 'dark' ? 'bg-gray-900/60 border-gray-700' : 'bg-gray-50 border-gray-200'
+                        )}
+                      >
+                        <div className={cn(
+                          "w-8 h-8 rounded-lg flex items-center justify-center",
+                          printer.isOnline
+                            ? theme === 'dark' ? 'bg-green-900/40' : 'bg-green-100'
+                            : theme === 'dark' ? 'bg-gray-700' : 'bg-gray-200'
+                        )}>
+                          <Printer className={cn(
+                            "w-4 h-4",
+                            printer.isOnline
+                              ? theme === 'dark' ? 'text-green-400' : 'text-green-600'
+                              : theme === 'dark' ? 'text-gray-400' : 'text-gray-500'
+                          )} />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className={cn("text-sm font-medium truncate", theme === 'dark' ? 'text-white' : 'text-gray-900')}>
+                            {printer.printerName}
+                          </p>
+                          <p className={cn("text-xs", theme === 'dark' ? 'text-gray-500' : 'text-gray-500')}>
+                            {printer.printerType || 'Tipo no especificado'}
+                          </p>
+                        </div>
+                        {printer.isDefault && (
+                          <span className={cn(
+                            "text-xs px-2 py-1 rounded-full",
+                            theme === 'dark' ? 'bg-purple-900/40 text-purple-300' : 'bg-purple-100 text-purple-700'
+                          )}>
+                            Predeterminada
+                          </span>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="flex gap-3 justify-between pt-6 mt-6 border-t border-gray-200 dark:border-gray-700">
+              <button
+                onClick={handleRegenerateCredentials}
+                disabled={regenerating}
+                className={cn(
+                  "px-4 py-2.5 rounded-xl text-sm font-medium flex items-center gap-2 transition-colors",
+                  regenerating
+                    ? 'bg-amber-400 text-white cursor-not-allowed'
+                    : theme === 'dark'
+                      ? 'bg-amber-900/40 text-amber-300 hover:bg-amber-900/60 border border-amber-800'
+                      : 'bg-amber-100 text-amber-700 hover:bg-amber-200'
+                )}
+              >
+                {regenerating ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCcw className="w-4 h-4" />}
+                {regenerating ? 'Regenerando...' : 'Regenerar Credenciales'}
+              </button>
+              <button
+                onClick={() => { setShowDetailsModal(false); setSelectedService(null); }}
+                className={cn(
+                  "px-5 py-2.5 rounded-xl text-sm font-medium text-white",
+                  theme === 'dark' ? 'bg-purple-600 hover:bg-purple-500' : 'bg-purple-500 hover:bg-purple-600'
+                )}
+              >
+                Cerrar
+              </button>
+            </div>
+          </motion.div>
+        </div>
+      )}
+
+      {/* Credentials Modal (for new or regenerated credentials) */}
+      {showCredentialsModal && newCredentials && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className={cn(
+              "rounded-2xl p-6 w-full max-w-lg mx-4 shadow-2xl",
+              theme === 'dark' ? 'bg-gray-800 border border-gray-700' : 'bg-white'
+            )}
+          >
+            <div className="flex items-center gap-3 mb-6">
+              <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-green-500 to-emerald-600 flex items-center justify-center">
+                <Key className="w-6 h-6 text-white" />
+              </div>
+              <div>
+                <h2 className={cn("text-lg font-bold", theme === 'dark' ? 'text-white' : 'text-gray-900')}>
+                  Credenciales Generadas
+                </h2>
+                <p className={cn("text-sm", theme === 'dark' ? 'text-gray-400' : 'text-gray-600')}>
+                  Guárdalas en un lugar seguro
+                </p>
+              </div>
+            </div>
+
+            <div className={cn(
+              "p-4 rounded-xl mb-6 border",
+              theme === 'dark' ? 'bg-red-950/40 border-red-800' : 'bg-red-50 border-red-200'
+            )}>
+              <div className="flex items-start gap-3">
+                <AlertCircle className={cn("w-5 h-5 flex-shrink-0 mt-0.5", theme === 'dark' ? 'text-red-400' : 'text-red-600')} />
+                <p className={cn("text-sm", theme === 'dark' ? 'text-red-200' : 'text-red-800')}>
+                  <strong>Importante:</strong> Guarda estas credenciales ahora. El API Secret no se mostrará de nuevo.
+                </p>
+              </div>
+            </div>
+
+            <div className="space-y-4">
+              <div>
+                <label className={cn(
+                  "block text-sm font-medium mb-2",
+                  theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
+                )}>
+                  ID del Servicio (Service Code)
+                </label>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={newCredentials.serviceCode}
+                    readOnly
+                    className={cn(
+                      "flex-1 px-4 py-2.5 text-sm font-mono font-bold rounded-xl border",
+                      theme === 'dark'
+                        ? 'bg-gray-900 border-gray-600 text-white'
+                        : 'bg-gray-100 border-gray-200 text-gray-900'
+                    )}
+                  />
+                  <button
+                    onClick={() => copyToClipboard(newCredentials.serviceCode, 'new-serviceCode')}
+                    className={cn(
+                      "px-3 py-2.5 rounded-xl transition-colors",
+                      copied === 'new-serviceCode'
+                        ? 'bg-green-500 text-white'
+                        : theme === 'dark' ? 'bg-gray-700 hover:bg-gray-600 text-gray-300' : 'bg-gray-200 hover:bg-gray-300 text-gray-700'
+                    )}
+                  >
+                    {copied === 'new-serviceCode' ? <CheckCircle className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+                  </button>
+                </div>
+              </div>
+
+              <div>
+                <label className={cn(
+                  "block text-sm font-medium mb-2",
+                  theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
+                )}>
+                  API Key
+                </label>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={newCredentials.apiKey}
+                    readOnly
+                    className={cn(
+                      "flex-1 px-4 py-2.5 text-xs font-mono rounded-xl border",
+                      theme === 'dark'
+                        ? 'bg-gray-900 border-gray-600 text-white'
+                        : 'bg-gray-100 border-gray-200 text-gray-900'
+                    )}
+                  />
+                  <button
+                    onClick={() => copyToClipboard(newCredentials.apiKey, 'new-apiKey')}
+                    className={cn(
+                      "px-3 py-2.5 rounded-xl transition-colors",
+                      copied === 'new-apiKey'
+                        ? 'bg-green-500 text-white'
+                        : theme === 'dark' ? 'bg-gray-700 hover:bg-gray-600 text-gray-300' : 'bg-gray-200 hover:bg-gray-300 text-gray-700'
+                    )}
+                  >
+                    {copied === 'new-apiKey' ? <CheckCircle className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+                  </button>
+                </div>
+              </div>
+
+              <div>
+                <label className={cn(
+                  "block text-sm font-medium mb-2",
+                  theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
+                )}>
+                  API Secret
+                </label>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={newCredentials.apiSecret}
+                    readOnly
+                    className={cn(
+                      "flex-1 px-4 py-2.5 text-xs font-mono rounded-xl border",
+                      theme === 'dark'
+                        ? 'bg-gray-900 border-gray-600 text-green-400'
+                        : 'bg-gray-100 border-gray-200 text-green-700'
+                    )}
+                  />
+                  <button
+                    onClick={() => copyToClipboard(newCredentials.apiSecret, 'new-apiSecret')}
+                    className={cn(
+                      "px-3 py-2.5 rounded-xl transition-colors",
+                      copied === 'new-apiSecret'
+                        ? 'bg-green-500 text-white'
+                        : theme === 'dark' ? 'bg-gray-700 hover:bg-gray-600 text-gray-300' : 'bg-gray-200 hover:bg-gray-300 text-gray-700'
+                    )}
+                  >
+                    {copied === 'new-apiSecret' ? <CheckCircle className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex justify-end pt-6">
+              <button
+                onClick={() => {
+                  setShowCredentialsModal(false)
+                  setNewCredentials(null)
+                }}
+                className={cn(
+                  "px-6 py-2.5 rounded-xl text-sm font-medium text-white",
+                  theme === 'dark' ? 'bg-green-600 hover:bg-green-500' : 'bg-green-500 hover:bg-green-600'
+                )}
+              >
+                He guardado las credenciales
+              </button>
+            </div>
+          </motion.div>
+        </div>
+      )}
+    </motion.div>
   )
 }

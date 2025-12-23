@@ -16,10 +16,12 @@ import {
   MoreVertical,
   Calendar,
   DollarSign,
-  Truck
+  Truck,
+  Printer
 } from 'lucide-react'
 import { DashboardLayout } from '@/components/layout/dashboard-layout'
 import { ProtectedRoute } from '@/components/protected-route'
+import { PrintDocumentModal } from '@/components/print/PrintDocumentModal'
 
 interface Purchase {
   id: number
@@ -63,6 +65,7 @@ export default function MarketPurchasesPage() {
   const [searchTerm, setSearchTerm] = useState('')
   const [selectedPurchase, setSelectedPurchase] = useState<Purchase | null>(null)
   const [actionLoading, setActionLoading] = useState(false)
+  const [printPurchase, setPrintPurchase] = useState<Purchase | null>(null)
 
   useEffect(() => {
     fetchPurchases()
@@ -379,6 +382,13 @@ export default function MarketPurchasesPage() {
                           <td className="px-4 py-3 text-right">
                             <div className="flex items-center justify-end gap-2">
                               <button
+                                onClick={() => setPrintPurchase(purchase)}
+                                className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+                                title="Imprimir factura"
+                              >
+                                <Printer className="w-4 h-4 text-gray-500" />
+                              </button>
+                              <button
                                 onClick={() => router.push(`/dashboard/market/purchases/${purchase.id}`)}
                                 className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
                                 title="Ver detalles"
@@ -480,6 +490,32 @@ export default function MarketPurchasesPage() {
               </motion.div>
             )}
           </AnimatePresence>
+
+          {/* Print Modal */}
+          {printPurchase && (
+            <PrintDocumentModal
+              isOpen={!!printPurchase}
+              onClose={() => setPrintPurchase(null)}
+              documentType="purchase_invoice"
+              documentTitle={`Compra ${printPurchase.purchaseNumber}`}
+              documentData={{
+                purchaseNumber: printPurchase.purchaseNumber,
+                purchaseId: printPurchase.id,
+                supplierName: printPurchase.supplierName,
+                supplierContact: printPurchase.supplierContact,
+                totalAmount: printPurchase.totalAmount,
+                currency: printPurchase.currency,
+                status: printPurchase.status,
+                purchaseDate: printPurchase.purchaseDate,
+                expectedDate: printPurchase.expectedDate,
+                lineCount: printPurchase.lineCount,
+                totalItems: printPurchase.totalItems
+              }}
+              sourceType="purchase"
+              sourceId={printPurchase.id}
+              onPrintSuccess={() => setPrintPurchase(null)}
+            />
+          )}
         </div>
       </DashboardLayout>
     </ProtectedRoute>
