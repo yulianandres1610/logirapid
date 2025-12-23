@@ -84,36 +84,124 @@ class PrinterService {
 
   private async detectMacPrinters(): Promise<SystemPrinter[]> {
     try {
-      // Use lpstat to get printer list
-      const { stdout } = await execAsync('lpstat -p -d', { encoding: 'utf8' })
-
       const printers: SystemPrinter[] = []
       let defaultPrinter = ''
 
-      const lines = stdout.split('\n')
-      for (const line of lines) {
-        // Parse "printer PrinterName is idle." or similar
-        const printerMatch = line.match(/^printer\s+(\S+)\s+/)
-        if (printerMatch) {
-          printers.push({
-            name: printerMatch[1],
-            displayName: printerMatch[1].replace(/_/g, ' '),
-            isDefault: false,
-            status: line.includes('idle') ? 0 : 1
-          })
-        }
+      // Method 1: Use lpstat for CUPS printers
+      try {
+        const { stdout } = await execAsync('lpstat -p -d 2>/dev/null', { encoding: 'utf8' })
+        const lines = stdout.split('\n')
 
-        // Parse "system default destination: PrinterName"
-        const defaultMatch = line.match(/system default destination:\s*(\S+)/)
-        if (defaultMatch) {
-          defaultPrinter = defaultMatch[1]
+        for (const line of lines) {
+          // Parse "printer PrinterName is idle." or similar
+          const printerMatch = line.match(/^printer\s+(\S+)\s+/)
+          if (printerMatch) {
+            printers.push({
+              name: printerMatch[1],
+              displayName: printerMatch[1].replace(/_/g, ' '),
+              isDefault: false,
+              status: line.includes('idle') ? 0 : 1
+            })
+          }
+
+          // Parse "system default destination: PrinterName"
+          const defaultMatch = line.match(/system default destination:\s*(\S+)/)
+          if (defaultMatch) {
+            defaultPrinter = defaultMatch[1]
+          }
         }
+      } catch (e) {
+        console.log('[Printer Service] lpstat failed, trying alternative methods')
       }
+
+      // Method 2: Use system_profiler for more comprehensive printer list
+      try {
+        const { stdout } = await execAsync(
+          'system_profiler SPPrintersDataType -json 2>/dev/null',
+          { encoding: 'utf8' }
+        )
+
+        if (stdout.trim()) {
+          const data = JSON.parse(stdout)
+          const printerData = data.SPPrintersDataType || []
+
+          for (const printer of printerData) {
+            const name = printer._name || ''
+            // Check if already added via lpstat
+            if (!printers.find(p => p.name === name || p.displayName === name)) {
+              const isNetwork = printer.uri?.startsWith('ipp://') ||
+                               printer.uri?.startsWith('ipps://') ||
+                               printer.uri?.startsWith('socket://') ||
+                               printer.uri?.includes('network')
+
+              printers.push({
+                name: name.replace(/\s+/g, '_'),
+                displayName: name,
+                description: printer.ppd || printer._name,
+                isDefault: printer.default === 'Yes',
+                status: printer.status === 'idle' ? 0 : 1,
+                options: {
+                  driverName: printer.ppd || '',
+                  portName: printer.uri || '',
+                  isNetwork: isNetwork ? 'true' : 'false'
+                }
+              })
+
+              if (printer.default === 'Yes') {
+                defaultPrinter = name.replace(/\s+/g, '_')
+              }
+            }
+          }
+        }
+      } catch (e) {
+        console.log('[Printer Service] system_profiler failed:', e)
+      }
+
+      // Method 3: Use lpinfo to discover network printers (if available)
+      try {
+        const { stdout } = await execAsync('lpinfo -v 2>/dev/null | grep -E "(socket|ipp|ipps)" | head -20', { encoding: 'utf8' })
+        const lines = stdout.split('\n').filter(l => l.trim())
+
+        for (const line of lines) {
+          // Parse "network ipp://192.168.1.100/ipp/print"
+          const match = line.match(/^(network|direct)\s+(\S+)/)
+          if (match) {
+            const uri = match[2]
+            // Extract IP or hostname
+            const hostMatch = uri.match(/:\/\/([^\/]+)/)
+            if (hostMatch) {
+              const host = hostMatch[1].split(':')[0]
+              const printerName = `Network_${host.replace(/\./g, '_')}`
+
+              // Check if not already added
+              if (!printers.find(p => p.name.includes(host.replace(/\./g, '_')))) {
+                printers.push({
+                  name: printerName,
+                  displayName: `Impresora de Red (${host})`,
+                  description: uri,
+                  isDefault: false,
+                  status: 0,
+                  options: {
+                    portName: uri,
+                    isNetwork: 'true',
+                    networkAddress: host
+                  }
+                })
+              }
+            }
+          }
+        }
+      } catch (e) {
+        // lpinfo might not be available or have permissions
+        console.log('[Printer Service] lpinfo not available for network discovery')
+      }
+
+      console.log(`[Printer Service] macOS: Found ${printers.length} printers`)
 
       // Mark default printer
       return printers.map(p => ({
         ...p,
-        isDefault: p.name === defaultPrinter
+        isDefault: p.name === defaultPrinter || p.displayName === defaultPrinter
       }))
     } catch (error) {
       console.error('[Printer Service] macOS detection failed:', error)
@@ -159,7 +247,10 @@ class PrinterService {
 
   private enrichPrinterInfo(systemPrinter: SystemPrinter): DetectedPrinter {
     const name = systemPrinter.name.toLowerCase()
+    const displayName = (systemPrinter.displayName || '').toLowerCase()
     const desc = (systemPrinter.description || '').toLowerCase()
+    const portName = systemPrinter.options?.portName || ''
+    const isNetworkOption = systemPrinter.options?.isNetwork === 'true'
 
     // Detect printer type based on name/description
     let printerType: PrinterInfo['printerType'] = 'standard'
@@ -170,11 +261,16 @@ class PrinterService {
     if (
       name.includes('thermal') ||
       name.includes('tm-t') || // Epson TM-T series
+      name.includes('tm-m') || // Epson TM-M series
       name.includes('tsp') || // Star TSP series
       name.includes('pos') ||
       name.includes('receipt') ||
+      name.includes('ticket') ||
       desc.includes('thermal') ||
-      desc.includes('pos')
+      desc.includes('pos') ||
+      desc.includes('epson') ||
+      displayName.includes('thermal') ||
+      displayName.includes('pos')
     ) {
       printerType = 'thermal_80mm'
       paperWidthMm = 80
@@ -187,9 +283,12 @@ class PrinterService {
       name.includes('zebra') ||
       name.includes('dymo') ||
       name.includes('brother ql') ||
-      name.includes('zd') // Zebra ZD series
+      name.includes('zd') || // Zebra ZD series
+      name.includes('etiqueta') ||
+      displayName.includes('label') ||
+      displayName.includes('zebra')
     ) {
-      if (name.includes('4x6') || name.includes('shipping')) {
+      if (name.includes('4x6') || name.includes('shipping') || name.includes('envio')) {
         printerType = 'label_4x6'
         paperWidthMm = 100 // ~4 inches
       } else {
@@ -200,19 +299,39 @@ class PrinterService {
 
     // Detect connection type
     let connectionType: PrinterInfo['connectionType'] = 'usb'
-    const portName = systemPrinter.options?.portName || ''
 
-    if (portName.includes('IP') || portName.includes(':') || name.includes('network')) {
+    // Check various indicators for network printers
+    if (
+      isNetworkOption ||
+      portName.includes('ipp://') ||
+      portName.includes('ipps://') ||
+      portName.includes('socket://') ||
+      portName.includes('http://') ||
+      portName.includes('IP') ||
+      name.includes('network') ||
+      name.includes('red') ||
+      systemPrinter.options?.networkAddress
+    ) {
       connectionType = 'network'
     } else if (name.includes('bluetooth') || name.includes('bt')) {
       connectionType = 'bluetooth'
     }
 
     // Extract network address if applicable
-    let networkAddress: string | undefined
-    const ipMatch = portName.match(/(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}(:\d+)?)/)
-    if (ipMatch) {
-      networkAddress = ipMatch[1]
+    let networkAddress: string | undefined = systemPrinter.options?.networkAddress
+
+    if (!networkAddress && connectionType === 'network') {
+      // Try to extract from port name
+      const ipMatch = portName.match(/\/\/([^\/\:]+)/)
+      if (ipMatch) {
+        networkAddress = ipMatch[1]
+      } else {
+        // Try simple IP pattern
+        const simpleIpMatch = portName.match(/(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})/)
+        if (simpleIpMatch) {
+          networkAddress = simpleIpMatch[1]
+        }
+      }
     }
 
     return {
