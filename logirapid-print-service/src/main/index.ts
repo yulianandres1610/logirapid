@@ -1,11 +1,55 @@
-import { app, BrowserWindow, ipcMain, Tray, Menu, nativeImage, shell } from 'electron'
+import { app, BrowserWindow, ipcMain, Tray, Menu, nativeImage, shell, dialog } from 'electron'
 import { join } from 'path'
+import { autoUpdater } from 'electron-updater'
 import { isConfigured, getCredentials, saveCredentials, clearCredentials, getSettings, updateSettings } from '../store/credentials'
 import { apiClient } from '../services/api-client'
 import { printerService } from '../services/printer-service'
 import { jobProcessor } from '../services/job-processor'
 import axios from 'axios'
 import os from 'os'
+
+// Auto-updater configuration
+autoUpdater.autoDownload = true
+autoUpdater.autoInstallOnAppQuit = true
+
+// Auto-updater event handlers
+autoUpdater.on('checking-for-update', () => {
+  console.log('[Auto-Updater] Checking for updates...')
+})
+
+autoUpdater.on('update-available', (info) => {
+  console.log('[Auto-Updater] Update available:', info.version)
+})
+
+autoUpdater.on('update-not-available', () => {
+  console.log('[Auto-Updater] No updates available')
+})
+
+autoUpdater.on('download-progress', (progressObj) => {
+  console.log(`[Auto-Updater] Download progress: ${progressObj.percent.toFixed(1)}%`)
+})
+
+autoUpdater.on('update-downloaded', (info) => {
+  console.log('[Auto-Updater] Update downloaded:', info.version)
+
+  // Notify user about the update
+  dialog.showMessageBox({
+    type: 'info',
+    title: 'Actualización Disponible',
+    message: `Una nueva versión (${info.version}) ha sido descargada.`,
+    detail: 'La actualización se instalará automáticamente al cerrar la aplicación.',
+    buttons: ['Reiniciar Ahora', 'Más Tarde'],
+    defaultId: 0
+  }).then((result) => {
+    if (result.response === 0) {
+      autoUpdater.quitAndInstall()
+    }
+  })
+})
+
+autoUpdater.on('error', (err) => {
+  console.error('[Auto-Updater] Error:', err)
+})
 
 let mainWindow: BrowserWindow | null = null
 let tray: Tray | null = null
@@ -385,6 +429,28 @@ function setupIpcHandlers(): void {
   })
 
   ipcMain.handle('get-app-version', () => app.getVersion())
+
+  // Auto-update handlers
+  ipcMain.handle('check-for-updates', async () => {
+    if (isDev) {
+      return { updateAvailable: false, message: 'Updates disabled in development mode' }
+    }
+    try {
+      const result = await autoUpdater.checkForUpdates()
+      return {
+        updateAvailable: result?.updateInfo?.version !== app.getVersion(),
+        currentVersion: app.getVersion(),
+        latestVersion: result?.updateInfo?.version
+      }
+    } catch (error) {
+      console.error('[Auto-Updater] Check failed:', error)
+      return { updateAvailable: false, error: 'Failed to check for updates' }
+    }
+  })
+
+  ipcMain.handle('install-update', () => {
+    autoUpdater.quitAndInstall()
+  })
 }
 
 // App lifecycle
@@ -414,6 +480,19 @@ app.whenReady().then(async () => {
 
   // Update tray periodically
   setInterval(updateTrayMenu, 10000)
+
+  // Check for updates in production
+  if (!isDev) {
+    // Check for updates after 5 seconds to not slow startup
+    setTimeout(() => {
+      autoUpdater.checkForUpdatesAndNotify()
+    }, 5000)
+
+    // Check for updates every 4 hours
+    setInterval(() => {
+      autoUpdater.checkForUpdatesAndNotify()
+    }, 4 * 60 * 60 * 1000)
+  }
 })
 
 app.on('before-quit', async () => {
