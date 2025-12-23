@@ -342,6 +342,17 @@ function setupIpcHandlers(): void {
     return printers
   })
 
+  ipcMain.handle('test-print', async (_, printerName: string) => {
+    console.log('[IPC] Test print requested for:', printerName)
+    const result = await printerService.printTestPage(printerName)
+    return result
+  })
+
+  ipcMain.handle('check-printer-online', async (_, printerName: string) => {
+    const isOnline = await printerService.checkPrinterOnline(printerName)
+    return { isOnline }
+  })
+
   // Service status
   ipcMain.handle('get-service-status', () => ({
     isRunning: jobProcessor.isActive(),

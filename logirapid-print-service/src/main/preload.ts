@@ -21,6 +21,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // Printers
   getPrinters: () => ipcRenderer.invoke('get-printers'),
   refreshPrinters: () => ipcRenderer.invoke('refresh-printers'),
+  testPrint: (printerName: string) => ipcRenderer.invoke('test-print', printerName),
+  checkPrinterOnline: (printerName: string) => ipcRenderer.invoke('check-printer-online', printerName),
 
   // Service
   getServiceStatus: () => ipcRenderer.invoke('get-service-status'),
@@ -64,10 +66,13 @@ declare global {
         printerName: string
         printerType: string
         connectionType: string
+        networkAddress?: string
         isOnline: boolean
         isDefault: boolean
       }>>
       refreshPrinters: () => Promise<Array<unknown>>
+      testPrint: (printerName: string) => Promise<{ success: boolean; error?: string }>
+      checkPrinterOnline: (printerName: string) => Promise<{ isOnline: boolean }>
       getServiceStatus: () => Promise<{
         isRunning: boolean
         processingCount: number

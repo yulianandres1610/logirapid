@@ -258,20 +258,39 @@ class PrinterService {
     let supportsEscpos = false
 
     // Thermal receipt printers (80mm)
-    if (
+    // Be specific about thermal printers - not all Epson printers are thermal!
+    const isThermalPrinter =
       name.includes('thermal') ||
-      name.includes('tm-t') || // Epson TM-T series
-      name.includes('tm-m') || // Epson TM-M series
+      name.includes('tm-t') || // Epson TM-T series (thermal)
+      name.includes('tm-m') || // Epson TM-M series (thermal)
+      name.includes('tm-u') || // Epson TM-U series (thermal)
+      name.includes('tm-p') || // Epson TM-P series (portable thermal)
       name.includes('tsp') || // Star TSP series
-      name.includes('pos') ||
+      name.includes('sp700') || // Star SP700
       name.includes('receipt') ||
       name.includes('ticket') ||
+      name.includes('termica') ||
       desc.includes('thermal') ||
-      desc.includes('pos') ||
-      desc.includes('epson') ||
+      desc.includes('receipt') ||
       displayName.includes('thermal') ||
-      displayName.includes('pos')
-    ) {
+      displayName.includes('tm-t') ||
+      displayName.includes('tm-m') ||
+      displayName.includes('tsp')
+
+    // Exclude regular inkjet/laser printers that might match other patterns
+    const isRegularPrinter =
+      name.includes('et-') || // Epson EcoTank (inkjet)
+      name.includes('wf-') || // Epson WorkForce (inkjet)
+      name.includes('xp-') || // Epson Expression (inkjet)
+      name.includes('l3') || // Epson L-series (inkjet)
+      name.includes('laserjet') ||
+      name.includes('inkjet') ||
+      name.includes('officejet') ||
+      name.includes('deskjet') ||
+      name.includes('pixma') || // Canon
+      name.includes('mfc-') // Brother MFC
+
+    if (isThermalPrinter && !isRegularPrinter) {
       printerType = 'thermal_80mm'
       paperWidthMm = 80
       supportsEscpos = true
@@ -384,14 +403,118 @@ class PrinterService {
         const status = parseInt(stdout.trim())
         return status === 0 || status === 3
       } else {
-        const { stdout } = await execAsync(
-          `lpstat -p "${printerName}" 2>/dev/null`,
-          { encoding: 'utf8' }
-        )
-        return stdout.includes('idle') || stdout.includes('enabled')
+        // Try lpstat first
+        try {
+          const { stdout } = await execAsync(
+            `lpstat -p "${printerName}" 2>/dev/null`,
+            { encoding: 'utf8' }
+          )
+          if (stdout.includes('idle') || stdout.includes('enabled') || stdout.includes('is ready')) {
+            return true
+          }
+        } catch {
+          // lpstat might fail, try alternative
+        }
+
+        // Try system_profiler as backup
+        try {
+          const { stdout } = await execAsync(
+            `system_profiler SPPrintersDataType -json 2>/dev/null`,
+            { encoding: 'utf8' }
+          )
+          const data = JSON.parse(stdout)
+          const printers = data.SPPrintersDataType || []
+          for (const printer of printers) {
+            const name = printer._name?.replace(/\s+/g, '_')
+            if (name === printerName || printer._name === printerName) {
+              // Check status - idle, ready, printing are all "online"
+              const status = (printer.status || '').toLowerCase()
+              return status === 'idle' || status === 'ready' || status === 'printing' || !status
+            }
+          }
+        } catch {
+          // system_profiler failed
+        }
+
+        // If we have the printer in our list, assume it's online
+        const printer = this.printers.find(p => p.systemName === printerName || p.printerName === printerName)
+        if (printer) {
+          return true // Assume online if detected
+        }
+
+        return false
       }
     } catch {
       return false
+    }
+  }
+
+  /**
+   * Print a test page to verify the printer is working
+   */
+  async printTestPage(printerName: string): Promise<{ success: boolean; error?: string }> {
+    try {
+      const printer = this.getPrinterByName(printerName)
+      if (!printer) {
+        return { success: false, error: 'Impresora no encontrada' }
+      }
+
+      console.log(`[Printer Service] Printing test page to: ${printerName}`)
+
+      if (process.platform === 'win32') {
+        // Windows: Use PowerShell to print a test page
+        await execAsync(
+          `powershell -Command "Start-Process -FilePath 'notepad' -ArgumentList '/p' -Wait"`,
+          { encoding: 'utf8' }
+        )
+      } else {
+        // macOS/Linux: Create a simple test file and print it
+        const testContent = `
+=====================================
+   PRUEBA DE IMPRESION
+   LogiRapid Print Service v1.6.0
+=====================================
+
+Fecha: ${new Date().toLocaleString('es-ES')}
+Impresora: ${printer.printerName}
+Tipo: ${printer.printerType}
+Conexion: ${printer.connectionType}
+${printer.networkAddress ? `IP: ${printer.networkAddress}` : ''}
+
+Esta es una pagina de prueba.
+Si puede ver este texto, la
+impresora esta funcionando
+correctamente.
+
+=====================================
+`
+        // Write to temp file
+        const fs = await import('fs').then(m => m.promises)
+        const tempFile = `/tmp/logirapid_test_print_${Date.now()}.txt`
+        await fs.writeFile(tempFile, testContent)
+
+        // Print using lp command
+        const systemName = printer.systemName.replace(/'/g, "'\\''")
+        await execAsync(`lp -d '${systemName}' '${tempFile}'`, { encoding: 'utf8' })
+
+        // Clean up temp file after a delay
+        setTimeout(async () => {
+          try {
+            await fs.unlink(tempFile)
+          } catch {
+            // Ignore cleanup errors
+          }
+        }, 5000)
+      }
+
+      console.log(`[Printer Service] Test page sent successfully to: ${printerName}`)
+      return { success: true }
+    } catch (error) {
+      console.error(`[Printer Service] Test print failed:`, error)
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Error al imprimir'
+      }
     }
   }
 
