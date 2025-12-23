@@ -40,7 +40,8 @@ import {
   Globe,
   Monitor,
   Tag,
-  ClipboardList
+  ClipboardList,
+  Printer
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
@@ -371,6 +372,7 @@ export function Sidebar({ isCollapsed, onToggle }: SidebarProps) {
         { icon: Box, label: "Empaque", href: "/dashboard/admin/package-route" }
       ]
     },
+    { icon: Printer, label: "Servicios Impresión", href: "/dashboard/admin/print-services" },
     { icon: Settings, label: "Configuración", href: "/dashboard/admin/settings" },
   ]
 
@@ -405,6 +407,7 @@ export function Sidebar({ isCollapsed, onToggle }: SidebarProps) {
         { icon: Box, label: "Empaque", href: "/dashboard/agency-admin/package-route", requiredSubmodule: 'package-route' }
       ]
     },
+    { icon: Printer, label: "Servicios Impresión", href: "/dashboard/agency-admin/print-services", requiredService: null },
     { icon: Settings, label: "Configuración", href: "/dashboard/agency-admin/settings", requiredService: null },
   ]
 
