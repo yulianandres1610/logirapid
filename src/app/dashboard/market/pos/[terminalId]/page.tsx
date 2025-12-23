@@ -122,7 +122,7 @@ export default function POSTerminalPage() {
   const [session, setSession] = useState<Session | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [isClient, setIsClient] = useState(false)
+  const [mounted, setMounted] = useState(false)
 
   // Cart state
   const [cart, setCart] = useState<CartItem[]>([])
@@ -149,15 +149,10 @@ export default function POSTerminalPage() {
   // Mobile responsive state
   const [showMobileCart, setShowMobileCart] = useState(false)
 
-  // Initialize client-side state
+  // Initialize client-side state and fetch data
   useEffect(() => {
-    setIsClient(true)
-    setIsOnline(navigator.onLine)
-  }, [])
-
-  // Fetch terminal, session and products (with offline support)
-  useEffect(() => {
-    if (!isClient) return
+    setMounted(true)
+    setIsOnline(typeof navigator !== 'undefined' ? navigator.onLine : true)
 
     const fetchData = async () => {
       setLoading(true)
@@ -395,7 +390,7 @@ export default function POSTerminalPage() {
     }
 
     fetchData()
-  }, [terminalId, router, isClient])
+  }, [terminalId, router])
 
   // Cache session info when it changes
   useEffect(() => {
@@ -406,7 +401,7 @@ export default function POSTerminalPage() {
 
   // Restore cart from localStorage (when returning from payment page)
   useEffect(() => {
-    if (!isClient || products.length === 0) return
+    if (!mounted || products.length === 0) return
 
     const restoreFromPayment = searchParams.get('restoreFromPayment')
     if (restoreFromPayment === 'true') {
@@ -444,7 +439,7 @@ export default function POSTerminalPage() {
         console.error('[POS] Error restoring cart:', e)
       }
     }
-  }, [searchParams, products, terminalId, router, isClient])
+  }, [searchParams, products, terminalId, router, mounted])
 
   // Online status and pending orders
   useEffect(() => {
@@ -753,28 +748,16 @@ export default function POSTerminalPage() {
     }
   }
 
-  if (loading) {
+  // Evitar parpadeo durante hidratación - mostrar loading inmediatamente
+  if (!mounted || loading) {
     return (
-      <div className={cn(
-        'min-h-screen flex items-center justify-center',
-        theme === 'dark' ? 'bg-gray-900' : 'bg-gray-100'
-      )}>
-        <motion.div
-          initial={{ opacity: 0, scale: 0.9 }}
-          animate={{ opacity: 1, scale: 1 }}
-          className="text-center"
-        >
-          <div className={cn(
-            'w-20 h-20 rounded-2xl flex items-center justify-center mx-auto mb-4',
-            theme === 'dark' ? 'bg-gray-800' : 'bg-white shadow-lg'
-          )}>
+      <div className="min-h-screen flex items-center justify-center bg-gray-900">
+        <div className="text-center">
+          <div className="w-20 h-20 rounded-2xl flex items-center justify-center mx-auto mb-4 bg-gray-800">
             <Loader2 className="w-10 h-10 animate-spin text-blue-500" />
           </div>
-          <p className={cn(
-            'text-sm font-medium',
-            theme === 'dark' ? 'text-gray-400' : 'text-gray-500'
-          )}>Cargando punto de venta...</p>
-        </motion.div>
+          <p className="text-sm font-medium text-gray-400">Cargando punto de venta...</p>
+        </div>
       </div>
     )
   }
