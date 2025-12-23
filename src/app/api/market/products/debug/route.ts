@@ -74,6 +74,24 @@ export async function GET(request: NextRequest) {
       LIMIT 5
     `, [companyId])
 
+    // Check ALL products in the system (for debugging)
+    const allProductsResult = await db.query(`
+      SELECT
+        p.company_id,
+        c.name as company_name,
+        COUNT(*) as product_count
+      FROM market_products p
+      LEFT JOIN companies c ON p.company_id = c.id
+      GROUP BY p.company_id, c.name
+      ORDER BY product_count DESC
+      LIMIT 10
+    `)
+
+    // Check if market_products table has any data at all
+    const totalInSystemResult = await db.query(`
+      SELECT COUNT(*) as total FROM market_products
+    `)
+
     return NextResponse.json({
       success: true,
       debug: {
@@ -90,7 +108,9 @@ export async function GET(request: NextRequest) {
           active: parseInt(totalProductsResult.rows[0]?.active) || 0,
           inactive: parseInt(totalProductsResult.rows[0]?.inactive) || 0
         },
-        sampleProducts: sampleProducts.rows
+        sampleProducts: sampleProducts.rows,
+        totalProductsInSystem: parseInt(totalInSystemResult.rows[0]?.total) || 0,
+        productsByCompany: allProductsResult.rows
       }
     })
 
