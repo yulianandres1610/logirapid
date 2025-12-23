@@ -37,6 +37,7 @@ import { DashboardLayout } from '@/components/layout/dashboard-layout'
 import { ProtectedRoute } from '@/components/protected-route'
 import { useTheme } from '@/contexts/theme-context'
 import { cn } from '@/lib/utils'
+import { PrintLabelModal } from '@/components/print/PrintLabelModal'
 
 interface Product {
   id: number
@@ -187,6 +188,7 @@ export default function ProductDetailPage() {
   const [historyLoading, setHistoryLoading] = useState(false)
   const [lots, setLots] = useState<ProductLot[]>([])
   const [lotsLoading, setLotsLoading] = useState(false)
+  const [showPrintModal, setShowPrintModal] = useState(false)
 
   useEffect(() => {
     fetchProduct()
@@ -689,7 +691,7 @@ export default function ProductDetailPage() {
                 <motion.button
                   whileHover={{ scale: 1.05 }}
                   whileTap={{ scale: 0.95 }}
-                  onClick={() => printBarcodeLabel(product)}
+                  onClick={() => setShowPrintModal(true)}
                   className={cn(
                     'flex items-center gap-2 px-4 py-2.5 rounded-xl transition-colors',
                     theme === 'dark' ? 'bg-gray-800 text-gray-300 hover:bg-gray-700' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
@@ -1818,6 +1820,25 @@ export default function ProductDetailPage() {
             </div>
           </motion.div>
         </div>
+
+        {/* Print Label Modal */}
+        <PrintLabelModal
+          isOpen={showPrintModal}
+          onClose={() => setShowPrintModal(false)}
+          productData={{
+            productName: product.name,
+            sku: product.sku,
+            barcode: product.barcode,
+            price: product.sellingPrice,
+            currency: product.currency,
+            unitOfMeasure: product.unitOfMeasure,
+            category: product.category || undefined,
+            description: product.description || undefined
+          }}
+          onPrintSuccess={(jobNumber) => {
+            console.log('Print job created:', jobNumber)
+          }}
+        />
       </DashboardLayout>
     </ProtectedRoute>
   )
