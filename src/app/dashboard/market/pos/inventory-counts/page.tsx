@@ -414,87 +414,104 @@ export default function InventoryCountsPage() {
               /* History Table */
               historyCounts.length === 0 ? (
                 <div className={cn(
-                  'text-center py-12 rounded-xl border',
-                  theme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'
+                  'text-center py-12 rounded-2xl border shadow-xl',
+                  theme === 'dark'
+                    ? 'bg-gradient-to-br from-gray-800 to-gray-900 border-gray-700'
+                    : 'bg-gradient-to-br from-slate-50 to-white border-slate-200'
                 )}>
                   <ClipboardList className="w-12 h-12 mx-auto mb-3 text-gray-400" />
                   <p className="text-gray-500">No hay conteos</p>
                 </div>
               ) : (
-                <div className={cn(
-                  'rounded-xl border overflow-hidden',
-                  theme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'
-                )}>
+                <motion.div
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className={cn(
+                    'rounded-2xl border shadow-xl overflow-hidden',
+                    theme === 'dark'
+                      ? 'bg-gradient-to-br from-gray-800 to-gray-900 border-gray-700'
+                      : 'bg-gradient-to-br from-slate-50 to-white border-slate-200'
+                  )}
+                >
                   <div className="overflow-x-auto">
-                    <table className="w-full text-sm">
+                    <table className="w-full">
                       <thead>
                         <tr className={cn(
                           'border-b',
-                          theme === 'dark' ? 'bg-gray-900/50 border-gray-700' : 'bg-gray-50 border-gray-200'
+                          theme === 'dark' ? 'border-gray-700 bg-gray-800/50' : 'border-gray-200 bg-gray-50'
                         )}>
-                          <th className="text-left py-3 px-4 font-semibold">Conteo</th>
-                          <th className="text-left py-3 px-4 font-semibold hidden sm:table-cell">Fecha</th>
-                          <th className="text-left py-3 px-4 font-semibold hidden md:table-cell">Terminal</th>
-                          <th className="text-left py-3 px-4 font-semibold hidden lg:table-cell">Cajero</th>
-                          <th className="text-center py-3 px-4 font-semibold">Productos</th>
-                          <th className="text-center py-3 px-4 font-semibold">Dif.</th>
-                          <th className="text-right py-3 px-4 font-semibold">Valor</th>
-                          <th className="text-center py-3 px-4 font-semibold">Estado</th>
+                          <th className="text-left py-4 px-4 text-xs font-medium text-gray-500 uppercase tracking-wider">Conteo</th>
+                          <th className="text-left py-4 px-4 text-xs font-medium text-gray-500 uppercase tracking-wider hidden sm:table-cell">Fecha</th>
+                          <th className="text-left py-4 px-4 text-xs font-medium text-gray-500 uppercase tracking-wider hidden md:table-cell">Terminal</th>
+                          <th className="text-left py-4 px-4 text-xs font-medium text-gray-500 uppercase tracking-wider hidden lg:table-cell">Cajero</th>
+                          <th className="text-center py-4 px-4 text-xs font-medium text-gray-500 uppercase tracking-wider">Productos</th>
+                          <th className="text-center py-4 px-4 text-xs font-medium text-gray-500 uppercase tracking-wider">Dif.</th>
+                          <th className="text-right py-4 px-4 text-xs font-medium text-gray-500 uppercase tracking-wider">Valor</th>
+                          <th className="text-center py-4 px-4 text-xs font-medium text-gray-500 uppercase tracking-wider">Estado</th>
                         </tr>
                       </thead>
-                      <tbody>
+                      <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
                         {historyCounts.map((count, idx) => (
-                          <tr
+                          <motion.tr
                             key={count.id}
+                            initial={{ opacity: 0, y: 10 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ delay: idx * 0.02 }}
                             onClick={() => openDetailModal(count)}
                             className={cn(
-                              'border-b cursor-pointer transition-colors',
-                              theme === 'dark'
-                                ? 'border-gray-700 hover:bg-gray-700/50'
-                                : 'border-gray-100 hover:bg-gray-50',
-                              idx === historyCounts.length - 1 && 'border-b-0'
+                              'group cursor-pointer transition-colors',
+                              theme === 'dark' ? 'hover:bg-gray-800/50' : 'hover:bg-gray-50'
                             )}
                           >
-                            <td className="py-3 px-4">
-                              <span className="font-medium">{count.countNumber}</span>
+                            <td className="py-4 px-4">
+                              <span className="font-medium text-gray-900 dark:text-white">{count.countNumber}</span>
                               <span className="sm:hidden block text-xs text-gray-500 mt-0.5">
                                 {formatShortDate(count.createdAt)}
                               </span>
                             </td>
-                            <td className="py-3 px-4 text-gray-500 hidden sm:table-cell">
+                            <td className="py-4 px-4 text-sm text-gray-600 dark:text-gray-300 hidden sm:table-cell">
                               {formatShortDate(count.createdAt)}
                             </td>
-                            <td className="py-3 px-4 text-gray-500 hidden md:table-cell">
+                            <td className="py-4 px-4 text-sm text-gray-600 dark:text-gray-300 hidden md:table-cell">
                               {count.terminalName || '-'}
                             </td>
-                            <td className="py-3 px-4 text-gray-500 hidden lg:table-cell">
+                            <td className="py-4 px-4 text-sm text-gray-600 dark:text-gray-300 hidden lg:table-cell">
                               {count.countedByName || '-'}
                             </td>
-                            <td className="py-3 px-4 text-center font-mono">
-                              {count.totalProducts}
+                            <td className="py-4 px-4 text-center">
+                              <span className="text-sm font-bold text-gray-900 dark:text-white">
+                                {count.totalProducts}
+                              </span>
                             </td>
-                            <td className="py-3 px-4 text-center">
+                            <td className="py-4 px-4 text-center">
                               <span className={cn(
-                                'font-mono font-medium',
-                                count.productsWithDifferences > 0 ? 'text-amber-500' : 'text-green-500'
+                                'inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium',
+                                count.productsWithDifferences > 0
+                                  ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400'
+                                  : 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
                               )}>
+                                {count.productsWithDifferences > 0 ? (
+                                  <AlertTriangle className="w-3 h-3" />
+                                ) : (
+                                  <CheckCircle2 className="w-3 h-3" />
+                                )}
                                 {count.productsWithDifferences}
                               </span>
                             </td>
-                            <td className="py-3 px-4 text-right">
+                            <td className="py-4 px-4 text-right">
                               <span className={cn(
-                                'font-mono font-medium',
-                                count.totalDifferenceValue > 0 ? 'text-green-500' :
-                                count.totalDifferenceValue < 0 ? 'text-red-500' : 'text-gray-500'
+                                'text-sm font-medium',
+                                count.totalDifferenceValue > 0 ? 'text-green-600' :
+                                count.totalDifferenceValue < 0 ? 'text-red-600' : 'text-gray-500'
                               )}>
                                 {count.totalDifferenceValue !== 0 && (count.totalDifferenceValue > 0 ? '+' : '-')}
-                                ${Math.abs(count.totalDifferenceValue).toFixed(0)}
+                                ${Math.abs(count.totalDifferenceValue).toFixed(2)}
                               </span>
                             </td>
-                            <td className="py-3 px-4 text-center">
+                            <td className="py-4 px-4 text-center">
                               {getStatusBadge(count.status, count.autoApproved, true)}
                             </td>
-                          </tr>
+                          </motion.tr>
                         ))}
                       </tbody>
                     </table>
@@ -504,39 +521,47 @@ export default function InventoryCountsPage() {
                   {pagination.totalPages > 1 && (
                     <div className={cn(
                       'flex items-center justify-between px-4 py-3 border-t',
-                      theme === 'dark' ? 'border-gray-700' : 'border-gray-200'
+                      theme === 'dark' ? 'border-gray-700 bg-gray-800/50' : 'border-gray-200 bg-gray-50'
                     )}>
-                      <span className="text-xs text-gray-500">
-                        {pagination.total} conteos
-                      </span>
+                      <p className="text-sm text-gray-500">
+                        Mostrando {((pagination.page - 1) * pagination.limit) + 1} - {Math.min(pagination.page * pagination.limit, pagination.total)} de {pagination.total}
+                      </p>
                       <div className="flex items-center gap-2">
-                        <button
+                        <motion.button
+                          whileHover={{ scale: 1.05 }}
+                          whileTap={{ scale: 0.95 }}
                           onClick={() => setPagination(prev => ({ ...prev, page: prev.page - 1 }))}
                           disabled={pagination.page === 1}
                           className={cn(
-                            'p-1.5 rounded-lg',
-                            pagination.page === 1 ? 'opacity-40' : theme === 'dark' ? 'hover:bg-gray-700' : 'hover:bg-gray-100'
+                            'p-2 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed',
+                            theme === 'dark'
+                              ? 'hover:bg-gray-700 text-gray-300'
+                              : 'hover:bg-gray-200 text-gray-600'
                           )}
                         >
-                          <ChevronLeft className="w-4 h-4" />
-                        </button>
-                        <span className="text-xs">
+                          <ChevronLeft className="w-5 h-5" />
+                        </motion.button>
+                        <span className="text-sm text-gray-600 dark:text-gray-300">
                           {pagination.page} / {pagination.totalPages}
                         </span>
-                        <button
+                        <motion.button
+                          whileHover={{ scale: 1.05 }}
+                          whileTap={{ scale: 0.95 }}
                           onClick={() => setPagination(prev => ({ ...prev, page: prev.page + 1 }))}
                           disabled={pagination.page === pagination.totalPages}
                           className={cn(
-                            'p-1.5 rounded-lg',
-                            pagination.page === pagination.totalPages ? 'opacity-40' : theme === 'dark' ? 'hover:bg-gray-700' : 'hover:bg-gray-100'
+                            'p-2 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed',
+                            theme === 'dark'
+                              ? 'hover:bg-gray-700 text-gray-300'
+                              : 'hover:bg-gray-200 text-gray-600'
                           )}
                         >
-                          <ChevronRight className="w-4 h-4" />
-                        </button>
+                          <ChevronRight className="w-5 h-5" />
+                        </motion.button>
                       </div>
                     </div>
                   )}
-                </div>
+                </motion.div>
               )
             )}
           </motion.div>
