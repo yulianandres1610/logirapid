@@ -7,6 +7,8 @@ interface CredentialsData {
   apiSecretEncrypted: string
   serverUrl: string
   configured: boolean
+  // Added for migration/versioning
+  version?: number
 }
 
 interface StoreSchema {
@@ -17,10 +19,15 @@ interface StoreSchema {
     autoStart: boolean
     minimizeToTray: boolean
     showNotifications: boolean
+    checkForUpdates: boolean
   }
+  // Store version for migrations
+  storeVersion: number
 }
 
+// Store with explicit name to ensure persistence across updates
 const store = new Store<StoreSchema>({
+  name: 'logirapid-print-config', // Explicit name ensures same file across versions
   defaults: {
     credentials: null,
     settings: {
@@ -28,9 +35,13 @@ const store = new Store<StoreSchema>({
       heartbeatInterval: 30000,
       autoStart: true,
       minimizeToTray: true,
-      showNotifications: true
-    }
-  }
+      showNotifications: true,
+      checkForUpdates: true
+    },
+    storeVersion: 1
+  },
+  // Clear invalid state on corruption
+  clearInvalidConfig: true
 })
 
 export function isConfigured(): boolean {

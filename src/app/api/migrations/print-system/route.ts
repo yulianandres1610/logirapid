@@ -290,6 +290,32 @@ export async function GET() {
       }
     }
 
+    // 7. Update existing printers to include all document types (for printers created before new types were added)
+    try {
+      // For TEXT[] column
+      await db.query(`
+        UPDATE print_service_printers
+        SET supported_document_types = ARRAY['pos_receipt', 'product_label', 'invoice', 'purchase_invoice', 'sales_report', 'inventory_count_report', 'cash_register_report', 'shipping_label']::TEXT[]
+        WHERE supported_document_types IS NULL
+           OR array_length(supported_document_types, 1) < 8
+           OR NOT (supported_document_types @> ARRAY['purchase_invoice', 'sales_report', 'inventory_count_report', 'cash_register_report']::TEXT[])
+      `)
+      results.push({ table: 'print_service_printers.update_types', status: 'updated' })
+    } catch {
+      // Try JSONB approach
+      try {
+        await db.query(`
+          UPDATE print_service_printers
+          SET supported_document_types = '["pos_receipt", "product_label", "invoice", "purchase_invoice", "sales_report", "inventory_count_report", "cash_register_report", "shipping_label"]'::JSONB
+          WHERE supported_document_types IS NULL
+             OR jsonb_array_length(supported_document_types) < 8
+        `)
+        results.push({ table: 'print_service_printers.update_types', status: 'updated (jsonb)' })
+      } catch {
+        results.push({ table: 'print_service_printers.update_types', status: 'skipped' })
+      }
+    }
+
     // Add comments to tables for documentation
     try {
       await db.query(`COMMENT ON TABLE print_services IS 'Local print service installations (Electron app)'`)

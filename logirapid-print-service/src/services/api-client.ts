@@ -45,7 +45,15 @@ interface HeartbeatResponse {
 interface PrintJob {
   id: number
   jobNumber: string
-  documentType: 'pos_receipt' | 'shipping_label' | 'product_label' | 'invoice'
+  documentType:
+    | 'pos_receipt'
+    | 'shipping_label'
+    | 'product_label'
+    | 'invoice'
+    | 'purchase_invoice'
+    | 'sales_report'
+    | 'inventory_count_report'
+    | 'cash_register_report'
   sourceType: string | null
   sourceId: number | null
   documentData: Record<string, unknown>
