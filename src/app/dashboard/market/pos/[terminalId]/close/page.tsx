@@ -1,7 +1,7 @@
 'use client'
 
-import React, { useState, useEffect } from 'react'
-import { motion } from 'framer-motion'
+import React, { useState, useEffect, useCallback } from 'react'
+import { motion, AnimatePresence } from 'framer-motion'
 import {
   DollarSign,
   ChevronLeft,
@@ -12,10 +12,12 @@ import {
   TrendingDown,
   Receipt,
   Clock,
-  ShoppingCart,
   Package,
   ClipboardCheck,
-  AlertTriangle
+  AlertTriangle,
+  Plus,
+  Minus,
+  Calculator
 } from 'lucide-react'
 import { useRouter, useParams } from 'next/navigation'
 import { DashboardLayout } from '@/components/layout/dashboard-layout'
@@ -58,6 +60,43 @@ interface InventoryCountSummary {
   completedAt: string | null
 }
 
+// Denominations for each currency
+const USD_DENOMINATIONS = [
+  { value: 100, label: '$100' },
+  { value: 50, label: '$50' },
+  { value: 20, label: '$20' },
+  { value: 10, label: '$10' },
+  { value: 5, label: '$5' },
+  { value: 1, label: '$1' },
+  { value: 0.25, label: '25¢' },
+  { value: 0.10, label: '10¢' },
+  { value: 0.05, label: '5¢' },
+  { value: 0.01, label: '1¢' }
+]
+
+const CUP_DENOMINATIONS = [
+  { value: 1000, label: '1000' },
+  { value: 500, label: '500' },
+  { value: 200, label: '200' },
+  { value: 100, label: '100' },
+  { value: 50, label: '50' },
+  { value: 20, label: '20' },
+  { value: 10, label: '10' },
+  { value: 5, label: '5' },
+  { value: 1, label: '1' }
+]
+
+const MLC_DENOMINATIONS = [
+  { value: 100, label: '$100' },
+  { value: 50, label: '$50' },
+  { value: 20, label: '$20' },
+  { value: 10, label: '$10' },
+  { value: 5, label: '$5' },
+  { value: 1, label: '$1' }
+]
+
+type CurrencyTab = 'usd' | 'cup' | 'mlc'
+
 export default function CloseSessionPage() {
   const { theme } = useTheme()
   const router = useRouter()
@@ -70,15 +109,29 @@ export default function CloseSessionPage() {
   const [closing, setClosing] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [countMissing, setCountMissing] = useState(false)
-
-  const [closingCash, setClosingCash] = useState({ usd: 0, cup: 0, mlc: 0 })
-  const [closingNotes, setClosingNotes] = useState('')
   const [countPendingApproval, setCountPendingApproval] = useState(false)
+
+  // Denomination counts
+  const [usdCounts, setUsdCounts] = useState<Record<number, number>>({})
+  const [cupCounts, setCupCounts] = useState<Record<number, number>>({})
+  const [mlcCounts, setMlcCounts] = useState<Record<number, number>>({})
+  const [activeTab, setActiveTab] = useState<CurrencyTab>('usd')
+  const [closingNotes, setClosingNotes] = useState('')
+
+  // Calculate totals from denominations
+  const calculateTotal = useCallback((counts: Record<number, number>, denominations: typeof USD_DENOMINATIONS) => {
+    return denominations.reduce((sum, d) => sum + (counts[d.value] || 0) * d.value, 0)
+  }, [])
+
+  const closingCash = {
+    usd: calculateTotal(usdCounts, USD_DENOMINATIONS),
+    cup: calculateTotal(cupCounts, CUP_DENOMINATIONS),
+    mlc: calculateTotal(mlcCounts, MLC_DENOMINATIONS)
+  }
 
   useEffect(() => {
     const fetchSession = async () => {
       try {
-        // Get open session for this terminal
         const sessionsRes = await fetch(`/api/market/pos/sessions?terminalId=${terminalId}&status=open`)
         const sessionsData = await sessionsRes.json()
 
@@ -89,29 +142,23 @@ export default function CloseSessionPage() {
 
         const openSession = sessionsData.data.sessions[0]
 
-        // Check if inventory count exists - use 'any' status to find both in_progress and completed
+        // Check if inventory count exists
         const countRes = await fetch(`/api/market/pos/inventory-count?sessionId=${openSession.id}&status=any`)
         const countData = await countRes.json()
 
-        // Si no hay ningún conteo registrado, mostrar mensaje de que se requiere conteo
         if (!countData.success || !countData.data) {
-          // No hay ningún conteo - mostrar mensaje de conteo requerido
           setCountMissing(true)
           setLoading(false)
           return
         }
 
-        // Si el conteo está en progreso pero no completado, también mostrar mensaje
         if (countData.data.status === 'in_progress') {
           setCountMissing(true)
           setLoading(false)
           return
         }
 
-        // Si el conteo está completado pero tiene diferencias y no está aprobado,
-        // mostrar mensaje de que requiere aprobación del admin
-        if (countData.data.status === 'completed' &&
-            countData.data.productsWithDifferences > 0) {
+        if (countData.data.status === 'completed' && countData.data.productsWithDifferences > 0) {
           setCountPendingApproval(true)
           setInventoryCount({
             id: countData.data.id,
@@ -140,14 +187,11 @@ export default function CloseSessionPage() {
           completedAt: countData.data.completedAt
         })
 
-        // Get full session details
         const detailsRes = await fetch(`/api/market/pos/sessions/${openSession.id}`)
         const detailsData = await detailsRes.json()
 
         if (detailsData.success) {
           setSession(detailsData.data)
-          // Pre-fill with expected values
-          setClosingCash(detailsData.data.expectedCash)
         } else {
           setError(detailsData.error)
         }
@@ -192,6 +236,27 @@ export default function CloseSessionPage() {
     }
   }
 
+  // Increment/Decrement denomination count
+  const updateCount = (currency: CurrencyTab, value: number, delta: number) => {
+    if (currency === 'usd') {
+      setUsdCounts(prev => ({ ...prev, [value]: Math.max(0, (prev[value] || 0) + delta) }))
+    } else if (currency === 'cup') {
+      setCupCounts(prev => ({ ...prev, [value]: Math.max(0, (prev[value] || 0) + delta) }))
+    } else {
+      setMlcCounts(prev => ({ ...prev, [value]: Math.max(0, (prev[value] || 0) + delta) }))
+    }
+  }
+
+  const setCount = (currency: CurrencyTab, value: number, count: number) => {
+    if (currency === 'usd') {
+      setUsdCounts(prev => ({ ...prev, [value]: Math.max(0, count) }))
+    } else if (currency === 'cup') {
+      setCupCounts(prev => ({ ...prev, [value]: Math.max(0, count) }))
+    } else {
+      setMlcCounts(prev => ({ ...prev, [value]: Math.max(0, count) }))
+    }
+  }
+
   // Calculate differences
   const differences = session ? {
     usd: closingCash.usd - session.expectedCash.usd,
@@ -216,7 +281,7 @@ export default function CloseSessionPage() {
     )
   }
 
-  // Inventory count required but not completed
+  // Inventory count required
   if (countMissing) {
     return (
       <ProtectedRoute>
@@ -247,9 +312,7 @@ export default function CloseSessionPage() {
                   onClick={() => router.push(`/dashboard/market/pos/${terminalId}`)}
                   className={cn(
                     'flex-1 py-2.5 rounded-xl font-medium',
-                    theme === 'dark'
-                      ? 'bg-gray-800 hover:bg-gray-700'
-                      : 'bg-gray-100 hover:bg-gray-200'
+                    theme === 'dark' ? 'bg-gray-800 hover:bg-gray-700' : 'bg-gray-100 hover:bg-gray-200'
                   )}
                 >
                   Volver al POS
@@ -269,7 +332,7 @@ export default function CloseSessionPage() {
     )
   }
 
-  // Count completed but has differences - waiting for admin approval
+  // Waiting for admin approval
   if (countPendingApproval && inventoryCount) {
     return (
       <ProtectedRoute>
@@ -293,10 +356,8 @@ export default function CloseSessionPage() {
               </div>
               <h2 className="text-xl font-bold mb-2">Esperando Aprobación del Admin</h2>
               <p className="text-gray-500 mb-4">
-                El conteo de inventario tiene diferencias y está pendiente de revisión por un administrador.
+                El conteo de inventario tiene diferencias y está pendiente de revisión.
               </p>
-
-              {/* Count Summary */}
               <div className={cn(
                 'rounded-xl p-4 mb-6 text-left',
                 theme === 'dark' ? 'bg-gray-700/50' : 'bg-gray-100'
@@ -311,39 +372,22 @@ export default function CloseSessionPage() {
                     <p className="text-xs text-gray-500">Con diferencias</p>
                     <p className="font-bold text-amber-500">{inventoryCount.productsWithDifferences}</p>
                   </div>
-                  <div className="col-span-2">
-                    <p className="text-xs text-gray-500">Valor diferencia</p>
-                    <p className={cn(
-                      'font-bold text-lg',
-                      inventoryCount.totalDifferenceValue >= 0 ? 'text-green-500' : 'text-red-500'
-                    )}>
-                      ${inventoryCount.totalDifferenceValue.toFixed(2)}
-                    </p>
-                  </div>
                 </div>
               </div>
-
-              <p className="text-xs text-gray-400 mb-6">
-                Una vez que el administrador apruebe el conteo, podrás proceder con el cierre de caja.
-              </p>
-
               <div className="flex gap-3">
                 <button
                   onClick={() => router.push(`/dashboard/market/pos/${terminalId}`)}
                   className={cn(
                     'flex-1 py-2.5 rounded-xl font-medium',
-                    theme === 'dark'
-                      ? 'bg-gray-800 hover:bg-gray-700'
-                      : 'bg-gray-100 hover:bg-gray-200'
+                    theme === 'dark' ? 'bg-gray-800 hover:bg-gray-700' : 'bg-gray-100 hover:bg-gray-200'
                   )}
                 >
                   Volver al POS
                 </button>
                 <button
                   onClick={() => router.push('/dashboard/market/pos/inventory-counts')}
-                  className="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 text-white font-medium shadow-lg shadow-amber-500/25 hover:from-amber-600 hover:to-amber-700 flex items-center justify-center gap-2"
+                  className="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 text-white font-medium"
                 >
-                  <ClipboardCheck className="w-4 h-4" />
                   Ver Estado
                 </button>
               </div>
@@ -375,424 +419,279 @@ export default function CloseSessionPage() {
     )
   }
 
+  const getDenominations = () => {
+    if (activeTab === 'usd') return USD_DENOMINATIONS
+    if (activeTab === 'cup') return CUP_DENOMINATIONS
+    return MLC_DENOMINATIONS
+  }
+
+  const getCounts = () => {
+    if (activeTab === 'usd') return usdCounts
+    if (activeTab === 'cup') return cupCounts
+    return mlcCounts
+  }
+
   return (
     <ProtectedRoute>
       <DashboardLayout>
-        <div className="min-h-screen p-6">
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="max-w-4xl mx-auto space-y-6"
-          >
+        <div className="min-h-screen p-4 md:p-6">
+          <div className="max-w-6xl mx-auto space-y-4 md:space-y-6">
             {/* Header */}
-            <div className="flex items-center gap-4">
+            <div className="flex items-center gap-3">
               <button
                 onClick={() => router.back()}
                 className={cn(
-                  'p-2 rounded-lg',
+                  'p-2 rounded-lg transition-colors',
                   theme === 'dark' ? 'hover:bg-gray-800' : 'hover:bg-gray-100'
                 )}
               >
-                <ChevronLeft className="w-6 h-6" />
+                <ChevronLeft className="w-5 h-5" />
               </button>
               <div>
-                <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
-                  Cerrar Sesión de Caja
-                </h1>
-                <p className="text-gray-500">
-                  {session.sessionCode} • {session.terminalName}
-                </p>
+                <h1 className="text-xl md:text-2xl font-bold">Arqueo de Caja</h1>
+                <p className="text-sm text-gray-500">{session.sessionCode} • {session.terminalName}</p>
               </div>
             </div>
 
-            {/* Session Summary */}
-            <div className={cn(
-              'rounded-2xl border shadow-xl p-6',
-              theme === 'dark'
-                ? 'bg-gradient-to-br from-gray-800 to-gray-900 border-gray-700'
-                : 'bg-gradient-to-br from-slate-50 to-white border-slate-200'
-            )}>
-              <h2 className="text-lg font-bold mb-4 flex items-center gap-2">
-                <Receipt className="w-5 h-5" />
-                Resumen de Sesión
-              </h2>
-
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-                <div className={cn(
-                  'p-4 rounded-xl',
-                  theme === 'dark' ? 'bg-gray-700/50' : 'bg-gray-50'
-                )}>
-                  <p className="text-sm text-gray-500 mb-1">Ventas</p>
-                  <p className="text-2xl font-bold text-green-500">
-                    ${session.summary.totalSales.toFixed(2)}
-                  </p>
-                  <p className="text-xs text-gray-500 mt-1">
-                    {session.summary.paidOrders} órdenes
-                  </p>
-                </div>
-
-                <div className={cn(
-                  'p-4 rounded-xl',
-                  theme === 'dark' ? 'bg-gray-700/50' : 'bg-gray-50'
-                )}>
-                  <p className="text-sm text-gray-500 mb-1">Reembolsos</p>
-                  <p className="text-2xl font-bold text-red-500">
-                    ${session.summary.totalRefunds.toFixed(2)}
-                  </p>
-                  <p className="text-xs text-gray-500 mt-1">
-                    {session.summary.refundedOrders} órdenes
-                  </p>
-                </div>
-
-                <div className={cn(
-                  'p-4 rounded-xl',
-                  theme === 'dark' ? 'bg-gray-700/50' : 'bg-gray-50'
-                )}>
-                  <p className="text-sm text-gray-500 mb-1">Descuentos</p>
-                  <p className="text-2xl font-bold text-amber-500">
-                    ${session.summary.totalDiscounts.toFixed(2)}
-                  </p>
-                </div>
-
-                <div className={cn(
-                  'p-4 rounded-xl',
-                  theme === 'dark' ? 'bg-gray-700/50' : 'bg-gray-50'
-                )}>
-                  <p className="text-sm text-gray-500 mb-1">Anuladas</p>
-                  <p className="text-2xl font-bold text-gray-500">
-                    {session.summary.voidedOrders}
-                  </p>
-                  <p className="text-xs text-gray-500 mt-1">órdenes</p>
-                </div>
-              </div>
-
-              {/* Payments by method */}
-              {session.paymentsByMethod.length > 0 && (
-                <div>
-                  <h3 className="text-sm font-medium mb-3">Pagos por Método</h3>
-                  <div className="space-y-2">
-                    {session.paymentsByMethod.map((payment, i) => (
-                      <div
-                        key={i}
-                        className={cn(
-                          'flex items-center justify-between p-3 rounded-lg',
-                          theme === 'dark' ? 'bg-gray-700/30' : 'bg-gray-50'
-                        )}
-                      >
-                        <div className="flex items-center gap-2">
-                          <span className="capitalize">{payment.method}</span>
-                          <span className="text-xs text-gray-500">({payment.currency})</span>
-                        </div>
-                        <div className="text-right">
-                          <span className="font-bold">${payment.amount.toFixed(2)}</span>
-                          <span className="text-xs text-gray-500 ml-2">
-                            ({payment.count} pagos)
-                          </span>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* Inventory Count Summary */}
-            {inventoryCount && (
+            <div className="grid lg:grid-cols-2 gap-4 md:gap-6">
+              {/* Left Column - Cash Count */}
               <div className={cn(
-                'rounded-2xl border shadow-xl p-6',
-                theme === 'dark'
-                  ? 'bg-gradient-to-br from-gray-800 to-gray-900 border-gray-700'
-                  : 'bg-gradient-to-br from-slate-50 to-white border-slate-200'
+                'rounded-2xl border shadow-lg overflow-hidden',
+                theme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'
               )}>
-                <div className="flex items-center justify-between mb-4">
-                  <h2 className="text-lg font-bold flex items-center gap-2">
-                    <ClipboardCheck className="w-5 h-5 text-green-500" />
-                    Conteo de Inventario Completado
-                  </h2>
-                  <span className="text-sm text-gray-500">{inventoryCount.countNumber}</span>
+                {/* Currency Tabs */}
+                <div className="flex border-b border-gray-700">
+                  {(['usd', 'cup', 'mlc'] as const).map(currency => (
+                    <button
+                      key={currency}
+                      onClick={() => setActiveTab(currency)}
+                      className={cn(
+                        'flex-1 py-3 px-4 text-sm font-medium transition-colors relative',
+                        activeTab === currency
+                          ? 'text-blue-500'
+                          : theme === 'dark' ? 'text-gray-400 hover:text-gray-300' : 'text-gray-500 hover:text-gray-700'
+                      )}
+                    >
+                      <span className="uppercase">{currency}</span>
+                      <span className="block text-xs mt-0.5 font-mono">
+                        {currency === 'usd' && `$${closingCash.usd.toFixed(2)}`}
+                        {currency === 'cup' && `$${closingCash.cup.toFixed(0)}`}
+                        {currency === 'mlc' && `$${closingCash.mlc.toFixed(2)}`}
+                      </span>
+                      {activeTab === currency && (
+                        <motion.div
+                          layoutId="activeTab"
+                          className="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-500"
+                        />
+                      )}
+                    </button>
+                  ))}
                 </div>
 
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                  <div className={cn(
-                    'p-4 rounded-xl',
-                    theme === 'dark' ? 'bg-gray-700/50' : 'bg-gray-50'
-                  )}>
-                    <p className="text-sm text-gray-500 mb-1">Almacén</p>
-                    <p className="font-bold">{inventoryCount.warehouseName || 'N/A'}</p>
-                  </div>
-
-                  <div className={cn(
-                    'p-4 rounded-xl',
-                    theme === 'dark' ? 'bg-gray-700/50' : 'bg-gray-50'
-                  )}>
-                    <p className="text-sm text-gray-500 mb-1">Productos Contados</p>
-                    <p className="text-2xl font-bold">{inventoryCount.totalProducts}</p>
-                  </div>
-
-                  <div className={cn(
-                    'p-4 rounded-xl',
-                    inventoryCount.productsWithDifferences > 0
-                      ? theme === 'dark' ? 'bg-amber-900/30' : 'bg-amber-50'
-                      : theme === 'dark' ? 'bg-green-900/30' : 'bg-green-50'
-                  )}>
-                    <p className="text-sm text-gray-500 mb-1">Con Diferencias</p>
-                    <p className={cn(
-                      'text-2xl font-bold',
-                      inventoryCount.productsWithDifferences > 0 ? 'text-amber-500' : 'text-green-500'
-                    )}>
-                      {inventoryCount.productsWithDifferences}
-                    </p>
-                  </div>
-
-                  <div className={cn(
-                    'p-4 rounded-xl',
-                    inventoryCount.totalDifferenceValue === 0
-                      ? theme === 'dark' ? 'bg-green-900/30' : 'bg-green-50'
-                      : inventoryCount.totalDifferenceValue > 0
-                      ? theme === 'dark' ? 'bg-green-900/30' : 'bg-green-50'
-                      : theme === 'dark' ? 'bg-red-900/30' : 'bg-red-50'
-                  )}>
-                    <p className="text-sm text-gray-500 mb-1">Valor Diferencia</p>
-                    <p className={cn(
-                      'text-2xl font-bold',
-                      inventoryCount.totalDifferenceValue === 0
-                        ? 'text-green-500'
-                        : inventoryCount.totalDifferenceValue > 0
-                        ? 'text-green-500'
-                        : 'text-red-500'
-                    )}>
-                      ${inventoryCount.totalDifferenceValue.toFixed(2)}
-                    </p>
-                  </div>
-                </div>
-
-                {inventoryCount.adjustmentOperationId && (
-                  <div className={cn(
-                    'mt-4 p-3 rounded-lg flex items-center gap-2 text-sm',
-                    theme === 'dark' ? 'bg-blue-900/30 text-blue-300' : 'bg-blue-50 text-blue-700'
-                  )}>
-                    <Package className="w-4 h-4" />
-                    Se creó una operación de ajuste pendiente de aprobación
-                  </div>
-                )}
-
-                <button
-                  onClick={() => router.push(`/dashboard/market/pos/${terminalId}/count/report`)}
-                  className={cn(
-                    'mt-4 w-full py-2 rounded-lg text-sm font-medium transition-colors',
-                    theme === 'dark'
-                      ? 'bg-gray-700 hover:bg-gray-600'
-                      : 'bg-gray-100 hover:bg-gray-200'
-                  )}
-                >
-                  Ver Reporte Completo
-                </button>
-              </div>
-            )}
-
-            {/* Cash Count */}
-            <div className={cn(
-              'rounded-2xl border shadow-xl p-6',
-              theme === 'dark'
-                ? 'bg-gradient-to-br from-gray-800 to-gray-900 border-gray-700'
-                : 'bg-gradient-to-br from-slate-50 to-white border-slate-200'
-            )}>
-              <h2 className="text-lg font-bold mb-4 flex items-center gap-2">
-                <DollarSign className="w-5 h-5" />
-                Arqueo de Caja
-              </h2>
-
-              <div className="grid gap-6">
-                {/* Opening Cash */}
-                <div>
-                  <h3 className="text-sm font-medium mb-3 text-gray-500">Efectivo de Apertura</h3>
-                  <div className="grid grid-cols-3 gap-4">
-                    <div className={cn(
-                      'p-3 rounded-lg text-center',
-                      theme === 'dark' ? 'bg-gray-700/50' : 'bg-gray-50'
-                    )}>
-                      <p className="text-xs text-gray-500">USD</p>
-                      <p className="text-lg font-bold">${session.openingCash.usd.toFixed(2)}</p>
-                    </div>
-                    <div className={cn(
-                      'p-3 rounded-lg text-center',
-                      theme === 'dark' ? 'bg-gray-700/50' : 'bg-gray-50'
-                    )}>
-                      <p className="text-xs text-gray-500">CUP</p>
-                      <p className="text-lg font-bold">${session.openingCash.cup.toFixed(0)}</p>
-                    </div>
-                    <div className={cn(
-                      'p-3 rounded-lg text-center',
-                      theme === 'dark' ? 'bg-gray-700/50' : 'bg-gray-50'
-                    )}>
-                      <p className="text-xs text-gray-500">MLC</p>
-                      <p className="text-lg font-bold">${session.openingCash.mlc.toFixed(2)}</p>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Expected Cash */}
-                <div>
-                  <h3 className="text-sm font-medium mb-3 text-gray-500">Efectivo Esperado</h3>
-                  <div className="grid grid-cols-3 gap-4">
-                    <div className={cn(
-                      'p-3 rounded-lg text-center',
-                      theme === 'dark' ? 'bg-blue-900/30 border border-blue-800/50' : 'bg-blue-50 border border-blue-200'
-                    )}>
-                      <p className="text-xs text-blue-600 dark:text-blue-400">USD</p>
-                      <p className="text-lg font-bold text-blue-600 dark:text-blue-400">
-                        ${session.expectedCash.usd.toFixed(2)}
-                      </p>
-                    </div>
-                    <div className={cn(
-                      'p-3 rounded-lg text-center',
-                      theme === 'dark' ? 'bg-blue-900/30 border border-blue-800/50' : 'bg-blue-50 border border-blue-200'
-                    )}>
-                      <p className="text-xs text-blue-600 dark:text-blue-400">CUP</p>
-                      <p className="text-lg font-bold text-blue-600 dark:text-blue-400">
-                        ${session.expectedCash.cup.toFixed(0)}
-                      </p>
-                    </div>
-                    <div className={cn(
-                      'p-3 rounded-lg text-center',
-                      theme === 'dark' ? 'bg-blue-900/30 border border-blue-800/50' : 'bg-blue-50 border border-blue-200'
-                    )}>
-                      <p className="text-xs text-blue-600 dark:text-blue-400">MLC</p>
-                      <p className="text-lg font-bold text-blue-600 dark:text-blue-400">
-                        ${session.expectedCash.mlc.toFixed(2)}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Actual Count */}
-                <div>
-                  <h3 className="text-sm font-medium mb-3">Conteo Real</h3>
-                  <div className="grid grid-cols-3 gap-4">
-                    <div>
-                      <label className="block text-xs text-gray-500 mb-1">USD</label>
-                      <input
-                        type="number"
-                        min="0"
-                        step="0.01"
-                        value={closingCash.usd}
-                        onChange={(e) => setClosingCash(prev => ({ ...prev, usd: parseFloat(e.target.value) || 0 }))}
-                        className={cn(
-                          'w-full px-3 py-2 rounded-xl border text-lg font-mono focus:outline-none focus:ring-2',
-                          theme === 'dark'
-                            ? 'bg-gray-800 border-gray-700 focus:border-blue-500 focus:ring-blue-500/20'
-                            : 'bg-white border-gray-200 focus:border-blue-500 focus:ring-blue-500/20'
-                        )}
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-xs text-gray-500 mb-1">CUP</label>
-                      <input
-                        type="number"
-                        min="0"
-                        step="1"
-                        value={closingCash.cup}
-                        onChange={(e) => setClosingCash(prev => ({ ...prev, cup: parseFloat(e.target.value) || 0 }))}
-                        className={cn(
-                          'w-full px-3 py-2 rounded-xl border text-lg font-mono focus:outline-none focus:ring-2',
-                          theme === 'dark'
-                            ? 'bg-gray-800 border-gray-700 focus:border-blue-500 focus:ring-blue-500/20'
-                            : 'bg-white border-gray-200 focus:border-blue-500 focus:ring-blue-500/20'
-                        )}
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-xs text-gray-500 mb-1">MLC</label>
-                      <input
-                        type="number"
-                        min="0"
-                        step="0.01"
-                        value={closingCash.mlc}
-                        onChange={(e) => setClosingCash(prev => ({ ...prev, mlc: parseFloat(e.target.value) || 0 }))}
-                        className={cn(
-                          'w-full px-3 py-2 rounded-xl border text-lg font-mono focus:outline-none focus:ring-2',
-                          theme === 'dark'
-                            ? 'bg-gray-800 border-gray-700 focus:border-blue-500 focus:ring-blue-500/20'
-                            : 'bg-white border-gray-200 focus:border-blue-500 focus:ring-blue-500/20'
-                        )}
-                      />
-                    </div>
-                  </div>
-                </div>
-
-                {/* Differences */}
-                <div>
-                  <h3 className="text-sm font-medium mb-3">Diferencia</h3>
-                  <div className="grid grid-cols-3 gap-4 mb-4">
-                    {(['usd', 'cup', 'mlc'] as const).map(currency => {
-                      const diff = differences[currency]
+                {/* Denominations Grid */}
+                <div className="p-3 md:p-4">
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                    {getDenominations().map(d => {
+                      const count = getCounts()[d.value] || 0
+                      const subtotal = count * d.value
                       return (
                         <div
-                          key={currency}
+                          key={d.value}
                           className={cn(
-                            'p-3 rounded-lg text-center',
-                            diff === 0
-                              ? theme === 'dark' ? 'bg-gray-700/50' : 'bg-gray-50'
-                              : diff > 0
-                              ? theme === 'dark' ? 'bg-green-900/30' : 'bg-green-50'
-                              : theme === 'dark' ? 'bg-red-900/30' : 'bg-red-50'
+                            'rounded-xl p-2 md:p-3 transition-colors',
+                            count > 0
+                              ? theme === 'dark' ? 'bg-blue-900/30 border border-blue-700/50' : 'bg-blue-50 border border-blue-200'
+                              : theme === 'dark' ? 'bg-gray-700/50' : 'bg-gray-50'
                           )}
                         >
-                          <p className="text-xs text-gray-500 uppercase">{currency}</p>
-                          <div className="flex items-center justify-center gap-1">
-                            {diff > 0 ? (
-                              <TrendingUp className="w-4 h-4 text-green-500" />
-                            ) : diff < 0 ? (
-                              <TrendingDown className="w-4 h-4 text-red-500" />
-                            ) : null}
-                            <p className={cn(
-                              'text-lg font-bold',
-                              diff === 0 ? '' : diff > 0 ? 'text-green-500' : 'text-red-500'
-                            )}>
-                              {diff >= 0 ? '+' : ''}{diff.toFixed(currency === 'cup' ? 0 : 2)}
-                            </p>
+                          <div className="flex items-center justify-between mb-2">
+                            <span className="font-bold text-sm">{d.label}</span>
+                            <span className="text-xs text-gray-500">
+                              {activeTab === 'cup' ? `$${subtotal.toFixed(0)}` : `$${subtotal.toFixed(2)}`}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-1">
+                            <button
+                              onClick={() => updateCount(activeTab, d.value, -1)}
+                              disabled={count === 0}
+                              className={cn(
+                                'p-1.5 rounded-lg transition-colors',
+                                count === 0
+                                  ? 'opacity-30 cursor-not-allowed'
+                                  : theme === 'dark' ? 'bg-gray-600 hover:bg-gray-500' : 'bg-gray-200 hover:bg-gray-300'
+                              )}
+                            >
+                              <Minus className="w-3 h-3" />
+                            </button>
+                            <input
+                              type="number"
+                              min="0"
+                              value={count}
+                              onChange={e => setCount(activeTab, d.value, parseInt(e.target.value) || 0)}
+                              className={cn(
+                                'flex-1 text-center font-mono font-bold py-1 rounded-lg w-12',
+                                theme === 'dark' ? 'bg-gray-800 border-gray-600' : 'bg-white border-gray-300',
+                                'border focus:outline-none focus:ring-1 focus:ring-blue-500'
+                              )}
+                            />
+                            <button
+                              onClick={() => updateCount(activeTab, d.value, 1)}
+                              className={cn(
+                                'p-1.5 rounded-lg transition-colors',
+                                theme === 'dark' ? 'bg-gray-600 hover:bg-gray-500' : 'bg-gray-200 hover:bg-gray-300'
+                              )}
+                            >
+                              <Plus className="w-3 h-3" />
+                            </button>
                           </div>
                         </div>
                       )
                     })}
                   </div>
 
-                  {/* Total difference in USD */}
+                  {/* Currency Total */}
                   <div className={cn(
-                    'p-4 rounded-xl',
-                    Math.abs(totalDifferenceUsd) < 0.01
-                      ? 'bg-green-100 dark:bg-green-900/30'
-                      : totalDifferenceUsd > 0
-                      ? 'bg-green-100 dark:bg-green-900/30'
-                      : 'bg-red-100 dark:bg-red-900/30'
+                    'mt-4 p-4 rounded-xl',
+                    theme === 'dark' ? 'bg-gray-700/50' : 'bg-gray-100'
                   )}>
-                    <p className="text-sm text-center mb-1">Diferencia Total (USD equiv.)</p>
-                    <p className={cn(
-                      'text-3xl font-bold text-center',
-                      Math.abs(totalDifferenceUsd) < 0.01
-                        ? 'text-green-600'
-                        : totalDifferenceUsd > 0
-                        ? 'text-green-600'
-                        : 'text-red-600'
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-gray-500">Total {activeTab.toUpperCase()}</span>
+                      <span className="text-2xl font-bold font-mono">
+                        {activeTab === 'cup' ? `$${closingCash[activeTab].toFixed(0)}` : `$${closingCash[activeTab].toFixed(2)}`}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between mt-2 pt-2 border-t border-gray-600/50">
+                      <span className="text-xs text-gray-500">Esperado</span>
+                      <span className="text-sm font-mono text-blue-400">
+                        {activeTab === 'cup' ? `$${session.expectedCash[activeTab].toFixed(0)}` : `$${session.expectedCash[activeTab].toFixed(2)}`}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between mt-1">
+                      <span className="text-xs text-gray-500">Diferencia</span>
+                      <span className={cn(
+                        'text-sm font-mono font-bold',
+                        differences[activeTab] === 0 ? 'text-gray-400' :
+                        differences[activeTab] > 0 ? 'text-green-400' : 'text-red-400'
+                      )}>
+                        {differences[activeTab] >= 0 ? '+' : ''}
+                        {activeTab === 'cup' ? differences[activeTab].toFixed(0) : differences[activeTab].toFixed(2)}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Right Column - Summary */}
+              <div className="space-y-4">
+                {/* Session Summary */}
+                <div className={cn(
+                  'rounded-2xl border shadow-lg p-4 md:p-6',
+                  theme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'
+                )}>
+                  <h2 className="text-lg font-bold mb-4 flex items-center gap-2">
+                    <Receipt className="w-5 h-5" />
+                    Resumen de Sesión
+                  </h2>
+
+                  <div className="grid grid-cols-2 gap-3 mb-4">
+                    <div className={cn(
+                      'p-3 rounded-xl',
+                      theme === 'dark' ? 'bg-gray-700/50' : 'bg-gray-50'
                     )}>
-                      {totalDifferenceUsd >= 0 ? '+' : ''}${totalDifferenceUsd.toFixed(2)}
-                    </p>
+                      <p className="text-xs text-gray-500 mb-1">Ventas</p>
+                      <p className="text-xl font-bold text-green-500">${session.summary.totalSales.toFixed(2)}</p>
+                      <p className="text-xs text-gray-500">{session.summary.paidOrders} órdenes</p>
+                    </div>
+                    <div className={cn(
+                      'p-3 rounded-xl',
+                      theme === 'dark' ? 'bg-gray-700/50' : 'bg-gray-50'
+                    )}>
+                      <p className="text-xs text-gray-500 mb-1">Descuentos</p>
+                      <p className="text-xl font-bold text-amber-500">${session.summary.totalDiscounts.toFixed(2)}</p>
+                    </div>
+                  </div>
+
+                  {session.paymentsByMethod.length > 0 && (
+                    <div className="space-y-2">
+                      <h3 className="text-sm font-medium text-gray-500">Pagos por Método</h3>
+                      {session.paymentsByMethod.map((payment, i) => (
+                        <div key={i} className={cn(
+                          'flex items-center justify-between p-2 rounded-lg text-sm',
+                          theme === 'dark' ? 'bg-gray-700/30' : 'bg-gray-50'
+                        )}>
+                          <span className="capitalize">{payment.method} ({payment.currency})</span>
+                          <span className="font-bold">${payment.amount.toFixed(2)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* Total Difference */}
+                <div className={cn(
+                  'rounded-2xl border shadow-lg p-4 md:p-6',
+                  Math.abs(totalDifferenceUsd) < 0.01
+                    ? 'bg-green-900/20 border-green-700/50'
+                    : totalDifferenceUsd > 0
+                    ? 'bg-green-900/20 border-green-700/50'
+                    : 'bg-red-900/20 border-red-700/50'
+                )}>
+                  <div className="flex items-center gap-2 mb-3">
+                    <Calculator className="w-5 h-5" />
+                    <h2 className="text-lg font-bold">Diferencia Total</h2>
+                  </div>
+
+                  <div className="grid grid-cols-3 gap-2 mb-4">
+                    {(['usd', 'cup', 'mlc'] as const).map(currency => (
+                      <div key={currency} className="text-center">
+                        <p className="text-xs text-gray-400 uppercase">{currency}</p>
+                        <p className={cn(
+                          'font-mono font-bold',
+                          differences[currency] === 0 ? 'text-gray-400' :
+                          differences[currency] > 0 ? 'text-green-400' : 'text-red-400'
+                        )}>
+                          {differences[currency] >= 0 ? '+' : ''}
+                          {currency === 'cup' ? differences[currency].toFixed(0) : differences[currency].toFixed(2)}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="text-center py-3 border-t border-gray-600/50">
+                    <p className="text-sm text-gray-400 mb-1">Equivalente USD</p>
+                    <div className="flex items-center justify-center gap-2">
+                      {totalDifferenceUsd > 0 ? (
+                        <TrendingUp className="w-6 h-6 text-green-400" />
+                      ) : totalDifferenceUsd < 0 ? (
+                        <TrendingDown className="w-6 h-6 text-red-400" />
+                      ) : null}
+                      <p className={cn(
+                        'text-3xl font-bold font-mono',
+                        Math.abs(totalDifferenceUsd) < 0.01 ? 'text-green-400' :
+                        totalDifferenceUsd > 0 ? 'text-green-400' : 'text-red-400'
+                      )}>
+                        {totalDifferenceUsd >= 0 ? '+' : ''}${totalDifferenceUsd.toFixed(2)}
+                      </p>
+                    </div>
                   </div>
                 </div>
 
                 {/* Notes */}
-                <div>
+                <div className={cn(
+                  'rounded-2xl border shadow-lg p-4 md:p-6',
+                  theme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'
+                )}>
                   <label className="block text-sm font-medium mb-2">Notas de Cierre</label>
                   <textarea
                     value={closingNotes}
                     onChange={(e) => setClosingNotes(e.target.value)}
-                    rows={3}
-                    placeholder="Observaciones al cerrar la caja..."
+                    rows={2}
+                    placeholder="Observaciones..."
                     className={cn(
-                      'w-full px-4 py-3 rounded-xl border focus:outline-none focus:ring-2 resize-none',
+                      'w-full px-3 py-2 rounded-xl border resize-none focus:outline-none focus:ring-2',
                       theme === 'dark'
-                        ? 'bg-gray-800 border-gray-700 focus:border-blue-500 focus:ring-blue-500/20'
-                        : 'bg-white border-gray-200 focus:border-blue-500 focus:ring-blue-500/20'
+                        ? 'bg-gray-700 border-gray-600 focus:ring-blue-500/50'
+                        : 'bg-gray-50 border-gray-200 focus:ring-blue-500/50'
                     )}
                   />
                 </div>
@@ -803,9 +702,7 @@ export default function CloseSessionPage() {
             {error && (
               <div className={cn(
                 'p-4 rounded-xl flex items-center gap-2',
-                theme === 'dark'
-                  ? 'bg-red-900/30 text-red-300 border border-red-800'
-                  : 'bg-red-50 text-red-600 border border-red-200'
+                'bg-red-900/30 text-red-300 border border-red-800'
               )}>
                 <AlertCircle className="w-5 h-5" />
                 {error}
@@ -813,15 +710,13 @@ export default function CloseSessionPage() {
             )}
 
             {/* Actions */}
-            <div className="flex gap-4">
+            <div className="flex gap-3 sticky bottom-4">
               <button
                 onClick={() => router.back()}
                 disabled={closing}
                 className={cn(
                   'flex-1 py-3 rounded-xl font-medium',
-                  theme === 'dark'
-                    ? 'bg-gray-800 hover:bg-gray-700'
-                    : 'bg-gray-100 hover:bg-gray-200'
+                  theme === 'dark' ? 'bg-gray-800 hover:bg-gray-700' : 'bg-gray-100 hover:bg-gray-200'
                 )}
               >
                 Cancelar
@@ -848,7 +743,7 @@ export default function CloseSessionPage() {
                 )}
               </button>
             </div>
-          </motion.div>
+          </div>
         </div>
       </DashboardLayout>
     </ProtectedRoute>

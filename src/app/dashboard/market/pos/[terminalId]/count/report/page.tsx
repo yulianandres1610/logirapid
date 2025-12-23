@@ -628,7 +628,7 @@ export default function InventoryCountReportPage() {
               </div>
             </div>
           ) : (
-            // NO DIFFERENCES: Print + Go to arqueo directly
+            // NO DIFFERENCES: Go to arqueo directly (print button is in header)
             <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3">
               <button
                 onClick={goBackToCount}
@@ -640,18 +640,9 @@ export default function InventoryCountReportPage() {
               </button>
 
               <button
-                onClick={handlePrint}
-                disabled={completing}
-                className="flex-1 sm:flex-initial px-4 py-2.5 sm:py-3 bg-green-600 rounded-xl font-semibold hover:bg-green-500 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 text-sm sm:text-base"
-              >
-                <Printer className="w-4 h-4 sm:w-5 sm:h-5" />
-                <span>Imprimir Conteo</span>
-              </button>
-
-              <button
                 onClick={completeAndGoToClose}
                 disabled={completing}
-                className="flex-1 sm:flex-initial px-4 sm:px-6 py-2.5 sm:py-3 bg-blue-600 rounded-xl font-semibold hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 text-sm sm:text-base"
+                className="flex-[2] sm:flex-initial px-4 sm:px-6 py-2.5 sm:py-3 bg-gradient-to-r from-green-500 to-green-600 rounded-xl font-semibold hover:from-green-600 hover:to-green-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 text-sm sm:text-base shadow-lg shadow-green-500/25"
               >
                 {completing ? (
                   <Loader2 className="w-4 h-4 sm:w-5 sm:h-5 animate-spin" />
