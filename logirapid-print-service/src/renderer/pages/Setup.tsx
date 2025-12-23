@@ -32,6 +32,12 @@ export default function SetupPage({ onComplete }: SetupPageProps) {
     setStep('connecting')
 
     try {
+      console.log('[Setup] Calling saveCredentials with:', {
+        serviceCode: formData.serviceCode,
+        apiKey: formData.apiKey.substring(0, 10) + '...',
+        serverUrl: formData.serverUrl
+      })
+
       const result = await window.electronAPI.saveCredentials({
         serviceCode: formData.serviceCode,
         apiKey: formData.apiKey,
@@ -39,14 +45,18 @@ export default function SetupPage({ onComplete }: SetupPageProps) {
         serverUrl: formData.serverUrl
       })
 
+      console.log('[Setup] Result from saveCredentials:', result)
+
       if (result.success) {
         onComplete()
       } else {
+        console.error('[Setup] Error:', result.error)
         setError(result.error || 'Error al conectar')
         setStep('credentials')
       }
-    } catch (err) {
-      setError('Error de conexión')
+    } catch (err: any) {
+      console.error('[Setup] Exception caught:', err)
+      setError(`Error: ${err?.message || 'Error de conexión desconocido'}`)
       setStep('credentials')
     }
   }
@@ -200,7 +210,7 @@ export default function SetupPage({ onComplete }: SetupPageProps) {
 
         {/* Footer */}
         <p className="text-center text-white/40 text-sm mt-6">
-          LogiRapid Print Service v1.1.0
+          LogiRapid Print Service v1.4.0
         </p>
       </div>
     </div>
