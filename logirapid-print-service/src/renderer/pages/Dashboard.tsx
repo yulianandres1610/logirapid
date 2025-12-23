@@ -5,6 +5,7 @@ interface Printer {
   printerName: string
   printerType: string
   connectionType: string
+  networkAddress?: string
   isOnline: boolean
   isDefault: boolean
 }
@@ -28,8 +29,9 @@ export default function DashboardPage({ onLogout }: DashboardPageProps) {
   const [printers, setPrinters] = useState<Printer[]>([])
   const [loading, setLoading] = useState(true)
   const [activeTab, setActiveTab] = useState<'status' | 'printers' | 'settings'>('status')
-  const [credentials, setCredentials] = useState<{ serviceId: number; serverUrl: string } | null>(null)
+  const [credentials, setCredentials] = useState<{ serviceCode: string; serverUrl: string } | null>(null)
   const [appVersion, setAppVersion] = useState('')
+  const [printingTest, setPrintingTest] = useState<string | null>(null)
 
   const fetchStatus = useCallback(async () => {
     try {
@@ -80,6 +82,22 @@ export default function DashboardPage({ onLogout }: DashboardPageProps) {
     setPrinters(result as Printer[])
   }
 
+  const handleTestPrint = async (printerName: string) => {
+    setPrintingTest(printerName)
+    try {
+      const result = await window.electronAPI.testPrint(printerName)
+      if (result.success) {
+        alert('Página de prueba enviada correctamente')
+      } else {
+        alert(`Error: ${result.error || 'No se pudo imprimir'}`)
+      }
+    } catch (error) {
+      alert('Error al enviar página de prueba')
+    } finally {
+      setPrintingTest(null)
+    }
+  }
+
   const handleDisconnect = async () => {
     if (confirm('¿Desconectar este servicio? Tendrás que configurarlo nuevamente.')) {
       await window.electronAPI.clearCredentials()
@@ -108,7 +126,7 @@ export default function DashboardPage({ onLogout }: DashboardPageProps) {
           <div>
             <h1 className="text-xl font-bold text-white">LogiRapid Print Service</h1>
             <p className="text-white/60 text-sm">
-              Servicio #{credentials?.serviceId} • {credentials?.serverUrl}
+              Servicio #{credentials?.serviceCode} • {credentials?.serverUrl}
             </p>
           </div>
         </div>
@@ -218,35 +236,57 @@ export default function DashboardPage({ onLogout }: DashboardPageProps) {
               <p className="text-white/60">No se detectaron impresoras</p>
             </div>
           ) : (
-            <div className="space-y-2">
+            <div className="space-y-3">
               {printers.map((printer, i) => (
-                <div key={i} className="bg-white/10 rounded-xl p-4 flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
-                      printer.printerType.includes('thermal') ? 'bg-orange-500/20' : 'bg-blue-500/20'
+                <div key={i} className="bg-white/10 rounded-xl p-4">
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-3">
+                      <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
+                        printer.printerType.includes('thermal') ? 'bg-orange-500/20' : 'bg-blue-500/20'
+                      }`}>
+                        <svg className={`w-5 h-5 ${
+                          printer.printerType.includes('thermal') ? 'text-orange-400' : 'text-blue-400'
+                        }`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+                        </svg>
+                      </div>
+                      <div>
+                        <p className="text-white font-medium">{printer.printerName}</p>
+                        <p className="text-white/60 text-sm">
+                          {printer.printerType === 'standard' ? 'Documento' : printer.printerType.replace('_', ' ')} • {printer.connectionType}
+                          {printer.networkAddress && ` • ${printer.networkAddress}`}
+                          {printer.isDefault && ' • Por defecto'}
+                        </p>
+                      </div>
+                    </div>
+                    <div className={`flex items-center gap-1.5 text-sm ${
+                      printer.isOnline ? 'text-green-400' : 'text-gray-400'
                     }`}>
-                      <svg className={`w-5 h-5 ${
-                        printer.printerType.includes('thermal') ? 'text-orange-400' : 'text-blue-400'
-                      }`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
-                      </svg>
-                    </div>
-                    <div>
-                      <p className="text-white font-medium">{printer.printerName}</p>
-                      <p className="text-white/60 text-sm">
-                        {printer.printerType.replace('_', ' ')} • {printer.connectionType}
-                        {printer.isDefault && ' • Por defecto'}
-                      </p>
+                      <div className={`w-2 h-2 rounded-full ${
+                        printer.isOnline ? 'bg-green-400' : 'bg-gray-400'
+                      }`} />
+                      {printer.isOnline ? 'En línea' : 'Offline'}
                     </div>
                   </div>
-                  <div className={`flex items-center gap-1.5 text-sm ${
-                    printer.isOnline ? 'text-green-400' : 'text-gray-400'
-                  }`}>
-                    <div className={`w-2 h-2 rounded-full ${
-                      printer.isOnline ? 'bg-green-400' : 'bg-gray-400'
-                    }`} />
-                    {printer.isOnline ? 'En línea' : 'Offline'}
-                  </div>
+                  <button
+                    onClick={() => handleTestPrint(printer.systemName)}
+                    disabled={printingTest === printer.systemName}
+                    className="w-full py-2 bg-blue-500/20 hover:bg-blue-500/30 disabled:bg-gray-500/20 text-blue-400 disabled:text-gray-400 text-sm font-medium rounded-lg transition-colors flex items-center justify-center gap-2"
+                  >
+                    {printingTest === printer.systemName ? (
+                      <>
+                        <div className="w-4 h-4 border-2 border-gray-400/30 border-t-blue-400 rounded-full animate-spin" />
+                        Imprimiendo...
+                      </>
+                    ) : (
+                      <>
+                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+                        </svg>
+                        Imprimir página de prueba
+                      </>
+                    )}
+                  </button>
                 </div>
               ))}
             </div>
@@ -262,7 +302,7 @@ export default function DashboardPage({ onLogout }: DashboardPageProps) {
             <div className="space-y-3 text-sm">
               <div className="flex justify-between">
                 <span className="text-white/60">ID del Servicio</span>
-                <span className="text-white font-mono">{credentials?.serviceId}</span>
+                <span className="text-white font-mono">{credentials?.serviceCode}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-white/60">Servidor</span>

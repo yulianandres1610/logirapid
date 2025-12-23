@@ -16,6 +16,7 @@ interface SystemPrinter {
 interface DetectedPrinter extends PrinterInfo {
   systemName: string
   isDefault: boolean
+  isOnline: boolean
 }
 
 class PrinterService {
@@ -353,6 +354,11 @@ class PrinterService {
       }
     }
 
+    // Determine if printer is online based on status
+    // Status 0 = idle (online), Status 1 = other status (may still be online)
+    // If no status info, assume online if printer was detected
+    const isOnline = systemPrinter.status === 0 || systemPrinter.status === undefined
+
     return {
       systemName: systemPrinter.name,
       printerName: systemPrinter.displayName || systemPrinter.name,
@@ -364,7 +370,8 @@ class PrinterService {
       supportsEscpos,
       supportsRaw: true, // Most modern printers support raw
       paperWidthMm,
-      isDefault: systemPrinter.isDefault
+      isDefault: systemPrinter.isDefault,
+      isOnline
     }
   }
 
