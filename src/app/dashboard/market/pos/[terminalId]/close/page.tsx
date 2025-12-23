@@ -73,6 +73,7 @@ export default function CloseSessionPage() {
 
   const [closingCash, setClosingCash] = useState({ usd: 0, cup: 0, mlc: 0 })
   const [closingNotes, setClosingNotes] = useState('')
+  const [countPendingApproval, setCountPendingApproval] = useState(false)
 
   useEffect(() => {
     const fetchSession = async () => {
@@ -88,13 +89,41 @@ export default function CloseSessionPage() {
 
         const openSession = sessionsData.data.sessions[0]
 
-        // Check if inventory count was completed
-        const countRes = await fetch(`/api/market/pos/inventory-count?sessionId=${openSession.id}`)
+        // Check if inventory count exists - use 'any' status to find both in_progress and completed
+        const countRes = await fetch(`/api/market/pos/inventory-count?sessionId=${openSession.id}&status=any`)
         const countData = await countRes.json()
 
-        if (!countData.success || !countData.data || countData.data.status !== 'completed') {
-          // No completed inventory count - redirect to count page
+        // Si no hay ningún conteo registrado, mostrar mensaje de que se requiere conteo
+        if (!countData.success || !countData.data) {
+          // No hay ningún conteo - mostrar mensaje de conteo requerido
           setCountMissing(true)
+          setLoading(false)
+          return
+        }
+
+        // Si el conteo está en progreso pero no completado, también mostrar mensaje
+        if (countData.data.status === 'in_progress') {
+          setCountMissing(true)
+          setLoading(false)
+          return
+        }
+
+        // Si el conteo está completado pero tiene diferencias y no está aprobado,
+        // mostrar mensaje de que requiere aprobación del admin
+        if (countData.data.status === 'completed' &&
+            countData.data.productsWithDifferences > 0) {
+          setCountPendingApproval(true)
+          setInventoryCount({
+            id: countData.data.id,
+            countNumber: countData.data.countNumber,
+            status: countData.data.status,
+            warehouseName: countData.data.warehouseName,
+            totalProducts: countData.data.totalProducts || 0,
+            productsWithDifferences: countData.data.productsWithDifferences || 0,
+            totalDifferenceValue: countData.data.totalDifferenceValue || 0,
+            adjustmentOperationId: countData.data.adjustmentOperationId,
+            completedAt: countData.data.completedAt
+          })
           setLoading(false)
           return
         }
@@ -231,6 +260,91 @@ export default function CloseSessionPage() {
                 >
                   <ClipboardCheck className="w-4 h-4" />
                   Ir a Contar
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        </DashboardLayout>
+      </ProtectedRoute>
+    )
+  }
+
+  // Count completed but has differences - waiting for admin approval
+  if (countPendingApproval && inventoryCount) {
+    return (
+      <ProtectedRoute>
+        <DashboardLayout>
+          <div className="min-h-screen flex items-center justify-center p-6">
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              className={cn(
+                'max-w-lg w-full rounded-2xl border shadow-xl p-8 text-center',
+                theme === 'dark'
+                  ? 'bg-gradient-to-br from-gray-800 to-gray-900 border-gray-700'
+                  : 'bg-gradient-to-br from-amber-50 to-white border-amber-200'
+              )}
+            >
+              <div className={cn(
+                'w-16 h-16 rounded-full mx-auto mb-6 flex items-center justify-center',
+                theme === 'dark' ? 'bg-amber-900/30' : 'bg-amber-100'
+              )}>
+                <Clock className="w-8 h-8 text-amber-500" />
+              </div>
+              <h2 className="text-xl font-bold mb-2">Esperando Aprobación del Admin</h2>
+              <p className="text-gray-500 mb-4">
+                El conteo de inventario tiene diferencias y está pendiente de revisión por un administrador.
+              </p>
+
+              {/* Count Summary */}
+              <div className={cn(
+                'rounded-xl p-4 mb-6 text-left',
+                theme === 'dark' ? 'bg-gray-700/50' : 'bg-gray-100'
+              )}>
+                <p className="text-sm text-gray-500 mb-2">Conteo: {inventoryCount.countNumber}</p>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <p className="text-xs text-gray-500">Productos contados</p>
+                    <p className="font-bold">{inventoryCount.totalProducts}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-gray-500">Con diferencias</p>
+                    <p className="font-bold text-amber-500">{inventoryCount.productsWithDifferences}</p>
+                  </div>
+                  <div className="col-span-2">
+                    <p className="text-xs text-gray-500">Valor diferencia</p>
+                    <p className={cn(
+                      'font-bold text-lg',
+                      inventoryCount.totalDifferenceValue >= 0 ? 'text-green-500' : 'text-red-500'
+                    )}>
+                      ${inventoryCount.totalDifferenceValue.toFixed(2)}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <p className="text-xs text-gray-400 mb-6">
+                Una vez que el administrador apruebe el conteo, podrás proceder con el cierre de caja.
+              </p>
+
+              <div className="flex gap-3">
+                <button
+                  onClick={() => router.push(`/dashboard/market/pos/${terminalId}`)}
+                  className={cn(
+                    'flex-1 py-2.5 rounded-xl font-medium',
+                    theme === 'dark'
+                      ? 'bg-gray-800 hover:bg-gray-700'
+                      : 'bg-gray-100 hover:bg-gray-200'
+                  )}
+                >
+                  Volver al POS
+                </button>
+                <button
+                  onClick={() => router.push('/dashboard/market/pos/inventory-counts')}
+                  className="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 text-white font-medium shadow-lg shadow-amber-500/25 hover:from-amber-600 hover:to-amber-700 flex items-center justify-center gap-2"
+                >
+                  <ClipboardCheck className="w-4 h-4" />
+                  Ver Estado
                 </button>
               </div>
             </motion.div>

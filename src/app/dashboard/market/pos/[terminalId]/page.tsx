@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useEffect, useCallback, useMemo } from 'react'
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   Monitor,
@@ -32,7 +32,10 @@ import {
   Receipt,
   Printer,
   ChevronLeft,
-  ClipboardList
+  ClipboardList,
+  Menu,
+  ChevronUp,
+  ChevronDown
 } from 'lucide-react'
 import { useRouter, useParams, useSearchParams } from 'next/navigation'
 import { useTheme } from '@/contexts/theme-context'
@@ -142,6 +145,9 @@ export default function POSTerminalPage() {
   const [paymentMethod, setPaymentMethod] = useState<string>('cash')
   const [paymentCurrency, setPaymentCurrency] = useState<string>('USD')
   const [amountTendered, setAmountTendered] = useState<string>('')
+
+  // Mobile responsive state
+  const [showMobileCart, setShowMobileCart] = useState(false)
 
   // Initialize client-side state
   useEffect(() => {
@@ -541,8 +547,9 @@ export default function POSTerminalPage() {
       )
     }
 
-    if (selectedCategory) {
-      filtered = filtered.filter(p => p.categoryId === selectedCategory)
+    if (selectedCategory !== null) {
+      // Comparar como números para evitar problemas de tipos string/number
+      filtered = filtered.filter(p => Number(p.categoryId) === Number(selectedCategory))
     }
 
     return filtered
@@ -785,44 +792,44 @@ export default function POSTerminalPage() {
       'h-screen flex flex-col overflow-hidden',
       theme === 'dark' ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-900'
     )}>
-      {/* Header */}
+      {/* Header - Responsive */}
       <header className={cn(
-        'flex items-center justify-between px-4 py-3 border-b shadow-sm',
+        'flex items-center justify-between px-2 sm:px-4 py-2 sm:py-3 border-b shadow-sm',
         theme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'
       )}>
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-2 sm:gap-4">
           <button
             onClick={() => router.push('/dashboard/market/pos')}
-            className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700"
+            className="p-1.5 sm:p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700"
           >
-            <ChevronLeft className="w-5 h-5" />
+            <ChevronLeft className="w-4 h-4 sm:w-5 sm:h-5" />
           </button>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 sm:gap-3">
             <div className={cn(
-              'p-2 rounded-lg',
+              'p-1.5 sm:p-2 rounded-lg hidden sm:flex',
               theme === 'dark' ? 'bg-blue-900/30' : 'bg-blue-50'
             )}>
-              <Monitor className="w-5 h-5 text-blue-500" />
+              <Monitor className="w-4 h-4 sm:w-5 sm:h-5 text-blue-500" />
             </div>
             <div>
-              <h1 className="font-bold text-lg">{terminal?.name}</h1>
-              <p className="text-xs text-gray-500">
+              <h1 className="font-bold text-sm sm:text-lg">{terminal?.name}</h1>
+              <p className="text-[10px] sm:text-xs text-gray-500 hidden sm:block">
                 Sesión: {session?.sessionCode}
               </p>
             </div>
           </div>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-1.5 sm:gap-3">
           {/* Online Status */}
           <div className={cn(
-            'flex items-center gap-2 px-3 py-1.5 rounded-full text-sm',
+            'flex items-center gap-1 sm:gap-2 px-2 sm:px-3 py-1 sm:py-1.5 rounded-full text-xs sm:text-sm',
             isOnline
               ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
               : 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'
           )}>
-            {isOnline ? <Wifi className="w-4 h-4" /> : <WifiOff className="w-4 h-4" />}
-            {isOnline ? 'Online' : 'Offline'}
+            {isOnline ? <Wifi className="w-3 h-3 sm:w-4 sm:h-4" /> : <WifiOff className="w-3 h-3 sm:w-4 sm:h-4" />}
+            <span className="hidden sm:inline">{isOnline ? 'Online' : 'Offline'}</span>
             {isSyncing && <Loader2 className="w-3 h-3 animate-spin" />}
           </div>
 
@@ -832,65 +839,96 @@ export default function POSTerminalPage() {
               onClick={syncPendingOrders}
               disabled={!isOnline || isSyncing}
               className={cn(
-                'flex items-center gap-2 px-3 py-1.5 rounded-full text-sm transition-all',
+                'flex items-center gap-1 sm:gap-2 px-2 sm:px-3 py-1 sm:py-1.5 rounded-full text-xs sm:text-sm transition-all',
                 isOnline
                   ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400 hover:bg-yellow-200 dark:hover:bg-yellow-900/50'
                   : 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400 cursor-not-allowed'
               )}
             >
-              <Clock className="w-4 h-4" />
-              {pendingOrdersCount} pendiente{pendingOrdersCount !== 1 ? 's' : ''}
-              {isOnline && !isSyncing && <span className="text-xs">(Sincronizar)</span>}
+              <Clock className="w-3 h-3 sm:w-4 sm:h-4" />
+              <span>{pendingOrdersCount}</span>
+              <span className="hidden lg:inline">pendiente{pendingOrdersCount !== 1 ? 's' : ''}</span>
             </button>
           )}
 
-          {/* Time */}
-          <div className="flex items-center gap-2 text-gray-500">
+          {/* Time - Hidden on small screens */}
+          <div className="hidden md:flex items-center gap-2 text-gray-500">
             <Clock className="w-4 h-4" />
             <span className="text-sm font-mono">
               {new Date().toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}
             </span>
           </div>
 
-          {/* User */}
-          <div className="flex items-center gap-2">
+          {/* User - Hidden on small screens */}
+          <div className="hidden lg:flex items-center gap-2">
             <User className="w-4 h-4 text-gray-500" />
             <span className="text-sm">{user?.email?.split('@')[0]}</span>
           </div>
 
-          {/* Fullscreen */}
+          {/* Fullscreen - Hidden on mobile */}
           <button
             onClick={toggleFullscreen}
-            className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700"
+            className="hidden sm:block p-1.5 sm:p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700"
           >
-            {isFullscreen ? <Minimize className="w-5 h-5" /> : <Maximize className="w-5 h-5" />}
+            {isFullscreen ? <Minimize className="w-4 h-4 sm:w-5 sm:h-5" /> : <Maximize className="w-4 h-4 sm:w-5 sm:h-5" />}
           </button>
 
           {/* Close Session */}
           <button
             onClick={() => setShowCloseSessionModal(true)}
-            className="flex items-center gap-2 px-3 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600"
+            className="flex items-center gap-1 sm:gap-2 px-2 sm:px-3 py-1.5 sm:py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 text-xs sm:text-sm"
           >
-            <LogOut className="w-4 h-4" />
-            Cerrar Caja
+            <LogOut className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+            <span className="hidden sm:inline">Cerrar Caja</span>
           </button>
         </div>
       </header>
 
       {/* Main Content */}
-      <div className="flex-1 flex overflow-hidden">
-        {/* Left Panel - Cart */}
+      <div className="flex-1 flex flex-col lg:flex-row overflow-hidden relative">
+        {/* Left Panel - Cart (Desktop) / Bottom Sheet (Mobile) */}
         <div className={cn(
-          'w-[400px] flex flex-col border-r',
-          theme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'
+          // Desktop: sidebar
+          'lg:w-[320px] xl:w-[380px] lg:flex lg:flex-col lg:border-r',
+          // Mobile/Tablet: bottom sheet
+          'fixed lg:relative bottom-0 left-0 right-0 lg:bottom-auto lg:left-auto lg:right-auto',
+          'z-40 lg:z-auto',
+          showMobileCart ? 'h-[70vh]' : 'h-auto',
+          'transition-all duration-300',
+          theme === 'dark' ? 'bg-gray-800 border-gray-700 lg:border-r' : 'bg-white border-gray-200 lg:border-r'
         )}>
-          {/* Cart Items */}
-          <div className="flex-1 overflow-y-auto p-4">
+          {/* Mobile Cart Toggle Bar */}
+          <button
+            onClick={() => setShowMobileCart(!showMobileCart)}
+            className={cn(
+              'lg:hidden flex items-center justify-between px-4 py-3 border-t',
+              theme === 'dark' ? 'border-gray-700' : 'border-gray-200'
+            )}
+          >
+            <div className="flex items-center gap-3">
+              <div className="relative">
+                <ShoppingCart className="w-5 h-5" />
+                {cart.length > 0 && (
+                  <span className="absolute -top-2 -right-2 w-5 h-5 bg-blue-500 text-white text-xs rounded-full flex items-center justify-center">
+                    {cartTotals.itemCount}
+                  </span>
+                )}
+              </div>
+              <span className="font-bold text-lg">${cartTotals.total.toFixed(2)}</span>
+            </div>
+            {showMobileCart ? <ChevronDown className="w-5 h-5" /> : <ChevronUp className="w-5 h-5" />}
+          </button>
+
+          {/* Cart Items - Only show on desktop or when mobile cart is open */}
+          <div className={cn(
+            'flex-1 overflow-y-auto p-3 lg:p-4',
+            showMobileCart ? 'block' : 'hidden lg:block'
+          )}>
             {cart.length === 0 ? (
-              <div className="h-full flex flex-col items-center justify-center text-gray-400">
-                <ShoppingCart className="w-16 h-16 mb-4 opacity-50" />
-                <p className="text-lg">Carrito vacío</p>
-                <p className="text-sm">Selecciona productos para agregar</p>
+              <div className="h-full flex flex-col items-center justify-center text-gray-400 py-8">
+                <ShoppingCart className="w-12 h-12 lg:w-16 lg:h-16 mb-3 opacity-50" />
+                <p className="text-base lg:text-lg">Carrito vacío</p>
+                <p className="text-xs lg:text-sm">Selecciona productos</p>
               </div>
             ) : (
               <div className="space-y-2">
@@ -901,7 +939,7 @@ export default function POSTerminalPage() {
                     animate={{ opacity: 1, x: 0 }}
                     onClick={() => setSelectedCartIndex(index)}
                     className={cn(
-                      'p-3 rounded-xl cursor-pointer transition-all',
+                      'p-2 lg:p-3 rounded-xl cursor-pointer transition-all',
                       selectedCartIndex === index
                         ? theme === 'dark'
                           ? 'bg-blue-900/30 border-2 border-blue-500'
@@ -911,32 +949,30 @@ export default function POSTerminalPage() {
                         : 'bg-gray-50 hover:bg-gray-100'
                     )}
                   >
-                    <div className="flex items-start justify-between">
-                      <div className="flex-1">
-                        <p className="font-medium text-sm">{item.product.name}</p>
-                        <p className="text-xs text-gray-500 mt-0.5">
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium text-xs lg:text-sm truncate">{item.product.name}</p>
+                        <p className="text-[10px] lg:text-xs text-gray-500">
                           {item.quantity} x ${item.unitPrice.toFixed(2)}
+                          {item.discountPercent > 0 && (
+                            <span className="text-green-500 ml-1">-{item.discountPercent}%</span>
+                          )}
                         </p>
-                        {item.discountPercent > 0 && (
-                          <p className="text-xs text-green-500">
-                            -{item.discountPercent}% (-${item.discountAmount.toFixed(2)})
-                          </p>
-                        )}
                       </div>
-                      <div className="text-right">
-                        <p className="font-bold">${item.total.toFixed(2)}</p>
+                      <div className="flex items-center gap-2">
+                        <p className="font-bold text-sm lg:text-base">${item.total.toFixed(2)}</p>
                         <button
                           onClick={(e) => { e.stopPropagation(); removeFromCart(index) }}
-                          className="p-1 text-red-500 hover:bg-red-100 dark:hover:bg-red-900/30 rounded mt-1"
+                          className="p-1 text-red-500 hover:bg-red-100 dark:hover:bg-red-900/30 rounded"
                         >
-                          <Trash2 className="w-4 h-4" />
+                          <Trash2 className="w-3.5 h-3.5 lg:w-4 lg:h-4" />
                         </button>
                       </div>
                     </div>
 
                     {/* Quick quantity buttons */}
                     {selectedCartIndex === index && (
-                      <div className="flex items-center gap-2 mt-3 pt-3 border-t border-gray-200 dark:border-gray-600">
+                      <div className="flex items-center gap-2 mt-2 pt-2 border-t border-gray-200 dark:border-gray-600">
                         <button
                           onClick={(e) => {
                             e.stopPropagation()
@@ -944,19 +980,19 @@ export default function POSTerminalPage() {
                               updateCartItem(index, { quantity: item.quantity - 1 })
                             }
                           }}
-                          className="p-2 rounded-lg bg-gray-200 dark:bg-gray-600 hover:bg-gray-300 dark:hover:bg-gray-500"
+                          className="p-1.5 lg:p-2 rounded-lg bg-gray-200 dark:bg-gray-600 hover:bg-gray-300 dark:hover:bg-gray-500"
                         >
-                          <Minus className="w-4 h-4" />
+                          <Minus className="w-3 h-3 lg:w-4 lg:h-4" />
                         </button>
-                        <span className="flex-1 text-center font-bold text-lg">{item.quantity}</span>
+                        <span className="flex-1 text-center font-bold text-base lg:text-lg">{item.quantity}</span>
                         <button
                           onClick={(e) => {
                             e.stopPropagation()
                             updateCartItem(index, { quantity: item.quantity + 1 })
                           }}
-                          className="p-2 rounded-lg bg-gray-200 dark:bg-gray-600 hover:bg-gray-300 dark:hover:bg-gray-500"
+                          className="p-1.5 lg:p-2 rounded-lg bg-gray-200 dark:bg-gray-600 hover:bg-gray-300 dark:hover:bg-gray-500"
                         >
-                          <Plus className="w-4 h-4" />
+                          <Plus className="w-3 h-3 lg:w-4 lg:h-4" />
                         </button>
                       </div>
                     )}
@@ -966,13 +1002,14 @@ export default function POSTerminalPage() {
             )}
           </div>
 
-          {/* Numpad */}
+          {/* Numpad - Hidden on mobile unless cart is open */}
           <div className={cn(
-            'p-4 border-t',
-            theme === 'dark' ? 'border-gray-700' : 'border-gray-200'
+            'p-2 lg:p-4 border-t',
+            theme === 'dark' ? 'border-gray-700' : 'border-gray-200',
+            showMobileCart ? 'block' : 'hidden lg:block'
           )}>
             {/* Mode selector */}
-            <div className="flex gap-2 mb-3">
+            <div className="flex gap-1 lg:gap-2 mb-2 lg:mb-3">
               {[
                 { mode: 'quantity' as NumpadMode, label: 'Cant.', icon: Package },
                 { mode: 'price' as NumpadMode, label: 'Precio', icon: DollarSign, disabled: !terminal?.allowPriceEdit },
@@ -983,7 +1020,7 @@ export default function POSTerminalPage() {
                   disabled={disabled}
                   onClick={() => { setNumpadMode(mode); setNumpadValue('') }}
                   className={cn(
-                    'flex-1 flex items-center justify-center gap-1 py-2 rounded-lg text-sm font-medium transition-all',
+                    'flex-1 flex items-center justify-center gap-1 py-1.5 lg:py-2 rounded-lg text-xs lg:text-sm font-medium transition-all',
                     numpadMode === mode
                       ? 'bg-blue-500 text-white'
                       : disabled
@@ -991,15 +1028,15 @@ export default function POSTerminalPage() {
                       : 'bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600'
                   )}
                 >
-                  <Icon className="w-4 h-4" />
-                  {label}
+                  <Icon className="w-3 h-3 lg:w-4 lg:h-4" />
+                  <span className="hidden sm:inline">{label}</span>
                 </button>
               ))}
             </div>
 
             {/* Display */}
             <div className={cn(
-              'px-4 py-3 rounded-xl mb-3 text-right text-2xl font-mono font-bold',
+              'px-3 py-2 lg:px-4 lg:py-3 rounded-xl mb-2 lg:mb-3 text-right text-xl lg:text-2xl font-mono font-bold',
               theme === 'dark' ? 'bg-gray-900' : 'bg-gray-100'
             )}>
               {numpadValue || '0'}
@@ -1008,16 +1045,15 @@ export default function POSTerminalPage() {
             </div>
 
             {/* Numpad grid */}
-            <div className="grid grid-cols-4 gap-2">
+            <div className="grid grid-cols-4 gap-1 lg:gap-2">
               {['7', '8', '9', 'C', '4', '5', '6', 'DEL', '1', '2', '3', 'ENTER', '.', '0', '00', ''].map((key, i) => {
                 if (key === '') return <div key={i} />
-                const isAction = ['C', 'DEL', 'ENTER'].includes(key)
                 return (
                   <button
                     key={key}
                     onClick={() => handleNumpad(key)}
                     className={cn(
-                      'py-4 rounded-xl font-bold text-lg transition-all active:scale-95',
+                      'py-2.5 lg:py-4 rounded-lg lg:rounded-xl font-bold text-sm lg:text-lg transition-all active:scale-95',
                       key === 'ENTER'
                         ? 'bg-blue-500 text-white hover:bg-blue-600 row-span-1'
                         : key === 'C'
@@ -1029,31 +1065,32 @@ export default function POSTerminalPage() {
                         : 'bg-gray-200 hover:bg-gray-300'
                     )}
                   >
-                    {key === 'DEL' ? <Delete className="w-5 h-5 mx-auto" /> :
-                     key === 'ENTER' ? <CornerDownLeft className="w-5 h-5 mx-auto" /> : key}
+                    {key === 'DEL' ? <Delete className="w-4 h-4 lg:w-5 lg:h-5 mx-auto" /> :
+                     key === 'ENTER' ? <CornerDownLeft className="w-4 h-4 lg:w-5 lg:h-5 mx-auto" /> : key}
                   </button>
                 )
               })}
             </div>
           </div>
 
-          {/* Cart Totals & Pay */}
+          {/* Cart Totals & Pay - Always visible */}
           <div className={cn(
-            'p-4 border-t',
-            theme === 'dark' ? 'border-gray-700 bg-gray-800/50' : 'border-gray-200 bg-gray-50'
+            'p-2 lg:p-4 border-t',
+            theme === 'dark' ? 'border-gray-700 bg-gray-800/50' : 'border-gray-200 bg-gray-50',
+            showMobileCart ? 'block' : 'hidden lg:block'
           )}>
-            <div className="space-y-2 mb-4">
-              <div className="flex justify-between text-sm">
-                <span className="text-gray-500">Subtotal ({cartTotals.itemCount} items)</span>
+            <div className="space-y-1 lg:space-y-2 mb-2 lg:mb-4">
+              <div className="flex justify-between text-xs lg:text-sm">
+                <span className="text-gray-500">Subtotal ({cartTotals.itemCount})</span>
                 <span>${cartTotals.subtotal.toFixed(2)}</span>
               </div>
               {cartTotals.discounts > 0 && (
-                <div className="flex justify-between text-sm text-green-500">
+                <div className="flex justify-between text-xs lg:text-sm text-green-500">
                   <span>Descuentos</span>
                   <span>-${cartTotals.discounts.toFixed(2)}</span>
                 </div>
               )}
-              <div className="flex justify-between text-xl font-bold pt-2 border-t border-gray-200 dark:border-gray-600">
+              <div className="flex justify-between text-lg lg:text-xl font-bold pt-1 lg:pt-2 border-t border-gray-200 dark:border-gray-600">
                 <span>Total</span>
                 <span>${cartTotals.total.toFixed(2)}</span>
               </div>
@@ -1064,19 +1101,18 @@ export default function POSTerminalPage() {
                 onClick={clearCart}
                 disabled={cart.length === 0}
                 className={cn(
-                  'flex-1 py-3 rounded-xl font-medium flex items-center justify-center gap-2 transition-all',
+                  'flex-1 py-2 lg:py-3 rounded-lg lg:rounded-xl font-medium flex items-center justify-center gap-1 lg:gap-2 transition-all text-xs lg:text-base',
                   cart.length === 0
                     ? 'bg-gray-100 text-gray-400 dark:bg-gray-700 cursor-not-allowed'
                     : 'bg-gray-200 dark:bg-gray-600 hover:bg-gray-300 dark:hover:bg-gray-500'
                 )}
               >
-                <Trash2 className="w-5 h-5" />
-                Vaciar
+                <Trash2 className="w-4 h-4 lg:w-5 lg:h-5" />
+                <span className="hidden sm:inline">Vaciar</span>
               </button>
               <button
                 onClick={() => {
                   if (cart.length === 0 || !session) return
-                  // Store cart data in localStorage for payment page (avoids URL encoding issues)
                   const cartData = cart.map(item => ({
                     productId: item.product.id,
                     productName: item.product.name,
@@ -1095,40 +1131,41 @@ export default function POSTerminalPage() {
                     timestamp: Date.now()
                   }
                   localStorage.setItem('pos_payment_data', JSON.stringify(paymentData))
+                  setShowMobileCart(false)
                   router.push(`/dashboard/market/pos/${terminalId}/payment`)
                 }}
                 disabled={cart.length === 0}
                 className={cn(
-                  'flex-[2] py-3 rounded-xl font-bold flex items-center justify-center gap-2 transition-all shadow-lg',
+                  'flex-[2] py-2 lg:py-3 rounded-lg lg:rounded-xl font-bold flex items-center justify-center gap-1 lg:gap-2 transition-all shadow-lg text-sm lg:text-base',
                   cart.length === 0
                     ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
                     : 'bg-gradient-to-r from-green-500 to-emerald-600 text-white hover:from-green-600 hover:to-emerald-700 shadow-green-500/25'
                 )}
               >
-                <CreditCard className="w-5 h-5" />
-                Cobrar ${cartTotals.total.toFixed(2)}
+                <CreditCard className="w-4 h-4 lg:w-5 lg:h-5" />
+                ${cartTotals.total.toFixed(2)}
               </button>
             </div>
           </div>
         </div>
 
         {/* Right Panel - Products */}
-        <div className="flex-1 flex flex-col overflow-hidden">
+        <div className="flex-1 flex flex-col overflow-hidden pb-14 lg:pb-0">
           {/* Search & Categories */}
           <div className={cn(
-            'p-4 border-b',
+            'p-2 sm:p-3 lg:p-4 border-b',
             theme === 'dark' ? 'border-gray-700' : 'border-gray-200'
           )}>
             {/* Search */}
-            <div className="relative mb-4">
-              <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+            <div className="relative mb-2 lg:mb-4">
+              <Search className="absolute left-3 lg:left-4 top-1/2 -translate-y-1/2 w-4 h-4 lg:w-5 lg:h-5 text-gray-400" />
               <input
                 type="text"
-                placeholder="Buscar producto o escanear código..."
+                placeholder="Buscar o escanear..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 className={cn(
-                  'w-full pl-12 pr-4 py-3 rounded-xl border focus:outline-none focus:ring-2 transition-all text-lg',
+                  'w-full pl-9 lg:pl-12 pr-3 lg:pr-4 py-2 lg:py-3 rounded-lg lg:rounded-xl border focus:outline-none focus:ring-2 transition-all text-sm lg:text-lg',
                   theme === 'dark'
                     ? 'bg-gray-800 border-gray-700 text-white focus:border-blue-500 focus:ring-blue-500/20'
                     : 'bg-white border-gray-200 focus:border-blue-500 focus:ring-blue-500/20'
@@ -1137,11 +1174,11 @@ export default function POSTerminalPage() {
             </div>
 
             {/* Categories */}
-            <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
+            <div className="flex gap-1.5 lg:gap-2 overflow-x-auto pb-1 scrollbar-hide">
               <button
                 onClick={() => setSelectedCategory(null)}
                 className={cn(
-                  'px-4 py-2 rounded-xl whitespace-nowrap text-sm font-medium transition-all',
+                  'px-2.5 lg:px-4 py-1.5 lg:py-2 rounded-lg lg:rounded-xl whitespace-nowrap text-xs lg:text-sm font-medium transition-all',
                   selectedCategory === null
                     ? 'bg-blue-500 text-white'
                     : theme === 'dark'
@@ -1156,7 +1193,7 @@ export default function POSTerminalPage() {
                   key={category.id}
                   onClick={() => setSelectedCategory(category.id)}
                   className={cn(
-                    'px-4 py-2 rounded-xl whitespace-nowrap text-sm font-medium transition-all',
+                    'px-2.5 lg:px-4 py-1.5 lg:py-2 rounded-lg lg:rounded-xl whitespace-nowrap text-xs lg:text-sm font-medium transition-all',
                     selectedCategory === category.id
                       ? 'bg-blue-500 text-white'
                       : theme === 'dark'
@@ -1171,35 +1208,34 @@ export default function POSTerminalPage() {
           </div>
 
           {/* Products Grid */}
-          <div className="flex-1 overflow-y-auto p-4">
+          <div className="flex-1 overflow-y-auto p-2 sm:p-3 lg:p-4">
             {filteredProducts.length === 0 ? (
               <div className="h-full flex flex-col items-center justify-center text-gray-400">
-                <Package className="w-16 h-16 mb-4 opacity-50" />
-                <p className="text-lg">No hay productos</p>
-                <p className="text-sm">Intenta con otra búsqueda</p>
+                <Package className="w-12 h-12 lg:w-16 lg:h-16 mb-3 opacity-50" />
+                <p className="text-base lg:text-lg">No hay productos</p>
+                <p className="text-xs lg:text-sm">Intenta con otra búsqueda</p>
               </div>
             ) : (
-              <div className="grid grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-4">
+              <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-1.5 sm:gap-2 lg:gap-3">
                 {filteredProducts.map(product => (
                   <motion.button
                     key={product.id}
-                    whileHover={{ scale: 1.02 }}
                     whileTap={{ scale: 0.98 }}
                     onClick={() => addToCart(product)}
                     disabled={product.trackInventory && product.stock <= 0}
                     className={cn(
-                      'relative p-4 rounded-xl text-left transition-all border',
+                      'relative p-1.5 sm:p-2 lg:p-3 rounded-lg lg:rounded-xl text-left transition-all border',
                       product.trackInventory && product.stock <= 0
                         ? 'opacity-50 cursor-not-allowed'
                         : '',
                       theme === 'dark'
-                        ? 'bg-gray-800 border-gray-700 hover:border-blue-500'
-                        : 'bg-white border-gray-200 hover:border-blue-500 shadow-sm hover:shadow-md'
+                        ? 'bg-gray-800 border-gray-700 hover:border-blue-500 active:bg-gray-700'
+                        : 'bg-white border-gray-200 hover:border-blue-500 shadow-sm active:shadow-none'
                     )}
                   >
                     {/* Product image or placeholder */}
                     <div className={cn(
-                      'w-full aspect-square rounded-lg mb-3 flex items-center justify-center overflow-hidden',
+                      'w-full aspect-square rounded-md lg:rounded-lg mb-1.5 lg:mb-2 flex items-center justify-center overflow-hidden',
                       theme === 'dark' ? 'bg-gray-700' : 'bg-gray-100'
                     )}>
                       {product.imageUrl ? (
@@ -1209,22 +1245,22 @@ export default function POSTerminalPage() {
                           className="w-full h-full object-cover"
                         />
                       ) : (
-                        <Package className="w-12 h-12 text-gray-400" />
+                        <Package className="w-6 h-6 sm:w-8 sm:h-8 lg:w-10 lg:h-10 text-gray-400" />
                       )}
                     </div>
 
                     {/* Product info */}
-                    <h3 className="font-medium text-sm line-clamp-2 mb-1">
+                    <h3 className="font-medium text-[10px] sm:text-xs lg:text-sm line-clamp-2 mb-0.5 lg:mb-1 leading-tight">
                       {product.name}
                     </h3>
-                    <p className="text-lg font-bold text-blue-500">
+                    <p className="text-xs sm:text-sm lg:text-base font-bold text-blue-500">
                       ${product.price.toFixed(2)}
                     </p>
 
-                    {/* Stock indicator */}
+                    {/* Stock indicator - hidden on smallest screens */}
                     {product.trackInventory && (
                       <p className={cn(
-                        'text-xs mt-1',
+                        'text-[9px] lg:text-xs mt-0.5 hidden sm:block',
                         product.stock <= 5
                           ? 'text-amber-500'
                           : 'text-gray-500'
@@ -1235,8 +1271,8 @@ export default function POSTerminalPage() {
 
                     {/* Out of stock overlay */}
                     {product.trackInventory && product.stock <= 0 && (
-                      <div className="absolute inset-0 bg-gray-900/50 rounded-xl flex items-center justify-center">
-                        <span className="bg-red-500 text-white px-3 py-1 rounded-full text-sm font-medium">
+                      <div className="absolute inset-0 bg-gray-900/50 rounded-lg lg:rounded-xl flex items-center justify-center">
+                        <span className="bg-red-500 text-white px-2 py-0.5 lg:px-3 lg:py-1 rounded-full text-[10px] lg:text-sm font-medium">
                           Agotado
                         </span>
                       </div>
@@ -1247,6 +1283,14 @@ export default function POSTerminalPage() {
             )}
           </div>
         </div>
+
+        {/* Mobile Cart Overlay - when cart is expanded */}
+        {showMobileCart && (
+          <div
+            className="lg:hidden fixed inset-0 bg-black/40 z-30"
+            onClick={() => setShowMobileCart(false)}
+          />
+        )}
       </div>
 
       {/* Payment Modal */}

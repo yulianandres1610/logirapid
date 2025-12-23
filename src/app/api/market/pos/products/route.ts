@@ -125,6 +125,12 @@ export async function GET(request: NextRequest) {
       ORDER BY category ASC
     `, [companyId])
 
+    // Create category name to ID mapping
+    const categoryMap: Record<string, number> = {}
+    categoriesResult.rows.forEach((c, index) => {
+      categoryMap[c.name] = index + 1
+    })
+
     // Get pricelist items if a pricelist is specified
     let pricelistItems: Record<number, { price?: number; discountPercent?: number }> = {}
     if (effectivePricelistId) {
@@ -188,7 +194,8 @@ export async function GET(request: NextRequest) {
         description: p.description,
         sku: p.sku,
         barcode: p.barcode,
-        categoryId: p.category_id,
+        categoryId: p.category ? categoryMap[p.category] || null : null,
+        categoryName: p.category || null,
         unit: p.unit,
         basePrice: parseFloat(p.sale_price) || 0,
         price: Math.round(finalPrice * 100) / 100,
