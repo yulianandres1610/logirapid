@@ -170,6 +170,13 @@ export default function ProductDetailPage() {
   const [loading, setLoading] = useState(true)
   const [salesPeriod, setSalesPeriod] = useState<'week' | 'month' | 'year'>('month')
   const [salesData, setSalesData] = useState<SalesData[]>([])
+  const [salesSummary, setSalesSummary] = useState<{
+    totalQuantity: number
+    totalRevenue: number
+    totalOrders: number
+    salesVelocity: number
+    avgOrderValue: number
+  } | null>(null)
   const [salesLoading, setSalesLoading] = useState(false)
   const [warehouseStock, setWarehouseStock] = useState<WarehouseStock[]>([])
   const [stockLoading, setStockLoading] = useState(false)
@@ -232,6 +239,7 @@ export default function ProductDetailPage() {
         const data = await response.json()
         if (data.success) {
           setSalesData(data.data.sales || [])
+          setSalesSummary(data.data.summary || null)
         }
       }
     } catch (error) {
@@ -1117,7 +1125,20 @@ export default function ProductDetailPage() {
                       className="space-y-6"
                     >
                       <div className="flex items-center justify-between flex-wrap gap-4">
-                        <h3 className="text-lg font-bold text-gray-900 dark:text-white">Ritmo de Ventas</h3>
+                        <div className="flex items-center gap-4">
+                          <h3 className="text-lg font-bold text-gray-900 dark:text-white">Ritmo de Ventas</h3>
+                          {salesSummary && salesSummary.salesVelocity > 0 && (
+                            <div className={cn(
+                              'px-3 py-1.5 rounded-full flex items-center gap-2',
+                              theme === 'dark' ? 'bg-emerald-900/30' : 'bg-emerald-100'
+                            )}>
+                              <TrendingUp className="w-4 h-4 text-emerald-600" />
+                              <span className="text-sm font-semibold text-emerald-600">
+                                {salesSummary.salesVelocity} uds/día
+                              </span>
+                            </div>
+                          )}
+                        </div>
                         <div className="flex items-center gap-2">
                           {(['week', 'month', 'year'] as const).map((period) => (
                             <button

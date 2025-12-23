@@ -88,6 +88,8 @@ export default function MarketInventoryPage() {
   const [deleteProduct, setDeleteProduct] = useState<Product | null>(null)
   const [deleting, setDeleting] = useState(false)
   const [deleteError, setDeleteError] = useState<string | null>(null)
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null)
+  const [isRefreshing, setIsRefreshing] = useState(false)
 
   // Check if user is admin
   const isAdmin = user?.role === 'ADMIN' || user?.role === 'SUPER_ADMIN'
@@ -95,6 +97,14 @@ export default function MarketInventoryPage() {
   useEffect(() => {
     fetchProducts()
   }, [pagination.page, selectedCategory, stockFilter])
+
+  // Auto-refresh every 30 seconds to keep stock updated
+  useEffect(() => {
+    const interval = setInterval(() => {
+      fetchProducts(true) // silent refresh
+    }, 30000)
+    return () => clearInterval(interval)
+  }, [pagination.page, selectedCategory, stockFilter, search])
 
   useEffect(() => {
     const debounce = setTimeout(() => {
@@ -107,8 +117,12 @@ export default function MarketInventoryPage() {
     return () => clearTimeout(debounce)
   }, [search])
 
-  const fetchProducts = async () => {
-    setLoading(true)
+  const fetchProducts = async (silent = false) => {
+    if (!silent) {
+      setLoading(true)
+    } else {
+      setIsRefreshing(true)
+    }
     try {
       const params = new URLSearchParams({
         page: pagination.page.toString(),
@@ -126,13 +140,22 @@ export default function MarketInventoryPage() {
           setCategories(data.data.categories)
           setStats(data.data.stats)
           setPagination(data.data.pagination)
+          setLastUpdated(new Date())
         }
       }
     } catch (error) {
       console.error('Error fetching products:', error)
     } finally {
-      setLoading(false)
+      if (!silent) {
+        setLoading(false)
+      } else {
+        setIsRefreshing(false)
+      }
     }
+  }
+
+  const handleManualRefresh = () => {
+    fetchProducts(true)
   }
 
   const getStockStatus = (product: Product) => {
@@ -604,21 +627,30 @@ export default function MarketInventoryPage() {
                   </motion.button>
                 )}
 
-                {/* Refresh */}
-                <motion.button
-                  whileHover={{ scale: 1.02 }}
-                  whileTap={{ scale: 0.98 }}
-                  onClick={fetchProducts}
-                  disabled={loading}
-                  className={cn(
-                    'flex items-center gap-2 px-4 py-2.5 rounded-xl transition-all',
-                    theme === 'dark'
-                      ? 'bg-gray-800 text-gray-300 hover:bg-gray-700'
-                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                {/* Refresh with last update indicator */}
+                <div className="flex items-center gap-2">
+                  {lastUpdated && (
+                    <span className="text-xs text-gray-400 hidden sm:inline">
+                      Actualizado: {lastUpdated.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}
+                    </span>
                   )}
-                >
-                  <RefreshCw className={cn('w-4 h-4', loading && 'animate-spin')} />
-                </motion.button>
+                  <motion.button
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
+                    onClick={handleManualRefresh}
+                    disabled={loading || isRefreshing}
+                    title="Actualizar inventario"
+                    className={cn(
+                      'flex items-center gap-2 px-4 py-2.5 rounded-xl transition-all',
+                      theme === 'dark'
+                        ? 'bg-gray-800 text-gray-300 hover:bg-gray-700'
+                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200',
+                      isRefreshing && 'opacity-75'
+                    )}
+                  >
+                    <RefreshCw className={cn('w-4 h-4', (loading || isRefreshing) && 'animate-spin')} />
+                  </motion.button>
+                </div>
 
                 {/* Nuevo Producto */}
                 <Link href="/dashboard/market/inventory/create">
