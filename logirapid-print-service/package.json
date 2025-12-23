@@ -1,0 +1,79 @@
+{
+  "name": "logirapid-print-service",
+  "version": "1.0.0",
+  "description": "LogiRapid Silent Print Service - Local print service for thermal printers and labels",
+  "main": "out/main/index.js",
+  "author": "LogiRapid",
+  "license": "MIT",
+  "scripts": {
+    "dev": "electron-vite dev",
+    "build": "electron-vite build",
+    "preview": "electron-vite preview",
+    "package": "electron-builder",
+    "package:win": "electron-builder --win",
+    "package:mac": "electron-builder --mac",
+    "package:linux": "electron-builder --linux",
+    "package:all": "electron-builder --win --mac --linux",
+    "type-check": "tsc --noEmit",
+    "lint": "eslint . --ext .ts,.tsx"
+  },
+  "dependencies": {
+    "@electron/remote": "^2.1.2",
+    "axios": "^1.6.0",
+    "bwip-js": "^4.1.0",
+    "electron-store": "^8.1.0",
+    "electron-updater": "^6.1.7",
+    "escpos": "^3.0.0-alpha.6",
+    "escpos-usb": "^3.0.0-alpha.4",
+    "pdf-lib": "^1.17.1",
+    "node-thermal-printer": "^4.4.0",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "uuid": "^9.0.0"
+  },
+  "devDependencies": {
+    "@types/bwip-js": "^3.2.0",
+    "@types/node": "^20.10.0",
+    "@types/react": "^18.2.0",
+    "@types/react-dom": "^18.2.0",
+    "@types/uuid": "^9.0.0",
+    "@vitejs/plugin-react": "^4.2.0",
+    "autoprefixer": "^10.4.16",
+    "electron": "^28.0.0",
+    "electron-builder": "^24.9.1",
+    "electron-vite": "^2.0.0",
+    "postcss": "^8.4.32",
+    "tailwindcss": "^3.3.6",
+    "typescript": "^5.3.2",
+    "vite": "^5.0.0"
+  },
+  "build": {
+    "appId": "com.logirapid.printservice",
+    "productName": "LogiRapid Print Service",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "out/**/*",
+      "resources/**/*"
+    ],
+    "win": {
+      "target": ["nsis"],
+      "icon": "resources/icon.png"
+    },
+    "mac": {
+      "target": ["dmg"],
+      "icon": "resources/icon.png",
+      "category": "public.app-category.utilities"
+    },
+    "linux": {
+      "target": ["AppImage", "deb"],
+      "icon": "resources/icon.png",
+      "category": "Utility"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
+    }
+  }
+}
