@@ -17,8 +17,11 @@ import { generateProductLabel, ProductLabelData } from '../documents/product-lab
 import { generatePurchaseInvoice, PurchaseInvoiceData } from '../documents/purchase-invoice'
 import { generatePurchaseInvoicePdf } from '../documents/purchase-invoice-pdf'
 import { generateSalesReport, SalesReportData } from '../documents/sales-report'
+import { generateSalesReportPdf } from '../documents/sales-report-pdf'
 import { generateInventoryCountReport, InventoryCountReportData } from '../documents/inventory-count-report'
+import { generateInventoryCountReportPdf } from '../documents/inventory-count-report-pdf'
 import { generateCashRegisterReport, CashRegisterReportData } from '../documents/cash-register-report'
+import { generateCashRegisterReportPdf } from '../documents/cash-register-report-pdf'
 
 const execAsync = promisify(exec)
 
@@ -232,15 +235,24 @@ class JobProcessor {
         return generatePurchaseInvoice(data as unknown as PurchaseInvoiceData)
 
       case 'sales_report':
-        // TODO: Add PDF version for standard printers
+        // Use PDF for standard printers, ESC/POS for thermal
+        if (usePdf) {
+          return generateSalesReportPdf(data as unknown as SalesReportData)
+        }
         return generateSalesReport(data as unknown as SalesReportData)
 
       case 'inventory_count_report':
-        // TODO: Add PDF version for standard printers
+        // Use PDF for standard printers, ESC/POS for thermal
+        if (usePdf) {
+          return generateInventoryCountReportPdf(data as unknown as InventoryCountReportData)
+        }
         return generateInventoryCountReport(data as unknown as InventoryCountReportData)
 
       case 'cash_register_report':
-        // TODO: Add PDF version for standard printers
+        // Use PDF for standard printers, ESC/POS for thermal
+        if (usePdf) {
+          return generateCashRegisterReportPdf(data as unknown as CashRegisterReportData)
+        }
         return generateCashRegisterReport(data as unknown as CashRegisterReportData)
 
       default:
