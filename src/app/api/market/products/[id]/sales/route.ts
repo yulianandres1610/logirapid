@@ -37,15 +37,17 @@ export async function GET(
           const startOfDay = new Date(date.getFullYear(), date.getMonth(), date.getDate())
           const endOfDay = new Date(date.getFullYear(), date.getMonth(), date.getDate() + 1)
 
+          // Query from POS order lines (main source of sales)
           const result = await db.query(`
             SELECT
-              COALESCE(SUM(moi.quantity), 0) as quantity,
-              COALESCE(SUM(moi.total), 0) as total,
-              COUNT(DISTINCT mo.id) as orders
-            FROM market_order_items moi
-            JOIN market_orders mo ON moi.order_id = mo.id
-            WHERE moi.product_id = $1 AND mo.company_id = $2
-            AND mo.created_at >= $3 AND mo.created_at < $4 AND mo.status != 'cancelled'
+              COALESCE(SUM(pol.quantity), 0) as quantity,
+              COALESCE(SUM(pol.total), 0) as total,
+              COUNT(DISTINCT po.id) as orders
+            FROM market_pos_order_lines pol
+            JOIN market_pos_orders po ON pol.order_id = po.id
+            WHERE pol.product_id = $1 AND po.company_id = $2
+            AND po.created_at >= $3 AND po.created_at < $4
+            AND po.status NOT IN ('cancelled', 'voided', 'draft')
           `, [productId, parseInt(companyId), startOfDay.toISOString(), endOfDay.toISOString()])
 
           const dayNames = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb']
@@ -67,13 +69,14 @@ export async function GET(
 
           const result = await db.query(`
             SELECT
-              COALESCE(SUM(moi.quantity), 0) as quantity,
-              COALESCE(SUM(moi.total), 0) as total,
-              COUNT(DISTINCT mo.id) as orders
-            FROM market_order_items moi
-            JOIN market_orders mo ON moi.order_id = mo.id
-            WHERE moi.product_id = $1 AND mo.company_id = $2
-            AND mo.created_at >= $3 AND mo.created_at < $4 AND mo.status != 'cancelled'
+              COALESCE(SUM(pol.quantity), 0) as quantity,
+              COALESCE(SUM(pol.total), 0) as total,
+              COUNT(DISTINCT po.id) as orders
+            FROM market_pos_order_lines pol
+            JOIN market_pos_orders po ON pol.order_id = po.id
+            WHERE pol.product_id = $1 AND po.company_id = $2
+            AND po.created_at >= $3 AND po.created_at < $4
+            AND po.status NOT IN ('cancelled', 'voided', 'draft')
           `, [productId, parseInt(companyId), weekStart.toISOString(), weekEnd.toISOString()])
 
           sales.push({
@@ -92,13 +95,14 @@ export async function GET(
 
           const result = await db.query(`
             SELECT
-              COALESCE(SUM(moi.quantity), 0) as quantity,
-              COALESCE(SUM(moi.total), 0) as total,
-              COUNT(DISTINCT mo.id) as orders
-            FROM market_order_items moi
-            JOIN market_orders mo ON moi.order_id = mo.id
-            WHERE moi.product_id = $1 AND mo.company_id = $2
-            AND mo.created_at >= $3 AND mo.created_at < $4 AND mo.status != 'cancelled'
+              COALESCE(SUM(pol.quantity), 0) as quantity,
+              COALESCE(SUM(pol.total), 0) as total,
+              COUNT(DISTINCT po.id) as orders
+            FROM market_pos_order_lines pol
+            JOIN market_pos_orders po ON pol.order_id = po.id
+            WHERE pol.product_id = $1 AND po.company_id = $2
+            AND po.created_at >= $3 AND po.created_at < $4
+            AND po.status NOT IN ('cancelled', 'voided', 'draft')
           `, [productId, parseInt(companyId), monthStart.toISOString(), monthEnd.toISOString()])
 
           sales.push({
@@ -109,15 +113,28 @@ export async function GET(
           })
         }
       }
-    } catch {
+    } catch (err) {
       // Tables may not exist, return empty data
+      console.error('[Product Sales API] Query error:', err)
     }
+
+    // Calculate sales velocity (units per day average)
+    const totalQuantity = sales.reduce((sum, s) => sum + s.quantity, 0)
+    const daysInPeriod = period === 'week' ? 7 : period === 'month' ? 30 : 365
+    const salesVelocity = daysInPeriod > 0 ? totalQuantity / daysInPeriod : 0
 
     return NextResponse.json({
       success: true,
       data: {
         sales,
-        period
+        period,
+        summary: {
+          totalQuantity,
+          totalRevenue: sales.reduce((sum, s) => sum + s.revenue, 0),
+          totalOrders: sales.reduce((sum, s) => sum + s.orders, 0),
+          salesVelocity: Math.round(salesVelocity * 100) / 100, // Units per day
+          avgOrderValue: sales.reduce((sum, s) => sum + s.revenue, 0) / Math.max(1, sales.reduce((sum, s) => sum + s.orders, 0))
+        }
       }
     })
   } catch (error) {
