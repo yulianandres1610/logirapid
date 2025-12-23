@@ -260,6 +260,11 @@ function ReceiptContent() {
   const [order, setOrder] = useState<Order | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [showPrintModal, setShowPrintModal] = useState(false)
+  const [printServices, setPrintServices] = useState<Array<{ id: number; serviceName: string; printers: Array<{ id: number; printerName: string; isOnline: boolean; isDefault: boolean; printerType: string }> }>>([])
+  const [selectedPrinter, setSelectedPrinter] = useState<{ serviceId: number; printerId: number } | null>(null)
+  const [printingWithService, setPrintingWithService] = useState(false)
+  const [copies, setCopies] = useState(1)
 
   // Initialize on client
   useEffect(() => {
@@ -420,7 +425,103 @@ function ReceiptContent() {
     return labels[method] || method
   }
 
-  // Print receipt
+  // Fetch print services for silent printing
+  const fetchPrintServices = async () => {
+    try {
+      const response = await fetch('/api/print/services?includeOffline=false')
+      const data = await response.json()
+      if (data.success && data.data?.services) {
+        const activeServices = data.data.services.filter(
+          (s: { status: string; printers?: unknown[] }) => s.status === 'active' && s.printers && s.printers.length > 0
+        )
+        setPrintServices(activeServices)
+
+        // Auto-select first thermal printer
+        for (const service of activeServices) {
+          const thermalPrinter = service.printers.find(
+            (p: { printerType: string; isOnline: boolean }) => p.printerType === 'thermal_80mm' && p.isOnline
+          )
+          if (thermalPrinter) {
+            setSelectedPrinter({ serviceId: service.id, printerId: thermalPrinter.id })
+            break
+          }
+        }
+      }
+    } catch (err) {
+      console.error('[Receipt] Error fetching print services:', err)
+    }
+  }
+
+  // Print with silent service
+  const printWithService = async () => {
+    if (!order || !selectedPrinter) return
+
+    setPrintingWithService(true)
+    try {
+      const response = await fetch('/api/print/jobs', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          documentType: 'pos_receipt',
+          documentData: {
+            orderNumber: order.orderNumber,
+            customerName: order.customerName,
+            cashierName: order.createdByName,
+            createdAt: order.createdAt,
+            lines: order.lines.map(l => ({
+              productName: l.productName,
+              quantity: l.quantity,
+              unitPrice: l.unitPrice,
+              total: l.total
+            })),
+            subtotal: order.subtotal,
+            discountAmount: order.discountAmount,
+            totalAmount: order.totalAmount,
+            currency: order.currency,
+            payments: order.payments.map(p => ({
+              method: p.method,
+              amount: p.amount,
+              currency: p.currency
+            }))
+          },
+          copies,
+          printServiceId: selectedPrinter.serviceId,
+          printerId: selectedPrinter.printerId,
+          sourceType: 'pos_order',
+          sourceId: order.id || 0
+        })
+      })
+
+      const data = await response.json()
+      if (data.success) {
+        setShowPrintModal(false)
+        // Show success toast or message
+      } else {
+        throw new Error(data.error)
+      }
+    } catch (err) {
+      console.error('[Receipt] Error printing with service:', err)
+      // Fallback to browser print
+      printReceipt()
+      setShowPrintModal(false)
+    } finally {
+      setPrintingWithService(false)
+    }
+  }
+
+  // Open print modal or use browser print if offline
+  const handlePrint = () => {
+    if (isOfflineOrder) {
+      // For offline orders, use browser print
+      printReceipt()
+    } else {
+      // For online orders, try to use print service
+      fetchPrintServices()
+      setShowPrintModal(true)
+    }
+  }
+
+  // Print receipt (browser fallback)
   const printReceipt = () => {
     if (!order) return
 
@@ -613,7 +714,7 @@ ${order.payments.map(p =>
           {/* Action Buttons */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <button
-              onClick={printReceipt}
+              onClick={handlePrint}
               className="p-4 rounded-xl flex items-center justify-center gap-2 font-medium shadow-lg bg-gray-800 hover:bg-gray-700"
             >
               <PrinterIcon />
@@ -630,6 +731,124 @@ ${order.payments.map(p =>
           </div>
         </div>
       </div>
+
+      {/* Print Modal */}
+      {showPrintModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={() => setShowPrintModal(false)}>
+          <div className="w-full max-w-md rounded-2xl shadow-2xl overflow-hidden bg-gray-800" onClick={e => e.stopPropagation()}>
+            <div className="px-6 py-4 border-b border-gray-700 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="p-2 rounded-lg bg-blue-900/30">
+                  <PrinterIcon />
+                </div>
+                <div>
+                  <h3 className="font-semibold">Imprimir Recibo</h3>
+                  <p className="text-xs text-gray-400">#{order?.orderNumber}</p>
+                </div>
+              </div>
+              <button onClick={() => setShowPrintModal(false)} className="p-2 rounded-lg hover:bg-gray-700">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            <div className="p-6 space-y-6">
+              {printServices.length === 0 ? (
+                <div className="text-center py-4">
+                  <p className="text-gray-400 mb-4">No hay servicio de impresión disponible</p>
+                  <button
+                    onClick={() => { setShowPrintModal(false); printReceipt(); }}
+                    className="px-4 py-2 bg-gray-700 rounded-lg hover:bg-gray-600"
+                  >
+                    Usar impresión del navegador
+                  </button>
+                </div>
+              ) : (
+                <>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300 mb-2">Impresora</label>
+                    <div className="space-y-2 max-h-48 overflow-y-auto">
+                      {printServices.map(service => (
+                        service.printers.map(printer => (
+                          <button
+                            key={`${service.id}-${printer.id}`}
+                            onClick={() => setSelectedPrinter({ serviceId: service.id, printerId: printer.id })}
+                            className={`w-full p-3 rounded-xl border-2 transition-all text-left flex items-center justify-between ${
+                              selectedPrinter?.printerId === printer.id
+                                ? 'border-blue-500 bg-blue-900/20'
+                                : 'border-gray-600 bg-gray-700/50 hover:border-gray-500'
+                            }`}
+                          >
+                            <div className="flex items-center gap-3">
+                              <PrinterIcon />
+                              <div>
+                                <p className="font-medium">{printer.printerName}</p>
+                                <p className="text-xs text-gray-500">
+                                  {printer.printerType === 'thermal_80mm' ? 'Térmica 80mm' : 'Estándar'}
+                                </p>
+                              </div>
+                            </div>
+                            {printer.isOnline ? (
+                              <span className="text-xs text-green-400">Online</span>
+                            ) : (
+                              <span className="text-xs text-gray-500">Offline</span>
+                            )}
+                          </button>
+                        ))
+                      ))}
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300 mb-2">Copias</label>
+                    <div className="flex items-center justify-center gap-4">
+                      <button
+                        onClick={() => setCopies(Math.max(1, copies - 1))}
+                        className="w-10 h-10 rounded-xl bg-gray-700 hover:bg-gray-600 flex items-center justify-center"
+                      >
+                        -
+                      </button>
+                      <span className="w-12 text-center text-xl font-bold">{copies}</span>
+                      <button
+                        onClick={() => setCopies(Math.min(5, copies + 1))}
+                        className="w-10 h-10 rounded-xl bg-gray-700 hover:bg-gray-600 flex items-center justify-center"
+                      >
+                        +
+                      </button>
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
+
+            {printServices.length > 0 && (
+              <div className="px-6 py-4 border-t border-gray-700 flex gap-3">
+                <button
+                  onClick={() => { setShowPrintModal(false); printReceipt(); }}
+                  className="flex-1 py-3 rounded-xl font-medium bg-gray-700 hover:bg-gray-600"
+                >
+                  Navegador
+                </button>
+                <button
+                  onClick={printWithService}
+                  disabled={printingWithService || !selectedPrinter}
+                  className="flex-1 py-3 rounded-xl font-medium bg-blue-500 hover:bg-blue-600 disabled:opacity-50 flex items-center justify-center gap-2"
+                >
+                  {printingWithService ? (
+                    <LoaderIcon />
+                  ) : (
+                    <>
+                      <PrinterIcon />
+                      Imprimir
+                    </>
+                  )}
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   )
 }
