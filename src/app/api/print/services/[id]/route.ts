@@ -81,12 +81,18 @@ export async function GET(
         supports_raw,
         paper_width_mm,
         dpi,
+        supported_document_types,
         created_at,
         updated_at
       FROM print_service_printers
       WHERE print_service_id = $1
       ORDER BY is_default DESC, printer_name ASC
     `, [serviceId])
+
+    const ALL_DOCUMENT_TYPES = [
+      'pos_receipt', 'product_label', 'invoice', 'purchase_invoice',
+      'sales_report', 'inventory_count_report', 'cash_register_report', 'shipping_label'
+    ]
 
     // Get recent jobs for this service
     const jobsResult = await db.query(`
@@ -128,23 +134,40 @@ export async function GET(
           createdByEmail: service.created_by_email,
           apiKey: service.api_key // Return API key for display (secret is not stored)
         },
-        printers: printersResult.rows.map(p => ({
-          id: p.id,
-          printerName: p.printer_name,
-          printerId: p.printer_id,
-          driverName: p.driver_name,
-          printerType: p.printer_type,
-          connectionType: p.connection_type,
-          networkAddress: p.network_address,
-          isOnline: p.is_online,
-          isDefault: p.is_default,
-          lastStatusCheck: p.last_status_check,
-          supportsEscpos: p.supports_escpos,
-          supportsRaw: p.supports_raw,
-          paperWidthMm: p.paper_width_mm,
-          dpi: p.dpi,
-          createdAt: p.created_at
-        })),
+        printers: printersResult.rows.map(p => {
+          // Parse supported_document_types
+          let supportedTypes: string[] = ALL_DOCUMENT_TYPES
+          if (p.supported_document_types) {
+            if (Array.isArray(p.supported_document_types)) {
+              supportedTypes = p.supported_document_types
+            } else if (typeof p.supported_document_types === 'string') {
+              try {
+                supportedTypes = JSON.parse(p.supported_document_types)
+              } catch {
+                supportedTypes = ALL_DOCUMENT_TYPES
+              }
+            }
+          }
+
+          return {
+            id: p.id,
+            printerName: p.printer_name,
+            printerId: p.printer_id,
+            driverName: p.driver_name,
+            printerType: p.printer_type,
+            connectionType: p.connection_type,
+            networkAddress: p.network_address,
+            isOnline: p.is_online,
+            isDefault: p.is_default,
+            lastStatusCheck: p.last_status_check,
+            supportsEscpos: p.supports_escpos,
+            supportsRaw: p.supports_raw,
+            paperWidthMm: p.paper_width_mm,
+            dpi: p.dpi,
+            supportedDocumentTypes: supportedTypes,
+            createdAt: p.created_at
+          }
+        }),
         recentJobs: jobsResult.rows.map(j => ({
           id: j.id,
           jobNumber: j.job_number,
