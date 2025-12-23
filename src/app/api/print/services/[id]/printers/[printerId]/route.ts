@@ -199,8 +199,10 @@ export async function PUT(
         }, { status: 400 })
       }
 
-      updates.push(`supported_document_types = $${paramIndex}`)
-      values.push(body.supportedDocumentTypes)
+      // Format as PostgreSQL array literal
+      const pgArray = `{${body.supportedDocumentTypes.join(',')}}`
+      updates.push(`supported_document_types = $${paramIndex}::text[]`)
+      values.push(pgArray)
       paramIndex++
     }
 
