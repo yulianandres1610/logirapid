@@ -42,7 +42,7 @@ export async function GET(request: NextRequest) {
 
     // Check company info
     const companyResult = await db.query(`
-      SELECT id, name, type, is_active
+      SELECT id, legalname as name, type, status
       FROM companies
       WHERE id = $1
     `, [companyId])
@@ -78,11 +78,11 @@ export async function GET(request: NextRequest) {
     const allProductsResult = await db.query(`
       SELECT
         p.company_id,
-        c.name as company_name,
+        c.legalname as company_name,
         COUNT(*) as product_count
       FROM market_products p
       LEFT JOIN companies c ON p.company_id = c.id
-      GROUP BY p.company_id, c.name
+      GROUP BY p.company_id, c.legalname
       ORDER BY product_count DESC
       LIMIT 10
     `)
