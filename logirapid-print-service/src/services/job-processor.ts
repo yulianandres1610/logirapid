@@ -14,6 +14,10 @@ import { printerService, DetectedPrinter } from './printer-service'
 import { generatePosReceipt, ReceiptData } from '../documents/pos-receipt'
 import { generateShippingLabel, ShippingLabelData } from '../documents/shipping-label'
 import { generateProductLabel, ProductLabelData } from '../documents/product-label'
+import { generatePurchaseInvoice, PurchaseInvoiceData } from '../documents/purchase-invoice'
+import { generateSalesReport, SalesReportData } from '../documents/sales-report'
+import { generateInventoryCountReport, InventoryCountReportData } from '../documents/inventory-count-report'
+import { generateCashRegisterReport, CashRegisterReportData } from '../documents/cash-register-report'
 
 const execAsync = promisify(exec)
 
@@ -180,11 +184,21 @@ class JobProcessor {
     // Otherwise, find by document type
     switch (job.documentType) {
       case 'pos_receipt':
+      case 'sales_report':
+      case 'inventory_count_report':
+      case 'cash_register_report':
+        // Prefer thermal printers for receipts and reports
         return printerService.getThermalPrinters()[0] || printerService.getDefaultPrinter()
 
       case 'shipping_label':
       case 'product_label':
+        // Prefer label printers
         return printerService.getLabelPrinters()[0] || printerService.getDefaultPrinter()
+
+      case 'purchase_invoice':
+      case 'invoice':
+        // For invoices, prefer thermal printers but fall back to any
+        return printerService.getThermalPrinters()[0] || printerService.getDefaultPrinter()
 
       default:
         return printerService.getDefaultPrinter()
@@ -204,6 +218,19 @@ class JobProcessor {
       case 'product_label':
         return generateProductLabel(data as unknown as ProductLabelData)
 
+      case 'purchase_invoice':
+      case 'invoice':
+        return generatePurchaseInvoice(data as unknown as PurchaseInvoiceData)
+
+      case 'sales_report':
+        return generateSalesReport(data as unknown as SalesReportData)
+
+      case 'inventory_count_report':
+        return generateInventoryCountReport(data as unknown as InventoryCountReportData)
+
+      case 'cash_register_report':
+        return generateCashRegisterReport(data as unknown as CashRegisterReportData)
+
       default:
         console.error(`[Job Processor] Unknown document type: ${job.documentType}`)
         return null
@@ -217,12 +244,22 @@ class JobProcessor {
   ): Promise<void> {
     const copies = job.copies || 1
 
+    // Document types that use ESC/POS commands (for thermal printers)
+    const escposDocTypes = [
+      'pos_receipt',
+      'purchase_invoice',
+      'invoice',
+      'sales_report',
+      'inventory_count_report',
+      'cash_register_report'
+    ]
+
     for (let i = 0; i < copies; i++) {
-      if (printer.supportsEscpos && job.documentType === 'pos_receipt') {
-        // Direct ESC/POS printing
+      if (printer.supportsEscpos && escposDocTypes.includes(job.documentType)) {
+        // Direct ESC/POS printing for thermal printers
         await this.printEscPos(printer, documentBuffer)
       } else {
-        // PDF printing through system
+        // PDF printing through system for other printers/documents
         await this.printPdf(printer, documentBuffer)
       }
 
