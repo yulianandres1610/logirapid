@@ -108,6 +108,9 @@ export async function GET(
       }
     }
 
+    // Get inventory shortage value for this session
+    const inventoryShortageValue = parseFloat(session.inventory_shortage_value) || 0
+
     return NextResponse.json({
       success: true,
       data: {
@@ -140,6 +143,7 @@ export async function GET(
           cup: (parseFloat(session.opening_cash_cup) || 0) + (cashPayments['CUP'] || 0),
           mlc: (parseFloat(session.opening_cash_mlc) || 0) + (cashPayments['MLC'] || 0)
         },
+        inventoryShortageValue,
         cashDifference: session.cash_difference !== null ? parseFloat(session.cash_difference) : null,
         openingNotes: session.opening_notes,
         closingNotes: session.closing_notes,
@@ -281,8 +285,12 @@ export async function PUT(
         cashByurrency[p.currency] = parseFloat(p.total) || 0
       }
 
+      // Get inventory shortage value (faltante de inventario)
+      const inventoryShortage = parseFloat(session.inventory_shortage_value) || 0
+
       // Calculate difference (reported - expected)
-      const expectedUsd = (parseFloat(session.opening_cash_usd) || 0) + (cashByurrency['USD'] || 0)
+      // El faltante de inventario se suma al expected USD (el cajero debe reponer)
+      const expectedUsd = (parseFloat(session.opening_cash_usd) || 0) + (cashByurrency['USD'] || 0) + inventoryShortage
       const expectedCup = (parseFloat(session.opening_cash_cup) || 0) + (cashByurrency['CUP'] || 0)
       const expectedMlc = (parseFloat(session.opening_cash_mlc) || 0) + (cashByurrency['MLC'] || 0)
 

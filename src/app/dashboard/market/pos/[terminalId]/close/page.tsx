@@ -32,6 +32,7 @@ interface SessionDetails {
   openedAt: string
   openingCash: { usd: number; cup: number; mlc: number }
   expectedCash: { usd: number; cup: number; mlc: number }
+  inventoryShortageValue: number
   summary: {
     paidOrders: number
     voidedOrders: number
@@ -264,11 +265,20 @@ export default function CloseSessionPage() {
     }
   }
 
-  // Calculate differences
+  // Calculate differences - including inventory shortage
+  const inventoryShortage = session?.inventoryShortageValue || 0
+
+  // El faltante de inventario se SUMA al efectivo esperado (el cajero debe reponer)
+  const adjustedExpectedCash = session ? {
+    usd: session.expectedCash.usd + inventoryShortage,
+    cup: session.expectedCash.cup,
+    mlc: session.expectedCash.mlc
+  } : { usd: 0, cup: 0, mlc: 0 }
+
   const differences = session ? {
-    usd: closingCash.usd - session.expectedCash.usd,
-    cup: closingCash.cup - session.expectedCash.cup,
-    mlc: closingCash.mlc - session.expectedCash.mlc
+    usd: closingCash.usd - adjustedExpectedCash.usd,
+    cup: closingCash.cup - adjustedExpectedCash.cup,
+    mlc: closingCash.mlc - adjustedExpectedCash.mlc
   } : { usd: 0, cup: 0, mlc: 0 }
 
   const totalDifferenceUsd = differences.usd + (differences.cup / 250) + (differences.mlc * 1.1)
@@ -570,7 +580,7 @@ export default function CloseSessionPage() {
                     <div className="flex items-center justify-between mt-2 pt-2 border-t border-gray-600/50">
                       <span className="text-xs text-gray-500">Esperado</span>
                       <span className="text-sm font-mono text-blue-400">
-                        {activeTab === 'cup' ? `$${session.expectedCash[activeTab].toFixed(0)}` : `$${session.expectedCash[activeTab].toFixed(2)}`}
+                        {activeTab === 'cup' ? `$${adjustedExpectedCash[activeTab].toFixed(0)}` : `$${adjustedExpectedCash[activeTab].toFixed(2)}`}
                       </span>
                     </div>
                     <div className="flex items-center justify-between mt-1">
@@ -633,6 +643,46 @@ export default function CloseSessionPage() {
                     </div>
                   )}
                 </div>
+
+                {/* Inventory Shortage Section */}
+                {inventoryShortage > 0 && (
+                  <div className={cn(
+                    'rounded-2xl border shadow-lg p-4 md:p-6',
+                    'bg-red-900/20 border-red-700/50'
+                  )}>
+                    <div className="flex items-center gap-2 mb-3">
+                      <Package className="w-5 h-5 text-red-400" />
+                      <h2 className="text-lg font-bold text-red-300">Faltante de Inventario</h2>
+                    </div>
+
+                    <div className="text-center py-3">
+                      <p className="text-sm text-gray-400 mb-2">Valor del faltante detectado en conteo</p>
+                      <p className="text-3xl font-bold text-red-400 font-mono">
+                        ${inventoryShortage.toFixed(2)}
+                      </p>
+                    </div>
+
+                    <div className="pt-3 border-t border-red-700/50">
+                      <div className="text-xs text-gray-400 space-y-1">
+                        <div className="flex justify-between">
+                          <span>Efectivo ventas esperado:</span>
+                          <span className="font-mono">${session?.expectedCash.usd.toFixed(2)}</span>
+                        </div>
+                        <div className="flex justify-between text-red-400">
+                          <span>+ Faltante inventario:</span>
+                          <span className="font-mono">${inventoryShortage.toFixed(2)}</span>
+                        </div>
+                        <div className="flex justify-between font-medium pt-1 border-t border-red-700/30">
+                          <span>= Total a reportar:</span>
+                          <span className="font-mono">${adjustedExpectedCash.usd.toFixed(2)}</span>
+                        </div>
+                      </div>
+                      <p className="text-xs text-red-300/70 mt-3">
+                        Este monto se suma al efectivo esperado. El cajero debe aportar dinero extra para cubrir el faltante.
+                      </p>
+                    </div>
+                  </div>
+                )}
 
                 {/* Total Difference */}
                 <div className={cn(
