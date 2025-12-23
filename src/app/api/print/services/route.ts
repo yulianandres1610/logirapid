@@ -105,6 +105,7 @@ export async function GET(request: NextRequest) {
       printerType: string
       isOnline: boolean
       isDefault: boolean
+      supportedDocumentTypes: string[]
     }>> = {}
 
     if (serviceIds.length > 0) {
@@ -116,7 +117,8 @@ export async function GET(request: NextRequest) {
           printer_id,
           printer_type,
           is_online,
-          is_default
+          is_default,
+          supported_document_types
         FROM print_service_printers
         WHERE print_service_id = ANY($1)
         ORDER BY is_default DESC, printer_name ASC
@@ -128,13 +130,33 @@ export async function GET(request: NextRequest) {
         if (!printersMap[serviceId]) {
           printersMap[serviceId] = []
         }
+
+        // Parse supported_document_types (could be TEXT[] or JSONB)
+        let supportedTypes: string[] = []
+        if (printer.supported_document_types) {
+          if (Array.isArray(printer.supported_document_types)) {
+            supportedTypes = printer.supported_document_types
+          } else if (typeof printer.supported_document_types === 'string') {
+            try {
+              supportedTypes = JSON.parse(printer.supported_document_types)
+            } catch {
+              supportedTypes = []
+            }
+          }
+        }
+        // Default to all types if not set
+        if (supportedTypes.length === 0) {
+          supportedTypes = ['pos_receipt', 'product_label', 'invoice', 'purchase_invoice', 'sales_report', 'inventory_count_report', 'cash_register_report', 'shipping_label']
+        }
+
         printersMap[serviceId].push({
           id: printer.id,
           printerName: printer.printer_name,
           printerId: printer.printer_id,
           printerType: printer.printer_type,
           isOnline: printer.is_online,
-          isDefault: printer.is_default
+          isDefault: printer.is_default,
+          supportedDocumentTypes: supportedTypes
         })
       }
     }

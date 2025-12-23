@@ -265,6 +265,31 @@ export async function GET() {
       // Index may already exist
     }
 
+    // 6. Add supported_document_types column to print_service_printers if not exists
+    try {
+      await db.query(`
+        ALTER TABLE print_service_printers
+        ADD COLUMN IF NOT EXISTS supported_document_types TEXT[] DEFAULT ARRAY['pos_receipt', 'product_label', 'invoice', 'purchase_invoice', 'sales_report', 'inventory_count_report', 'cash_register_report', 'shipping_label']::TEXT[]
+      `)
+      results.push({ table: 'print_service_printers.supported_document_types', status: 'created' })
+    } catch (error) {
+      // Column may already exist or DB doesn't support arrays
+      try {
+        // Fallback to JSONB
+        await db.query(`
+          ALTER TABLE print_service_printers
+          ADD COLUMN IF NOT EXISTS supported_document_types JSONB DEFAULT '["pos_receipt", "product_label", "invoice", "purchase_invoice", "sales_report", "inventory_count_report", "cash_register_report", "shipping_label"]'::JSONB
+        `)
+        results.push({ table: 'print_service_printers.supported_document_types', status: 'created (jsonb)' })
+      } catch {
+        results.push({
+          table: 'print_service_printers.supported_document_types',
+          status: 'skipped',
+          error: 'Column may already exist'
+        })
+      }
+    }
+
     // Add comments to tables for documentation
     try {
       await db.query(`COMMENT ON TABLE print_services IS 'Local print service installations (Electron app)'`)

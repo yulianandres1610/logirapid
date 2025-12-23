@@ -21,6 +21,7 @@ interface PrinterInfo {
   printerType: string
   isOnline: boolean
   isDefault: boolean
+  supportedDocumentTypes?: string[]
 }
 
 export type DocumentType =
@@ -30,6 +31,8 @@ export type DocumentType =
   | 'sales_report'
   | 'product_label'
   | 'cash_register_report'
+  | 'invoice'
+  | 'shipping_label'
 
 interface PrintDocumentModalProps {
   isOpen: boolean
@@ -48,7 +51,9 @@ const DOCUMENT_LABELS: Record<DocumentType, { label: string; icon: typeof FileTe
   purchase_invoice: { label: 'Factura de Compra', icon: FileText },
   sales_report: { label: 'Reporte de Ventas', icon: ShoppingCart },
   product_label: { label: 'Etiqueta de Producto', icon: Package },
-  cash_register_report: { label: 'Reporte de Caja', icon: FileText }
+  cash_register_report: { label: 'Reporte de Caja', icon: FileText },
+  invoice: { label: 'Factura', icon: FileText },
+  shipping_label: { label: 'Etiqueta de Envío', icon: Package }
 }
 
 export function PrintDocumentModal({
@@ -80,6 +85,15 @@ export function PrintDocumentModal({
     }
   }, [isOpen])
 
+  // Helper to check if printer supports the document type
+  const printerSupportsDocType = (printer: PrinterInfo, docType: string): boolean => {
+    // If no supported types defined, assume it supports all
+    if (!printer.supportedDocumentTypes || printer.supportedDocumentTypes.length === 0) {
+      return true
+    }
+    return printer.supportedDocumentTypes.includes(docType)
+  }
+
   const fetchPrintServices = async () => {
     setLoading(true)
     setError(null)
@@ -88,9 +102,16 @@ export function PrintDocumentModal({
       const data = await response.json()
 
       if (data.success && data.data?.services) {
-        const activeServices = data.data.services.filter(
-          (s: PrintService) => s.status === 'active' && s.printers?.length > 0
-        )
+        // Filter services that have at least one printer supporting this document type
+        const activeServices = data.data.services
+          .filter((s: PrintService) => s.status === 'active' && s.printers?.length > 0)
+          .map((service: PrintService) => ({
+            ...service,
+            // Filter printers to only those supporting this document type
+            printers: service.printers.filter((p: PrinterInfo) => printerSupportsDocType(p, documentType))
+          }))
+          .filter((s: PrintService) => s.printers.length > 0) // Only keep services with compatible printers
+
         setServices(activeServices)
 
         if (activeServices.length > 0) {
