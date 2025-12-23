@@ -195,10 +195,7 @@ export async function generatePurchaseInvoicePdf(data: PurchaseInvoiceData): Pro
     drawText(formatCurrency(item.unitCost), 400, y, { size: 9 })
     drawText(formatCurrency(itemTotal), 500, y, { size: 9, font: fontBold })
 
-    y -= 18
-
-    // Draw line between rows
-    drawLine(50, y + 5, 562, y + 5)
+    y -= 20
 
     // Check if we need a new page
     if (y < 150) {
@@ -207,55 +204,56 @@ export async function generatePurchaseInvoicePdf(data: PurchaseInvoiceData): Pro
     }
   }
 
-  y -= 15
+  // Draw bottom line of table
+  drawLine(50, y + 8, 562, y + 8)
+  y -= 20
 
   // === TOTALS ===
   const totalsX = 400
-  const totalsValueX = 500
+  const totalsValueX = 510
 
   // Subtotal
   drawText('Subtotal:', totalsX, y, { size: 10 })
   drawText(formatCurrency(data.subtotal), totalsValueX, y, { size: 10 })
-  y -= 15
+  y -= 18
 
   // Tax
   if (data.tax !== undefined && data.tax > 0) {
     const taxLabel = data.taxRate ? `IVA (${data.taxRate}%):` : 'IVA:'
     drawText(taxLabel, totalsX, y, { size: 10 })
     drawText(formatCurrency(data.tax), totalsValueX, y, { size: 10 })
-    y -= 15
+    y -= 18
   }
 
   // Discount
   if (data.discount !== undefined && data.discount > 0) {
     drawText('Descuento:', totalsX, y, { size: 10 })
     drawText(`-${formatCurrency(data.discount)}`, totalsValueX, y, { size: 10, color: rgb(0.8, 0, 0) })
-    y -= 15
+    y -= 18
   }
 
   // Shipping
   if (data.shipping !== undefined && data.shipping > 0) {
     drawText('Envío:', totalsX, y, { size: 10 })
     drawText(formatCurrency(data.shipping), totalsValueX, y, { size: 10 })
-    y -= 15
+    y -= 18
   }
 
-  // Total line
-  y -= 5
-  drawLine(totalsX - 10, y + 20, 562, y + 20)
+  // Add spacing before total box
+  y -= 10
 
-  // Total
+  // Total box
   page.drawRectangle({
     x: totalsX - 10,
-    y: y - 5,
+    y: y - 8,
     width: 172,
-    height: 25,
+    height: 28,
     color: darkBlue
   })
   drawText('TOTAL:', totalsX, y, { font: fontBold, size: 12, color: rgb(1, 1, 1) })
   drawText(formatCurrency(data.total), totalsValueX - 10, y, { font: fontBold, size: 14, color: rgb(1, 1, 1) })
 
-  y -= 40
+  y -= 50
 
   // === PAYMENT INFO ===
   if (data.paymentStatus || data.paymentMethod) {
