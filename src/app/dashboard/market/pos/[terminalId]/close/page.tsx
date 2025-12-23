@@ -62,37 +62,44 @@ interface InventoryCountSummary {
 
 // Denominations for each currency
 const USD_DENOMINATIONS = [
-  { value: 100, label: '$100' },
-  { value: 50, label: '$50' },
-  { value: 20, label: '$20' },
-  { value: 10, label: '$10' },
-  { value: 5, label: '$5' },
-  { value: 1, label: '$1' },
-  { value: 0.25, label: '25¢' },
-  { value: 0.10, label: '10¢' },
-  { value: 0.05, label: '5¢' },
-  { value: 0.01, label: '1¢' }
+  { value: 100, label: '$100', type: 'bill' },
+  { value: 50, label: '$50', type: 'bill' },
+  { value: 20, label: '$20', type: 'bill' },
+  { value: 10, label: '$10', type: 'bill' },
+  { value: 5, label: '$5', type: 'bill' },
+  { value: 2, label: '$2', type: 'bill' },
+  { value: 1, label: '$1', type: 'bill' },
+  { value: 0.50, label: '50¢', type: 'coin' },
+  { value: 0.25, label: '25¢', type: 'coin' },
+  { value: 0.10, label: '10¢', type: 'coin' },
+  { value: 0.05, label: '5¢', type: 'coin' },
+  { value: 0.01, label: '1¢', type: 'coin' }
 ]
 
 const CUP_DENOMINATIONS = [
-  { value: 1000, label: '1000' },
-  { value: 500, label: '500' },
-  { value: 200, label: '200' },
-  { value: 100, label: '100' },
-  { value: 50, label: '50' },
-  { value: 20, label: '20' },
-  { value: 10, label: '10' },
-  { value: 5, label: '5' },
-  { value: 1, label: '1' }
+  { value: 1000, label: '$1000', type: 'bill' },
+  { value: 500, label: '$500', type: 'bill' },
+  { value: 200, label: '$200', type: 'bill' },
+  { value: 100, label: '$100', type: 'bill' },
+  { value: 50, label: '$50', type: 'bill' },
+  { value: 20, label: '$20', type: 'bill' },
+  { value: 10, label: '$10', type: 'bill' },
+  { value: 5, label: '$5', type: 'bill' },
+  { value: 3, label: '$3', type: 'bill' },
+  { value: 1, label: '$1', type: 'bill' },
+  { value: 0.20, label: '20¢', type: 'coin' },
+  { value: 0.05, label: '5¢', type: 'coin' },
+  { value: 0.02, label: '2¢', type: 'coin' },
+  { value: 0.01, label: '1¢', type: 'coin' }
 ]
 
 const MLC_DENOMINATIONS = [
-  { value: 100, label: '$100' },
-  { value: 50, label: '$50' },
-  { value: 20, label: '$20' },
-  { value: 10, label: '$10' },
-  { value: 5, label: '$5' },
-  { value: 1, label: '$1' }
+  { value: 100, label: '$100', type: 'bill' },
+  { value: 50, label: '$50', type: 'bill' },
+  { value: 20, label: '$20', type: 'bill' },
+  { value: 10, label: '$10', type: 'bill' },
+  { value: 5, label: '$5', type: 'bill' },
+  { value: 1, label: '$1', type: 'bill' }
 ]
 
 type CurrencyTab = 'usd' | 'cup' | 'mlc'
