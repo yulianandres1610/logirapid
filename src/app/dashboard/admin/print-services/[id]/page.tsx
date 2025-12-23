@@ -43,7 +43,26 @@ interface PrintServicePrinter {
   dpi: number | null
   lastStatusCheck: string | null
   createdAt: string
+  supportedDocumentTypes?: string[]
 }
+
+const ALL_DOCUMENT_TYPES = [
+  { id: 'pos_receipt', label: 'Recibo POS', description: 'Recibos de punto de venta' },
+  { id: 'purchase_invoice', label: 'Factura de Compra', description: 'Facturas de proveedores' },
+  { id: 'sales_report', label: 'Reporte de Ventas', description: 'Reportes de ventas diarias' },
+  { id: 'cash_register_report', label: 'Reporte de Caja', description: 'Arqueos y cierres de caja' },
+  { id: 'inventory_count_report', label: 'Reporte de Conteo', description: 'Conteos de inventario' },
+  { id: 'invoice', label: 'Factura', description: 'Facturas generales' },
+  { id: 'product_label', label: 'Etiqueta Producto', description: 'Etiquetas de productos' },
+  { id: 'shipping_label', label: 'Etiqueta Envío', description: 'Etiquetas de paquetes' }
+]
+
+const PRINTER_TYPES = [
+  { id: 'thermal_80mm', label: 'Térmica 80mm', description: 'Impresora de recibos' },
+  { id: 'label_4x6', label: 'Etiquetas 4x6', description: 'Impresora de etiquetas de envío' },
+  { id: 'label_barcode', label: 'Código de Barras', description: 'Impresora de etiquetas pequeñas' },
+  { id: 'standard', label: 'Estándar', description: 'Impresora de documentos' }
+]
 
 interface PrintJob {
   id: number
@@ -92,13 +111,41 @@ export default function PrintServiceDetailPage({ params }: { params: Promise<{ i
   const [newCredentials, setNewCredentials] = useState<{ apiKey: string; apiSecret: string } | null>(null)
   const [regenerating, setRegenerating] = useState(false)
 
+  // Printer configuration modal state
+  const [showPrinterConfigModal, setShowPrinterConfigModal] = useState(false)
+  const [selectedPrinter, setSelectedPrinter] = useState<PrintServicePrinter | null>(null)
+  const [printerConfig, setPrinterConfig] = useState<{
+    printerType: string
+    supportedDocumentTypes: string[]
+  }>({ printerType: 'standard', supportedDocumentTypes: [] })
+  const [savingPrinter, setSavingPrinter] = useState(false)
+
   const fetchService = useCallback(async () => {
     try {
       setLoading(true)
       const response = await fetch(`/api/print/services/${serviceId}`)
       if (response.ok) {
         const data = await response.json()
-        setService(data.data)
+        // Map API response to PrintService interface
+        const serviceData = data.data
+        setService({
+          id: serviceData.service.id,
+          serviceCode: serviceData.service.serviceCode,
+          serviceName: serviceData.service.serviceName,
+          status: serviceData.service.status,
+          apiKey: serviceData.service.apiKey,
+          lastSeenAt: serviceData.service.lastSeenAt,
+          lastIpAddress: serviceData.service.lastIpAddress,
+          platform: serviceData.service.platform,
+          hostname: serviceData.service.hostname,
+          version: serviceData.service.version,
+          warehouseId: serviceData.service.warehouseId,
+          warehouseName: serviceData.service.warehouseName,
+          printers: serviceData.printers || [],
+          recentJobs: serviceData.recentJobs || [],
+          createdAt: serviceData.service.createdAt,
+          updatedAt: serviceData.service.updatedAt
+        })
       } else if (response.status === 404) {
         showNotification('error', 'Error', 'Servicio no encontrado')
         router.push('/dashboard/admin/print-services')
@@ -154,6 +201,54 @@ export default function PrintServiceDetailPage({ params }: { params: Promise<{ i
   const copyToClipboard = (text: string, label: string) => {
     navigator.clipboard.writeText(text)
     showNotification('success', 'Copiado', `${label} copiado al portapapeles`)
+  }
+
+  const openPrinterConfig = (printer: PrintServicePrinter) => {
+    setSelectedPrinter(printer)
+    setPrinterConfig({
+      printerType: printer.printerType || 'standard',
+      supportedDocumentTypes: printer.supportedDocumentTypes || ALL_DOCUMENT_TYPES.map(t => t.id)
+    })
+    setShowPrinterConfigModal(true)
+  }
+
+  const handleSavePrinterConfig = async () => {
+    if (!selectedPrinter || !service) return
+
+    setSavingPrinter(true)
+    try {
+      const response = await fetch(`/api/print/services/${service.id}/printers/${selectedPrinter.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          printerType: printerConfig.printerType,
+          supportedDocumentTypes: printerConfig.supportedDocumentTypes
+        })
+      })
+
+      const data = await response.json()
+
+      if (response.ok && data.success) {
+        showNotification('success', 'Guardado', 'Configuración de impresora actualizada')
+        setShowPrinterConfigModal(false)
+        fetchService()
+      } else {
+        throw new Error(data.error || 'Error al guardar')
+      }
+    } catch (error) {
+      showNotification('error', 'Error', error instanceof Error ? error.message : 'Error al guardar configuración')
+    } finally {
+      setSavingPrinter(false)
+    }
+  }
+
+  const toggleDocumentType = (docType: string) => {
+    setPrinterConfig(prev => ({
+      ...prev,
+      supportedDocumentTypes: prev.supportedDocumentTypes.includes(docType)
+        ? prev.supportedDocumentTypes.filter(t => t !== docType)
+        : [...prev.supportedDocumentTypes, docType]
+    }))
   }
 
   const getStatusBadge = (status: string, lastSeenAt: string | null) => {
@@ -395,7 +490,8 @@ export default function PrintServiceDetailPage({ params }: { params: Promise<{ i
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Tipo</th>
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Conexión</th>
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Estado</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Características</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Documentos</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Acciones</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
@@ -430,17 +526,34 @@ export default function PrintServiceDetailPage({ params }: { params: Promise<{ i
                         )}
                       </td>
                       <td className="px-4 py-3">
-                        <div className="flex gap-1 flex-wrap">
-                          {printer.supportsEscpos && (
-                            <span className="px-1.5 py-0.5 text-xs bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded">ESC/POS</span>
-                          )}
-                          {printer.supportsRaw && (
-                            <span className="px-1.5 py-0.5 text-xs bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 rounded">RAW</span>
-                          )}
-                          {printer.paperWidthMm && (
-                            <span className="px-1.5 py-0.5 text-xs bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 rounded">{printer.paperWidthMm}mm</span>
+                        <div className="flex gap-1 flex-wrap max-w-[200px]">
+                          {printer.supportedDocumentTypes && printer.supportedDocumentTypes.length > 0 ? (
+                            printer.supportedDocumentTypes.length === ALL_DOCUMENT_TYPES.length ? (
+                              <span className="px-1.5 py-0.5 text-xs bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 rounded">
+                                Todos ({printer.supportedDocumentTypes.length})
+                              </span>
+                            ) : (
+                              <span className="px-1.5 py-0.5 text-xs bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded">
+                                {printer.supportedDocumentTypes.length} tipos
+                              </span>
+                            )
+                          ) : (
+                            <span className="px-1.5 py-0.5 text-xs bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-300 rounded">
+                              Sin configurar
+                            </span>
                           )}
                         </div>
+                      </td>
+                      <td className="px-4 py-3">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => openPrinterConfig(printer)}
+                          className="gap-1"
+                        >
+                          <Settings className="w-3 h-3" />
+                          Configurar
+                        </Button>
                       </td>
                     </tr>
                   ))}
@@ -561,6 +674,118 @@ export default function PrintServiceDetailPage({ params }: { params: Promise<{ i
                   </Button>
                 </div>
               )}
+            </div>
+          </div>
+        )}
+
+        {/* Printer Configuration Modal */}
+        {showPrinterConfigModal && selectedPrinter && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+            <div className="bg-white dark:bg-gray-800 rounded-xl p-6 w-full max-w-lg mx-4 shadow-xl max-h-[90vh] overflow-y-auto">
+              <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
+                Configurar Impresora
+              </h2>
+              <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">
+                {selectedPrinter.printerName}
+              </p>
+
+              {/* Printer Type */}
+              <div className="mb-6">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
+                  Tipo de Impresora
+                </label>
+                <div className="grid grid-cols-2 gap-2">
+                  {PRINTER_TYPES.map(type => (
+                    <button
+                      key={type.id}
+                      onClick={() => setPrinterConfig(prev => ({ ...prev, printerType: type.id }))}
+                      className={cn(
+                        "p-3 rounded-lg border-2 text-left transition-all",
+                        printerConfig.printerType === type.id
+                          ? "border-blue-500 bg-blue-50 dark:bg-blue-900/20"
+                          : "border-gray-200 dark:border-gray-700 hover:border-gray-300"
+                      )}
+                    >
+                      <p className={cn(
+                        "text-sm font-medium",
+                        printerConfig.printerType === type.id
+                          ? "text-blue-700 dark:text-blue-300"
+                          : "text-gray-900 dark:text-white"
+                      )}>
+                        {type.label}
+                      </p>
+                      <p className="text-xs text-gray-500 dark:text-gray-400">{type.description}</p>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Supported Document Types */}
+              <div className="mb-6">
+                <div className="flex items-center justify-between mb-3">
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                    Documentos Soportados
+                  </label>
+                  <button
+                    onClick={() => setPrinterConfig(prev => ({
+                      ...prev,
+                      supportedDocumentTypes: prev.supportedDocumentTypes.length === ALL_DOCUMENT_TYPES.length
+                        ? []
+                        : ALL_DOCUMENT_TYPES.map(t => t.id)
+                    }))}
+                    className="text-xs text-blue-600 dark:text-blue-400 hover:underline"
+                  >
+                    {printerConfig.supportedDocumentTypes.length === ALL_DOCUMENT_TYPES.length
+                      ? 'Deseleccionar todos'
+                      : 'Seleccionar todos'}
+                  </button>
+                </div>
+                <div className="space-y-2 max-h-[300px] overflow-y-auto">
+                  {ALL_DOCUMENT_TYPES.map(docType => (
+                    <label
+                      key={docType.id}
+                      className={cn(
+                        "flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-all",
+                        printerConfig.supportedDocumentTypes.includes(docType.id)
+                          ? "border-green-500 bg-green-50 dark:bg-green-900/20"
+                          : "border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50"
+                      )}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={printerConfig.supportedDocumentTypes.includes(docType.id)}
+                        onChange={() => toggleDocumentType(docType.id)}
+                        className="w-4 h-4 rounded border-gray-300 text-green-600 focus:ring-green-500"
+                      />
+                      <div className="flex-1">
+                        <p className="text-sm font-medium text-gray-900 dark:text-white">
+                          {docType.label}
+                        </p>
+                        <p className="text-xs text-gray-500 dark:text-gray-400">
+                          {docType.description}
+                        </p>
+                      </div>
+                    </label>
+                  ))}
+                </div>
+              </div>
+
+              {/* Actions */}
+              <div className="flex gap-3 justify-end pt-4 border-t border-gray-200 dark:border-gray-700">
+                <Button
+                  variant="outline"
+                  onClick={() => setShowPrinterConfigModal(false)}
+                  disabled={savingPrinter}
+                >
+                  Cancelar
+                </Button>
+                <Button
+                  onClick={handleSavePrinterConfig}
+                  disabled={savingPrinter || printerConfig.supportedDocumentTypes.length === 0}
+                >
+                  {savingPrinter ? 'Guardando...' : 'Guardar Configuración'}
+                </Button>
+              </div>
             </div>
           </div>
         )}
