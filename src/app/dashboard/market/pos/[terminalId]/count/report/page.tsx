@@ -128,7 +128,8 @@ export default function InventoryCountReportPage() {
     router.push(`/dashboard/market/pos/${terminalId}/count`)
   }, [router, terminalId])
 
-  const completeAndContinue = useCallback(async () => {
+  // Complete count and go to cash close (arqueo)
+  const completeAndGoToClose = useCallback(async () => {
     if (!countData || !sessionId) return
 
     try {
@@ -156,7 +157,45 @@ export default function InventoryCountReportPage() {
       const data = await response.json()
       if (!data.success) throw new Error(data.error)
 
-      // Go to count history after completing
+      // Go directly to cash close (arqueo)
+      router.push(`/dashboard/market/pos/${terminalId}/close`)
+
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Error al completar conteo')
+      setCompleting(false)
+    }
+  }, [countData, sessionId, terminalId, router])
+
+  // Complete count and send to review (for counts with differences)
+  const completeAndSendToReview = useCallback(async () => {
+    if (!countData || !sessionId) return
+
+    try {
+      setCompleting(true)
+
+      const response = await fetch('/api/market/pos/inventory-count', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          sessionId,
+          warehouseId: countData.warehouseId,
+          lines: countData.lines.map(l => ({
+            productId: l.productId,
+            productName: l.productName,
+            productSku: l.productSku,
+            productBarcode: l.productBarcode,
+            productImage: l.productImage,
+            unitPrice: l.unitPrice,
+            countedQuantity: l.countedQuantity
+          })),
+          action: 'complete'
+        })
+      })
+
+      const data = await response.json()
+      if (!data.success) throw new Error(data.error)
+
+      // Go to count history for admin review
       router.push(`/dashboard/market/pos/${terminalId}/count/history?completed=${countData.countNumber}`)
 
     } catch (err) {
@@ -164,6 +203,11 @@ export default function InventoryCountReportPage() {
       setCompleting(false)
     }
   }, [countData, sessionId, terminalId, router])
+
+  // Just go to close without completing (for cases where count is already done)
+  const goToClose = useCallback(() => {
+    router.push(`/dashboard/market/pos/${terminalId}/close`)
+  }, [router, terminalId])
 
   // Print function
   const handlePrint = useCallback(() => {
@@ -550,32 +594,75 @@ export default function InventoryCountReportPage() {
           ) : null}
         </div>
 
-        {/* Footer */}
+        {/* Footer - Different buttons based on differences */}
         <footer className="px-3 sm:px-4 py-3 sm:py-4 bg-gray-800 border-t border-gray-700 no-print">
-          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3">
-            <button
-              onClick={goBackToCount}
-              disabled={completing}
-              className="flex-1 sm:flex-initial px-4 py-2.5 sm:py-3 bg-gray-700 rounded-xl font-medium hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 text-sm sm:text-base"
-            >
-              <RotateCcw className="w-4 h-4 sm:w-5 sm:h-5" />
-              Volver a Contar
-            </button>
+          {totals && totals.productsWithDifferences > 0 ? (
+            // WITH DIFFERENCES: Must send to review - admin approval required before arqueo
+            <div className="flex flex-col gap-3">
+              <p className="text-xs sm:text-sm text-amber-300 text-center">
+                Este conteo tiene diferencias y requiere aprobación de un administrador antes de poder cerrar la caja.
+              </p>
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3">
+                <button
+                  onClick={goBackToCount}
+                  disabled={completing}
+                  className="flex-1 sm:flex-initial px-4 py-2.5 sm:py-3 bg-gray-700 rounded-xl font-medium hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 text-sm sm:text-base"
+                >
+                  <RotateCcw className="w-4 h-4 sm:w-5 sm:h-5" />
+                  Recontar
+                </button>
 
-            <button
-              onClick={completeAndContinue}
-              disabled={completing}
-              className="flex-1 sm:flex-initial px-4 sm:px-6 py-2.5 sm:py-3 bg-blue-600 rounded-xl font-semibold hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 text-sm sm:text-base"
-            >
-              {completing ? (
-                <Loader2 className="w-4 h-4 sm:w-5 sm:h-5 animate-spin" />
-              ) : (
-                <FileCheck className="w-4 h-4 sm:w-5 sm:h-5" />
-              )}
-              <span>Aprobar Conteo</span>
-              <ArrowRight className="w-4 h-4 sm:w-5 sm:h-5" />
-            </button>
-          </div>
+                <button
+                  onClick={completeAndSendToReview}
+                  disabled={completing}
+                  className="flex-[2] sm:flex-initial px-4 sm:px-6 py-2.5 sm:py-3 bg-amber-600 rounded-xl font-semibold hover:bg-amber-500 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 text-sm sm:text-base"
+                >
+                  {completing ? (
+                    <Loader2 className="w-4 h-4 sm:w-5 sm:h-5 animate-spin" />
+                  ) : (
+                    <AlertTriangle className="w-4 h-4 sm:w-5 sm:h-5" />
+                  )}
+                  <span>Enviar a Revisión del Admin</span>
+                  <ArrowRight className="w-4 h-4 sm:w-5 sm:h-5" />
+                </button>
+              </div>
+            </div>
+          ) : (
+            // NO DIFFERENCES: Print + Go to arqueo directly
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3">
+              <button
+                onClick={goBackToCount}
+                disabled={completing}
+                className="flex-1 sm:flex-initial px-4 py-2.5 sm:py-3 bg-gray-700 rounded-xl font-medium hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 text-sm sm:text-base"
+              >
+                <RotateCcw className="w-4 h-4 sm:w-5 sm:h-5" />
+                Recontar
+              </button>
+
+              <button
+                onClick={handlePrint}
+                disabled={completing}
+                className="flex-1 sm:flex-initial px-4 py-2.5 sm:py-3 bg-green-600 rounded-xl font-semibold hover:bg-green-500 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 text-sm sm:text-base"
+              >
+                <Printer className="w-4 h-4 sm:w-5 sm:h-5" />
+                <span>Imprimir Conteo</span>
+              </button>
+
+              <button
+                onClick={completeAndGoToClose}
+                disabled={completing}
+                className="flex-1 sm:flex-initial px-4 sm:px-6 py-2.5 sm:py-3 bg-blue-600 rounded-xl font-semibold hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 text-sm sm:text-base"
+              >
+                {completing ? (
+                  <Loader2 className="w-4 h-4 sm:w-5 sm:h-5 animate-spin" />
+                ) : (
+                  <CheckCircle2 className="w-4 h-4 sm:w-5 sm:h-5" />
+                )}
+                <span>Completar e Ir al Arqueo</span>
+                <ArrowRight className="w-4 h-4 sm:w-5 sm:h-5" />
+              </button>
+            </div>
+          )}
         </footer>
       </div>
 

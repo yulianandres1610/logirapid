@@ -37,6 +37,7 @@ interface CountRequest {
  * Query params:
  * - sessionId: ID de la sesión POS
  * - countId: ID del conteo específico
+ * - status: 'in_progress' | 'completed' | 'any' (default: 'in_progress')
  */
 export async function GET(request: NextRequest) {
   try {
@@ -64,6 +65,7 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url)
     const sessionId = searchParams.get('sessionId')
     const countId = searchParams.get('countId')
+    const statusFilter = searchParams.get('status') || 'in_progress'
 
     if (!sessionId && !countId) {
       return NextResponse.json({
@@ -87,8 +89,16 @@ export async function GET(request: NextRequest) {
         WHERE c.id = $1
       `, [countId])
     } else {
-      // Buscar el conteo más reciente de la sesión que NO esté completado
-      // Si ya está completado, no devolver nada para que el usuario pueda iniciar uno nuevo
+      // Buscar el conteo más reciente de la sesión
+      // El filtro de status determina qué conteos buscar
+      let statusCondition = ''
+      if (statusFilter === 'in_progress') {
+        statusCondition = "AND c.status = 'in_progress'"
+      } else if (statusFilter === 'completed') {
+        statusCondition = "AND c.status = 'completed'"
+      }
+      // Si statusFilter === 'any', no aplicar filtro de status
+
       countResult = await db.query(`
         SELECT
           c.*,
@@ -99,7 +109,7 @@ export async function GET(request: NextRequest) {
         LEFT JOIN market_warehouses w ON c.warehouse_id = w.id
         LEFT JOIN market_pos_sessions s ON c.session_id = s.id
         LEFT JOIN users u ON c.counted_by = u.id
-        WHERE c.session_id = $1 AND c.status = 'in_progress'
+        WHERE c.session_id = $1 ${statusCondition}
         ORDER BY c.created_at DESC
         LIMIT 1
       `, [sessionId])
