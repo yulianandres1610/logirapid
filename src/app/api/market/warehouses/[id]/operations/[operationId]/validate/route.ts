@@ -104,7 +104,7 @@ export async function POST(
     for (const line of lines) {
       // Verify line belongs to this operation
       const lineCheck = await db.query(`
-        SELECT id, quantity, quantity_validated
+        SELECT id, quantity_planned, COALESCE(quantity_validated, 0) as quantity_validated
         FROM market_warehouse_operation_lines
         WHERE id = $1 AND operation_id = $2
       `, [line.lineId, opId])
@@ -128,8 +128,8 @@ export async function POST(
         l.product_id,
         p.name as product_name,
         p.sku,
-        l.quantity as quantity_expected,
-        l.quantity_validated
+        l.quantity_planned as quantity_expected,
+        COALESCE(l.quantity_validated, 0) as quantity_validated
       FROM market_warehouse_operation_lines l
       JOIN market_products p ON p.id = l.product_id
       WHERE l.operation_id = $1
@@ -258,8 +258,8 @@ export async function GET(
         p.name as product_name,
         p.sku,
         p.barcode,
-        l.quantity as quantity_expected,
-        l.quantity_validated,
+        l.quantity_planned as quantity_expected,
+        COALESCE(l.quantity_validated, 0) as quantity_validated,
         l.notes
       FROM market_warehouse_operation_lines l
       JOIN market_products p ON p.id = l.product_id
