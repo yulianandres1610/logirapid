@@ -40,6 +40,7 @@ export async function GET(request: NextRequest) {
     // Search for markets by name or phone, excluding current company
     const searchQuery = `%${query}%`
 
+    // First, search in companies table (simpler query without consignment tables)
     const result = await db.query(`
       SELECT
         c.id,
@@ -49,24 +50,10 @@ export async function GET(request: NextRequest) {
         c.address,
         c.city,
         c.state,
-        c.logo_url,
-        c.company_type,
-        (
-          SELECT COUNT(*)
-          FROM consignment_orders co
-          WHERE co.receiver_company_id = c.id
-          AND co.provider_company_id = $1
-        ) as total_consignments,
-        (
-          SELECT COALESCE(SUM(cw.balance), 0)
-          FROM consignment_wallets cw
-          WHERE cw.receiver_company_id = c.id
-          AND cw.provider_company_id = $1
-        ) as pending_balance
+        c.logo_url
       FROM companies c
       WHERE c.id != $1
-        AND c.company_type = 'market'
-        AND c.status = 'active'
+        AND c.is_active = true
         AND (
           c.name ILIKE $2
           OR c.phone ILIKE $2
@@ -82,9 +69,36 @@ export async function GET(request: NextRequest) {
       LIMIT $3
     `, [currentCompanyId, searchQuery, limit])
 
+    // Try to get consignment stats if tables exist
+    const marketsWithStats = await Promise.all(result.rows.map(async (row) => {
+      let totalConsignments = 0
+      let pendingBalance = 0
+
+      try {
+        const statsResult = await db.query(`
+          SELECT
+            (SELECT COUNT(*) FROM consignment_orders WHERE receiver_company_id = $1 AND provider_company_id = $2) as total,
+            (SELECT COALESCE(balance, 0) FROM consignment_wallets WHERE receiver_company_id = $1 AND provider_company_id = $2) as balance
+        `, [row.id, currentCompanyId])
+
+        if (statsResult.rows[0]) {
+          totalConsignments = parseInt(statsResult.rows[0].total) || 0
+          pendingBalance = parseFloat(statsResult.rows[0].balance) || 0
+        }
+      } catch {
+        // Tables don't exist yet, ignore
+      }
+
+      return {
+        ...row,
+        totalConsignments,
+        pendingBalance
+      }
+    }))
+
     // Get recent partners (companies we've sent consignments to before)
-    let recentPartners: unknown[] = []
-    if (query.length === 0) {
+    let recentPartners: { id: number; name: string; phone: string | null; email: string | null; address: string | null; city: string | null; logoUrl: string | null }[] = []
+    try {
       const recentResult = await db.query(`
         SELECT DISTINCT ON (c.id)
           c.id,
@@ -93,22 +107,31 @@ export async function GET(request: NextRequest) {
           c.email,
           c.address,
           c.city,
-          c.logo_url,
-          co.created_at as last_consignment_at
+          c.logo_url
         FROM companies c
         INNER JOIN consignment_orders co ON co.receiver_company_id = c.id
         WHERE co.provider_company_id = $1
-          AND c.status = 'active'
+          AND c.is_active = true
         ORDER BY c.id, co.created_at DESC
         LIMIT 5
       `, [currentCompanyId])
-      recentPartners = recentResult.rows
+      recentPartners = recentResult.rows.map(row => ({
+        id: row.id,
+        name: row.name,
+        phone: row.phone,
+        email: row.email,
+        address: row.address,
+        city: row.city,
+        logoUrl: row.logo_url
+      }))
+    } catch {
+      // Tables don't exist yet, ignore
     }
 
     return NextResponse.json({
       success: true,
       data: {
-        markets: result.rows.map(row => ({
+        markets: marketsWithStats.map(row => ({
           id: row.id,
           name: row.name,
           phone: row.phone,
@@ -117,21 +140,11 @@ export async function GET(request: NextRequest) {
           city: row.city,
           state: row.state,
           logoUrl: row.logo_url,
-          companyType: row.company_type,
-          totalConsignments: parseInt(row.total_consignments) || 0,
-          pendingBalance: parseFloat(row.pending_balance) || 0
+          totalConsignments: row.totalConsignments,
+          pendingBalance: row.pendingBalance
         })),
-        recentPartners: recentPartners.map((row: Record<string, unknown>) => ({
-          id: row.id,
-          name: row.name,
-          phone: row.phone,
-          email: row.email,
-          address: row.address,
-          city: row.city,
-          logoUrl: row.logo_url,
-          lastConsignmentAt: row.last_consignment_at
-        })),
-        total: result.rows.length
+        recentPartners,
+        total: marketsWithStats.length
       }
     })
 

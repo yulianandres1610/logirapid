@@ -122,10 +122,15 @@ export default function CreateConsignmentPage() {
       try {
         const response = await fetch('/api/market/warehouses')
         const data = await response.json()
-        if (data.success && data.data) {
-          setWarehouses(data.data)
-          if (data.data.length > 0) {
-            setSelectedWarehouse(data.data[0])
+        if (data.success && data.data?.warehouses) {
+          const warehouseList = data.data.warehouses.map((w: { id: number; name: string; address: string | null }) => ({
+            id: w.id,
+            name: w.name,
+            address: w.address
+          }))
+          setWarehouses(warehouseList)
+          if (warehouseList.length > 0) {
+            setSelectedWarehouse(warehouseList[0])
           }
         }
       } catch (error) {
@@ -619,10 +624,10 @@ export default function CreateConsignmentPage() {
                                       {market.phone && <span className="flex items-center gap-1"><Phone className="w-3 h-3" />{market.phone}</span>}
                                       {market.city && <span className="flex items-center gap-1"><MapPin className="w-3 h-3" />{market.city}</span>}
                                     </div>
-                                    {market.pendingBalance > 0 && (
+                                    {(market.pendingBalance || 0) > 0 && (
                                       <p className="text-xs text-amber-500 mt-1 flex items-center gap-1">
                                         <DollarSign className="w-3 h-3" />
-                                        Saldo pendiente: ${market.pendingBalance.toFixed(2)}
+                                        Saldo pendiente: ${(market.pendingBalance || 0).toFixed(2)}
                                       </p>
                                     )}
                                   </div>
@@ -1137,7 +1142,7 @@ export default function CreateConsignmentPage() {
                             </div>
                             <div className="text-right">
                               <p className={cn('font-bold text-lg', theme === 'dark' ? 'text-white' : 'text-gray-900')}>
-                                ${product.sellingPrice.toFixed(2)}
+                                ${(product.sellingPrice || 0).toFixed(2)}
                               </p>
                               <p className={cn('text-xs', theme === 'dark' ? 'text-gray-500' : 'text-gray-400')}>Precio venta</p>
                             </div>
