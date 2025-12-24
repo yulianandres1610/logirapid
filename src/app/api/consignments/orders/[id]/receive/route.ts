@@ -114,14 +114,14 @@ export async function POST(
 
         // Add to warehouse stock
         const stockCheck = await db.query(`
-          SELECT id, quantity FROM market_warehouse_stock
+          SELECT id, quantity_on_hand FROM market_warehouse_stock
           WHERE warehouse_id = $1 AND product_id = $2
         `, [receiverWarehouseId, orderItem.product_id])
 
         if (stockCheck.rows.length > 0) {
           await db.query(`
             UPDATE market_warehouse_stock
-            SET quantity = quantity + $1,
+            SET quantity_on_hand = quantity_on_hand + $1,
                 updated_at = NOW()
             WHERE id = $2
           `, [quantityReceived, stockCheck.rows[0].id])
@@ -130,11 +130,10 @@ export async function POST(
             INSERT INTO market_warehouse_stock (
               warehouse_id,
               product_id,
-              quantity,
-              min_stock,
-              max_stock,
+              quantity_on_hand,
+              quantity_reserved,
               created_at
-            ) VALUES ($1, $2, $3, 0, 0, NOW())
+            ) VALUES ($1, $2, $3, 0, NOW())
           `, [receiverWarehouseId, orderItem.product_id, quantityReceived])
         }
       }

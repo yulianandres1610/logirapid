@@ -299,8 +299,8 @@ export async function POST(
         } else {
           await db.query(`
             INSERT INTO market_warehouse_stock (
-              warehouse_id, product_id, quantity_on_hand, quantity_reserved, min_stock, max_stock, created_at
-            ) VALUES ($1, $2, $3, 0, 0, 0, NOW())
+              warehouse_id, product_id, quantity_on_hand, quantity_reserved, created_at
+            ) VALUES ($1, $2, $3, 0, NOW())
           `, [warehouseId, line.productId, newStock])
         }
 
@@ -322,8 +322,8 @@ export async function POST(
           } else {
             await db.query(`
               INSERT INTO market_warehouse_stock (
-                warehouse_id, product_id, quantity_on_hand, quantity_reserved, min_stock, max_stock, created_at
-              ) VALUES ($1, $2, $3, 0, 0, 0, NOW())
+                warehouse_id, product_id, quantity_on_hand, quantity_reserved, created_at
+              ) VALUES ($1, $2, $3, 0, NOW())
             `, [destinationWarehouseId, line.productId, line.quantity])
           }
         }

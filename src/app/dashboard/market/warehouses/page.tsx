@@ -625,7 +625,7 @@ export default function MarketWarehousesPage() {
                                   whileHover={{ scale: 1.05 }}
                                   whileTap={{ scale: 0.95 }}
                                   onClick={() => router.push(`/dashboard/market/warehouses/${warehouse.id}/operations`)}
-                                  className="flex items-center gap-1.5 px-3 py-1.5 bg-gradient-to-r from-purple-500 to-indigo-600 text-white text-xs font-medium rounded-lg hover:from-purple-600 hover:to-indigo-700 shadow-md shadow-purple-500/25 transition-all mr-1"
+                                  className="flex items-center gap-1.5 px-3 py-1.5 bg-gradient-to-r from-blue-500 to-blue-600 text-white text-xs font-medium rounded-lg hover:from-blue-600 hover:to-blue-700 shadow-md shadow-blue-500/25 transition-all mr-1"
                                   title="Operaciones de almacen"
                                 >
                                   <Boxes className="w-3.5 h-3.5" />
