@@ -4,19 +4,14 @@ import { db } from '@/lib/database'
 /**
  * GET /api/consignments/partners/debug?q=infanta
  * Debug endpoint to check company data
+ *
+ * POST /api/consignments/partners/debug
+ * Fix company name
  */
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url)
     const query = searchParams.get('q') || 'infanta'
-
-    // First, get all columns from companies table
-    const columnsResult = await db.query(`
-      SELECT column_name
-      FROM information_schema.columns
-      WHERE table_name = 'companies'
-      ORDER BY ordinal_position
-    `)
 
     // Search in multiple possible name columns
     const result = await db.query(`
@@ -35,20 +30,50 @@ export async function GET(request: NextRequest) {
       LIMIT 20
     `, [`%${query}%`])
 
-    // Also get ALL companies to see what's there
-    const allCompanies = await db.query(`
-      SELECT id, legalname, companytype, status
-      FROM companies
-      ORDER BY id DESC
-      LIMIT 50
-    `)
-
     return NextResponse.json({
       success: true,
       query,
-      columns: columnsResult.rows.map(r => r.column_name),
-      matchingCompanies: result.rows,
-      allCompanies: allCompanies.rows
+      companies: result.rows
+    })
+
+  } catch (error) {
+    console.error('[Debug Partners] Error:', error)
+    return NextResponse.json({
+      success: false,
+      error: error instanceof Error ? error.message : 'Error'
+    }, { status: 500 })
+  }
+}
+
+export async function POST(request: NextRequest) {
+  try {
+    const { id, newName } = await request.json()
+
+    if (!id || !newName) {
+      return NextResponse.json({
+        success: false,
+        error: 'Se requiere id y newName'
+      }, { status: 400 })
+    }
+
+    // Update company name
+    await db.query(`
+      UPDATE companies
+      SET legalname = $1
+      WHERE id = $2
+    `, [newName.trim(), id])
+
+    // Verify update
+    const result = await db.query(`
+      SELECT id, legalname, companytype, status
+      FROM companies
+      WHERE id = $1
+    `, [id])
+
+    return NextResponse.json({
+      success: true,
+      message: 'Nombre actualizado',
+      company: result.rows[0]
     })
 
   } catch (error) {
