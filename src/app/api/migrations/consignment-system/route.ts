@@ -181,6 +181,15 @@ export async function POST(request: NextRequest) {
     `)
     console.log('[Migration] Created consignment_return_items table')
 
+    // Add sent_by and sent_at columns for tracking when provider marks as sent
+    try {
+      await db.query(`ALTER TABLE consignment_orders ADD COLUMN IF NOT EXISTS sent_by INTEGER REFERENCES users(id)`)
+      await db.query(`ALTER TABLE consignment_orders ADD COLUMN IF NOT EXISTS sent_at TIMESTAMP`)
+      console.log('[Migration] Added sent_by and sent_at columns')
+    } catch (alterError) {
+      console.log('[Migration] sent_by/sent_at columns may already exist, continuing...')
+    }
+
     // Create indexes
     try {
       await db.query(`CREATE INDEX IF NOT EXISTS idx_consignment_orders_provider ON consignment_orders(provider_company_id)`)

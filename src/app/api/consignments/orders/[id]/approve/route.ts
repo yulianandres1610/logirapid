@@ -3,7 +3,6 @@ import { cookies } from 'next/headers'
 import { db } from '@/lib/database'
 
 interface ApproveRequest {
-  receiverWarehouseId: number
   receiverNotes?: string
   items?: {
     id: number
@@ -14,7 +13,8 @@ interface ApproveRequest {
 /**
  * POST /api/consignments/orders/[id]/approve
  * Approve a pending consignment order (as receiver)
- * This also adds products to the receiver's inventory
+ * This imports product catalog but does NOT add stock
+ * Stock is added when the receiver calls /receive after the order is in_transit
  */
 export async function POST(
   request: NextRequest,
@@ -35,28 +35,8 @@ export async function POST(
     }
 
     const { id } = await params
-    const body: ApproveRequest = await request.json()
-    const { receiverWarehouseId, receiverNotes, items } = body
-
-    if (!receiverWarehouseId) {
-      return NextResponse.json({
-        success: false,
-        error: 'Debe seleccionar un almacén de destino'
-      }, { status: 400 })
-    }
-
-    // Verify warehouse belongs to current company
-    const warehouseCheck = await db.query(`
-      SELECT id, name FROM market_warehouses
-      WHERE id = $1 AND company_id = $2
-    `, [receiverWarehouseId, currentCompanyId])
-
-    if (warehouseCheck.rows.length === 0) {
-      return NextResponse.json({
-        success: false,
-        error: 'El almacén seleccionado no pertenece a su empresa'
-      }, { status: 400 })
-    }
+    const body: ApproveRequest = await request.json().catch(() => ({}))
+    const { receiverNotes, items } = body
 
     // Verify order exists and is pending approval for current company as receiver
     const orderCheck = await db.query(`
@@ -101,54 +81,72 @@ export async function POST(
         }
       }
 
-      // Get all items with product details
+      // Get all items with product details from provider
       const orderItems = await db.query(`
         SELECT
           coi.*,
           mp.name as product_name,
-          mp.sku as product_sku
+          mp.sku as product_sku,
+          mp.barcode as product_barcode,
+          mp.description as product_description,
+          mp.category_id as product_category_id,
+          mp.unit_of_measure as product_unit,
+          mp.image_url as product_image_url,
+          mp.weight as product_weight,
+          mp.dimensions as product_dimensions,
+          mp.is_active as product_is_active
         FROM consignment_order_items coi
         LEFT JOIN market_products mp ON mp.id = coi.product_id
         WHERE coi.consignment_order_id = $1
       `, [id])
 
-      // Add products to receiver's inventory (warehouse stock)
-      // The cost for receiver = provider_price
+      // Import product catalog to receiver's company
+      // For each product, check if it already exists in receiver's catalog
+      // If not, create it with provider_price as the cost
+      let productsImported = 0
       for (const item of orderItems.rows) {
-        // Check if product already exists in warehouse stock
-        const stockCheck = await db.query(`
-          SELECT id, quantity FROM market_warehouse_stock
-          WHERE warehouse_id = $1 AND product_id = $2
-        `, [receiverWarehouseId, item.product_id])
+        // Check if product with same SKU or barcode exists in receiver's catalog
+        const existingProduct = await db.query(`
+          SELECT id FROM market_products
+          WHERE company_id = $1 AND (sku = $2 OR barcode = $3)
+        `, [currentCompanyId, item.product_sku, item.product_barcode])
 
-        if (stockCheck.rows.length > 0) {
-          // Update existing stock
+        if (existingProduct.rows.length === 0) {
+          // Create new product in receiver's catalog
           await db.query(`
-            UPDATE market_warehouse_stock
-            SET quantity = quantity + $1,
-                updated_at = NOW()
-            WHERE id = $2
-          `, [item.quantity, stockCheck.rows[0].id])
-        } else {
-          // Create new stock entry
-          await db.query(`
-            INSERT INTO market_warehouse_stock (
-              warehouse_id,
-              product_id,
-              quantity,
-              min_stock,
-              max_stock,
+            INSERT INTO market_products (
+              company_id,
+              name,
+              sku,
+              barcode,
+              description,
+              category_id,
+              unit_of_measure,
+              cost,
+              price,
+              image_url,
+              weight,
+              dimensions,
+              is_active,
               created_at
-            ) VALUES ($1, $2, $3, 0, 0, NOW())
-          `, [receiverWarehouseId, item.product_id, item.quantity])
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, NOW())
+          `, [
+            currentCompanyId,
+            item.product_name,
+            item.product_sku,
+            item.product_barcode,
+            item.product_description,
+            item.product_category_id,
+            item.product_unit,
+            item.provider_price,  // Cost for receiver = provider's price
+            item.actual_retail_price || item.suggested_retail_price || item.provider_price * 1.3,  // Default 30% margin
+            item.product_image_url,
+            item.product_weight,
+            item.product_dimensions,
+            true
+          ])
+          productsImported++
         }
-
-        // Update quantity_received to match quantity
-        await db.query(`
-          UPDATE consignment_order_items
-          SET quantity_received = quantity
-          WHERE id = $1
-        `, [item.id])
       }
 
       // Create or get wallet for this provider-receiver relationship
@@ -160,31 +158,28 @@ export async function POST(
         RETURNING id
       `, [order.provider_company_id, currentCompanyId])
 
-      // Update order status
+      // Update order status to approved (not received - that happens after send → receive)
       await db.query(`
         UPDATE consignment_orders
-        SET status = 'received',
-            receiver_warehouse_id = $1,
-            receiver_notes = $2,
-            approved_by = $3,
+        SET status = 'approved',
+            receiver_notes = $1,
+            approved_by = $2,
             approved_at = NOW(),
-            received_by = $3,
-            received_at = NOW(),
-            actual_delivery_date = CURRENT_DATE,
             updated_at = NOW()
-        WHERE id = $4
-      `, [receiverWarehouseId, receiverNotes || null, userId, id])
+        WHERE id = $3
+      `, [receiverNotes || null, userId, id])
 
       await db.query('COMMIT')
 
       return NextResponse.json({
         success: true,
-        message: `Consignación ${order.order_number} aprobada y recibida en ${warehouseCheck.rows[0].name}`,
+        message: `Consignación ${order.order_number} aprobada. ${productsImported > 0 ? `${productsImported} productos importados al catálogo.` : ''} Esperando envío del proveedor.`,
         data: {
           id: order.id,
           orderNumber: order.order_number,
-          status: 'received',
-          itemsReceived: orderItems.rows.length,
+          status: 'approved',
+          productsImported,
+          totalItems: orderItems.rows.length,
           walletId: walletResult.rows[0].id
         }
       })

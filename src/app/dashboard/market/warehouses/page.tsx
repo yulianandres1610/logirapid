@@ -21,8 +21,10 @@ import {
   Eye,
   Edit,
   Trash2,
-  Building
+  Building,
+  Boxes
 } from 'lucide-react'
+import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { DashboardLayout } from '@/components/layout/dashboard-layout'
 import { ProtectedRoute } from '@/components/protected-route'
@@ -70,6 +72,7 @@ const WAREHOUSE_TYPES: Record<string, { label: string; color: string }> = {
 export default function MarketWarehousesPage() {
   const { theme } = useTheme()
   const { user } = useAuth()
+  const router = useRouter()
   const [warehouses, setWarehouses] = useState<WarehouseData[]>([])
   const [stats, setStats] = useState<Stats>({ total: 0, active: 0, inactive: 0, central: 0 })
   const [loading, setLoading] = useState(true)
@@ -616,6 +619,19 @@ export default function MarketWarehousesPage() {
                           </td>
                           <td className="py-4 px-4 text-center">
                             <div className="flex items-center justify-center gap-1">
+                              {/* Boton Operar - Acceso rapido a operaciones de almacen */}
+                              {warehouse.isActive && (
+                                <motion.button
+                                  whileHover={{ scale: 1.05 }}
+                                  whileTap={{ scale: 0.95 }}
+                                  onClick={() => router.push(`/dashboard/market/warehouses/${warehouse.id}/operations`)}
+                                  className="flex items-center gap-1.5 px-3 py-1.5 bg-gradient-to-r from-purple-500 to-indigo-600 text-white text-xs font-medium rounded-lg hover:from-purple-600 hover:to-indigo-700 shadow-md shadow-purple-500/25 transition-all mr-1"
+                                  title="Operaciones de almacen"
+                                >
+                                  <Boxes className="w-3.5 h-3.5" />
+                                  Operar
+                                </motion.button>
+                              )}
                               <Link href={`/dashboard/market/warehouses/${warehouse.id}`}>
                                 <motion.button
                                   whileHover={{ scale: 1.1 }}
@@ -631,7 +647,7 @@ export default function MarketWarehousesPage() {
                                   whileHover={{ scale: 1.1 }}
                                   whileTap={{ scale: 0.9 }}
                                   className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-                                  title="Editar almacén"
+                                  title="Editar almacen"
                                 >
                                   <Edit className="w-4 h-4 text-amber-500" />
                                 </motion.button>
@@ -642,7 +658,7 @@ export default function MarketWarehousesPage() {
                                   whileTap={{ scale: 0.9 }}
                                   onClick={() => setDeleteWarehouse(warehouse)}
                                   className="p-2 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
-                                  title="Eliminar almacén"
+                                  title="Eliminar almacen"
                                 >
                                   <Trash2 className="w-4 h-4 text-red-500" />
                                 </motion.button>
