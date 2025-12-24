@@ -7,7 +7,6 @@ import {
   Package,
   Plus,
   Search,
-  Filter,
   ChevronRight,
   Clock,
   CheckCircle,
@@ -22,7 +21,6 @@ import {
   Eye,
   Send,
   Inbox,
-  Wallet,
   BarChart3,
   RefreshCw
 } from 'lucide-react'
@@ -294,50 +292,23 @@ export default function ConsignmentsPage() {
                   Gestiona tus consignaciones enviadas y recibidas
                 </p>
               </div>
-              <div className="flex items-center gap-3">
-                {pendingApprovalCount > 0 && (
-                  <Link href="/dashboard/market/consignments/pending">
-                    <motion.div
-                      whileHover={{ scale: 1.02 }}
-                      className={cn(
-                        'flex items-center gap-2 px-4 py-2 rounded-xl cursor-pointer',
-                        theme === 'dark'
-                          ? 'bg-amber-900/30 text-amber-400 border border-amber-500/30'
-                          : 'bg-amber-50 text-amber-700 border border-amber-200'
-                      )}
-                    >
-                      <Inbox className="w-5 h-5" />
-                      <span className="font-medium">{pendingApprovalCount} pendientes</span>
-                      <ChevronRight className="w-4 h-4" />
-                    </motion.div>
-                  </Link>
-                )}
-                <Link href="/dashboard/market/consignments/collections">
-                  <motion.button
+              {pendingApprovalCount > 0 && (
+                <Link href="/dashboard/market/consignments/pending">
+                  <motion.div
                     whileHover={{ scale: 1.02 }}
-                    whileTap={{ scale: 0.98 }}
                     className={cn(
-                      'flex items-center gap-2 px-4 py-2.5 rounded-xl font-medium',
+                      'flex items-center gap-2 px-4 py-2 rounded-xl cursor-pointer',
                       theme === 'dark'
-                        ? 'bg-gray-800 text-white border border-gray-700 hover:border-purple-500'
-                        : 'bg-white text-gray-700 border border-gray-200 hover:border-purple-300'
+                        ? 'bg-amber-900/30 text-amber-400 border border-amber-500/30'
+                        : 'bg-amber-50 text-amber-700 border border-amber-200'
                     )}
                   >
-                    <Wallet className="w-5 h-5" />
-                    Cobros
-                  </motion.button>
+                    <Inbox className="w-5 h-5" />
+                    <span className="font-medium">{pendingApprovalCount} pendientes</span>
+                    <ChevronRight className="w-4 h-4" />
+                  </motion.div>
                 </Link>
-                <Link href="/dashboard/market/consignments/create">
-                  <motion.button
-                    whileHover={{ scale: 1.02 }}
-                    whileTap={{ scale: 0.98 }}
-                    className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-purple-500 to-purple-600 text-white font-medium shadow-lg"
-                  >
-                    <Plus className="w-5 h-5" />
-                    Nueva Consignación
-                  </motion.button>
-                </Link>
-              </div>
+              )}
             </div>
 
             {/* KPI Cards */}
@@ -700,6 +671,16 @@ export default function ConsignmentsPage() {
                 <option value="rejected">Rechazada</option>
                 <option value="cancelled">Cancelada</option>
               </select>
+              <Link href="/dashboard/market/consignments/create">
+                <motion.button
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                  className="flex items-center gap-2 px-5 py-3 rounded-xl bg-gradient-to-r from-purple-500 to-purple-600 text-white font-medium shadow-lg whitespace-nowrap"
+                >
+                  <Plus className="w-5 h-5" />
+                  Nueva Consignación
+                </motion.button>
+              </Link>
             </div>
 
             {/* Orders List */}
