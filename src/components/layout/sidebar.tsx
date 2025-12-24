@@ -476,7 +476,7 @@ export function Sidebar({ isCollapsed, onToggle }: SidebarProps) {
     { icon: FileText, label: "Compras", href: "/dashboard/market/purchases" },
     {
       icon: Store,
-      label: "Consignaciones",
+      label: "Órdenes Consignaciones",
       href: "/dashboard/market/consignments",
       hasSubmenu: true,
       submenuItems: [
