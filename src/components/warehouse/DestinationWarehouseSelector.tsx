@@ -16,10 +16,16 @@ interface WarehouseOption {
   displayName: string
 }
 
+export interface SelectedWarehouse {
+  id: number
+  name: string
+  code: string
+}
+
 interface DestinationWarehouseSelectorProps {
   currentWarehouseId: number
   selectedWarehouseId: number | null
-  onSelect: (warehouseId: number | null) => void
+  onSelect: (warehouseId: number | null, warehouse: SelectedWarehouse | null) => void
   disabled?: boolean
 }
 
@@ -151,7 +157,11 @@ export default function DestinationWarehouseSelector({
               <button
                 key={warehouse.id}
                 onClick={() => {
-                  onSelect(warehouse.id)
+                  onSelect(warehouse.id, {
+                    id: warehouse.id,
+                    name: warehouse.name,
+                    code: warehouse.code
+                  })
                   setIsOpen(false)
                 }}
                 className={`
