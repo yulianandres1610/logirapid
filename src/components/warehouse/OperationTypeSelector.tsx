@@ -53,19 +53,10 @@ const operationTypes = [
   }
 ]
 
-export default function OperationTypeSelector({ onSelect, currentWarehouse }: OperationTypeSelectorProps) {
+export default function OperationTypeSelector({ onSelect }: OperationTypeSelectorProps) {
   return (
-    <div className="flex flex-col items-center justify-center min-h-[60vh] p-6">
-      <div className="text-center mb-8">
-        <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">
-          Seleccionar Operacion
-        </h2>
-        <p className="text-gray-500 dark:text-gray-400">
-          Almacen: <span className="font-medium text-gray-900 dark:text-white">{currentWarehouse.name}</span>
-        </p>
-      </div>
-
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 max-w-5xl w-full">
+    <div className="flex flex-col items-center justify-center min-h-[50vh] p-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 lg:gap-6 max-w-6xl w-full">
         {operationTypes.map((op, index) => {
           const Icon = op.icon
           return (
@@ -78,24 +69,25 @@ export default function OperationTypeSelector({ onSelect, currentWarehouse }: Op
               whileTap={{ scale: 0.98 }}
               onClick={() => onSelect(op.id)}
               className={`
-                relative flex flex-col items-center p-6 rounded-2xl
+                relative flex flex-col items-center p-6 lg:p-8 rounded-2xl
                 bg-gradient-to-br ${op.gradient}
                 text-white shadow-lg
                 hover:shadow-xl transition-all duration-200
                 group overflow-hidden
+                min-h-[180px] lg:min-h-[220px]
               `}
             >
               {/* Background decoration */}
               <div className="absolute inset-0 bg-white/10 opacity-0 group-hover:opacity-100 transition-opacity" />
 
               {/* Icon container */}
-              <div className="relative z-10 w-16 h-16 bg-white/20 rounded-xl flex items-center justify-center mb-4 group-hover:bg-white/30 transition-colors">
-                <Icon className="w-8 h-8" />
+              <div className="relative z-10 w-16 h-16 lg:w-20 lg:h-20 bg-white/20 rounded-xl flex items-center justify-center mb-4 group-hover:bg-white/30 transition-colors">
+                <Icon className="w-8 h-8 lg:w-10 lg:h-10" />
               </div>
 
               {/* Text */}
-              <h3 className="relative z-10 text-lg font-bold mb-1">{op.name}</h3>
-              <p className="relative z-10 text-sm text-white/80 text-center leading-tight">
+              <h3 className="relative z-10 text-lg lg:text-xl font-bold mb-2">{op.name}</h3>
+              <p className="relative z-10 text-sm lg:text-base text-white/80 text-center leading-tight">
                 {op.description}
               </p>
             </motion.button>

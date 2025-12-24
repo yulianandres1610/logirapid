@@ -11,8 +11,10 @@ import {
   CheckCircle2,
   X,
   AlertTriangle,
-  FileText
+  Printer
 } from 'lucide-react'
+import { format } from 'date-fns'
+import { es } from 'date-fns/locale'
 
 import OperationTypeSelector, { type OperationType } from '@/components/warehouse/OperationTypeSelector'
 import WarehouseScanner, { type ScannedProductData } from '@/components/warehouse/WarehouseScanner'
@@ -30,9 +32,263 @@ interface WarehouseData {
   allowNegativeStock: boolean
 }
 
+interface DestinationWarehouse {
+  id: number
+  name: string
+  code: string
+}
+
+// Silent print function for warehouse operations
+function printOperationReport(data: {
+  operationType: OperationType
+  operationNumber: string
+  warehouse: WarehouseData
+  destinationWarehouse?: DestinationWarehouse | null
+  products: ScannedProduct[]
+  scrapReason?: string | null
+  adjustmentReason?: string | null
+  notes?: string
+  companyName?: string
+}) {
+  const OPERATION_TITLES: Record<string, string> = {
+    reception: 'RECEPCIÓN DE MERCANCÍA',
+    transfer: 'TRANSFERENCIA INTERNA',
+    scrap: 'REPORTE DE SCRAP / MERMA',
+    adjustment: 'AJUSTE DE INVENTARIO'
+  }
+
+  const SCRAP_REASONS: Record<string, string> = {
+    damaged: 'Producto Dañado',
+    expired: 'Producto Vencido',
+    defective: 'Producto Defectuoso',
+    other: 'Otro Motivo'
+  }
+
+  const ADJUSTMENT_REASONS: Record<string, string> = {
+    physical_count: 'Conteo Físico',
+    system_error: 'Error de Sistema',
+    theft_loss: 'Robo / Pérdida',
+    other: 'Otro Motivo'
+  }
+
+  const totalUnits = data.products.reduce((sum, p) => sum + p.quantity, 0)
+  const now = new Date()
+
+  const printWindow = window.open('', '_blank', 'width=800,height=600')
+  if (!printWindow) {
+    console.error('No se pudo abrir ventana de impresión')
+    return
+  }
+
+  const html = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <title>${OPERATION_TITLES[data.operationType]} - ${data.operationNumber}</title>
+      <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: Arial, sans-serif; font-size: 12px; padding: 20px; background: white; color: black; }
+        .header { border-bottom: 2px solid black; padding-bottom: 15px; margin-bottom: 15px; display: flex; justify-content: space-between; align-items: start; }
+        .company { font-size: 20px; font-weight: bold; }
+        .title { font-size: 18px; font-weight: bold; text-align: right; }
+        .op-number { font-size: 14px; font-family: monospace; margin-top: 5px; }
+        .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px; }
+        .info-box { border: 1px solid #ccc; padding: 12px; border-radius: 4px; }
+        .info-label { font-size: 10px; color: #666; text-transform: uppercase; font-weight: bold; margin-bottom: 4px; }
+        .info-value { font-size: 14px; font-weight: bold; }
+        .info-code { font-size: 12px; color: #666; }
+        .detail-row { display: flex; justify-content: space-between; margin: 5px 0; font-size: 12px; }
+        .detail-label { color: #666; }
+        .detail-value { font-weight: 500; }
+        table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
+        th { background: #f5f5f5; border: 1px solid #ccc; padding: 10px; text-align: left; font-size: 11px; text-transform: uppercase; font-weight: bold; }
+        td { border: 1px solid #ccc; padding: 10px; font-size: 12px; }
+        tr:nth-child(even) { background: #fafafa; }
+        .text-center { text-align: center; }
+        .text-right { text-align: right; }
+        .font-bold { font-weight: bold; }
+        .font-mono { font-family: monospace; }
+        .totals-row { background: #f5f5f5 !important; font-weight: bold; }
+        .notes { background: #f9fafb; border: 1px solid #e5e7eb; padding: 12px; border-radius: 4px; margin-bottom: 20px; }
+        .notes-label { font-size: 10px; color: #666; text-transform: uppercase; font-weight: bold; margin-bottom: 5px; }
+        .signatures { display: grid; grid-template-columns: 1fr 1fr; gap: 50px; margin-top: 50px; }
+        .signature-box { text-align: center; }
+        .signature-line { border-top: 2px solid black; padding-top: 10px; margin-top: 70px; }
+        .signature-title { font-weight: bold; font-size: 11px; }
+        .signature-subtitle { font-size: 10px; color: #666; margin-top: 5px; }
+        .footer { margin-top: 30px; padding-top: 15px; border-top: 1px solid #e5e7eb; text-align: center; font-size: 10px; color: #666; }
+        .badge { display: inline-block; padding: 3px 10px; border-radius: 4px; font-size: 10px; font-weight: bold; }
+        .badge-green { background: #dcfce7; color: #166534; }
+        .badge-blue { background: #dbeafe; color: #1e40af; }
+        .badge-red { background: #fee2e2; color: #991b1b; }
+        .badge-amber { background: #fef3c7; color: #92400e; }
+        @media print {
+          body { padding: 10px; }
+          @page { margin: 10mm; }
+        }
+      </style>
+    </head>
+    <body>
+      <div class="header">
+        <div>
+          <div class="company">${data.companyName || 'LogiRapid'}</div>
+          <div style="font-size: 11px; color: #666; margin-top: 5px;">Sistema de Gestión de Almacenes</div>
+        </div>
+        <div style="text-align: right;">
+          <div class="title">${OPERATION_TITLES[data.operationType]}</div>
+          <div class="op-number">${data.operationNumber}</div>
+          <div class="badge ${
+            data.operationType === 'reception' ? 'badge-green' :
+            data.operationType === 'transfer' ? 'badge-blue' :
+            data.operationType === 'scrap' ? 'badge-red' : 'badge-amber'
+          }" style="margin-top: 8px;">COMPLETADO</div>
+        </div>
+      </div>
+
+      <div class="info-grid">
+        <div>
+          <div class="info-box">
+            <div class="info-label">${data.operationType === 'transfer' ? 'Almacén Origen' : 'Almacén'}</div>
+            <div class="info-value">${data.warehouse.name}</div>
+            <div class="info-code">${data.warehouse.code}</div>
+          </div>
+          ${data.destinationWarehouse ? `
+            <div class="info-box" style="margin-top: 10px;">
+              <div class="info-label">Almacén Destino</div>
+              <div class="info-value">${data.destinationWarehouse.name}</div>
+              <div class="info-code">${data.destinationWarehouse.code}</div>
+            </div>
+          ` : ''}
+        </div>
+        <div>
+          <div class="detail-row">
+            <span class="detail-label">Fecha y Hora:</span>
+            <span class="detail-value">${format(now, "dd/MM/yyyy HH:mm", { locale: es })}</span>
+          </div>
+          <div class="detail-row">
+            <span class="detail-label">Total Productos:</span>
+            <span class="detail-value">${data.products.length}</span>
+          </div>
+          <div class="detail-row">
+            <span class="detail-label">Total Unidades:</span>
+            <span class="detail-value">${totalUnits}</span>
+          </div>
+          ${data.scrapReason ? `
+            <div class="detail-row">
+              <span class="detail-label">Motivo Scrap:</span>
+              <span class="detail-value">${SCRAP_REASONS[data.scrapReason] || data.scrapReason}</span>
+            </div>
+          ` : ''}
+          ${data.adjustmentReason ? `
+            <div class="detail-row">
+              <span class="detail-label">Motivo Ajuste:</span>
+              <span class="detail-value">${ADJUSTMENT_REASONS[data.adjustmentReason] || data.adjustmentReason}</span>
+            </div>
+          ` : ''}
+        </div>
+      </div>
+
+      <table>
+        <thead>
+          <tr>
+            <th style="width: 40px;">#</th>
+            <th>Producto</th>
+            <th style="width: 100px;">SKU</th>
+            ${data.operationType === 'adjustment' ? '<th style="width: 80px;" class="text-center">Stock Ant.</th>' : ''}
+            <th style="width: 80px;" class="text-center">${data.operationType === 'adjustment' ? 'Stock Real' : 'Cantidad'}</th>
+            ${data.operationType === 'adjustment' ? '<th style="width: 80px;" class="text-center">Diferencia</th>' : ''}
+            <th style="width: 50px;" class="text-center">✓</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${data.products.map((p, i) => {
+            const diff = data.operationType === 'adjustment' && p.realStock !== undefined
+              ? (p.realStock - p.currentStock)
+              : 0
+            return `
+              <tr>
+                <td class="text-center">${i + 1}</td>
+                <td class="font-bold">${p.name}</td>
+                <td class="font-mono">${p.sku}</td>
+                ${data.operationType === 'adjustment' ? `<td class="text-center">${p.currentStock}</td>` : ''}
+                <td class="text-center font-bold">${data.operationType === 'adjustment' ? (p.realStock ?? '-') : p.quantity}</td>
+                ${data.operationType === 'adjustment' ? `
+                  <td class="text-center font-bold" style="color: ${diff >= 0 ? '#16a34a' : '#dc2626'};">
+                    ${diff >= 0 ? '+' : ''}${diff}
+                  </td>
+                ` : ''}
+                <td class="text-center">☐</td>
+              </tr>
+            `
+          }).join('')}
+        </tbody>
+        <tfoot>
+          <tr class="totals-row">
+            <td colspan="${data.operationType === 'adjustment' ? 4 : 3}" class="text-right">TOTAL:</td>
+            <td class="text-center font-bold">${data.operationType === 'adjustment'
+              ? data.products.reduce((sum, p) => sum + (p.realStock ?? 0), 0)
+              : totalUnits}</td>
+            ${data.operationType === 'adjustment' ? '<td></td>' : ''}
+            <td></td>
+          </tr>
+        </tfoot>
+      </table>
+
+      ${data.notes ? `
+        <div class="notes">
+          <div class="notes-label">Notas:</div>
+          <div>${data.notes}</div>
+        </div>
+      ` : ''}
+
+      <div class="signatures">
+        <div class="signature-box">
+          <div class="signature-line">
+            <div class="signature-title">
+              ${data.operationType === 'reception' ? 'RECIBIDO POR' :
+                data.operationType === 'transfer' ? 'ENTREGADO POR' :
+                data.operationType === 'scrap' ? 'AUTORIZADO POR' : 'REALIZADO POR'}
+            </div>
+            <div class="signature-subtitle">Nombre y Firma</div>
+            <div class="signature-subtitle">Fecha: ___/___/______</div>
+          </div>
+        </div>
+        <div class="signature-box">
+          <div class="signature-line">
+            <div class="signature-title">
+              ${data.operationType === 'reception' ? 'VERIFICADO POR' :
+                data.operationType === 'transfer' ? 'RECIBIDO POR' :
+                data.operationType === 'scrap' ? 'EJECUTADO POR' : 'APROBADO POR'}
+            </div>
+            <div class="signature-subtitle">Nombre y Firma</div>
+            <div class="signature-subtitle">Fecha: ___/___/______</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="footer">
+        <p>Este documento fue generado automáticamente por el sistema de gestión de almacenes</p>
+        <p style="margin-top: 5px;">${data.operationNumber} - Impreso el ${format(now, "dd/MM/yyyy 'a las' HH:mm", { locale: es })}</p>
+      </div>
+
+      <script>
+        window.onload = function() {
+          window.print();
+          setTimeout(function() { window.close(); }, 500);
+        }
+      </script>
+    </body>
+    </html>
+  `
+
+  printWindow.document.write(html)
+  printWindow.document.close()
+}
+
 interface OperationState {
   operationType: OperationType | null
   destinationWarehouseId: number | null
+  destinationWarehouse: DestinationWarehouse | null
   referenceType: ReferenceType
   referenceId: number | null
   referenceOrderNumber: string | null
@@ -45,6 +301,7 @@ interface OperationState {
 const initialOperationState: OperationState = {
   operationType: null,
   destinationWarehouseId: null,
+  destinationWarehouse: null,
   referenceType: 'none',
   referenceId: null,
   referenceOrderNumber: null,
@@ -243,6 +500,21 @@ export default function WarehouseOperationsPage() {
 
       if (data.success) {
         setSuccess(data.message)
+
+        // Print report silently
+        if (operation.operationType) {
+          printOperationReport({
+            operationType: operation.operationType,
+            operationNumber: data.data.operationNumber,
+            warehouse: warehouse!,
+            destinationWarehouse: operation.destinationWarehouse,
+            products: operation.products,
+            scrapReason: operation.scrapReason,
+            adjustmentReason: operation.adjustmentReason,
+            notes: operation.notes
+          })
+        }
+
         // Reset after success
         setTimeout(() => {
           setOperation(initialOperationState)
@@ -472,7 +744,11 @@ export default function WarehouseOperationsPage() {
                 <DestinationWarehouseSelector
                   currentWarehouseId={warehouseId}
                   selectedWarehouseId={operation.destinationWarehouseId}
-                  onSelect={(id) => setOperation(prev => ({ ...prev, destinationWarehouseId: id }))}
+                  onSelect={(id, warehouse) => setOperation(prev => ({
+                    ...prev,
+                    destinationWarehouseId: id,
+                    destinationWarehouse: warehouse
+                  }))}
                   disabled={submitting}
                 />
               )}
