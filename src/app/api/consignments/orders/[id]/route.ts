@@ -28,12 +28,12 @@ export async function GET(
     const orderResult = await db.query(`
       SELECT
         co.*,
-        provider.name as provider_name,
+        provider.legalname as provider_name,
         provider.phone as provider_phone,
         provider.email as provider_email,
         provider.address as provider_address,
         provider.logo_url as provider_logo,
-        receiver.name as receiver_name,
+        receiver.legalname as receiver_name,
         receiver.phone as receiver_phone,
         receiver.email as receiver_email,
         receiver.address as receiver_address,
@@ -42,9 +42,9 @@ export async function GET(
         pw.address as provider_warehouse_address,
         rw.name as receiver_warehouse_name,
         rw.address as receiver_warehouse_address,
-        creator.name as created_by_name,
-        approver.name as approved_by_name,
-        receiver_user.name as received_by_name
+        COALESCE(creator.firstname || ' ' || creator.lastname, creator.email) as created_by_name,
+        COALESCE(approver.firstname || ' ' || approver.lastname, approver.email) as approved_by_name,
+        COALESCE(receiver_user.firstname || ' ' || receiver_user.lastname, receiver_user.email) as received_by_name
       FROM consignment_orders co
       LEFT JOIN companies provider ON provider.id = co.provider_company_id
       LEFT JOIN companies receiver ON receiver.id = co.receiver_company_id
