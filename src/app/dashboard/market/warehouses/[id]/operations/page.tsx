@@ -273,8 +273,20 @@ function printOperationReport(data: {
 
       <script>
         window.onload = function() {
-          window.print();
-          setTimeout(function() { window.close(); }, 500);
+          // Esperar un momento para que el contenido renderice
+          setTimeout(function() {
+            window.print();
+          }, 100);
+        }
+        // Cerrar ventana después de imprimir o cancelar
+        window.onafterprint = function() {
+          window.close();
+        }
+        // Fallback para navegadores que no soporten onafterprint
+        window.onfocus = function() {
+          setTimeout(function() {
+            window.close();
+          }, 300);
         }
       </script>
     </body>
