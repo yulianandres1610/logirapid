@@ -1,9 +1,10 @@
 'use client'
 
+import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
-import { PackageCheck, ArrowRightLeft, Trash2, Scale } from 'lucide-react'
+import { PackageCheck, ArrowRightLeft, Trash2, Scale, PackageOpen } from 'lucide-react'
 
-export type OperationType = 'reception' | 'transfer' | 'scrap' | 'adjustment'
+export type OperationType = 'reception' | 'transfer' | 'scrap' | 'adjustment' | 'receive_transfer'
 
 interface OperationTypeSelectorProps {
   onSelect: (type: OperationType) => void
@@ -50,15 +51,48 @@ const operationTypes = [
     hoverGradient: 'from-amber-600 to-yellow-700',
     bgLight: 'bg-amber-50',
     textColor: 'text-amber-600'
+  },
+  {
+    id: 'receive_transfer' as OperationType,
+    name: 'Recibir',
+    description: 'Validar transferencias entrantes',
+    icon: PackageOpen,
+    gradient: 'from-purple-500 to-indigo-600',
+    hoverGradient: 'from-purple-600 to-indigo-700',
+    bgLight: 'bg-purple-50',
+    textColor: 'text-purple-600'
   }
 ]
 
-export default function OperationTypeSelector({ onSelect }: OperationTypeSelectorProps) {
+export default function OperationTypeSelector({ onSelect, currentWarehouse }: OperationTypeSelectorProps) {
+  const [pendingCount, setPendingCount] = useState(0)
+
+  // Fetch pending transfers count
+  useEffect(() => {
+    const fetchPendingCount = async () => {
+      try {
+        const response = await fetch(`/api/market/warehouses/${currentWarehouse.id}/pending-transfers`)
+        const data = await response.json()
+        if (data.success) {
+          setPendingCount(data.data.pendingCount)
+        }
+      } catch (error) {
+        console.error('Error fetching pending transfers:', error)
+      }
+    }
+
+    fetchPendingCount()
+    // Refresh every 30 seconds
+    const interval = setInterval(fetchPendingCount, 30000)
+    return () => clearInterval(interval)
+  }, [currentWarehouse.id])
+
   return (
-    <div className="flex flex-col items-center justify-center min-h-[50vh] p-4">
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 lg:gap-6 max-w-6xl w-full">
+    <div className="flex items-center justify-center min-h-[60vh] p-4 w-full">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-6 lg:gap-6 max-w-6xl mx-auto">
         {operationTypes.map((op, index) => {
           const Icon = op.icon
+          const showBadge = op.id === 'receive_transfer' && pendingCount > 0
           return (
             <motion.button
               key={op.id}
@@ -77,6 +111,17 @@ export default function OperationTypeSelector({ onSelect }: OperationTypeSelecto
                 min-h-[180px] lg:min-h-[220px]
               `}
             >
+              {/* Badge for pending transfers */}
+              {showBadge && (
+                <motion.div
+                  initial={{ scale: 0 }}
+                  animate={{ scale: 1 }}
+                  className="absolute top-3 right-3 z-20 w-8 h-8 bg-white rounded-full flex items-center justify-center shadow-lg"
+                >
+                  <span className="text-sm font-bold text-purple-600">{pendingCount}</span>
+                </motion.div>
+              )}
+
               {/* Background decoration */}
               <div className="absolute inset-0 bg-white/10 opacity-0 group-hover:opacity-100 transition-opacity" />
 
