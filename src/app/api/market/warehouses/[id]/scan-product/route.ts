@@ -97,9 +97,7 @@ export async function POST(
         p.image_url,
         p.is_active,
         COALESCE(ws.quantity_on_hand, 0) as quantity_on_hand,
-        COALESCE(ws.quantity_reserved, 0) as quantity_reserved,
-        COALESCE(ws.min_stock, 0) as min_stock,
-        COALESCE(ws.max_stock, 0) as max_stock
+        COALESCE(ws.quantity_reserved, 0) as quantity_reserved
       FROM market_products p
       LEFT JOIN market_warehouse_stock ws ON p.id = ws.product_id AND ws.warehouse_id = $2
       WHERE p.company_id = $1 AND (p.barcode = $3 OR p.sku = $3)
@@ -149,8 +147,6 @@ export async function POST(
           quantityOnHand,
           quantityReserved,
           quantityAvailable,
-          minStock: parseFloat(product.min_stock) || 0,
-          maxStock: parseFloat(product.max_stock) || 0,
           allowNegative: warehouse.allow_negative_stock
         }
       }
