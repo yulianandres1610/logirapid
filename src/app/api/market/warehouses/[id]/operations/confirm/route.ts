@@ -294,17 +294,17 @@ export async function POST(
           INSERT INTO market_warehouse_operation_lines (
             operation_id,
             product_id,
-            quantity,
-            quantity_before,
-            quantity_after,
+            quantity_planned,
+            quantity_done,
+            scrap_reason,
             notes
           ) VALUES ($1, $2, $3, $4, $5, $6)
         `, [
           operationId,
           line.productId,
           lineQuantity,
-          currentStock,
-          operationType === 'transfer' ? currentStock : newStock, // For transfers, stock stays the same until validated
+          operationType === 'transfer' ? 0 : lineQuantity, // For transfers, quantity_done starts at 0
+          operationType === 'scrap' ? (line.scrapReason || scrapReason) : null,
           lineNotes || null
         ])
 
