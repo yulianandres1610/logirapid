@@ -10,6 +10,15 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url)
     const query = searchParams.get('q') || 'infanta'
 
+    // First, get all columns from companies table
+    const columnsResult = await db.query(`
+      SELECT column_name
+      FROM information_schema.columns
+      WHERE table_name = 'companies'
+      ORDER BY ordinal_position
+    `)
+
+    // Search in multiple possible name columns
     const result = await db.query(`
       SELECT
         c.id,
@@ -20,15 +29,26 @@ export async function GET(request: NextRequest) {
         c.status
       FROM companies c
       WHERE c.legalname ILIKE $1
+         OR c.phone ILIKE $1
+         OR c.email ILIKE $1
       ORDER BY c.id DESC
-      LIMIT 10
+      LIMIT 20
     `, [`%${query}%`])
+
+    // Also get ALL companies to see what's there
+    const allCompanies = await db.query(`
+      SELECT id, legalname, companytype, status
+      FROM companies
+      ORDER BY id DESC
+      LIMIT 50
+    `)
 
     return NextResponse.json({
       success: true,
       query,
-      total: result.rows.length,
-      companies: result.rows
+      columns: columnsResult.rows.map(r => r.column_name),
+      matchingCompanies: result.rows,
+      allCompanies: allCompanies.rows
     })
 
   } catch (error) {
