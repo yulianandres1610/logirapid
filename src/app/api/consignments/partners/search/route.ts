@@ -45,10 +45,10 @@ export async function GET(request: NextRequest) {
     // Search for markets by name or phone, excluding current company
     const searchQuery = `%${query}%`
 
-    // First, search in companies table (simpler query without consignment tables)
-    // Note: companies table uses 'status' column, not 'is_active'
-    // Also uses 'legalname' instead of 'name'
-    // Search without status filter first to debug, then filter in code
+    // Search in companies table for active markets only
+    // - companytype = 'market' to only show markets
+    // - status = 'active' to only show active companies
+    // - legalname instead of name (column naming convention)
     const result = await db.query(`
       SELECT
         c.id,
@@ -59,9 +59,12 @@ export async function GET(request: NextRequest) {
         c.city,
         c.state,
         c.logo_url,
+        c.companytype,
         c.status
       FROM companies c
       WHERE c.id != $1
+        AND c.companytype = 'market'
+        AND c.status = 'active'
         AND (
           c.legalname ILIKE $2
           OR c.phone ILIKE $2
@@ -77,7 +80,7 @@ export async function GET(request: NextRequest) {
       LIMIT $3
     `, [currentCompanyId, searchQuery, limit])
 
-    console.log('[Partners Search] Found', result.rows.length, 'companies:', result.rows.map(r => ({ id: r.id, name: r.name, status: r.status })))
+    console.log('[Partners Search] Found', result.rows.length, 'markets:', result.rows.map(r => ({ id: r.id, name: r.name, type: r.companytype, status: r.status })))
 
     // Try to get consignment stats if tables exist
     const marketsWithStats = await Promise.all(result.rows.map(async (row) => {
@@ -138,8 +141,7 @@ export async function GET(request: NextRequest) {
       // Tables don't exist yet, ignore
     }
 
-    // Return all found markets (removed status filter to allow all companies)
-    // This allows consigning to any company, not just 'active' ones
+    // Return only active markets (companytype = 'market' AND status = 'active')
     return NextResponse.json({
       success: true,
       data: {
