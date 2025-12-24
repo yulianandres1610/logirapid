@@ -3,6 +3,7 @@ import { cookies } from 'next/headers'
 import { db } from '@/lib/database'
 
 interface ReceiveRequest {
+  receiverWarehouseId: number
   items?: {
     id: number
     quantityReceived: number
@@ -12,8 +13,9 @@ interface ReceiveRequest {
 
 /**
  * POST /api/consignments/orders/[id]/receive
- * Confirm physical receipt of products (if approval was separate)
- * Allows adjusting received quantities if different from sent
+ * Receive a consignment order in warehouse (as receiver)
+ * This happens after the provider has sent the order (in_transit status)
+ * This adds the products to the receiver's inventory
  */
 export async function POST(
   request: NextRequest,
@@ -35,7 +37,27 @@ export async function POST(
 
     const { id } = await params
     const body: ReceiveRequest = await request.json()
-    const { items, receiverNotes } = body
+    const { receiverWarehouseId, items, receiverNotes } = body
+
+    if (!receiverWarehouseId) {
+      return NextResponse.json({
+        success: false,
+        error: 'Debe seleccionar un almacén de destino'
+      }, { status: 400 })
+    }
+
+    // Verify warehouse belongs to current company
+    const warehouseCheck = await db.query(`
+      SELECT id, name FROM market_warehouses
+      WHERE id = $1 AND company_id = $2
+    `, [receiverWarehouseId, currentCompanyId])
+
+    if (warehouseCheck.rows.length === 0) {
+      return NextResponse.json({
+        success: false,
+        error: 'El almacén seleccionado no pertenece a su empresa'
+      }, { status: 400 })
+    }
 
     // Verify order exists and is in transit for current company as receiver
     const orderCheck = await db.query(`
@@ -43,9 +65,8 @@ export async function POST(
         co.id,
         co.status,
         co.order_number,
-        co.receiver_warehouse_id,
         co.provider_company_id,
-        p.name as provider_name
+        p.legalname as provider_name
       FROM consignment_orders co
       LEFT JOIN companies p ON p.id = co.provider_company_id
       WHERE co.id = $1 AND co.receiver_company_id = $2
@@ -60,18 +81,13 @@ export async function POST(
 
     const order = orderCheck.rows[0]
 
-    // Can receive from approved or in_transit status
-    if (!['approved', 'in_transit'].includes(order.status)) {
+    // Can only receive from in_transit status
+    if (order.status !== 'in_transit') {
       return NextResponse.json({
         success: false,
-        error: 'Esta consignación no está lista para recibir'
-      }, { status: 400 })
-    }
-
-    if (!order.receiver_warehouse_id) {
-      return NextResponse.json({
-        success: false,
-        error: 'No se ha asignado un almacén de destino'
+        error: order.status === 'received'
+          ? 'Esta consignación ya fue recibida'
+          : 'Esta consignación no está en tránsito'
       }, { status: 400 })
     }
 
@@ -100,7 +116,7 @@ export async function POST(
         const stockCheck = await db.query(`
           SELECT id, quantity FROM market_warehouse_stock
           WHERE warehouse_id = $1 AND product_id = $2
-        `, [order.receiver_warehouse_id, orderItem.product_id])
+        `, [receiverWarehouseId, orderItem.product_id])
 
         if (stockCheck.rows.length > 0) {
           await db.query(`
@@ -119,7 +135,7 @@ export async function POST(
               max_stock,
               created_at
             ) VALUES ($1, $2, $3, 0, 0, NOW())
-          `, [order.receiver_warehouse_id, orderItem.product_id, quantityReceived])
+          `, [receiverWarehouseId, orderItem.product_id, quantityReceived])
         }
       }
 
@@ -135,24 +151,26 @@ export async function POST(
       await db.query(`
         UPDATE consignment_orders
         SET status = 'received',
-            receiver_notes = COALESCE($1, receiver_notes),
-            received_by = $2,
+            receiver_warehouse_id = $1,
+            receiver_notes = COALESCE($2, receiver_notes),
+            received_by = $3,
             received_at = NOW(),
             actual_delivery_date = CURRENT_DATE,
             updated_at = NOW()
-        WHERE id = $3
-      `, [receiverNotes || null, userId, id])
+        WHERE id = $4
+      `, [receiverWarehouseId, receiverNotes || null, userId, id])
 
       await db.query('COMMIT')
 
       return NextResponse.json({
         success: true,
-        message: `Consignación ${order.order_number} recibida exitosamente`,
+        message: `Consignación ${order.order_number} recibida en ${warehouseCheck.rows[0].name}`,
         data: {
           id: order.id,
           orderNumber: order.order_number,
           status: 'received',
-          itemsReceived: orderItems.rows.length
+          itemsReceived: orderItems.rows.length,
+          warehouseName: warehouseCheck.rows[0].name
         }
       })
 
