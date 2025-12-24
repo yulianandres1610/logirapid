@@ -74,7 +74,7 @@ export async function GET(
         mp.sku as product_sku,
         mp.barcode as product_barcode,
         mp.image_url as product_image,
-        mp.unit_type as product_unit
+        mp.unit_of_measure as product_unit
       FROM consignment_order_items coi
       LEFT JOIN market_products mp ON mp.id = coi.product_id
       WHERE coi.consignment_order_id = $1
