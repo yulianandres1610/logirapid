@@ -14,18 +14,23 @@ export async function GET(request: NextRequest) {
   try {
     const cookieStore = await cookies()
     const companyIdCookie = cookieStore.get('user-company-id')
-    const currentCompanyId = companyIdCookie?.value
+    const currentCompanyIdStr = companyIdCookie?.value
 
-    if (!currentCompanyId) {
+    if (!currentCompanyIdStr) {
       return NextResponse.json({
         success: false,
         error: 'No autenticado'
       }, { status: 401 })
     }
 
+    // Convert to integer for proper comparison
+    const currentCompanyId = parseInt(currentCompanyIdStr, 10)
+
     const { searchParams } = new URL(request.url)
     const query = searchParams.get('q') || ''
     const limit = parseInt(searchParams.get('limit') || '10')
+
+    console.log('[Partners Search] Query:', query, 'CompanyId:', currentCompanyId)
 
     if (query.length < 2) {
       return NextResponse.json({
@@ -43,6 +48,7 @@ export async function GET(request: NextRequest) {
     // First, search in companies table (simpler query without consignment tables)
     // Note: companies table uses 'status' column, not 'is_active'
     // Also uses 'legalname' instead of 'name'
+    // Search without status filter first to debug, then filter in code
     const result = await db.query(`
       SELECT
         c.id,
@@ -52,10 +58,10 @@ export async function GET(request: NextRequest) {
         c.address,
         c.city,
         c.state,
-        c.logo_url
+        c.logo_url,
+        c.status
       FROM companies c
       WHERE c.id != $1
-        AND c.status = 'active'
         AND (
           c.legalname ILIKE $2
           OR c.phone ILIKE $2
@@ -70,6 +76,8 @@ export async function GET(request: NextRequest) {
         c.legalname
       LIMIT $3
     `, [currentCompanyId, searchQuery, limit])
+
+    console.log('[Partners Search] Found', result.rows.length, 'companies:', result.rows.map(r => ({ id: r.id, name: r.name, status: r.status })))
 
     // Try to get consignment stats if tables exist
     const marketsWithStats = await Promise.all(result.rows.map(async (row) => {
@@ -130,6 +138,8 @@ export async function GET(request: NextRequest) {
       // Tables don't exist yet, ignore
     }
 
+    // Return all found markets (removed status filter to allow all companies)
+    // This allows consigning to any company, not just 'active' ones
     return NextResponse.json({
       success: true,
       data: {
