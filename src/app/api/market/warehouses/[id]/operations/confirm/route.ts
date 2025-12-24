@@ -178,22 +178,29 @@ export async function POST(
                               operationType === 'transfer' ? 'internal' :
                               operationType === 'scrap' ? 'out' : 'adjustment'
 
+      // For transfers, status is 'pending' until destination validates
+      // For other operations, status is 'done' immediately
+      const initialStatus = operationType === 'transfer' ? 'pending' : 'done'
+      const validationStatus = operationType === 'transfer' ? 'pending_validation' : null
+      const completedAt = operationType === 'transfer' ? null : 'NOW()'
+
       // Create operation record
       const operationResult = await db.query(`
         INSERT INTO market_warehouse_operations (
           company_id,
-          warehouse_id,
+          source_warehouse_id,
           operation_number,
           operation_type,
           destination_warehouse_id,
           reference_type,
           reference_id,
           status,
+          validation_status,
           notes,
           created_by,
           created_at,
           completed_at
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, 'done', $8, $9, NOW(), NOW())
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, NOW(), ${operationType === 'transfer' ? 'NULL' : 'NOW()'})
         RETURNING id
       `, [
         payload.companyId,
@@ -203,6 +210,8 @@ export async function POST(
         destinationWarehouseId || null,
         referenceType || null,
         referenceId || null,
+        initialStatus,
+        validationStatus,
         notes || null,
         payload.userId
       ])
@@ -245,11 +254,17 @@ export async function POST(
             break
 
           case 'transfer':
-            // Validate sufficient stock for transfer
-            if (line.quantity > currentStock && !warehouse.allow_negative_stock) {
-              throw new Error(`Stock insuficiente para ${product.name} (SKU: ${product.sku}). Disponible: ${currentStock}, Solicitado: ${line.quantity}`)
+            // Validate sufficient stock for transfer (considering already reserved)
+            const currentReserved = stockResult.rows.length > 0
+              ? parseFloat(stockResult.rows[0].quantity_reserved) || 0
+              : 0
+            const availableStock = currentStock - currentReserved
+            if (line.quantity > availableStock && !warehouse.allow_negative_stock) {
+              throw new Error(`Stock insuficiente para ${product.name} (SKU: ${product.sku}). Disponible: ${availableStock}, Solicitado: ${line.quantity}`)
             }
-            quantityChange = -line.quantity
+            // For transfers: quantity_on_hand stays the same, we only reserve
+            // quantityChange remains 0 - stock will be moved when destination validates
+            quantityChange = 0
             break
 
           case 'scrap':
@@ -270,6 +285,10 @@ export async function POST(
 
         const newStock = currentStock + quantityChange
 
+        // For transfers, quantity is the planned quantity (stock doesn't move yet)
+        // For other operations, quantity is the actual change
+        const lineQuantity = operationType === 'transfer' ? line.quantity : Math.abs(quantityChange)
+
         // Create operation line
         await db.query(`
           INSERT INTO market_warehouse_operation_lines (
@@ -283,84 +302,85 @@ export async function POST(
         `, [
           operationId,
           line.productId,
-          Math.abs(quantityChange),
+          lineQuantity,
           currentStock,
-          newStock,
+          operationType === 'transfer' ? currentStock : newStock, // For transfers, stock stays the same until validated
           lineNotes || null
         ])
 
         // Update stock in source warehouse
-        if (stockResult.rows.length > 0) {
-          await db.query(`
-            UPDATE market_warehouse_stock
-            SET quantity_on_hand = $1, updated_at = NOW()
-            WHERE id = $2
-          `, [newStock, stockResult.rows[0].id])
+        if (operationType === 'transfer') {
+          // For transfers: RESERVE stock instead of moving it
+          // Stock will be actually moved when destination validates reception
+          if (stockResult.rows.length > 0) {
+            const newReserved = (parseFloat(stockResult.rows[0].quantity_reserved) || 0) + line.quantity
+            await db.query(`
+              UPDATE market_warehouse_stock
+              SET quantity_reserved = $1, updated_at = NOW()
+              WHERE id = $2
+            `, [newReserved, stockResult.rows[0].id])
+          } else {
+            // Create stock record with reserved quantity
+            await db.query(`
+              INSERT INTO market_warehouse_stock (
+                warehouse_id, product_id, quantity_on_hand, quantity_reserved, created_at
+              ) VALUES ($1, $2, 0, $3, NOW())
+            `, [warehouseId, line.productId, line.quantity])
+          }
+          // NOTE: Stock is NOT added to destination warehouse here
+          // That happens when destination validates the reception
         } else {
-          await db.query(`
-            INSERT INTO market_warehouse_stock (
-              warehouse_id, product_id, quantity_on_hand, quantity_reserved, created_at
-            ) VALUES ($1, $2, $3, 0, NOW())
-          `, [warehouseId, line.productId, newStock])
-        }
-
-        // For transfers, add stock to destination warehouse
-        if (operationType === 'transfer' && destinationWarehouseId) {
-          const destStockResult = await db.query(`
-            SELECT id, quantity_on_hand
-            FROM market_warehouse_stock
-            WHERE warehouse_id = $1 AND product_id = $2
-          `, [destinationWarehouseId, line.productId])
-
-          if (destStockResult.rows.length > 0) {
-            const destCurrentStock = parseFloat(destStockResult.rows[0].quantity_on_hand) || 0
+          // For other operations: directly update quantity_on_hand
+          if (stockResult.rows.length > 0) {
             await db.query(`
               UPDATE market_warehouse_stock
               SET quantity_on_hand = $1, updated_at = NOW()
               WHERE id = $2
-            `, [destCurrentStock + line.quantity, destStockResult.rows[0].id])
+            `, [newStock, stockResult.rows[0].id])
           } else {
             await db.query(`
               INSERT INTO market_warehouse_stock (
                 warehouse_id, product_id, quantity_on_hand, quantity_reserved, created_at
               ) VALUES ($1, $2, $3, 0, NOW())
-            `, [destinationWarehouseId, line.productId, line.quantity])
+            `, [warehouseId, line.productId, newStock])
           }
         }
 
-        // Record stock movement
-        const movementType = operationType === 'reception' ? 'in' :
-                             operationType === 'transfer' ? 'transfer' :
-                             operationType === 'scrap' ? 'scrap' : 'adjustment'
+        // Record stock movement (except for transfers - they record movement when validated)
+        if (operationType !== 'transfer') {
+          const movementType = operationType === 'reception' ? 'in' :
+                               operationType === 'scrap' ? 'scrap' : 'adjustment'
 
-        await db.query(`
-          INSERT INTO market_stock_movements (
-            company_id,
-            warehouse_id,
-            product_id,
-            movement_type,
-            quantity,
-            quantity_before,
-            quantity_after,
-            reference_type,
-            reference_id,
-            notes,
-            created_by,
-            created_at
-          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, NOW())
-        `, [
-          payload.companyId,
-          warehouseId,
-          line.productId,
-          movementType,
-          quantityChange,
-          currentStock,
-          newStock,
-          'warehouse_operation',
-          operationId,
-          lineNotes || null,
-          payload.userId
-        ])
+          await db.query(`
+            INSERT INTO market_stock_movements (
+              company_id,
+              warehouse_id,
+              product_id,
+              movement_type,
+              quantity,
+              quantity_before,
+              quantity_after,
+              reference_type,
+              reference_id,
+              notes,
+              created_by,
+              created_at
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, NOW())
+          `, [
+            payload.companyId,
+            warehouseId,
+            line.productId,
+            movementType,
+            quantityChange,
+            currentStock,
+            newStock,
+            'warehouse_operation',
+            operationId,
+            lineNotes || null,
+            payload.userId
+          ])
+        }
+        // For transfers: stock movements will be recorded when destination validates
 
         totalQuantity += Math.abs(line.quantity)
         processedLines++
@@ -403,6 +423,8 @@ export async function POST(
           operationId,
           operationNumber,
           operationType,
+          status: initialStatus,
+          validationStatus,
           warehouseId,
           warehouseName: warehouse.name,
           destinationWarehouseId,
@@ -431,7 +453,7 @@ function getOperationMessage(type: OperationType, lines: number, quantity: numbe
     case 'reception':
       return `Recepción completada: ${lines} producto${plural}, ${quantity} unidades ingresadas`
     case 'transfer':
-      return `Transferencia completada: ${lines} producto${plural}, ${quantity} unidades transferidas`
+      return `Transferencia creada: ${lines} producto${plural}, ${quantity} unidades. Pendiente de validación en almacén destino.`
     case 'scrap':
       return `Scrap registrado: ${lines} producto${plural}, ${quantity} unidades dadas de baja`
     case 'adjustment':

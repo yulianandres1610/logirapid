@@ -1026,6 +1026,41 @@ export async function POST() {
       CREATE INDEX IF NOT EXISTS idx_promotions_code ON market_promotions(code)
     `)
 
+    // 29. Add validation columns to market_warehouse_operations for transfer validation
+    const operationValidationColumns = [
+      { name: 'validation_status', type: "VARCHAR(50) DEFAULT NULL" },  // null, pending_validation, validated
+      { name: 'validated_by', type: 'INTEGER REFERENCES users(id)' },
+      { name: 'validated_at', type: 'TIMESTAMP' },
+      { name: 'discrepancy_notes', type: 'TEXT' }  // Required note when quantities don't match
+    ]
+
+    for (const col of operationValidationColumns) {
+      try {
+        await db.query(`
+          ALTER TABLE market_warehouse_operations
+          ADD COLUMN IF NOT EXISTS ${col.name} ${col.type}
+        `)
+        console.log(`[Migration] Added column ${col.name} to market_warehouse_operations`)
+      } catch (e: any) {
+        if (!e.message.includes('already exists')) {
+          console.log(`[Migration] Note: ${col.name} - ${e.message}`)
+        }
+      }
+    }
+
+    // 30. Add quantity_validated column to operation lines
+    try {
+      await db.query(`
+        ALTER TABLE market_warehouse_operation_lines
+        ADD COLUMN IF NOT EXISTS quantity_validated INTEGER DEFAULT 0
+      `)
+      console.log('[Migration] Added quantity_validated column to market_warehouse_operation_lines')
+    } catch (e: any) {
+      if (!e.message.includes('already exists')) {
+        console.log(`[Migration] Note: quantity_validated - ${e.message}`)
+      }
+    }
+
     // Get table stats
     const tables = [
       'market_products',

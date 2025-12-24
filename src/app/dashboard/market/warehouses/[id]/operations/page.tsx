@@ -24,6 +24,8 @@ import DestinationWarehouseSelector from '@/components/warehouse/DestinationWare
 import ScrapReasonSelector, { type ScrapReason } from '@/components/warehouse/ScrapReasonSelector'
 import AdjustmentReasonSelector, { type AdjustmentReason } from '@/components/warehouse/AdjustmentReasonSelector'
 import ReferenceOrderSelector, { type ReferenceType } from '@/components/warehouse/ReferenceOrderSelector'
+import PendingTransfersList, { type PendingTransfer } from '@/components/warehouse/PendingTransfersList'
+import TransferValidationView from '@/components/warehouse/TransferValidationView'
 
 interface WarehouseData {
   id: number
@@ -399,6 +401,12 @@ export default function WarehouseOperationsPage() {
   const [selectedProductIndex, setSelectedProductIndex] = useState<number | null>(null)
   const [numpadValue, setNumpadValue] = useState('1')
 
+  // Transfer validation state
+  const [pendingTransfers, setPendingTransfers] = useState<PendingTransfer[]>([])
+  const [loadingTransfers, setLoadingTransfers] = useState(false)
+  const [selectedTransfer, setSelectedTransfer] = useState<PendingTransfer | null>(null)
+  const [showValidationView, setShowValidationView] = useState(false)
+
   // Fetch warehouse data
   useEffect(() => {
     const fetchWarehouse = async () => {
@@ -428,12 +436,57 @@ export default function WarehouseOperationsPage() {
     }
   }, [warehouseId])
 
+  // Fetch pending transfers when receive_transfer is selected
+  const fetchPendingTransfers = useCallback(async () => {
+    setLoadingTransfers(true)
+    try {
+      const response = await fetch(`/api/market/warehouses/${warehouseId}/pending-transfers`)
+      const data = await response.json()
+      if (data.success) {
+        setPendingTransfers(data.data.transfers)
+      } else {
+        setError(data.error)
+      }
+    } catch (err) {
+      console.error('Error fetching pending transfers:', err)
+      setError('Error al cargar transferencias pendientes')
+    } finally {
+      setLoadingTransfers(false)
+    }
+  }, [warehouseId])
+
   const handleOperationTypeSelect = (type: OperationType) => {
-    setOperation({ ...initialOperationState, operationType: type })
+    if (type === 'receive_transfer') {
+      setOperation({ ...initialOperationState, operationType: type })
+      fetchPendingTransfers()
+    } else {
+      setOperation({ ...initialOperationState, operationType: type })
+    }
     setSelectedProductIndex(null)
     setNumpadValue('1')
     setError(null)
     setSuccess(null)
+    setSelectedTransfer(null)
+    setShowValidationView(false)
+  }
+
+  const handleSelectTransferForValidation = (transfer: PendingTransfer) => {
+    setSelectedTransfer(transfer)
+    setShowValidationView(true)
+  }
+
+  const handleValidationComplete = () => {
+    setShowValidationView(false)
+    setSelectedTransfer(null)
+    setSuccess('Transferencia recibida exitosamente')
+    // Refresh the pending transfers list
+    fetchPendingTransfers()
+    setTimeout(() => setSuccess(null), 3000)
+  }
+
+  const handleValidationClose = () => {
+    setShowValidationView(false)
+    setSelectedTransfer(null)
   }
 
   const handleProductScanned = useCallback((data: ScannedProductData) => {
@@ -669,7 +722,9 @@ export default function WarehouseOperationsPage() {
                   {operation.operationType
                     ? `${operation.operationType === 'reception' ? 'Recepcion' :
                         operation.operationType === 'transfer' ? 'Transferencia' :
-                        operation.operationType === 'scrap' ? 'Scrap' : 'Ajuste'}`
+                        operation.operationType === 'scrap' ? 'Scrap' :
+                        operation.operationType === 'adjustment' ? 'Ajuste' :
+                        operation.operationType === 'receive_transfer' ? 'Recibir Transferencia' : 'Operacion'}`
                     : 'Operaciones'}
                 </h1>
                 <p className="text-sm text-gray-500 dark:text-gray-400">{warehouse.name}</p>
@@ -718,6 +773,16 @@ export default function WarehouseOperationsPage() {
         )}
       </AnimatePresence>
 
+      {/* Transfer Validation Modal */}
+      {showValidationView && selectedTransfer && (
+        <TransferValidationView
+          warehouseId={warehouseId}
+          operationId={selectedTransfer.id}
+          onClose={handleValidationClose}
+          onComplete={handleValidationComplete}
+        />
+      )}
+
       {/* Main Content */}
       <main className="max-w-7xl mx-auto p-4">
         {!operation.operationType ? (
@@ -725,6 +790,26 @@ export default function WarehouseOperationsPage() {
             onSelect={handleOperationTypeSelect}
             currentWarehouse={warehouse}
           />
+        ) : operation.operationType === 'receive_transfer' ? (
+          /* Receive Transfer View */
+          <div className="max-w-4xl mx-auto">
+            <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6">
+              <PendingTransfersList
+                transfers={pendingTransfers}
+                onSelectTransfer={handleSelectTransferForValidation}
+                loading={loadingTransfers}
+              />
+
+              <div className="mt-6 pt-6 border-t border-gray-200 dark:border-gray-700">
+                <button
+                  onClick={handleBack}
+                  className="px-6 py-3 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-xl transition-colors"
+                >
+                  Volver a operaciones
+                </button>
+              </div>
+            </div>
+          </div>
         ) : (
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             {/* Left Column: Scanner + Products */}
