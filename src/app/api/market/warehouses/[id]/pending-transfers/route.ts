@@ -77,7 +77,7 @@ export async function GET(
         o.notes,
         o.created_at,
         o.created_by,
-        u.name as created_by_name,
+        CONCAT(u.firstname, ' ', u.lastname) as created_by_name,
         (SELECT COUNT(*) FROM market_warehouse_operation_lines WHERE operation_id = o.id) as total_products,
         (SELECT COALESCE(SUM(quantity), 0) FROM market_warehouse_operation_lines WHERE operation_id = o.id) as total_units
       FROM market_warehouse_operations o
