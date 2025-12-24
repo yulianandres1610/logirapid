@@ -38,8 +38,80 @@ interface DestinationWarehouse {
   code: string
 }
 
-// Silent print function for warehouse operations
-function printOperationReport(data: {
+// Silent print function for warehouse operations - uses print service API
+async function printOperationReport(data: {
+  operationType: OperationType
+  operationNumber: string
+  operationId: number
+  warehouse: WarehouseData
+  destinationWarehouse?: DestinationWarehouse | null
+  products: ScannedProduct[]
+  scrapReason?: string | null
+  adjustmentReason?: string | null
+  notes?: string
+  companyName?: string
+}) {
+  try {
+    // Send print job to the silent print service
+    const response = await fetch('/api/print/jobs', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        documentType: 'warehouse_operation',
+        documentData: {
+          operationType: data.operationType,
+          operationNumber: data.operationNumber,
+          warehouse: {
+            id: data.warehouse.id,
+            name: data.warehouse.name,
+            code: data.warehouse.code
+          },
+          destinationWarehouse: data.destinationWarehouse ? {
+            id: data.destinationWarehouse.id,
+            name: data.destinationWarehouse.name,
+            code: data.destinationWarehouse.code
+          } : null,
+          products: data.products.map(p => ({
+            productId: p.productId,
+            name: p.name,
+            sku: p.sku,
+            quantity: p.quantity,
+            currentStock: p.currentStock,
+            realStock: p.realStock
+          })),
+          scrapReason: data.scrapReason,
+          adjustmentReason: data.adjustmentReason,
+          notes: data.notes,
+          createdAt: new Date().toISOString()
+        },
+        copies: 1,
+        sourceType: 'warehouse_operation',
+        sourceId: data.operationId,
+        warehouseId: data.warehouse.id
+      })
+    })
+
+    const result = await response.json()
+
+    if (result.success) {
+      console.log('[Print] Job created:', result.data.jobNumber)
+      return true
+    } else {
+      console.warn('[Print] Service failed, falling back to browser print:', result.error)
+      // Fallback to browser print
+      printOperationReportBrowser(data)
+      return false
+    }
+  } catch (error) {
+    console.error('[Print] Error sending to print service:', error)
+    // Fallback to browser print
+    printOperationReportBrowser(data)
+    return false
+  }
+}
+
+// Fallback browser print function
+function printOperationReportBrowser(data: {
   operationType: OperationType
   operationNumber: string
   warehouse: WarehouseData
@@ -273,21 +345,10 @@ function printOperationReport(data: {
 
       <script>
         window.onload = function() {
-          // Esperar un momento para que el contenido renderice
-          setTimeout(function() {
-            window.print();
-          }, 100);
+          setTimeout(function() { window.print(); }, 100);
         }
-        // Cerrar ventana después de imprimir o cancelar
-        window.onafterprint = function() {
-          window.close();
-        }
-        // Fallback para navegadores que no soporten onafterprint
-        window.onfocus = function() {
-          setTimeout(function() {
-            window.close();
-          }, 300);
-        }
+        window.onafterprint = function() { window.close(); }
+        window.onfocus = function() { setTimeout(function() { window.close(); }, 300); }
       </script>
     </body>
     </html>
@@ -513,11 +574,12 @@ export default function WarehouseOperationsPage() {
       if (data.success) {
         setSuccess(data.message)
 
-        // Print report silently
+        // Print report silently via print service
         if (operation.operationType) {
           printOperationReport({
             operationType: operation.operationType,
             operationNumber: data.data.operationNumber,
+            operationId: data.data.operationId,
             warehouse: warehouse!,
             destinationWarehouse: operation.destinationWarehouse,
             products: operation.products,

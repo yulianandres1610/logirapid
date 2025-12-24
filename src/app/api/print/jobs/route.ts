@@ -194,7 +194,8 @@ export async function POST(request: NextRequest) {
       'purchase_invoice',      // Factura de compra
       'sales_report',          // Reporte de ventas
       'inventory_count_report', // Reporte de conteo de inventario
-      'cash_register_report'   // Reporte de caja/arqueo
+      'cash_register_report',  // Reporte de caja/arqueo
+      'warehouse_operation'    // Operación de almacén (recepción, transferencia, scrap, ajuste)
     ]
     if (!validDocTypes.includes(documentType)) {
       return NextResponse.json({
