@@ -17,8 +17,7 @@ export async function GET(request: NextRequest) {
         c.phone,
         c.email,
         c.companytype,
-        c.status,
-        c.created_at
+        c.status
       FROM companies c
       WHERE c.legalname ILIKE $1
       ORDER BY c.id DESC
