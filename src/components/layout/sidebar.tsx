@@ -474,6 +474,7 @@ export function Sidebar({ isCollapsed, onToggle }: SidebarProps) {
     { icon: Package, label: "Inventario", href: "/dashboard/market/inventory" },
     { icon: Warehouse, label: "Almacenes", href: "/dashboard/market/warehouses" },
     { icon: FileText, label: "Compras", href: "/dashboard/market/purchases" },
+    { icon: Store, label: "Consignaciones", href: "/dashboard/market/consignments" },
     { icon: ShoppingCart, label: "Órdenes Recibidas", href: "/dashboard/market/orders" },
     {
       icon: Monitor,
