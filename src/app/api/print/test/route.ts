@@ -285,10 +285,112 @@ export async function GET(request: NextRequest) {
       })
     }
 
+    if (action === 'add-warehouse-operation-support') {
+      // Add warehouse_operation to all printers' supported_document_types
+      const result = await db.query(`
+        UPDATE print_service_printers
+        SET supported_document_types = array_append(
+          CASE
+            WHEN 'warehouse_operation' = ANY(supported_document_types) THEN supported_document_types
+            ELSE supported_document_types
+          END,
+          'warehouse_operation'
+        )
+        WHERE NOT ('warehouse_operation' = ANY(supported_document_types))
+        RETURNING id, printer_name, supported_document_types
+      `)
+
+      return NextResponse.json({
+        success: true,
+        message: `${result.rows.length} impresoras actualizadas con soporte para warehouse_operation`,
+        data: {
+          updatedPrinters: result.rows
+        }
+      })
+    }
+
+    if (action === 'print-warehouse-operation') {
+      // Find an active service
+      const serviceResult = await db.query(`
+        SELECT ps.id as service_id, psp.id as printer_id, psp.printer_name
+        FROM print_services ps
+        JOIN print_service_printers psp ON psp.print_service_id = ps.id
+        WHERE ps.company_id = $1 AND ps.status = 'active'
+        ORDER BY psp.is_default DESC
+        LIMIT 1
+      `, [companyId])
+
+      if (serviceResult.rows.length === 0) {
+        return NextResponse.json({
+          success: false,
+          error: 'No hay servicios de impresión activos.'
+        })
+      }
+
+      const { service_id, printer_id, printer_name } = serviceResult.rows[0]
+
+      const jobNumber = `TEST-WO-${Date.now()}`
+      const testWarehouseData = {
+        operationType: 'reception',
+        operationNumber: 'OP-TEST-001',
+        warehouse: {
+          id: 1,
+          name: 'Almacén Principal',
+          code: 'ALM-001'
+        },
+        destinationWarehouse: null,
+        products: [
+          { productId: 1, name: 'Producto de Prueba 1', sku: 'SKU-001', quantity: 10, currentStock: 50 },
+          { productId: 2, name: 'Producto de Prueba 2', sku: 'SKU-002', quantity: 5, currentStock: 25 },
+          { productId: 3, name: 'Producto de Prueba 3', sku: 'SKU-003', quantity: 15, currentStock: 100 }
+        ],
+        scrapReason: null,
+        adjustmentReason: null,
+        notes: 'Documento de prueba para verificar impresión de operaciones de almacén',
+        createdAt: new Date().toISOString()
+      }
+
+      const result = await db.query(`
+        INSERT INTO print_jobs (
+          job_number, company_id, print_service_id, printer_id,
+          document_type, source_type, document_data, copies,
+          status, created_at
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'pending', NOW())
+        RETURNING id
+      `, [
+        jobNumber,
+        companyId,
+        service_id,
+        printer_id,
+        'warehouse_operation',
+        'test',
+        JSON.stringify(testWarehouseData),
+        1
+      ])
+
+      await db.query(`
+        INSERT INTO print_job_history (print_job_id, event_type, event_data, created_at)
+        VALUES ($1, 'created', $2, NOW())
+      `, [result.rows[0].id, JSON.stringify({ test: true, operationType: 'reception' })])
+
+      return NextResponse.json({
+        success: true,
+        message: 'Trabajo de impresión de operación de almacén creado',
+        data: {
+          jobId: result.rows[0].id,
+          jobNumber,
+          documentType: 'warehouse_operation',
+          operationType: 'reception',
+          printerName: printer_name
+        },
+        nextStep: 'El servicio de impresión debería procesar este trabajo en los próximos segundos.'
+      })
+    }
+
     return NextResponse.json({
       success: false,
       error: 'Acción no válida',
-      validActions: ['status', 'print-test', 'print-sales-report', 'list-all', 'cleanup']
+      validActions: ['status', 'print-test', 'print-sales-report', 'print-warehouse-operation', 'list-all', 'cleanup']
     })
 
   } catch (error) {

@@ -22,6 +22,8 @@ import { generateInventoryCountReport, InventoryCountReportData } from '../docum
 import { generateInventoryCountReportPdf } from '../documents/inventory-count-report-pdf'
 import { generateCashRegisterReport, CashRegisterReportData } from '../documents/cash-register-report'
 import { generateCashRegisterReportPdf } from '../documents/cash-register-report-pdf'
+import { generateWarehouseOperation, WarehouseOperationData } from '../documents/warehouse-operation'
+import { generateWarehouseOperationPdf } from '../documents/warehouse-operation-pdf'
 
 const execAsync = promisify(exec)
 
@@ -204,6 +206,10 @@ class JobProcessor {
         // For invoices, prefer thermal printers but fall back to any
         return printerService.getThermalPrinters()[0] || printerService.getDefaultPrinter()
 
+      case 'warehouse_operation':
+        // For warehouse operations, prefer thermal printers but fall back to any
+        return printerService.getThermalPrinters()[0] || printerService.getDefaultPrinter()
+
       default:
         return printerService.getDefaultPrinter()
     }
@@ -255,6 +261,13 @@ class JobProcessor {
         }
         return generateCashRegisterReport(data as unknown as CashRegisterReportData)
 
+      case 'warehouse_operation':
+        // Use PDF for standard printers, ESC/POS for thermal
+        if (usePdf) {
+          return generateWarehouseOperationPdf(data as unknown as WarehouseOperationData)
+        }
+        return generateWarehouseOperation(data as unknown as WarehouseOperationData)
+
       default:
         console.error(`[Job Processor] Unknown document type: ${job.documentType}`)
         return null
@@ -277,7 +290,8 @@ class JobProcessor {
     // For purchase_invoice, invoice, reports: check if printer supports ESC/POS
     // The document was already generated in the appropriate format by generateDocument()
     const isReceiptOrReport = ['purchase_invoice', 'invoice', 'sales_report',
-                               'inventory_count_report', 'cash_register_report'].includes(job.documentType)
+                               'inventory_count_report', 'cash_register_report',
+                               'warehouse_operation'].includes(job.documentType)
 
     for (let i = 0; i < copies; i++) {
       if (useEscPos || (isReceiptOrReport && printer.supportsEscpos && printer.printerType !== 'standard')) {
