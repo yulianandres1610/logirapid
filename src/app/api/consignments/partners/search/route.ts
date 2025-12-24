@@ -41,10 +41,12 @@ export async function GET(request: NextRequest) {
     const searchQuery = `%${query}%`
 
     // First, search in companies table (simpler query without consignment tables)
+    // Note: companies table uses 'status' column, not 'is_active'
+    // Also uses 'legalname' instead of 'name'
     const result = await db.query(`
       SELECT
         c.id,
-        c.name,
+        c.legalname as name,
         c.phone,
         c.email,
         c.address,
@@ -53,19 +55,19 @@ export async function GET(request: NextRequest) {
         c.logo_url
       FROM companies c
       WHERE c.id != $1
-        AND c.is_active = true
+        AND c.status = 'active'
         AND (
-          c.name ILIKE $2
+          c.legalname ILIKE $2
           OR c.phone ILIKE $2
           OR c.email ILIKE $2
         )
       ORDER BY
         CASE
           WHEN c.phone ILIKE $2 THEN 1
-          WHEN c.name ILIKE $2 THEN 2
+          WHEN c.legalname ILIKE $2 THEN 2
           ELSE 3
         END,
-        c.name
+        c.legalname
       LIMIT $3
     `, [currentCompanyId, searchQuery, limit])
 
@@ -102,7 +104,7 @@ export async function GET(request: NextRequest) {
       const recentResult = await db.query(`
         SELECT DISTINCT ON (c.id)
           c.id,
-          c.name,
+          c.legalname as name,
           c.phone,
           c.email,
           c.address,
@@ -111,7 +113,7 @@ export async function GET(request: NextRequest) {
         FROM companies c
         INNER JOIN consignment_orders co ON co.receiver_company_id = c.id
         WHERE co.provider_company_id = $1
-          AND c.is_active = true
+          AND c.status = 'active'
         ORDER BY c.id, co.created_at DESC
         LIMIT 5
       `, [currentCompanyId])
