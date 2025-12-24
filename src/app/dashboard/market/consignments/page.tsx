@@ -251,7 +251,7 @@ export default function ConsignmentsPage() {
 
   // Chart tooltip formatter
   const CustomTooltip = ({ active, payload, label }: { active?: boolean; payload?: { value: number }[]; label?: string }) => {
-    if (active && payload && payload.length) {
+    if (active && payload && payload.length && payload[0]?.value != null) {
       return (
         <div className={cn(
           'px-3 py-2 rounded-lg shadow-lg border',
@@ -261,7 +261,7 @@ export default function ConsignmentsPage() {
             {label}
           </p>
           <p className="text-sm text-purple-500 font-bold">
-            ${payload[0].value.toFixed(2)}
+            ${(payload[0].value || 0).toFixed(2)}
           </p>
         </div>
       )
