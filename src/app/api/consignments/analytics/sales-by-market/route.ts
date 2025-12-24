@@ -54,7 +54,7 @@ export async function GET(request: NextRequest) {
     const query = `
       SELECT
         cw.receiver_company_id as market_id,
-        r.name as market_name,
+        r.legalname as market_name,
         r.logo_url as market_logo,
         COALESCE(SUM(CASE WHEN cwt.transaction_type = 'sale' THEN cwt.amount ELSE 0 END), 0) as total_sales,
         COALESCE(SUM(CASE WHEN cwt.transaction_type = 'return' THEN ABS(cwt.amount) ELSE 0 END), 0) as total_returns,
@@ -65,7 +65,7 @@ export async function GET(request: NextRequest) {
       LEFT JOIN companies r ON r.id = cw.receiver_company_id
       LEFT JOIN consignment_wallet_transactions cwt ON cwt.wallet_id = cw.id ${dateFilter}
       WHERE cw.provider_company_id = $1
-      GROUP BY cw.receiver_company_id, r.name, r.logo_url, cw.balance, cw.total_paid
+      GROUP BY cw.receiver_company_id, r.legalname, r.logo_url, cw.balance, cw.total_paid
       ORDER BY total_sales DESC
       LIMIT ${limit}
     `

@@ -65,7 +65,7 @@ export async function POST(
         co.status,
         co.order_number,
         co.provider_company_id,
-        p.name as provider_name
+        p.legalname as provider_name
       FROM consignment_orders co
       LEFT JOIN companies p ON p.id = co.provider_company_id
       WHERE co.id = $1 AND co.receiver_company_id = $2
