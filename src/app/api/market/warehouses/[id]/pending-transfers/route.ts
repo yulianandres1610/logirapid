@@ -101,8 +101,7 @@ export async function GET(
             p.name as product_name,
             p.sku,
             l.quantity_planned as quantity_expected,
-            COALESCE(l.quantity_validated, 0) as quantity_validated,
-            l.notes
+            COALESCE(l.quantity_validated, 0) as quantity_validated
           FROM market_warehouse_operation_lines l
           JOIN market_products p ON p.id = l.product_id
           WHERE l.operation_id = $1
@@ -130,8 +129,7 @@ export async function GET(
             productName: line.product_name,
             sku: line.sku,
             quantityExpected: parseFloat(line.quantity_expected) || 0,
-            quantityValidated: parseFloat(line.quantity_validated) || 0,
-            notes: line.notes
+            quantityValidated: parseFloat(line.quantity_validated) || 0
           }))
         }
       })

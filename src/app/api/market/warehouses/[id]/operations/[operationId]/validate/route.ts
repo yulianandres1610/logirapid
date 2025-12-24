@@ -259,8 +259,7 @@ export async function GET(
         p.sku,
         p.barcode,
         l.quantity_planned as quantity_expected,
-        COALESCE(l.quantity_validated, 0) as quantity_validated,
-        l.notes
+        COALESCE(l.quantity_validated, 0) as quantity_validated
       FROM market_warehouse_operation_lines l
       JOIN market_products p ON p.id = l.product_id
       WHERE l.operation_id = $1
@@ -275,8 +274,7 @@ export async function GET(
       barcode: line.barcode,
       quantityExpected: parseFloat(line.quantity_expected) || 0,
       quantityValidated: parseFloat(line.quantity_validated) || 0,
-      isComplete: parseFloat(line.quantity_validated) >= parseFloat(line.quantity_expected),
-      notes: line.notes
+      isComplete: parseFloat(line.quantity_validated) >= parseFloat(line.quantity_expected)
     }))
 
     // Calculate progress

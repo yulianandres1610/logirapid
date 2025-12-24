@@ -297,7 +297,7 @@ export async function POST(
             quantity_planned,
             quantity_done,
             scrap_reason,
-            notes
+            line_status
           ) VALUES ($1, $2, $3, $4, $5, $6)
         `, [
           operationId,
@@ -305,7 +305,7 @@ export async function POST(
           lineQuantity,
           operationType === 'transfer' ? 0 : lineQuantity, // For transfers, quantity_done starts at 0
           operationType === 'scrap' ? (line.scrapReason || scrapReason) : null,
-          lineNotes || null
+          operationType === 'transfer' ? 'pending' : 'done'
         ])
 
         // Update stock in source warehouse
