@@ -673,8 +673,8 @@ export function Sidebar({ isCollapsed, onToggle }: SidebarProps) {
                 >
                   <img
                     src={theme === 'light'
-                      ? (branding?.logoUrlLight || branding?.logoUrl || "/logo-rojo.png")
-                      : (branding?.logoUrlDark || branding?.logoUrl || "/logo-blanco.png")}
+                      ? (branding?.logoUrlLight || branding?.logoUrl || "/images/negro.png")
+                      : (branding?.logoUrlDark || branding?.logoUrl || "/images/blanco.png")}
                     alt={branding?.companyName || "LogiRapid"}
                     className={cn(
                       "h-14 object-contain transition-all duration-300",

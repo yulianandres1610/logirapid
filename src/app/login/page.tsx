@@ -147,7 +147,7 @@ export default function LoginPage() {
             className="flex justify-center pt-8 pb-4"
           >
             <img
-              src="/logo-blanco.png"
+              src="/images/blanco.png"
               alt="LogiRapid"
               className="object-contain w-full max-w-xs h-auto"
               onError={(e) => {
