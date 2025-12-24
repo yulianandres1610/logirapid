@@ -230,7 +230,7 @@ export async function GET(
         sw.code as source_warehouse_code,
         dw.name as destination_warehouse_name,
         dw.code as destination_warehouse_code,
-        u.name as created_by_name
+        CONCAT(u.firstname, ' ', u.lastname) as created_by_name
       FROM market_warehouse_operations o
       LEFT JOIN market_warehouses sw ON sw.id = o.source_warehouse_id
       LEFT JOIN market_warehouses dw ON dw.id = o.destination_warehouse_id
