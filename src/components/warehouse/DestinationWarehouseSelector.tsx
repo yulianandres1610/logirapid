@@ -91,10 +91,6 @@ export default function DestinationWarehouseSelector({
 
   return (
     <div className="relative">
-      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-        Almacen de Destino
-      </label>
-
       <button
         onClick={() => !disabled && setIsOpen(!isOpen)}
         disabled={disabled}
@@ -136,6 +132,10 @@ export default function DestinationWarehouseSelector({
 
         <ChevronDown className={`w-5 h-5 text-gray-400 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
       </button>
+
+      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mt-2">
+        Almacen de Destino
+      </label>
 
       {/* Dropdown */}
       {isOpen && (
