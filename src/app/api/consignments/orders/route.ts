@@ -81,15 +81,15 @@ export async function GET(request: NextRequest) {
     const result = await db.query(`
       SELECT
         co.*,
-        provider.name as provider_name,
+        provider.legalname as provider_name,
         provider.phone as provider_phone,
         provider.logo_url as provider_logo,
-        receiver.name as receiver_name,
+        receiver.legalname as receiver_name,
         receiver.phone as receiver_phone,
         receiver.logo_url as receiver_logo,
         pw.name as provider_warehouse_name,
         rw.name as receiver_warehouse_name,
-        creator.name as created_by_name,
+        COALESCE(creator.firstname || ' ' || creator.lastname, creator.email) as created_by_name,
         (
           SELECT COUNT(*)
           FROM consignment_order_items coi
@@ -216,8 +216,8 @@ export async function POST(request: NextRequest) {
 
     // Verify receiver company exists and is a market
     const receiverCheck = await db.query(`
-      SELECT id, name FROM companies
-      WHERE id = $1 AND company_type = 'market' AND status = 'active'
+      SELECT id, legalname as name FROM companies
+      WHERE id = $1 AND companytype = 'market' AND status = 'active'
     `, [receiverCompanyId])
 
     if (receiverCheck.rows.length === 0) {
