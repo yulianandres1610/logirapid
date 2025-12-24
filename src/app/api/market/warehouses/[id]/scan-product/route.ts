@@ -82,8 +82,8 @@ export async function POST(
 
     const searchCode = barcode.trim()
 
-    // Search product by barcode or SKU (exact match)
-    const productResult = await db.query(`
+    // First try exact match on barcode or SKU
+    let productResult = await db.query(`
       SELECT
         p.id,
         p.name,
@@ -103,6 +103,42 @@ export async function POST(
       WHERE p.company_id = $1 AND (p.barcode = $3 OR p.sku = $3)
       LIMIT 1
     `, [payload.companyId, warehouseId, searchCode])
+
+    // If no exact match, try partial search on name, SKU, or barcode
+    if (productResult.rows.length === 0) {
+      productResult = await db.query(`
+        SELECT
+          p.id,
+          p.name,
+          p.description,
+          p.sku,
+          p.barcode,
+          p.category,
+          p.unit_of_measure as unit,
+          p.cost_price,
+          p.selling_price,
+          p.image_url,
+          p.is_active,
+          COALESCE(ws.quantity_on_hand, 0) as quantity_on_hand,
+          COALESCE(ws.quantity_reserved, 0) as quantity_reserved
+        FROM market_products p
+        LEFT JOIN market_warehouse_stock ws ON p.id = ws.product_id AND ws.warehouse_id = $2
+        WHERE p.company_id = $1
+          AND (
+            p.name ILIKE $3
+            OR p.sku ILIKE $3
+            OR p.barcode ILIKE $3
+          )
+        ORDER BY
+          CASE
+            WHEN p.sku ILIKE $4 THEN 1
+            WHEN p.barcode ILIKE $4 THEN 2
+            ELSE 3
+          END,
+          p.name
+        LIMIT 1
+      `, [payload.companyId, warehouseId, `%${searchCode}%`, `${searchCode}%`])
+    }
 
     if (productResult.rows.length === 0) {
       return NextResponse.json({

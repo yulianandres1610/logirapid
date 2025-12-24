@@ -31,8 +31,6 @@ export interface ScannedProductData {
     quantityOnHand: number
     quantityReserved: number
     quantityAvailable: number
-    minStock: number
-    maxStock: number
     allowNegative: boolean
   }
 }
