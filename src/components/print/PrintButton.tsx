@@ -6,7 +6,15 @@ import { Button } from '@/components/ui/button'
 import { useNotifications } from '@/contexts/NotificationContext'
 import { cn } from '@/lib/utils'
 
-type DocumentType = 'pos_receipt' | 'shipping_label' | 'product_label' | 'invoice'
+type DocumentType =
+  | 'pos_receipt'
+  | 'shipping_label'
+  | 'product_label'
+  | 'invoice'
+  | 'purchase_invoice'
+  | 'sales_report'
+  | 'inventory_count_report'
+  | 'cash_register_report'
 
 interface PrintButtonProps {
   documentType: DocumentType
@@ -153,7 +161,11 @@ export function PrintButton({
       pos_receipt: 'Imprimir Recibo',
       shipping_label: 'Imprimir Etiqueta',
       product_label: 'Imprimir Etiqueta',
-      invoice: 'Imprimir Factura'
+      invoice: 'Imprimir Factura',
+      purchase_invoice: 'Imprimir Factura',
+      sales_report: 'Imprimir Reporte',
+      inventory_count_report: 'Imprimir Conteo',
+      cash_register_report: 'Imprimir Arqueo'
     }
     return labels[documentType] || 'Imprimir'
   }

@@ -199,6 +199,7 @@ export async function PUT(
         }, { status: 400 })
       }
 
+      // Pass JavaScript array directly - pg driver handles conversion
       updates.push(`supported_document_types = $${paramIndex}`)
       values.push(body.supportedDocumentTypes)
       paramIndex++

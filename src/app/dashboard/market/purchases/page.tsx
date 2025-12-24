@@ -66,10 +66,56 @@ export default function MarketPurchasesPage() {
   const [selectedPurchase, setSelectedPurchase] = useState<Purchase | null>(null)
   const [actionLoading, setActionLoading] = useState(false)
   const [printPurchase, setPrintPurchase] = useState<Purchase | null>(null)
+  const [printData, setPrintData] = useState<Record<string, unknown> | null>(null)
+  const [loadingPrint, setLoadingPrint] = useState(false)
 
   useEffect(() => {
     fetchPurchases()
   }, [activeTab])
+
+  // Fetch complete purchase data for printing
+  const handlePrintPurchase = async (purchase: Purchase) => {
+    setLoadingPrint(true)
+    setPrintPurchase(purchase)
+    try {
+      const response = await fetch(`/api/market/purchases/${purchase.id}`)
+      if (response.ok) {
+        const data = await response.json()
+        if (data.success) {
+          // Transform data for the print generator
+          setPrintData({
+            companyName: 'LogiRapid', // TODO: Get from company context
+            supplierName: data.data.supplierName,
+            supplierRuc: data.data.supplierCode,
+            supplierAddress: data.data.supplierAddress,
+            supplierPhone: data.data.supplierPhone,
+            invoiceNumber: data.data.purchaseNumber,
+            purchaseNumber: data.data.purchaseNumber,
+            date: data.data.purchaseDate ? new Date(data.data.purchaseDate).toLocaleDateString('es-ES') : new Date().toLocaleDateString('es-ES'),
+            dueDate: data.data.expectedDate ? new Date(data.data.expectedDate).toLocaleDateString('es-ES') : undefined,
+            warehouseName: data.data.warehouseName,
+            receivedBy: data.data.receivedByName,
+            items: data.data.lines.map((line: { productName: string; productSku: string; quantity: number; unitPrice: number; totalPrice: number }) => ({
+              name: line.productName,
+              sku: line.productSku,
+              quantity: line.quantity,
+              unitCost: line.unitPrice,
+              total: line.totalPrice
+            })),
+            subtotal: data.data.subtotal,
+            tax: data.data.taxAmount,
+            total: data.data.totalAmount,
+            paymentStatus: data.data.status === 'recibido' ? 'paid' : 'pending',
+            notes: data.data.notes
+          })
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching purchase for print:', error)
+    } finally {
+      setLoadingPrint(false)
+    }
+  }
 
   const fetchPurchases = async () => {
     setLoading(true)
@@ -382,7 +428,7 @@ export default function MarketPurchasesPage() {
                           <td className="px-4 py-3 text-right">
                             <div className="flex items-center justify-end gap-2">
                               <button
-                                onClick={() => setPrintPurchase(purchase)}
+                                onClick={() => handlePrintPurchase(purchase)}
                                 className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
                                 title="Imprimir factura"
                               >
@@ -492,29 +538,27 @@ export default function MarketPurchasesPage() {
           </AnimatePresence>
 
           {/* Print Modal */}
-          {printPurchase && (
+          {printPurchase && printData && !loadingPrint && (
             <PrintDocumentModal
               isOpen={!!printPurchase}
-              onClose={() => setPrintPurchase(null)}
+              onClose={() => { setPrintPurchase(null); setPrintData(null); }}
               documentType="purchase_invoice"
               documentTitle={`Compra ${printPurchase.purchaseNumber}`}
-              documentData={{
-                purchaseNumber: printPurchase.purchaseNumber,
-                purchaseId: printPurchase.id,
-                supplierName: printPurchase.supplierName,
-                supplierContact: printPurchase.supplierContact,
-                totalAmount: printPurchase.totalAmount,
-                currency: printPurchase.currency,
-                status: printPurchase.status,
-                purchaseDate: printPurchase.purchaseDate,
-                expectedDate: printPurchase.expectedDate,
-                lineCount: printPurchase.lineCount,
-                totalItems: printPurchase.totalItems
-              }}
+              documentData={printData}
               sourceType="purchase"
               sourceId={printPurchase.id}
-              onPrintSuccess={() => setPrintPurchase(null)}
+              onPrintSuccess={() => { setPrintPurchase(null); setPrintData(null); }}
             />
+          )}
+
+          {/* Loading indicator for print data */}
+          {loadingPrint && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+              <div className="bg-white dark:bg-gray-800 p-6 rounded-xl flex items-center gap-3">
+                <div className="w-6 h-6 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+                <span className="text-gray-700 dark:text-gray-300">Cargando datos para imprimir...</span>
+              </div>
+            </div>
           )}
         </div>
       </DashboardLayout>

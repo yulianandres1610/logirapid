@@ -1258,6 +1258,25 @@ export default function MarketSettingsPage() {
   )
 }
 
+// Printer configuration constants
+const ALL_DOCUMENT_TYPES = [
+  { id: 'pos_receipt', label: 'Recibo POS', description: 'Recibos de punto de venta' },
+  { id: 'purchase_invoice', label: 'Factura de Compra', description: 'Facturas de proveedores' },
+  { id: 'sales_report', label: 'Reporte de Ventas', description: 'Reportes de ventas diarias' },
+  { id: 'cash_register_report', label: 'Reporte de Caja', description: 'Arqueos y cierres de caja' },
+  { id: 'inventory_count_report', label: 'Reporte de Conteo', description: 'Conteos de inventario' },
+  { id: 'invoice', label: 'Factura', description: 'Facturas generales' },
+  { id: 'product_label', label: 'Etiqueta Producto', description: 'Etiquetas de productos' },
+  { id: 'shipping_label', label: 'Etiqueta Envío', description: 'Etiquetas de paquetes' }
+]
+
+const PRINTER_TYPES = [
+  { id: 'thermal_80mm', label: 'Térmica 80mm', description: 'Impresora de recibos' },
+  { id: 'label_4x6', label: 'Etiquetas 4x6', description: 'Impresora de etiquetas de envío' },
+  { id: 'label_barcode', label: 'Código de Barras', description: 'Impresora de etiquetas pequeñas' },
+  { id: 'standard', label: 'Estándar', description: 'Impresora de documentos' }
+]
+
 // Print Services Tab Component
 function PrintServicesTab({ theme }: { theme: string }) {
   const [services, setServices] = useState<any[]>([])
@@ -1276,6 +1295,15 @@ function PrintServicesTab({ theme }: { theme: string }) {
   const [actionMenuOpen, setActionMenuOpen] = useState<number | null>(null)
   const [copied, setCopied] = useState<string | null>(null)
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
+
+  // Printer configuration state
+  const [showPrinterConfigModal, setShowPrinterConfigModal] = useState(false)
+  const [selectedPrinter, setSelectedPrinter] = useState<any>(null)
+  const [printerConfig, setPrinterConfig] = useState<{
+    printerType: string
+    supportedDocumentTypes: string[]
+  }>({ printerType: 'standard', supportedDocumentTypes: [] })
+  const [savingPrinter, setSavingPrinter] = useState(false)
 
   useEffect(() => {
     fetchServices()
@@ -1450,6 +1478,59 @@ function PrintServicesTab({ theme }: { theme: string }) {
     navigator.clipboard.writeText(text)
     setCopied(field)
     setTimeout(() => setCopied(null), 2000)
+  }
+
+  // Printer configuration functions
+  const openPrinterConfig = (printer: any) => {
+    setSelectedPrinter(printer)
+    setPrinterConfig({
+      printerType: printer.printerType || 'standard',
+      supportedDocumentTypes: printer.supportedDocumentTypes || ALL_DOCUMENT_TYPES.map(t => t.id)
+    })
+    setShowPrinterConfigModal(true)
+  }
+
+  const handleSavePrinterConfig = async () => {
+    if (!selectedPrinter || !selectedService) return
+
+    setSavingPrinter(true)
+    try {
+      const response = await fetch(`/api/print/services/${selectedService.id}/printers/${selectedPrinter.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          printerType: printerConfig.printerType,
+          supportedDocumentTypes: printerConfig.supportedDocumentTypes
+        })
+      })
+
+      const data = await response.json()
+
+      if (response.ok && data.success) {
+        setMessage({ type: 'success', text: 'Configuración de impresora actualizada' })
+        setShowPrinterConfigModal(false)
+        // Refresh service details
+        const details = await fetchServiceDetails(selectedService.id)
+        if (details) {
+          setSelectedService({ ...selectedService, ...details.service, printers: details.printers })
+        }
+      } else {
+        setMessage({ type: 'error', text: data.error || 'Error al guardar configuración' })
+      }
+    } catch (error) {
+      setMessage({ type: 'error', text: 'Error al guardar configuración de impresora' })
+    } finally {
+      setSavingPrinter(false)
+    }
+  }
+
+  const toggleDocumentType = (docType: string) => {
+    setPrinterConfig(prev => ({
+      ...prev,
+      supportedDocumentTypes: prev.supportedDocumentTypes.includes(docType)
+        ? prev.supportedDocumentTypes.filter(t => t !== docType)
+        : [...prev.supportedDocumentTypes, docType]
+    }))
   }
 
   const formatLastSeen = (date: string | null) => {
@@ -2033,9 +2114,23 @@ function PrintServicesTab({ theme }: { theme: string }) {
                           <p className={cn("text-sm font-medium truncate", theme === 'dark' ? 'text-white' : 'text-gray-900')}>
                             {printer.printerName}
                           </p>
-                          <p className={cn("text-xs", theme === 'dark' ? 'text-gray-500' : 'text-gray-500')}>
-                            {printer.printerType || 'Tipo no especificado'}
-                          </p>
+                          <div className="flex items-center gap-2">
+                            <p className={cn("text-xs", theme === 'dark' ? 'text-gray-500' : 'text-gray-500')}>
+                              {PRINTER_TYPES.find(t => t.id === printer.printerType)?.label || 'Sin configurar'}
+                            </p>
+                            {printer.supportedDocumentTypes && (
+                              <span className={cn(
+                                "text-xs px-1.5 py-0.5 rounded",
+                                printer.supportedDocumentTypes.length === ALL_DOCUMENT_TYPES.length
+                                  ? theme === 'dark' ? 'bg-green-900/40 text-green-300' : 'bg-green-100 text-green-700'
+                                  : theme === 'dark' ? 'bg-blue-900/40 text-blue-300' : 'bg-blue-100 text-blue-700'
+                              )}>
+                                {printer.supportedDocumentTypes.length === ALL_DOCUMENT_TYPES.length
+                                  ? 'Todos los docs'
+                                  : `${printer.supportedDocumentTypes.length} docs`}
+                              </span>
+                            )}
+                          </div>
                         </div>
                         {printer.isDefault && (
                           <span className={cn(
@@ -2045,6 +2140,17 @@ function PrintServicesTab({ theme }: { theme: string }) {
                             Predeterminada
                           </span>
                         )}
+                        <button
+                          onClick={() => openPrinterConfig(printer)}
+                          className={cn(
+                            "px-3 py-1.5 text-xs font-medium rounded-lg transition-colors",
+                            theme === 'dark'
+                              ? 'bg-gray-700 hover:bg-gray-600 text-gray-200'
+                              : 'bg-gray-200 hover:bg-gray-300 text-gray-700'
+                          )}
+                        >
+                          Configurar
+                        </button>
                       </div>
                     ))}
                   </div>
@@ -2232,6 +2338,172 @@ function PrintServicesTab({ theme }: { theme: string }) {
                 )}
               >
                 He guardado las credenciales
+              </button>
+            </div>
+          </motion.div>
+        </div>
+      )}
+
+      {/* Printer Configuration Modal */}
+      {showPrinterConfigModal && selectedPrinter && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className={cn(
+              "rounded-2xl p-6 w-full max-w-lg mx-4 shadow-2xl max-h-[90vh] overflow-y-auto",
+              theme === 'dark' ? 'bg-gray-800 border border-gray-700' : 'bg-white'
+            )}
+          >
+            <div className="flex items-center gap-3 mb-6">
+              <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center">
+                <Settings className="w-6 h-6 text-white" />
+              </div>
+              <div>
+                <h2 className={cn("text-lg font-bold", theme === 'dark' ? 'text-white' : 'text-gray-900')}>
+                  Configurar Impresora
+                </h2>
+                <p className={cn("text-sm", theme === 'dark' ? 'text-gray-400' : 'text-gray-600')}>
+                  {selectedPrinter.printerName}
+                </p>
+              </div>
+            </div>
+
+            {/* Printer Type */}
+            <div className="mb-6">
+              <label className={cn(
+                "block text-sm font-medium mb-3",
+                theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
+              )}>
+                Tipo de Impresora
+              </label>
+              <div className="grid grid-cols-2 gap-2">
+                {PRINTER_TYPES.map(type => (
+                  <button
+                    key={type.id}
+                    onClick={() => setPrinterConfig(prev => ({ ...prev, printerType: type.id }))}
+                    className={cn(
+                      "p-3 rounded-xl border-2 text-left transition-all",
+                      printerConfig.printerType === type.id
+                        ? theme === 'dark'
+                          ? "border-blue-500 bg-blue-900/30"
+                          : "border-blue-500 bg-blue-50"
+                        : theme === 'dark'
+                          ? "border-gray-700 hover:border-gray-600"
+                          : "border-gray-200 hover:border-gray-300"
+                    )}
+                  >
+                    <p className={cn(
+                      "text-sm font-medium",
+                      printerConfig.printerType === type.id
+                        ? theme === 'dark' ? "text-blue-300" : "text-blue-700"
+                        : theme === 'dark' ? "text-white" : "text-gray-900"
+                    )}>
+                      {type.label}
+                    </p>
+                    <p className={cn("text-xs", theme === 'dark' ? 'text-gray-500' : 'text-gray-500')}>
+                      {type.description}
+                    </p>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Supported Document Types */}
+            <div className="mb-6">
+              <div className="flex items-center justify-between mb-3">
+                <label className={cn(
+                  "block text-sm font-medium",
+                  theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
+                )}>
+                  Documentos Soportados
+                </label>
+                <button
+                  onClick={() => setPrinterConfig(prev => ({
+                    ...prev,
+                    supportedDocumentTypes: prev.supportedDocumentTypes.length === ALL_DOCUMENT_TYPES.length
+                      ? []
+                      : ALL_DOCUMENT_TYPES.map(t => t.id)
+                  }))}
+                  className={cn(
+                    "text-xs font-medium",
+                    theme === 'dark' ? 'text-blue-400 hover:text-blue-300' : 'text-blue-600 hover:text-blue-700'
+                  )}
+                >
+                  {printerConfig.supportedDocumentTypes.length === ALL_DOCUMENT_TYPES.length
+                    ? 'Deseleccionar todos'
+                    : 'Seleccionar todos'}
+                </button>
+              </div>
+              <div className="space-y-2 max-h-[250px] overflow-y-auto">
+                {ALL_DOCUMENT_TYPES.map(docType => (
+                  <label
+                    key={docType.id}
+                    className={cn(
+                      "flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-all",
+                      printerConfig.supportedDocumentTypes.includes(docType.id)
+                        ? theme === 'dark'
+                          ? "border-green-600 bg-green-900/30"
+                          : "border-green-500 bg-green-50"
+                        : theme === 'dark'
+                          ? "border-gray-700 hover:bg-gray-700/50"
+                          : "border-gray-200 hover:bg-gray-50"
+                    )}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={printerConfig.supportedDocumentTypes.includes(docType.id)}
+                      onChange={() => toggleDocumentType(docType.id)}
+                      className="w-4 h-4 rounded border-gray-300 text-green-600 focus:ring-green-500"
+                    />
+                    <div className="flex-1">
+                      <p className={cn(
+                        "text-sm font-medium",
+                        theme === 'dark' ? 'text-white' : 'text-gray-900'
+                      )}>
+                        {docType.label}
+                      </p>
+                      <p className={cn("text-xs", theme === 'dark' ? 'text-gray-500' : 'text-gray-500')}>
+                        {docType.description}
+                      </p>
+                    </div>
+                  </label>
+                ))}
+              </div>
+            </div>
+
+            {/* Actions */}
+            <div className="flex gap-3 justify-end pt-4 border-t border-gray-200 dark:border-gray-700">
+              <button
+                onClick={() => setShowPrinterConfigModal(false)}
+                disabled={savingPrinter}
+                className={cn(
+                  "px-4 py-2.5 rounded-xl text-sm font-medium transition-colors",
+                  theme === 'dark'
+                    ? 'bg-gray-700 hover:bg-gray-600 text-gray-200'
+                    : 'bg-gray-200 hover:bg-gray-300 text-gray-700'
+                )}
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleSavePrinterConfig}
+                disabled={savingPrinter || printerConfig.supportedDocumentTypes.length === 0}
+                className={cn(
+                  "px-5 py-2.5 rounded-xl text-sm font-medium text-white flex items-center gap-2",
+                  savingPrinter || printerConfig.supportedDocumentTypes.length === 0
+                    ? 'bg-gray-400 cursor-not-allowed'
+                    : theme === 'dark' ? 'bg-blue-600 hover:bg-blue-500' : 'bg-blue-500 hover:bg-blue-600'
+                )}
+              >
+                {savingPrinter ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Guardando...
+                  </>
+                ) : (
+                  'Guardar Configuración'
+                )}
               </button>
             </div>
           </motion.div>

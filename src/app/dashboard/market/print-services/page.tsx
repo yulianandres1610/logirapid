@@ -462,7 +462,7 @@ export default function MarketPrintServicesPage() {
                     variant="ghost"
                     size="sm"
                     className="flex-1"
-                    onClick={() => router.push(`/dashboard/market/print-services/${service.id}/config`)}
+                    onClick={() => router.push(`/dashboard/market/print-services/${service.id}`)}
                   >
                     <Settings className="w-4 h-4 mr-1" />
                     Config
