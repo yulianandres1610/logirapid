@@ -73,7 +73,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Return PDF as downloadable file
-    return new NextResponse(pdfBytes, {
+    return new NextResponse(Buffer.from(pdfBytes), {
       headers: {
         'Content-Type': 'application/pdf',
         'Content-Disposition': `attachment; filename="${filename}"`,
