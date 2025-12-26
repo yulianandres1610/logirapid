@@ -411,9 +411,9 @@ export default function TransferValidationView({
   if (loading) {
     return (
       <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-        <div className="bg-white rounded-2xl p-8">
+        <div className="bg-white dark:bg-gray-800 rounded-2xl p-8">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600 mx-auto"></div>
-          <p className="mt-4 text-gray-600">Cargando validación...</p>
+          <p className="mt-4 text-gray-600 dark:text-gray-400">Cargando validación...</p>
         </div>
       </div>
     )
@@ -425,7 +425,7 @@ export default function TransferValidationView({
         initial={{ opacity: 0, scale: 0.95 }}
         animate={{ opacity: 1, scale: 1 }}
         exit={{ opacity: 0, scale: 0.95 }}
-        className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col"
+        className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col"
       >
         {/* Header */}
         <div className="bg-gradient-to-r from-purple-600 to-indigo-600 text-white p-6">
@@ -476,16 +476,16 @@ export default function TransferValidationView({
 
         {/* Progress Bar */}
         {progress && (
-          <div className="px-6 py-4 border-b bg-gray-50">
+          <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-700/50">
             <div className="flex items-center justify-between mb-2">
-              <span className="text-sm font-medium text-gray-700">
+              <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
                 Progreso de Validación
               </span>
-              <span className="text-sm font-bold text-purple-600">
+              <span className="text-sm font-bold text-purple-600 dark:text-purple-400">
                 {progress.progressPercent}%
               </span>
             </div>
-            <div className="h-3 bg-gray-200 rounded-full overflow-hidden">
+            <div className="h-3 bg-gray-200 dark:bg-gray-600 rounded-full overflow-hidden">
               <motion.div
                 className="h-full bg-gradient-to-r from-purple-500 to-indigo-500"
                 initial={{ width: 0 }}
@@ -493,7 +493,7 @@ export default function TransferValidationView({
                 transition={{ duration: 0.3 }}
               />
             </div>
-            <div className="flex items-center justify-between mt-2 text-xs text-gray-500">
+            <div className="flex items-center justify-between mt-2 text-xs text-gray-500 dark:text-gray-400">
               <span>{progress.completedLines} de {progress.totalLines} productos completos</span>
               <span>{progress.totalValidated} de {progress.totalExpected} unidades</span>
             </div>
@@ -501,13 +501,13 @@ export default function TransferValidationView({
         )}
 
         {/* Scanner Hint */}
-        <div className="px-6 py-3 bg-purple-50 border-b flex items-center gap-3">
-          <ScanBarcode className="w-5 h-5 text-purple-600" />
-          <span className="text-sm text-purple-700">
+        <div className="px-6 py-3 bg-purple-50 dark:bg-purple-900/30 border-b border-gray-200 dark:border-gray-700 flex items-center gap-3">
+          <ScanBarcode className="w-5 h-5 text-purple-600 dark:text-purple-400" />
+          <span className="text-sm text-purple-700 dark:text-purple-300">
             Escanea productos para validar automáticamente
           </span>
           {saving && (
-            <span className="ml-auto text-xs text-purple-500 animate-pulse">
+            <span className="ml-auto text-xs text-purple-500 dark:text-purple-400 animate-pulse">
               Guardando...
             </span>
           )}
@@ -515,7 +515,7 @@ export default function TransferValidationView({
 
         {/* Error */}
         {error && (
-          <div className="mx-6 mt-4 p-4 bg-red-100 text-red-700 rounded-lg flex items-center gap-3">
+          <div className="mx-6 mt-4 p-4 bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 rounded-lg flex items-center gap-3">
             <AlertTriangle className="w-5 h-5" />
             <span>{error}</span>
             <button onClick={() => setError(null)} className="ml-auto">
@@ -541,10 +541,10 @@ export default function TransferValidationView({
         </div>
 
         {/* Footer */}
-        <div className="p-6 border-t bg-gray-50 flex items-center justify-between">
+        <div className="p-6 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-700/50 flex items-center justify-between">
           <button
             onClick={onClose}
-            className="px-6 py-3 text-gray-700 hover:bg-gray-200 rounded-xl transition-colors"
+            className="px-6 py-3 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-xl transition-colors"
           >
             Cancelar
           </button>
@@ -554,7 +554,7 @@ export default function TransferValidationView({
             disabled={completing || (progress?.totalValidated || 0) === 0}
             className={`px-8 py-3 rounded-xl font-semibold flex items-center gap-2 transition-all ${
               (progress?.totalValidated || 0) === 0
-                ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                ? 'bg-gray-300 dark:bg-gray-600 text-gray-500 dark:text-gray-400 cursor-not-allowed'
                 : 'bg-gradient-to-r from-green-500 to-emerald-600 text-white hover:shadow-lg'
             }`}
           >
