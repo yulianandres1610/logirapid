@@ -29,26 +29,26 @@ export default function ValidationProductCard({
   const difference = quantityValidated - quantityExpected
 
   // Determine status and colors
-  let statusIcon = <Circle className="w-5 h-5 text-gray-400" />
-  let bgColor = 'bg-white'
-  let borderColor = 'border-gray-200'
+  let statusIcon = <Circle className="w-5 h-5 text-gray-400 dark:text-gray-500" />
+  let bgColor = 'bg-white dark:bg-gray-700'
+  let borderColor = 'border-gray-200 dark:border-gray-600'
 
   if (isComplete && !hasExcess) {
-    statusIcon = <Check className="w-5 h-5 text-green-600" />
-    bgColor = 'bg-green-50'
-    borderColor = 'border-green-300'
+    statusIcon = <Check className="w-5 h-5 text-green-600 dark:text-green-400" />
+    bgColor = 'bg-green-50 dark:bg-green-900/30'
+    borderColor = 'border-green-300 dark:border-green-600'
   } else if (hasExcess) {
-    statusIcon = <AlertTriangle className="w-5 h-5 text-amber-600" />
-    bgColor = 'bg-amber-50'
-    borderColor = 'border-amber-300'
+    statusIcon = <AlertTriangle className="w-5 h-5 text-amber-600 dark:text-amber-400" />
+    bgColor = 'bg-amber-50 dark:bg-amber-900/30'
+    borderColor = 'border-amber-300 dark:border-amber-600'
   } else if (quantityValidated > 0) {
-    statusIcon = <Circle className="w-5 h-5 text-blue-500 fill-blue-200" />
-    bgColor = 'bg-blue-50'
-    borderColor = 'border-blue-300'
+    statusIcon = <Circle className="w-5 h-5 text-blue-500 dark:text-blue-400 fill-blue-200 dark:fill-blue-800" />
+    bgColor = 'bg-blue-50 dark:bg-blue-900/30'
+    borderColor = 'border-blue-300 dark:border-blue-600'
   }
 
   if (isActive) {
-    borderColor = 'border-purple-500 ring-2 ring-purple-200'
+    borderColor = 'border-purple-500 ring-2 ring-purple-200 dark:ring-purple-800'
   }
 
   return (
@@ -65,8 +65,8 @@ export default function ValidationProductCard({
 
         {/* Product Info */}
         <div className="flex-grow min-w-0">
-          <h4 className="font-medium text-gray-900 truncate">{productName}</h4>
-          <p className="text-sm text-gray-500">SKU: {sku}</p>
+          <h4 className="font-medium text-gray-900 dark:text-white truncate">{productName}</h4>
+          <p className="text-sm text-gray-500 dark:text-gray-400">SKU: {sku}</p>
         </div>
 
         {/* Quantity Controls */}
@@ -75,7 +75,7 @@ export default function ValidationProductCard({
           {onDecrement && quantityValidated > 0 && (
             <button
               onClick={onDecrement}
-              className="w-8 h-8 rounded-full bg-gray-200 hover:bg-gray-300 flex items-center justify-center text-gray-600 transition-colors"
+              className="w-8 h-8 rounded-full bg-gray-200 dark:bg-gray-600 hover:bg-gray-300 dark:hover:bg-gray-500 flex items-center justify-center text-gray-600 dark:text-gray-300 transition-colors"
             >
               <Minus className="w-4 h-4" />
             </button>
@@ -84,12 +84,12 @@ export default function ValidationProductCard({
           {/* Quantity Display */}
           <div className="text-center min-w-[80px]">
             <div className="flex items-center justify-center gap-1">
-              <span className="text-2xl font-bold text-gray-900">{quantityValidated}</span>
-              <span className="text-lg text-gray-400">/</span>
-              <span className="text-lg text-gray-600">{quantityExpected}</span>
+              <span className="text-2xl font-bold text-gray-900 dark:text-white">{quantityValidated}</span>
+              <span className="text-lg text-gray-400 dark:text-gray-500">/</span>
+              <span className="text-lg text-gray-600 dark:text-gray-400">{quantityExpected}</span>
             </div>
             {difference !== 0 && (
-              <span className={`text-xs font-medium ${difference > 0 ? 'text-amber-600' : 'text-red-600'}`}>
+              <span className={`text-xs font-medium ${difference > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-red-600 dark:text-red-400'}`}>
                 {difference > 0 ? `+${difference}` : difference}
               </span>
             )}
@@ -99,7 +99,7 @@ export default function ValidationProductCard({
           {onIncrement && (
             <button
               onClick={onIncrement}
-              className="w-8 h-8 rounded-full bg-purple-100 hover:bg-purple-200 flex items-center justify-center text-purple-600 transition-colors"
+              className="w-8 h-8 rounded-full bg-purple-100 dark:bg-purple-900/50 hover:bg-purple-200 dark:hover:bg-purple-800/50 flex items-center justify-center text-purple-600 dark:text-purple-400 transition-colors"
             >
               <Plus className="w-4 h-4" />
             </button>
@@ -109,7 +109,7 @@ export default function ValidationProductCard({
 
       {/* Progress Bar */}
       <div className="mt-3">
-        <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
+        <div className="h-2 bg-gray-200 dark:bg-gray-600 rounded-full overflow-hidden">
           <div
             className={`h-full rounded-full transition-all duration-300 ${
               isComplete && !hasExcess ? 'bg-green-500' :
