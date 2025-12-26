@@ -11,9 +11,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { resolveCompany, extractSubdomain } from '@/lib/subdomain-helpers'
 
-// Logos de LogiRapid (plataforma) - diferentes para tema claro y oscuro
-const PLATFORM_LOGO_LIGHT = '/images/negro.png'   // Logo para tema claro
-const PLATFORM_LOGO_DARK = '/images/blanco.png'   // Logo para tema oscuro
+// Logo de LogiRapid (plataforma) - único para ambos temas
+const PLATFORM_LOGO_LIGHT = '/images/blanco.png'
+const PLATFORM_LOGO_DARK = '/images/blanco.png'
 const PLATFORM_NAME = 'LogiRapid'
 const PLATFORM_PRIMARY_COLOR = '#DC2626'
 const PLATFORM_SECONDARY_COLOR = '#1E40AF'

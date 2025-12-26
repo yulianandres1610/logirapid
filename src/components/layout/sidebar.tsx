@@ -672,9 +672,7 @@ export function Sidebar({ isCollapsed, onToggle }: SidebarProps) {
                   className="flex items-center justify-start w-full"
                 >
                   <img
-                    src={theme === 'light'
-                      ? (branding?.logoUrlLight || branding?.logoUrl || "/images/negro.png")
-                      : (branding?.logoUrlDark || branding?.logoUrl || "/images/blanco.png")}
+                    src={branding?.logoUrlLight || branding?.logoUrlDark || branding?.logoUrl || "/images/blanco.png"}
                     alt={branding?.companyName || "LogiRapid"}
                     className={cn(
                       "h-14 object-contain transition-all duration-300",
