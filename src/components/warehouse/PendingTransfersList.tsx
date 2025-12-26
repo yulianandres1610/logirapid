@@ -45,7 +45,7 @@ export default function PendingTransfersList({
     return (
       <div className="flex items-center justify-center py-12">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600"></div>
-        <span className="ml-3 text-gray-600">Cargando transferencias...</span>
+        <span className="ml-3 text-gray-600 dark:text-gray-400">Cargando transferencias...</span>
       </div>
     )
   }
@@ -53,9 +53,9 @@ export default function PendingTransfersList({
   if (transfers.length === 0) {
     return (
       <div className="text-center py-12">
-        <Package className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-        <h3 className="text-lg font-medium text-gray-900 mb-2">No hay transferencias pendientes</h3>
-        <p className="text-gray-500">
+        <Package className="w-16 h-16 text-gray-300 dark:text-gray-600 mx-auto mb-4" />
+        <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">No hay transferencias pendientes</h3>
+        <p className="text-gray-500 dark:text-gray-400">
           Las transferencias enviadas desde otros almacenes aparecerán aquí para validación.
         </p>
       </div>
@@ -65,10 +65,10 @@ export default function PendingTransfersList({
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <h2 className="text-lg font-semibold text-gray-900">
+        <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
           Transferencias Pendientes
         </h2>
-        <span className="px-3 py-1 bg-purple-100 text-purple-700 rounded-full text-sm font-medium">
+        <span className="px-3 py-1 bg-purple-100 dark:bg-purple-900/50 text-purple-700 dark:text-purple-300 rounded-full text-sm font-medium">
           {transfers.length} pendiente{transfers.length !== 1 ? 's' : ''}
         </span>
       </div>
@@ -81,7 +81,7 @@ export default function PendingTransfersList({
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: index * 0.05 }}
             onClick={() => onSelectTransfer(transfer)}
-            className="w-full bg-white border border-gray-200 rounded-xl p-4 hover:border-purple-300 hover:shadow-md transition-all duration-200 text-left group"
+            className="w-full bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-xl p-4 hover:border-purple-300 dark:hover:border-purple-500 hover:shadow-md transition-all duration-200 text-left group"
           >
             <div className="flex items-center gap-4">
               {/* Icon */}
@@ -92,26 +92,26 @@ export default function PendingTransfersList({
               {/* Content */}
               <div className="flex-grow min-w-0">
                 <div className="flex items-center gap-2 mb-1">
-                  <span className="font-semibold text-gray-900">{transfer.operationNumber}</span>
-                  <span className="px-2 py-0.5 bg-amber-100 text-amber-700 text-xs rounded-full">
+                  <span className="font-semibold text-gray-900 dark:text-white">{transfer.operationNumber}</span>
+                  <span className="px-2 py-0.5 bg-amber-100 dark:bg-amber-900/50 text-amber-700 dark:text-amber-300 text-xs rounded-full">
                     Pendiente
                   </span>
                 </div>
 
                 {/* Source Warehouse */}
-                <div className="flex items-center gap-2 text-sm text-gray-600 mb-2">
+                <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-300 mb-2">
                   <span className="font-medium">{transfer.sourceWarehouse.name}</span>
-                  <ArrowRight className="w-4 h-4 text-gray-400" />
-                  <span className="text-purple-600 font-medium">Este almacén</span>
+                  <ArrowRight className="w-4 h-4 text-gray-400 dark:text-gray-500" />
+                  <span className="text-purple-600 dark:text-purple-400 font-medium">Este almacén</span>
                 </div>
 
                 {/* Details */}
-                <div className="flex items-center gap-4 text-sm text-gray-500">
+                <div className="flex items-center gap-4 text-sm text-gray-500 dark:text-gray-400">
                   <span className="flex items-center gap-1">
                     <Package className="w-4 h-4" />
                     {transfer.totalProducts} productos
                   </span>
-                  <span className="font-medium text-gray-700">
+                  <span className="font-medium text-gray-700 dark:text-gray-300">
                     {transfer.totalUnits} unidades
                   </span>
                   {transfer.createdBy && (
@@ -123,7 +123,7 @@ export default function PendingTransfersList({
                 </div>
 
                 {/* Time */}
-                <div className="flex items-center gap-1 text-xs text-gray-400 mt-1">
+                <div className="flex items-center gap-1 text-xs text-gray-400 dark:text-gray-500 mt-1">
                   <Clock className="w-3 h-3" />
                   {formatDate(transfer.createdAt)}
                 </div>
@@ -131,7 +131,7 @@ export default function PendingTransfersList({
 
               {/* Arrow */}
               <div className="flex-shrink-0">
-                <ChevronRight className="w-6 h-6 text-gray-400 group-hover:text-purple-600 transition-colors" />
+                <ChevronRight className="w-6 h-6 text-gray-400 dark:text-gray-500 group-hover:text-purple-600 dark:group-hover:text-purple-400 transition-colors" />
               </div>
             </div>
           </motion.button>
