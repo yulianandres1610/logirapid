@@ -120,29 +120,25 @@ export async function POST(
               sku,
               barcode,
               description,
-              category_id,
+              category,
               unit_of_measure,
-              cost,
-              price,
+              cost_price,
+              selling_price,
               image_url,
-              weight,
-              dimensions,
               is_active,
               created_at
-            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, NOW())
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, NOW())
           `, [
             currentCompanyId,
             item.product_name,
             item.product_sku,
             item.product_barcode,
             item.product_description,
-            item.product_category_id,
-            item.product_unit,
+            null, // category es VARCHAR, no category_id
+            item.product_unit || 'unidad',
             item.provider_price,  // Cost for receiver = provider's price
             item.actual_retail_price || item.suggested_retail_price || item.provider_price * 1.3,  // Default 30% margin
             item.product_image_url,
-            item.product_weight,
-            item.product_dimensions,
             true
           ])
           productsImported++

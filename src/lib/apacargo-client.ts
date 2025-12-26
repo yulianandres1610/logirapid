@@ -85,6 +85,7 @@ export interface ApaCargoProduct {
   description?: string
 }
 
+// Formato legacy (anidado) - mantener por compatibilidad
 export interface ApaCargoOrderRequest {
   orderId?: number
   serviceId?: number
@@ -99,6 +100,62 @@ export interface ApaCargoOrderRequest {
   sender: ApaCargoSender
   receiver: ApaCargoReceiver
   products: ApaCargoProduct[]
+}
+
+// Formato Integration API (flat) - según documentación oficial
+export interface ApaCargoIntegrationProduct {
+  labelCode: string
+  weight: number
+  declaredValueUsd?: number
+  length: number
+  width?: number
+  height?: number
+  count?: number
+  description?: string
+  shippingProduct?: number
+}
+
+export interface ApaCargoIntegrationRequest {
+  orderId?: number
+  agencyId: number
+  serviceId: number
+  senderTravelDate?: string
+  comment?: string
+  // Sender fields (flat)
+  senderFirstName: string
+  senderMiddleName?: string
+  senderLastName: string
+  senderEmail?: string
+  senderCellPhone: string
+  senderHomePhone?: string
+  senderIdentification: string
+  senderDocumentNumber?: string
+  senderDocumentCountry?: string
+  senderDocumentExpirationDate?: string
+  senderIdentityDocumentTypeId?: number
+  senderAddressLine1?: string
+  senderAddressLine2?: string
+  senderCity?: string
+  senderZipCode?: string
+  senderStateId?: number
+  // Receiver fields (flat)
+  receiverFirstName: string
+  receiverMiddleName?: string
+  receiverLastName: string
+  receiverEmail?: string
+  receiverCellPhone: string
+  receiverHomePhone?: string
+  receiverIdentification: string
+  receiverStreet: string
+  receiverStreetNo: string
+  receiverApt?: string
+  receiverFloor?: string
+  receiverStreetBetween1?: string
+  receiverStreetBetween2?: string
+  receiverCity: string
+  receiverMunicipalityId: number
+  // Products
+  products: ApaCargoIntegrationProduct[]
 }
 
 export interface ApaCargoOrderResponse {
@@ -283,7 +340,29 @@ class ApaCargoClient {
   }
 
   /**
-   * Crea una nueva orden en ApaCargo
+   * Crea una nueva orden en ApaCargo usando el endpoint de Integration API
+   * Este es el endpoint oficial para integraciones externas
+   */
+  async createIntegrationOrder(orderData: ApaCargoIntegrationRequest): Promise<ApaCargoOrderResponse> {
+    console.log('[ApaCargo] Creando orden via Integration API:', JSON.stringify(orderData, null, 2))
+
+    // Asegurar que el agencyId esté configurado
+    if (!orderData.agencyId && APACARGO_AGENCY_ID) {
+      orderData.agencyId = APACARGO_AGENCY_ID
+    }
+
+    const result = await this.authenticatedRequest<ApaCargoOrderResponse>('/integration', {
+      method: 'POST',
+      body: JSON.stringify(orderData),
+    })
+
+    console.log('[ApaCargo] Orden creada via Integration:', result.code)
+    return result
+  }
+
+  /**
+   * Crea una nueva orden en ApaCargo (endpoint legacy /orders)
+   * @deprecated Usar createIntegrationOrder para nuevas integraciones
    */
   async createOrder(orderData: ApaCargoOrderRequest): Promise<ApaCargoOrderResponse> {
     console.log('[ApaCargo] Creando orden:', JSON.stringify(orderData, null, 2))
