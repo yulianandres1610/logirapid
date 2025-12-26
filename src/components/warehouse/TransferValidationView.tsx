@@ -4,7 +4,8 @@ import { useState, useEffect, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   X, ArrowRight, Package, Check, AlertTriangle,
-  ScanBarcode, CheckCircle, XCircle, MessageSquare
+  ScanBarcode, CheckCircle, XCircle, MessageSquare,
+  Printer, Calendar
 } from 'lucide-react'
 import { useBarcodeScan } from '@/hooks/useBarcodeScan'
 import ValidationProductCard from './ValidationProductCard'
@@ -74,10 +75,12 @@ export default function TransferValidationView({
   const [completedData, setCompletedData] = useState<{
     operationNumber: string
     sourceWarehouseName: string
+    destinationWarehouseName: string
     totalProducts: number
     totalExpected: number
     totalReceived: number
     hasDiscrepancies: boolean
+    completedAt: string
   } | null>(null)
 
   // Fetch validation data
@@ -225,10 +228,12 @@ export default function TransferValidationView({
         setCompletedData({
           operationNumber: data.data.operationNumber,
           sourceWarehouseName: data.data.sourceWarehouseName,
+          destinationWarehouseName: operation?.destinationWarehouse?.name || 'Destino',
           totalProducts: data.data.totalProducts,
           totalExpected: data.data.totalExpected,
           totalReceived: data.data.totalReceived,
-          hasDiscrepancies: data.data.hasDiscrepancies
+          hasDiscrepancies: data.data.hasDiscrepancies,
+          completedAt: new Date().toISOString()
         })
         setShowSuccessModal(true)
       } else {
@@ -248,6 +253,159 @@ export default function TransferValidationView({
   const handleCloseSuccess = () => {
     setShowSuccessModal(false)
     onComplete()
+  }
+
+  // Print transfer report
+  const handlePrintReport = () => {
+    if (!completedData) return
+
+    const printWindow = window.open('', '_blank')
+    if (!printWindow) return
+
+    const currentDate = new Date().toLocaleDateString('es-ES', {
+      day: '2-digit',
+      month: 'long',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    })
+
+    const productsHtml = lines.map(line => `
+      <tr>
+        <td style="padding: 12px; border-bottom: 1px solid #e5e7eb;">
+          <div style="font-weight: 600; color: #111827;">${line.productName}</div>
+          <div style="font-size: 12px; color: #6b7280;">SKU: ${line.sku}</div>
+          ${line.barcode ? `
+            <div style="margin-top: 8px;">
+              <svg id="barcode-${line.lineId}"></svg>
+            </div>
+          ` : ''}
+        </td>
+        <td style="padding: 12px; border-bottom: 1px solid #e5e7eb; text-align: center; font-weight: 500;">${line.quantityExpected}</td>
+        <td style="padding: 12px; border-bottom: 1px solid #e5e7eb; text-align: center; font-weight: 600; color: ${line.quantityValidated >= line.quantityExpected ? '#059669' : '#dc2626'};">${line.quantityValidated}</td>
+        <td style="padding: 12px; border-bottom: 1px solid #e5e7eb; text-align: center;">
+          ${line.quantityValidated >= line.quantityExpected
+            ? '<span style="color: #059669;">✓</span>'
+            : `<span style="color: #dc2626;">${line.quantityValidated - line.quantityExpected}</span>`}
+        </td>
+      </tr>
+    `).join('')
+
+    const barcodeScripts = lines
+      .filter(l => l.barcode)
+      .map(line => `JsBarcode("#barcode-${line.lineId}", "${line.barcode}", { format: "CODE128", width: 1.5, height: 40, displayValue: true, fontSize: 10 });`)
+      .join('\n')
+
+    printWindow.document.write(`
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>Recepción de Transferencia - ${completedData.operationNumber}</title>
+        <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
+        <style>
+          * { margin: 0; padding: 0; box-sizing: border-box; }
+          body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; padding: 40px; color: #111827; }
+          .header { text-align: center; margin-bottom: 30px; padding-bottom: 20px; border-bottom: 2px solid #e5e7eb; }
+          .logo { font-size: 24px; font-weight: bold; color: #7c3aed; margin-bottom: 5px; }
+          .doc-title { font-size: 18px; color: #374151; margin-bottom: 15px; }
+          .doc-number { font-size: 28px; font-weight: bold; color: #111827; font-family: monospace; background: #f3f4f6; padding: 10px 20px; border-radius: 8px; display: inline-block; }
+          .date { font-size: 14px; color: #6b7280; margin-top: 15px; }
+          .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 30px; margin-bottom: 30px; }
+          .info-box { background: #f9fafb; padding: 20px; border-radius: 12px; border: 1px solid #e5e7eb; }
+          .info-box h3 { font-size: 12px; color: #6b7280; text-transform: uppercase; margin-bottom: 8px; }
+          .info-box p { font-size: 16px; font-weight: 600; color: #111827; }
+          .summary-box { background: linear-gradient(135deg, #7c3aed 0%, #4f46e5 100%); color: white; padding: 25px 30px; border-radius: 12px; margin-bottom: 30px; }
+          .summary-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 25px; }
+          .summary-item { text-align: center; }
+          .summary-item .label { font-size: 12px; opacity: 0.9; margin-bottom: 5px; }
+          .summary-item .value { font-size: 28px; font-weight: bold; }
+          table { width: 100%; border-collapse: collapse; margin-bottom: 30px; }
+          th { background: #f3f4f6; padding: 14px; text-align: left; font-size: 12px; text-transform: uppercase; color: #6b7280; font-weight: 600; }
+          th:not(:first-child) { text-align: center; }
+          .footer { text-align: center; padding-top: 20px; border-top: 1px solid #e5e7eb; font-size: 12px; color: #9ca3af; }
+          .status-badge { display: inline-block; padding: 6px 16px; border-radius: 20px; font-size: 14px; font-weight: 600; }
+          .status-success { background: #d1fae5; color: #059669; }
+          .status-warning { background: #fef3c7; color: #d97706; }
+          @media print { body { padding: 20px; } }
+        </style>
+      </head>
+      <body>
+        <div class="header">
+          <div class="logo">LogiRapid</div>
+          <div class="doc-title">Recepción de Transferencia</div>
+          <div class="doc-number">${completedData.operationNumber}</div>
+          <div class="date">
+            <svg style="width: 14px; height: 14px; display: inline-block; vertical-align: middle; margin-right: 4px;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+              <line x1="16" y1="2" x2="16" y2="6"></line>
+              <line x1="8" y1="2" x2="8" y2="6"></line>
+              <line x1="3" y1="10" x2="21" y2="10"></line>
+            </svg>
+            ${currentDate}
+          </div>
+        </div>
+
+        <div class="info-grid">
+          <div class="info-box">
+            <h3>Almacén Origen</h3>
+            <p>${completedData.sourceWarehouseName}</p>
+          </div>
+          <div class="info-box">
+            <h3>Almacén Destino</h3>
+            <p>${completedData.destinationWarehouseName}</p>
+          </div>
+        </div>
+
+        <div class="summary-box">
+          <div class="summary-grid">
+            <div class="summary-item">
+              <div class="label">Total Productos</div>
+              <div class="value">${completedData.totalProducts}</div>
+            </div>
+            <div class="summary-item">
+              <div class="label">Unidades Esperadas</div>
+              <div class="value">${completedData.totalExpected}</div>
+            </div>
+            <div class="summary-item">
+              <div class="label">Unidades Recibidas</div>
+              <div class="value">${completedData.totalReceived}</div>
+            </div>
+          </div>
+        </div>
+
+        <div style="margin-bottom: 15px;">
+          <span class="status-badge ${completedData.hasDiscrepancies ? 'status-warning' : 'status-success'}">
+            ${completedData.hasDiscrepancies ? '⚠ Recepción con Discrepancias' : '✓ Recepción Completa'}
+          </span>
+        </div>
+
+        <table>
+          <thead>
+            <tr>
+              <th style="width: 50%;">Producto / Código</th>
+              <th>Esperado</th>
+              <th>Recibido</th>
+              <th>Diferencia</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${productsHtml}
+          </tbody>
+        </table>
+
+        <div class="footer">
+          <p>Documento generado automáticamente por LogiRapid</p>
+          <p style="margin-top: 5px;">${currentDate}</p>
+        </div>
+
+        <script>
+          ${barcodeScripts}
+          window.onload = function() { window.print(); }
+        </script>
+      </body>
+      </html>
+    `)
+    printWindow.document.close()
   }
 
   if (loading) {
@@ -493,7 +651,7 @@ export default function TransferValidationView({
               initial={{ scale: 0.9, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.9, opacity: 0 }}
-              className="bg-white rounded-2xl p-8 max-w-md w-full text-center"
+              className="bg-white rounded-2xl p-8 max-w-lg w-full text-center"
             >
               {/* Success Icon */}
               <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-6">
@@ -504,56 +662,83 @@ export default function TransferValidationView({
               <h3 className="text-2xl font-bold text-gray-900 mb-2">
                 Transferencia Recibida
               </h3>
-              <p className="text-gray-500 mb-6">
+              <p className="text-gray-500 mb-4">
                 La mercancía ha sido validada y agregada al inventario
               </p>
 
+              {/* Date */}
+              <div className="flex items-center justify-center gap-2 text-sm text-gray-500 mb-6">
+                <Calendar className="w-4 h-4" />
+                <span>
+                  {new Date().toLocaleDateString('es-ES', {
+                    day: '2-digit',
+                    month: 'long',
+                    year: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit'
+                  })}
+                </span>
+              </div>
+
               {/* Document Number */}
-              <div className="bg-gradient-to-r from-purple-50 to-indigo-50 rounded-xl p-4 mb-6">
+              <div className="bg-gradient-to-r from-purple-50 to-indigo-50 rounded-xl p-5 mb-6">
                 <p className="text-sm text-gray-500 mb-1">Número de Documento</p>
-                <p className="text-xl font-bold text-purple-700 font-mono">
+                <p className="text-2xl font-bold text-purple-700 font-mono">
                   {completedData.operationNumber}
                 </p>
               </div>
 
-              {/* Summary */}
-              <div className="bg-gray-50 rounded-xl p-4 mb-6 text-left">
-                <h4 className="font-semibold text-gray-700 mb-3 flex items-center gap-2">
+              {/* Summary - wider */}
+              <div className="bg-gray-50 rounded-xl p-5 mb-6 text-left">
+                <h4 className="font-semibold text-gray-700 mb-4 flex items-center gap-2">
                   <Package className="w-4 h-4" />
                   Resumen de Recepción
                 </h4>
-                <div className="space-y-2 text-sm">
-                  <div className="flex justify-between">
-                    <span className="text-gray-500">Origen:</span>
-                    <span className="font-medium">{completedData.sourceWarehouseName}</span>
+                <div className="grid grid-cols-2 gap-4 text-sm">
+                  <div>
+                    <span className="text-gray-500 block mb-1">Origen</span>
+                    <span className="font-semibold text-gray-800">{completedData.sourceWarehouseName}</span>
                   </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-500">Productos:</span>
-                    <span className="font-medium">{completedData.totalProducts}</span>
+                  <div>
+                    <span className="text-gray-500 block mb-1">Destino</span>
+                    <span className="font-semibold text-gray-800">{completedData.destinationWarehouseName}</span>
                   </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-500">Unidades recibidas:</span>
-                    <span className="font-medium text-green-600">
-                      {completedData.totalReceived} de {completedData.totalExpected}
+                  <div>
+                    <span className="text-gray-500 block mb-1">Total Productos</span>
+                    <span className="font-semibold text-gray-800">{completedData.totalProducts}</span>
+                  </div>
+                  <div>
+                    <span className="text-gray-500 block mb-1">Unidades Recibidas</span>
+                    <span className="font-semibold text-green-600">
+                      {completedData.totalReceived} / {completedData.totalExpected}
                     </span>
                   </div>
-                  {completedData.hasDiscrepancies && (
-                    <div className="flex items-center gap-2 text-amber-600 mt-2 pt-2 border-t">
-                      <AlertTriangle className="w-4 h-4" />
-                      <span className="text-xs">Recepción con discrepancias registradas</span>
-                    </div>
-                  )}
                 </div>
+                {completedData.hasDiscrepancies && (
+                  <div className="flex items-center gap-2 text-amber-600 mt-4 pt-3 border-t border-gray-200">
+                    <AlertTriangle className="w-4 h-4" />
+                    <span className="text-sm">Recepción con discrepancias registradas</span>
+                  </div>
+                )}
               </div>
 
-              {/* Close Button */}
-              <button
-                onClick={handleCloseSuccess}
-                className="w-full px-6 py-4 bg-gradient-to-r from-green-500 to-emerald-600 text-white rounded-xl font-semibold hover:shadow-lg transition-all flex items-center justify-center gap-2"
-              >
-                <Check className="w-5 h-5" />
-                Aceptar
-              </button>
+              {/* Buttons */}
+              <div className="flex gap-3">
+                <button
+                  onClick={handlePrintReport}
+                  className="flex-1 px-6 py-4 bg-gray-100 text-gray-700 rounded-xl font-semibold hover:bg-gray-200 transition-all flex items-center justify-center gap-2"
+                >
+                  <Printer className="w-5 h-5" />
+                  Imprimir
+                </button>
+                <button
+                  onClick={handleCloseSuccess}
+                  className="flex-1 px-6 py-4 bg-gradient-to-r from-green-500 to-emerald-600 text-white rounded-xl font-semibold hover:shadow-lg transition-all flex items-center justify-center gap-2"
+                >
+                  <Check className="w-5 h-5" />
+                  Aceptar
+                </button>
+              </div>
             </motion.div>
           </motion.div>
         )}
