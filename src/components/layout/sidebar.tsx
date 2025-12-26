@@ -474,16 +474,6 @@ export function Sidebar({ isCollapsed, onToggle }: SidebarProps) {
     { icon: Package, label: "Inventario", href: "/dashboard/market/inventory" },
     { icon: Warehouse, label: "Almacenes", href: "/dashboard/market/warehouses" },
     { icon: FileText, label: "Compras", href: "/dashboard/market/purchases" },
-    {
-      icon: Store,
-      label: "Órdenes Consignaciones",
-      href: "/dashboard/market/consignments",
-      hasSubmenu: true,
-      submenuItems: [
-        { icon: Store, label: "Consignaciones", href: "/dashboard/market/consignments" },
-        { icon: Wallet, label: "Cobros", href: "/dashboard/market/consignments/collections" },
-      ]
-    },
     { icon: ShoppingCart, label: "Órdenes Recibidas", href: "/dashboard/market/orders" },
     {
       icon: Monitor,
