@@ -70,6 +70,15 @@ export default function TransferValidationView({
   const [discrepancyNotes, setDiscrepancyNotes] = useState('')
   const [lastScannedProduct, setLastScannedProduct] = useState<string | null>(null)
   const [scanFeedback, setScanFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
+  const [showSuccessModal, setShowSuccessModal] = useState(false)
+  const [completedData, setCompletedData] = useState<{
+    operationNumber: string
+    sourceWarehouseName: string
+    totalProducts: number
+    totalExpected: number
+    totalReceived: number
+    hasDiscrepancies: boolean
+  } | null>(null)
 
   // Fetch validation data
   const fetchValidationData = useCallback(async () => {
@@ -212,7 +221,16 @@ export default function TransferValidationView({
       const data = await response.json()
 
       if (data.success) {
-        onComplete()
+        // Show success modal with summary
+        setCompletedData({
+          operationNumber: data.data.operationNumber,
+          sourceWarehouseName: data.data.sourceWarehouseName,
+          totalProducts: data.data.totalProducts,
+          totalExpected: data.data.totalExpected,
+          totalReceived: data.data.totalReceived,
+          hasDiscrepancies: data.data.hasDiscrepancies
+        })
+        setShowSuccessModal(true)
       } else {
         setError(data.error)
         if (data.requiresNote) {
@@ -225,6 +243,11 @@ export default function TransferValidationView({
     } finally {
       setCompleting(false)
     }
+  }
+
+  const handleCloseSuccess = () => {
+    setShowSuccessModal(false)
+    onComplete()
   }
 
   if (loading) {
@@ -452,6 +475,85 @@ export default function TransferValidationView({
                   Confirmar con Nota
                 </button>
               </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Success Modal */}
+      <AnimatePresence>
+        {showSuccessModal && completedData && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/60 flex items-center justify-center z-60 p-4"
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="bg-white rounded-2xl p-8 max-w-md w-full text-center"
+            >
+              {/* Success Icon */}
+              <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-6">
+                <CheckCircle className="w-12 h-12 text-green-600" />
+              </div>
+
+              {/* Title */}
+              <h3 className="text-2xl font-bold text-gray-900 mb-2">
+                Transferencia Recibida
+              </h3>
+              <p className="text-gray-500 mb-6">
+                La mercancía ha sido validada y agregada al inventario
+              </p>
+
+              {/* Document Number */}
+              <div className="bg-gradient-to-r from-purple-50 to-indigo-50 rounded-xl p-4 mb-6">
+                <p className="text-sm text-gray-500 mb-1">Número de Documento</p>
+                <p className="text-xl font-bold text-purple-700 font-mono">
+                  {completedData.operationNumber}
+                </p>
+              </div>
+
+              {/* Summary */}
+              <div className="bg-gray-50 rounded-xl p-4 mb-6 text-left">
+                <h4 className="font-semibold text-gray-700 mb-3 flex items-center gap-2">
+                  <Package className="w-4 h-4" />
+                  Resumen de Recepción
+                </h4>
+                <div className="space-y-2 text-sm">
+                  <div className="flex justify-between">
+                    <span className="text-gray-500">Origen:</span>
+                    <span className="font-medium">{completedData.sourceWarehouseName}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-500">Productos:</span>
+                    <span className="font-medium">{completedData.totalProducts}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-500">Unidades recibidas:</span>
+                    <span className="font-medium text-green-600">
+                      {completedData.totalReceived} de {completedData.totalExpected}
+                    </span>
+                  </div>
+                  {completedData.hasDiscrepancies && (
+                    <div className="flex items-center gap-2 text-amber-600 mt-2 pt-2 border-t">
+                      <AlertTriangle className="w-4 h-4" />
+                      <span className="text-xs">Recepción con discrepancias registradas</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Close Button */}
+              <button
+                onClick={handleCloseSuccess}
+                className="w-full px-6 py-4 bg-gradient-to-r from-green-500 to-emerald-600 text-white rounded-xl font-semibold hover:shadow-lg transition-all flex items-center justify-center gap-2"
+              >
+                <Check className="w-5 h-5" />
+                Aceptar
+              </button>
             </motion.div>
           </motion.div>
         )}
