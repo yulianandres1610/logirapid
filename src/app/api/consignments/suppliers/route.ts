@@ -131,6 +131,13 @@ export async function GET(request: NextRequest) {
   }
 }
 
+interface BankAccount {
+  bankName: string
+  accountNumber: string
+  accountType: string
+  holderName: string
+}
+
 /**
  * POST /api/consignments/suppliers
  * Crear proveedor de consignacion
@@ -143,7 +150,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json()
-    const { code, name, legalName, taxId, contactName, email, phone, address, username, password, userId } = body
+    const { code, name, legalName, taxId, contactName, email, phone, address, username, password, userId, bankAccounts } = body
 
     // Validaciones
     if (!code || !name) {
@@ -246,6 +253,36 @@ export async function POST(request: NextRequest) {
       INSERT INTO consignment_supplier_wallets (supplier_id)
       VALUES ($1)
     `, [supplierId])
+
+    // Crear tabla de cuentas bancarias si no existe
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS consignment_supplier_bank_accounts (
+        id SERIAL PRIMARY KEY,
+        supplier_id INTEGER NOT NULL REFERENCES consignment_suppliers(id) ON DELETE CASCADE,
+        bank_name VARCHAR(100) NOT NULL,
+        account_number VARCHAR(50) NOT NULL,
+        account_type VARCHAR(20) DEFAULT 'checking',
+        holder_name VARCHAR(200),
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `)
+
+    // Insertar cuentas bancarias si se proporcionaron
+    if (bankAccounts && Array.isArray(bankAccounts) && bankAccounts.length > 0) {
+      for (const account of bankAccounts as BankAccount[]) {
+        await db.query(`
+          INSERT INTO consignment_supplier_bank_accounts (
+            supplier_id, bank_name, account_number, account_type, holder_name
+          ) VALUES ($1, $2, $3, $4, $5)
+        `, [
+          supplierId,
+          account.bankName,
+          account.accountNumber,
+          account.accountType || 'checking',
+          account.holderName || name
+        ])
+      }
+    }
 
     return NextResponse.json({
       success: true,
