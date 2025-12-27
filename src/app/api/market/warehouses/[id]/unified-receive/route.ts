@@ -176,14 +176,16 @@ export async function POST(
           orderLine.unit_cost
         ])
 
-        // Update main inventory
+        // Update warehouse stock
         await db.query(`
-          INSERT INTO market_product_inventory (
-            warehouse_id, product_id, quantity_on_hand, quantity_expected,
-            minimum_stock, last_count_date
-          ) VALUES ($1, $2, $3, 0, 0, NOW())
+          INSERT INTO market_warehouse_stock (
+            warehouse_id, product_id, quantity_on_hand, quantity_reserved,
+            last_movement_at, created_at, updated_at
+          ) VALUES ($1, $2, $3, 0, NOW(), NOW(), NOW())
           ON CONFLICT (warehouse_id, product_id) DO UPDATE SET
-            quantity_on_hand = market_product_inventory.quantity_on_hand + $3
+            quantity_on_hand = market_warehouse_stock.quantity_on_hand + $3,
+            last_movement_at = NOW(),
+            updated_at = NOW()
         `, [warehouseId, orderLine.product_id, line.quantityReceived])
 
         totalUnitsReceived += line.quantityReceived
