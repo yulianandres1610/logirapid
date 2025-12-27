@@ -176,17 +176,28 @@ export async function POST(
           orderLine.unit_cost
         ])
 
-        // Update warehouse stock
-        await db.query(`
-          INSERT INTO market_warehouse_stock (
-            warehouse_id, product_id, quantity_on_hand, quantity_reserved,
-            last_movement_at, created_at, updated_at
-          ) VALUES ($1, $2, $3, 0, NOW(), NOW(), NOW())
-          ON CONFLICT (warehouse_id, product_id) DO UPDATE SET
-            quantity_on_hand = market_warehouse_stock.quantity_on_hand + $3,
-            last_movement_at = NOW(),
-            updated_at = NOW()
-        `, [warehouseId, orderLine.product_id, line.quantityReceived])
+        // Update warehouse stock (upsert manual por índice con variant_id)
+        const stockExists = await db.query(`
+          SELECT id, quantity_on_hand FROM market_warehouse_stock
+          WHERE warehouse_id = $1 AND product_id = $2 AND variant_id IS NULL
+        `, [warehouseId, orderLine.product_id])
+
+        if (stockExists.rows.length > 0) {
+          await db.query(`
+            UPDATE market_warehouse_stock SET
+              quantity_on_hand = quantity_on_hand + $1,
+              last_movement_at = NOW(),
+              updated_at = NOW()
+            WHERE warehouse_id = $2 AND product_id = $3 AND variant_id IS NULL
+          `, [line.quantityReceived, warehouseId, orderLine.product_id])
+        } else {
+          await db.query(`
+            INSERT INTO market_warehouse_stock (
+              warehouse_id, product_id, variant_id, quantity_on_hand, quantity_reserved,
+              last_movement_at, created_at, updated_at
+            ) VALUES ($1, $2, NULL, $3, 0, NOW(), NOW(), NOW())
+          `, [warehouseId, orderLine.product_id, line.quantityReceived])
+        }
 
         totalUnitsReceived += line.quantityReceived
         processedLines++
@@ -348,17 +359,28 @@ export async function POST(
           WHERE id = $2
         `, [line.quantityReceived, purchaseLine.product_id])
 
-        // Update warehouse stock
-        await db.query(`
-          INSERT INTO market_warehouse_stock (
-            warehouse_id, product_id, quantity_on_hand, quantity_reserved,
-            last_movement_at, created_at, updated_at
-          ) VALUES ($1, $2, $3, 0, NOW(), NOW(), NOW())
-          ON CONFLICT (warehouse_id, product_id) DO UPDATE SET
-            quantity_on_hand = market_warehouse_stock.quantity_on_hand + $3,
-            last_movement_at = NOW(),
-            updated_at = NOW()
-        `, [warehouseId, purchaseLine.product_id, line.quantityReceived])
+        // Update warehouse stock (upsert manual por índice con variant_id)
+        const stockExists = await db.query(`
+          SELECT id, quantity_on_hand FROM market_warehouse_stock
+          WHERE warehouse_id = $1 AND product_id = $2 AND variant_id IS NULL
+        `, [warehouseId, purchaseLine.product_id])
+
+        if (stockExists.rows.length > 0) {
+          await db.query(`
+            UPDATE market_warehouse_stock SET
+              quantity_on_hand = quantity_on_hand + $1,
+              last_movement_at = NOW(),
+              updated_at = NOW()
+            WHERE warehouse_id = $2 AND product_id = $3 AND variant_id IS NULL
+          `, [line.quantityReceived, warehouseId, purchaseLine.product_id])
+        } else {
+          await db.query(`
+            INSERT INTO market_warehouse_stock (
+              warehouse_id, product_id, variant_id, quantity_on_hand, quantity_reserved,
+              last_movement_at, created_at, updated_at
+            ) VALUES ($1, $2, NULL, $3, 0, NOW(), NOW(), NOW())
+          `, [warehouseId, purchaseLine.product_id, line.quantityReceived])
+        }
 
         totalUnitsReceived += line.quantityReceived
         processedLines++
