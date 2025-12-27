@@ -117,6 +117,54 @@ export async function POST(
       supplierName = order.supplier_name
       supplierId = order.supplier_id
 
+      // VALIDACIÓN: Verificar que ningún producto tenga stock de OTRO proveedor de consignación
+      for (const line of lines) {
+        if (line.quantityReceived <= 0) continue
+
+        const conflictCheck = await db.query(`
+          SELECT
+            cli.supplier_id,
+            cs.code as supplier_code,
+            cs.name as supplier_name,
+            cli.unit_cost,
+            SUM(cli.quantity_available) as total_available
+          FROM consignment_lot_inventory cli
+          JOIN consignment_suppliers cs ON cs.id = cli.supplier_id
+          WHERE cli.warehouse_id = $1
+            AND cli.product_id = $2
+            AND cli.quantity_available > 0
+            AND cli.supplier_id != $3
+          GROUP BY cli.supplier_id, cs.code, cs.name, cli.unit_cost
+        `, [warehouseId, line.productId, supplierId])
+
+        if (conflictCheck.rows.length > 0) {
+          const conflict = conflictCheck.rows[0]
+          // Obtener nombre del producto
+          const productResult = await db.query(
+            'SELECT name FROM market_products WHERE id = $1',
+            [line.productId]
+          )
+          const productName = productResult.rows[0]?.name || 'Producto'
+
+          return NextResponse.json({
+            success: false,
+            error: 'supplier_conflict',
+            conflict: {
+              productId: line.productId,
+              productName,
+              existingSupplier: {
+                id: parseInt(conflict.supplier_id),
+                code: conflict.supplier_code,
+                name: conflict.supplier_name,
+                unitCost: parseFloat(conflict.unit_cost),
+                stockAvailable: parseInt(conflict.total_available)
+              },
+              message: `El producto "${productName}" tiene ${conflict.total_available} unidades en consignación del proveedor ${conflict.supplier_name} a $${parseFloat(conflict.unit_cost).toFixed(2)}. Debe devolver todo el stock antes de consignar con otro proveedor.`
+            }
+          }, { status: 409 })
+        }
+      }
+
       // Process each line
       for (const line of lines) {
         if (line.quantityReceived <= 0) continue

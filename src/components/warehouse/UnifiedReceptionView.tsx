@@ -105,6 +105,19 @@ interface OrderDetail {
   }
 }
 
+interface SupplierConflict {
+  productId: number
+  productName: string
+  existingSupplier: {
+    id: number
+    code: string
+    name: string
+    unitCost: number
+    stockAvailable: number
+  }
+  message: string
+}
+
 interface UnifiedReceptionViewProps {
   warehouseId: number
   warehouseName: string
@@ -114,6 +127,7 @@ interface UnifiedReceptionViewProps {
     orderNumber: string
     unitsReceived: number
   }) => void
+  onNavigateToReturns?: () => void
 }
 
 type ValidationStatus = 'pending' | 'partial' | 'complete' | 'excess'
@@ -144,7 +158,8 @@ export default function UnifiedReceptionView({
   warehouseId,
   warehouseName,
   onBack,
-  onComplete
+  onComplete,
+  onNavigateToReturns
 }: UnifiedReceptionViewProps) {
   const { theme } = useTheme()
   const searchInputRef = useRef<HTMLInputElement>(null)
@@ -169,6 +184,9 @@ export default function UnifiedReceptionView({
   const [historyItems, setHistoryItems] = useState<ReceptionHistoryItem[]>([])
   const [selectedOrder, setSelectedOrder] = useState<OrderDetail | null>(null)
   const [orderDetailLoading, setOrderDetailLoading] = useState(false)
+
+  // Supplier conflict state
+  const [supplierConflict, setSupplierConflict] = useState<SupplierConflict | null>(null)
 
   // Focus search input on mount
   useEffect(() => {
@@ -417,6 +435,9 @@ export default function UnifiedReceptionView({
           unitsReceived: data.data.unitsReceived
         })
         setShowSuccess(true)
+      } else if (data.error === 'supplier_conflict' && data.conflict) {
+        // Mostrar modal de conflicto de proveedor
+        setSupplierConflict(data.conflict)
       } else {
         setError(data.error || 'Error al procesar recepcion')
       }
@@ -530,6 +551,94 @@ export default function UnifiedReceptionView({
   }).length || 0
   const totalProducts = detectedOrder?.lines.length || 0
   const progressPercent = totalExpected > 0 ? Math.round((totalToReceive / totalExpected) * 100) : 0
+
+  // Supplier Conflict Modal
+  if (supplierConflict) {
+    return (
+      <div className="min-h-[60vh] flex items-center justify-center p-4">
+        <motion.div
+          initial={{ scale: 0.9, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          className={cn(
+            'text-center p-8 rounded-2xl max-w-md w-full',
+            theme === 'dark' ? 'bg-gray-800' : 'bg-white'
+          )}
+        >
+          <motion.div
+            initial={{ scale: 0 }}
+            animate={{ scale: 1 }}
+            transition={{ delay: 0.2, type: 'spring' }}
+            className="w-20 h-20 mx-auto mb-6 bg-orange-100 dark:bg-orange-900/30 rounded-full flex items-center justify-center"
+          >
+            <AlertTriangle className="w-10 h-10 text-orange-600" />
+          </motion.div>
+          <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-2">
+            Conflicto de Proveedor
+          </h2>
+          <p className="text-gray-500 mb-4">
+            {supplierConflict.productName}
+          </p>
+          <div className={cn(
+            'p-4 rounded-xl mb-6 text-left',
+            theme === 'dark' ? 'bg-gray-700' : 'bg-gray-100'
+          )}>
+            <p className="text-sm text-gray-500 mb-2">Proveedor actual:</p>
+            <p className="font-bold text-gray-900 dark:text-white">
+              {supplierConflict.existingSupplier.name}
+            </p>
+            <p className="text-sm text-gray-500">
+              Codigo: {supplierConflict.existingSupplier.code}
+            </p>
+            <div className="mt-3 pt-3 border-t border-gray-200 dark:border-gray-600">
+              <div className="flex justify-between">
+                <span className="text-sm text-gray-500">Stock disponible:</span>
+                <span className="font-bold text-orange-600">
+                  {supplierConflict.existingSupplier.stockAvailable} uds
+                </span>
+              </div>
+              <div className="flex justify-between mt-1">
+                <span className="text-sm text-gray-500">Precio de costo:</span>
+                <span className="font-medium text-gray-900 dark:text-white">
+                  ${supplierConflict.existingSupplier.unitCost.toFixed(2)}
+                </span>
+              </div>
+            </div>
+          </div>
+          <p className="text-sm text-gray-500 mb-6">
+            Debe devolver todo el stock de este producto antes de consignar con otro proveedor.
+          </p>
+          <div className="flex gap-3">
+            <motion.button
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+              onClick={() => setSupplierConflict(null)}
+              className={cn(
+                'flex-1 py-3 rounded-xl font-medium transition-colors',
+                theme === 'dark'
+                  ? 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                  : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+              )}
+            >
+              Cerrar
+            </motion.button>
+            {onNavigateToReturns && (
+              <motion.button
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+                onClick={() => {
+                  setSupplierConflict(null)
+                  onNavigateToReturns()
+                }}
+                className="flex-1 py-3 bg-orange-500 text-white rounded-xl hover:bg-orange-600 transition-colors font-medium"
+              >
+                Ir a Devoluciones
+              </motion.button>
+            )}
+          </div>
+        </motion.div>
+      </div>
+    )
+  }
 
   // Success Modal
   if (showSuccess && successData) {

@@ -27,6 +27,9 @@ import ReferenceOrderSelector, { type ReferenceType } from '@/components/warehou
 import PendingTransfersList, { type PendingTransfer } from '@/components/warehouse/PendingTransfersList'
 import TransferValidationView from '@/components/warehouse/TransferValidationView'
 import UnifiedReceptionView from '@/components/warehouse/UnifiedReceptionView'
+import ReturnTypeSelector, { type ReturnType } from '@/components/warehouse/ReturnTypeSelector'
+import SupplierReturnView from '@/components/warehouse/SupplierReturnView'
+import POSReturnReceiveView from '@/components/warehouse/POSReturnReceiveView'
 
 interface WarehouseData {
   id: number
@@ -408,6 +411,9 @@ export default function WarehouseOperationsPage() {
   const [selectedTransfer, setSelectedTransfer] = useState<PendingTransfer | null>(null)
   const [showValidationView, setShowValidationView] = useState(false)
 
+  // Return operation state
+  const [returnType, setReturnType] = useState<ReturnType | null>(null)
+
   // Fetch warehouse data
   useEffect(() => {
     const fetchWarehouse = async () => {
@@ -462,6 +468,9 @@ export default function WarehouseOperationsPage() {
       fetchPendingTransfers()
     } else if (type === 'order_reception') {
       setOperation({ ...initialOperationState, operationType: type })
+    } else if (type === 'return') {
+      setOperation({ ...initialOperationState, operationType: type })
+      setReturnType(null)
     } else {
       setOperation({ ...initialOperationState, operationType: type })
     }
@@ -471,6 +480,19 @@ export default function WarehouseOperationsPage() {
     setSuccess(null)
     setSelectedTransfer(null)
     setShowValidationView(false)
+    setReturnType(null)
+  }
+
+  const handleReturnTypeSelect = (type: ReturnType) => {
+    setReturnType(type)
+  }
+
+  const handleReturnBack = () => {
+    if (returnType) {
+      setReturnType(null)
+    } else {
+      setOperation(initialOperationState)
+    }
   }
 
   const handleSelectTransferForValidation = (transfer: PendingTransfer) => {
@@ -728,7 +750,8 @@ export default function WarehouseOperationsPage() {
                         operation.operationType === 'scrap' ? 'Scrap' :
                         operation.operationType === 'adjustment' ? 'Ajuste' :
                         operation.operationType === 'receive_transfer' ? 'Recibir Transferencia' :
-                        operation.operationType === 'order_reception' ? 'Recibir Orden' : 'Operacion'}`
+                        operation.operationType === 'order_reception' ? 'Recibir Orden' :
+                        operation.operationType === 'return' ? (returnType === 'supplier' ? 'Devolucion a Proveedor' : returnType === 'pos' ? 'Devolucion desde POS' : 'Devoluciones') : 'Operacion'}`
                     : 'Operaciones'}
                 </h1>
                 <p className="text-sm text-gray-500 dark:text-gray-400">{warehouse.name}</p>
@@ -826,6 +849,39 @@ export default function WarehouseOperationsPage() {
               setTimeout(() => setSuccess(null), 3000)
             }}
           />
+        ) : operation.operationType === 'return' ? (
+          /* Return Operations View */
+          !returnType ? (
+            <ReturnTypeSelector
+              onSelect={handleReturnTypeSelect}
+              onBack={handleReturnBack}
+              currentWarehouse={warehouse}
+            />
+          ) : returnType === 'supplier' ? (
+            <SupplierReturnView
+              warehouseId={warehouseId}
+              warehouseName={warehouse.name}
+              onBack={handleReturnBack}
+              onComplete={(data) => {
+                setReturnType(null)
+                setOperation(initialOperationState)
+                setSuccess(`Devolucion completada: ${data.totalUnits} unidades devueltas a ${data.supplierName}`)
+                setTimeout(() => setSuccess(null), 3000)
+              }}
+            />
+          ) : (
+            <POSReturnReceiveView
+              warehouseId={warehouseId}
+              warehouseName={warehouse.name}
+              onBack={handleReturnBack}
+              onComplete={(data) => {
+                setReturnType(null)
+                setOperation(initialOperationState)
+                setSuccess(`Devolucion POS procesada: ${data.totalUnits} unidades a scrap`)
+                setTimeout(() => setSuccess(null), 3000)
+              }}
+            />
+          )
         ) : (
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             {/* Left Column: Scanner + Products */}
