@@ -20,7 +20,8 @@ import {
   Circle,
   History,
   Eye,
-  ChevronRight
+  ChevronRight,
+  Printer
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useTheme } from '@/contexts/theme-context'
@@ -187,6 +188,19 @@ export default function UnifiedReceptionView({
 
   // Supplier conflict state
   const [supplierConflict, setSupplierConflict] = useState<SupplierConflict | null>(null)
+
+  // Print states
+  const [printing, setPrinting] = useState(false)
+  const [lastReceptionData, setLastReceptionData] = useState<{
+    orderType: string
+    orderId: number
+    orderNumber: string
+    supplier: Supplier
+    warehouse: { id: number; name: string; code: string }
+    linesProcessed: number
+    unitsReceived: number
+    receivedAt: string
+  } | null>(null)
 
   // Focus search input on mount
   useEffect(() => {
@@ -428,6 +442,10 @@ export default function UnifiedReceptionView({
       const data = await response.json()
 
       if (data.success) {
+        // Store reception data for reprinting
+        setLastReceptionData(data.data)
+
+        // Send initial print job
         await sendPrintJob(data.data)
 
         setSuccessData({
@@ -499,6 +517,18 @@ export default function UnifiedReceptionView({
       })
     } catch (err) {
       console.error('Error sending print job:', err)
+    }
+  }
+
+  // Reprint reception
+  const handleReprint = async () => {
+    if (!lastReceptionData) return
+
+    setPrinting(true)
+    try {
+      await sendPrintJob(lastReceptionData)
+    } finally {
+      setPrinting(false)
     }
   }
 
@@ -669,14 +699,36 @@ export default function UnifiedReceptionView({
           <p className="text-3xl font-bold text-emerald-600 mb-6">
             {successData.unitsReceived} unidades
           </p>
-          <motion.button
-            whileHover={{ scale: 1.02 }}
-            whileTap={{ scale: 0.98 }}
-            onClick={handleSuccessClose}
-            className="w-full py-3 bg-emerald-500 text-white rounded-xl hover:bg-emerald-600 transition-colors font-medium"
-          >
-            Continuar
-          </motion.button>
+          <div className="flex gap-3">
+            <motion.button
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+              onClick={handleReprint}
+              disabled={printing}
+              className={cn(
+                'flex-1 py-3 rounded-xl font-medium transition-colors flex items-center justify-center gap-2',
+                theme === 'dark'
+                  ? 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                  : 'bg-gray-200 text-gray-700 hover:bg-gray-300',
+                printing && 'opacity-50 cursor-not-allowed'
+              )}
+            >
+              {printing ? (
+                <Loader2 className="w-5 h-5 animate-spin" />
+              ) : (
+                <Printer className="w-5 h-5" />
+              )}
+              Imprimir
+            </motion.button>
+            <motion.button
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+              onClick={handleSuccessClose}
+              className="flex-1 py-3 bg-emerald-500 text-white rounded-xl hover:bg-emerald-600 transition-colors font-medium"
+            >
+              Continuar
+            </motion.button>
+          </div>
         </motion.div>
       </div>
     )
