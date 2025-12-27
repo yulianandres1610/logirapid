@@ -41,40 +41,43 @@ export async function GET(request: NextRequest) {
     const limit = parseInt(searchParams.get('limit') || '20')
     const offset = (page - 1) * limit
 
-    let query = `
+    // Build WHERE clause
+    let whereClause = 'WHERE s.company_id = $1'
+    const countParams: (string | number)[] = [payload.companyId]
+
+    if (search) {
+      whereClause += ` AND (s.name ILIKE $2 OR s.code ILIKE $2 OR s.email ILIKE $2 OR s.phone ILIKE $2)`
+      countParams.push(`%${search}%`)
+    }
+
+    // Count total first (simple query)
+    const countResult = await db.query(
+      `SELECT COUNT(*) as total FROM consignment_suppliers s ${whereClause}`,
+      countParams
+    )
+    const total = parseInt(countResult.rows[0]?.total || '0')
+
+    // Build main query with all fields
+    const query = `
       SELECT
         s.*,
         u.id as linked_user_id,
         u.firstname as linked_user_firstname,
         u.lastname as linked_user_lastname,
         u.email as linked_user_email,
-        (SELECT COUNT(*) FROM consignment_orders WHERE supplier_id = s.id) as total_orders,
-        (SELECT COALESCE(SUM(total_cost), 0) FROM consignment_orders WHERE supplier_id = s.id) as total_consigned,
-        w.balance_available,
-        w.total_earned,
-        w.total_paid
+        COALESCE((SELECT COUNT(*) FROM consignment_orders WHERE supplier_id = s.id), 0) as total_orders,
+        COALESCE((SELECT SUM(total_cost) FROM consignment_orders WHERE supplier_id = s.id), 0) as total_consigned,
+        COALESCE(w.balance_available, 0) as balance_available,
+        COALESCE(w.total_earned, 0) as total_earned,
+        COALESCE(w.total_paid, 0) as total_paid
       FROM consignment_suppliers s
       LEFT JOIN consignment_supplier_wallets w ON w.supplier_id = s.id
       LEFT JOIN users u ON u.id = s.user_id
-      WHERE s.company_id = $1
+      ${whereClause}
+      ORDER BY s.name ASC
+      LIMIT $${countParams.length + 1} OFFSET $${countParams.length + 2}
     `
-    const params: (string | number)[] = [payload.companyId]
-
-    if (search) {
-      query += ` AND (s.name ILIKE $2 OR s.code ILIKE $2 OR s.email ILIKE $2 OR s.phone ILIKE $2)`
-      params.push(`%${search}%`)
-    }
-
-    // Count total
-    const countResult = await db.query(
-      query.replace(/SELECT[\s\S]*?FROM/, 'SELECT COUNT(*) as total FROM'),
-      params
-    )
-    const total = parseInt(countResult.rows[0]?.total || '0')
-
-    // Get paginated results
-    query += ` ORDER BY s.name ASC LIMIT $${params.length + 1} OFFSET $${params.length + 2}`
-    params.push(limit, offset)
+    const params = [...countParams, limit, offset]
 
     const result = await db.query(query, params)
 
