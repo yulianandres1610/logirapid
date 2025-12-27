@@ -14,8 +14,12 @@ import {
   Plus,
   Loader2,
   X,
-  AlertTriangle
+  AlertTriangle,
+  ArrowLeft
 } from 'lucide-react'
+import Link from 'next/link'
+import { DashboardLayout } from '@/components/layout/dashboard-layout'
+import { ProtectedRoute } from '@/components/protected-route'
 import { useTheme } from '@/contexts/theme-context'
 import { cn } from '@/lib/utils'
 
@@ -96,27 +100,43 @@ export default function ConsignmentReturnsPage() {
     })
 
   return (
-    <div className="p-6">
-      {/* Header */}
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
-            Devoluciones
-          </h1>
-          <p className="text-gray-500 mt-1">
-            Gestiona devoluciones de productos consignados
-          </p>
-        </div>
-        <motion.button
-          whileHover={{ scale: 1.02 }}
-          whileTap={{ scale: 0.98 }}
-          onClick={() => router.push('/dashboard/market/consignments/returns/create')}
-          className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-red-500 to-rose-600 text-white rounded-xl font-medium shadow-lg hover:shadow-xl transition-shadow"
-        >
-          <Plus className="w-5 h-5" />
-          Nueva Devolucion
-        </motion.button>
-      </div>
+    <ProtectedRoute>
+      <DashboardLayout>
+        <div className="min-h-screen p-6">
+          {/* Header */}
+          <div className="flex items-center justify-between mb-6">
+            <div className="flex items-center gap-4">
+              <Link href="/dashboard/market/consignments">
+                <motion.button
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                  className={cn(
+                    'p-2 rounded-lg transition-colors',
+                    theme === 'dark' ? 'hover:bg-gray-800' : 'hover:bg-gray-100'
+                  )}
+                >
+                  <ArrowLeft className="w-5 h-5" />
+                </motion.button>
+              </Link>
+              <div>
+                <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
+                  Devoluciones
+                </h1>
+                <p className="text-gray-500 mt-1">
+                  Gestiona devoluciones de productos consignados
+                </p>
+              </div>
+            </div>
+            <motion.button
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+              onClick={() => router.push('/dashboard/market/consignments/returns/create')}
+              className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-red-500 to-rose-600 text-white rounded-xl font-medium shadow-lg hover:shadow-xl transition-shadow"
+            >
+              <Plus className="w-5 h-5" />
+              Nueva Devolucion
+            </motion.button>
+          </div>
 
       {/* Stats Cards */}
       {stats && (
@@ -297,6 +317,8 @@ export default function ConsignmentReturnsPage() {
           })}
         </div>
       )}
-    </div>
+        </div>
+      </DashboardLayout>
+    </ProtectedRoute>
   )
 }

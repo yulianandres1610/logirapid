@@ -14,8 +14,12 @@ import {
   ArrowDownRight,
   Loader2,
   RefreshCcw,
-  BarChart3
+  BarChart3,
+  ArrowLeft
 } from 'lucide-react'
+import Link from 'next/link'
+import { DashboardLayout } from '@/components/layout/dashboard-layout'
+import { ProtectedRoute } from '@/components/protected-route'
 import { useTheme } from '@/contexts/theme-context'
 import { cn } from '@/lib/utils'
 
@@ -89,17 +93,25 @@ export default function ConsignmentReportsPage() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-[60vh]">
-        <Loader2 className="w-10 h-10 text-teal-500 animate-spin" />
-      </div>
+      <ProtectedRoute>
+        <DashboardLayout>
+          <div className="flex items-center justify-center min-h-[60vh]">
+            <Loader2 className="w-10 h-10 text-teal-500 animate-spin" />
+          </div>
+        </DashboardLayout>
+      </ProtectedRoute>
     )
   }
 
   if (!data) {
     return (
-      <div className="flex items-center justify-center min-h-[60vh]">
-        <p className="text-gray-500">Error al cargar datos</p>
-      </div>
+      <ProtectedRoute>
+        <DashboardLayout>
+          <div className="flex items-center justify-center min-h-[60vh]">
+            <p className="text-gray-500">Error al cargar datos</p>
+          </div>
+        </DashboardLayout>
+      </ProtectedRoute>
     )
   }
 
@@ -108,29 +120,45 @@ export default function ConsignmentReportsPage() {
     : 0
 
   return (
-    <div className="p-6">
-      {/* Header */}
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
-            Reportes de Consignacion
-          </h1>
-          <p className="text-gray-500 mt-1">
-            Dashboard con KPIs y estadisticas
-          </p>
-        </div>
-        <motion.button
-          whileHover={{ scale: 1.05 }}
-          whileTap={{ scale: 0.95 }}
-          onClick={fetchData}
-          className={cn(
-            'p-2 rounded-xl transition-colors',
-            theme === 'dark' ? 'hover:bg-gray-800' : 'hover:bg-gray-100'
-          )}
-        >
-          <RefreshCcw className="w-5 h-5 text-gray-500" />
-        </motion.button>
-      </div>
+    <ProtectedRoute>
+      <DashboardLayout>
+        <div className="min-h-screen p-6">
+          {/* Header */}
+          <div className="flex items-center justify-between mb-6">
+            <div className="flex items-center gap-4">
+              <Link href="/dashboard/market/consignments">
+                <motion.button
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                  className={cn(
+                    'p-2 rounded-lg transition-colors',
+                    theme === 'dark' ? 'hover:bg-gray-800' : 'hover:bg-gray-100'
+                  )}
+                >
+                  <ArrowLeft className="w-5 h-5" />
+                </motion.button>
+              </Link>
+              <div>
+                <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
+                  Reportes de Consignacion
+                </h1>
+                <p className="text-gray-500 mt-1">
+                  Dashboard con KPIs y estadisticas
+                </p>
+              </div>
+            </div>
+            <motion.button
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+              onClick={fetchData}
+              className={cn(
+                'p-2 rounded-xl transition-colors',
+                theme === 'dark' ? 'hover:bg-gray-800' : 'hover:bg-gray-100'
+              )}
+            >
+              <RefreshCcw className="w-5 h-5 text-gray-500" />
+            </motion.button>
+          </div>
 
       {/* Main KPIs */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
@@ -450,6 +478,8 @@ export default function ConsignmentReportsPage() {
           </div>
         </motion.div>
       )}
-    </div>
+        </div>
+      </DashboardLayout>
+    </ProtectedRoute>
   )
 }
