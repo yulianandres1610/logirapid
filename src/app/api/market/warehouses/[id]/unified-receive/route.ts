@@ -384,24 +384,28 @@ export async function POST(
         `)
 
         // Create FIFO inventory entry for purchase
+        const purchaseQty = parseInt(String(line.quantityReceived))
+        const purchaseUnitCost = parseFloat(purchaseLine.unit_price) || 0
+
         await db.query(`
           INSERT INTO purchase_lot_inventory (
             company_id, warehouse_id, product_id, purchase_line_id, supplier_id,
             lot_number, expiration_date, quantity_initial, quantity_available, unit_cost
-          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $8, $9)
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
           ON CONFLICT (warehouse_id, product_id, lot_number) DO UPDATE SET
-            quantity_initial = purchase_lot_inventory.quantity_initial + $8,
-            quantity_available = purchase_lot_inventory.quantity_available + $8
+            quantity_initial = purchase_lot_inventory.quantity_initial + EXCLUDED.quantity_initial,
+            quantity_available = purchase_lot_inventory.quantity_available + EXCLUDED.quantity_available
         `, [
           payload.companyId,
           warehouseId,
-          purchaseLine.product_id,
+          parseInt(purchaseLine.product_id),
           line.lineId,
           supplierId,
           lotNumber,
           line.expirationDate || null,
-          line.quantityReceived,
-          purchaseLine.unit_price || 0
+          purchaseQty,
+          purchaseQty,
+          purchaseUnitCost
         ])
 
         // Update main product inventory
