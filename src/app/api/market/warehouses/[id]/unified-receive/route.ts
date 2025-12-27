@@ -115,7 +115,7 @@ export async function POST(
       orderNumber = order.order_number
       supplierCode = order.supplier_code
       supplierName = order.supplier_name
-      supplierId = order.supplier_id
+      supplierId = parseInt(order.supplier_id)
 
       // VALIDACIÓN: Verificar que ningún producto tenga stock de OTRO proveedor de consignación
       for (const line of lines) {
@@ -130,10 +130,10 @@ export async function POST(
             SUM(cli.quantity_available) as total_available
           FROM consignment_lot_inventory cli
           JOIN consignment_suppliers cs ON cs.id = cli.supplier_id
-          WHERE cli.warehouse_id = $1
-            AND cli.product_id = $2
+          WHERE cli.warehouse_id = $1::integer
+            AND cli.product_id = $2::integer
             AND cli.quantity_available > 0
-            AND cli.supplier_id != $3
+            AND cli.supplier_id != $3::integer
           GROUP BY cli.supplier_id, cs.code, cs.name, cli.unit_cost
         `, [warehouseId, line.productId, supplierId])
 
@@ -204,47 +204,51 @@ export async function POST(
         ])
 
         // Create FIFO inventory entry
+        const productId = parseInt(orderLine.product_id)
+        const unitCost = parseFloat(orderLine.unit_cost) || 0
+        const qtyReceived = parseInt(String(line.quantityReceived))
+
         await db.query(`
           INSERT INTO consignment_lot_inventory (
             company_id, warehouse_id, product_id, order_line_id, supplier_id,
             lot_number, expiration_date, quantity_initial, quantity_available, unit_cost
-          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $8, $9)
+          ) VALUES ($1::integer, $2::integer, $3::integer, $4::integer, $5::integer, $6, $7, $8::integer, $8::integer, $9::numeric)
           ON CONFLICT (warehouse_id, product_id, lot_number) DO UPDATE SET
-            quantity_initial = consignment_lot_inventory.quantity_initial + $8,
-            quantity_available = consignment_lot_inventory.quantity_available + $8
+            quantity_initial = consignment_lot_inventory.quantity_initial + EXCLUDED.quantity_initial,
+            quantity_available = consignment_lot_inventory.quantity_available + EXCLUDED.quantity_available
         `, [
           payload.companyId,
           warehouseId,
-          orderLine.product_id,
+          productId,
           line.lineId,
           supplierId,
           lotNumber,
           line.expirationDate || null,
-          line.quantityReceived,
-          orderLine.unit_cost
+          qtyReceived,
+          unitCost
         ])
 
         // Update warehouse stock (upsert manual por índice con variant_id)
         const stockExists = await db.query(`
           SELECT id, quantity_on_hand FROM market_warehouse_stock
-          WHERE warehouse_id = $1 AND product_id = $2 AND variant_id IS NULL
-        `, [warehouseId, orderLine.product_id])
+          WHERE warehouse_id = $1::integer AND product_id = $2::integer AND variant_id IS NULL
+        `, [warehouseId, productId])
 
         if (stockExists.rows.length > 0) {
           await db.query(`
             UPDATE market_warehouse_stock SET
-              quantity_on_hand = quantity_on_hand + $1,
+              quantity_on_hand = quantity_on_hand + $1::integer,
               last_movement_at = NOW(),
               updated_at = NOW()
-            WHERE warehouse_id = $2 AND product_id = $3 AND variant_id IS NULL
-          `, [line.quantityReceived, warehouseId, orderLine.product_id])
+            WHERE warehouse_id = $2::integer AND product_id = $3::integer AND variant_id IS NULL
+          `, [qtyReceived, warehouseId, productId])
         } else {
           await db.query(`
             INSERT INTO market_warehouse_stock (
               warehouse_id, product_id, variant_id, quantity_on_hand, quantity_reserved,
               last_movement_at, created_at, updated_at
-            ) VALUES ($1, $2, NULL, $3, 0, NOW(), NOW(), NOW())
-          `, [warehouseId, orderLine.product_id, line.quantityReceived])
+            ) VALUES ($1::integer, $2::integer, NULL, $3::integer, 0, NOW(), NOW(), NOW())
+          `, [warehouseId, productId, qtyReceived])
         }
 
         totalUnitsReceived += line.quantityReceived
