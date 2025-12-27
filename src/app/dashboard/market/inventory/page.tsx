@@ -717,9 +717,6 @@ export default function MarketInventoryPage() {
                               <span className="text-sm font-bold text-gray-900 dark:text-white">
                                 {product.quantityOnHand}
                               </span>
-                              {product.quantityExpected > 0 && (
-                                <span className="text-xs text-blue-500 ml-1">(+{product.quantityExpected})</span>
-                              )}
                             </td>
                             <td className="py-4 px-4 text-center">
                               <span className={cn(

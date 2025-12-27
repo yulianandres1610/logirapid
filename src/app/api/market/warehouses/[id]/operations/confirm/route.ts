@@ -354,26 +354,30 @@ export async function POST(
           await db.query(`
             INSERT INTO market_stock_movements (
               company_id,
-              warehouse_id,
               product_id,
               movement_type,
+              from_warehouse_id,
+              to_warehouse_id,
               quantity,
               quantity_before,
               quantity_after,
+              operation_id,
               reference_type,
               reference_id,
               notes,
               created_by,
               created_at
-            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, NOW())
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, NOW())
           `, [
             payload.companyId,
-            warehouseId,
             line.productId,
             movementType,
+            movementType === 'in' ? null : warehouseId,  // from_warehouse_id (null for reception)
+            movementType === 'in' ? warehouseId : null,  // to_warehouse_id (set for reception)
             quantityChange,
             currentStock,
             newStock,
+            operationId,
             'warehouse_operation',
             operationId,
             lineNotes || null,
