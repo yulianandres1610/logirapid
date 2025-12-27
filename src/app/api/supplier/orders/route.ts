@@ -3,38 +3,26 @@ import { cookies } from 'next/headers'
 import jwt from 'jsonwebtoken'
 import { db } from '@/lib/database'
 
-interface JWTPayload {
-  userId: number
-  email: string
-  role: string
+interface SupplierJWTPayload {
+  supplierId: number
+  supplierCode: string
   companyId: number
-  supplierId?: number
-  supplierCode?: string
+  type: string
 }
 
-async function getPayload(): Promise<JWTPayload | null> {
+async function getSupplierPayload(): Promise<SupplierJWTPayload | null> {
   const cookieStore = await cookies()
-  const token = cookieStore.get('auth-token')?.value
+  const token = cookieStore.get('supplier-token')?.value
   if (!token) return null
 
   try {
     const secret = process.env.JWT_SECRET || 'fallback-secret'
-    return jwt.verify(token, secret) as JWTPayload
+    const payload = jwt.verify(token, secret) as SupplierJWTPayload
+    if (payload.type !== 'supplier') return null
+    return payload
   } catch {
     return null
   }
-}
-
-async function getSupplierId(payload: JWTPayload): Promise<number | null> {
-  if (payload.supplierId) return payload.supplierId
-
-  const result = await db.query(`
-    SELECT id FROM consignment_suppliers
-    WHERE user_id = $1 AND is_active = true
-    LIMIT 1
-  `, [payload.userId])
-
-  return result.rows[0]?.id || null
 }
 
 /**
@@ -43,7 +31,7 @@ async function getSupplierId(payload: JWTPayload): Promise<number | null> {
  */
 export async function GET(request: NextRequest) {
   try {
-    const payload = await getPayload()
+    const payload = await getSupplierPayload()
     if (!payload) {
       return NextResponse.json({
         success: false,
@@ -51,13 +39,7 @@ export async function GET(request: NextRequest) {
       }, { status: 401 })
     }
 
-    const supplierId = await getSupplierId(payload)
-    if (!supplierId) {
-      return NextResponse.json({
-        success: false,
-        error: 'No es un proveedor de consignacion'
-      }, { status: 403 })
-    }
+    const supplierId = payload.supplierId
 
     const { searchParams } = new URL(request.url)
     const status = searchParams.get('status') // all, active, completed

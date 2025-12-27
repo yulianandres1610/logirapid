@@ -3,23 +3,23 @@ import { cookies } from 'next/headers'
 import jwt from 'jsonwebtoken'
 import { db } from '@/lib/database'
 
-interface JWTPayload {
-  userId: number
-  email: string
-  role: string
+interface SupplierJWTPayload {
+  supplierId: number
+  supplierCode: string
   companyId: number
-  supplierId?: number
-  supplierCode?: string
+  type: string
 }
 
-async function getPayload(): Promise<JWTPayload | null> {
+async function getSupplierPayload(): Promise<SupplierJWTPayload | null> {
   const cookieStore = await cookies()
-  const token = cookieStore.get('auth-token')?.value
+  const token = cookieStore.get('supplier-token')?.value
   if (!token) return null
 
   try {
     const secret = process.env.JWT_SECRET || 'fallback-secret'
-    return jwt.verify(token, secret) as JWTPayload
+    const payload = jwt.verify(token, secret) as SupplierJWTPayload
+    if (payload.type !== 'supplier') return null
+    return payload
   } catch {
     return null
   }
@@ -31,7 +31,7 @@ async function getPayload(): Promise<JWTPayload | null> {
  */
 export async function GET() {
   try {
-    const payload = await getPayload()
+    const payload = await getSupplierPayload()
     if (!payload) {
       return NextResponse.json({
         success: false,
@@ -39,26 +39,7 @@ export async function GET() {
       }, { status: 401 })
     }
 
-    // Get supplier ID from token or from database
-    let supplierId = payload.supplierId
-
-    if (!supplierId) {
-      // Fallback: check if user has a supplier linked
-      const supplierCheck = await db.query(`
-        SELECT id FROM consignment_suppliers
-        WHERE user_id = $1 AND is_active = true
-        LIMIT 1
-      `, [payload.userId])
-
-      if (supplierCheck.rows.length === 0) {
-        return NextResponse.json({
-          success: false,
-          error: 'No es un proveedor de consignacion'
-        }, { status: 403 })
-      }
-
-      supplierId = supplierCheck.rows[0].id
-    }
+    const supplierId = payload.supplierId
 
     // Get supplier info
     const supplierResult = await db.query(`

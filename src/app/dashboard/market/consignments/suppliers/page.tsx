@@ -849,41 +849,63 @@ export default function SuppliersPage() {
                     />
                   </div>
 
-                  {/* Linked User Section */}
+                  {/* Portal de Proveedor Section */}
                   <div className="md:col-span-2 border-t pt-4 mt-2">
                     <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3 flex items-center gap-2">
                       <User className="w-4 h-4" />
-                      Usuario del Sistema Vinculado
+                      Acceso al Portal de Proveedor
                     </h3>
                     <p className="text-xs text-gray-500 mb-3">
-                      Vincular un usuario permite al proveedor acceder al panel con su login normal del sistema
+                      Crea credenciales para que el proveedor acceda a su portal independiente (proveedores.logirapid.com)
                     </p>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                        Seleccionar Usuario
-                      </label>
-                      <select
-                        value={formData.userId || ''}
-                        onChange={(e) => setFormData(p => ({ ...p, userId: e.target.value ? parseInt(e.target.value) : null }))}
-                        disabled={loadingUsers}
-                        className={cn(
-                          'w-full px-4 py-2.5 rounded-xl border focus:outline-none focus:ring-2 transition-all',
-                          theme === 'dark'
-                            ? 'bg-gray-800 border-gray-700 text-white focus:border-blue-500 focus:ring-blue-500/20'
-                            : 'bg-white border-gray-200 text-gray-900 focus:border-blue-500 focus:ring-blue-500/20'
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {/* Username */}
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                          Usuario del Portal
+                        </label>
+                        <input
+                          type="text"
+                          value={formData.username}
+                          onChange={(e) => setFormData(p => ({ ...p, username: e.target.value.toLowerCase().replace(/\s/g, '') }))}
+                          placeholder="usuario123"
+                          className={cn(
+                            'w-full px-4 py-2.5 rounded-xl border focus:outline-none focus:ring-2 transition-all',
+                            theme === 'dark'
+                              ? 'bg-gray-800 border-gray-700 text-white focus:border-blue-500 focus:ring-blue-500/20'
+                              : 'bg-white border-gray-200 text-gray-900 focus:border-blue-500 focus:ring-blue-500/20'
+                          )}
+                        />
+                      </div>
+
+                      {/* Password */}
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                          Contrasena {showEditModal ? '(dejar vacia para no cambiar)' : '*'}
+                        </label>
+                        <input
+                          type="password"
+                          value={formData.password}
+                          onChange={(e) => setFormData(p => ({ ...p, password: e.target.value }))}
+                          placeholder={showEditModal ? '********' : 'Contrasena segura'}
+                          className={cn(
+                            'w-full px-4 py-2.5 rounded-xl border focus:outline-none focus:ring-2 transition-all',
+                            theme === 'dark'
+                              ? 'bg-gray-800 border-gray-700 text-white focus:border-blue-500 focus:ring-blue-500/20'
+                              : 'bg-white border-gray-200 text-gray-900 focus:border-blue-500 focus:ring-blue-500/20',
+                            formErrors.password && 'border-red-500'
+                          )}
+                        />
+                        {formErrors.password && (
+                          <p className="text-xs text-red-500 mt-1">{formErrors.password}</p>
                         )}
-                      >
-                        <option value="">-- Sin usuario vinculado --</option>
-                        {availableUsers.map(user => (
-                          <option key={user.id} value={user.id}>
-                            {user.name} ({user.email})
-                          </option>
-                        ))}
-                      </select>
-                      {loadingUsers && (
-                        <p className="text-xs text-gray-500 mt-1">Cargando usuarios...</p>
-                      )}
+                      </div>
                     </div>
+                    {formData.username && (
+                      <p className="text-xs text-emerald-500 mt-2">
+                        El proveedor podra acceder en proveedores.logirapid.com con usuario: {formData.username}
+                      </p>
+                    )}
                   </div>
                 </div>
 

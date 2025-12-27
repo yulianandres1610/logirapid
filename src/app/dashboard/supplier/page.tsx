@@ -12,7 +12,6 @@ import {
   DollarSign,
   ArrowUpRight,
   ArrowDownRight,
-  LogOut,
   Loader2,
   X,
   AlertTriangle,
@@ -96,23 +95,6 @@ export default function SupplierDashboardPage() {
     }
   }
 
-  const handleLogout = () => {
-    // Clear localStorage and cookies
-    if (typeof window !== 'undefined') {
-      localStorage.removeItem('user')
-      localStorage.removeItem('auth-token')
-      // Clear auth cookies
-      const cookiesToClear = [
-        'auth-token', 'user-id', 'user-name', 'user-email', 'user-role',
-        'user-company-id', 'user-company-name', 'user-company-type',
-        'supplier-id', 'supplier-code', 'supplier-name'
-      ]
-      cookiesToClear.forEach(cookie => {
-        document.cookie = `${cookie}=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT`
-      })
-    }
-    router.push('/login')
-  }
 
   const handleRequestPayment = async () => {
     const amount = parseFloat(paymentAmount)
@@ -183,35 +165,26 @@ export default function SupplierDashboardPage() {
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
-      {/* Header */}
-      <header className="bg-gradient-to-r from-teal-600 via-cyan-600 to-blue-600 text-white">
-        <div className="max-w-6xl mx-auto px-4 py-6">
+      {/* Header - Mobile Optimized */}
+      <header className="bg-gradient-to-r from-teal-600 via-cyan-600 to-blue-600 text-white sticky top-0 z-30">
+        <div className="px-4 py-4 md:py-6 md:max-w-4xl md:mx-auto">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <div className="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center">
-                <Package className="w-6 h-6" />
+              <div className="w-11 h-11 md:w-12 md:h-12 bg-white/20 rounded-xl flex items-center justify-center flex-shrink-0">
+                <Package className="w-5 h-5 md:w-6 md:h-6" />
               </div>
-              <div>
-                <h1 className="text-xl font-bold">{data.supplier.name}</h1>
-                <p className="text-white/70 text-sm">Codigo: {data.supplier.code}</p>
+              <div className="min-w-0">
+                <h1 className="text-lg md:text-xl font-bold truncate">{data.supplier.name}</h1>
+                <p className="text-white/70 text-xs md:text-sm">Codigo: {data.supplier.code}</p>
               </div>
             </div>
-            <div className="flex items-center gap-3">
-              <button
-                onClick={fetchDashboard}
-                className="p-2 hover:bg-white/10 rounded-lg transition-colors"
-                title="Actualizar"
-              >
-                <RefreshCcw className="w-5 h-5" />
-              </button>
-              <button
-                onClick={handleLogout}
-                className="flex items-center gap-2 px-4 py-2 bg-white/10 hover:bg-white/20 rounded-lg transition-colors"
-              >
-                <LogOut className="w-4 h-4" />
-                Salir
-              </button>
-            </div>
+            <button
+              onClick={fetchDashboard}
+              className="p-2.5 hover:bg-white/10 active:bg-white/20 rounded-xl transition-colors touch-manipulation"
+              title="Actualizar"
+            >
+              <RefreshCcw className="w-5 h-5" />
+            </button>
           </div>
         </div>
       </header>
@@ -231,45 +204,44 @@ export default function SupplierDashboardPage() {
         )}
       </AnimatePresence>
 
-      {/* Main Content */}
-      <main className="max-w-6xl mx-auto px-4 py-8">
+      {/* Main Content - Mobile First */}
+      <main className="px-4 py-5 md:py-8 md:max-w-4xl md:mx-auto space-y-5 md:space-y-8">
         {/* Wallet Card */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          className="bg-gradient-to-br from-teal-500 to-cyan-600 rounded-3xl p-6 text-white shadow-xl mb-8"
+          className="bg-gradient-to-br from-teal-500 to-cyan-600 rounded-2xl md:rounded-3xl p-5 md:p-6 text-white shadow-xl"
         >
-          <div className="flex items-start justify-between mb-6">
+          <div className="flex items-start justify-between mb-5 md:mb-6">
             <div>
-              <p className="text-white/70 text-sm mb-1">Saldo Disponible</p>
-              <p className="text-4xl font-bold">{formatCurrency(data.wallet.available)}</p>
+              <p className="text-white/70 text-xs md:text-sm mb-1">Saldo Disponible</p>
+              <p className="text-3xl md:text-4xl font-bold">{formatCurrency(data.wallet.available)}</p>
             </div>
-            <div className="w-14 h-14 bg-white/20 rounded-2xl flex items-center justify-center">
-              <Wallet className="w-7 h-7" />
+            <div className="w-12 h-12 md:w-14 md:h-14 bg-white/20 rounded-xl md:rounded-2xl flex items-center justify-center flex-shrink-0">
+              <Wallet className="w-6 h-6 md:w-7 md:h-7" />
             </div>
           </div>
 
-          <div className="grid grid-cols-3 gap-4 mb-6">
-            <div className="bg-white/10 rounded-xl p-3">
-              <p className="text-white/60 text-xs">En Proceso</p>
-              <p className="text-lg font-bold">{formatCurrency(data.wallet.pending)}</p>
+          <div className="grid grid-cols-3 gap-2 md:gap-4 mb-5 md:mb-6">
+            <div className="bg-white/10 rounded-xl p-2.5 md:p-3">
+              <p className="text-white/60 text-[10px] md:text-xs">En Proceso</p>
+              <p className="text-sm md:text-lg font-bold truncate">{formatCurrency(data.wallet.pending)}</p>
             </div>
-            <div className="bg-white/10 rounded-xl p-3">
-              <p className="text-white/60 text-xs">Total Ganado</p>
-              <p className="text-lg font-bold">{formatCurrency(data.wallet.totalEarned)}</p>
+            <div className="bg-white/10 rounded-xl p-2.5 md:p-3">
+              <p className="text-white/60 text-[10px] md:text-xs">Total Ganado</p>
+              <p className="text-sm md:text-lg font-bold truncate">{formatCurrency(data.wallet.totalEarned)}</p>
             </div>
-            <div className="bg-white/10 rounded-xl p-3">
-              <p className="text-white/60 text-xs">Total Pagado</p>
-              <p className="text-lg font-bold">{formatCurrency(data.wallet.totalPaid)}</p>
+            <div className="bg-white/10 rounded-xl p-2.5 md:p-3">
+              <p className="text-white/60 text-[10px] md:text-xs">Total Pagado</p>
+              <p className="text-sm md:text-lg font-bold truncate">{formatCurrency(data.wallet.totalPaid)}</p>
             </div>
           </div>
 
           <motion.button
-            whileHover={{ scale: 1.02 }}
             whileTap={{ scale: 0.98 }}
             onClick={() => setShowPaymentModal(true)}
             disabled={data.wallet.available <= 0 || data.payments.pendingRequests > 0}
-            className="w-full py-4 bg-white text-teal-600 rounded-2xl font-bold text-lg shadow-lg hover:shadow-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+            className="w-full py-4 bg-white text-teal-600 rounded-xl md:rounded-2xl font-bold text-base md:text-lg shadow-lg active:shadow-md transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 touch-manipulation min-h-[52px]"
           >
             <DollarSign className="w-5 h-5" />
             {data.payments.pendingRequests > 0
@@ -278,119 +250,119 @@ export default function SupplierDashboardPage() {
           </motion.button>
         </motion.div>
 
-        {/* Stats Grid */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+        {/* Stats Grid - Mobile Optimized */}
+        <div className="grid grid-cols-2 gap-3 md:grid-cols-4 md:gap-4">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.1 }}
-            className="bg-white dark:bg-gray-800 rounded-2xl p-5 shadow-sm"
+            className="bg-white dark:bg-gray-800 rounded-xl md:rounded-2xl p-4 md:p-5 shadow-sm"
           >
-            <div className="flex items-center gap-3 mb-2">
-              <div className="w-10 h-10 bg-amber-100 dark:bg-amber-900/30 rounded-xl flex items-center justify-center">
-                <Clock className="w-5 h-5 text-amber-600" />
+            <div className="flex items-center gap-2 md:gap-3 mb-2">
+              <div className="w-9 h-9 md:w-10 md:h-10 bg-amber-100 dark:bg-amber-900/30 rounded-lg md:rounded-xl flex items-center justify-center flex-shrink-0">
+                <Clock className="w-4 h-4 md:w-5 md:h-5 text-amber-600" />
               </div>
             </div>
-            <p className="text-2xl font-bold text-gray-900 dark:text-white">{data.orders.pending + data.orders.received}</p>
-            <p className="text-sm text-gray-500">Ordenes Pendientes</p>
+            <p className="text-xl md:text-2xl font-bold text-gray-900 dark:text-white">{data.orders.pending + data.orders.received}</p>
+            <p className="text-xs md:text-sm text-gray-500">Pendientes</p>
           </motion.div>
 
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.15 }}
-            className="bg-white dark:bg-gray-800 rounded-2xl p-5 shadow-sm"
+            className="bg-white dark:bg-gray-800 rounded-xl md:rounded-2xl p-4 md:p-5 shadow-sm"
           >
-            <div className="flex items-center gap-3 mb-2">
-              <div className="w-10 h-10 bg-green-100 dark:bg-green-900/30 rounded-xl flex items-center justify-center">
-                <TrendingUp className="w-5 h-5 text-green-600" />
+            <div className="flex items-center gap-2 md:gap-3 mb-2">
+              <div className="w-9 h-9 md:w-10 md:h-10 bg-green-100 dark:bg-green-900/30 rounded-lg md:rounded-xl flex items-center justify-center flex-shrink-0">
+                <TrendingUp className="w-4 h-4 md:w-5 md:h-5 text-green-600" />
               </div>
             </div>
-            <p className="text-2xl font-bold text-gray-900 dark:text-white">{data.orders.active}</p>
-            <p className="text-sm text-gray-500">En Venta</p>
+            <p className="text-xl md:text-2xl font-bold text-gray-900 dark:text-white">{data.orders.active}</p>
+            <p className="text-xs md:text-sm text-gray-500">En Venta</p>
           </motion.div>
 
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.2 }}
-            className="bg-white dark:bg-gray-800 rounded-2xl p-5 shadow-sm"
+            className="bg-white dark:bg-gray-800 rounded-xl md:rounded-2xl p-4 md:p-5 shadow-sm"
           >
-            <div className="flex items-center gap-3 mb-2">
-              <div className="w-10 h-10 bg-blue-100 dark:bg-blue-900/30 rounded-xl flex items-center justify-center">
-                <FileText className="w-5 h-5 text-blue-600" />
+            <div className="flex items-center gap-2 md:gap-3 mb-2">
+              <div className="w-9 h-9 md:w-10 md:h-10 bg-blue-100 dark:bg-blue-900/30 rounded-lg md:rounded-xl flex items-center justify-center flex-shrink-0">
+                <FileText className="w-4 h-4 md:w-5 md:h-5 text-blue-600" />
               </div>
             </div>
-            <p className="text-2xl font-bold text-gray-900 dark:text-white">{data.orders.total}</p>
-            <p className="text-sm text-gray-500">Total Ordenes</p>
+            <p className="text-xl md:text-2xl font-bold text-gray-900 dark:text-white">{data.orders.total}</p>
+            <p className="text-xs md:text-sm text-gray-500">Total Ordenes</p>
           </motion.div>
 
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.25 }}
-            className="bg-white dark:bg-gray-800 rounded-2xl p-5 shadow-sm"
+            className="bg-white dark:bg-gray-800 rounded-xl md:rounded-2xl p-4 md:p-5 shadow-sm"
           >
-            <div className="flex items-center gap-3 mb-2">
-              <div className="w-10 h-10 bg-purple-100 dark:bg-purple-900/30 rounded-xl flex items-center justify-center">
-                <DollarSign className="w-5 h-5 text-purple-600" />
+            <div className="flex items-center gap-2 md:gap-3 mb-2">
+              <div className="w-9 h-9 md:w-10 md:h-10 bg-purple-100 dark:bg-purple-900/30 rounded-lg md:rounded-xl flex items-center justify-center flex-shrink-0">
+                <DollarSign className="w-4 h-4 md:w-5 md:h-5 text-purple-600" />
               </div>
             </div>
-            <p className="text-2xl font-bold text-gray-900 dark:text-white">{formatCurrency(data.sales30Days)}</p>
-            <p className="text-sm text-gray-500">Ventas (30 dias)</p>
+            <p className="text-lg md:text-2xl font-bold text-gray-900 dark:text-white truncate">{formatCurrency(data.sales30Days)}</p>
+            <p className="text-xs md:text-sm text-gray-500">Ventas (30d)</p>
           </motion.div>
         </div>
 
-        {/* Recent Transactions */}
+        {/* Recent Transactions - Mobile Optimized */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.3 }}
-          className="bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-sm"
+          className="bg-white dark:bg-gray-800 rounded-xl md:rounded-2xl p-4 md:p-6 shadow-sm"
         >
-          <h2 className="text-lg font-bold text-gray-900 dark:text-white mb-4">
+          <h2 className="text-base md:text-lg font-bold text-gray-900 dark:text-white mb-3 md:mb-4">
             Transacciones Recientes
           </h2>
 
           {data.recentTransactions.length === 0 ? (
-            <div className="text-center py-8 text-gray-500">
+            <div className="text-center py-6 md:py-8 text-gray-500 text-sm">
               No hay transacciones recientes
             </div>
           ) : (
-            <div className="space-y-3">
-              {data.recentTransactions.map((tx) => (
+            <div className="space-y-2 md:space-y-3">
+              {data.recentTransactions.slice(0, 5).map((tx) => (
                 <div
                   key={tx.id}
                   className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700/50 rounded-xl"
                 >
-                  <div className="flex items-center gap-3">
-                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${
+                  <div className="flex items-center gap-2.5 md:gap-3 min-w-0 flex-1">
+                    <div className={`w-9 h-9 md:w-10 md:h-10 rounded-lg md:rounded-xl flex items-center justify-center flex-shrink-0 ${
                       tx.type === 'sale' ? 'bg-green-100 dark:bg-green-900/30' :
                       tx.type === 'payment' ? 'bg-blue-100 dark:bg-blue-900/30' :
                       tx.type === 'return' ? 'bg-red-100 dark:bg-red-900/30' :
                       'bg-gray-100 dark:bg-gray-600'
                     }`}>
                       {tx.type === 'sale' ? (
-                        <ArrowUpRight className="w-5 h-5 text-green-600" />
+                        <ArrowUpRight className="w-4 h-4 md:w-5 md:h-5 text-green-600" />
                       ) : tx.type === 'payment' ? (
-                        <ArrowDownRight className="w-5 h-5 text-blue-600" />
+                        <ArrowDownRight className="w-4 h-4 md:w-5 md:h-5 text-blue-600" />
                       ) : (
-                        <ArrowDownRight className="w-5 h-5 text-red-600" />
+                        <ArrowDownRight className="w-4 h-4 md:w-5 md:h-5 text-red-600" />
                       )}
                     </div>
-                    <div>
-                      <p className="font-medium text-gray-900 dark:text-white">
+                    <div className="min-w-0">
+                      <p className="font-medium text-sm md:text-base text-gray-900 dark:text-white truncate">
                         {tx.type === 'sale' ? 'Venta' :
                          tx.type === 'payment' ? 'Pago Recibido' :
                          tx.type === 'return' ? 'Devolucion' :
                          tx.type === 'received' ? 'Recepcion' : tx.type}
                       </p>
-                      <p className="text-xs text-gray-500">
+                      <p className="text-[11px] md:text-xs text-gray-500 truncate">
                         {tx.posOrderNumber || tx.orderNumber || tx.notes || formatDate(tx.createdAt)}
                       </p>
                     </div>
                   </div>
-                  <p className={`font-bold ${
+                  <p className={`font-bold text-sm md:text-base ml-2 flex-shrink-0 ${
                     tx.type === 'sale' ? 'text-green-600' :
                     tx.type === 'return' ? 'text-red-600' :
                     'text-gray-900 dark:text-white'
@@ -405,46 +377,52 @@ export default function SupplierDashboardPage() {
         </motion.div>
       </main>
 
-      {/* Payment Request Modal */}
+      {/* Payment Request Modal - Mobile Bottom Sheet */}
       <AnimatePresence>
         {showPaymentModal && (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
+            className="fixed inset-0 bg-black/50 flex items-end md:items-center justify-center z-50"
             onClick={() => setShowPaymentModal(false)}
           >
             <motion.div
-              initial={{ scale: 0.9, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.9, opacity: 0 }}
+              initial={{ y: '100%', opacity: 1 }}
+              animate={{ y: 0, opacity: 1 }}
+              exit={{ y: '100%', opacity: 1 }}
+              transition={{ type: 'spring', damping: 25, stiffness: 300 }}
               onClick={(e) => e.stopPropagation()}
-              className="bg-white dark:bg-gray-800 rounded-2xl p-6 w-full max-w-md shadow-xl"
+              className="bg-white dark:bg-gray-800 rounded-t-3xl md:rounded-2xl p-5 md:p-6 w-full md:max-w-md md:m-4 shadow-xl max-h-[90vh] overflow-y-auto"
             >
-              <div className="flex items-center justify-between mb-6">
-                <h2 className="text-xl font-bold text-gray-900 dark:text-white">
+              {/* Handle Bar - Mobile Only */}
+              <div className="flex justify-center mb-3 md:hidden">
+                <div className="w-12 h-1.5 bg-gray-300 dark:bg-gray-600 rounded-full" />
+              </div>
+
+              <div className="flex items-center justify-between mb-5 md:mb-6">
+                <h2 className="text-lg md:text-xl font-bold text-gray-900 dark:text-white">
                   Solicitar Cobro
                 </h2>
                 <button
                   onClick={() => setShowPaymentModal(false)}
-                  className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+                  className="p-2.5 hover:bg-gray-100 active:bg-gray-200 dark:hover:bg-gray-700 rounded-xl transition-colors touch-manipulation"
                 >
                   <X className="w-5 h-5 text-gray-500" />
                 </button>
               </div>
 
-              <div className="mb-6">
-                <p className="text-sm text-gray-500 mb-2">Saldo disponible</p>
-                <p className="text-3xl font-bold text-teal-600">
+              <div className="mb-5 md:mb-6">
+                <p className="text-xs md:text-sm text-gray-500 mb-1.5">Saldo disponible</p>
+                <p className="text-2xl md:text-3xl font-bold text-teal-600">
                   {formatCurrency(data.wallet.available)}
                 </p>
               </div>
 
               {error && (
                 <div className="mb-4 p-3 bg-red-100 dark:bg-red-900/30 text-red-600 rounded-xl text-sm flex items-center gap-2">
-                  <AlertTriangle className="w-4 h-4" />
-                  {error}
+                  <AlertTriangle className="w-4 h-4 flex-shrink-0" />
+                  <span>{error}</span>
                 </div>
               )}
 
@@ -454,24 +432,25 @@ export default function SupplierDashboardPage() {
                     Monto a solicitar
                   </label>
                   <div className="relative">
-                    <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400">$</span>
+                    <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 text-lg">$</span>
                     <input
                       type="number"
+                      inputMode="decimal"
                       value={paymentAmount}
                       onChange={(e) => setPaymentAmount(e.target.value)}
                       max={data.wallet.available}
                       step="0.01"
                       placeholder="0.00"
-                      className="w-full pl-8 pr-4 py-3 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent"
+                      className="w-full pl-9 pr-4 py-3.5 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-xl font-medium focus:ring-2 focus:ring-teal-500 focus:border-transparent"
                     />
                   </div>
-                  <div className="flex gap-2 mt-2">
+                  <div className="flex gap-2 mt-3">
                     {[25, 50, 75, 100].map((pct) => (
                       <button
                         key={pct}
                         type="button"
                         onClick={() => setPaymentAmount((data.wallet.available * pct / 100).toFixed(2))}
-                        className="flex-1 py-1.5 text-sm bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
+                        className="flex-1 py-2.5 text-sm font-medium bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 rounded-xl active:bg-gray-200 dark:active:bg-gray-600 transition-colors touch-manipulation"
                       >
                         {pct}%
                       </button>
@@ -488,16 +467,15 @@ export default function SupplierDashboardPage() {
                     onChange={(e) => setPaymentNotes(e.target.value)}
                     placeholder="Agregar notas..."
                     rows={2}
-                    className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-teal-500 focus:border-transparent resize-none"
+                    className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-base focus:ring-2 focus:ring-teal-500 focus:border-transparent resize-none"
                   />
                 </div>
 
                 <motion.button
-                  whileHover={{ scale: 1.02 }}
                   whileTap={{ scale: 0.98 }}
                   onClick={handleRequestPayment}
                   disabled={submittingPayment || !paymentAmount || parseFloat(paymentAmount) <= 0 || parseFloat(paymentAmount) > data.wallet.available}
-                  className="w-full py-4 bg-gradient-to-r from-teal-500 to-cyan-600 text-white rounded-xl font-bold text-lg shadow-lg hover:shadow-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                  className="w-full py-4 bg-gradient-to-r from-teal-500 to-cyan-600 text-white rounded-xl font-bold text-base md:text-lg shadow-lg active:shadow-md transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 touch-manipulation min-h-[52px]"
                 >
                   {submittingPayment ? (
                     <>
@@ -512,6 +490,9 @@ export default function SupplierDashboardPage() {
                   )}
                 </motion.button>
               </div>
+
+              {/* Safe area padding for iOS */}
+              <div className="h-safe-area-bottom md:hidden" />
             </motion.div>
           </motion.div>
         )}

@@ -161,12 +161,13 @@ export function useAuth(): UseAuthReturn {
         if (typeof window !== 'undefined') {
           let redirectPath = '/dashboard/admin'
 
-          // Si el usuario es un proveedor de consignacion, redirigir al dashboard de proveedor
-          if (data.user.isSupplier || data.user.supplierId) {
-            redirectPath = '/dashboard/supplier'
-          } else if (user.companyType === 'broker') {
+          // Determinar ruta de redirección según tipo de empresa y rol
+          if (user.companyType === 'broker') {
             // Si la empresa es de tipo broker, redirigir al dashboard de broker
             redirectPath = '/dashboard/broker'
+          } else if (user.companyType === 'market') {
+            // Si la empresa es de tipo market, redirigir al dashboard de market
+            redirectPath = '/dashboard/market'
           } else {
             switch (user.role) {
               case 'SUPER_ADMIN':
