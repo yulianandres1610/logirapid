@@ -14,8 +14,12 @@ import {
   AlertTriangle,
   Check,
   XCircle,
-  CreditCard
+  CreditCard,
+  ArrowLeft
 } from 'lucide-react'
+import Link from 'next/link'
+import { DashboardLayout } from '@/components/layout/dashboard-layout'
+import { ProtectedRoute } from '@/components/protected-route'
 import { useTheme } from '@/contexts/theme-context'
 import { cn } from '@/lib/utils'
 
@@ -153,18 +157,34 @@ export default function ConsignmentPaymentsPage() {
     })
 
   return (
-    <div className="p-6">
-      {/* Header */}
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
-            Pagos a Proveedores
-          </h1>
-          <p className="text-gray-500 mt-1">
-            Gestiona las solicitudes de cobro de proveedores
-          </p>
-        </div>
-      </div>
+    <ProtectedRoute>
+      <DashboardLayout>
+        <div className="min-h-screen p-6">
+          {/* Header */}
+          <div className="flex items-center justify-between mb-6">
+            <div className="flex items-center gap-4">
+              <Link href="/dashboard/market/consignments">
+                <motion.button
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                  className={cn(
+                    'p-2 rounded-lg transition-colors',
+                    theme === 'dark' ? 'hover:bg-gray-800' : 'hover:bg-gray-100'
+                  )}
+                >
+                  <ArrowLeft className="w-5 h-5" />
+                </motion.button>
+              </Link>
+              <div>
+                <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
+                  Pagos a Proveedores
+                </h1>
+                <p className="text-gray-500 mt-1">
+                  Gestiona las solicitudes de cobro de proveedores
+                </p>
+              </div>
+            </div>
+          </div>
 
       {/* Success Message */}
       <AnimatePresence>
@@ -548,6 +568,8 @@ export default function ConsignmentPaymentsPage() {
           </motion.div>
         )}
       </AnimatePresence>
-    </div>
+        </div>
+      </DashboardLayout>
+    </ProtectedRoute>
   )
 }
