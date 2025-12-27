@@ -161,9 +161,13 @@ export function useAuth(): UseAuthReturn {
         if (typeof window !== 'undefined') {
           let redirectPath = '/dashboard/admin'
 
-          // Si la empresa es de tipo broker, redirigir al dashboard de broker
+          // Determinar ruta de redirección según tipo de empresa y rol
           if (user.companyType === 'broker') {
+            // Si la empresa es de tipo broker, redirigir al dashboard de broker
             redirectPath = '/dashboard/broker'
+          } else if (user.companyType === 'market') {
+            // Si la empresa es de tipo market, redirigir al dashboard de market
+            redirectPath = '/dashboard/market'
           } else {
             switch (user.role) {
               case 'SUPER_ADMIN':

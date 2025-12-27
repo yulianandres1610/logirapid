@@ -2,9 +2,9 @@
 
 import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
-import { PackageCheck, ArrowRightLeft, Trash2, Scale, PackageOpen } from 'lucide-react'
+import { PackageCheck, ArrowRightLeft, Trash2, Scale, PackageOpen, Package } from 'lucide-react'
 
-export type OperationType = 'reception' | 'transfer' | 'scrap' | 'adjustment' | 'receive_transfer'
+export type OperationType = 'reception' | 'transfer' | 'scrap' | 'adjustment' | 'receive_transfer' | 'consignment_reception'
 
 interface OperationTypeSelectorProps {
   onSelect: (type: OperationType) => void
@@ -61,29 +61,48 @@ const operationTypes = [
     hoverGradient: 'from-purple-600 to-indigo-700',
     bgLight: 'bg-purple-50',
     textColor: 'text-purple-600'
+  },
+  {
+    id: 'consignment_reception' as OperationType,
+    name: 'Consignacion',
+    description: 'Recibir ordenes de consignacion',
+    icon: Package,
+    gradient: 'from-teal-500 to-cyan-600',
+    hoverGradient: 'from-teal-600 to-cyan-700',
+    bgLight: 'bg-teal-50',
+    textColor: 'text-teal-600'
   }
 ]
 
 export default function OperationTypeSelector({ onSelect, currentWarehouse }: OperationTypeSelectorProps) {
   const [pendingCount, setPendingCount] = useState(0)
+  const [pendingConsignments, setPendingConsignments] = useState(0)
 
   // Fetch pending transfers count
   useEffect(() => {
-    const fetchPendingCount = async () => {
+    const fetchPendingCounts = async () => {
       try {
-        const response = await fetch(`/api/market/warehouses/${currentWarehouse.id}/pending-transfers`)
-        const data = await response.json()
-        if (data.success) {
-          setPendingCount(data.data.pendingCount)
+        // Fetch pending transfers
+        const transfersResponse = await fetch(`/api/market/warehouses/${currentWarehouse.id}/pending-transfers`)
+        const transfersData = await transfersResponse.json()
+        if (transfersData.success) {
+          setPendingCount(transfersData.data.pendingCount)
+        }
+
+        // Fetch pending consignments
+        const consignmentsResponse = await fetch(`/api/market/warehouses/${currentWarehouse.id}/consignments?status=pending`)
+        const consignmentsData = await consignmentsResponse.json()
+        if (consignmentsData.success) {
+          setPendingConsignments(consignmentsData.data.count)
         }
       } catch (error) {
-        console.error('Error fetching pending transfers:', error)
+        console.error('Error fetching pending counts:', error)
       }
     }
 
-    fetchPendingCount()
+    fetchPendingCounts()
     // Refresh every 30 seconds
-    const interval = setInterval(fetchPendingCount, 30000)
+    const interval = setInterval(fetchPendingCounts, 30000)
     return () => clearInterval(interval)
   }, [currentWarehouse.id])
 
@@ -92,7 +111,8 @@ export default function OperationTypeSelector({ onSelect, currentWarehouse }: Op
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-6 lg:gap-6 max-w-6xl mx-auto">
         {operationTypes.map((op, index) => {
           const Icon = op.icon
-          const showBadge = op.id === 'receive_transfer' && pendingCount > 0
+          const showBadge = (op.id === 'receive_transfer' && pendingCount > 0) || (op.id === 'consignment_reception' && pendingConsignments > 0)
+            const badgeCount = op.id === 'receive_transfer' ? pendingCount : pendingConsignments
           return (
             <motion.button
               key={op.id}
@@ -111,14 +131,14 @@ export default function OperationTypeSelector({ onSelect, currentWarehouse }: Op
                 min-h-[180px] lg:min-h-[220px]
               `}
             >
-              {/* Badge for pending transfers */}
+              {/* Badge for pending operations */}
               {showBadge && (
                 <motion.div
                   initial={{ scale: 0 }}
                   animate={{ scale: 1 }}
                   className="absolute top-3 right-3 z-20 w-8 h-8 bg-white rounded-full flex items-center justify-center shadow-lg"
                 >
-                  <span className="text-sm font-bold text-purple-600">{pendingCount}</span>
+                  <span className={`text-sm font-bold ${op.id === 'consignment_reception' ? 'text-teal-600' : 'text-purple-600'}`}>{badgeCount}</span>
                 </motion.div>
               )}
 
