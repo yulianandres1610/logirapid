@@ -88,7 +88,7 @@ export async function POST() {
         company_id INTEGER NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
         warehouse_id INTEGER NOT NULL REFERENCES market_warehouses(id),
         pos_id INTEGER REFERENCES market_pos(id),
-        customer_id INTEGER,
+        customer_name VARCHAR(255),
         status VARCHAR(50) DEFAULT 'pending',
         reason TEXT,
         notes TEXT,
@@ -102,6 +102,16 @@ export async function POST() {
         updated_at TIMESTAMP DEFAULT NOW()
       )
     `)
+
+    // Add customer_name column if it doesn't exist (for existing tables)
+    try {
+      await db.query(`
+        ALTER TABLE pos_returns
+        ADD COLUMN IF NOT EXISTS customer_name VARCHAR(255)
+      `)
+    } catch {
+      console.log('[Migration] customer_name column may already exist')
+    }
     console.log('[Migration] Created pos_returns table')
 
     await db.query(`
