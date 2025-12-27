@@ -161,8 +161,11 @@ export function useAuth(): UseAuthReturn {
         if (typeof window !== 'undefined') {
           let redirectPath = '/dashboard/admin'
 
-          // Si la empresa es de tipo broker, redirigir al dashboard de broker
-          if (user.companyType === 'broker') {
+          // Si el usuario es un proveedor de consignacion, redirigir al dashboard de proveedor
+          if (data.user.isSupplier || data.user.supplierId) {
+            redirectPath = '/dashboard/supplier'
+          } else if (user.companyType === 'broker') {
+            // Si la empresa es de tipo broker, redirigir al dashboard de broker
             redirectPath = '/dashboard/broker'
           } else {
             switch (user.role) {

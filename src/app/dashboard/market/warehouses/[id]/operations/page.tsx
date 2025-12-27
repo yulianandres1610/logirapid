@@ -26,6 +26,7 @@ import AdjustmentReasonSelector, { type AdjustmentReason } from '@/components/wa
 import ReferenceOrderSelector, { type ReferenceType } from '@/components/warehouse/ReferenceOrderSelector'
 import PendingTransfersList, { type PendingTransfer } from '@/components/warehouse/PendingTransfersList'
 import TransferValidationView from '@/components/warehouse/TransferValidationView'
+import ConsignmentReceptionView from '@/components/warehouse/ConsignmentReceptionView'
 
 interface WarehouseData {
   id: number
@@ -459,6 +460,8 @@ export default function WarehouseOperationsPage() {
     if (type === 'receive_transfer') {
       setOperation({ ...initialOperationState, operationType: type })
       fetchPendingTransfers()
+    } else if (type === 'consignment_reception') {
+      setOperation({ ...initialOperationState, operationType: type })
     } else {
       setOperation({ ...initialOperationState, operationType: type })
     }
@@ -724,7 +727,8 @@ export default function WarehouseOperationsPage() {
                         operation.operationType === 'transfer' ? 'Transferencia' :
                         operation.operationType === 'scrap' ? 'Scrap' :
                         operation.operationType === 'adjustment' ? 'Ajuste' :
-                        operation.operationType === 'receive_transfer' ? 'Recibir Transferencia' : 'Operacion'}`
+                        operation.operationType === 'receive_transfer' ? 'Recibir Transferencia' :
+                        operation.operationType === 'consignment_reception' ? 'Recibir Consignacion' : 'Operacion'}`
                     : 'Operaciones'}
                 </h1>
                 <p className="text-sm text-gray-500 dark:text-gray-400">{warehouse.name}</p>
@@ -810,6 +814,18 @@ export default function WarehouseOperationsPage() {
               </div>
             </div>
           </div>
+        ) : operation.operationType === 'consignment_reception' ? (
+          /* Consignment Reception View */
+          <ConsignmentReceptionView
+            warehouseId={warehouseId}
+            warehouseName={warehouse.name}
+            onBack={handleBack}
+            onComplete={() => {
+              setOperation({ ...initialOperationState, operationType: null })
+              setSuccess('Consignacion recibida exitosamente')
+              setTimeout(() => setSuccess(null), 3000)
+            }}
+          />
         ) : (
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             {/* Left Column: Scanner + Products */}

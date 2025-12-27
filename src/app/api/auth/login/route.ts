@@ -57,10 +57,14 @@ export async function POST(request: NextRequest) {
         u.lastlogin as "lastLogin",
         uc.companyid as "companyId",
         c.legalname as "companyName",
-        c.companytype as "companyType"
+        c.companytype as "companyType",
+        cs.id as "supplierId",
+        cs.code as "supplierCode",
+        cs.name as "supplierName"
       FROM users u
       LEFT JOIN user_companies uc ON u.id = uc.userid
       LEFT JOIN companies c ON uc.companyid = c.id
+      LEFT JOIN consignment_suppliers cs ON cs.user_id = u.id AND cs.is_active = true
       WHERE LOWER(u.email) = LOWER($1)
       ORDER BY uc.createdat ASC
       LIMIT 1
@@ -131,6 +135,10 @@ export async function POST(request: NextRequest) {
       companyId: user.companyId,
       companyName: user.companyName,
       companyType: user.companyType,
+      supplierId: user.supplierId || null,
+      supplierCode: user.supplierCode || null,
+      supplierName: user.supplierName || null,
+      isSupplier: !!user.supplierId,
       createdAt: user.createdAt,
       updatedAt: user.createdAt, // Use createdAt as fallback
     }
@@ -147,6 +155,8 @@ export async function POST(request: NextRequest) {
         companyId: user.companyId,
         companyName: user.companyName,
         companyType: user.companyType,
+        supplierId: user.supplierId || null,
+        supplierCode: user.supplierCode || null,
       },
       jwtSecret,
       { expiresIn: '7d' }
@@ -201,7 +211,16 @@ export async function POST(request: NextRequest) {
       response.cookies.set('user-company-type', user.companyType, cookieOptions)
     }
 
-    console.log('[LOGIN] Login exitoso para:', user.email, '- Company type:', user.companyType)
+    // Set supplier cookies if user is a supplier
+    if (user.supplierId) {
+      response.cookies.set('supplier-id', user.supplierId.toString(), cookieOptions)
+      response.cookies.set('supplier-code', user.supplierCode, cookieOptions)
+      if (user.supplierName) {
+        response.cookies.set('supplier-name', encodeURIComponent(user.supplierName), cookieOptions)
+      }
+    }
+
+    console.log('[LOGIN] Login exitoso para:', user.email, '- Company type:', user.companyType, '- Is supplier:', !!user.supplierId)
     return response
 
   } catch (error) {
