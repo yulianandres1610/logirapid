@@ -141,6 +141,9 @@ interface ProductLot {
   purchaseNumber: string | null
   purchaseDate: string | null
   supplierName: string | null
+  warehouseName: string | null
+  unitCost: number
+  source: 'consignment' | 'purchase' | 'manual'
   isActive: boolean
   createdAt: string
 }
@@ -1243,13 +1246,19 @@ export default function ProductDetailPage() {
                                       <p className="text-xs text-gray-400">{product?.unitOfMeasure || 'unidad'}</p>
                                     </div>
 
-                                    {/* Proveedor */}
+                                    {/* Proveedor y Almacén */}
                                     <div>
-                                      <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">Proveedor</p>
+                                      <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">Proveedor / Almacén</p>
                                       {lot.supplierName ? (
                                         <p className="font-medium text-gray-900 dark:text-white">{lot.supplierName}</p>
                                       ) : (
                                         <p className="text-gray-400 italic">—</p>
+                                      )}
+                                      {lot.warehouseName && (
+                                        <p className="text-xs text-gray-400 flex items-center gap-1">
+                                          <Warehouse className="w-3 h-3" />
+                                          {lot.warehouseName}
+                                        </p>
                                       )}
                                       {lot.purchaseNumber && (
                                         <p className="text-xs text-gray-400">#{lot.purchaseNumber}</p>
@@ -1257,18 +1266,36 @@ export default function ProductDetailPage() {
                                     </div>
                                   </div>
 
-                                  {/* Estado */}
-                                  <div className="flex items-center gap-2">
-                                    <span className={cn(
-                                      'px-3 py-1.5 rounded-full text-xs font-medium',
-                                      expStatus.color === 'green' && 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400',
-                                      expStatus.color === 'amber' && 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400',
-                                      expStatus.color === 'orange' && 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400',
-                                      expStatus.color === 'red' && 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400',
-                                      expStatus.color === 'gray' && 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400'
-                                    )}>
-                                      {expStatus.label}
-                                    </span>
+                                  {/* Estado y Origen */}
+                                  <div className="flex flex-col items-end gap-2">
+                                    <div className="flex items-center gap-2">
+                                      {/* Source badge */}
+                                      <span className={cn(
+                                        'px-2 py-1 rounded text-[10px] font-medium uppercase',
+                                        lot.source === 'consignment' && 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400',
+                                        lot.source === 'purchase' && 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400',
+                                        lot.source === 'manual' && 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400'
+                                      )}>
+                                        {lot.source === 'consignment' ? 'Consig.' : lot.source === 'purchase' ? 'Compra' : 'Manual'}
+                                      </span>
+                                      {/* Expiration status */}
+                                      <span className={cn(
+                                        'px-3 py-1.5 rounded-full text-xs font-medium',
+                                        expStatus.color === 'green' && 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400',
+                                        expStatus.color === 'amber' && 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400',
+                                        expStatus.color === 'orange' && 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400',
+                                        expStatus.color === 'red' && 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400',
+                                        expStatus.color === 'gray' && 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400'
+                                      )}>
+                                        {expStatus.label}
+                                      </span>
+                                    </div>
+                                    {/* Unit cost */}
+                                    {lot.unitCost > 0 && (
+                                      <p className="text-xs text-gray-500">
+                                        Costo: <span className="font-medium text-gray-700 dark:text-gray-300">${lot.unitCost.toFixed(2)}</span>
+                                      </p>
+                                    )}
                                   </div>
                                 </div>
 
