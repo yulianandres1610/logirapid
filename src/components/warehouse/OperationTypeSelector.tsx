@@ -142,9 +142,6 @@ export default function OperationTypeSelector({ onSelect, currentWarehouse }: Op
                 </motion.div>
               )}
 
-              {/* Background decoration */}
-              <div className="absolute inset-0 bg-white/10 opacity-0 group-hover:opacity-100 transition-opacity" />
-
               {/* Icon container */}
               <div className="relative z-10 w-16 h-16 lg:w-20 lg:h-20 bg-white/20 rounded-xl flex items-center justify-center mb-4 group-hover:bg-white/30 transition-colors">
                 <Icon className="w-8 h-8 lg:w-10 lg:h-10" />
