@@ -455,21 +455,21 @@ export default function SuppliersPage() {
                           )}
                         >
                           <td className="px-6 py-4">
-                            <div className="flex items-center gap-3">
-                              <div className={cn(
-                                'w-10 h-10 rounded-xl flex items-center justify-center text-sm font-bold flex-shrink-0',
-                                supplier.isActive
-                                  ? theme === 'dark' ? 'bg-emerald-900/30 text-emerald-400' : 'bg-emerald-100 text-emerald-600'
-                                  : theme === 'dark' ? 'bg-gray-700 text-gray-400' : 'bg-gray-100 text-gray-500'
-                              )}>
-                                {supplier.code}
+                            <div className="min-w-0">
+                              <div className="flex items-center gap-2 mb-0.5">
+                                <span className={cn(
+                                  'px-2 py-0.5 rounded text-xs font-mono font-bold',
+                                  supplier.isActive
+                                    ? theme === 'dark' ? 'bg-emerald-900/30 text-emerald-400' : 'bg-emerald-100 text-emerald-600'
+                                    : theme === 'dark' ? 'bg-gray-700 text-gray-400' : 'bg-gray-100 text-gray-500'
+                                )}>
+                                  {supplier.code}
+                                </span>
                               </div>
-                              <div className="min-w-0">
-                                <p className="font-semibold text-gray-900 dark:text-white truncate">{supplier.name}</p>
-                                {supplier.legalName && (
-                                  <p className="text-xs text-gray-500 truncate">{supplier.legalName}</p>
-                                )}
-                              </div>
+                              <p className="font-semibold text-gray-900 dark:text-white">{supplier.name}</p>
+                              {supplier.legalName && (
+                                <p className="text-xs text-gray-500 truncate">{supplier.legalName}</p>
+                              )}
                             </div>
                           </td>
                           <td className="px-6 py-4">
