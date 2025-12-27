@@ -129,10 +129,12 @@ function printOperationReportBrowser(data: {
   companyName?: string
 }) {
   const OPERATION_TITLES: Record<string, string> = {
-    reception: 'RECEPCIÓN DE MERCANCÍA',
     transfer: 'TRANSFERENCIA INTERNA',
     scrap: 'REPORTE DE SCRAP / MERMA',
-    adjustment: 'AJUSTE DE INVENTARIO'
+    adjustment: 'AJUSTE DE INVENTARIO',
+    receive_transfer: 'RECEPCIÓN DE TRANSFERENCIA',
+    order_reception: 'RECEPCIÓN DE ORDEN',
+    return: 'DEVOLUCIÓN'
   }
 
   const SCRAP_REASONS: Record<string, string> = {
@@ -216,9 +218,11 @@ function printOperationReportBrowser(data: {
           <div class="title">${OPERATION_TITLES[data.operationType]}</div>
           <div class="op-number">${data.operationNumber}</div>
           <div class="badge ${
-            data.operationType === 'reception' ? 'badge-green' :
             data.operationType === 'transfer' ? 'badge-blue' :
-            data.operationType === 'scrap' ? 'badge-red' : 'badge-amber'
+            data.operationType === 'scrap' ? 'badge-red' :
+            data.operationType === 'return' ? 'badge-red' :
+            data.operationType === 'receive_transfer' ? 'badge-green' :
+            data.operationType === 'order_reception' ? 'badge-green' : 'badge-amber'
           }" style="margin-top: 8px;">COMPLETADO</div>
         </div>
       </div>
@@ -323,9 +327,9 @@ function printOperationReportBrowser(data: {
         <div class="signature-box">
           <div class="signature-line">
             <div class="signature-title">
-              ${data.operationType === 'reception' ? 'RECIBIDO POR' :
+              ${data.operationType === 'receive_transfer' || data.operationType === 'order_reception' ? 'RECIBIDO POR' :
                 data.operationType === 'transfer' ? 'ENTREGADO POR' :
-                data.operationType === 'scrap' ? 'AUTORIZADO POR' : 'REALIZADO POR'}
+                data.operationType === 'scrap' || data.operationType === 'return' ? 'AUTORIZADO POR' : 'REALIZADO POR'}
             </div>
             <div class="signature-subtitle">Nombre y Firma</div>
             <div class="signature-subtitle">Fecha: ___/___/______</div>
@@ -334,9 +338,9 @@ function printOperationReportBrowser(data: {
         <div class="signature-box">
           <div class="signature-line">
             <div class="signature-title">
-              ${data.operationType === 'reception' ? 'VERIFICADO POR' :
+              ${data.operationType === 'receive_transfer' || data.operationType === 'order_reception' ? 'VERIFICADO POR' :
                 data.operationType === 'transfer' ? 'RECIBIDO POR' :
-                data.operationType === 'scrap' ? 'EJECUTADO POR' : 'APROBADO POR'}
+                data.operationType === 'scrap' || data.operationType === 'return' ? 'EJECUTADO POR' : 'APROBADO POR'}
             </div>
             <div class="signature-subtitle">Nombre y Firma</div>
             <div class="signature-subtitle">Fecha: ___/___/______</div>
@@ -696,10 +700,12 @@ export default function WarehouseOperationsPage() {
 
   const getOperationColor = () => {
     switch (operation.operationType) {
-      case 'reception': return 'green'
       case 'transfer': return 'blue'
       case 'scrap': return 'red'
       case 'adjustment': return 'amber'
+      case 'return': return 'orange'
+      case 'receive_transfer': return 'purple'
+      case 'order_reception': return 'teal'
       default: return 'purple'
     }
   }
@@ -745,8 +751,7 @@ export default function WarehouseOperationsPage() {
               <div>
                 <h1 className="font-bold text-gray-900 dark:text-white">
                   {operation.operationType
-                    ? `${operation.operationType === 'reception' ? 'Recepcion' :
-                        operation.operationType === 'transfer' ? 'Transferencia' :
+                    ? `${operation.operationType === 'transfer' ? 'Transferencia' :
                         operation.operationType === 'scrap' ? 'Scrap' :
                         operation.operationType === 'adjustment' ? 'Ajuste' :
                         operation.operationType === 'receive_transfer' ? 'Recibir Transferencia' :
@@ -953,24 +958,6 @@ export default function WarehouseOperationsPage() {
             {/* Right Column: Configuration */}
             <div className="space-y-4">
               {/* Operation specific selectors */}
-              {operation.operationType === 'reception' && (
-                <ReferenceOrderSelector
-                  warehouseId={warehouseId}
-                  selectedReference={{
-                    type: operation.referenceType,
-                    id: operation.referenceId,
-                    orderNumber: operation.referenceOrderNumber
-                  }}
-                  onSelect={(ref) => setOperation(prev => ({
-                    ...prev,
-                    referenceType: ref.type,
-                    referenceId: ref.id,
-                    referenceOrderNumber: ref.orderNumber
-                  }))}
-                  disabled={submitting}
-                />
-              )}
-
               {operation.operationType === 'transfer' && (
                 <DestinationWarehouseSelector
                   currentWarehouseId={warehouseId}
@@ -1067,8 +1054,7 @@ export default function WarehouseOperationsPage() {
                   `}
                   style={{
                     background: canConfirm() && !submitting
-                      ? operation.operationType === 'reception' ? 'linear-gradient(to right, #22c55e, #10b981)' :
-                        operation.operationType === 'transfer' ? 'linear-gradient(to right, #3b82f6, #06b6d4)' :
+                      ? operation.operationType === 'transfer' ? 'linear-gradient(to right, #3b82f6, #06b6d4)' :
                         operation.operationType === 'scrap' ? 'linear-gradient(to right, #ef4444, #f43f5e)' :
                         'linear-gradient(to right, #f59e0b, #eab308)'
                       : undefined
