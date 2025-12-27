@@ -398,159 +398,165 @@ export default function SuppliersPage() {
               </div>
             </motion.div>
 
-            {/* Suppliers Grid */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {/* Suppliers Table */}
+            <motion.div
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.3 }}
+              className={cn(
+                'rounded-2xl border shadow-xl overflow-hidden',
+                theme === 'dark'
+                  ? 'bg-gradient-to-br from-gray-800 to-gray-900 border-gray-700'
+                  : 'bg-gradient-to-br from-white to-slate-50 border-slate-200'
+              )}
+            >
               {loading ? (
-                [...Array(6)].map((_, i) => (
-                  <div key={i} className={cn(
-                    'rounded-2xl border p-5 animate-pulse',
-                    theme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'
-                  )}>
-                    <div className="flex items-center gap-3 mb-4">
-                      <div className="w-12 h-12 rounded-xl bg-gray-200 dark:bg-gray-700" />
-                      <div className="flex-1">
-                        <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-3/4 mb-2" />
-                        <div className="h-3 bg-gray-200 dark:bg-gray-700 rounded w-1/2" />
-                      </div>
-                    </div>
-                  </div>
-                ))
+                <div className="p-8 text-center">
+                  <RefreshCw className="w-8 h-8 mx-auto mb-3 text-gray-400 animate-spin" />
+                  <p className="text-gray-500">Cargando proveedores...</p>
+                </div>
               ) : suppliers.length === 0 ? (
-                <div className="col-span-full">
-                  <div className={cn(
-                    'rounded-2xl border p-12 text-center',
-                    theme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'
-                  )}>
-                    <Users className="w-12 h-12 mx-auto mb-3 text-gray-400" />
-                    <p className="text-gray-500">No hay proveedores registrados</p>
-                    <button
-                      onClick={() => router.push('/dashboard/market/consignments/suppliers/create')}
-                      className="mt-3 text-sm text-emerald-500 hover:text-emerald-600"
-                    >
-                      Crear primer proveedor
-                    </button>
-                  </div>
+                <div className="p-12 text-center">
+                  <Users className="w-12 h-12 mx-auto mb-3 text-gray-400" />
+                  <p className="text-gray-500">No hay proveedores registrados</p>
+                  <button
+                    onClick={() => router.push('/dashboard/market/consignments/suppliers/create')}
+                    className="mt-3 text-sm text-emerald-500 hover:text-emerald-600"
+                  >
+                    Crear primer proveedor
+                  </button>
                 </div>
               ) : (
-                suppliers.map((supplier, index) => (
-                  <motion.div
-                    key={supplier.id}
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: index * 0.05 }}
-                    className={cn(
-                      'rounded-2xl border p-5 shadow-lg transition-all hover:shadow-xl',
-                      theme === 'dark'
-                        ? 'bg-gradient-to-br from-gray-800 to-gray-900 border-gray-700'
-                        : 'bg-gradient-to-br from-white to-slate-50 border-slate-200'
-                    )}
-                  >
-                    <div className="flex items-start justify-between mb-4">
-                      <div className="flex items-center gap-3">
-                        <div className={cn(
-                          'w-12 h-12 rounded-xl flex items-center justify-center text-lg font-bold',
-                          supplier.isActive
-                            ? theme === 'dark' ? 'bg-blue-900/30 text-blue-400' : 'bg-blue-100 text-blue-600'
-                            : theme === 'dark' ? 'bg-gray-700 text-gray-400' : 'bg-gray-100 text-gray-500'
-                        )}>
-                          {supplier.code}
-                        </div>
-                        <div>
-                          <h3 className="font-semibold text-gray-900 dark:text-white">{supplier.name}</h3>
-                          {supplier.contactName && (
-                            <p className="text-sm text-gray-500">{supplier.contactName}</p>
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead>
+                      <tr className={cn(
+                        'text-left text-xs font-semibold uppercase tracking-wider',
+                        theme === 'dark' ? 'bg-gray-800/50 text-gray-400' : 'bg-gray-50 text-gray-500'
+                      )}>
+                        <th className="px-6 py-4">Proveedor</th>
+                        <th className="px-6 py-4">Contacto</th>
+                        <th className="px-6 py-4 text-center">Ordenes</th>
+                        <th className="px-6 py-4 text-right">Saldo Disp.</th>
+                        <th className="px-6 py-4 text-center">Estado</th>
+                        <th className="px-6 py-4 text-center">Acciones</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
+                      {suppliers.map((supplier, index) => (
+                        <motion.tr
+                          key={supplier.id}
+                          initial={{ opacity: 0, y: 10 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          transition={{ delay: index * 0.03 }}
+                          className={cn(
+                            'transition-colors',
+                            theme === 'dark' ? 'hover:bg-gray-800/50' : 'hover:bg-gray-50'
                           )}
-                        </div>
-                      </div>
-                      <span className={cn(
-                        'inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium',
-                        supplier.isActive
-                          ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400'
-                          : 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400'
-                      )}>
-                        {supplier.isActive ? <CheckCircle className="w-3 h-3" /> : <XCircle className="w-3 h-3" />}
-                        {supplier.isActive ? 'Activo' : 'Inactivo'}
-                      </span>
-                    </div>
-
-                    {/* Contact Info */}
-                    <div className="space-y-2 mb-4">
-                      {supplier.email && (
-                        <div className="flex items-center gap-2 text-sm text-gray-500">
-                          <Mail className="w-4 h-4" />
-                          {supplier.email}
-                        </div>
-                      )}
-                      {supplier.phone && (
-                        <div className="flex items-center gap-2 text-sm text-gray-500">
-                          <Phone className="w-4 h-4" />
-                          {supplier.phone}
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Stats */}
-                    <div className={cn(
-                      'grid grid-cols-2 gap-3 p-3 rounded-xl mb-4',
-                      theme === 'dark' ? 'bg-gray-800/50' : 'bg-gray-50'
-                    )}>
-                      <div>
-                        <p className="text-xs text-gray-500 mb-1">Ordenes</p>
-                        <p className="text-lg font-bold text-gray-900 dark:text-white">{supplier.stats.totalOrders}</p>
-                      </div>
-                      <div>
-                        <p className="text-xs text-gray-500 mb-1">Saldo Disp.</p>
-                        <p className="text-lg font-bold text-emerald-600">{formatCurrency(supplier.stats.balanceAvailable)}</p>
-                      </div>
-                    </div>
-
-                    {/* Linked User */}
-                    {supplier.linkedUser && (
-                      <div className={cn(
-                        'flex items-center gap-2 px-3 py-2 rounded-lg mb-4',
-                        theme === 'dark' ? 'bg-blue-900/20' : 'bg-blue-50'
-                      )}>
-                        <User className="w-4 h-4 text-blue-500" />
-                        <div className="flex-1 min-w-0">
-                          <span className="text-sm font-medium text-blue-600 dark:text-blue-400 block truncate">
-                            {supplier.linkedUser.name}
-                          </span>
-                          <span className="text-xs text-blue-500/70 block truncate">
-                            {supplier.linkedUser.email}
-                          </span>
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Actions */}
-                    <div className="flex items-center gap-2">
-                      <motion.button
-                        whileHover={{ scale: 1.05 }}
-                        whileTap={{ scale: 0.95 }}
-                        onClick={() => openEditModal(supplier)}
-                        className={cn(
-                          'flex-1 flex items-center justify-center gap-2 py-2 rounded-lg transition-colors',
-                          theme === 'dark'
-                            ? 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-                            : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                        )}
-                      >
-                        <Edit className="w-4 h-4" />
-                        Editar
-                      </motion.button>
-                      <motion.button
-                        whileHover={{ scale: 1.05 }}
-                        whileTap={{ scale: 0.95 }}
-                        onClick={() => openDeleteModal(supplier)}
-                        className="p-2 rounded-lg bg-red-50 text-red-500 hover:bg-red-100 dark:bg-red-900/20 dark:hover:bg-red-900/30 transition-colors"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </motion.button>
-                    </div>
-                  </motion.div>
-                ))
+                        >
+                          <td className="px-6 py-4">
+                            <div className="flex items-center gap-3">
+                              <div className={cn(
+                                'w-10 h-10 rounded-xl flex items-center justify-center text-sm font-bold flex-shrink-0',
+                                supplier.isActive
+                                  ? theme === 'dark' ? 'bg-emerald-900/30 text-emerald-400' : 'bg-emerald-100 text-emerald-600'
+                                  : theme === 'dark' ? 'bg-gray-700 text-gray-400' : 'bg-gray-100 text-gray-500'
+                              )}>
+                                {supplier.code}
+                              </div>
+                              <div className="min-w-0">
+                                <p className="font-semibold text-gray-900 dark:text-white truncate">{supplier.name}</p>
+                                {supplier.legalName && (
+                                  <p className="text-xs text-gray-500 truncate">{supplier.legalName}</p>
+                                )}
+                              </div>
+                            </div>
+                          </td>
+                          <td className="px-6 py-4">
+                            <div className="space-y-1">
+                              {supplier.email && (
+                                <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-300">
+                                  <Mail className="w-3.5 h-3.5 text-gray-400" />
+                                  <span className="truncate max-w-[180px]">{supplier.email}</span>
+                                </div>
+                              )}
+                              {supplier.phone && (
+                                <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-300">
+                                  <Phone className="w-3.5 h-3.5 text-gray-400" />
+                                  {supplier.phone}
+                                </div>
+                              )}
+                              {!supplier.email && !supplier.phone && (
+                                <span className="text-xs text-gray-400">Sin contacto</span>
+                              )}
+                            </div>
+                          </td>
+                          <td className="px-6 py-4 text-center">
+                            <span className={cn(
+                              'inline-flex items-center justify-center w-10 h-10 rounded-xl text-lg font-bold',
+                              supplier.stats.totalOrders > 0
+                                ? theme === 'dark' ? 'bg-blue-900/30 text-blue-400' : 'bg-blue-100 text-blue-600'
+                                : theme === 'dark' ? 'bg-gray-700 text-gray-400' : 'bg-gray-100 text-gray-500'
+                            )}>
+                              {supplier.stats.totalOrders}
+                            </span>
+                          </td>
+                          <td className="px-6 py-4 text-right">
+                            <span className={cn(
+                              'font-bold text-lg',
+                              supplier.stats.balanceAvailable > 0 ? 'text-emerald-600' : 'text-gray-500'
+                            )}>
+                              {formatCurrency(supplier.stats.balanceAvailable)}
+                            </span>
+                          </td>
+                          <td className="px-6 py-4 text-center">
+                            <span className={cn(
+                              'inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium',
+                              supplier.isActive
+                                ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400'
+                                : 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400'
+                            )}>
+                              {supplier.isActive ? <CheckCircle className="w-3.5 h-3.5" /> : <XCircle className="w-3.5 h-3.5" />}
+                              {supplier.isActive ? 'Activo' : 'Inactivo'}
+                            </span>
+                          </td>
+                          <td className="px-6 py-4">
+                            <div className="flex items-center justify-center gap-2">
+                              <motion.button
+                                whileHover={{ scale: 1.1 }}
+                                whileTap={{ scale: 0.9 }}
+                                onClick={() => openEditModal(supplier)}
+                                className={cn(
+                                  'p-2 rounded-lg transition-colors',
+                                  theme === 'dark'
+                                    ? 'hover:bg-gray-700 text-gray-400 hover:text-blue-400'
+                                    : 'hover:bg-gray-100 text-gray-500 hover:text-blue-600'
+                                )}
+                              >
+                                <Edit className="w-4 h-4" />
+                              </motion.button>
+                              <motion.button
+                                whileHover={{ scale: 1.1 }}
+                                whileTap={{ scale: 0.9 }}
+                                onClick={() => openDeleteModal(supplier)}
+                                className={cn(
+                                  'p-2 rounded-lg transition-colors',
+                                  theme === 'dark'
+                                    ? 'hover:bg-red-900/30 text-gray-400 hover:text-red-400'
+                                    : 'hover:bg-red-50 text-gray-500 hover:text-red-500'
+                                )}
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </motion.button>
+                            </div>
+                          </td>
+                        </motion.tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               )}
-            </div>
+            </motion.div>
 
             {/* Pagination */}
             {pagination.totalPages > 1 && (
