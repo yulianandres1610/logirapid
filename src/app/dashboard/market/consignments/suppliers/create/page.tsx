@@ -13,19 +13,16 @@ import {
   Trash2,
   Loader2,
   X,
-  CheckCircle,
   User,
   Mail,
   Phone,
   MapPin,
-  FileText,
   Eye,
   EyeOff,
   Landmark,
   AlertTriangle
 } from 'lucide-react'
 import { useRouter } from 'next/navigation'
-import Link from 'next/link'
 import { DashboardLayout } from '@/components/layout/dashboard-layout'
 import { ProtectedRoute } from '@/components/protected-route'
 import { useTheme } from '@/contexts/theme-context'
@@ -41,7 +38,7 @@ interface WizardStep {
 }
 
 const STEPS: WizardStep[] = [
-  { id: 'company', title: 'Empresa', description: 'Informacion basica', icon: Building2 },
+  { id: 'company', title: 'Empresa', description: 'Datos basicos', icon: Building2 },
   { id: 'banking', title: 'Bancos', description: 'Cuentas bancarias', icon: CreditCard },
   { id: 'credentials', title: 'Acceso', description: 'Usuario y clave', icon: KeyRound },
   { id: 'review', title: 'Confirmar', description: 'Revisar y crear', icon: Check }
@@ -56,7 +53,6 @@ interface BankAccount {
 }
 
 interface SupplierFormData {
-  // Step 1: Company Info
   code: string
   name: string
   legalName: string
@@ -65,9 +61,7 @@ interface SupplierFormData {
   email: string
   phone: string
   address: string
-  // Step 2: Bank Accounts
   bankAccounts: BankAccount[]
-  // Step 3: Credentials
   username: string
   password: string
   confirmPassword: string
@@ -98,8 +92,8 @@ export default function CreateSupplierWizardPage() {
   const [showPassword, setShowPassword] = useState(false)
   const [showConfirmPassword, setShowConfirmPassword] = useState(false)
   const [createdSupplier, setCreatedSupplier] = useState<{ id: number; code: string } | null>(null)
+  const [showCancelModal, setShowCancelModal] = useState(false)
 
-  // New bank account form
   const [newBank, setNewBank] = useState({
     bankName: '',
     accountNumber: '',
@@ -134,7 +128,6 @@ export default function CreateSupplierWizardPage() {
         break
 
       case 'banking':
-        // Bank accounts are optional
         break
 
       case 'credentials':
@@ -160,17 +153,16 @@ export default function CreateSupplierWizardPage() {
 
   const goToNextStep = () => {
     if (!validateStep(currentStep)) return
-
-    const stepIndex = STEPS.findIndex(s => s.id === currentStep)
-    if (stepIndex < STEPS.length - 1) {
-      setCurrentStep(STEPS[stepIndex + 1].id)
+    const nextIndex = currentStepIndex + 1
+    if (nextIndex < STEPS.length) {
+      setCurrentStep(STEPS[nextIndex].id)
     }
   }
 
   const goToPreviousStep = () => {
-    const stepIndex = STEPS.findIndex(s => s.id === currentStep)
-    if (stepIndex > 0) {
-      setCurrentStep(STEPS[stepIndex - 1].id)
+    const prevIndex = currentStepIndex - 1
+    if (prevIndex >= 0) {
+      setCurrentStep(STEPS[prevIndex].id)
     }
   }
 
@@ -240,90 +232,158 @@ export default function CreateSupplierWizardPage() {
   return (
     <ProtectedRoute>
       <DashboardLayout>
-        <div className="min-h-screen p-6">
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="max-w-3xl mx-auto"
-          >
-            {/* Header */}
-            <div className="flex items-center gap-4 mb-6">
-              <Link href="/dashboard/market/consignments/suppliers">
-                <motion.button
-                  whileHover={{ scale: 1.05 }}
-                  whileTap={{ scale: 0.95 }}
-                  className={cn(
-                    'p-2 rounded-lg transition-colors',
-                    theme === 'dark' ? 'hover:bg-gray-800' : 'hover:bg-gray-100'
-                  )}
-                >
-                  <ArrowLeft className="w-5 h-5" />
-                </motion.button>
-              </Link>
-              <div>
-                <h1 className={cn(
-                  'text-2xl font-bold',
-                  theme === 'dark' ? 'text-white' : 'text-gray-900'
-                )}>Nuevo Proveedor</h1>
-                <p className="text-sm text-gray-500">Registra un nuevo proveedor de consignacion</p>
-              </div>
-            </div>
+        <div className={cn(
+          "min-h-screen pt-12 sm:pt-16 lg:pt-20 pb-20 px-4 sm:px-6 lg:px-8",
+          theme === 'dark' ? 'bg-gray-900' : 'bg-gray-50'
+        )}>
+          <div className="max-w-4xl xl:max-w-5xl mx-auto space-y-6 sm:space-y-8 relative">
 
-            {/* Step Indicator */}
-            <div className={cn(
-              'p-4 rounded-2xl mb-6 border',
-              theme === 'dark' ? 'bg-gray-800/50 border-gray-700' : 'bg-white border-gray-200'
-            )}>
+            {/* Close Button */}
+            <motion.button
+              onClick={() => setShowCancelModal(true)}
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+              className={cn(
+                "absolute -top-14 -right-2 sm:-top-12 sm:right-0 z-10 w-8 h-8 rounded-full flex items-center justify-center",
+                "transition-colors duration-200",
+                theme === 'dark'
+                  ? 'text-gray-400 hover:text-gray-200 hover:bg-gray-800'
+                  : 'text-gray-500 hover:text-gray-700 hover:bg-gray-200'
+              )}
+            >
+              <X className="w-4 h-4" />
+            </motion.button>
+
+            {/* Progress Indicator */}
+            <div className="mb-8 sm:mb-12">
               <div className="flex items-center justify-between">
-                {STEPS.map((step, index) => {
-                  const isActive = step.id === currentStep
-                  const isComplete = index < currentStepIndex || createdSupplier !== null
-                  const StepIcon = step.icon
+                {STEPS.map((step, index) => (
+                  <React.Fragment key={step.id}>
+                    <div className="flex flex-col items-center">
+                      <div className="relative w-14 h-14">
+                        {currentStep === step.id && (
+                          <motion.div
+                            className="absolute inset-0 rounded-full"
+                            animate={{
+                              scale: [1, 1.2, 1],
+                              opacity: [0.5, 0, 0.5]
+                            }}
+                            transition={{
+                              duration: 2,
+                              repeat: Infinity,
+                              ease: "easeInOut"
+                            }}
+                            style={{
+                              background: theme === 'dark'
+                                ? 'rgba(16, 185, 129, 0.5)'
+                                : 'rgba(5, 150, 105, 0.5)'
+                            }}
+                          />
+                        )}
 
-                  return (
-                    <div key={step.id} className="flex items-center flex-1">
-                      <div className="flex items-center gap-3">
-                        <div className={cn(
-                          'w-10 h-10 rounded-full flex items-center justify-center transition-all',
-                          isComplete
-                            ? 'bg-emerald-500 text-white'
-                            : isActive
-                              ? theme === 'dark' ? 'bg-blue-600 text-white' : 'bg-blue-500 text-white'
-                              : theme === 'dark' ? 'bg-gray-700 text-gray-400' : 'bg-gray-100 text-gray-400'
-                        )}>
-                          {isComplete ? (
-                            <Check className="w-5 h-5" />
-                          ) : (
-                            <StepIcon className="w-5 h-5" />
+                        <motion.div
+                          initial={false}
+                          animate={{
+                            scale: currentStep === step.id ? 1.1 : 1,
+                            backgroundColor: currentStep === step.id
+                              ? theme === 'dark' ? '#10B981' : '#059669'
+                              : currentStepIndex > index || createdSupplier
+                                ? theme === 'dark' ? '#10B981' : '#059669'
+                                : theme === 'dark' ? '#374151' : '#E5E7EB'
+                          }}
+                          transition={{
+                            scale: { duration: 0.3 },
+                            backgroundColor: { duration: 0.3 }
+                          }}
+                          whileHover={{ scale: currentStepIndex >= index ? 1.15 : 1.05 }}
+                          className={cn(
+                            "w-14 h-14 rounded-full flex items-center justify-center relative z-10",
+                            "transition-shadow duration-300",
+                            currentStep === step.id && (
+                              theme === 'dark'
+                                ? 'shadow-lg shadow-emerald-500/50'
+                                : 'shadow-lg shadow-emerald-400/50'
+                            ),
+                            (currentStepIndex > index || createdSupplier) && (
+                              theme === 'dark'
+                                ? 'shadow-md shadow-emerald-500/30'
+                                : 'shadow-md shadow-emerald-400/30'
+                            )
                           )}
-                        </div>
-                        <div className="hidden sm:block">
-                          <p className={cn(
-                            'text-sm font-medium',
-                            isActive ? 'text-gray-900 dark:text-white' : 'text-gray-500'
-                          )}>{step.title}</p>
-                          <p className="text-xs text-gray-400">{step.description}</p>
-                        </div>
+                        >
+                          {currentStepIndex > index || createdSupplier ? (
+                            <motion.div
+                              initial={{ scale: 0 }}
+                              animate={{ scale: 1 }}
+                              transition={{ type: "spring", stiffness: 200, damping: 15 }}
+                            >
+                              <Check className="w-7 h-7 text-white" />
+                            </motion.div>
+                          ) : (
+                            <step.icon className={cn(
+                              "w-7 h-7",
+                              currentStep === step.id ? 'text-white' : theme === 'dark' ? 'text-gray-500' : 'text-gray-400'
+                            )} />
+                          )}
+                        </motion.div>
                       </div>
-                      {index < STEPS.length - 1 && (
-                        <div className={cn(
-                          'flex-1 h-0.5 mx-4',
-                          isComplete
-                            ? 'bg-emerald-500'
-                            : theme === 'dark' ? 'bg-gray-700' : 'bg-gray-200'
-                        )} />
-                      )}
+
+                      <div className="mt-3 text-center">
+                        <p className={cn(
+                          "text-xs sm:text-sm font-semibold",
+                          currentStep === step.id
+                            ? theme === 'dark' ? 'text-emerald-400' : 'text-emerald-600'
+                            : currentStepIndex > index || createdSupplier
+                              ? theme === 'dark' ? 'text-emerald-400' : 'text-emerald-600'
+                              : theme === 'dark' ? 'text-gray-500' : 'text-gray-400'
+                        )}>
+                          {step.title}
+                        </p>
+                        <p className={cn(
+                          "text-xs hidden sm:block mt-0.5",
+                          theme === 'dark' ? 'text-gray-600' : 'text-gray-500'
+                        )}>
+                          {step.description}
+                        </p>
+                      </div>
                     </div>
-                  )
-                })}
+
+                    {index < STEPS.length - 1 && (
+                      <div className="flex-1 h-0.5 mx-2 sm:mx-3 mb-8 sm:mb-10 relative">
+                        <div className={cn(
+                          "absolute inset-0 rounded-full",
+                          theme === 'dark' ? 'bg-gray-700' : 'bg-gray-200'
+                        )} />
+                        <motion.div
+                          initial={false}
+                          animate={{
+                            scaleX: currentStepIndex > index || createdSupplier ? 1 : 0
+                          }}
+                          transition={{ duration: 0.5, ease: "easeInOut" }}
+                          className={cn(
+                            "h-full origin-left rounded-full",
+                            theme === 'dark' ? 'bg-emerald-500' : 'bg-emerald-600'
+                          )}
+                        />
+                      </div>
+                    )}
+                  </React.Fragment>
+                ))}
               </div>
             </div>
 
             {/* Step Content */}
-            <div className={cn(
-              'rounded-2xl border p-6',
-              theme === 'dark' ? 'bg-gray-800/50 border-gray-700' : 'bg-white border-gray-200'
-            )}>
+            <motion.div
+              className={cn(
+                "rounded-2xl border p-6 sm:p-8 shadow-lg",
+                theme === 'dark'
+                  ? 'bg-gray-800/95 border-gray-700/50 backdrop-blur-sm'
+                  : 'bg-white border-gray-200 backdrop-blur-sm'
+              )}
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.5 }}
+            >
               <AnimatePresence mode="wait">
                 {/* Step 1: Company Info */}
                 {currentStep === 'company' && !createdSupplier && (
@@ -332,21 +392,25 @@ export default function CreateSupplierWizardPage() {
                     initial={{ opacity: 0, x: 20 }}
                     animate={{ opacity: 1, x: 0 }}
                     exit={{ opacity: 0, x: -20 }}
+                    transition={{ duration: 0.3 }}
                     className="space-y-6"
                   >
-                    <div>
-                      <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-1">
-                        Informacion de la Empresa
-                      </h2>
-                      <p className="text-sm text-gray-500">
-                        Datos basicos del proveedor
-                      </p>
-                    </div>
+                    <h2 className={cn(
+                      "text-xl font-bold flex items-center gap-3",
+                      theme === 'dark' ? 'text-white' : 'text-gray-900'
+                    )}>
+                      <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-500 to-emerald-600 flex items-center justify-center">
+                        <Building2 className="w-5 h-5 text-white" />
+                      </div>
+                      Informacion de la Empresa
+                    </h2>
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      {/* Code */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                       <div>
-                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                        <label className={cn(
+                          "block text-sm font-medium mb-2",
+                          theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
+                        )}>
                           Codigo *
                         </label>
                         <input
@@ -356,19 +420,22 @@ export default function CreateSupplierWizardPage() {
                           maxLength={10}
                           placeholder="ABC"
                           className={cn(
-                            'w-full px-4 py-2.5 rounded-xl border focus:outline-none focus:ring-2 transition-all',
-                            theme === 'dark'
-                              ? 'bg-gray-800 border-gray-700 text-white focus:border-blue-500'
-                              : 'bg-gray-50 border-gray-200 focus:border-blue-500',
-                            errors.code && 'border-red-500'
+                            'w-full px-4 py-3 rounded-xl border focus:outline-none focus:ring-2 transition-all font-mono',
+                            errors.code
+                              ? 'border-red-500 bg-red-50 dark:bg-red-900/20'
+                              : theme === 'dark'
+                                ? 'bg-gray-900/50 border-gray-600 text-white focus:border-emerald-500 focus:ring-emerald-500/20'
+                                : 'bg-gray-50 border-gray-200 text-gray-900 focus:border-emerald-500 focus:ring-emerald-500/20'
                           )}
                         />
-                        {errors.code && <p className="text-xs text-red-500 mt-1">{errors.code}</p>}
+                        {errors.code && <p className="text-red-500 text-xs mt-1">{errors.code}</p>}
                       </div>
 
-                      {/* Name */}
                       <div>
-                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                        <label className={cn(
+                          "block text-sm font-medium mb-2",
+                          theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
+                        )}>
                           Nombre *
                         </label>
                         <input
@@ -377,19 +444,22 @@ export default function CreateSupplierWizardPage() {
                           onChange={(e) => updateFormData('name', e.target.value)}
                           placeholder="Nombre del proveedor"
                           className={cn(
-                            'w-full px-4 py-2.5 rounded-xl border focus:outline-none focus:ring-2 transition-all',
-                            theme === 'dark'
-                              ? 'bg-gray-800 border-gray-700 text-white focus:border-blue-500'
-                              : 'bg-gray-50 border-gray-200 focus:border-blue-500',
-                            errors.name && 'border-red-500'
+                            'w-full px-4 py-3 rounded-xl border focus:outline-none focus:ring-2 transition-all',
+                            errors.name
+                              ? 'border-red-500 bg-red-50 dark:bg-red-900/20'
+                              : theme === 'dark'
+                                ? 'bg-gray-900/50 border-gray-600 text-white focus:border-emerald-500 focus:ring-emerald-500/20'
+                                : 'bg-gray-50 border-gray-200 text-gray-900 focus:border-emerald-500 focus:ring-emerald-500/20'
                           )}
                         />
-                        {errors.name && <p className="text-xs text-red-500 mt-1">{errors.name}</p>}
+                        {errors.name && <p className="text-red-500 text-xs mt-1">{errors.name}</p>}
                       </div>
 
-                      {/* Legal Name */}
                       <div>
-                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                        <label className={cn(
+                          "block text-sm font-medium mb-2",
+                          theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
+                        )}>
                           Razon Social
                         </label>
                         <input
@@ -398,17 +468,19 @@ export default function CreateSupplierWizardPage() {
                           onChange={(e) => updateFormData('legalName', e.target.value)}
                           placeholder="Razon social"
                           className={cn(
-                            'w-full px-4 py-2.5 rounded-xl border focus:outline-none focus:ring-2 transition-all',
+                            'w-full px-4 py-3 rounded-xl border focus:outline-none focus:ring-2 transition-all',
                             theme === 'dark'
-                              ? 'bg-gray-800 border-gray-700 text-white focus:border-blue-500'
-                              : 'bg-gray-50 border-gray-200 focus:border-blue-500'
+                              ? 'bg-gray-900/50 border-gray-600 text-white focus:border-emerald-500 focus:ring-emerald-500/20'
+                              : 'bg-gray-50 border-gray-200 text-gray-900 focus:border-emerald-500 focus:ring-emerald-500/20'
                           )}
                         />
                       </div>
 
-                      {/* Tax ID */}
                       <div>
-                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                        <label className={cn(
+                          "block text-sm font-medium mb-2",
+                          theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
+                        )}>
                           RIF / NIT
                         </label>
                         <input
@@ -417,102 +489,103 @@ export default function CreateSupplierWizardPage() {
                           onChange={(e) => updateFormData('taxId', e.target.value)}
                           placeholder="J-12345678-9"
                           className={cn(
-                            'w-full px-4 py-2.5 rounded-xl border focus:outline-none focus:ring-2 transition-all',
+                            'w-full px-4 py-3 rounded-xl border focus:outline-none focus:ring-2 transition-all',
                             theme === 'dark'
-                              ? 'bg-gray-800 border-gray-700 text-white focus:border-blue-500'
-                              : 'bg-gray-50 border-gray-200 focus:border-blue-500'
+                              ? 'bg-gray-900/50 border-gray-600 text-white focus:border-emerald-500 focus:ring-emerald-500/20'
+                              : 'bg-gray-50 border-gray-200 text-gray-900 focus:border-emerald-500 focus:ring-emerald-500/20'
                           )}
                         />
                       </div>
 
-                      {/* Contact Name */}
                       <div>
-                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                        <label className={cn(
+                          "block text-sm font-medium mb-2 flex items-center gap-2",
+                          theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
+                        )}>
+                          <User className="w-4 h-4" />
                           Persona de Contacto
                         </label>
-                        <div className="relative">
-                          <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                          <input
-                            type="text"
-                            value={formData.contactName}
-                            onChange={(e) => updateFormData('contactName', e.target.value)}
-                            placeholder="Nombre del contacto"
-                            className={cn(
-                              'w-full pl-10 pr-4 py-2.5 rounded-xl border focus:outline-none focus:ring-2 transition-all',
-                              theme === 'dark'
-                                ? 'bg-gray-800 border-gray-700 text-white focus:border-blue-500'
-                                : 'bg-gray-50 border-gray-200 focus:border-blue-500'
-                            )}
-                          />
-                        </div>
+                        <input
+                          type="text"
+                          value={formData.contactName}
+                          onChange={(e) => updateFormData('contactName', e.target.value)}
+                          placeholder="Nombre del contacto"
+                          className={cn(
+                            'w-full px-4 py-3 rounded-xl border focus:outline-none focus:ring-2 transition-all',
+                            theme === 'dark'
+                              ? 'bg-gray-900/50 border-gray-600 text-white focus:border-emerald-500 focus:ring-emerald-500/20'
+                              : 'bg-gray-50 border-gray-200 text-gray-900 focus:border-emerald-500 focus:ring-emerald-500/20'
+                          )}
+                        />
                       </div>
 
-                      {/* Email */}
                       <div>
-                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                        <label className={cn(
+                          "block text-sm font-medium mb-2 flex items-center gap-2",
+                          theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
+                        )}>
+                          <Mail className="w-4 h-4" />
                           Email
                         </label>
-                        <div className="relative">
-                          <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                          <input
-                            type="email"
-                            value={formData.email}
-                            onChange={(e) => updateFormData('email', e.target.value)}
-                            placeholder="email@ejemplo.com"
-                            className={cn(
-                              'w-full pl-10 pr-4 py-2.5 rounded-xl border focus:outline-none focus:ring-2 transition-all',
-                              theme === 'dark'
-                                ? 'bg-gray-800 border-gray-700 text-white focus:border-blue-500'
-                                : 'bg-gray-50 border-gray-200 focus:border-blue-500',
-                              errors.email && 'border-red-500'
-                            )}
-                          />
-                        </div>
-                        {errors.email && <p className="text-xs text-red-500 mt-1">{errors.email}</p>}
+                        <input
+                          type="email"
+                          value={formData.email}
+                          onChange={(e) => updateFormData('email', e.target.value)}
+                          placeholder="email@ejemplo.com"
+                          className={cn(
+                            'w-full px-4 py-3 rounded-xl border focus:outline-none focus:ring-2 transition-all',
+                            errors.email
+                              ? 'border-red-500 bg-red-50 dark:bg-red-900/20'
+                              : theme === 'dark'
+                                ? 'bg-gray-900/50 border-gray-600 text-white focus:border-emerald-500 focus:ring-emerald-500/20'
+                                : 'bg-gray-50 border-gray-200 text-gray-900 focus:border-emerald-500 focus:ring-emerald-500/20'
+                          )}
+                        />
+                        {errors.email && <p className="text-red-500 text-xs mt-1">{errors.email}</p>}
                       </div>
 
-                      {/* Phone */}
                       <div>
-                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                        <label className={cn(
+                          "block text-sm font-medium mb-2 flex items-center gap-2",
+                          theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
+                        )}>
+                          <Phone className="w-4 h-4" />
                           Telefono
                         </label>
-                        <div className="relative">
-                          <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                          <input
-                            type="text"
-                            value={formData.phone}
-                            onChange={(e) => updateFormData('phone', e.target.value)}
-                            placeholder="+1 234 567 8900"
-                            className={cn(
-                              'w-full pl-10 pr-4 py-2.5 rounded-xl border focus:outline-none focus:ring-2 transition-all',
-                              theme === 'dark'
-                                ? 'bg-gray-800 border-gray-700 text-white focus:border-blue-500'
-                                : 'bg-gray-50 border-gray-200 focus:border-blue-500'
-                            )}
-                          />
-                        </div>
+                        <input
+                          type="text"
+                          value={formData.phone}
+                          onChange={(e) => updateFormData('phone', e.target.value)}
+                          placeholder="+1 234 567 8900"
+                          className={cn(
+                            'w-full px-4 py-3 rounded-xl border focus:outline-none focus:ring-2 transition-all',
+                            theme === 'dark'
+                              ? 'bg-gray-900/50 border-gray-600 text-white focus:border-emerald-500 focus:ring-emerald-500/20'
+                              : 'bg-gray-50 border-gray-200 text-gray-900 focus:border-emerald-500 focus:ring-emerald-500/20'
+                          )}
+                        />
                       </div>
 
-                      {/* Address */}
                       <div className="md:col-span-2">
-                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                        <label className={cn(
+                          "block text-sm font-medium mb-2 flex items-center gap-2",
+                          theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
+                        )}>
+                          <MapPin className="w-4 h-4" />
                           Direccion
                         </label>
-                        <div className="relative">
-                          <MapPin className="absolute left-3 top-3 w-4 h-4 text-gray-400" />
-                          <textarea
-                            value={formData.address}
-                            onChange={(e) => updateFormData('address', e.target.value)}
-                            rows={2}
-                            placeholder="Direccion completa"
-                            className={cn(
-                              'w-full pl-10 pr-4 py-2.5 rounded-xl border focus:outline-none focus:ring-2 transition-all resize-none',
-                              theme === 'dark'
-                                ? 'bg-gray-800 border-gray-700 text-white focus:border-blue-500'
-                                : 'bg-gray-50 border-gray-200 focus:border-blue-500'
-                            )}
-                          />
-                        </div>
+                        <textarea
+                          value={formData.address}
+                          onChange={(e) => updateFormData('address', e.target.value)}
+                          rows={2}
+                          placeholder="Direccion completa"
+                          className={cn(
+                            'w-full px-4 py-3 rounded-xl border focus:outline-none focus:ring-2 transition-all resize-none',
+                            theme === 'dark'
+                              ? 'bg-gray-900/50 border-gray-600 text-white focus:border-emerald-500 focus:ring-emerald-500/20'
+                              : 'bg-gray-50 border-gray-200 text-gray-900 focus:border-emerald-500 focus:ring-emerald-500/20'
+                          )}
+                        />
                       </div>
                     </div>
                   </motion.div>
@@ -525,26 +598,37 @@ export default function CreateSupplierWizardPage() {
                     initial={{ opacity: 0, x: 20 }}
                     animate={{ opacity: 1, x: 0 }}
                     exit={{ opacity: 0, x: -20 }}
+                    transition={{ duration: 0.3 }}
                     className="space-y-6"
                   >
-                    <div>
-                      <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-1">
-                        Cuentas Bancarias
-                      </h2>
-                      <p className="text-sm text-gray-500">
-                        Agrega las cuentas bancarias del proveedor para pagos (opcional)
-                      </p>
-                    </div>
+                    <h2 className={cn(
+                      "text-xl font-bold flex items-center gap-3",
+                      theme === 'dark' ? 'text-white' : 'text-gray-900'
+                    )}>
+                      <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center">
+                        <CreditCard className="w-5 h-5 text-white" />
+                      </div>
+                      Cuentas Bancarias
+                    </h2>
+
+                    <p className={cn(
+                      "text-sm",
+                      theme === 'dark' ? 'text-gray-400' : 'text-gray-600'
+                    )}>
+                      Agrega las cuentas bancarias del proveedor para pagos. Este paso es opcional.
+                    </p>
 
                     {/* Add Bank Account Form */}
                     <div className={cn(
-                      'p-4 rounded-xl border',
-                      theme === 'dark' ? 'bg-gray-700/50 border-gray-600' : 'bg-gray-50 border-gray-200'
+                      "p-4 rounded-xl border",
+                      theme === 'dark' ? 'bg-gray-900/50 border-gray-700' : 'bg-gray-50 border-gray-200'
                     )}>
-                      <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3 flex items-center gap-2">
-                        <Plus className="w-4 h-4" />
-                        Agregar Cuenta
-                      </h3>
+                      <label className={cn(
+                        "block text-sm font-medium mb-3",
+                        theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
+                      )}>
+                        Agregar cuenta bancaria
+                      </label>
 
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                         <div>
@@ -557,10 +641,10 @@ export default function CreateSupplierWizardPage() {
                               onChange={(e) => setNewBank(p => ({ ...p, bankName: e.target.value }))}
                               placeholder="Bank of America"
                               className={cn(
-                                'w-full pl-10 pr-4 py-2 rounded-lg border focus:outline-none focus:ring-2 transition-all text-sm',
+                                'w-full pl-10 pr-4 py-2.5 rounded-xl border focus:outline-none focus:ring-2 transition-all',
                                 theme === 'dark'
-                                  ? 'bg-gray-800 border-gray-600 text-white focus:border-blue-500'
-                                  : 'bg-white border-gray-300 focus:border-blue-500'
+                                  ? 'bg-gray-800 border-gray-600 text-white focus:border-blue-500 focus:ring-blue-500/20'
+                                  : 'bg-white border-gray-300 focus:border-blue-500 focus:ring-blue-500/20'
                               )}
                             />
                           </div>
@@ -574,10 +658,10 @@ export default function CreateSupplierWizardPage() {
                             onChange={(e) => setNewBank(p => ({ ...p, accountNumber: e.target.value }))}
                             placeholder="1234567890"
                             className={cn(
-                              'w-full px-4 py-2 rounded-lg border focus:outline-none focus:ring-2 transition-all text-sm',
+                              'w-full px-4 py-2.5 rounded-xl border focus:outline-none focus:ring-2 transition-all',
                               theme === 'dark'
-                                ? 'bg-gray-800 border-gray-600 text-white focus:border-blue-500'
-                                : 'bg-white border-gray-300 focus:border-blue-500'
+                                ? 'bg-gray-800 border-gray-600 text-white focus:border-blue-500 focus:ring-blue-500/20'
+                                : 'bg-white border-gray-300 focus:border-blue-500 focus:ring-blue-500/20'
                             )}
                           />
                         </div>
@@ -588,10 +672,10 @@ export default function CreateSupplierWizardPage() {
                             value={newBank.accountType}
                             onChange={(e) => setNewBank(p => ({ ...p, accountType: e.target.value }))}
                             className={cn(
-                              'w-full px-4 py-2 rounded-lg border focus:outline-none focus:ring-2 transition-all text-sm',
+                              'w-full px-4 py-2.5 rounded-xl border focus:outline-none focus:ring-2 transition-all',
                               theme === 'dark'
-                                ? 'bg-gray-800 border-gray-600 text-white focus:border-blue-500'
-                                : 'bg-white border-gray-300 focus:border-blue-500'
+                                ? 'bg-gray-800 border-gray-600 text-white focus:border-blue-500 focus:ring-blue-500/20'
+                                : 'bg-white border-gray-300 focus:border-blue-500 focus:ring-blue-500/20'
                             )}
                           >
                             <option value="checking">Corriente</option>
@@ -607,10 +691,10 @@ export default function CreateSupplierWizardPage() {
                             onChange={(e) => setNewBank(p => ({ ...p, holderName: e.target.value }))}
                             placeholder={formData.name || 'Nombre del titular'}
                             className={cn(
-                              'w-full px-4 py-2 rounded-lg border focus:outline-none focus:ring-2 transition-all text-sm',
+                              'w-full px-4 py-2.5 rounded-xl border focus:outline-none focus:ring-2 transition-all',
                               theme === 'dark'
-                                ? 'bg-gray-800 border-gray-600 text-white focus:border-blue-500'
-                                : 'bg-white border-gray-300 focus:border-blue-500'
+                                ? 'bg-gray-800 border-gray-600 text-white focus:border-blue-500 focus:ring-blue-500/20'
+                                : 'bg-white border-gray-300 focus:border-blue-500 focus:ring-blue-500/20'
                             )}
                           />
                         </div>
@@ -625,7 +709,12 @@ export default function CreateSupplierWizardPage() {
                         whileTap={{ scale: 0.98 }}
                         type="button"
                         onClick={addBankAccount}
-                        className="mt-3 px-4 py-2 bg-blue-500 text-white rounded-lg text-sm font-medium flex items-center gap-2 hover:bg-blue-600 transition-colors"
+                        className={cn(
+                          "mt-4 px-4 py-2.5 rounded-xl font-medium transition-all flex items-center gap-2",
+                          theme === 'dark'
+                            ? 'bg-blue-600 hover:bg-blue-700 text-white'
+                            : 'bg-blue-500 hover:bg-blue-600 text-white'
+                        )}
                       >
                         <Plus className="w-4 h-4" />
                         Agregar Cuenta
@@ -635,17 +724,21 @@ export default function CreateSupplierWizardPage() {
                     {/* Bank Accounts List */}
                     {formData.bankAccounts.length > 0 && (
                       <div className="space-y-3">
-                        <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                        <h3 className={cn(
+                          "font-semibold",
+                          theme === 'dark' ? 'text-white' : 'text-gray-900'
+                        )}>
                           Cuentas Agregadas ({formData.bankAccounts.length})
                         </h3>
                         {formData.bankAccounts.map((account, index) => (
                           <motion.div
                             key={account.id}
-                            initial={{ opacity: 0, y: 10 }}
-                            animate={{ opacity: 1, y: 0 }}
+                            initial={{ opacity: 0, x: -10 }}
+                            animate={{ opacity: 1, x: 0 }}
+                            transition={{ delay: index * 0.05 }}
                             className={cn(
                               'p-4 rounded-xl border flex items-center justify-between',
-                              theme === 'dark' ? 'bg-gray-700/30 border-gray-600' : 'bg-white border-gray-200'
+                              theme === 'dark' ? 'bg-gray-900/30 border-gray-700' : 'bg-white border-gray-200'
                             )}
                           >
                             <div className="flex items-center gap-3">
@@ -679,10 +772,26 @@ export default function CreateSupplierWizardPage() {
                     )}
 
                     {formData.bankAccounts.length === 0 && (
-                      <div className="text-center py-8 text-gray-500">
-                        <CreditCard className="w-12 h-12 mx-auto mb-3 opacity-30" />
-                        <p>No hay cuentas bancarias agregadas</p>
-                        <p className="text-sm">Este paso es opcional</p>
+                      <div className={cn(
+                        "text-center py-12 rounded-xl border-2 border-dashed",
+                        theme === 'dark' ? 'border-gray-700' : 'border-gray-200'
+                      )}>
+                        <CreditCard className={cn(
+                          "w-12 h-12 mx-auto mb-3",
+                          theme === 'dark' ? 'text-gray-600' : 'text-gray-400'
+                        )} />
+                        <p className={cn(
+                          "font-medium",
+                          theme === 'dark' ? 'text-gray-400' : 'text-gray-600'
+                        )}>
+                          No hay cuentas bancarias agregadas
+                        </p>
+                        <p className={cn(
+                          "text-sm mt-1",
+                          theme === 'dark' ? 'text-gray-500' : 'text-gray-500'
+                        )}>
+                          Puedes continuar sin agregar cuentas
+                        </p>
                       </div>
                     )}
                   </motion.div>
@@ -695,16 +804,18 @@ export default function CreateSupplierWizardPage() {
                     initial={{ opacity: 0, x: 20 }}
                     animate={{ opacity: 1, x: 0 }}
                     exit={{ opacity: 0, x: -20 }}
+                    transition={{ duration: 0.3 }}
                     className="space-y-6"
                   >
-                    <div>
-                      <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-1">
-                        Acceso al Portal
-                      </h2>
-                      <p className="text-sm text-gray-500">
-                        Configura las credenciales para que el proveedor acceda a su portal (opcional)
-                      </p>
-                    </div>
+                    <h2 className={cn(
+                      "text-xl font-bold flex items-center gap-3",
+                      theme === 'dark' ? 'text-white' : 'text-gray-900'
+                    )}>
+                      <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-purple-500 to-purple-600 flex items-center justify-center">
+                        <KeyRound className="w-5 h-5 text-white" />
+                      </div>
+                      Acceso al Portal
+                    </h2>
 
                     <div className={cn(
                       'p-4 rounded-xl border',
@@ -715,49 +826,53 @@ export default function CreateSupplierWizardPage() {
                       </p>
                     </div>
 
-                    <div className="space-y-4 max-w-md">
-                      {/* Username */}
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      <div className="md:col-span-2">
+                        <label className={cn(
+                          "block text-sm font-medium mb-2 flex items-center gap-2",
+                          theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
+                        )}>
+                          <User className="w-4 h-4" />
                           Nombre de Usuario
                         </label>
-                        <div className="relative">
-                          <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                          <input
-                            type="text"
-                            value={formData.username}
-                            onChange={(e) => updateFormData('username', e.target.value.toLowerCase().replace(/\s/g, ''))}
-                            placeholder="usuario123"
-                            className={cn(
-                              'w-full pl-10 pr-4 py-2.5 rounded-xl border focus:outline-none focus:ring-2 transition-all',
-                              theme === 'dark'
-                                ? 'bg-gray-800 border-gray-700 text-white focus:border-blue-500'
-                                : 'bg-gray-50 border-gray-200 focus:border-blue-500',
-                              errors.username && 'border-red-500'
-                            )}
-                          />
-                        </div>
-                        {errors.username && <p className="text-xs text-red-500 mt-1">{errors.username}</p>}
+                        <input
+                          type="text"
+                          value={formData.username}
+                          onChange={(e) => updateFormData('username', e.target.value.toLowerCase().replace(/\s/g, ''))}
+                          placeholder="usuario123"
+                          className={cn(
+                            'w-full px-4 py-3 rounded-xl border focus:outline-none focus:ring-2 transition-all',
+                            errors.username
+                              ? 'border-red-500 bg-red-50 dark:bg-red-900/20'
+                              : theme === 'dark'
+                                ? 'bg-gray-900/50 border-gray-600 text-white focus:border-purple-500 focus:ring-purple-500/20'
+                                : 'bg-gray-50 border-gray-200 text-gray-900 focus:border-purple-500 focus:ring-purple-500/20'
+                          )}
+                        />
+                        {errors.username && <p className="text-red-500 text-xs mt-1">{errors.username}</p>}
                       </div>
 
-                      {/* Password */}
                       <div>
-                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                        <label className={cn(
+                          "block text-sm font-medium mb-2 flex items-center gap-2",
+                          theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
+                        )}>
+                          <KeyRound className="w-4 h-4" />
                           Contrasena
                         </label>
                         <div className="relative">
-                          <KeyRound className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                           <input
                             type={showPassword ? 'text' : 'password'}
                             value={formData.password}
                             onChange={(e) => updateFormData('password', e.target.value)}
                             placeholder="Minimo 6 caracteres"
                             className={cn(
-                              'w-full pl-10 pr-12 py-2.5 rounded-xl border focus:outline-none focus:ring-2 transition-all',
-                              theme === 'dark'
-                                ? 'bg-gray-800 border-gray-700 text-white focus:border-blue-500'
-                                : 'bg-gray-50 border-gray-200 focus:border-blue-500',
-                              errors.password && 'border-red-500'
+                              'w-full px-4 py-3 pr-12 rounded-xl border focus:outline-none focus:ring-2 transition-all',
+                              errors.password
+                                ? 'border-red-500 bg-red-50 dark:bg-red-900/20'
+                                : theme === 'dark'
+                                  ? 'bg-gray-900/50 border-gray-600 text-white focus:border-purple-500 focus:ring-purple-500/20'
+                                  : 'bg-gray-50 border-gray-200 text-gray-900 focus:border-purple-500 focus:ring-purple-500/20'
                             )}
                           />
                           <button
@@ -765,30 +880,33 @@ export default function CreateSupplierWizardPage() {
                             onClick={() => setShowPassword(!showPassword)}
                             className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
                           >
-                            {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                            {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
                           </button>
                         </div>
-                        {errors.password && <p className="text-xs text-red-500 mt-1">{errors.password}</p>}
+                        {errors.password && <p className="text-red-500 text-xs mt-1">{errors.password}</p>}
                       </div>
 
-                      {/* Confirm Password */}
                       <div>
-                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                        <label className={cn(
+                          "block text-sm font-medium mb-2 flex items-center gap-2",
+                          theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
+                        )}>
+                          <KeyRound className="w-4 h-4" />
                           Confirmar Contrasena
                         </label>
                         <div className="relative">
-                          <KeyRound className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                           <input
                             type={showConfirmPassword ? 'text' : 'password'}
                             value={formData.confirmPassword}
                             onChange={(e) => updateFormData('confirmPassword', e.target.value)}
                             placeholder="Repetir contrasena"
                             className={cn(
-                              'w-full pl-10 pr-12 py-2.5 rounded-xl border focus:outline-none focus:ring-2 transition-all',
-                              theme === 'dark'
-                                ? 'bg-gray-800 border-gray-700 text-white focus:border-blue-500'
-                                : 'bg-gray-50 border-gray-200 focus:border-blue-500',
-                              errors.confirmPassword && 'border-red-500'
+                              'w-full px-4 py-3 pr-12 rounded-xl border focus:outline-none focus:ring-2 transition-all',
+                              errors.confirmPassword
+                                ? 'border-red-500 bg-red-50 dark:bg-red-900/20'
+                                : theme === 'dark'
+                                  ? 'bg-gray-900/50 border-gray-600 text-white focus:border-purple-500 focus:ring-purple-500/20'
+                                  : 'bg-gray-50 border-gray-200 text-gray-900 focus:border-purple-500 focus:ring-purple-500/20'
                             )}
                           />
                           <button
@@ -796,17 +914,20 @@ export default function CreateSupplierWizardPage() {
                             onClick={() => setShowConfirmPassword(!showConfirmPassword)}
                             className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
                           >
-                            {showConfirmPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                            {showConfirmPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
                           </button>
                         </div>
-                        {errors.confirmPassword && <p className="text-xs text-red-500 mt-1">{errors.confirmPassword}</p>}
+                        {errors.confirmPassword && <p className="text-red-500 text-xs mt-1">{errors.confirmPassword}</p>}
                       </div>
                     </div>
 
                     {!formData.username && (
-                      <div className="text-center py-4 text-gray-500 text-sm">
-                        Si no configuras credenciales, el proveedor no podra acceder al portal
-                      </div>
+                      <p className={cn(
+                        "text-sm text-center",
+                        theme === 'dark' ? 'text-gray-500' : 'text-gray-500'
+                      )}>
+                        Este paso es opcional. Si no configuras credenciales, el proveedor no podra acceder al portal.
+                      </p>
                     )}
                   </motion.div>
                 )}
@@ -818,125 +939,140 @@ export default function CreateSupplierWizardPage() {
                     initial={{ opacity: 0, x: 20 }}
                     animate={{ opacity: 1, x: 0 }}
                     exit={{ opacity: 0, x: -20 }}
+                    transition={{ duration: 0.3 }}
                     className="space-y-6"
                   >
-                    <div>
-                      <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-1">
-                        Revisar y Confirmar
-                      </h2>
-                      <p className="text-sm text-gray-500">
-                        Verifica la informacion antes de crear el proveedor
-                      </p>
-                    </div>
+                    <h2 className={cn(
+                      "text-xl font-bold flex items-center gap-3",
+                      theme === 'dark' ? 'text-white' : 'text-gray-900'
+                    )}>
+                      <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-green-500 to-green-600 flex items-center justify-center">
+                        <Check className="w-5 h-5 text-white" />
+                      </div>
+                      Revision del Proveedor
+                    </h2>
 
                     {errors.submit && (
-                      <div className={cn(
-                        'p-4 rounded-xl flex items-center gap-3',
-                        theme === 'dark' ? 'bg-red-900/30 text-red-300' : 'bg-red-50 text-red-600'
-                      )}>
-                        <AlertTriangle className="w-5 h-5 flex-shrink-0" />
-                        <p className="text-sm">{errors.submit}</p>
+                      <div className="p-4 rounded-xl bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 flex items-center gap-3">
+                        <AlertTriangle className="w-5 h-5 text-red-600" />
+                        <p className="text-red-600 text-sm">{errors.submit}</p>
                       </div>
                     )}
 
-                    {/* Company Info Summary */}
                     <div className={cn(
-                      'p-4 rounded-xl border',
-                      theme === 'dark' ? 'bg-gray-700/30 border-gray-600' : 'bg-gray-50 border-gray-200'
+                      'rounded-2xl p-6',
+                      theme === 'dark' ? 'bg-gray-900/50' : 'bg-gray-50'
                     )}>
-                      <div className="flex items-center gap-2 mb-3">
-                        <Building2 className="w-4 h-4 text-gray-500" />
-                        <h3 className="font-medium text-gray-900 dark:text-white">Informacion de Empresa</h3>
-                      </div>
-                      <div className="grid grid-cols-2 gap-3 text-sm">
-                        <div>
-                          <span className="text-gray-500">Codigo:</span>
-                          <span className="ml-2 font-medium text-gray-900 dark:text-white">{formData.code}</span>
+                      {/* Company Info */}
+                      <div className="mb-6">
+                        <div className="flex items-center gap-2 mb-4">
+                          <Building2 className="w-5 h-5 text-emerald-500" />
+                          <h3 className={cn(
+                            "font-semibold",
+                            theme === 'dark' ? 'text-white' : 'text-gray-900'
+                          )}>Informacion de Empresa</h3>
                         </div>
-                        <div>
-                          <span className="text-gray-500">Nombre:</span>
-                          <span className="ml-2 font-medium text-gray-900 dark:text-white">{formData.name}</span>
-                        </div>
-                        {formData.legalName && (
-                          <div>
-                            <span className="text-gray-500">Razon Social:</span>
-                            <span className="ml-2 text-gray-900 dark:text-white">{formData.legalName}</span>
+                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+                          <div className={cn(
+                            "p-3 rounded-xl",
+                            theme === 'dark' ? 'bg-gray-800' : 'bg-white'
+                          )}>
+                            <p className="text-xs text-gray-500">Codigo</p>
+                            <p className="font-bold text-gray-900 dark:text-white font-mono">{formData.code}</p>
                           </div>
-                        )}
-                        {formData.taxId && (
-                          <div>
-                            <span className="text-gray-500">RIF/NIT:</span>
-                            <span className="ml-2 text-gray-900 dark:text-white">{formData.taxId}</span>
+                          <div className={cn(
+                            "p-3 rounded-xl col-span-2",
+                            theme === 'dark' ? 'bg-gray-800' : 'bg-white'
+                          )}>
+                            <p className="text-xs text-gray-500">Nombre</p>
+                            <p className="font-bold text-gray-900 dark:text-white">{formData.name}</p>
                           </div>
-                        )}
-                        {formData.email && (
-                          <div>
-                            <span className="text-gray-500">Email:</span>
-                            <span className="ml-2 text-gray-900 dark:text-white">{formData.email}</span>
-                          </div>
-                        )}
-                        {formData.phone && (
-                          <div>
-                            <span className="text-gray-500">Telefono:</span>
-                            <span className="ml-2 text-gray-900 dark:text-white">{formData.phone}</span>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Bank Accounts Summary */}
-                    <div className={cn(
-                      'p-4 rounded-xl border',
-                      theme === 'dark' ? 'bg-gray-700/30 border-gray-600' : 'bg-gray-50 border-gray-200'
-                    )}>
-                      <div className="flex items-center gap-2 mb-3">
-                        <CreditCard className="w-4 h-4 text-gray-500" />
-                        <h3 className="font-medium text-gray-900 dark:text-white">Cuentas Bancarias</h3>
-                      </div>
-                      {formData.bankAccounts.length > 0 ? (
-                        <div className="space-y-2">
-                          {formData.bankAccounts.map(account => (
-                            <div key={account.id} className="text-sm flex items-center gap-2">
-                              <Landmark className="w-4 h-4 text-blue-500" />
-                              <span className="text-gray-900 dark:text-white">{account.bankName}</span>
-                              <span className="text-gray-500">****{account.accountNumber.slice(-4)}</span>
+                          {formData.email && (
+                            <div className={cn(
+                              "p-3 rounded-xl",
+                              theme === 'dark' ? 'bg-gray-800' : 'bg-white'
+                            )}>
+                              <p className="text-xs text-gray-500">Email</p>
+                              <p className="text-sm text-gray-900 dark:text-white">{formData.email}</p>
                             </div>
-                          ))}
+                          )}
+                          {formData.phone && (
+                            <div className={cn(
+                              "p-3 rounded-xl",
+                              theme === 'dark' ? 'bg-gray-800' : 'bg-white'
+                            )}>
+                              <p className="text-xs text-gray-500">Telefono</p>
+                              <p className="text-sm text-gray-900 dark:text-white">{formData.phone}</p>
+                            </div>
+                          )}
                         </div>
-                      ) : (
-                        <p className="text-sm text-gray-500">Sin cuentas bancarias</p>
-                      )}
-                    </div>
-
-                    {/* Credentials Summary */}
-                    <div className={cn(
-                      'p-4 rounded-xl border',
-                      theme === 'dark' ? 'bg-gray-700/30 border-gray-600' : 'bg-gray-50 border-gray-200'
-                    )}>
-                      <div className="flex items-center gap-2 mb-3">
-                        <KeyRound className="w-4 h-4 text-gray-500" />
-                        <h3 className="font-medium text-gray-900 dark:text-white">Acceso al Portal</h3>
                       </div>
-                      {formData.username ? (
-                        <div className="text-sm">
-                          <div className="flex items-center gap-2 mb-1">
-                            <User className="w-4 h-4 text-green-500" />
-                            <span className="text-gray-500">Usuario:</span>
-                            <span className="font-medium text-gray-900 dark:text-white">{formData.username}</span>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <CheckCircle className="w-4 h-4 text-green-500" />
-                            <span className="text-green-600 dark:text-green-400">Contrasena configurada</span>
-                          </div>
+
+                      {/* Bank Accounts */}
+                      <div className={cn(
+                        "pt-6 border-t mb-6",
+                        theme === 'dark' ? 'border-gray-700' : 'border-gray-200'
+                      )}>
+                        <div className="flex items-center gap-2 mb-4">
+                          <CreditCard className="w-5 h-5 text-blue-500" />
+                          <h3 className={cn(
+                            "font-semibold",
+                            theme === 'dark' ? 'text-white' : 'text-gray-900'
+                          )}>Cuentas Bancarias ({formData.bankAccounts.length})</h3>
                         </div>
-                      ) : (
-                        <p className="text-sm text-gray-500">Sin acceso al portal configurado</p>
-                      )}
+                        {formData.bankAccounts.length > 0 ? (
+                          <div className="flex flex-wrap gap-2">
+                            {formData.bankAccounts.map((account) => (
+                              <span
+                                key={account.id}
+                                className={cn(
+                                  "text-sm px-3 py-1 rounded-full",
+                                  theme === 'dark'
+                                    ? 'bg-blue-900/30 text-blue-300'
+                                    : 'bg-blue-100 text-blue-700'
+                                )}
+                              >
+                                {account.bankName} - ****{account.accountNumber.slice(-4)}
+                              </span>
+                            ))}
+                          </div>
+                        ) : (
+                          <p className="text-sm text-gray-500">Sin cuentas bancarias</p>
+                        )}
+                      </div>
+
+                      {/* Credentials */}
+                      <div className={cn(
+                        "pt-6 border-t",
+                        theme === 'dark' ? 'border-gray-700' : 'border-gray-200'
+                      )}>
+                        <div className="flex items-center gap-2 mb-4">
+                          <KeyRound className="w-5 h-5 text-purple-500" />
+                          <h3 className={cn(
+                            "font-semibold",
+                            theme === 'dark' ? 'text-white' : 'text-gray-900'
+                          )}>Acceso al Portal</h3>
+                        </div>
+                        {formData.username ? (
+                          <div className={cn(
+                            "p-3 rounded-xl inline-flex items-center gap-3",
+                            theme === 'dark' ? 'bg-gray-800' : 'bg-white'
+                          )}>
+                            <Check className="w-4 h-4 text-green-500" />
+                            <div>
+                              <p className="text-xs text-gray-500">Usuario</p>
+                              <p className="font-medium text-gray-900 dark:text-white">{formData.username}</p>
+                            </div>
+                          </div>
+                        ) : (
+                          <p className="text-sm text-gray-500">Sin acceso al portal configurado</p>
+                        )}
+                      </div>
                     </div>
                   </motion.div>
                 )}
 
-                {/* Confirmation */}
+                {/* Success */}
                 {createdSupplier && (
                   <motion.div
                     key="success"
@@ -950,11 +1086,11 @@ export default function CreateSupplierWizardPage() {
                       transition={{ type: 'spring', delay: 0.2 }}
                       className="w-20 h-20 mx-auto mb-6 bg-emerald-100 dark:bg-emerald-900/30 rounded-full flex items-center justify-center"
                     >
-                      <CheckCircle className="w-10 h-10 text-emerald-500" />
+                      <Check className="w-10 h-10 text-emerald-500" />
                     </motion.div>
 
                     <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">
-                      Proveedor Creado
+                      Proveedor Creado!
                     </h2>
                     <p className="text-gray-500 mb-6">
                       El proveedor ha sido registrado exitosamente
@@ -988,20 +1124,19 @@ export default function CreateSupplierWizardPage() {
                     )}
 
                     <div className="flex gap-3 justify-center">
-                      <Link href="/dashboard/market/consignments/suppliers">
-                        <motion.button
-                          whileHover={{ scale: 1.02 }}
-                          whileTap={{ scale: 0.98 }}
-                          className={cn(
-                            'px-6 py-2.5 rounded-xl font-medium transition-colors',
-                            theme === 'dark'
-                              ? 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-                              : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                          )}
-                        >
-                          Ver Proveedores
-                        </motion.button>
-                      </Link>
+                      <motion.button
+                        whileHover={{ scale: 1.02 }}
+                        whileTap={{ scale: 0.98 }}
+                        onClick={() => router.push('/dashboard/market/consignments/suppliers')}
+                        className={cn(
+                          'px-6 py-3 rounded-xl font-medium transition-all',
+                          theme === 'dark'
+                            ? 'bg-gray-700 hover:bg-gray-600 text-white'
+                            : 'bg-gray-200 hover:bg-gray-300 text-gray-900'
+                        )}
+                      >
+                        Ver Proveedores
+                      </motion.button>
                       <motion.button
                         whileHover={{ scale: 1.02 }}
                         whileTap={{ scale: 0.98 }}
@@ -1010,7 +1145,12 @@ export default function CreateSupplierWizardPage() {
                           setCreatedSupplier(null)
                           setCurrentStep('company')
                         }}
-                        className="px-6 py-2.5 bg-emerald-500 text-white rounded-xl font-medium hover:bg-emerald-600 transition-colors"
+                        className={cn(
+                          'px-6 py-3 rounded-xl font-medium transition-all text-white',
+                          theme === 'dark'
+                            ? 'bg-gradient-to-r from-emerald-600 to-emerald-700 hover:from-emerald-700 hover:to-emerald-800'
+                            : 'bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700'
+                        )}
                       >
                         Crear Otro
                       </motion.button>
@@ -1018,68 +1158,160 @@ export default function CreateSupplierWizardPage() {
                   </motion.div>
                 )}
               </AnimatePresence>
+            </motion.div>
 
-              {/* Navigation Buttons */}
-              {!createdSupplier && (
-                <div className="flex justify-between mt-8 pt-6 border-t border-gray-200 dark:border-gray-700">
+            {/* Navigation Buttons */}
+            {!createdSupplier && (
+              <div className="flex justify-between items-center gap-4">
+                <motion.button
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                  onClick={goToPreviousStep}
+                  disabled={currentStepIndex === 0}
+                  className={cn(
+                    "flex items-center gap-2 px-6 py-3 rounded-xl font-medium transition-all",
+                    "disabled:opacity-50 disabled:cursor-not-allowed",
+                    theme === 'dark'
+                      ? 'bg-gray-700 hover:bg-gray-600 text-white shadow-lg'
+                      : 'bg-gray-200 hover:bg-gray-300 text-gray-900 shadow-md'
+                  )}
+                >
+                  <ArrowLeft className="w-5 h-5" />
+                  Anterior
+                </motion.button>
+
+                {currentStep === 'review' ? (
                   <motion.button
                     whileHover={{ scale: 1.02 }}
                     whileTap={{ scale: 0.98 }}
-                    onClick={goToPreviousStep}
-                    disabled={currentStepIndex === 0}
+                    onClick={handleSubmit}
+                    disabled={submitting}
                     className={cn(
-                      'flex items-center gap-2 px-5 py-2.5 rounded-xl font-medium transition-all',
-                      currentStepIndex === 0
-                        ? 'opacity-50 cursor-not-allowed'
-                        : theme === 'dark'
-                          ? 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-                          : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                      "flex items-center gap-2 px-6 py-3 rounded-xl font-medium transition-all",
+                      "disabled:opacity-50 disabled:cursor-not-allowed",
+                      theme === 'dark'
+                        ? 'bg-gradient-to-r from-emerald-600 to-green-600 hover:from-emerald-700 hover:to-green-700 shadow-lg shadow-emerald-500/30'
+                        : 'bg-gradient-to-r from-emerald-500 to-green-500 hover:from-emerald-600 hover:to-green-600 shadow-lg shadow-emerald-400/30',
+                      'text-white'
                     )}
                   >
-                    <ArrowLeft className="w-4 h-4" />
-                    Anterior
+                    {submitting && <Loader2 className="w-5 h-5 animate-spin" />}
+                    <Check className="w-5 h-5" />
+                    Crear Proveedor
                   </motion.button>
+                ) : (
+                  <motion.button
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
+                    onClick={goToNextStep}
+                    className={cn(
+                      "flex items-center gap-2 px-6 py-3 rounded-xl font-medium transition-all",
+                      theme === 'dark'
+                        ? 'bg-emerald-600 hover:bg-emerald-700 shadow-lg shadow-emerald-500/30'
+                        : 'bg-emerald-500 hover:bg-emerald-600 shadow-lg shadow-emerald-400/30',
+                      'text-white'
+                    )}
+                  >
+                    Siguiente
+                    <ArrowRight className="w-5 h-5" />
+                  </motion.button>
+                )}
+              </div>
+            )}
+          </div>
 
-                  {currentStep === 'review' ? (
-                    <motion.button
-                      whileHover={{ scale: 1.02 }}
-                      whileTap={{ scale: 0.98 }}
-                      onClick={handleSubmit}
-                      disabled={submitting}
-                      className={cn(
-                        'flex items-center gap-2 px-6 py-2.5 rounded-xl font-medium text-white transition-all',
-                        submitting
-                          ? 'bg-gray-400 cursor-not-allowed'
-                          : 'bg-emerald-500 hover:bg-emerald-600 shadow-lg shadow-emerald-500/25'
-                      )}
-                    >
-                      {submitting ? (
-                        <>
-                          <Loader2 className="w-4 h-4 animate-spin" />
-                          Creando...
-                        </>
-                      ) : (
-                        <>
-                          <Check className="w-4 h-4" />
-                          Crear Proveedor
-                        </>
-                      )}
-                    </motion.button>
-                  ) : (
-                    <motion.button
-                      whileHover={{ scale: 1.02 }}
-                      whileTap={{ scale: 0.98 }}
-                      onClick={goToNextStep}
-                      className="flex items-center gap-2 px-5 py-2.5 bg-blue-500 text-white rounded-xl font-medium hover:bg-blue-600 transition-colors shadow-lg shadow-blue-500/25"
-                    >
-                      Siguiente
-                      <ArrowRight className="w-4 h-4" />
-                    </motion.button>
-                  )}
-                </div>
-              )}
-            </div>
-          </motion.div>
+          {/* Cancel Modal */}
+          <AnimatePresence>
+            {showCancelModal && (
+              <>
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  onClick={() => setShowCancelModal(false)}
+                  className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50"
+                />
+
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.95, y: 20 }}
+                  animate={{ opacity: 1, scale: 1, y: 0 }}
+                  exit={{ opacity: 0, scale: 0.95, y: 20 }}
+                  transition={{ type: "spring", duration: 0.3 }}
+                  className="fixed inset-0 z-50 flex items-center justify-center p-4"
+                >
+                  <div
+                    className={cn(
+                      "w-full max-w-md rounded-2xl shadow-2xl border",
+                      theme === 'dark'
+                        ? 'bg-gray-800 border-gray-700'
+                        : 'bg-white border-gray-200'
+                    )}
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <div className="p-6 pb-4">
+                      <div className="flex items-start gap-4">
+                        <div className={cn(
+                          "w-12 h-12 rounded-full flex items-center justify-center flex-shrink-0",
+                          theme === 'dark' ? 'bg-red-900/30' : 'bg-red-100'
+                        )}>
+                          <X className={cn(
+                            "w-6 h-6",
+                            theme === 'dark' ? 'text-red-400' : 'text-red-600'
+                          )} />
+                        </div>
+                        <div className="flex-1">
+                          <h3 className={cn(
+                            "text-xl font-bold mb-2",
+                            theme === 'dark' ? 'text-white' : 'text-gray-900'
+                          )}>
+                            Cancelar creacion?
+                          </h3>
+                          <p className={cn(
+                            "text-sm",
+                            theme === 'dark' ? 'text-gray-400' : 'text-gray-600'
+                          )}>
+                            Se perdera toda la informacion ingresada y no podras recuperarla.
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className={cn(
+                      "flex gap-3 p-6 pt-4 border-t",
+                      theme === 'dark' ? 'border-gray-700' : 'border-gray-200'
+                    )}>
+                      <motion.button
+                        whileHover={{ scale: 1.02 }}
+                        whileTap={{ scale: 0.98 }}
+                        onClick={() => setShowCancelModal(false)}
+                        className={cn(
+                          "flex-1 px-4 py-3 rounded-xl font-medium transition-all",
+                          theme === 'dark'
+                            ? 'bg-gray-700 hover:bg-gray-600 text-white'
+                            : 'bg-gray-100 hover:bg-gray-200 text-gray-900'
+                        )}
+                      >
+                        Continuar editando
+                      </motion.button>
+                      <motion.button
+                        whileHover={{ scale: 1.02 }}
+                        whileTap={{ scale: 0.98 }}
+                        onClick={() => router.push('/dashboard/market/consignments/suppliers')}
+                        className={cn(
+                          "flex-1 px-4 py-3 rounded-xl font-medium transition-all text-white",
+                          theme === 'dark'
+                            ? 'bg-red-600 hover:bg-red-700'
+                            : 'bg-red-500 hover:bg-red-600'
+                        )}
+                      >
+                        Si, cancelar
+                      </motion.button>
+                    </div>
+                  </div>
+                </motion.div>
+              </>
+            )}
+          </AnimatePresence>
         </div>
       </DashboardLayout>
     </ProtectedRoute>
