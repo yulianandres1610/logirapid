@@ -116,6 +116,23 @@ export default function CreateConsignmentOrderPage() {
   const [createdOrder, setCreatedOrder] = useState<CreatedOrder | null>(null)
   const [submitting, setSubmitting] = useState(false)
 
+  // Print state
+  const [showPrintModal, setShowPrintModal] = useState(false)
+  const [printServices, setPrintServices] = useState<Array<{
+    id: number
+    serviceName: string
+    printers: Array<{
+      id: number
+      printerName: string
+      isOnline: boolean
+      isDefault: boolean
+      printerType: string
+    }>
+  }>>([])
+  const [selectedPrinter, setSelectedPrinter] = useState<{ serviceId: number; printerId: number } | null>(null)
+  const [printingWithService, setPrintingWithService] = useState(false)
+  const [copies, setCopies] = useState(1)
+
   const currentStepIndex = STEPS.findIndex(s => s.id === currentStep)
 
   // Load suppliers and warehouses
@@ -311,6 +328,98 @@ export default function CreateConsignmentOrderPage() {
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('es-US', { style: 'currency', currency: 'USD' }).format(value)
+  }
+
+  // Fetch print services for silent printing
+  const fetchPrintServices = async () => {
+    try {
+      const response = await fetch('/api/print/services?includeOffline=false')
+      const data = await response.json()
+      if (data.success && data.data?.services) {
+        const activeServices = data.data.services.filter(
+          (s: { status: string; printers?: unknown[] }) => s.status === 'active' && s.printers && s.printers.length > 0
+        )
+        setPrintServices(activeServices)
+
+        // Auto-select first available printer
+        for (const service of activeServices) {
+          const availablePrinter = service.printers.find(
+            (p: { isOnline: boolean }) => p.isOnline
+          )
+          if (availablePrinter) {
+            setSelectedPrinter({ serviceId: service.id, printerId: availablePrinter.id })
+            break
+          }
+        }
+      }
+    } catch (err) {
+      console.error('[Consignment Print] Error fetching print services:', err)
+    }
+  }
+
+  // Print with silent service
+  const printWithSilentService = async () => {
+    if (!createdOrder || !selectedSupplier || !selectedWarehouse || !selectedPrinter) return
+
+    setPrintingWithService(true)
+    try {
+      const response = await fetch('/api/print/jobs', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          documentType: 'consignment_receipt',
+          documentData: {
+            orderNumber: createdOrder.orderNumber,
+            supplier: {
+              code: selectedSupplier.code,
+              name: selectedSupplier.name,
+              contactName: selectedSupplier.contactName
+            },
+            warehouse: {
+              code: selectedWarehouse.code,
+              name: selectedWarehouse.name
+            },
+            lines: orderLines.map(l => ({
+              productName: l.product.name,
+              sku: l.product.sku,
+              barcode: l.product.barcode,
+              quantity: l.quantity,
+              unitCost: l.unitCost,
+              totalCost: l.totalCost
+            })),
+            totalItems: createdOrder.totalItems,
+            totalUnits: createdOrder.totalUnits,
+            totalCost: createdOrder.totalCost,
+            consignmentDate: consignmentDate,
+            notes: notes || undefined
+          },
+          copies,
+          printServiceId: selectedPrinter.serviceId,
+          printerId: selectedPrinter.printerId,
+          sourceType: 'consignment_order',
+          sourceId: createdOrder.id,
+          warehouseId: selectedWarehouse.id
+        })
+      })
+
+      const data = await response.json()
+      if (data.success) {
+        setShowPrintModal(false)
+      } else {
+        throw new Error(data.error)
+      }
+    } catch (err) {
+      console.error('[Consignment Print] Error printing with service:', err)
+      setShowPrintModal(false)
+    } finally {
+      setPrintingWithService(false)
+    }
+  }
+
+  // Handle print button click
+  const handlePrint = () => {
+    fetchPrintServices()
+    setShowPrintModal(true)
   }
 
   const filteredSuppliers = suppliers.filter(s =>
@@ -1084,7 +1193,7 @@ export default function CreateConsignmentOrderPage() {
                       <motion.button
                         whileHover={{ scale: 1.02 }}
                         whileTap={{ scale: 0.98 }}
-                        onClick={() => window.print()}
+                        onClick={handlePrint}
                         className={cn(
                           'flex items-center gap-2 px-6 py-3 rounded-xl transition-all',
                           theme === 'dark'
@@ -1093,7 +1202,7 @@ export default function CreateConsignmentOrderPage() {
                         )}
                       >
                         <Printer className="w-5 h-5" />
-                        Imprimir
+                        Imprimir Recepcion
                       </motion.button>
 
                       <Link href="/dashboard/market/consignments">
@@ -1267,6 +1376,215 @@ export default function CreateConsignmentOrderPage() {
                         Si, cancelar
                       </motion.button>
                     </div>
+                  </div>
+                </motion.div>
+              </>
+            )}
+          </AnimatePresence>
+
+          {/* Print Modal */}
+          <AnimatePresence>
+            {showPrintModal && (
+              <>
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  onClick={() => setShowPrintModal(false)}
+                  className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50"
+                />
+
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.95, y: 20 }}
+                  animate={{ opacity: 1, scale: 1, y: 0 }}
+                  exit={{ opacity: 0, scale: 0.95, y: 20 }}
+                  transition={{ type: "spring", duration: 0.3 }}
+                  className="fixed inset-0 z-50 flex items-center justify-center p-4"
+                >
+                  <div
+                    className={cn(
+                      "w-full max-w-md rounded-2xl shadow-2xl border",
+                      theme === 'dark'
+                        ? 'bg-gray-800 border-gray-700'
+                        : 'bg-white border-gray-200'
+                    )}
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <div className={cn(
+                      "px-6 py-4 border-b flex items-center justify-between",
+                      theme === 'dark' ? 'border-gray-700' : 'border-gray-200'
+                    )}>
+                      <div className="flex items-center gap-3">
+                        <div className="p-2 rounded-lg bg-emerald-100 dark:bg-emerald-900/30">
+                          <Printer className="w-5 h-5 text-emerald-600" />
+                        </div>
+                        <div>
+                          <h3 className={cn(
+                            "font-semibold",
+                            theme === 'dark' ? 'text-white' : 'text-gray-900'
+                          )}>
+                            Imprimir Recepcion
+                          </h3>
+                          <p className="text-xs text-gray-500">#{createdOrder?.orderNumber}</p>
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => setShowPrintModal(false)}
+                        className={cn(
+                          "p-2 rounded-lg transition-colors",
+                          theme === 'dark' ? 'hover:bg-gray-700' : 'hover:bg-gray-100'
+                        )}
+                      >
+                        <X className="w-5 h-5" />
+                      </button>
+                    </div>
+
+                    <div className="p-6 space-y-6">
+                      {printServices.length === 0 ? (
+                        <div className="text-center py-4">
+                          <Loader2 className="w-8 h-8 animate-spin text-emerald-500 mx-auto mb-4" />
+                          <p className="text-gray-500">Buscando impresoras...</p>
+                        </div>
+                      ) : (
+                        <>
+                          <div>
+                            <label className={cn(
+                              "block text-sm font-medium mb-2",
+                              theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
+                            )}>
+                              Seleccionar Impresora
+                            </label>
+                            <div className="space-y-2 max-h-48 overflow-y-auto">
+                              {printServices.map(service => (
+                                service.printers.map(printer => (
+                                  <button
+                                    key={`${service.id}-${printer.id}`}
+                                    onClick={() => setSelectedPrinter({ serviceId: service.id, printerId: printer.id })}
+                                    className={cn(
+                                      'w-full p-3 rounded-xl border-2 transition-all text-left flex items-center justify-between',
+                                      selectedPrinter?.printerId === printer.id
+                                        ? 'border-emerald-500 bg-emerald-50 dark:bg-emerald-900/20'
+                                        : theme === 'dark'
+                                          ? 'border-gray-600 bg-gray-700/50 hover:border-gray-500'
+                                          : 'border-gray-200 bg-gray-50 hover:border-gray-300'
+                                    )}
+                                  >
+                                    <div className="flex items-center gap-3">
+                                      <Printer className={cn(
+                                        "w-5 h-5",
+                                        selectedPrinter?.printerId === printer.id ? 'text-emerald-600' : 'text-gray-400'
+                                      )} />
+                                      <div>
+                                        <p className={cn(
+                                          "font-medium",
+                                          theme === 'dark' ? 'text-white' : 'text-gray-900'
+                                        )}>
+                                          {printer.printerName}
+                                        </p>
+                                        <p className="text-xs text-gray-500">
+                                          {printer.printerType === 'thermal_80mm' ? 'Termica 80mm' : 'Estandar'}
+                                        </p>
+                                      </div>
+                                    </div>
+                                    {printer.isOnline ? (
+                                      <span className="text-xs text-emerald-500 font-medium">Online</span>
+                                    ) : (
+                                      <span className="text-xs text-gray-400">Offline</span>
+                                    )}
+                                  </button>
+                                ))
+                              ))}
+                            </div>
+                          </div>
+
+                          <div>
+                            <label className={cn(
+                              "block text-sm font-medium mb-2",
+                              theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
+                            )}>
+                              Copias
+                            </label>
+                            <div className="flex items-center justify-center gap-4">
+                              <motion.button
+                                whileHover={{ scale: 1.05 }}
+                                whileTap={{ scale: 0.95 }}
+                                onClick={() => setCopies(Math.max(1, copies - 1))}
+                                className={cn(
+                                  "w-10 h-10 rounded-xl flex items-center justify-center font-bold",
+                                  theme === 'dark'
+                                    ? 'bg-gray-700 hover:bg-gray-600 text-white'
+                                    : 'bg-gray-200 hover:bg-gray-300 text-gray-900'
+                                )}
+                              >
+                                -
+                              </motion.button>
+                              <span className={cn(
+                                "w-12 text-center text-xl font-bold",
+                                theme === 'dark' ? 'text-white' : 'text-gray-900'
+                              )}>
+                                {copies}
+                              </span>
+                              <motion.button
+                                whileHover={{ scale: 1.05 }}
+                                whileTap={{ scale: 0.95 }}
+                                onClick={() => setCopies(Math.min(5, copies + 1))}
+                                className={cn(
+                                  "w-10 h-10 rounded-xl flex items-center justify-center font-bold",
+                                  theme === 'dark'
+                                    ? 'bg-gray-700 hover:bg-gray-600 text-white'
+                                    : 'bg-gray-200 hover:bg-gray-300 text-gray-900'
+                                )}
+                              >
+                                +
+                              </motion.button>
+                            </div>
+                          </div>
+                        </>
+                      )}
+                    </div>
+
+                    {printServices.length > 0 && (
+                      <div className={cn(
+                        "flex gap-3 p-6 pt-4 border-t",
+                        theme === 'dark' ? 'border-gray-700' : 'border-gray-200'
+                      )}>
+                        <motion.button
+                          whileHover={{ scale: 1.02 }}
+                          whileTap={{ scale: 0.98 }}
+                          onClick={() => setShowPrintModal(false)}
+                          className={cn(
+                            "flex-1 py-3 rounded-xl font-medium transition-all",
+                            theme === 'dark'
+                              ? 'bg-gray-700 hover:bg-gray-600 text-white'
+                              : 'bg-gray-100 hover:bg-gray-200 text-gray-700'
+                          )}
+                        >
+                          Cancelar
+                        </motion.button>
+                        <motion.button
+                          whileHover={{ scale: 1.02 }}
+                          whileTap={{ scale: 0.98 }}
+                          onClick={printWithSilentService}
+                          disabled={printingWithService || !selectedPrinter}
+                          className={cn(
+                            "flex-1 py-3 rounded-xl font-medium transition-all flex items-center justify-center gap-2",
+                            "bg-emerald-500 hover:bg-emerald-600 text-white disabled:opacity-50"
+                          )}
+                        >
+                          {printingWithService ? (
+                            <>
+                              <Loader2 className="w-5 h-5 animate-spin" />
+                              Enviando...
+                            </>
+                          ) : (
+                            <>
+                              <Printer className="w-5 h-5" />
+                              Imprimir
+                            </>
+                          )}
+                        </motion.button>
+                      </div>
+                    )}
                   </div>
                 </motion.div>
               </>

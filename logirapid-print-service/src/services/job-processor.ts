@@ -24,6 +24,7 @@ import { generateCashRegisterReport, CashRegisterReportData } from '../documents
 import { generateCashRegisterReportPdf } from '../documents/cash-register-report-pdf'
 import { generateWarehouseOperation, WarehouseOperationData } from '../documents/warehouse-operation'
 import { generateWarehouseOperationPdf } from '../documents/warehouse-operation-pdf'
+import { generateConsignmentReceipt, ConsignmentReceiptData } from '../documents/consignment-receipt'
 
 const execAsync = promisify(exec)
 
@@ -207,7 +208,8 @@ class JobProcessor {
         return printerService.getThermalPrinters()[0] || printerService.getDefaultPrinter()
 
       case 'warehouse_operation':
-        // For warehouse operations, prefer thermal printers but fall back to any
+      case 'consignment_receipt':
+        // For warehouse operations and consignment receipts, prefer thermal printers but fall back to any
         return printerService.getThermalPrinters()[0] || printerService.getDefaultPrinter()
 
       default:
@@ -268,6 +270,10 @@ class JobProcessor {
         }
         return generateWarehouseOperation(data as unknown as WarehouseOperationData)
 
+      case 'consignment_receipt':
+        // Always PDF for consignment receipts (has barcodes)
+        return generateConsignmentReceipt(data as unknown as ConsignmentReceiptData)
+
       default:
         console.error(`[Job Processor] Unknown document type: ${job.documentType}`)
         return null
@@ -293,8 +299,15 @@ class JobProcessor {
                                'inventory_count_report', 'cash_register_report',
                                'warehouse_operation'].includes(job.documentType)
 
+    // Consignment receipts are always PDF (have barcodes that require PDF rendering)
+    const isPdfOnly = ['consignment_receipt'].includes(job.documentType)
+
     for (let i = 0; i < copies; i++) {
-      if (useEscPos || (isReceiptOrReport && printer.supportsEscpos && printer.printerType !== 'standard')) {
+      if (isPdfOnly) {
+        // PDF printing for documents with barcodes
+        console.log(`[Job Processor] Printing via PDF to ${printer.printerName}`)
+        await this.printPdf(printer, documentBuffer)
+      } else if (useEscPos || (isReceiptOrReport && printer.supportsEscpos && printer.printerType !== 'standard')) {
         // Direct ESC/POS printing for thermal printers
         console.log(`[Job Processor] Printing via ESC/POS to ${printer.printerName}`)
         await this.printEscPos(printer, documentBuffer)
