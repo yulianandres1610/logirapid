@@ -2,9 +2,9 @@
 
 import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
-import { PackageCheck, ArrowRightLeft, Trash2, Scale, PackageOpen, Package } from 'lucide-react'
+import { ArrowRightLeft, Trash2, Scale, PackageOpen, Package } from 'lucide-react'
 
-export type OperationType = 'reception' | 'transfer' | 'scrap' | 'adjustment' | 'receive_transfer' | 'order_reception'
+export type OperationType = 'transfer' | 'scrap' | 'adjustment' | 'receive_transfer' | 'order_reception'
 
 interface OperationTypeSelectorProps {
   onSelect: (type: OperationType) => void
@@ -12,16 +12,6 @@ interface OperationTypeSelectorProps {
 }
 
 const operationTypes = [
-  {
-    id: 'reception' as OperationType,
-    name: 'Recepcion',
-    description: 'Ingresar stock - Compras y consignaciones',
-    icon: PackageCheck,
-    gradient: 'from-green-500 to-emerald-600',
-    hoverGradient: 'from-green-600 to-emerald-700',
-    bgLight: 'bg-green-50',
-    textColor: 'text-green-600'
-  },
   {
     id: 'transfer' as OperationType,
     name: 'Transferencia',
