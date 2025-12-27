@@ -14,7 +14,10 @@ import {
   X,
   Barcode,
   Truck,
-  ShoppingCart
+  ShoppingCart,
+  Plus,
+  Minus,
+  Circle
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useTheme } from '@/contexts/theme-context'
@@ -66,6 +69,15 @@ interface UnifiedReceptionViewProps {
   }) => void
 }
 
+type ValidationStatus = 'pending' | 'partial' | 'complete' | 'excess'
+
+function getValidationStatus(received: number, expected: number): ValidationStatus {
+  if (received === 0) return 'pending'
+  if (received < expected) return 'partial'
+  if (received === expected) return 'complete'
+  return 'excess'
+}
+
 export default function UnifiedReceptionView({
   warehouseId,
   warehouseName,
@@ -74,9 +86,11 @@ export default function UnifiedReceptionView({
 }: UnifiedReceptionViewProps) {
   const { theme } = useTheme()
   const searchInputRef = useRef<HTMLInputElement>(null)
+  const productSearchRef = useRef<HTMLInputElement>(null)
 
   // States
   const [searchCode, setSearchCode] = useState('')
+  const [productSearchCode, setProductSearchCode] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [detectedOrder, setDetectedOrder] = useState<DetectedOrder | null>(null)
@@ -84,6 +98,7 @@ export default function UnifiedReceptionView({
   const [processing, setProcessing] = useState(false)
   const [showSuccess, setShowSuccess] = useState(false)
   const [successData, setSuccessData] = useState<{ orderNumber: string; unitsReceived: number } | null>(null)
+  const [expandedLineId, setExpandedLineId] = useState<number | null>(null)
 
   // Focus search input on mount
   useEffect(() => {
@@ -92,11 +107,22 @@ export default function UnifiedReceptionView({
     }
   }, [detectedOrder])
 
-  // Handle barcode scan
+  // Focus product search when order is loaded
+  useEffect(() => {
+    if (productSearchRef.current && detectedOrder) {
+      productSearchRef.current.focus()
+    }
+  }, [detectedOrder])
+
+  // Handle barcode scan for order or product
   const handleBarcodeScan = useCallback((code: string) => {
     if (!detectedOrder) {
+      // Scan order code
       setSearchCode(code)
       detectOrder(code)
+    } else {
+      // Scan product - increment its quantity
+      incrementProductByBarcode(code)
     }
   }, [detectedOrder])
 
@@ -131,13 +157,13 @@ export default function UnifiedReceptionView({
         const order: DetectedOrder = data.data
         setDetectedOrder(order)
 
-        // Initialize received lines with pending quantities and auto-generated lots
+        // Initialize received lines with ZERO quantities (force counting)
         const initialLines = new Map<number, ReceivedLine>()
         order.lines.forEach((line, index) => {
           initialLines.set(line.lineId, {
             lineId: line.lineId,
             productId: line.productId,
-            quantityReceived: line.quantityPending,
+            quantityReceived: 0, // Start at 0 - force counting
             lotNumber: generateLotNumber(order.supplier.code, index),
             expirationDate: ''
           })
@@ -160,12 +186,57 @@ export default function UnifiedReceptionView({
     detectOrder(searchCode)
   }
 
-  // Update line quantity
+  // Increment product by barcode scan
+  const incrementProductByBarcode = (barcode: string) => {
+    if (!detectedOrder) return
+
+    const line = detectedOrder.lines.find(l =>
+      l.barcode === barcode || l.sku === barcode
+    )
+
+    if (line) {
+      incrementLineQuantity(line.lineId)
+      setProductSearchCode('')
+      // Show brief feedback
+      setError(null)
+    } else {
+      setError(`Producto no encontrado: ${barcode}`)
+      setTimeout(() => setError(null), 2000)
+    }
+  }
+
+  // Increment line quantity
+  const incrementLineQuantity = (lineId: number) => {
+    const current = receivedLines.get(lineId)
+    if (current) {
+      const line = detectedOrder?.lines.find(l => l.lineId === lineId)
+      const maxQty = (line?.quantityPending || 0) + 5 // Allow up to 5 extra for discrepancies
+      if (current.quantityReceived < maxQty) {
+        setReceivedLines(new Map(receivedLines.set(lineId, {
+          ...current,
+          quantityReceived: current.quantityReceived + 1
+        })))
+      }
+    }
+  }
+
+  // Decrement line quantity
+  const decrementLineQuantity = (lineId: number) => {
+    const current = receivedLines.get(lineId)
+    if (current && current.quantityReceived > 0) {
+      setReceivedLines(new Map(receivedLines.set(lineId, {
+        ...current,
+        quantityReceived: current.quantityReceived - 1
+      })))
+    }
+  }
+
+  // Update line quantity directly
   const updateLineQuantity = (lineId: number, quantity: number) => {
     const current = receivedLines.get(lineId)
     if (current) {
       const line = detectedOrder?.lines.find(l => l.lineId === lineId)
-      const maxQty = line?.quantityPending || 0
+      const maxQty = (line?.quantityPending || 0) + 5
       setReceivedLines(new Map(receivedLines.set(lineId, {
         ...current,
         quantityReceived: Math.max(0, Math.min(quantity, maxQty))
@@ -313,12 +384,18 @@ export default function UnifiedReceptionView({
   // Cancel and go back
   const handleCancel = () => {
     if (detectedOrder && receivedLines.size > 0) {
-      if (confirm('Hay productos pendientes. ¿Desea cancelar la recepcion?')) {
-        setDetectedOrder(null)
-        setReceivedLines(new Map())
-        setSearchCode('')
+      const hasReceived = Array.from(receivedLines.values()).some(l => l.quantityReceived > 0)
+      if (hasReceived) {
+        if (confirm('Hay productos contados. ¿Desea cancelar la recepcion?')) {
+          setDetectedOrder(null)
+          setReceivedLines(new Map())
+          setSearchCode('')
+        }
+        return
       }
-    } else if (detectedOrder) {
+    }
+
+    if (detectedOrder) {
       setDetectedOrder(null)
       setReceivedLines(new Map())
       setSearchCode('')
@@ -331,6 +408,13 @@ export default function UnifiedReceptionView({
   const totalToReceive = Array.from(receivedLines.values()).reduce(
     (sum, l) => sum + l.quantityReceived, 0
   )
+  const totalExpected = detectedOrder?.lines.reduce((sum, l) => sum + l.quantityPending, 0) || 0
+  const completedProducts = detectedOrder?.lines.filter(line => {
+    const received = receivedLines.get(line.lineId)
+    return received && received.quantityReceived >= line.quantityPending
+  }).length || 0
+  const totalProducts = detectedOrder?.lines.length || 0
+  const progressPercent = totalExpected > 0 ? Math.round((totalToReceive / totalExpected) * 100) : 0
 
   // Success Modal
   if (showSuccess && successData) {
@@ -374,7 +458,7 @@ export default function UnifiedReceptionView({
     )
   }
 
-  // Order Detail View
+  // Order Detail View with Counting Interface
   if (detectedOrder) {
     return (
       <div className="p-4 space-y-4">
@@ -417,6 +501,56 @@ export default function UnifiedReceptionView({
           </div>
         </div>
 
+        {/* Progress Bar */}
+        <div className={cn(
+          'p-4 rounded-xl',
+          theme === 'dark' ? 'bg-gray-800' : 'bg-gray-100'
+        )}>
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+              Progreso de Recepcion
+            </span>
+            <span className="text-sm font-bold text-gray-900 dark:text-white">
+              {completedProducts}/{totalProducts} productos ({progressPercent}%)
+            </span>
+          </div>
+          <div className="h-3 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
+            <motion.div
+              initial={{ width: 0 }}
+              animate={{ width: `${Math.min(100, progressPercent)}%` }}
+              className={cn(
+                'h-full rounded-full transition-all duration-300',
+                progressPercent >= 100 ? 'bg-emerald-500' :
+                progressPercent > 0 ? 'bg-blue-500' : 'bg-gray-300'
+              )}
+            />
+          </div>
+        </div>
+
+        {/* Product Search/Scan Field */}
+        <div className="relative">
+          <Barcode className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+          <input
+            ref={productSearchRef}
+            type="text"
+            value={productSearchCode}
+            onChange={(e) => setProductSearchCode(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && productSearchCode) {
+                incrementProductByBarcode(productSearchCode)
+              }
+            }}
+            placeholder="Escanear codigo de producto para contar..."
+            className={cn(
+              'w-full pl-12 pr-4 py-3 rounded-xl border text-sm',
+              'focus:ring-2 focus:ring-emerald-500 focus:border-transparent',
+              theme === 'dark'
+                ? 'bg-gray-800 border-gray-700 text-white placeholder-gray-500'
+                : 'bg-white border-gray-200 text-gray-900 placeholder-gray-400'
+            )}
+          />
+        </div>
+
         {/* Error Message */}
         <AnimatePresence>
           {error && (
@@ -435,98 +569,205 @@ export default function UnifiedReceptionView({
           )}
         </AnimatePresence>
 
-        {/* Lines */}
+        {/* Product Cards */}
         <div className="space-y-3">
           {detectedOrder.lines.map(line => {
             const receivedData = receivedLines.get(line.lineId)
-            const hasDiscrepancy = receivedData && receivedData.quantityReceived !== line.quantityPending
+            const quantityReceived = receivedData?.quantityReceived || 0
+            const status = getValidationStatus(quantityReceived, line.quantityPending)
+            const isExpanded = expandedLineId === line.lineId
+
+            // Status colors
+            let bgColor = theme === 'dark' ? 'bg-gray-800' : 'bg-white'
+            let borderColor = theme === 'dark' ? 'border-gray-700' : 'border-gray-200'
+            let statusIcon = <Circle className="w-5 h-5 text-gray-400" />
+
+            if (status === 'complete') {
+              bgColor = theme === 'dark' ? 'bg-emerald-900/20' : 'bg-emerald-50'
+              borderColor = 'border-emerald-500'
+              statusIcon = <Check className="w-5 h-5 text-emerald-600" />
+            } else if (status === 'excess') {
+              bgColor = theme === 'dark' ? 'bg-amber-900/20' : 'bg-amber-50'
+              borderColor = 'border-amber-500'
+              statusIcon = <AlertTriangle className="w-5 h-5 text-amber-600" />
+            } else if (status === 'partial') {
+              bgColor = theme === 'dark' ? 'bg-blue-900/20' : 'bg-blue-50'
+              borderColor = 'border-blue-500'
+              statusIcon = <Circle className="w-5 h-5 text-blue-500 fill-blue-200" />
+            }
 
             return (
-              <div
+              <motion.div
                 key={line.lineId}
+                layout
                 className={cn(
-                  'p-4 rounded-xl border',
-                  theme === 'dark' ? 'bg-gray-800/50 border-gray-700' : 'bg-white border-gray-200'
+                  'rounded-xl border transition-all',
+                  bgColor,
+                  borderColor
                 )}
               >
-                <div className="flex items-start justify-between mb-3">
-                  <div>
-                    <p className="font-medium text-gray-900 dark:text-white">{line.productName}</p>
-                    <div className="flex items-center gap-2 text-xs text-gray-500">
-                      <span>SKU: {line.sku}</span>
-                      {line.barcode && (
-                        <>
-                          <span>|</span>
-                          <span className="flex items-center gap-1">
-                            <Barcode className="w-3 h-3" />
-                            {line.barcode}
-                          </span>
-                        </>
-                      )}
+                {/* Main Row */}
+                <div
+                  className="p-4 cursor-pointer"
+                  onClick={() => setExpandedLineId(isExpanded ? null : line.lineId)}
+                >
+                  <div className="flex items-center gap-3">
+                    {/* Status Icon */}
+                    <div className="flex-shrink-0">
+                      {statusIcon}
                     </div>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-sm text-gray-500">Pendiente:</p>
-                    <p className="font-bold text-gray-900 dark:text-white">{line.quantityPending}</p>
-                  </div>
-                </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                  {/* Quantity */}
-                  <div>
-                    <label className="block text-xs text-gray-500 mb-1">Cantidad a Recibir</label>
-                    <div className="flex items-center gap-2">
-                      <input
-                        type="number"
-                        value={receivedData?.quantityReceived || 0}
-                        onChange={(e) => updateLineQuantity(line.lineId, parseInt(e.target.value) || 0)}
-                        min={0}
-                        max={line.quantityPending}
-                        className={cn(
-                          'w-full px-3 py-2 rounded-lg border text-center font-bold',
-                          theme === 'dark' ? 'bg-gray-700 border-gray-600 text-white' : 'bg-gray-50 border-gray-200',
-                          hasDiscrepancy && 'border-amber-500'
+                    {/* Product Info */}
+                    <div className="flex-grow min-w-0">
+                      <p className="font-medium text-gray-900 dark:text-white truncate">
+                        {line.productName}
+                      </p>
+                      <div className="flex items-center gap-2 text-xs text-gray-500">
+                        <span>SKU: {line.sku}</span>
+                        {line.barcode && (
+                          <>
+                            <span>|</span>
+                            <span className="flex items-center gap-1">
+                              <Barcode className="w-3 h-3" />
+                              {line.barcode}
+                            </span>
+                          </>
                         )}
-                      />
-                      {hasDiscrepancy && (
-                        <AlertTriangle className="w-5 h-5 text-amber-500 flex-shrink-0" />
-                      )}
+                      </div>
+                    </div>
+
+                    {/* Quantity Controls */}
+                    <div className="flex items-center gap-2" onClick={e => e.stopPropagation()}>
+                      <button
+                        onClick={() => decrementLineQuantity(line.lineId)}
+                        disabled={quantityReceived === 0}
+                        className={cn(
+                          'w-10 h-10 rounded-full flex items-center justify-center transition-colors',
+                          quantityReceived === 0
+                            ? 'bg-gray-100 dark:bg-gray-800 text-gray-300 dark:text-gray-600 cursor-not-allowed'
+                            : 'bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'
+                        )}
+                      >
+                        <Minus className="w-5 h-5" />
+                      </button>
+
+                      <div className="text-center min-w-[90px]">
+                        <div className="flex items-center justify-center gap-1">
+                          <span className="text-2xl font-bold text-gray-900 dark:text-white">
+                            {quantityReceived}
+                          </span>
+                          <span className="text-lg text-gray-400">/</span>
+                          <span className="text-lg text-gray-500">{line.quantityPending}</span>
+                        </div>
+                        {quantityReceived !== line.quantityPending && quantityReceived > 0 && (
+                          <span className={cn(
+                            'text-xs font-medium',
+                            quantityReceived > line.quantityPending
+                              ? 'text-amber-600'
+                              : 'text-blue-600'
+                          )}>
+                            {quantityReceived > line.quantityPending
+                              ? `+${quantityReceived - line.quantityPending}`
+                              : `${quantityReceived - line.quantityPending}`}
+                          </span>
+                        )}
+                      </div>
+
+                      <button
+                        onClick={() => incrementLineQuantity(line.lineId)}
+                        className={cn(
+                          'w-10 h-10 rounded-full flex items-center justify-center transition-colors',
+                          'bg-emerald-100 dark:bg-emerald-900/50 text-emerald-600 dark:text-emerald-400',
+                          'hover:bg-emerald-200 dark:hover:bg-emerald-800/50'
+                        )}
+                      >
+                        <Plus className="w-5 h-5" />
+                      </button>
                     </div>
                   </div>
 
-                  {/* Lot Number */}
-                  <div>
-                    <label className="block text-xs text-gray-500 mb-1">Numero de Lote</label>
-                    <input
-                      type="text"
-                      value={receivedData?.lotNumber || ''}
-                      onChange={(e) => updateLineLot(line.lineId, e.target.value)}
-                      placeholder="Ej: ABC241227-01"
-                      className={cn(
-                        'w-full px-3 py-2 rounded-lg border font-mono text-sm',
-                        theme === 'dark' ? 'bg-gray-700 border-gray-600 text-white' : 'bg-gray-50 border-gray-200'
-                      )}
-                    />
-                  </div>
-
-                  {/* Expiration Date */}
-                  <div>
-                    <label className="block text-xs text-gray-500 mb-1 flex items-center gap-1">
-                      <Calendar className="w-3 h-3" />
-                      Fecha Vencimiento
-                    </label>
-                    <input
-                      type="date"
-                      value={receivedData?.expirationDate || ''}
-                      onChange={(e) => updateLineExpiration(line.lineId, e.target.value)}
-                      className={cn(
-                        'w-full px-3 py-2 rounded-lg border',
-                        theme === 'dark' ? 'bg-gray-700 border-gray-600 text-white' : 'bg-gray-50 border-gray-200'
-                      )}
-                    />
+                  {/* Progress Bar */}
+                  <div className="mt-3">
+                    <div className="h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
+                      <div
+                        className={cn(
+                          'h-full rounded-full transition-all duration-300',
+                          status === 'complete' ? 'bg-emerald-500' :
+                          status === 'excess' ? 'bg-amber-500' :
+                          status === 'partial' ? 'bg-blue-500' : 'bg-gray-300'
+                        )}
+                        style={{ width: `${Math.min(100, (quantityReceived / line.quantityPending) * 100)}%` }}
+                      />
+                    </div>
                   </div>
                 </div>
-              </div>
+
+                {/* Expanded Details */}
+                <AnimatePresence>
+                  {isExpanded && (
+                    <motion.div
+                      initial={{ height: 0, opacity: 0 }}
+                      animate={{ height: 'auto', opacity: 1 }}
+                      exit={{ height: 0, opacity: 0 }}
+                      className="overflow-hidden"
+                    >
+                      <div className={cn(
+                        'px-4 pb-4 pt-2 border-t',
+                        theme === 'dark' ? 'border-gray-700' : 'border-gray-200'
+                      )}>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                          {/* Lot Number */}
+                          <div>
+                            <label className="block text-xs text-gray-500 mb-1">Numero de Lote</label>
+                            <input
+                              type="text"
+                              value={receivedData?.lotNumber || ''}
+                              onChange={(e) => updateLineLot(line.lineId, e.target.value)}
+                              placeholder="Ej: ABC241227-01"
+                              className={cn(
+                                'w-full px-3 py-2 rounded-lg border font-mono text-sm',
+                                theme === 'dark' ? 'bg-gray-700 border-gray-600 text-white' : 'bg-gray-50 border-gray-200'
+                              )}
+                            />
+                          </div>
+
+                          {/* Expiration Date - Optional */}
+                          <div>
+                            <label className="block text-xs text-gray-500 mb-1 flex items-center gap-1">
+                              <Calendar className="w-3 h-3" />
+                              Fecha Vencimiento <span className="text-gray-400">(opcional)</span>
+                            </label>
+                            <input
+                              type="date"
+                              value={receivedData?.expirationDate || ''}
+                              onChange={(e) => updateLineExpiration(line.lineId, e.target.value)}
+                              className={cn(
+                                'w-full px-3 py-2 rounded-lg border',
+                                theme === 'dark' ? 'bg-gray-700 border-gray-600 text-white' : 'bg-gray-50 border-gray-200'
+                              )}
+                            />
+                          </div>
+                        </div>
+
+                        {/* Quick set quantity */}
+                        <div className="mt-3">
+                          <label className="block text-xs text-gray-500 mb-1">Cantidad manual</label>
+                          <input
+                            type="number"
+                            value={quantityReceived}
+                            onChange={(e) => updateLineQuantity(line.lineId, parseInt(e.target.value) || 0)}
+                            min={0}
+                            className={cn(
+                              'w-full px-3 py-2 rounded-lg border text-center font-bold',
+                              theme === 'dark' ? 'bg-gray-700 border-gray-600 text-white' : 'bg-gray-50 border-gray-200'
+                            )}
+                          />
+                        </div>
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </motion.div>
             )
           })}
         </div>
@@ -534,12 +775,14 @@ export default function UnifiedReceptionView({
         {/* Summary & Action */}
         <div className={cn(
           'p-4 rounded-xl sticky bottom-4',
-          theme === 'dark' ? 'bg-gray-800 border border-gray-700' : 'bg-gray-50 border border-gray-200'
+          theme === 'dark' ? 'bg-gray-800 border border-gray-700' : 'bg-white border border-gray-200 shadow-lg'
         )}>
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm text-gray-500">Total a Recibir</p>
-              <p className="text-2xl font-bold text-gray-900 dark:text-white">{totalToReceive} unidades</p>
+              <p className="text-sm text-gray-500">Total Contado</p>
+              <p className="text-2xl font-bold text-gray-900 dark:text-white">
+                {totalToReceive} <span className="text-lg text-gray-400">/ {totalExpected}</span> unidades
+              </p>
             </div>
             <div className="flex gap-2">
               <motion.button
