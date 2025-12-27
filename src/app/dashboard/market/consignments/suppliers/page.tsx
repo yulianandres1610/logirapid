@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   Users,
@@ -12,7 +13,6 @@ import {
   ChevronLeft,
   ChevronRight,
   X,
-  Building2,
   Phone,
   Mail,
   User,
@@ -101,6 +101,7 @@ const initialFormData: SupplierFormData = {
 
 export default function SuppliersPage() {
   const { theme } = useTheme()
+  const router = useRouter()
   const [suppliers, setSuppliers] = useState<Supplier[]>([])
   const [pagination, setPagination] = useState<Pagination>({ page: 1, limit: 20, total: 0, totalPages: 0 })
   const [loading, setLoading] = useState(true)
@@ -109,7 +110,6 @@ export default function SuppliersPage() {
   const [isRefreshing, setIsRefreshing] = useState(false)
 
   // Modal states
-  const [showCreateModal, setShowCreateModal] = useState(false)
   const [showEditModal, setShowEditModal] = useState(false)
   const [showDeleteModal, setShowDeleteModal] = useState(false)
   const [formData, setFormData] = useState<SupplierFormData>(initialFormData)
@@ -222,36 +222,6 @@ export default function SuppliersPage() {
     return Object.keys(errors).length === 0
   }
 
-  const handleCreateSupplier = async () => {
-    if (!validateForm()) return
-
-    setSaving(true)
-    setActionError(null)
-
-    try {
-      const response = await fetch('/api/consignments/suppliers', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(formData)
-      })
-
-      const data = await response.json()
-
-      if (response.ok && data.success) {
-        setShowCreateModal(false)
-        setFormData(initialFormData)
-        fetchSuppliers()
-      } else {
-        setActionError(data.error || 'Error al crear proveedor')
-      }
-    } catch (error) {
-      console.error('Error:', error)
-      setActionError('Error de conexion')
-    } finally {
-      setSaving(false)
-    }
-  }
-
   const handleUpdateSupplier = async () => {
     if (!selectedSupplier || !validateForm()) return
 
@@ -338,14 +308,6 @@ export default function SuppliersPage() {
     setShowDeleteModal(true)
   }
 
-  const openCreateModal = () => {
-    setFormData(initialFormData)
-    setFormErrors({})
-    setActionError(null)
-    setShowCreateModal(true)
-    fetchAvailableUsers()
-  }
-
   return (
     <ProtectedRoute>
       <DashboardLayout>
@@ -427,7 +389,7 @@ export default function SuppliersPage() {
                 <motion.button
                   whileHover={{ scale: 1.02 }}
                   whileTap={{ scale: 0.98 }}
-                  onClick={openCreateModal}
+                  onClick={() => router.push('/dashboard/market/consignments/suppliers/create')}
                   className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-emerald-500 to-emerald-600 text-white rounded-xl hover:from-emerald-600 hover:to-emerald-700 transition-all shadow-lg shadow-emerald-500/25"
                 >
                   <Plus className="w-5 h-5" />
@@ -462,7 +424,7 @@ export default function SuppliersPage() {
                     <Users className="w-12 h-12 mx-auto mb-3 text-gray-400" />
                     <p className="text-gray-500">No hay proveedores registrados</p>
                     <button
-                      onClick={openCreateModal}
+                      onClick={() => router.push('/dashboard/market/consignments/suppliers/create')}
                       className="mt-3 text-sm text-emerald-500 hover:text-emerald-600"
                     >
                       Crear primer proveedor
@@ -629,9 +591,9 @@ export default function SuppliersPage() {
           </motion.div>
         </div>
 
-        {/* Create/Edit Modal */}
+        {/* Edit Modal */}
         <AnimatePresence>
-          {(showCreateModal || showEditModal) && (
+          {showEditModal && (
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
@@ -639,7 +601,6 @@ export default function SuppliersPage() {
               className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4"
               onClick={() => {
                 if (!saving) {
-                  setShowCreateModal(false)
                   setShowEditModal(false)
                 }
               }}
@@ -656,13 +617,10 @@ export default function SuppliersPage() {
               >
                 <div className="flex items-center justify-between mb-6">
                   <h2 className="text-xl font-bold text-gray-900 dark:text-white">
-                    {showCreateModal ? 'Nuevo Proveedor' : 'Editar Proveedor'}
+                    Editar Proveedor
                   </h2>
                   <button
-                    onClick={() => {
-                      setShowCreateModal(false)
-                      setShowEditModal(false)
-                    }}
+                    onClick={() => setShowEditModal(false)}
                     className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800"
                   >
                     <X className="w-5 h-5 text-gray-500" />
@@ -881,13 +839,13 @@ export default function SuppliersPage() {
                       {/* Password */}
                       <div>
                         <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                          Contrasena {showEditModal ? '(dejar vacia para no cambiar)' : '*'}
+                          Contrasena (dejar vacia para no cambiar)
                         </label>
                         <input
                           type="password"
                           value={formData.password}
                           onChange={(e) => setFormData(p => ({ ...p, password: e.target.value }))}
-                          placeholder={showEditModal ? '********' : 'Contrasena segura'}
+                          placeholder="********"
                           className={cn(
                             'w-full px-4 py-2.5 rounded-xl border focus:outline-none focus:ring-2 transition-all',
                             theme === 'dark'
@@ -914,10 +872,7 @@ export default function SuppliersPage() {
                   <motion.button
                     whileHover={{ scale: 1.02 }}
                     whileTap={{ scale: 0.98 }}
-                    onClick={() => {
-                      setShowCreateModal(false)
-                      setShowEditModal(false)
-                    }}
+                    onClick={() => setShowEditModal(false)}
                     disabled={saving}
                     className={cn(
                       'flex-1 py-2.5 rounded-xl transition-colors font-medium',
@@ -932,7 +887,7 @@ export default function SuppliersPage() {
                   <motion.button
                     whileHover={{ scale: 1.02 }}
                     whileTap={{ scale: 0.98 }}
-                    onClick={showCreateModal ? handleCreateSupplier : handleUpdateSupplier}
+                    onClick={handleUpdateSupplier}
                     disabled={saving}
                     className={cn(
                       'flex-1 py-2.5 rounded-xl bg-gradient-to-r from-emerald-500 to-emerald-600 text-white font-medium shadow-lg shadow-emerald-500/25 transition-all',
@@ -945,7 +900,7 @@ export default function SuppliersPage() {
                         Guardando...
                       </span>
                     ) : (
-                      showCreateModal ? 'Crear Proveedor' : 'Guardar Cambios'
+                      'Guardar Cambios'
                     )}
                   </motion.button>
                 </div>
