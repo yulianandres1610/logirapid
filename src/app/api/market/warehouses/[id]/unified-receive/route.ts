@@ -264,16 +264,16 @@ export async function POST(
 
       const newStatus = parseInt(pendingResult.rows[0].pending) === 0 ? 'received' : 'partial'
 
-      // Update order status
+      // Update order status (use $5 as duplicate of $1 to avoid type inference issue)
       await db.query(`
         UPDATE consignment_orders SET
           status = $1,
           warehouse_id = COALESCE(warehouse_id, $2),
-          received_at = CASE WHEN $1 = 'received' THEN NOW() ELSE received_at END,
+          received_at = CASE WHEN $5 = 'received' THEN NOW() ELSE received_at END,
           received_by = $3,
           updated_at = NOW()
         WHERE id = $4
-      `, [newStatus, warehouseId, payload.userId, orderId])
+      `, [newStatus, warehouseId, payload.userId, orderId, newStatus])
 
       // Create wallet transaction for received goods
       const walletResult = await db.query(
@@ -451,16 +451,16 @@ export async function POST(
 
       const newStatus = parseInt(pendingResult.rows[0].pending) === 0 ? 'recibido' : 'pendiente'
 
-      // Update purchase status
+      // Update purchase status (use $5 as duplicate of $1 to avoid type inference issue)
       await db.query(`
         UPDATE market_purchases SET
           status = $1,
           warehouse_id = COALESCE(warehouse_id, $2),
-          received_date = CASE WHEN $1 = 'recibido' THEN NOW() ELSE received_date END,
+          received_date = CASE WHEN $5 = 'recibido' THEN NOW() ELSE received_date END,
           received_by = $3,
           updated_at = NOW()
         WHERE id = $4
-      `, [newStatus, warehouseId, payload.userId, orderId])
+      `, [newStatus, warehouseId, payload.userId, orderId, newStatus])
 
       // Create inventory movement record
       await db.query(`
@@ -510,4 +510,3 @@ export async function POST(
     }, { status: 500 })
   }
 }
-// Rebuild trigger: 1766877031
