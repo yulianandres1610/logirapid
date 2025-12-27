@@ -2,7 +2,7 @@
 
 import { usePathname, useRouter } from 'next/navigation'
 import { motion } from 'framer-motion'
-import { Home, Package, DollarSign, User, LogOut } from 'lucide-react'
+import { Home, Package, DollarSign, User, LogOut, Menu, X } from 'lucide-react'
 import { useState } from 'react'
 
 const navItems = [
@@ -20,14 +20,13 @@ export default function SupplierDashboardLayout({
   const pathname = usePathname()
   const router = useRouter()
   const [loggingOut, setLoggingOut] = useState(false)
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
 
   const handleLogout = async () => {
     setLoggingOut(true)
     try {
-      // Call logout API
       await fetch('/api/supplier/auth', { method: 'DELETE' })
 
-      // Clear client-side cookies
       if (typeof window !== 'undefined') {
         const cookiesToClear = [
           'supplier-token', 'supplier-id', 'supplier-code', 'supplier-name'
@@ -37,7 +36,6 @@ export default function SupplierDashboardLayout({
         })
       }
 
-      // Redirect to login
       window.location.href = '/supplier/login'
     } catch {
       console.error('Error during logout')
@@ -53,15 +51,145 @@ export default function SupplierDashboardLayout({
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 pb-20 md:pb-0">
-      {/* Main Content */}
-      <main className="min-h-screen">
-        {children}
-      </main>
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
+      {/* Desktop Sidebar */}
+      <aside className="hidden md:flex fixed left-0 top-0 bottom-0 w-64 bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 flex-col z-40">
+        {/* Logo */}
+        <div className="h-16 flex items-center px-6 border-b border-gray-200 dark:border-gray-700">
+          <div className="w-10 h-10 bg-gradient-to-br from-teal-500 to-cyan-600 rounded-xl flex items-center justify-center">
+            <Package className="w-5 h-5 text-white" />
+          </div>
+          <span className="ml-3 font-bold text-lg text-gray-900 dark:text-white">
+            Portal Proveedor
+          </span>
+        </div>
+
+        {/* Nav Items */}
+        <nav className="flex-1 py-6 px-3">
+          {navItems.map((item) => {
+            const active = isActive(item.href)
+            const Icon = item.icon
+
+            return (
+              <motion.button
+                key={item.id}
+                whileHover={{ x: 4 }}
+                whileTap={{ scale: 0.98 }}
+                onClick={() => router.push(item.href)}
+                className={`w-full flex items-center px-4 py-3 mb-2 rounded-xl transition-all ${
+                  active
+                    ? 'bg-gradient-to-r from-teal-500 to-cyan-500 text-white shadow-lg shadow-teal-500/30'
+                    : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700/50'
+                }`}
+              >
+                <Icon className="w-5 h-5" />
+                <span className="ml-3 font-medium">{item.label}</span>
+              </motion.button>
+            )
+          })}
+        </nav>
+
+        {/* Logout Button */}
+        <div className="p-4 border-t border-gray-200 dark:border-gray-700">
+          <button
+            onClick={handleLogout}
+            disabled={loggingOut}
+            className="w-full flex items-center px-4 py-3 text-gray-600 dark:text-gray-400 hover:bg-red-50 dark:hover:bg-red-900/20 hover:text-red-600 rounded-xl transition-colors"
+          >
+            <LogOut className="w-5 h-5" />
+            <span className="ml-3 font-medium">
+              {loggingOut ? 'Saliendo...' : 'Cerrar Sesion'}
+            </span>
+          </button>
+        </div>
+      </aside>
+
+      {/* Mobile Header */}
+      <header className="md:hidden fixed top-0 left-0 right-0 h-16 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 z-50 flex items-center justify-between px-4">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 bg-gradient-to-br from-teal-500 to-cyan-600 rounded-xl flex items-center justify-center">
+            <Package className="w-5 h-5 text-white" />
+          </div>
+          <span className="font-bold text-gray-900 dark:text-white">Portal Proveedor</span>
+        </div>
+        <button
+          onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+          className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700"
+        >
+          {mobileMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
+        </button>
+      </header>
+
+      {/* Mobile Menu Overlay */}
+      {mobileMenuOpen && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          className="md:hidden fixed inset-0 bg-black/50 z-40"
+          onClick={() => setMobileMenuOpen(false)}
+        />
+      )}
+
+      {/* Mobile Slide Menu */}
+      <motion.div
+        initial={{ x: '100%' }}
+        animate={{ x: mobileMenuOpen ? 0 : '100%' }}
+        transition={{ type: 'spring', damping: 25, stiffness: 200 }}
+        className="md:hidden fixed right-0 top-0 bottom-0 w-72 bg-white dark:bg-gray-800 z-50 shadow-2xl"
+      >
+        <div className="h-16 flex items-center justify-between px-4 border-b border-gray-200 dark:border-gray-700">
+          <span className="font-bold text-gray-900 dark:text-white">Menu</span>
+          <button
+            onClick={() => setMobileMenuOpen(false)}
+            className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        <nav className="p-4">
+          {navItems.map((item) => {
+            const active = isActive(item.href)
+            const Icon = item.icon
+
+            return (
+              <button
+                key={item.id}
+                onClick={() => {
+                  router.push(item.href)
+                  setMobileMenuOpen(false)
+                }}
+                className={`w-full flex items-center px-4 py-4 mb-2 rounded-xl transition-all ${
+                  active
+                    ? 'bg-gradient-to-r from-teal-500 to-cyan-500 text-white'
+                    : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700'
+                }`}
+              >
+                <Icon className="w-5 h-5" />
+                <span className="ml-3 font-medium">{item.label}</span>
+              </button>
+            )
+          })}
+
+          <div className="border-t border-gray-200 dark:border-gray-700 mt-4 pt-4">
+            <button
+              onClick={handleLogout}
+              disabled={loggingOut}
+              className="w-full flex items-center px-4 py-4 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-xl transition-colors"
+            >
+              <LogOut className="w-5 h-5" />
+              <span className="ml-3 font-medium">
+                {loggingOut ? 'Saliendo...' : 'Cerrar Sesion'}
+              </span>
+            </button>
+          </div>
+        </nav>
+      </motion.div>
 
       {/* Bottom Navigation - Mobile Only */}
-      <nav className="fixed bottom-0 left-0 right-0 bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 md:hidden z-50 safe-area-bottom">
-        <div className="flex items-center justify-around h-16">
+      <nav className="fixed bottom-0 left-0 right-0 bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 md:hidden z-30">
+        <div className="flex items-center justify-around h-16 pb-safe">
           {navItems.map((item) => {
             const active = isActive(item.href)
             const Icon = item.icon
@@ -70,7 +198,7 @@ export default function SupplierDashboardLayout({
               <button
                 key={item.id}
                 onClick={() => router.push(item.href)}
-                className={`flex flex-col items-center justify-center flex-1 h-full min-w-[64px] relative touch-manipulation ${
+                className={`flex flex-col items-center justify-center flex-1 h-full min-w-[64px] relative ${
                   active
                     ? 'text-teal-600 dark:text-teal-400'
                     : 'text-gray-500 dark:text-gray-400'
@@ -82,91 +210,21 @@ export default function SupplierDashboardLayout({
                     className="absolute top-0 left-1/2 -translate-x-1/2 w-12 h-1 bg-teal-500 rounded-b-full"
                   />
                 )}
-                <Icon className={`w-6 h-6 ${active ? 'text-teal-600 dark:text-teal-400' : ''}`} />
-                <span className={`text-[10px] mt-1 font-medium ${active ? 'text-teal-600 dark:text-teal-400' : ''}`}>
-                  {item.label}
-                </span>
+                <Icon className="w-5 h-5" />
+                <span className="text-[10px] mt-1 font-medium">{item.label}</span>
               </button>
             )
           })}
-
-          {/* Logout Button */}
-          <button
-            onClick={handleLogout}
-            disabled={loggingOut}
-            className="flex flex-col items-center justify-center flex-1 h-full min-w-[64px] text-gray-500 dark:text-gray-400 touch-manipulation"
-          >
-            <LogOut className="w-6 h-6" />
-            <span className="text-[10px] mt-1 font-medium">
-              {loggingOut ? '...' : 'Salir'}
-            </span>
-          </button>
         </div>
       </nav>
 
-      {/* Desktop Sidebar - Hidden on Mobile */}
-      <aside className="hidden md:flex fixed left-0 top-0 bottom-0 w-20 lg:w-64 bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 flex-col z-40">
-        {/* Logo */}
-        <div className="h-16 flex items-center justify-center lg:justify-start px-4 border-b border-gray-200 dark:border-gray-700">
-          <div className="w-10 h-10 bg-gradient-to-br from-teal-500 to-cyan-600 rounded-xl flex items-center justify-center">
-            <Package className="w-5 h-5 text-white" />
-          </div>
-          <span className="hidden lg:block ml-3 font-bold text-gray-900 dark:text-white">
-            Portal Proveedor
-          </span>
-        </div>
+      {/* Main Content */}
+      <main className="md:ml-64 pt-16 md:pt-0 pb-20 md:pb-0 min-h-screen">
+        {children}
+      </main>
 
-        {/* Nav Items */}
-        <nav className="flex-1 py-4">
-          {navItems.map((item) => {
-            const active = isActive(item.href)
-            const Icon = item.icon
-
-            return (
-              <button
-                key={item.id}
-                onClick={() => router.push(item.href)}
-                className={`w-full flex items-center justify-center lg:justify-start px-4 py-3 mb-1 transition-colors ${
-                  active
-                    ? 'bg-teal-50 dark:bg-teal-900/30 text-teal-600 dark:text-teal-400 border-r-4 border-teal-500'
-                    : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700'
-                }`}
-              >
-                <Icon className="w-5 h-5" />
-                <span className="hidden lg:block ml-3 font-medium">{item.label}</span>
-              </button>
-            )
-          })}
-        </nav>
-
-        {/* Logout Button - Desktop */}
-        <div className="p-4 border-t border-gray-200 dark:border-gray-700">
-          <button
-            onClick={handleLogout}
-            disabled={loggingOut}
-            className="w-full flex items-center justify-center lg:justify-start px-4 py-3 text-gray-600 dark:text-gray-400 hover:bg-red-50 dark:hover:bg-red-900/20 hover:text-red-600 rounded-xl transition-colors"
-          >
-            <LogOut className="w-5 h-5" />
-            <span className="hidden lg:block ml-3 font-medium">
-              {loggingOut ? 'Saliendo...' : 'Cerrar Sesion'}
-            </span>
-          </button>
-        </div>
-      </aside>
-
-      {/* Content Offset for Desktop Sidebar */}
       <style jsx global>{`
-        @media (min-width: 768px) {
-          .min-h-screen {
-            margin-left: 5rem;
-          }
-        }
-        @media (min-width: 1024px) {
-          .min-h-screen {
-            margin-left: 16rem;
-          }
-        }
-        .safe-area-bottom {
+        .pb-safe {
           padding-bottom: env(safe-area-inset-bottom);
         }
       `}</style>

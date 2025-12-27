@@ -5,7 +5,6 @@ import { useRouter } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   DollarSign,
-  ArrowLeft,
   Loader2,
   Clock,
   CheckCircle,
@@ -134,27 +133,25 @@ export default function SupplierPaymentsPage() {
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
-      {/* Header */}
-      <header className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-4 py-4 sticky top-0 z-20">
-        <div className="max-w-4xl mx-auto flex items-center justify-between">
+      {/* Header - Responsive */}
+      <header className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-4 py-4 md:px-8 md:py-6 lg:px-12">
+        <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <button
-              onClick={() => router.push('/dashboard/supplier')}
-              className="p-2 hover:bg-gray-100 active:bg-gray-200 dark:hover:bg-gray-700 rounded-lg transition-colors touch-manipulation"
-            >
-              <ArrowLeft className="w-5 h-5 text-gray-600 dark:text-gray-300" />
-            </button>
-            <div className="flex items-center gap-2">
-              <DollarSign className="w-6 h-6 text-teal-600" />
-              <h1 className="text-lg md:text-xl font-bold text-gray-900 dark:text-white">Mis Pagos</h1>
+            <div className="w-10 h-10 md:w-12 md:h-12 bg-teal-100 dark:bg-teal-900/30 rounded-xl flex items-center justify-center">
+              <DollarSign className="w-5 h-5 md:w-6 md:h-6 text-teal-600" />
+            </div>
+            <div>
+              <h1 className="text-xl md:text-2xl font-bold text-gray-900 dark:text-white">Mis Pagos</h1>
+              <p className="text-sm text-gray-500">{requests.length} solicitudes</p>
             </div>
           </div>
           <button
             onClick={() => setShowModal(true)}
             disabled={!wallet || wallet.available <= 0 || hasPendingRequest}
-            className="p-2.5 bg-teal-500 text-white rounded-xl disabled:opacity-50 disabled:cursor-not-allowed active:bg-teal-600 transition-colors touch-manipulation"
+            className="flex items-center gap-2 px-4 py-2.5 md:px-6 md:py-3 bg-teal-500 hover:bg-teal-600 text-white rounded-xl disabled:opacity-50 disabled:cursor-not-allowed transition-colors touch-manipulation font-medium"
           >
             <Plus className="w-5 h-5" />
+            <span className="hidden md:inline">Nueva Solicitud</span>
           </button>
         </div>
       </header>
@@ -174,37 +171,39 @@ export default function SupplierPaymentsPage() {
         )}
       </AnimatePresence>
 
-      <main className="max-w-4xl mx-auto px-4 py-5 md:py-8 space-y-5 md:space-y-6">
+      <main className="px-4 py-5 md:px-8 md:py-8 lg:px-12 pb-24 md:pb-8 space-y-5 md:space-y-8">
         {loading ? (
           <div className="flex items-center justify-center py-12">
             <Loader2 className="w-8 h-8 text-teal-500 animate-spin" />
           </div>
         ) : (
           <>
-            {/* Wallet Summary */}
+            {/* Wallet Summary - Desktop layout */}
             {wallet && (
               <motion.div
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
-                className="bg-gradient-to-br from-teal-500 to-cyan-600 rounded-2xl p-5 text-white shadow-lg"
+                className="bg-gradient-to-br from-teal-500 to-cyan-600 rounded-2xl md:rounded-3xl p-5 md:p-8 text-white shadow-lg"
               >
-                <div className="flex items-center gap-3 mb-4">
-                  <div className="w-11 h-11 bg-white/20 rounded-xl flex items-center justify-center">
-                    <Wallet className="w-5 h-5" />
+                <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 md:gap-8">
+                  <div className="flex items-center gap-3 md:gap-4">
+                    <div className="w-11 h-11 md:w-14 md:h-14 bg-white/20 rounded-xl md:rounded-2xl flex items-center justify-center">
+                      <Wallet className="w-5 h-5 md:w-7 md:h-7" />
+                    </div>
+                    <div>
+                      <p className="text-white/70 text-xs md:text-sm">Disponible para cobrar</p>
+                      <p className="text-2xl md:text-4xl font-bold">{formatCurrency(wallet.available)}</p>
+                    </div>
                   </div>
-                  <div>
-                    <p className="text-white/70 text-xs">Disponible para cobrar</p>
-                    <p className="text-2xl font-bold">{formatCurrency(wallet.available)}</p>
-                  </div>
-                </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="bg-white/10 rounded-xl p-3">
-                    <p className="text-white/60 text-xs">En Proceso</p>
-                    <p className="font-bold">{formatCurrency(wallet.pending)}</p>
-                  </div>
-                  <div className="bg-white/10 rounded-xl p-3">
-                    <p className="text-white/60 text-xs">Total Pagado</p>
-                    <p className="font-bold">{formatCurrency(wallet.totalPaid)}</p>
+                  <div className="grid grid-cols-2 gap-3 md:gap-4 md:min-w-[320px]">
+                    <div className="bg-white/10 rounded-xl p-3 md:p-4">
+                      <p className="text-white/60 text-xs md:text-sm">En Proceso</p>
+                      <p className="font-bold text-lg md:text-xl">{formatCurrency(wallet.pending)}</p>
+                    </div>
+                    <div className="bg-white/10 rounded-xl p-3 md:p-4">
+                      <p className="text-white/60 text-xs md:text-sm">Total Pagado</p>
+                      <p className="font-bold text-lg md:text-xl">{formatCurrency(wallet.totalPaid)}</p>
+                    </div>
                   </div>
                 </div>
               </motion.div>
@@ -212,17 +211,17 @@ export default function SupplierPaymentsPage() {
 
             {/* Requests List */}
             <div>
-              <h2 className="text-base font-bold text-gray-900 dark:text-white mb-3">
+              <h2 className="text-base md:text-xl font-bold text-gray-900 dark:text-white mb-4">
                 Solicitudes de Pago
               </h2>
 
               {requests.length === 0 ? (
-                <div className="text-center py-10 bg-white dark:bg-gray-800 rounded-2xl">
-                  <DollarSign className="w-12 h-12 text-gray-300 mx-auto mb-3" />
-                  <p className="text-gray-500 text-sm">No hay solicitudes</p>
+                <div className="text-center py-10 md:py-16 bg-white dark:bg-gray-800 rounded-2xl">
+                  <DollarSign className="w-12 h-12 md:w-16 md:h-16 text-gray-300 mx-auto mb-3" />
+                  <p className="text-gray-500">No hay solicitudes</p>
                 </div>
               ) : (
-                <div className="space-y-3">
+                <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4 md:gap-6">
                   {requests.map((request, index) => {
                     const statusConfig = STATUS_CONFIG[request.status] || STATUS_CONFIG.pending
                     const StatusIcon = statusConfig.icon
@@ -233,41 +232,41 @@ export default function SupplierPaymentsPage() {
                         initial={{ opacity: 0, y: 20 }}
                         animate={{ opacity: 1, y: 0 }}
                         transition={{ delay: index * 0.05 }}
-                        className="bg-white dark:bg-gray-800 rounded-xl p-4 shadow-sm"
+                        className="bg-white dark:bg-gray-800 rounded-xl md:rounded-2xl p-4 md:p-6 shadow-sm hover:shadow-md transition-shadow"
                       >
-                        <div className="flex items-start justify-between mb-3">
-                          <div className="flex items-center gap-2.5">
-                            <div className={`w-9 h-9 rounded-lg flex items-center justify-center ${statusConfig.bgColor}`}>
-                              <StatusIcon className={`w-4 h-4 ${statusConfig.color}`} />
+                        <div className="flex items-start justify-between mb-4">
+                          <div className="flex items-center gap-3">
+                            <div className={`w-10 h-10 md:w-12 md:h-12 rounded-xl flex items-center justify-center ${statusConfig.bgColor}`}>
+                              <StatusIcon className={`w-5 h-5 md:w-6 md:h-6 ${statusConfig.color}`} />
                             </div>
                             <div>
-                              <p className="font-mono font-bold text-sm text-gray-900 dark:text-white">
+                              <p className="font-mono font-bold text-sm md:text-base text-gray-900 dark:text-white">
                                 {request.requestNumber}
                               </p>
-                              <div className="flex items-center gap-1 text-xs text-gray-500">
+                              <div className="flex items-center gap-1 text-xs md:text-sm text-gray-500">
                                 <Calendar className="w-3 h-3" />
                                 {formatDate(request.createdAt)}
                               </div>
                             </div>
                           </div>
-                          <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${statusConfig.bgColor} ${statusConfig.color}`}>
+                          <span className={`px-2.5 py-1 rounded-full text-xs font-medium ${statusConfig.bgColor} ${statusConfig.color}`}>
                             {statusConfig.label}
                           </span>
                         </div>
 
                         <div className="flex items-end justify-between">
                           <div>
-                            <p className="text-xs text-gray-500">Solicitado</p>
-                            <p className="text-lg font-bold text-gray-900 dark:text-white">
+                            <p className="text-xs md:text-sm text-gray-500">Solicitado</p>
+                            <p className="text-xl md:text-2xl font-bold text-gray-900 dark:text-white">
                               {formatCurrency(request.amountRequested)}
                             </p>
                           </div>
                           {request.amountApproved !== null && request.status !== 'pending' && (
                             <div className="text-right">
-                              <p className="text-xs text-gray-500">
+                              <p className="text-xs md:text-sm text-gray-500">
                                 {request.status === 'paid' ? 'Pagado' : 'Aprobado'}
                               </p>
-                              <p className={`text-lg font-bold ${
+                              <p className={`text-xl md:text-2xl font-bold ${
                                 request.status === 'paid' ? 'text-green-600' : 'text-blue-600'
                               }`}>
                                 {formatCurrency(request.amountApproved)}
@@ -277,8 +276,8 @@ export default function SupplierPaymentsPage() {
                         </div>
 
                         {request.adminNotes && (
-                          <div className="mt-3 p-2.5 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
-                            <p className="text-xs text-gray-600 dark:text-gray-300">
+                          <div className="mt-4 p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
+                            <p className="text-xs md:text-sm text-gray-600 dark:text-gray-300">
                               {request.adminNotes}
                             </p>
                           </div>

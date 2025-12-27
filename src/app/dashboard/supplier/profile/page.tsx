@@ -5,12 +5,10 @@ import { useRouter } from 'next/navigation'
 import { motion } from 'framer-motion'
 import {
   User,
-  ArrowLeft,
   Loader2,
   Mail,
   Phone,
   Building2,
-  Hash,
   CreditCard,
   LogOut,
   ChevronRight
@@ -89,42 +87,39 @@ export default function SupplierProfilePage() {
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
-      {/* Header */}
-      <header className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-4 py-4 sticky top-0 z-20">
-        <div className="max-w-4xl mx-auto flex items-center gap-3">
-          <button
-            onClick={() => router.push('/dashboard/supplier')}
-            className="p-2 hover:bg-gray-100 active:bg-gray-200 dark:hover:bg-gray-700 rounded-lg transition-colors touch-manipulation"
-          >
-            <ArrowLeft className="w-5 h-5 text-gray-600 dark:text-gray-300" />
-          </button>
-          <div className="flex items-center gap-2">
-            <User className="w-6 h-6 text-teal-600" />
-            <h1 className="text-lg md:text-xl font-bold text-gray-900 dark:text-white">Mi Perfil</h1>
+      {/* Header - Responsive */}
+      <header className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-4 py-4 md:px-8 md:py-6 lg:px-12">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 md:w-12 md:h-12 bg-teal-100 dark:bg-teal-900/30 rounded-xl flex items-center justify-center">
+            <User className="w-5 h-5 md:w-6 md:h-6 text-teal-600" />
+          </div>
+          <div>
+            <h1 className="text-xl md:text-2xl font-bold text-gray-900 dark:text-white">Mi Perfil</h1>
+            <p className="text-sm text-gray-500">Informacion de tu cuenta</p>
           </div>
         </div>
       </header>
 
-      <main className="max-w-4xl mx-auto px-4 py-5 md:py-8 space-y-5">
+      <main className="px-4 py-5 md:px-8 md:py-8 lg:px-12 pb-24 md:pb-8 space-y-5 md:space-y-8">
         {profile && (
           <>
             {/* Profile Header */}
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
-              className="bg-gradient-to-br from-teal-500 to-cyan-600 rounded-2xl p-5 text-white shadow-lg"
+              className="bg-gradient-to-br from-teal-500 to-cyan-600 rounded-2xl md:rounded-3xl p-5 md:p-8 text-white shadow-lg"
             >
-              <div className="flex items-center gap-4">
-                <div className="w-16 h-16 bg-white/20 rounded-2xl flex items-center justify-center flex-shrink-0">
-                  <User className="w-8 h-8" />
+              <div className="flex items-center gap-4 md:gap-6">
+                <div className="w-16 h-16 md:w-20 md:h-20 bg-white/20 rounded-2xl flex items-center justify-center flex-shrink-0">
+                  <User className="w-8 h-8 md:w-10 md:h-10" />
                 </div>
                 <div className="min-w-0">
-                  <h2 className="text-xl font-bold truncate">{profile.name}</h2>
+                  <h2 className="text-xl md:text-3xl font-bold truncate">{profile.name}</h2>
                   {profile.legalName && (
-                    <p className="text-white/70 text-sm truncate">{profile.legalName}</p>
+                    <p className="text-white/70 text-sm md:text-base truncate">{profile.legalName}</p>
                   )}
-                  <div className="flex items-center gap-1.5 mt-1">
-                    <span className="px-2 py-0.5 bg-white/20 rounded text-xs font-mono">
+                  <div className="flex items-center gap-1.5 mt-2">
+                    <span className="px-3 py-1 bg-white/20 rounded-lg text-xs md:text-sm font-mono">
                       {profile.code}
                     </span>
                   </div>
@@ -132,79 +127,87 @@ export default function SupplierProfilePage() {
               </div>
             </motion.div>
 
-            {/* Contact Info */}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.1 }}
-              className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm overflow-hidden"
-            >
-              <div className="px-5 py-3 border-b border-gray-200 dark:border-gray-700">
-                <h3 className="font-bold text-gray-900 dark:text-white">Contacto</h3>
-              </div>
-              <div className="divide-y divide-gray-200 dark:divide-gray-700">
-                <div className="flex items-center gap-3 px-5 py-4">
-                  <div className="w-10 h-10 bg-gray-100 dark:bg-gray-700 rounded-xl flex items-center justify-center flex-shrink-0">
-                    <Mail className="w-5 h-5 text-gray-500" />
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <p className="text-xs text-gray-500">Email</p>
-                    <p className="text-gray-900 dark:text-white truncate">{profile.email}</p>
-                  </div>
+            {/* Desktop Layout: Contact + Banks side by side */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 md:gap-8">
+              {/* Contact Info */}
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.1 }}
+                className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm overflow-hidden"
+              >
+                <div className="px-5 py-4 md:px-6 md:py-5 border-b border-gray-200 dark:border-gray-700">
+                  <h3 className="font-bold text-base md:text-lg text-gray-900 dark:text-white">Contacto</h3>
                 </div>
-                <div className="flex items-center gap-3 px-5 py-4">
-                  <div className="w-10 h-10 bg-gray-100 dark:bg-gray-700 rounded-xl flex items-center justify-center flex-shrink-0">
-                    <Phone className="w-5 h-5 text-gray-500" />
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <p className="text-xs text-gray-500">Telefono</p>
-                    <p className="text-gray-900 dark:text-white">{profile.phone || 'No registrado'}</p>
-                  </div>
-                </div>
-                {profile.address && (
-                  <div className="flex items-center gap-3 px-5 py-4">
-                    <div className="w-10 h-10 bg-gray-100 dark:bg-gray-700 rounded-xl flex items-center justify-center flex-shrink-0">
-                      <Building2 className="w-5 h-5 text-gray-500" />
+                <div className="divide-y divide-gray-200 dark:divide-gray-700">
+                  <div className="flex items-center gap-3 md:gap-4 px-5 py-4 md:px-6 md:py-5">
+                    <div className="w-10 h-10 md:w-12 md:h-12 bg-gray-100 dark:bg-gray-700 rounded-xl flex items-center justify-center flex-shrink-0">
+                      <Mail className="w-5 h-5 md:w-6 md:h-6 text-gray-500" />
                     </div>
                     <div className="min-w-0 flex-1">
-                      <p className="text-xs text-gray-500">Direccion</p>
-                      <p className="text-gray-900 dark:text-white">{profile.address}</p>
+                      <p className="text-xs md:text-sm text-gray-500">Email</p>
+                      <p className="text-gray-900 dark:text-white text-sm md:text-base truncate">{profile.email}</p>
                     </div>
                   </div>
-                )}
-              </div>
-            </motion.div>
+                  <div className="flex items-center gap-3 md:gap-4 px-5 py-4 md:px-6 md:py-5">
+                    <div className="w-10 h-10 md:w-12 md:h-12 bg-gray-100 dark:bg-gray-700 rounded-xl flex items-center justify-center flex-shrink-0">
+                      <Phone className="w-5 h-5 md:w-6 md:h-6 text-gray-500" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-xs md:text-sm text-gray-500">Telefono</p>
+                      <p className="text-gray-900 dark:text-white text-sm md:text-base">{profile.phone || 'No registrado'}</p>
+                    </div>
+                  </div>
+                  {profile.address && (
+                    <div className="flex items-center gap-3 md:gap-4 px-5 py-4 md:px-6 md:py-5">
+                      <div className="w-10 h-10 md:w-12 md:h-12 bg-gray-100 dark:bg-gray-700 rounded-xl flex items-center justify-center flex-shrink-0">
+                        <Building2 className="w-5 h-5 md:w-6 md:h-6 text-gray-500" />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-xs md:text-sm text-gray-500">Direccion</p>
+                        <p className="text-gray-900 dark:text-white text-sm md:text-base">{profile.address}</p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </motion.div>
 
-            {/* Bank Accounts */}
-            {profile.bankAccounts && profile.bankAccounts.length > 0 && (
+              {/* Bank Accounts */}
               <motion.div
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.2 }}
                 className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm overflow-hidden"
               >
-                <div className="px-5 py-3 border-b border-gray-200 dark:border-gray-700">
-                  <h3 className="font-bold text-gray-900 dark:text-white">Cuentas Bancarias</h3>
+                <div className="px-5 py-4 md:px-6 md:py-5 border-b border-gray-200 dark:border-gray-700">
+                  <h3 className="font-bold text-base md:text-lg text-gray-900 dark:text-white">Cuentas Bancarias</h3>
                 </div>
-                <div className="divide-y divide-gray-200 dark:divide-gray-700">
-                  {profile.bankAccounts.map((account) => (
-                    <div key={account.id} className="flex items-center gap-3 px-5 py-4">
-                      <div className="w-10 h-10 bg-blue-100 dark:bg-blue-900/30 rounded-xl flex items-center justify-center flex-shrink-0">
-                        <CreditCard className="w-5 h-5 text-blue-600" />
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <p className="font-medium text-gray-900 dark:text-white">{account.bankName}</p>
-                        <div className="flex items-center gap-2 text-sm text-gray-500">
-                          <span className="font-mono">****{account.accountNumber.slice(-4)}</span>
-                          <span>•</span>
-                          <span className="capitalize">{account.accountType}</span>
+                {profile.bankAccounts && profile.bankAccounts.length > 0 ? (
+                  <div className="divide-y divide-gray-200 dark:divide-gray-700">
+                    {profile.bankAccounts.map((account) => (
+                      <div key={account.id} className="flex items-center gap-3 md:gap-4 px-5 py-4 md:px-6 md:py-5">
+                        <div className="w-10 h-10 md:w-12 md:h-12 bg-blue-100 dark:bg-blue-900/30 rounded-xl flex items-center justify-center flex-shrink-0">
+                          <CreditCard className="w-5 h-5 md:w-6 md:h-6 text-blue-600" />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="font-medium text-gray-900 dark:text-white text-sm md:text-base">{account.bankName}</p>
+                          <div className="flex items-center gap-2 text-xs md:text-sm text-gray-500">
+                            <span className="font-mono">****{account.accountNumber.slice(-4)}</span>
+                            <span>•</span>
+                            <span className="capitalize">{account.accountType}</span>
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  ))}
-                </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="px-5 py-8 md:py-12 text-center">
+                    <CreditCard className="w-10 h-10 md:w-12 md:h-12 text-gray-300 mx-auto mb-2" />
+                    <p className="text-gray-500 text-sm">No hay cuentas registradas</p>
+                  </div>
+                )}
               </motion.div>
-            )}
+            </div>
 
             {/* Logout Button */}
             <motion.button
@@ -214,17 +217,17 @@ export default function SupplierProfilePage() {
               whileTap={{ scale: 0.98 }}
               onClick={handleLogout}
               disabled={loggingOut}
-              className="w-full bg-white dark:bg-gray-800 rounded-2xl p-4 shadow-sm flex items-center justify-between text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors touch-manipulation"
+              className="w-full md:w-auto md:min-w-[300px] bg-white dark:bg-gray-800 rounded-2xl p-4 md:p-5 shadow-sm flex items-center justify-between text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors touch-manipulation"
             >
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-red-100 dark:bg-red-900/30 rounded-xl flex items-center justify-center">
-                  <LogOut className="w-5 h-5" />
+              <div className="flex items-center gap-3 md:gap-4">
+                <div className="w-10 h-10 md:w-12 md:h-12 bg-red-100 dark:bg-red-900/30 rounded-xl flex items-center justify-center">
+                  <LogOut className="w-5 h-5 md:w-6 md:h-6" />
                 </div>
-                <span className="font-medium">
+                <span className="font-medium text-base md:text-lg">
                   {loggingOut ? 'Cerrando sesion...' : 'Cerrar Sesion'}
                 </span>
               </div>
-              <ChevronRight className="w-5 h-5" />
+              <ChevronRight className="w-5 h-5 md:w-6 md:h-6" />
             </motion.button>
           </>
         )}

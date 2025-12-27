@@ -165,25 +165,25 @@ export default function SupplierDashboardPage() {
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
-      {/* Header - Mobile Optimized */}
-      <header className="bg-gradient-to-r from-teal-600 via-cyan-600 to-blue-600 text-white sticky top-0 z-30">
-        <div className="px-4 py-4 md:py-6 md:max-w-4xl md:mx-auto">
+      {/* Header - Responsive */}
+      <header className="bg-gradient-to-r from-teal-600 via-cyan-600 to-blue-600 text-white">
+        <div className="px-4 py-4 md:px-8 md:py-6 lg:px-12">
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="w-11 h-11 md:w-12 md:h-12 bg-white/20 rounded-xl flex items-center justify-center flex-shrink-0">
-                <Package className="w-5 h-5 md:w-6 md:h-6" />
+            <div className="flex items-center gap-3 md:gap-4">
+              <div className="w-11 h-11 md:w-14 md:h-14 bg-white/20 rounded-xl md:rounded-2xl flex items-center justify-center flex-shrink-0">
+                <Package className="w-5 h-5 md:w-7 md:h-7" />
               </div>
               <div className="min-w-0">
-                <h1 className="text-lg md:text-xl font-bold truncate">{data.supplier.name}</h1>
+                <h1 className="text-lg md:text-2xl font-bold truncate">{data.supplier.name}</h1>
                 <p className="text-white/70 text-xs md:text-sm">Codigo: {data.supplier.code}</p>
               </div>
             </div>
             <button
               onClick={fetchDashboard}
-              className="p-2.5 hover:bg-white/10 active:bg-white/20 rounded-xl transition-colors touch-manipulation"
+              className="p-2.5 md:p-3 hover:bg-white/10 active:bg-white/20 rounded-xl transition-colors touch-manipulation"
               title="Actualizar"
             >
-              <RefreshCcw className="w-5 h-5" />
+              <RefreshCcw className="w-5 h-5 md:w-6 md:h-6" />
             </button>
           </div>
         </div>
@@ -204,14 +204,16 @@ export default function SupplierDashboardPage() {
         )}
       </AnimatePresence>
 
-      {/* Main Content - Mobile First */}
-      <main className="px-4 py-5 md:py-8 md:max-w-4xl md:mx-auto space-y-5 md:space-y-8">
-        {/* Wallet Card */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="bg-gradient-to-br from-teal-500 to-cyan-600 rounded-2xl md:rounded-3xl p-5 md:p-6 text-white shadow-xl"
-        >
+      {/* Main Content - Responsive */}
+      <main className="px-4 py-5 md:px-8 md:py-8 lg:px-12 space-y-5 md:space-y-8">
+        {/* Desktop Layout: Wallet + Stats Side by Side */}
+        <div className="lg:grid lg:grid-cols-2 lg:gap-8">
+          {/* Wallet Card */}
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="bg-gradient-to-br from-teal-500 to-cyan-600 rounded-2xl md:rounded-3xl p-5 md:p-8 text-white shadow-xl lg:h-fit"
+          >
           <div className="flex items-start justify-between mb-5 md:mb-6">
             <div>
               <p className="text-white/70 text-xs md:text-sm mb-1">Saldo Disponible</p>
@@ -250,8 +252,8 @@ export default function SupplierDashboardPage() {
           </motion.button>
         </motion.div>
 
-        {/* Stats Grid - Mobile Optimized */}
-        <div className="grid grid-cols-2 gap-3 md:grid-cols-4 md:gap-4">
+          {/* Stats Grid - Desktop: 2x2 on right side */}
+          <div className="grid grid-cols-2 gap-3 md:gap-4 mt-5 lg:mt-0">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -311,18 +313,27 @@ export default function SupplierDashboardPage() {
             <p className="text-lg md:text-2xl font-bold text-gray-900 dark:text-white truncate">{formatCurrency(data.sales30Days)}</p>
             <p className="text-xs md:text-sm text-gray-500">Ventas (30d)</p>
           </motion.div>
+          </div>
         </div>
 
-        {/* Recent Transactions - Mobile Optimized */}
+        {/* Recent Transactions - Responsive */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.3 }}
-          className="bg-white dark:bg-gray-800 rounded-xl md:rounded-2xl p-4 md:p-6 shadow-sm"
+          className="bg-white dark:bg-gray-800 rounded-xl md:rounded-2xl p-4 md:p-6 lg:p-8 shadow-sm"
         >
-          <h2 className="text-base md:text-lg font-bold text-gray-900 dark:text-white mb-3 md:mb-4">
-            Transacciones Recientes
-          </h2>
+          <div className="flex items-center justify-between mb-4 md:mb-6">
+            <h2 className="text-base md:text-xl font-bold text-gray-900 dark:text-white">
+              Transacciones Recientes
+            </h2>
+            <button
+              onClick={() => router.push('/dashboard/supplier/payments')}
+              className="text-sm text-teal-600 hover:text-teal-700 font-medium"
+            >
+              Ver todas
+            </button>
+          </div>
 
           {data.recentTransactions.length === 0 ? (
             <div className="text-center py-6 md:py-8 text-gray-500 text-sm">
@@ -330,39 +341,44 @@ export default function SupplierDashboardPage() {
             </div>
           ) : (
             <div className="space-y-2 md:space-y-3">
-              {data.recentTransactions.slice(0, 5).map((tx) => (
+              {data.recentTransactions.slice(0, 8).map((tx) => (
                 <div
                   key={tx.id}
-                  className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700/50 rounded-xl"
+                  className="flex items-center justify-between p-3 md:p-4 bg-gray-50 dark:bg-gray-700/50 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
                 >
-                  <div className="flex items-center gap-2.5 md:gap-3 min-w-0 flex-1">
-                    <div className={`w-9 h-9 md:w-10 md:h-10 rounded-lg md:rounded-xl flex items-center justify-center flex-shrink-0 ${
+                  <div className="flex items-center gap-2.5 md:gap-4 min-w-0 flex-1">
+                    <div className={`w-9 h-9 md:w-12 md:h-12 rounded-lg md:rounded-xl flex items-center justify-center flex-shrink-0 ${
                       tx.type === 'sale' ? 'bg-green-100 dark:bg-green-900/30' :
                       tx.type === 'payment' ? 'bg-blue-100 dark:bg-blue-900/30' :
                       tx.type === 'return' ? 'bg-red-100 dark:bg-red-900/30' :
                       'bg-gray-100 dark:bg-gray-600'
                     }`}>
                       {tx.type === 'sale' ? (
-                        <ArrowUpRight className="w-4 h-4 md:w-5 md:h-5 text-green-600" />
+                        <ArrowUpRight className="w-4 h-4 md:w-6 md:h-6 text-green-600" />
                       ) : tx.type === 'payment' ? (
-                        <ArrowDownRight className="w-4 h-4 md:w-5 md:h-5 text-blue-600" />
+                        <ArrowDownRight className="w-4 h-4 md:w-6 md:h-6 text-blue-600" />
                       ) : (
-                        <ArrowDownRight className="w-4 h-4 md:w-5 md:h-5 text-red-600" />
+                        <ArrowDownRight className="w-4 h-4 md:w-6 md:h-6 text-red-600" />
                       )}
                     </div>
-                    <div className="min-w-0">
-                      <p className="font-medium text-sm md:text-base text-gray-900 dark:text-white truncate">
-                        {tx.type === 'sale' ? 'Venta' :
-                         tx.type === 'payment' ? 'Pago Recibido' :
-                         tx.type === 'return' ? 'Devolucion' :
-                         tx.type === 'received' ? 'Recepcion' : tx.type}
-                      </p>
-                      <p className="text-[11px] md:text-xs text-gray-500 truncate">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center justify-between md:justify-start md:gap-4">
+                        <p className="font-medium text-sm md:text-base text-gray-900 dark:text-white">
+                          {tx.type === 'sale' ? 'Venta' :
+                           tx.type === 'payment' ? 'Pago Recibido' :
+                           tx.type === 'return' ? 'Devolucion' :
+                           tx.type === 'received' ? 'Recepcion' : tx.type}
+                        </p>
+                        <span className="hidden md:inline text-sm text-gray-500">
+                          {formatDate(tx.createdAt)}
+                        </span>
+                      </div>
+                      <p className="text-[11px] md:text-sm text-gray-500 truncate">
                         {tx.posOrderNumber || tx.orderNumber || tx.notes || formatDate(tx.createdAt)}
                       </p>
                     </div>
                   </div>
-                  <p className={`font-bold text-sm md:text-base ml-2 flex-shrink-0 ${
+                  <p className={`font-bold text-sm md:text-lg ml-2 flex-shrink-0 ${
                     tx.type === 'sale' ? 'text-green-600' :
                     tx.type === 'return' ? 'text-red-600' :
                     'text-gray-900 dark:text-white'
