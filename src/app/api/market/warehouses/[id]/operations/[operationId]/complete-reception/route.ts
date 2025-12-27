@@ -176,17 +176,20 @@ export async function POST(
           // Record stock movement for source (out)
           await db.query(`
             INSERT INTO market_stock_movements (
-              company_id, warehouse_id, product_id, movement_type,
+              company_id, product_id, movement_type,
+              from_warehouse_id, to_warehouse_id,
               quantity, quantity_before, quantity_after,
-              reference_type, reference_id, notes, created_by, created_at
-            ) VALUES ($1, $2, $3, 'transfer_out', $4, $5, $6, 'warehouse_operation', $7, $8, $9, NOW())
+              operation_id, reference_type, reference_id, notes, created_by, created_at
+            ) VALUES ($1, $2, 'transfer_out', $3, $4, $5, $6, $7, $8, 'warehouse_operation', $9, $10, $11, NOW())
           `, [
             payload.companyId,
-            sourceWarehouseId,
             productId,
+            sourceWarehouseId,
+            destinationWarehouseId,
             -validatedQuantity,
             currentOnHand,
             newOnHand,
+            opId,
             opId,
             hasDiscrepancies ? `Transferencia con discrepancia: esperado ${expectedQuantity}, validado ${validatedQuantity}` : null,
             payload.userId
@@ -221,17 +224,20 @@ export async function POST(
         // Record stock movement for destination (in)
         await db.query(`
           INSERT INTO market_stock_movements (
-            company_id, warehouse_id, product_id, movement_type,
+            company_id, product_id, movement_type,
+            from_warehouse_id, to_warehouse_id,
             quantity, quantity_before, quantity_after,
-            reference_type, reference_id, notes, created_by, created_at
-          ) VALUES ($1, $2, $3, 'transfer_in', $4, $5, $6, 'warehouse_operation', $7, $8, $9, NOW())
+            operation_id, reference_type, reference_id, notes, created_by, created_at
+          ) VALUES ($1, $2, 'transfer_in', $3, $4, $5, $6, $7, $8, 'warehouse_operation', $9, $10, $11, NOW())
         `, [
           payload.companyId,
-          destinationWarehouseId,
           productId,
+          sourceWarehouseId,
+          destinationWarehouseId,
           validatedQuantity,
           destCurrentStock,
           destCurrentStock + validatedQuantity,
+          opId,
           opId,
           hasDiscrepancies ? `Recepción con discrepancia: esperado ${expectedQuantity}, recibido ${validatedQuantity}` : null,
           payload.userId
