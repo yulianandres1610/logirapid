@@ -34,18 +34,6 @@ interface SupplierStats {
   totalPaid: number
 }
 
-interface LinkedUser {
-  id: number
-  name: string
-  email: string
-}
-
-interface SystemUser {
-  id: number
-  name: string
-  email: string
-}
-
 interface Supplier {
   id: number
   code: string
@@ -57,8 +45,6 @@ interface Supplier {
   phone: string | null
   address: string | null
   username: string | null
-  userId: number | null
-  linkedUser: LinkedUser | null
   isActive: boolean
   createdAt: string
   stats: SupplierStats
@@ -82,7 +68,6 @@ interface SupplierFormData {
   address: string
   username: string
   password: string
-  userId: number | null
 }
 
 const initialFormData: SupplierFormData = {
@@ -95,8 +80,7 @@ const initialFormData: SupplierFormData = {
   phone: '',
   address: '',
   username: '',
-  password: '',
-  userId: null
+  password: ''
 }
 
 export default function SuppliersPage() {
@@ -118,9 +102,6 @@ export default function SuppliersPage() {
   const [deleting, setDeleting] = useState(false)
   const [actionError, setActionError] = useState<string | null>(null)
 
-  // Users for linking
-  const [availableUsers, setAvailableUsers] = useState<SystemUser[]>([])
-  const [loadingUsers, setLoadingUsers] = useState(false)
 
   useEffect(() => {
     fetchSuppliers()
@@ -165,30 +146,6 @@ export default function SuppliersPage() {
   }
 
   const handleManualRefresh = () => fetchSuppliers(true)
-
-  const fetchAvailableUsers = async () => {
-    setLoadingUsers(true)
-    try {
-      const response = await fetch('/api/users?limit=100')
-      if (response.ok) {
-        const data = await response.json()
-        if (data.success) {
-          // Get users and filter out those already linked to suppliers
-          const linkedUserIds = suppliers.map(s => s.userId).filter(Boolean)
-          const users = (data.users || data.data?.users || []).map((u: { id: number; firstname: string; lastname: string; email: string }) => ({
-            id: u.id,
-            name: `${u.firstname || ''} ${u.lastname || ''}`.trim() || u.email,
-            email: u.email
-          })).filter((u: SystemUser) => !linkedUserIds.includes(u.id) || u.id === formData.userId)
-          setAvailableUsers(users)
-        }
-      }
-    } catch (error) {
-      console.error('Error fetching users:', error)
-    } finally {
-      setLoadingUsers(false)
-    }
-  }
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('es-US', {
@@ -293,13 +250,11 @@ export default function SuppliersPage() {
       phone: supplier.phone || '',
       address: supplier.address || '',
       username: supplier.username || '',
-      password: '',
-      userId: supplier.userId
+      password: ''
     })
     setFormErrors({})
     setActionError(null)
     setShowEditModal(true)
-    fetchAvailableUsers()
   }
 
   const openDeleteModal = (supplier: Supplier) => {

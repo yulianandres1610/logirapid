@@ -26,7 +26,7 @@ import AdjustmentReasonSelector, { type AdjustmentReason } from '@/components/wa
 import ReferenceOrderSelector, { type ReferenceType } from '@/components/warehouse/ReferenceOrderSelector'
 import PendingTransfersList, { type PendingTransfer } from '@/components/warehouse/PendingTransfersList'
 import TransferValidationView from '@/components/warehouse/TransferValidationView'
-import ConsignmentReceptionView from '@/components/warehouse/ConsignmentReceptionView'
+import UnifiedReceptionView from '@/components/warehouse/UnifiedReceptionView'
 
 interface WarehouseData {
   id: number
@@ -460,7 +460,7 @@ export default function WarehouseOperationsPage() {
     if (type === 'receive_transfer') {
       setOperation({ ...initialOperationState, operationType: type })
       fetchPendingTransfers()
-    } else if (type === 'consignment_reception') {
+    } else if (type === 'order_reception') {
       setOperation({ ...initialOperationState, operationType: type })
     } else {
       setOperation({ ...initialOperationState, operationType: type })
@@ -728,7 +728,7 @@ export default function WarehouseOperationsPage() {
                         operation.operationType === 'scrap' ? 'Scrap' :
                         operation.operationType === 'adjustment' ? 'Ajuste' :
                         operation.operationType === 'receive_transfer' ? 'Recibir Transferencia' :
-                        operation.operationType === 'consignment_reception' ? 'Recibir Consignacion' : 'Operacion'}`
+                        operation.operationType === 'order_reception' ? 'Recibir Orden' : 'Operacion'}`
                     : 'Operaciones'}
                 </h1>
                 <p className="text-sm text-gray-500 dark:text-gray-400">{warehouse.name}</p>
@@ -814,15 +814,15 @@ export default function WarehouseOperationsPage() {
               </div>
             </div>
           </div>
-        ) : operation.operationType === 'consignment_reception' ? (
-          /* Consignment Reception View */
-          <ConsignmentReceptionView
+        ) : operation.operationType === 'order_reception' ? (
+          /* Unified Order Reception View (Consignments + Purchases) */
+          <UnifiedReceptionView
             warehouseId={warehouseId}
             warehouseName={warehouse.name}
             onBack={handleBack}
-            onComplete={() => {
+            onComplete={(data) => {
               setOperation({ ...initialOperationState, operationType: null })
-              setSuccess('Consignacion recibida exitosamente')
+              setSuccess(`Orden ${data.orderNumber} recibida: ${data.unitsReceived} unidades`)
               setTimeout(() => setSuccess(null), 3000)
             }}
           />

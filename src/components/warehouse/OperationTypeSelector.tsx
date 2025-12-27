@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
 import { PackageCheck, ArrowRightLeft, Trash2, Scale, PackageOpen, Package } from 'lucide-react'
 
-export type OperationType = 'reception' | 'transfer' | 'scrap' | 'adjustment' | 'receive_transfer' | 'consignment_reception'
+export type OperationType = 'reception' | 'transfer' | 'scrap' | 'adjustment' | 'receive_transfer' | 'order_reception'
 
 interface OperationTypeSelectorProps {
   onSelect: (type: OperationType) => void
@@ -63,9 +63,9 @@ const operationTypes = [
     textColor: 'text-purple-600'
   },
   {
-    id: 'consignment_reception' as OperationType,
-    name: 'Consignacion',
-    description: 'Recibir ordenes de consignacion',
+    id: 'order_reception' as OperationType,
+    name: 'Recibir Orden',
+    description: 'Consignaciones y compras',
     icon: Package,
     gradient: 'from-teal-500 to-cyan-600',
     hoverGradient: 'from-teal-600 to-cyan-700',
@@ -111,7 +111,7 @@ export default function OperationTypeSelector({ onSelect, currentWarehouse }: Op
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-6 lg:gap-6 max-w-6xl mx-auto">
         {operationTypes.map((op, index) => {
           const Icon = op.icon
-          const showBadge = (op.id === 'receive_transfer' && pendingCount > 0) || (op.id === 'consignment_reception' && pendingConsignments > 0)
+          const showBadge = (op.id === 'receive_transfer' && pendingCount > 0) || (op.id === 'order_reception' && pendingConsignments > 0)
             const badgeCount = op.id === 'receive_transfer' ? pendingCount : pendingConsignments
           return (
             <motion.button
@@ -138,7 +138,7 @@ export default function OperationTypeSelector({ onSelect, currentWarehouse }: Op
                   animate={{ scale: 1 }}
                   className="absolute top-3 right-3 z-20 w-8 h-8 bg-white rounded-full flex items-center justify-center shadow-lg"
                 >
-                  <span className={`text-sm font-bold ${op.id === 'consignment_reception' ? 'text-teal-600' : 'text-purple-600'}`}>{badgeCount}</span>
+                  <span className={`text-sm font-bold ${op.id === 'order_reception' ? 'text-teal-600' : 'text-purple-600'}`}>{badgeCount}</span>
                 </motion.div>
               )}
 

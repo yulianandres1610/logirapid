@@ -17,12 +17,8 @@ import {
   Warehouse,
   Calendar,
   Barcode,
-  DollarSign,
   Printer,
-  CheckCircle,
-  Building2,
-  Phone,
-  Mail
+  CheckCircle
 } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
@@ -119,6 +115,23 @@ export default function CreateConsignmentOrderPage() {
   // Step 4: Confirmation
   const [createdOrder, setCreatedOrder] = useState<CreatedOrder | null>(null)
   const [submitting, setSubmitting] = useState(false)
+
+  // Print state
+  const [showPrintModal, setShowPrintModal] = useState(false)
+  const [printServices, setPrintServices] = useState<Array<{
+    id: number
+    serviceName: string
+    printers: Array<{
+      id: number
+      printerName: string
+      isOnline: boolean
+      isDefault: boolean
+      printerType: string
+    }>
+  }>>([])
+  const [selectedPrinter, setSelectedPrinter] = useState<{ serviceId: number; printerId: number } | null>(null)
+  const [printingWithService, setPrintingWithService] = useState(false)
+  const [copies, setCopies] = useState(1)
 
   const currentStepIndex = STEPS.findIndex(s => s.id === currentStep)
 
@@ -317,6 +330,98 @@ export default function CreateConsignmentOrderPage() {
     return new Intl.NumberFormat('es-US', { style: 'currency', currency: 'USD' }).format(value)
   }
 
+  // Fetch print services for silent printing
+  const fetchPrintServices = async () => {
+    try {
+      const response = await fetch('/api/print/services?includeOffline=false')
+      const data = await response.json()
+      if (data.success && data.data?.services) {
+        const activeServices = data.data.services.filter(
+          (s: { status: string; printers?: unknown[] }) => s.status === 'active' && s.printers && s.printers.length > 0
+        )
+        setPrintServices(activeServices)
+
+        // Auto-select first available printer
+        for (const service of activeServices) {
+          const availablePrinter = service.printers.find(
+            (p: { isOnline: boolean }) => p.isOnline
+          )
+          if (availablePrinter) {
+            setSelectedPrinter({ serviceId: service.id, printerId: availablePrinter.id })
+            break
+          }
+        }
+      }
+    } catch (err) {
+      console.error('[Consignment Print] Error fetching print services:', err)
+    }
+  }
+
+  // Print with silent service
+  const printWithSilentService = async () => {
+    if (!createdOrder || !selectedSupplier || !selectedWarehouse || !selectedPrinter) return
+
+    setPrintingWithService(true)
+    try {
+      const response = await fetch('/api/print/jobs', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          documentType: 'consignment_receipt',
+          documentData: {
+            orderNumber: createdOrder.orderNumber,
+            supplier: {
+              code: selectedSupplier.code,
+              name: selectedSupplier.name,
+              contactName: selectedSupplier.contactName
+            },
+            warehouse: {
+              code: selectedWarehouse.code,
+              name: selectedWarehouse.name
+            },
+            lines: orderLines.map(l => ({
+              productName: l.product.name,
+              sku: l.product.sku,
+              barcode: l.product.barcode,
+              quantity: l.quantity,
+              unitCost: l.unitCost,
+              totalCost: l.totalCost
+            })),
+            totalItems: createdOrder.totalItems,
+            totalUnits: createdOrder.totalUnits,
+            totalCost: createdOrder.totalCost,
+            consignmentDate: consignmentDate,
+            notes: notes || undefined
+          },
+          copies,
+          printServiceId: selectedPrinter.serviceId,
+          printerId: selectedPrinter.printerId,
+          sourceType: 'consignment_order',
+          sourceId: createdOrder.id,
+          warehouseId: selectedWarehouse.id
+        })
+      })
+
+      const data = await response.json()
+      if (data.success) {
+        setShowPrintModal(false)
+      } else {
+        throw new Error(data.error)
+      }
+    } catch (err) {
+      console.error('[Consignment Print] Error printing with service:', err)
+      setShowPrintModal(false)
+    } finally {
+      setPrintingWithService(false)
+    }
+  }
+
+  // Handle print button click
+  const handlePrint = () => {
+    fetchPrintServices()
+    setShowPrintModal(true)
+  }
+
   const filteredSuppliers = suppliers.filter(s =>
     s.name.toLowerCase().includes(supplierSearch.toLowerCase()) ||
     s.code.toLowerCase().includes(supplierSearch.toLowerCase())
@@ -325,90 +430,159 @@ export default function CreateConsignmentOrderPage() {
   return (
     <ProtectedRoute>
       <DashboardLayout>
-        <div className="min-h-screen p-6">
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="max-w-4xl mx-auto"
-          >
-            {/* Header */}
-            <div className="flex items-center gap-4 mb-6">
-              <Link href="/dashboard/market/consignments">
-                <motion.button
-                  whileHover={{ scale: 1.05 }}
-                  whileTap={{ scale: 0.95 }}
-                  className={cn(
-                    'p-2 rounded-lg transition-colors',
-                    theme === 'dark' ? 'hover:bg-gray-800' : 'hover:bg-gray-100'
-                  )}
-                >
-                  <ArrowLeft className="w-5 h-5" />
-                </motion.button>
-              </Link>
-              <div>
-                <h1 className={cn(
-                  'text-2xl font-bold',
-                  theme === 'dark' ? 'text-white' : 'text-gray-900'
-                )}>Nueva Orden de Consignacion</h1>
-                <p className="text-sm text-gray-500">Registra mercancia en consignacion de proveedor externo</p>
-              </div>
-            </div>
+        <div className={cn(
+          "min-h-screen pt-12 sm:pt-16 lg:pt-20 pb-20 px-4 sm:px-6 lg:px-8",
+          theme === 'dark' ? 'bg-gray-900' : 'bg-gray-50'
+        )}>
+          <div className="max-w-4xl xl:max-w-5xl mx-auto space-y-6 sm:space-y-8 relative">
 
-            {/* Step Indicator */}
-            <div className={cn(
-              'p-4 rounded-2xl mb-6 border',
-              theme === 'dark' ? 'bg-gray-800/50 border-gray-700' : 'bg-white border-gray-200'
-            )}>
+            {/* Close Button */}
+            <motion.button
+              onClick={() => setShowCancelModal(true)}
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+              className={cn(
+                "absolute -top-14 -right-2 sm:-top-12 sm:right-0 z-10 w-8 h-8 rounded-full flex items-center justify-center",
+                "transition-colors duration-200",
+                theme === 'dark'
+                  ? 'text-gray-400 hover:text-gray-200 hover:bg-gray-800'
+                  : 'text-gray-500 hover:text-gray-700 hover:bg-gray-200'
+              )}
+            >
+              <X className="w-4 h-4" />
+            </motion.button>
+
+            {/* Progress Indicator */}
+            <div className="mb-8 sm:mb-12">
               <div className="flex items-center justify-between">
-                {STEPS.map((step, index) => {
-                  const isActive = step.id === currentStep
-                  const isComplete = index < currentStepIndex
-                  const StepIcon = step.icon
+                {STEPS.map((step, index) => (
+                  <React.Fragment key={step.id}>
+                    <div className="flex flex-col items-center">
+                      <div className="relative w-14 h-14">
+                        {/* Pulsing ring for active step */}
+                        {currentStep === step.id && (
+                          <motion.div
+                            className="absolute inset-0 rounded-full"
+                            animate={{
+                              scale: [1, 1.2, 1],
+                              opacity: [0.5, 0, 0.5]
+                            }}
+                            transition={{
+                              duration: 2,
+                              repeat: Infinity,
+                              ease: "easeInOut"
+                            }}
+                            style={{
+                              background: theme === 'dark'
+                                ? 'rgba(16, 185, 129, 0.5)'
+                                : 'rgba(5, 150, 105, 0.5)'
+                            }}
+                          />
+                        )}
 
-                  return (
-                    <div key={step.id} className="flex items-center flex-1">
-                      <div className="flex items-center gap-3">
-                        <div className={cn(
-                          'w-10 h-10 rounded-full flex items-center justify-center transition-all',
-                          isComplete
-                            ? 'bg-emerald-500 text-white'
-                            : isActive
-                              ? theme === 'dark' ? 'bg-blue-600 text-white' : 'bg-blue-500 text-white'
-                              : theme === 'dark' ? 'bg-gray-700 text-gray-400' : 'bg-gray-100 text-gray-400'
-                        )}>
-                          {isComplete ? (
-                            <Check className="w-5 h-5" />
-                          ) : (
-                            <StepIcon className="w-5 h-5" />
+                        <motion.div
+                          initial={false}
+                          animate={{
+                            scale: currentStep === step.id ? 1.1 : 1,
+                            backgroundColor: currentStep === step.id
+                              ? theme === 'dark' ? '#10B981' : '#059669'
+                              : currentStepIndex > index
+                                ? theme === 'dark' ? '#10B981' : '#059669'
+                                : theme === 'dark' ? '#374151' : '#E5E7EB'
+                          }}
+                          transition={{
+                            scale: { duration: 0.3 },
+                            backgroundColor: { duration: 0.3 }
+                          }}
+                          whileHover={{ scale: currentStepIndex >= index ? 1.15 : 1.05 }}
+                          className={cn(
+                            "w-14 h-14 rounded-full flex items-center justify-center relative z-10",
+                            "transition-shadow duration-300",
+                            currentStep === step.id && (
+                              theme === 'dark'
+                                ? 'shadow-lg shadow-emerald-500/50'
+                                : 'shadow-lg shadow-emerald-400/50'
+                            ),
+                            currentStepIndex > index && (
+                              theme === 'dark'
+                                ? 'shadow-md shadow-emerald-500/30'
+                                : 'shadow-md shadow-emerald-400/30'
+                            )
                           )}
-                        </div>
-                        <div className="hidden sm:block">
-                          <p className={cn(
-                            'text-sm font-medium',
-                            isActive ? 'text-gray-900 dark:text-white' : 'text-gray-500'
-                          )}>{step.title}</p>
-                          <p className="text-xs text-gray-400">{step.description}</p>
-                        </div>
+                        >
+                          {currentStepIndex > index ? (
+                            <motion.div
+                              initial={{ scale: 0 }}
+                              animate={{ scale: 1 }}
+                              transition={{ type: "spring", stiffness: 200, damping: 15 }}
+                            >
+                              <Check className="w-7 h-7 text-white" />
+                            </motion.div>
+                          ) : (
+                            <step.icon className={cn(
+                              "w-7 h-7",
+                              currentStep === step.id ? 'text-white' : theme === 'dark' ? 'text-gray-500' : 'text-gray-400'
+                            )} />
+                          )}
+                        </motion.div>
                       </div>
-                      {index < STEPS.length - 1 && (
-                        <div className={cn(
-                          'flex-1 h-0.5 mx-4',
-                          isComplete
-                            ? 'bg-emerald-500'
-                            : theme === 'dark' ? 'bg-gray-700' : 'bg-gray-200'
-                        )} />
-                      )}
+
+                      <div className="mt-3 text-center">
+                        <p className={cn(
+                          "text-xs sm:text-sm font-semibold",
+                          currentStep === step.id
+                            ? theme === 'dark' ? 'text-emerald-400' : 'text-emerald-600'
+                            : currentStepIndex > index
+                              ? theme === 'dark' ? 'text-emerald-400' : 'text-emerald-600'
+                              : theme === 'dark' ? 'text-gray-500' : 'text-gray-400'
+                        )}>
+                          {step.title}
+                        </p>
+                        <p className={cn(
+                          "text-xs hidden sm:block mt-0.5",
+                          theme === 'dark' ? 'text-gray-600' : 'text-gray-500'
+                        )}>
+                          {step.description}
+                        </p>
+                      </div>
                     </div>
-                  )
-                })}
+
+                    {index < STEPS.length - 1 && (
+                      <div className="flex-1 h-0.5 mx-2 sm:mx-3 mb-8 sm:mb-10 relative">
+                        <div className={cn(
+                          "absolute inset-0 rounded-full",
+                          theme === 'dark' ? 'bg-gray-700' : 'bg-gray-200'
+                        )} />
+                        <motion.div
+                          initial={false}
+                          animate={{
+                            scaleX: currentStepIndex > index ? 1 : 0
+                          }}
+                          transition={{ duration: 0.5, ease: "easeInOut" }}
+                          className={cn(
+                            "h-full origin-left rounded-full",
+                            theme === 'dark' ? 'bg-emerald-500' : 'bg-emerald-600'
+                          )}
+                        />
+                      </div>
+                    )}
+                  </React.Fragment>
+                ))}
               </div>
             </div>
 
             {/* Step Content */}
-            <div className={cn(
-              'rounded-2xl border p-6',
-              theme === 'dark' ? 'bg-gray-800/50 border-gray-700' : 'bg-white border-gray-200'
-            )}>
+            <motion.div
+              className={cn(
+                "rounded-2xl border p-6 sm:p-8 shadow-lg",
+                theme === 'dark'
+                  ? 'bg-gray-800/95 border-gray-700/50 backdrop-blur-sm'
+                  : 'bg-white border-gray-200 backdrop-blur-sm'
+              )}
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.5 }}
+            >
               <AnimatePresence mode="wait">
                 {/* Step 1: Supplier */}
                 {currentStep === 'supplier' && (
@@ -417,15 +591,25 @@ export default function CreateConsignmentOrderPage() {
                     initial={{ opacity: 0, x: 20 }}
                     animate={{ opacity: 1, x: 0 }}
                     exit={{ opacity: 0, x: -20 }}
+                    transition={{ duration: 0.3 }}
                     className="space-y-6"
                   >
-                    <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
+                    <h2 className={cn(
+                      "text-xl font-bold flex items-center gap-3",
+                      theme === 'dark' ? 'text-white' : 'text-gray-900'
+                    )}>
+                      <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-500 to-emerald-600 flex items-center justify-center">
+                        <Users className="w-5 h-5 text-white" />
+                      </div>
                       Seleccionar Proveedor y Almacen
                     </h2>
 
                     {/* Supplier Selection */}
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                      <label className={cn(
+                        "block text-sm font-medium mb-2",
+                        theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
+                      )}>
                         Proveedor *
                       </label>
                       <div className="relative mb-3">
@@ -436,17 +620,17 @@ export default function CreateConsignmentOrderPage() {
                           onChange={(e) => setSupplierSearch(e.target.value)}
                           placeholder="Buscar proveedor..."
                           className={cn(
-                            'w-full pl-10 pr-4 py-2.5 rounded-xl border focus:outline-none focus:ring-2 transition-all',
+                            'w-full pl-10 pr-4 py-3 rounded-xl border focus:outline-none focus:ring-2 transition-all',
                             theme === 'dark'
-                              ? 'bg-gray-800 border-gray-700 text-white focus:border-blue-500'
-                              : 'bg-gray-50 border-gray-200 focus:border-blue-500'
+                              ? 'bg-gray-900/50 border-gray-600 text-white focus:border-emerald-500 focus:ring-emerald-500/20'
+                              : 'bg-gray-50 border-gray-200 text-gray-900 focus:border-emerald-500 focus:ring-emerald-500/20'
                           )}
                         />
                       </div>
 
                       {loadingSuppliers ? (
                         <div className="flex items-center justify-center py-8">
-                          <Loader2 className="w-6 h-6 animate-spin text-gray-400" />
+                          <Loader2 className="w-6 h-6 animate-spin text-emerald-500" />
                         </div>
                       ) : (
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-3 max-h-60 overflow-y-auto">
@@ -459,7 +643,7 @@ export default function CreateConsignmentOrderPage() {
                               className={cn(
                                 'p-4 rounded-xl border text-left transition-all',
                                 selectedSupplier?.id === supplier.id
-                                  ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
+                                  ? 'border-emerald-500 bg-emerald-50 dark:bg-emerald-900/20'
                                   : theme === 'dark'
                                     ? 'border-gray-700 hover:border-gray-600'
                                     : 'border-gray-200 hover:border-gray-300'
@@ -467,9 +651,9 @@ export default function CreateConsignmentOrderPage() {
                             >
                               <div className="flex items-center gap-3">
                                 <div className={cn(
-                                  'w-10 h-10 rounded-lg flex items-center justify-center text-sm font-bold',
+                                  'px-2 py-1 rounded-lg text-xs font-mono font-bold',
                                   selectedSupplier?.id === supplier.id
-                                    ? 'bg-blue-500 text-white'
+                                    ? 'bg-emerald-500 text-white'
                                     : theme === 'dark' ? 'bg-gray-700 text-gray-300' : 'bg-gray-100 text-gray-600'
                                 )}>
                                   {supplier.code}
@@ -487,8 +671,8 @@ export default function CreateConsignmentOrderPage() {
                             <div className="col-span-2 text-center py-8">
                               <Users className="w-8 h-8 mx-auto mb-2 text-gray-400" />
                               <p className="text-gray-500">No hay proveedores</p>
-                              <Link href="/dashboard/market/consignments/suppliers">
-                                <button className="mt-2 text-sm text-blue-500 hover:text-blue-600">
+                              <Link href="/dashboard/market/consignments/suppliers/create">
+                                <button className="mt-2 text-sm text-emerald-500 hover:text-emerald-600">
                                   Crear proveedor
                                 </button>
                               </Link>
@@ -503,7 +687,10 @@ export default function CreateConsignmentOrderPage() {
 
                     {/* Warehouse Selection */}
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                      <label className={cn(
+                        "block text-sm font-medium mb-2",
+                        theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
+                      )}>
                         Almacen Destino *
                       </label>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -516,7 +703,7 @@ export default function CreateConsignmentOrderPage() {
                             className={cn(
                               'p-4 rounded-xl border text-left transition-all flex items-center gap-3',
                               selectedWarehouse?.id === warehouse.id
-                                ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
+                                ? 'border-emerald-500 bg-emerald-50 dark:bg-emerald-900/20'
                                 : theme === 'dark'
                                   ? 'border-gray-700 hover:border-gray-600'
                                   : 'border-gray-200 hover:border-gray-300'
@@ -524,7 +711,7 @@ export default function CreateConsignmentOrderPage() {
                           >
                             <Warehouse className={cn(
                               'w-5 h-5',
-                              selectedWarehouse?.id === warehouse.id ? 'text-blue-500' : 'text-gray-400'
+                              selectedWarehouse?.id === warehouse.id ? 'text-emerald-500' : 'text-gray-400'
                             )} />
                             <div>
                               <p className="font-medium text-gray-900 dark:text-white">{warehouse.name}</p>
@@ -540,7 +727,10 @@ export default function CreateConsignmentOrderPage() {
 
                     {/* Date */}
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                      <label className={cn(
+                        "block text-sm font-medium mb-2",
+                        theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
+                      )}>
                         Fecha de Consignacion
                       </label>
                       <div className="relative max-w-xs">
@@ -550,10 +740,10 @@ export default function CreateConsignmentOrderPage() {
                           value={consignmentDate}
                           onChange={(e) => setConsignmentDate(e.target.value)}
                           className={cn(
-                            'w-full pl-10 pr-4 py-2.5 rounded-xl border focus:outline-none focus:ring-2 transition-all',
+                            'w-full pl-10 pr-4 py-3 rounded-xl border focus:outline-none focus:ring-2 transition-all',
                             theme === 'dark'
-                              ? 'bg-gray-800 border-gray-700 text-white focus:border-blue-500'
-                              : 'bg-gray-50 border-gray-200 focus:border-blue-500'
+                              ? 'bg-gray-900/50 border-gray-600 text-white focus:border-emerald-500 focus:ring-emerald-500/20'
+                              : 'bg-gray-50 border-gray-200 text-gray-900 focus:border-emerald-500 focus:ring-emerald-500/20'
                           )}
                         />
                       </div>
@@ -568,9 +758,16 @@ export default function CreateConsignmentOrderPage() {
                     initial={{ opacity: 0, x: 20 }}
                     animate={{ opacity: 1, x: 0 }}
                     exit={{ opacity: 0, x: -20 }}
+                    transition={{ duration: 0.3 }}
                     className="space-y-6"
                   >
-                    <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
+                    <h2 className={cn(
+                      "text-xl font-bold flex items-center gap-3",
+                      theme === 'dark' ? 'text-white' : 'text-gray-900'
+                    )}>
+                      <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center">
+                        <Package className="w-5 h-5 text-white" />
+                      </div>
                       Agregar Productos
                     </h2>
 
@@ -587,8 +784,8 @@ export default function CreateConsignmentOrderPage() {
                           className={cn(
                             'w-full pl-10 pr-4 py-3 rounded-xl border focus:outline-none focus:ring-2 transition-all',
                             theme === 'dark'
-                              ? 'bg-gray-800 border-gray-700 text-white focus:border-emerald-500'
-                              : 'bg-gray-50 border-gray-200 focus:border-emerald-500'
+                              ? 'bg-gray-900/50 border-gray-600 text-white focus:border-emerald-500 focus:ring-emerald-500/20'
+                              : 'bg-gray-50 border-gray-200 text-gray-900 focus:border-emerald-500 focus:ring-emerald-500/20'
                           )}
                         />
                       </div>
@@ -597,7 +794,7 @@ export default function CreateConsignmentOrderPage() {
                         whileTap={{ scale: 0.98 }}
                         type="submit"
                         disabled={searchingProducts}
-                        className="px-6 py-3 bg-emerald-500 text-white rounded-xl hover:bg-emerald-600 transition-colors disabled:opacity-50"
+                        className="px-6 py-3 bg-gradient-to-r from-emerald-500 to-emerald-600 text-white rounded-xl hover:from-emerald-600 hover:to-emerald-700 transition-all disabled:opacity-50 shadow-lg shadow-emerald-500/25"
                       >
                         {searchingProducts ? <Loader2 className="w-5 h-5 animate-spin" /> : <Plus className="w-5 h-5" />}
                       </motion.button>
@@ -615,10 +812,10 @@ export default function CreateConsignmentOrderPage() {
                         onChange={(e) => setProductSearch(e.target.value)}
                         placeholder="Buscar por nombre o SKU..."
                         className={cn(
-                          'w-full pl-10 pr-4 py-2.5 rounded-xl border focus:outline-none focus:ring-2 transition-all',
+                          'w-full pl-10 pr-4 py-3 rounded-xl border focus:outline-none focus:ring-2 transition-all',
                           theme === 'dark'
-                            ? 'bg-gray-800 border-gray-700 text-white focus:border-blue-500'
-                            : 'bg-gray-50 border-gray-200 focus:border-blue-500'
+                            ? 'bg-gray-900/50 border-gray-600 text-white focus:border-blue-500 focus:ring-blue-500/20'
+                            : 'bg-gray-50 border-gray-200 text-gray-900 focus:border-blue-500 focus:ring-blue-500/20'
                         )}
                       />
 
@@ -657,8 +854,14 @@ export default function CreateConsignmentOrderPage() {
                           theme === 'dark' ? 'border-gray-700' : 'border-gray-200'
                         )}>
                           <Package className="w-12 h-12 mx-auto mb-3 text-gray-400" />
-                          <p className="text-gray-500">No hay productos agregados</p>
-                          <p className="text-sm text-gray-400">Escanea o busca productos para agregar</p>
+                          <p className={cn(
+                            "font-medium",
+                            theme === 'dark' ? 'text-gray-400' : 'text-gray-600'
+                          )}>No hay productos agregados</p>
+                          <p className={cn(
+                            "text-sm mt-1",
+                            theme === 'dark' ? 'text-gray-500' : 'text-gray-500'
+                          )}>Escanea o busca productos para agregar</p>
                         </div>
                       ) : (
                         orderLines.map((line, index) => (
@@ -669,7 +872,7 @@ export default function CreateConsignmentOrderPage() {
                             transition={{ delay: index * 0.05 }}
                             className={cn(
                               'p-4 rounded-xl border',
-                              theme === 'dark' ? 'bg-gray-800/50 border-gray-700' : 'bg-gray-50 border-gray-200'
+                              theme === 'dark' ? 'bg-gray-900/30 border-gray-700' : 'bg-gray-50 border-gray-200'
                             )}
                           >
                             <div className="flex items-start gap-4">
@@ -689,7 +892,7 @@ export default function CreateConsignmentOrderPage() {
                                     min={1}
                                     className={cn(
                                       'w-20 px-3 py-1.5 rounded-lg border text-center',
-                                      theme === 'dark' ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-200'
+                                      theme === 'dark' ? 'bg-gray-800 border-gray-600 text-white' : 'bg-white border-gray-200'
                                     )}
                                   />
                                 </div>
@@ -705,7 +908,7 @@ export default function CreateConsignmentOrderPage() {
                                     min={0}
                                     className={cn(
                                       'w-24 px-3 py-1.5 rounded-lg border text-right',
-                                      theme === 'dark' ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-200'
+                                      theme === 'dark' ? 'bg-gray-800 border-gray-600 text-white' : 'bg-white border-gray-200'
                                     )}
                                   />
                                 </div>
@@ -721,7 +924,7 @@ export default function CreateConsignmentOrderPage() {
                                     min={0}
                                     className={cn(
                                       'w-24 px-3 py-1.5 rounded-lg border text-right',
-                                      theme === 'dark' ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-200'
+                                      theme === 'dark' ? 'bg-gray-800 border-gray-600 text-white' : 'bg-white border-gray-200'
                                     )}
                                   />
                                 </div>
@@ -756,7 +959,7 @@ export default function CreateConsignmentOrderPage() {
                     {orderLines.length > 0 && (
                       <div className={cn(
                         'p-4 rounded-xl',
-                        theme === 'dark' ? 'bg-gray-700/50' : 'bg-gray-100'
+                        theme === 'dark' ? 'bg-gray-900/50' : 'bg-gray-100'
                       )}>
                         <div className="flex justify-between text-sm mb-2">
                           <span className="text-gray-500">Productos:</span>
@@ -782,82 +985,82 @@ export default function CreateConsignmentOrderPage() {
                     initial={{ opacity: 0, x: 20 }}
                     animate={{ opacity: 1, x: 0 }}
                     exit={{ opacity: 0, x: -20 }}
+                    transition={{ duration: 0.3 }}
                     className="space-y-6"
                   >
-                    <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
+                    <h2 className={cn(
+                      "text-xl font-bold flex items-center gap-3",
+                      theme === 'dark' ? 'text-white' : 'text-gray-900'
+                    )}>
+                      <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-500 to-amber-600 flex items-center justify-center">
+                        <FileText className="w-5 h-5 text-white" />
+                      </div>
                       Revisar Orden
                     </h2>
 
                     {/* Order Info */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div className={cn(
-                        'p-4 rounded-xl',
-                        theme === 'dark' ? 'bg-gray-700/50' : 'bg-gray-50'
-                      )}>
-                        <h3 className="text-sm font-medium text-gray-500 mb-3">Proveedor</h3>
-                        <div className="flex items-center gap-3">
-                          <div className={cn(
-                            'w-10 h-10 rounded-lg flex items-center justify-center text-sm font-bold',
-                            theme === 'dark' ? 'bg-blue-900/30 text-blue-400' : 'bg-blue-100 text-blue-600'
-                          )}>
-                            {selectedSupplier?.code}
+                    <div className={cn(
+                      'rounded-2xl p-6',
+                      theme === 'dark' ? 'bg-gray-900/50' : 'bg-gray-50'
+                    )}>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                        <div className={cn(
+                          'p-4 rounded-xl',
+                          theme === 'dark' ? 'bg-gray-800' : 'bg-white'
+                        )}>
+                          <h3 className="text-xs text-gray-500 mb-2">Proveedor</h3>
+                          <div className="flex items-center gap-3">
+                            <div className={cn(
+                              'px-2 py-1 rounded-lg text-xs font-mono font-bold',
+                              theme === 'dark' ? 'bg-emerald-900/30 text-emerald-400' : 'bg-emerald-100 text-emerald-600'
+                            )}>
+                              {selectedSupplier?.code}
+                            </div>
+                            <div>
+                              <p className="font-medium text-gray-900 dark:text-white">{selectedSupplier?.name}</p>
+                              {selectedSupplier?.contactName && (
+                                <p className="text-xs text-gray-500">{selectedSupplier.contactName}</p>
+                              )}
+                            </div>
                           </div>
-                          <div>
-                            <p className="font-medium text-gray-900 dark:text-white">{selectedSupplier?.name}</p>
-                            {selectedSupplier?.contactName && (
-                              <p className="text-xs text-gray-500">{selectedSupplier.contactName}</p>
-                            )}
+                        </div>
+
+                        <div className={cn(
+                          'p-4 rounded-xl',
+                          theme === 'dark' ? 'bg-gray-800' : 'bg-white'
+                        )}>
+                          <h3 className="text-xs text-gray-500 mb-2">Almacen Destino</h3>
+                          <div className="flex items-center gap-3">
+                            <Warehouse className="w-5 h-5 text-gray-400" />
+                            <div>
+                              <p className="font-medium text-gray-900 dark:text-white">{selectedWarehouse?.name}</p>
+                              <p className="text-xs text-gray-500">{selectedWarehouse?.code}</p>
+                            </div>
                           </div>
                         </div>
                       </div>
 
-                      <div className={cn(
-                        'p-4 rounded-xl',
-                        theme === 'dark' ? 'bg-gray-700/50' : 'bg-gray-50'
-                      )}>
-                        <h3 className="text-sm font-medium text-gray-500 mb-3">Almacen Destino</h3>
-                        <div className="flex items-center gap-3">
-                          <Warehouse className="w-5 h-5 text-gray-400" />
-                          <div>
-                            <p className="font-medium text-gray-900 dark:text-white">{selectedWarehouse?.name}</p>
-                            <p className="text-xs text-gray-500">{selectedWarehouse?.code}</p>
-                          </div>
+                      <div className="grid grid-cols-3 gap-4">
+                        <div className={cn(
+                          'p-4 rounded-xl text-center',
+                          theme === 'dark' ? 'bg-gray-800' : 'bg-white'
+                        )}>
+                          <p className="text-2xl font-bold text-gray-900 dark:text-white">{totalItems}</p>
+                          <p className="text-xs text-gray-500">productos</p>
                         </div>
-                      </div>
-
-                      <div className={cn(
-                        'p-4 rounded-xl',
-                        theme === 'dark' ? 'bg-gray-700/50' : 'bg-gray-50'
-                      )}>
-                        <h3 className="text-sm font-medium text-gray-500 mb-3">Fecha</h3>
-                        <div className="flex items-center gap-3">
-                          <Calendar className="w-5 h-5 text-gray-400" />
-                          <p className="font-medium text-gray-900 dark:text-white">
-                            {new Date(consignmentDate).toLocaleDateString('es-ES', {
-                              day: '2-digit', month: 'long', year: 'numeric'
-                            })}
-                          </p>
+                        <div className={cn(
+                          'p-4 rounded-xl text-center',
+                          theme === 'dark' ? 'bg-gray-800' : 'bg-white'
+                        )}>
+                          <p className="text-2xl font-bold text-gray-900 dark:text-white">{totalUnits}</p>
+                          <p className="text-xs text-gray-500">unidades</p>
                         </div>
-                      </div>
-
-                      <div className={cn(
-                        'p-4 rounded-xl',
-                        theme === 'dark' ? 'bg-gray-700/50' : 'bg-gray-50'
-                      )}>
-                        <h3 className="text-sm font-medium text-gray-500 mb-3">Resumen</h3>
-                        <div className="flex items-center gap-6">
-                          <div>
-                            <p className="text-2xl font-bold text-gray-900 dark:text-white">{totalItems}</p>
-                            <p className="text-xs text-gray-500">productos</p>
-                          </div>
-                          <div>
-                            <p className="text-2xl font-bold text-gray-900 dark:text-white">{totalUnits}</p>
-                            <p className="text-xs text-gray-500">unidades</p>
-                          </div>
-                          <div>
-                            <p className="text-2xl font-bold text-emerald-600">{formatCurrency(totalCost)}</p>
-                            <p className="text-xs text-gray-500">total costo</p>
-                          </div>
+                        <div className={cn(
+                          'p-4 rounded-xl text-center',
+                          theme === 'dark' ? 'bg-gray-800' : 'bg-white'
+                        )}>
+                          <p className="text-2xl font-bold text-emerald-600">{formatCurrency(totalCost)}</p>
+                          <p className="text-xs text-gray-500">total costo</p>
                         </div>
                       </div>
                     </div>
@@ -869,7 +1072,7 @@ export default function CreateConsignmentOrderPage() {
                     )}>
                       <table className="w-full">
                         <thead className={cn(
-                          theme === 'dark' ? 'bg-gray-700/50' : 'bg-gray-50'
+                          theme === 'dark' ? 'bg-gray-900/50' : 'bg-gray-50'
                         )}>
                           <tr>
                             <th className="text-left py-3 px-4 text-xs font-medium text-gray-500 uppercase">Producto</th>
@@ -894,7 +1097,7 @@ export default function CreateConsignmentOrderPage() {
                           ))}
                         </tbody>
                         <tfoot className={cn(
-                          theme === 'dark' ? 'bg-gray-700/50' : 'bg-gray-50'
+                          theme === 'dark' ? 'bg-gray-900/50' : 'bg-gray-50'
                         )}>
                           <tr>
                             <td colSpan={4} className="py-3 px-4 text-right font-bold text-gray-900 dark:text-white">
@@ -910,7 +1113,10 @@ export default function CreateConsignmentOrderPage() {
 
                     {/* Notes */}
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                      <label className={cn(
+                        "block text-sm font-medium mb-2",
+                        theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
+                      )}>
                         Notas (opcional)
                       </label>
                       <textarea
@@ -919,21 +1125,17 @@ export default function CreateConsignmentOrderPage() {
                         rows={3}
                         placeholder="Agregar notas u observaciones..."
                         className={cn(
-                          'w-full px-4 py-2.5 rounded-xl border focus:outline-none focus:ring-2 transition-all resize-none',
+                          'w-full px-4 py-3 rounded-xl border focus:outline-none focus:ring-2 transition-all resize-none',
                           theme === 'dark'
-                            ? 'bg-gray-800 border-gray-700 text-white focus:border-blue-500'
-                            : 'bg-gray-50 border-gray-200 focus:border-blue-500'
+                            ? 'bg-gray-900/50 border-gray-600 text-white focus:border-emerald-500 focus:ring-emerald-500/20'
+                            : 'bg-gray-50 border-gray-200 text-gray-900 focus:border-emerald-500 focus:ring-emerald-500/20'
                         )}
                       />
                     </div>
 
                     {errors.submit && (
-                      <div className={cn(
-                        'p-4 rounded-xl flex items-center gap-3',
-                        theme === 'dark' ? 'bg-red-900/20 text-red-400' : 'bg-red-50 text-red-600'
-                      )}>
-                        <X className="w-5 h-5" />
-                        {errors.submit}
+                      <div className="p-4 rounded-xl bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800">
+                        <p className="text-red-600 text-sm">{errors.submit}</p>
                       </div>
                     )}
                   </motion.div>
@@ -965,7 +1167,7 @@ export default function CreateConsignmentOrderPage() {
 
                     <div className={cn(
                       'inline-block p-6 rounded-2xl mb-6',
-                      theme === 'dark' ? 'bg-gray-700/50' : 'bg-gray-50'
+                      theme === 'dark' ? 'bg-gray-900/50' : 'bg-gray-50'
                     )}>
                       <p className="text-sm text-gray-500 mb-1">Numero de Orden</p>
                       <p className="text-3xl font-mono font-bold text-gray-900 dark:text-white">
@@ -991,23 +1193,23 @@ export default function CreateConsignmentOrderPage() {
                       <motion.button
                         whileHover={{ scale: 1.02 }}
                         whileTap={{ scale: 0.98 }}
-                        onClick={() => window.print()}
+                        onClick={handlePrint}
                         className={cn(
-                          'flex items-center gap-2 px-6 py-3 rounded-xl transition-colors',
+                          'flex items-center gap-2 px-6 py-3 rounded-xl transition-all',
                           theme === 'dark'
                             ? 'bg-gray-700 text-white hover:bg-gray-600'
                             : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                         )}
                       >
                         <Printer className="w-5 h-5" />
-                        Imprimir
+                        Imprimir Recepcion
                       </motion.button>
 
                       <Link href="/dashboard/market/consignments">
                         <motion.button
                           whileHover={{ scale: 1.02 }}
                           whileTap={{ scale: 0.98 }}
-                          className="flex items-center gap-2 px-6 py-3 bg-emerald-500 text-white rounded-xl hover:bg-emerald-600 transition-colors"
+                          className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-emerald-500 to-emerald-600 text-white rounded-xl hover:from-emerald-600 hover:to-emerald-700 transition-all shadow-lg shadow-emerald-500/25"
                         >
                           Ver Ordenes
                           <ArrowRight className="w-5 h-5" />
@@ -1017,118 +1219,378 @@ export default function CreateConsignmentOrderPage() {
                   </motion.div>
                 )}
               </AnimatePresence>
+            </motion.div>
 
-              {/* Navigation Buttons */}
-              {currentStep !== 'confirmation' && (
-                <div className="flex justify-between mt-8 pt-6 border-t border-gray-200 dark:border-gray-700">
+            {/* Navigation Buttons */}
+            {currentStep !== 'confirmation' && (
+              <div className="flex justify-between items-center gap-4">
+                <motion.button
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                  onClick={goToPrevStep}
+                  disabled={currentStepIndex === 0}
+                  className={cn(
+                    "flex items-center gap-2 px-6 py-3 rounded-xl font-medium transition-all",
+                    "disabled:opacity-50 disabled:cursor-not-allowed",
+                    theme === 'dark'
+                      ? 'bg-gray-700 hover:bg-gray-600 text-white shadow-lg'
+                      : 'bg-gray-200 hover:bg-gray-300 text-gray-900 shadow-md'
+                  )}
+                >
+                  <ArrowLeft className="w-5 h-5" />
+                  Anterior
+                </motion.button>
+
+                {currentStep === 'review' ? (
                   <motion.button
                     whileHover={{ scale: 1.02 }}
                     whileTap={{ scale: 0.98 }}
-                    onClick={currentStepIndex === 0 ? () => setShowCancelModal(true) : goToPrevStep}
+                    onClick={handleSubmitOrder}
+                    disabled={submitting}
                     className={cn(
-                      'flex items-center gap-2 px-6 py-2.5 rounded-xl transition-colors',
+                      "flex items-center gap-2 px-6 py-3 rounded-xl font-medium transition-all",
+                      "disabled:opacity-50 disabled:cursor-not-allowed",
                       theme === 'dark'
-                        ? 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                        ? 'bg-gradient-to-r from-emerald-600 to-emerald-700 hover:from-emerald-700 hover:to-emerald-800 shadow-lg shadow-emerald-500/30'
+                        : 'bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 shadow-lg shadow-emerald-400/30',
+                      'text-white'
                     )}
                   >
-                    <ArrowLeft className="w-5 h-5" />
-                    {currentStepIndex === 0 ? 'Cancelar' : 'Anterior'}
+                    {submitting ? (
+                      <>
+                        <Loader2 className="w-5 h-5 animate-spin" />
+                        Creando...
+                      </>
+                    ) : (
+                      <>
+                        <Check className="w-5 h-5" />
+                        Crear Orden
+                      </>
+                    )}
                   </motion.button>
+                ) : (
+                  <motion.button
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
+                    onClick={goToNextStep}
+                    className={cn(
+                      "flex items-center gap-2 px-6 py-3 rounded-xl font-medium transition-all",
+                      theme === 'dark'
+                        ? 'bg-emerald-600 hover:bg-emerald-700 shadow-lg shadow-emerald-500/30'
+                        : 'bg-emerald-500 hover:bg-emerald-600 shadow-lg shadow-emerald-400/30',
+                      'text-white'
+                    )}
+                  >
+                    Siguiente
+                    <ArrowRight className="w-5 h-5" />
+                  </motion.button>
+                )}
+              </div>
+            )}
+          </div>
 
-                  {currentStep === 'review' ? (
-                    <motion.button
-                      whileHover={{ scale: 1.02 }}
-                      whileTap={{ scale: 0.98 }}
-                      onClick={handleSubmitOrder}
-                      disabled={submitting}
-                      className={cn(
-                        'flex items-center gap-2 px-6 py-2.5 rounded-xl transition-all',
-                        'bg-gradient-to-r from-emerald-500 to-emerald-600 text-white shadow-lg shadow-emerald-500/25',
-                        submitting ? 'opacity-70 cursor-not-allowed' : 'hover:from-emerald-600 hover:to-emerald-700'
-                      )}
-                    >
-                      {submitting ? (
-                        <>
-                          <Loader2 className="w-5 h-5 animate-spin" />
-                          Creando...
-                        </>
+          {/* Cancel Modal */}
+          <AnimatePresence>
+            {showCancelModal && (
+              <>
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  onClick={() => setShowCancelModal(false)}
+                  className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50"
+                />
+
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.95, y: 20 }}
+                  animate={{ opacity: 1, scale: 1, y: 0 }}
+                  exit={{ opacity: 0, scale: 0.95, y: 20 }}
+                  transition={{ type: "spring", duration: 0.3 }}
+                  className="fixed inset-0 z-50 flex items-center justify-center p-4"
+                >
+                  <div
+                    className={cn(
+                      "w-full max-w-md rounded-2xl shadow-2xl border",
+                      theme === 'dark'
+                        ? 'bg-gray-800 border-gray-700'
+                        : 'bg-white border-gray-200'
+                    )}
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <div className="p-6 pb-4">
+                      <div className="flex items-start gap-4">
+                        <div className={cn(
+                          "w-12 h-12 rounded-full flex items-center justify-center flex-shrink-0",
+                          theme === 'dark' ? 'bg-red-900/30' : 'bg-red-100'
+                        )}>
+                          <X className={cn(
+                            "w-6 h-6",
+                            theme === 'dark' ? 'text-red-400' : 'text-red-600'
+                          )} />
+                        </div>
+                        <div className="flex-1">
+                          <h3 className={cn(
+                            "text-xl font-bold mb-2",
+                            theme === 'dark' ? 'text-white' : 'text-gray-900'
+                          )}>
+                            ¿Cancelar orden?
+                          </h3>
+                          <p className={cn(
+                            "text-sm",
+                            theme === 'dark' ? 'text-gray-400' : 'text-gray-600'
+                          )}>
+                            Se perdera toda la informacion ingresada y no podras recuperarla.
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className={cn(
+                      "flex gap-3 p-6 pt-4 border-t",
+                      theme === 'dark' ? 'border-gray-700' : 'border-gray-200'
+                    )}>
+                      <motion.button
+                        whileHover={{ scale: 1.02 }}
+                        whileTap={{ scale: 0.98 }}
+                        onClick={() => setShowCancelModal(false)}
+                        className={cn(
+                          "flex-1 px-4 py-3 rounded-xl font-medium transition-all",
+                          theme === 'dark'
+                            ? 'bg-gray-700 hover:bg-gray-600 text-white'
+                            : 'bg-gray-100 hover:bg-gray-200 text-gray-900'
+                        )}
+                      >
+                        Continuar editando
+                      </motion.button>
+                      <motion.button
+                        whileHover={{ scale: 1.02 }}
+                        whileTap={{ scale: 0.98 }}
+                        onClick={() => router.push('/dashboard/market/consignments')}
+                        className={cn(
+                          "flex-1 px-4 py-3 rounded-xl font-medium transition-all text-white",
+                          theme === 'dark'
+                            ? 'bg-red-600 hover:bg-red-700'
+                            : 'bg-red-500 hover:bg-red-600'
+                        )}
+                      >
+                        Si, cancelar
+                      </motion.button>
+                    </div>
+                  </div>
+                </motion.div>
+              </>
+            )}
+          </AnimatePresence>
+
+          {/* Print Modal */}
+          <AnimatePresence>
+            {showPrintModal && (
+              <>
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  onClick={() => setShowPrintModal(false)}
+                  className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50"
+                />
+
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.95, y: 20 }}
+                  animate={{ opacity: 1, scale: 1, y: 0 }}
+                  exit={{ opacity: 0, scale: 0.95, y: 20 }}
+                  transition={{ type: "spring", duration: 0.3 }}
+                  className="fixed inset-0 z-50 flex items-center justify-center p-4"
+                >
+                  <div
+                    className={cn(
+                      "w-full max-w-md rounded-2xl shadow-2xl border",
+                      theme === 'dark'
+                        ? 'bg-gray-800 border-gray-700'
+                        : 'bg-white border-gray-200'
+                    )}
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <div className={cn(
+                      "px-6 py-4 border-b flex items-center justify-between",
+                      theme === 'dark' ? 'border-gray-700' : 'border-gray-200'
+                    )}>
+                      <div className="flex items-center gap-3">
+                        <div className="p-2 rounded-lg bg-emerald-100 dark:bg-emerald-900/30">
+                          <Printer className="w-5 h-5 text-emerald-600" />
+                        </div>
+                        <div>
+                          <h3 className={cn(
+                            "font-semibold",
+                            theme === 'dark' ? 'text-white' : 'text-gray-900'
+                          )}>
+                            Imprimir Recepcion
+                          </h3>
+                          <p className="text-xs text-gray-500">#{createdOrder?.orderNumber}</p>
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => setShowPrintModal(false)}
+                        className={cn(
+                          "p-2 rounded-lg transition-colors",
+                          theme === 'dark' ? 'hover:bg-gray-700' : 'hover:bg-gray-100'
+                        )}
+                      >
+                        <X className="w-5 h-5" />
+                      </button>
+                    </div>
+
+                    <div className="p-6 space-y-6">
+                      {printServices.length === 0 ? (
+                        <div className="text-center py-4">
+                          <Loader2 className="w-8 h-8 animate-spin text-emerald-500 mx-auto mb-4" />
+                          <p className="text-gray-500">Buscando impresoras...</p>
+                        </div>
                       ) : (
                         <>
-                          <Check className="w-5 h-5" />
-                          Crear Orden
+                          <div>
+                            <label className={cn(
+                              "block text-sm font-medium mb-2",
+                              theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
+                            )}>
+                              Seleccionar Impresora
+                            </label>
+                            <div className="space-y-2 max-h-48 overflow-y-auto">
+                              {printServices.map(service => (
+                                service.printers.map(printer => (
+                                  <button
+                                    key={`${service.id}-${printer.id}`}
+                                    onClick={() => setSelectedPrinter({ serviceId: service.id, printerId: printer.id })}
+                                    className={cn(
+                                      'w-full p-3 rounded-xl border-2 transition-all text-left flex items-center justify-between',
+                                      selectedPrinter?.printerId === printer.id
+                                        ? 'border-emerald-500 bg-emerald-50 dark:bg-emerald-900/20'
+                                        : theme === 'dark'
+                                          ? 'border-gray-600 bg-gray-700/50 hover:border-gray-500'
+                                          : 'border-gray-200 bg-gray-50 hover:border-gray-300'
+                                    )}
+                                  >
+                                    <div className="flex items-center gap-3">
+                                      <Printer className={cn(
+                                        "w-5 h-5",
+                                        selectedPrinter?.printerId === printer.id ? 'text-emerald-600' : 'text-gray-400'
+                                      )} />
+                                      <div>
+                                        <p className={cn(
+                                          "font-medium",
+                                          theme === 'dark' ? 'text-white' : 'text-gray-900'
+                                        )}>
+                                          {printer.printerName}
+                                        </p>
+                                        <p className="text-xs text-gray-500">
+                                          {printer.printerType === 'thermal_80mm' ? 'Termica 80mm' : 'Estandar'}
+                                        </p>
+                                      </div>
+                                    </div>
+                                    {printer.isOnline ? (
+                                      <span className="text-xs text-emerald-500 font-medium">Online</span>
+                                    ) : (
+                                      <span className="text-xs text-gray-400">Offline</span>
+                                    )}
+                                  </button>
+                                ))
+                              ))}
+                            </div>
+                          </div>
+
+                          <div>
+                            <label className={cn(
+                              "block text-sm font-medium mb-2",
+                              theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
+                            )}>
+                              Copias
+                            </label>
+                            <div className="flex items-center justify-center gap-4">
+                              <motion.button
+                                whileHover={{ scale: 1.05 }}
+                                whileTap={{ scale: 0.95 }}
+                                onClick={() => setCopies(Math.max(1, copies - 1))}
+                                className={cn(
+                                  "w-10 h-10 rounded-xl flex items-center justify-center font-bold",
+                                  theme === 'dark'
+                                    ? 'bg-gray-700 hover:bg-gray-600 text-white'
+                                    : 'bg-gray-200 hover:bg-gray-300 text-gray-900'
+                                )}
+                              >
+                                -
+                              </motion.button>
+                              <span className={cn(
+                                "w-12 text-center text-xl font-bold",
+                                theme === 'dark' ? 'text-white' : 'text-gray-900'
+                              )}>
+                                {copies}
+                              </span>
+                              <motion.button
+                                whileHover={{ scale: 1.05 }}
+                                whileTap={{ scale: 0.95 }}
+                                onClick={() => setCopies(Math.min(5, copies + 1))}
+                                className={cn(
+                                  "w-10 h-10 rounded-xl flex items-center justify-center font-bold",
+                                  theme === 'dark'
+                                    ? 'bg-gray-700 hover:bg-gray-600 text-white'
+                                    : 'bg-gray-200 hover:bg-gray-300 text-gray-900'
+                                )}
+                              >
+                                +
+                              </motion.button>
+                            </div>
+                          </div>
                         </>
                       )}
-                    </motion.button>
-                  ) : (
-                    <motion.button
-                      whileHover={{ scale: 1.02 }}
-                      whileTap={{ scale: 0.98 }}
-                      onClick={goToNextStep}
-                      className="flex items-center gap-2 px-6 py-2.5 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-xl hover:from-blue-600 hover:to-blue-700 transition-all shadow-lg shadow-blue-500/25"
-                    >
-                      Siguiente
-                      <ArrowRight className="w-5 h-5" />
-                    </motion.button>
-                  )}
-                </div>
-              )}
-            </div>
-          </motion.div>
-        </div>
+                    </div>
 
-        {/* Cancel Modal */}
-        <AnimatePresence>
-          {showCancelModal && (
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4"
-            >
-              <motion.div
-                initial={{ scale: 0.9, opacity: 0 }}
-                animate={{ scale: 1, opacity: 1 }}
-                exit={{ scale: 0.9, opacity: 0 }}
-                className={cn(
-                  'w-full max-w-md rounded-2xl p-6 shadow-2xl',
-                  theme === 'dark' ? 'bg-gray-900' : 'bg-white'
-                )}
-              >
-                <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-2">
-                  Cancelar Orden
-                </h3>
-                <p className="text-gray-500 mb-6">
-                  ¿Estas seguro de que deseas cancelar? Se perderan los datos ingresados.
-                </p>
-                <div className="flex gap-3">
-                  <motion.button
-                    whileHover={{ scale: 1.02 }}
-                    whileTap={{ scale: 0.98 }}
-                    onClick={() => setShowCancelModal(false)}
-                    className={cn(
-                      'flex-1 py-2.5 rounded-xl transition-colors',
-                      theme === 'dark'
-                        ? 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                    {printServices.length > 0 && (
+                      <div className={cn(
+                        "flex gap-3 p-6 pt-4 border-t",
+                        theme === 'dark' ? 'border-gray-700' : 'border-gray-200'
+                      )}>
+                        <motion.button
+                          whileHover={{ scale: 1.02 }}
+                          whileTap={{ scale: 0.98 }}
+                          onClick={() => setShowPrintModal(false)}
+                          className={cn(
+                            "flex-1 py-3 rounded-xl font-medium transition-all",
+                            theme === 'dark'
+                              ? 'bg-gray-700 hover:bg-gray-600 text-white'
+                              : 'bg-gray-100 hover:bg-gray-200 text-gray-700'
+                          )}
+                        >
+                          Cancelar
+                        </motion.button>
+                        <motion.button
+                          whileHover={{ scale: 1.02 }}
+                          whileTap={{ scale: 0.98 }}
+                          onClick={printWithSilentService}
+                          disabled={printingWithService || !selectedPrinter}
+                          className={cn(
+                            "flex-1 py-3 rounded-xl font-medium transition-all flex items-center justify-center gap-2",
+                            "bg-emerald-500 hover:bg-emerald-600 text-white disabled:opacity-50"
+                          )}
+                        >
+                          {printingWithService ? (
+                            <>
+                              <Loader2 className="w-5 h-5 animate-spin" />
+                              Enviando...
+                            </>
+                          ) : (
+                            <>
+                              <Printer className="w-5 h-5" />
+                              Imprimir
+                            </>
+                          )}
+                        </motion.button>
+                      </div>
                     )}
-                  >
-                    Continuar editando
-                  </motion.button>
-                  <Link href="/dashboard/market/consignments">
-                    <motion.button
-                      whileHover={{ scale: 1.02 }}
-                      whileTap={{ scale: 0.98 }}
-                      className="px-6 py-2.5 bg-red-500 text-white rounded-xl hover:bg-red-600 transition-colors"
-                    >
-                      Cancelar
-                    </motion.button>
-                  </Link>
-                </div>
-              </motion.div>
-            </motion.div>
-          )}
-        </AnimatePresence>
+                  </div>
+                </motion.div>
+              </>
+            )}
+          </AnimatePresence>
+        </div>
       </DashboardLayout>
     </ProtectedRoute>
   )

@@ -85,9 +85,43 @@ export async function GET(request: NextRequest) {
       paramIndex++
     }
 
-    // Count total
-    const countQuery = query.replace(/SELECT[\s\S]*?FROM/, 'SELECT COUNT(*) as total FROM')
-    const countResult = await db.query(countQuery, params)
+    // Count total - build count query separately to avoid subquery issues
+    let countQuery = `
+      SELECT COUNT(*) as total
+      FROM consignment_orders o
+      JOIN consignment_suppliers s ON s.id = o.supplier_id
+      JOIN market_warehouses w ON w.id = o.warehouse_id
+      LEFT JOIN users u ON u.id = o.created_by
+      WHERE o.company_id = $1
+    `
+    const countParams: (string | number)[] = [payload.companyId]
+    let countParamIndex = 2
+
+    if (search) {
+      countQuery += ` AND (o.order_number ILIKE $${countParamIndex} OR s.name ILIKE $${countParamIndex})`
+      countParams.push(`%${search}%`)
+      countParamIndex++
+    }
+
+    if (status) {
+      countQuery += ` AND o.status = $${countParamIndex}`
+      countParams.push(status)
+      countParamIndex++
+    }
+
+    if (supplierId) {
+      countQuery += ` AND o.supplier_id = $${countParamIndex}`
+      countParams.push(parseInt(supplierId))
+      countParamIndex++
+    }
+
+    if (warehouseId) {
+      countQuery += ` AND o.warehouse_id = $${countParamIndex}`
+      countParams.push(parseInt(warehouseId))
+      countParamIndex++
+    }
+
+    const countResult = await db.query(countQuery, countParams)
     const total = parseInt(countResult.rows[0]?.total || '0')
 
     // Get stats by status
