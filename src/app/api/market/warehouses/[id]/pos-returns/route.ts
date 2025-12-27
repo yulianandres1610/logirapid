@@ -56,19 +56,18 @@ export async function GET(
         pr.status,
         pr.reason,
         pr.created_at,
-        pos.name as pos_name,
-        c.name as customer_name,
+        pr.customer_name,
+        COALESCE(pos.name, 'POS') as pos_name,
         COUNT(prl.id) as total_items,
-        SUM(prl.quantity) as total_units,
-        SUM(prl.quantity * prl.unit_price) as total_value
+        COALESCE(SUM(prl.quantity), 0) as total_units,
+        COALESCE(SUM(prl.quantity * prl.unit_price), 0) as total_value
       FROM pos_returns pr
       LEFT JOIN market_pos pos ON pos.id = pr.pos_id
-      LEFT JOIN customers c ON c.id = pr.customer_id
       LEFT JOIN pos_return_lines prl ON prl.return_id = pr.id
       WHERE pr.warehouse_id = $1
         AND pr.company_id = $2
         ${statusFilter}
-      GROUP BY pr.id, pr.return_number, pr.status, pr.reason, pr.created_at, pos.name, c.name
+      GROUP BY pr.id, pr.return_number, pr.status, pr.reason, pr.created_at, pr.customer_name, pos.name
       ORDER BY pr.created_at DESC
     `, [warehouseId, payload.companyId])
 
