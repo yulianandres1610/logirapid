@@ -25,6 +25,7 @@ import { generateCashRegisterReportPdf } from '../documents/cash-register-report
 import { generateWarehouseOperation, WarehouseOperationData } from '../documents/warehouse-operation'
 import { generateWarehouseOperationPdf } from '../documents/warehouse-operation-pdf'
 import { generateConsignmentReceipt, ConsignmentReceiptData } from '../documents/consignment-receipt'
+import { generateUnifiedReception, UnifiedReceptionData } from '../documents/unified-reception'
 
 const execAsync = promisify(exec)
 
@@ -209,7 +210,8 @@ class JobProcessor {
 
       case 'warehouse_operation':
       case 'consignment_receipt':
-        // For warehouse operations and consignment receipts, prefer thermal printers but fall back to any
+      case 'unified_reception':
+        // For warehouse operations and receipts, prefer thermal printers but fall back to any
         return printerService.getThermalPrinters()[0] || printerService.getDefaultPrinter()
 
       default:
@@ -274,6 +276,10 @@ class JobProcessor {
         // Always PDF for consignment receipts (has barcodes)
         return generateConsignmentReceipt(data as unknown as ConsignmentReceiptData)
 
+      case 'unified_reception':
+        // Always PDF for unified reception receipts (has barcodes)
+        return generateUnifiedReception(data as unknown as UnifiedReceptionData)
+
       default:
         console.error(`[Job Processor] Unknown document type: ${job.documentType}`)
         return null
@@ -299,8 +305,8 @@ class JobProcessor {
                                'inventory_count_report', 'cash_register_report',
                                'warehouse_operation'].includes(job.documentType)
 
-    // Consignment receipts are always PDF (have barcodes that require PDF rendering)
-    const isPdfOnly = ['consignment_receipt'].includes(job.documentType)
+    // Consignment receipts and unified reception are always PDF (have barcodes that require PDF rendering)
+    const isPdfOnly = ['consignment_receipt', 'unified_reception'].includes(job.documentType)
 
     for (let i = 0; i < copies; i++) {
       if (isPdfOnly) {

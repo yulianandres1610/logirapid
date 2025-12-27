@@ -56,6 +56,7 @@ interface PrintJob {
     | 'cash_register_report'
     | 'warehouse_operation'
     | 'consignment_receipt'
+    | 'unified_reception'
   sourceType: string | null
   sourceId: number | null
   documentData: Record<string, unknown>
