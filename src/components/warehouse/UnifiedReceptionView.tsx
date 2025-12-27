@@ -17,7 +17,10 @@ import {
   ShoppingCart,
   Plus,
   Minus,
-  Circle
+  Circle,
+  History,
+  Eye,
+  ChevronRight
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useTheme } from '@/contexts/theme-context'
@@ -58,6 +61,63 @@ interface ReceivedLine {
   expirationDate: string
 }
 
+interface ReceptionHistoryItem {
+  id: number
+  order_number: string
+  order_type: 'consignment' | 'purchase'
+  status: string
+  received_at: string
+  supplier_code: string
+  supplier_name: string
+  received_by_name: string | null
+  total_units: string
+  total_lines: string
+}
+
+interface OrderDetail {
+  orderType: string
+  order: {
+    id: number
+    orderNumber: string
+    status: string
+    receivedAt: string
+    createdAt: string
+    supplier: Supplier
+    warehouse: { name: string; code: string }
+    receivedBy: string | null
+  }
+  lines: {
+    lineId: number
+    productId: number
+    productName: string
+    sku: string
+    barcode: string | null
+    quantityOrdered: number
+    quantityReceived: number
+    lotNumber: string | null
+    expirationDate: string | null
+    unitCost: number
+  }[]
+  totals: {
+    totalOrdered: number
+    totalReceived: number
+    totalLines: number
+  }
+}
+
+interface SupplierConflict {
+  productId: number
+  productName: string
+  existingSupplier: {
+    id: number
+    code: string
+    name: string
+    unitCost: number
+    stockAvailable: number
+  }
+  message: string
+}
+
 interface UnifiedReceptionViewProps {
   warehouseId: number
   warehouseName: string
@@ -67,6 +127,7 @@ interface UnifiedReceptionViewProps {
     orderNumber: string
     unitsReceived: number
   }) => void
+  onNavigateToReturns?: () => void
 }
 
 type ValidationStatus = 'pending' | 'partial' | 'complete' | 'excess'
@@ -78,11 +139,27 @@ function getValidationStatus(received: number, expected: number): ValidationStat
   return 'excess'
 }
 
+function formatDate(dateStr: string): string {
+  try {
+    const date = new Date(dateStr)
+    return date.toLocaleDateString('es-ES', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    })
+  } catch {
+    return dateStr
+  }
+}
+
 export default function UnifiedReceptionView({
   warehouseId,
   warehouseName,
   onBack,
-  onComplete
+  onComplete,
+  onNavigateToReturns
 }: UnifiedReceptionViewProps) {
   const { theme } = useTheme()
   const searchInputRef = useRef<HTMLInputElement>(null)
@@ -100,12 +177,23 @@ export default function UnifiedReceptionView({
   const [successData, setSuccessData] = useState<{ orderNumber: string; unitsReceived: number } | null>(null)
   const [expandedLineId, setExpandedLineId] = useState<number | null>(null)
 
+  // History states
+  const [showHistory, setShowHistory] = useState(false)
+  const [historyType, setHistoryType] = useState<'consignment' | 'purchase' | null>(null)
+  const [historyLoading, setHistoryLoading] = useState(false)
+  const [historyItems, setHistoryItems] = useState<ReceptionHistoryItem[]>([])
+  const [selectedOrder, setSelectedOrder] = useState<OrderDetail | null>(null)
+  const [orderDetailLoading, setOrderDetailLoading] = useState(false)
+
+  // Supplier conflict state
+  const [supplierConflict, setSupplierConflict] = useState<SupplierConflict | null>(null)
+
   // Focus search input on mount
   useEffect(() => {
-    if (searchInputRef.current && !detectedOrder) {
+    if (searchInputRef.current && !detectedOrder && !showHistory) {
       searchInputRef.current.focus()
     }
-  }, [detectedOrder])
+  }, [detectedOrder, showHistory])
 
   // Focus product search when order is loaded
   useEffect(() => {
@@ -116,15 +204,14 @@ export default function UnifiedReceptionView({
 
   // Handle barcode scan for order or product
   const handleBarcodeScan = useCallback((code: string) => {
+    if (showHistory) return
     if (!detectedOrder) {
-      // Scan order code
       setSearchCode(code)
       detectOrder(code)
     } else {
-      // Scan product - increment its quantity
       incrementProductByBarcode(code)
     }
-  }, [detectedOrder])
+  }, [detectedOrder, showHistory])
 
   useBarcodeScan({
     onScan: handleBarcodeScan,
@@ -135,7 +222,7 @@ export default function UnifiedReceptionView({
   // Generate lot number
   const generateLotNumber = (supplierCode: string, index: number): string => {
     const today = new Date()
-    const dateStr = today.toISOString().split('T')[0].replace(/-/g, '').slice(2) // YYMMDD
+    const dateStr = today.toISOString().split('T')[0].replace(/-/g, '').slice(2)
     const seq = (index + 1).toString().padStart(2, '0')
     return `${supplierCode}${dateStr}${seq}`
   }
@@ -157,13 +244,12 @@ export default function UnifiedReceptionView({
         const order: DetectedOrder = data.data
         setDetectedOrder(order)
 
-        // Initialize received lines with ZERO quantities (force counting)
         const initialLines = new Map<number, ReceivedLine>()
         order.lines.forEach((line, index) => {
           initialLines.set(line.lineId, {
             lineId: line.lineId,
             productId: line.productId,
-            quantityReceived: 0, // Start at 0 - force counting
+            quantityReceived: 0,
             lotNumber: generateLotNumber(order.supplier.code, index),
             expirationDate: ''
           })
@@ -186,6 +272,55 @@ export default function UnifiedReceptionView({
     detectOrder(searchCode)
   }
 
+  // Fetch history
+  const fetchHistory = async (type: 'consignment' | 'purchase') => {
+    setHistoryType(type)
+    setShowHistory(true)
+    setHistoryLoading(true)
+    setSelectedOrder(null)
+
+    try {
+      const response = await fetch(
+        `/api/market/warehouses/${warehouseId}/reception-history?type=${type}&limit=50`
+      )
+      const data = await response.json()
+
+      if (data.success) {
+        setHistoryItems(data.data.receptions)
+      } else {
+        setError(data.error || 'Error al cargar historial')
+      }
+    } catch (err) {
+      console.error('Error fetching history:', err)
+      setError('Error de conexión')
+    } finally {
+      setHistoryLoading(false)
+    }
+  }
+
+  // Fetch order detail
+  const fetchOrderDetail = async (orderId: number, orderType: string) => {
+    setOrderDetailLoading(true)
+
+    try {
+      const response = await fetch(
+        `/api/market/warehouses/${warehouseId}/reception-history/${orderId}?type=${orderType}`
+      )
+      const data = await response.json()
+
+      if (data.success) {
+        setSelectedOrder(data.data)
+      } else {
+        setError(data.error || 'Error al cargar detalles')
+      }
+    } catch (err) {
+      console.error('Error fetching order detail:', err)
+      setError('Error de conexión')
+    } finally {
+      setOrderDetailLoading(false)
+    }
+  }
+
   // Increment product by barcode scan
   const incrementProductByBarcode = (barcode: string) => {
     if (!detectedOrder) return
@@ -197,7 +332,6 @@ export default function UnifiedReceptionView({
     if (line) {
       incrementLineQuantity(line.lineId)
       setProductSearchCode('')
-      // Show brief feedback
       setError(null)
     } else {
       setError(`Producto no encontrado: ${barcode}`)
@@ -210,7 +344,7 @@ export default function UnifiedReceptionView({
     const current = receivedLines.get(lineId)
     if (current) {
       const line = detectedOrder?.lines.find(l => l.lineId === lineId)
-      const maxQty = (line?.quantityPending || 0) + 5 // Allow up to 5 extra for discrepancies
+      const maxQty = (line?.quantityPending || 0) + 5
       if (current.quantityReceived < maxQty) {
         setReceivedLines(new Map(receivedLines.set(lineId, {
           ...current,
@@ -294,7 +428,6 @@ export default function UnifiedReceptionView({
       const data = await response.json()
 
       if (data.success) {
-        // Send print job
         await sendPrintJob(data.data)
 
         setSuccessData({
@@ -302,6 +435,9 @@ export default function UnifiedReceptionView({
           unitsReceived: data.data.unitsReceived
         })
         setShowSuccess(true)
+      } else if (data.error === 'supplier_conflict' && data.conflict) {
+        // Mostrar modal de conflicto de proveedor
+        setSupplierConflict(data.conflict)
       } else {
         setError(data.error || 'Error al procesar recepcion')
       }
@@ -313,7 +449,7 @@ export default function UnifiedReceptionView({
     }
   }
 
-  // Send print job for reception receipt
+  // Send print job
   const sendPrintJob = async (receptionData: {
     orderType: string
     orderId: number
@@ -416,6 +552,94 @@ export default function UnifiedReceptionView({
   const totalProducts = detectedOrder?.lines.length || 0
   const progressPercent = totalExpected > 0 ? Math.round((totalToReceive / totalExpected) * 100) : 0
 
+  // Supplier Conflict Modal
+  if (supplierConflict) {
+    return (
+      <div className="min-h-[60vh] flex items-center justify-center p-4">
+        <motion.div
+          initial={{ scale: 0.9, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          className={cn(
+            'text-center p-8 rounded-2xl max-w-md w-full',
+            theme === 'dark' ? 'bg-gray-800' : 'bg-white'
+          )}
+        >
+          <motion.div
+            initial={{ scale: 0 }}
+            animate={{ scale: 1 }}
+            transition={{ delay: 0.2, type: 'spring' }}
+            className="w-20 h-20 mx-auto mb-6 bg-orange-100 dark:bg-orange-900/30 rounded-full flex items-center justify-center"
+          >
+            <AlertTriangle className="w-10 h-10 text-orange-600" />
+          </motion.div>
+          <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-2">
+            Conflicto de Proveedor
+          </h2>
+          <p className="text-gray-500 mb-4">
+            {supplierConflict.productName}
+          </p>
+          <div className={cn(
+            'p-4 rounded-xl mb-6 text-left',
+            theme === 'dark' ? 'bg-gray-700' : 'bg-gray-100'
+          )}>
+            <p className="text-sm text-gray-500 mb-2">Proveedor actual:</p>
+            <p className="font-bold text-gray-900 dark:text-white">
+              {supplierConflict.existingSupplier.name}
+            </p>
+            <p className="text-sm text-gray-500">
+              Codigo: {supplierConflict.existingSupplier.code}
+            </p>
+            <div className="mt-3 pt-3 border-t border-gray-200 dark:border-gray-600">
+              <div className="flex justify-between">
+                <span className="text-sm text-gray-500">Stock disponible:</span>
+                <span className="font-bold text-orange-600">
+                  {supplierConflict.existingSupplier.stockAvailable} uds
+                </span>
+              </div>
+              <div className="flex justify-between mt-1">
+                <span className="text-sm text-gray-500">Precio de costo:</span>
+                <span className="font-medium text-gray-900 dark:text-white">
+                  ${supplierConflict.existingSupplier.unitCost.toFixed(2)}
+                </span>
+              </div>
+            </div>
+          </div>
+          <p className="text-sm text-gray-500 mb-6">
+            Debe devolver todo el stock de este producto antes de consignar con otro proveedor.
+          </p>
+          <div className="flex gap-3">
+            <motion.button
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+              onClick={() => setSupplierConflict(null)}
+              className={cn(
+                'flex-1 py-3 rounded-xl font-medium transition-colors',
+                theme === 'dark'
+                  ? 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                  : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+              )}
+            >
+              Cerrar
+            </motion.button>
+            {onNavigateToReturns && (
+              <motion.button
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+                onClick={() => {
+                  setSupplierConflict(null)
+                  onNavigateToReturns()
+                }}
+                className="flex-1 py-3 bg-orange-500 text-white rounded-xl hover:bg-orange-600 transition-colors font-medium"
+              >
+                Ir a Devoluciones
+              </motion.button>
+            )}
+          </div>
+        </motion.div>
+      </div>
+    )
+  }
+
   // Success Modal
   if (showSuccess && successData) {
     return (
@@ -454,6 +678,237 @@ export default function UnifiedReceptionView({
             Continuar
           </motion.button>
         </motion.div>
+      </div>
+    )
+  }
+
+  // History View
+  if (showHistory) {
+    return (
+      <div className="p-4 space-y-4">
+        {/* Header */}
+        <div className="flex items-center gap-4">
+          <motion.button
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+            onClick={() => {
+              if (selectedOrder) {
+                setSelectedOrder(null)
+              } else {
+                setShowHistory(false)
+                setHistoryItems([])
+              }
+            }}
+            className={cn(
+              'p-2 rounded-lg transition-colors',
+              theme === 'dark' ? 'hover:bg-gray-800' : 'hover:bg-gray-100'
+            )}
+          >
+            <ArrowLeft className="w-5 h-5" />
+          </motion.button>
+          <div>
+            <h2 className="text-xl font-bold text-gray-900 dark:text-white">
+              {selectedOrder ? selectedOrder.order.orderNumber : (
+                historyType === 'consignment' ? 'Consignaciones Recibidas' : 'Compras Recibidas'
+              )}
+            </h2>
+            <p className="text-sm text-gray-500">
+              {selectedOrder ? (
+                `${selectedOrder.order.supplier.name} - ${formatDate(selectedOrder.order.receivedAt)}`
+              ) : warehouseName}
+            </p>
+          </div>
+        </div>
+
+        {/* Order Detail View */}
+        {selectedOrder ? (
+          <div className="space-y-4">
+            {/* Order Info */}
+            <div className={cn(
+              'p-4 rounded-xl',
+              theme === 'dark' ? 'bg-gray-800' : 'bg-gray-100'
+            )}>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <p className="text-xs text-gray-500">Proveedor</p>
+                  <p className="font-medium text-gray-900 dark:text-white">
+                    {selectedOrder.order.supplier.name}
+                  </p>
+                  <p className="text-sm text-gray-500">{selectedOrder.order.supplier.code}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-gray-500">Estado</p>
+                  <span className={cn(
+                    'inline-block px-2 py-1 rounded-full text-xs font-medium',
+                    selectedOrder.order.status === 'received' || selectedOrder.order.status === 'recibido'
+                      ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400'
+                      : 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400'
+                  )}>
+                    {selectedOrder.order.status === 'received' || selectedOrder.order.status === 'recibido' ? 'Completo' : 'Parcial'}
+                  </span>
+                </div>
+                <div>
+                  <p className="text-xs text-gray-500">Recibido por</p>
+                  <p className="font-medium text-gray-900 dark:text-white">
+                    {selectedOrder.order.receivedBy || 'N/A'}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs text-gray-500">Almacén</p>
+                  <p className="font-medium text-gray-900 dark:text-white">
+                    {selectedOrder.order.warehouse.name}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Totals */}
+            <div className="grid grid-cols-3 gap-3">
+              <div className={cn(
+                'p-3 rounded-xl text-center',
+                theme === 'dark' ? 'bg-gray-800' : 'bg-white border border-gray-200'
+              )}>
+                <p className="text-2xl font-bold text-gray-900 dark:text-white">
+                  {selectedOrder.totals.totalLines}
+                </p>
+                <p className="text-xs text-gray-500">Productos</p>
+              </div>
+              <div className={cn(
+                'p-3 rounded-xl text-center',
+                theme === 'dark' ? 'bg-gray-800' : 'bg-white border border-gray-200'
+              )}>
+                <p className="text-2xl font-bold text-gray-900 dark:text-white">
+                  {selectedOrder.totals.totalOrdered}
+                </p>
+                <p className="text-xs text-gray-500">Ordenados</p>
+              </div>
+              <div className={cn(
+                'p-3 rounded-xl text-center',
+                theme === 'dark' ? 'bg-emerald-900/20' : 'bg-emerald-50'
+              )}>
+                <p className="text-2xl font-bold text-emerald-600">
+                  {selectedOrder.totals.totalReceived}
+                </p>
+                <p className="text-xs text-gray-500">Recibidos</p>
+              </div>
+            </div>
+
+            {/* Product Lines */}
+            <div className="space-y-2">
+              <h3 className="font-medium text-gray-900 dark:text-white">Productos Recibidos</h3>
+              {selectedOrder.lines.map(line => (
+                <div
+                  key={line.lineId}
+                  className={cn(
+                    'p-3 rounded-xl',
+                    theme === 'dark' ? 'bg-gray-800' : 'bg-white border border-gray-200'
+                  )}
+                >
+                  <div className="flex items-start justify-between">
+                    <div className="flex-1 min-w-0">
+                      <p className="font-medium text-gray-900 dark:text-white truncate">
+                        {line.productName}
+                      </p>
+                      <p className="text-xs text-gray-500">SKU: {line.sku}</p>
+                      {line.lotNumber && (
+                        <p className="text-xs text-blue-600 dark:text-blue-400 mt-1">
+                          Lote: {line.lotNumber}
+                        </p>
+                      )}
+                      {line.expirationDate && (
+                        <p className="text-xs text-gray-500">
+                          Vence: {new Date(line.expirationDate).toLocaleDateString('es-ES')}
+                        </p>
+                      )}
+                    </div>
+                    <div className="text-right">
+                      <p className="text-lg font-bold text-emerald-600">
+                        {line.quantityReceived}
+                      </p>
+                      <p className="text-xs text-gray-500">
+                        de {line.quantityOrdered}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : (
+          // History List
+          <div className="space-y-2">
+            {historyLoading ? (
+              <div className="flex items-center justify-center py-12">
+                <Loader2 className="w-8 h-8 animate-spin text-gray-400" />
+              </div>
+            ) : historyItems.length === 0 ? (
+              <div className="text-center py-12">
+                <History className="w-12 h-12 mx-auto mb-4 text-gray-400" />
+                <p className="text-gray-500">No hay recepciones registradas</p>
+              </div>
+            ) : (
+              historyItems.map(item => (
+                <motion.button
+                  key={`${item.order_type}-${item.id}`}
+                  whileHover={{ scale: 1.01 }}
+                  whileTap={{ scale: 0.99 }}
+                  onClick={() => fetchOrderDetail(item.id, item.order_type)}
+                  className={cn(
+                    'w-full p-4 rounded-xl text-left transition-colors',
+                    theme === 'dark'
+                      ? 'bg-gray-800 hover:bg-gray-750'
+                      : 'bg-white border border-gray-200 hover:border-gray-300'
+                  )}
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <p className="font-medium text-gray-900 dark:text-white">
+                          {item.order_number}
+                        </p>
+                        <span className={cn(
+                          'px-2 py-0.5 rounded-full text-xs',
+                          item.status === 'received' || item.status === 'recibido'
+                            ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400'
+                            : 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400'
+                        )}>
+                          {item.status === 'received' || item.status === 'recibido' ? 'Completo' : 'Parcial'}
+                        </span>
+                      </div>
+                      <p className="text-sm text-gray-500 truncate">
+                        {item.supplier_name}
+                      </p>
+                      <p className="text-xs text-gray-400">
+                        {formatDate(item.received_at)}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <div className="text-right">
+                        <p className="text-lg font-bold text-gray-900 dark:text-white">
+                          {item.total_units}
+                        </p>
+                        <p className="text-xs text-gray-500">unidades</p>
+                      </div>
+                      <ChevronRight className="w-5 h-5 text-gray-400" />
+                    </div>
+                  </div>
+                </motion.button>
+              ))
+            )}
+          </div>
+        )}
+
+        {orderDetailLoading && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+            <div className={cn(
+              'p-6 rounded-xl',
+              theme === 'dark' ? 'bg-gray-800' : 'bg-white'
+            )}>
+              <Loader2 className="w-8 h-8 animate-spin text-emerald-500 mx-auto" />
+              <p className="text-sm text-gray-500 mt-2">Cargando detalles...</p>
+            </div>
+          </div>
+        )}
       </div>
     )
   }
@@ -577,7 +1032,6 @@ export default function UnifiedReceptionView({
             const status = getValidationStatus(quantityReceived, line.quantityPending)
             const isExpanded = expandedLineId === line.lineId
 
-            // Status colors
             let bgColor = theme === 'dark' ? 'bg-gray-800' : 'bg-white'
             let borderColor = theme === 'dark' ? 'border-gray-700' : 'border-gray-200'
             let statusIcon = <Circle className="w-5 h-5 text-gray-400" />
@@ -606,18 +1060,14 @@ export default function UnifiedReceptionView({
                   borderColor
                 )}
               >
-                {/* Main Row */}
                 <div
                   className="p-4 cursor-pointer"
                   onClick={() => setExpandedLineId(isExpanded ? null : line.lineId)}
                 >
                   <div className="flex items-center gap-3">
-                    {/* Status Icon */}
                     <div className="flex-shrink-0">
                       {statusIcon}
                     </div>
-
-                    {/* Product Info */}
                     <div className="flex-grow min-w-0">
                       <p className="font-medium text-gray-900 dark:text-white truncate">
                         {line.productName}
@@ -635,8 +1085,6 @@ export default function UnifiedReceptionView({
                         )}
                       </div>
                     </div>
-
-                    {/* Quantity Controls */}
                     <div className="flex items-center gap-2" onClick={e => e.stopPropagation()}>
                       <button
                         onClick={() => decrementLineQuantity(line.lineId)}
@@ -650,7 +1098,6 @@ export default function UnifiedReceptionView({
                       >
                         <Minus className="w-5 h-5" />
                       </button>
-
                       <div className="text-center min-w-[90px]">
                         <div className="flex items-center justify-center gap-1">
                           <span className="text-2xl font-bold text-gray-900 dark:text-white">
@@ -672,7 +1119,6 @@ export default function UnifiedReceptionView({
                           </span>
                         )}
                       </div>
-
                       <button
                         onClick={() => incrementLineQuantity(line.lineId)}
                         className={cn(
@@ -685,8 +1131,6 @@ export default function UnifiedReceptionView({
                       </button>
                     </div>
                   </div>
-
-                  {/* Progress Bar */}
                   <div className="mt-3">
                     <div className="h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
                       <div
@@ -702,7 +1146,6 @@ export default function UnifiedReceptionView({
                   </div>
                 </div>
 
-                {/* Expanded Details */}
                 <AnimatePresence>
                   {isExpanded && (
                     <motion.div
@@ -716,7 +1159,6 @@ export default function UnifiedReceptionView({
                         theme === 'dark' ? 'border-gray-700' : 'border-gray-200'
                       )}>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                          {/* Lot Number */}
                           <div>
                             <label className="block text-xs text-gray-500 mb-1">Numero de Lote</label>
                             <input
@@ -730,8 +1172,6 @@ export default function UnifiedReceptionView({
                               )}
                             />
                           </div>
-
-                          {/* Expiration Date - Optional */}
                           <div>
                             <label className="block text-xs text-gray-500 mb-1 flex items-center gap-1">
                               <Calendar className="w-3 h-3" />
@@ -748,8 +1188,6 @@ export default function UnifiedReceptionView({
                             />
                           </div>
                         </div>
-
-                        {/* Quick set quantity */}
                         <div className="mt-3">
                           <label className="block text-xs text-gray-500 mb-1">Cantidad manual</label>
                           <input
@@ -893,7 +1331,6 @@ export default function UnifiedReceptionView({
             />
           </div>
 
-          {/* Error Message */}
           <AnimatePresence>
             {error && (
               <motion.div
@@ -936,28 +1373,46 @@ export default function UnifiedReceptionView({
           </motion.button>
         </form>
 
-        {/* Help Text */}
+        {/* History Buttons */}
         <div className="mt-6 pt-6 border-t border-gray-200 dark:border-gray-700">
           <p className="text-sm text-gray-500 text-center mb-4">
-            Tipos de ordenes soportadas:
+            Ver historial de recepciones:
           </p>
           <div className="grid grid-cols-2 gap-3">
-            <div className={cn(
-              'p-3 rounded-lg text-center',
-              theme === 'dark' ? 'bg-teal-900/20' : 'bg-teal-50'
-            )}>
-              <Truck className="w-5 h-5 mx-auto mb-1 text-teal-600" />
-              <p className="text-xs font-medium text-teal-700 dark:text-teal-400">Consignaciones</p>
-              <p className="text-xs text-gray-500">CONS-YYYY-XXXX</p>
-            </div>
-            <div className={cn(
-              'p-3 rounded-lg text-center',
-              theme === 'dark' ? 'bg-blue-900/20' : 'bg-blue-50'
-            )}>
-              <ShoppingCart className="w-5 h-5 mx-auto mb-1 text-blue-600" />
-              <p className="text-xs font-medium text-blue-700 dark:text-blue-400">Compras</p>
-              <p className="text-xs text-gray-500">PUR-YYYY-XXXX</p>
-            </div>
+            <motion.button
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+              onClick={() => fetchHistory('consignment')}
+              className={cn(
+                'p-4 rounded-xl text-center transition-colors cursor-pointer',
+                theme === 'dark'
+                  ? 'bg-teal-900/20 hover:bg-teal-900/40'
+                  : 'bg-teal-50 hover:bg-teal-100'
+              )}
+            >
+              <Truck className="w-6 h-6 mx-auto mb-2 text-teal-600" />
+              <p className="text-sm font-medium text-teal-700 dark:text-teal-400">
+                Consignaciones
+              </p>
+              <p className="text-xs text-gray-500 mt-1">Ver recibidas</p>
+            </motion.button>
+            <motion.button
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+              onClick={() => fetchHistory('purchase')}
+              className={cn(
+                'p-4 rounded-xl text-center transition-colors cursor-pointer',
+                theme === 'dark'
+                  ? 'bg-blue-900/20 hover:bg-blue-900/40'
+                  : 'bg-blue-50 hover:bg-blue-100'
+              )}
+            >
+              <ShoppingCart className="w-6 h-6 mx-auto mb-2 text-blue-600" />
+              <p className="text-sm font-medium text-blue-700 dark:text-blue-400">
+                Compras
+              </p>
+              <p className="text-xs text-gray-500 mt-1">Ver recibidas</p>
+            </motion.button>
           </div>
         </div>
       </div>

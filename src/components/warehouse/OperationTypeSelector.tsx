@@ -2,9 +2,9 @@
 
 import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
-import { PackageCheck, ArrowRightLeft, Trash2, Scale, PackageOpen, Package } from 'lucide-react'
+import { ArrowRightLeft, Trash2, Scale, PackageOpen, Package, RotateCcw } from 'lucide-react'
 
-export type OperationType = 'reception' | 'transfer' | 'scrap' | 'adjustment' | 'receive_transfer' | 'order_reception'
+export type OperationType = 'transfer' | 'scrap' | 'adjustment' | 'receive_transfer' | 'order_reception' | 'return'
 
 interface OperationTypeSelectorProps {
   onSelect: (type: OperationType) => void
@@ -12,16 +12,6 @@ interface OperationTypeSelectorProps {
 }
 
 const operationTypes = [
-  {
-    id: 'reception' as OperationType,
-    name: 'Recepcion',
-    description: 'Ingresar stock - Compras y consignaciones',
-    icon: PackageCheck,
-    gradient: 'from-green-500 to-emerald-600',
-    hoverGradient: 'from-green-600 to-emerald-700',
-    bgLight: 'bg-green-50',
-    textColor: 'text-green-600'
-  },
   {
     id: 'transfer' as OperationType,
     name: 'Transferencia',
@@ -71,6 +61,16 @@ const operationTypes = [
     hoverGradient: 'from-teal-600 to-cyan-700',
     bgLight: 'bg-teal-50',
     textColor: 'text-teal-600'
+  },
+  {
+    id: 'return' as OperationType,
+    name: 'Devolucion',
+    description: 'Devolver a proveedor o recibir POS',
+    icon: RotateCcw,
+    gradient: 'from-orange-500 to-red-600',
+    hoverGradient: 'from-orange-600 to-red-700',
+    bgLight: 'bg-orange-50',
+    textColor: 'text-orange-600'
   }
 ]
 
@@ -108,7 +108,7 @@ export default function OperationTypeSelector({ onSelect, currentWarehouse }: Op
 
   return (
     <div className="flex items-center justify-center min-h-[60vh] p-4 w-full">
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-6 lg:gap-6 max-w-6xl mx-auto">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4 lg:gap-5 max-w-7xl mx-auto">
         {operationTypes.map((op, index) => {
           const Icon = op.icon
           const showBadge = (op.id === 'receive_transfer' && pendingCount > 0) || (op.id === 'order_reception' && pendingConsignments > 0)
@@ -141,9 +141,6 @@ export default function OperationTypeSelector({ onSelect, currentWarehouse }: Op
                   <span className={`text-sm font-bold ${op.id === 'order_reception' ? 'text-teal-600' : 'text-purple-600'}`}>{badgeCount}</span>
                 </motion.div>
               )}
-
-              {/* Background decoration */}
-              <div className="absolute inset-0 bg-white/10 opacity-0 group-hover:opacity-100 transition-opacity" />
 
               {/* Icon container */}
               <div className="relative z-10 w-16 h-16 lg:w-20 lg:h-20 bg-white/20 rounded-xl flex items-center justify-center mb-4 group-hover:bg-white/30 transition-colors">
