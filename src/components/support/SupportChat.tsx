@@ -30,6 +30,154 @@ interface SupportChatProps {
   }
 }
 
+// Typing Indicator Component - 3 dots animation
+const TypingIndicator = () => {
+  return (
+    <div className="flex items-center gap-1 py-2 px-1">
+      <motion.span
+        className="w-2 h-2 rounded-full bg-gray-400"
+        animate={{ y: [0, -5, 0] }}
+        transition={{ duration: 0.6, repeat: Infinity, delay: 0 }}
+      />
+      <motion.span
+        className="w-2 h-2 rounded-full bg-gray-400"
+        animate={{ y: [0, -5, 0] }}
+        transition={{ duration: 0.6, repeat: Infinity, delay: 0.15 }}
+      />
+      <motion.span
+        className="w-2 h-2 rounded-full bg-gray-400"
+        animate={{ y: [0, -5, 0] }}
+        transition={{ duration: 0.6, repeat: Infinity, delay: 0.3 }}
+      />
+    </div>
+  )
+}
+
+// Format message content with links and markdown-like formatting
+const FormattedMessage = ({ content, isDark }: { content: string; isDark: boolean }) => {
+  // Convert markdown-like links and formatting to JSX
+  const formatText = (text: string) => {
+    // Split by lines for better formatting
+    const lines = text.split('\n')
+
+    return lines.map((line, lineIndex) => {
+      // Check for numbered list items
+      const numberedMatch = line.match(/^(\d+)\.\s*(.*)/)
+      if (numberedMatch) {
+        return (
+          <div key={lineIndex} className="flex gap-2 my-1">
+            <span className="font-semibold text-blue-500 min-w-[20px]">{numberedMatch[1]}.</span>
+            <span>{formatInlineContent(numberedMatch[2], isDark)}</span>
+          </div>
+        )
+      }
+
+      // Check for bullet points
+      if (line.startsWith('- ') || line.startsWith('• ')) {
+        return (
+          <div key={lineIndex} className="flex gap-2 my-1">
+            <span className="text-blue-500">•</span>
+            <span>{formatInlineContent(line.substring(2), isDark)}</span>
+          </div>
+        )
+      }
+
+      // Check for headers (lines starting with **)
+      if (line.startsWith('**') && line.endsWith('**')) {
+        return (
+          <div key={lineIndex} className="font-semibold mt-2 mb-1">
+            {line.replace(/\*\*/g, '')}
+          </div>
+        )
+      }
+
+      // Regular line
+      if (line.trim()) {
+        return (
+          <p key={lineIndex} className="my-1">
+            {formatInlineContent(line, isDark)}
+          </p>
+        )
+      }
+
+      // Empty line for spacing
+      return <div key={lineIndex} className="h-2" />
+    })
+  }
+
+  // Format inline content (bold, links, etc.)
+  const formatInlineContent = (text: string, isDark: boolean): React.ReactNode => {
+    // Match URLs and make them clickable
+    const urlRegex = /(\/dashboard\/[^\s]+|https?:\/\/[^\s]+)/g
+    const parts = text.split(urlRegex)
+
+    return parts.map((part, index) => {
+      // Check if this part is a dashboard link
+      if (part.startsWith('/dashboard/')) {
+        return (
+          <a
+            key={index}
+            href={part}
+            className={`font-medium underline ${isDark ? 'text-blue-400 hover:text-blue-300' : 'text-blue-600 hover:text-blue-700'}`}
+          >
+            {formatPathToLabel(part)}
+          </a>
+        )
+      }
+
+      // Check if this part is an external URL
+      if (part.startsWith('http')) {
+        return (
+          <a
+            key={index}
+            href={part}
+            target="_blank"
+            rel="noopener noreferrer"
+            className={`font-medium underline ${isDark ? 'text-blue-400 hover:text-blue-300' : 'text-blue-600 hover:text-blue-700'}`}
+          >
+            {part}
+          </a>
+        )
+      }
+
+      // Format bold text **text**
+      const boldParts = part.split(/\*\*(.*?)\*\*/g)
+      return boldParts.map((boldPart, boldIndex) => {
+        if (boldIndex % 2 === 1) {
+          return <strong key={`${index}-${boldIndex}`}>{boldPart}</strong>
+        }
+        return boldPart
+      })
+    })
+  }
+
+  // Convert path to readable label
+  const formatPathToLabel = (path: string): string => {
+    const pathLabels: Record<string, string> = {
+      '/dashboard': 'Dashboard',
+      '/dashboard/market/inventory': 'Inventario',
+      '/dashboard/market/inventory/create': 'Crear Producto',
+      '/dashboard/market/warehouses': 'Almacenes',
+      '/dashboard/market/marketplace': 'Marketplace',
+      '/dashboard/market/marketplace/create': 'Nueva Publicacion',
+      '/dashboard/market/purchases': 'Compras',
+      '/dashboard/market/consignments': 'Consignaciones',
+      '/dashboard/market/consignments/create': 'Nueva Consignacion',
+      '/dashboard/agency/orders': 'Ordenes de Paquetes',
+      '/dashboard/agency/orders/create': 'Nueva Orden',
+      '/dashboard/agency/clients': 'Clientes',
+      '/dashboard/agency/routes': 'Rutas',
+      '/dashboard/wallet': 'Wallet',
+      '/dashboard/reports': 'Reportes',
+      '/dashboard/settings': 'Configuracion',
+      '/dashboard/support': 'Soporte'
+    }
+    return pathLabels[path] || path
+  }
+
+  return <div className="text-sm leading-relaxed">{formatText(content)}</div>
+}
+
 export default function SupportChat({ userContext }: SupportChatProps) {
   const { theme } = useTheme()
   const pathname = usePathname()
@@ -174,7 +322,7 @@ export default function SupportChat({ userContext }: SupportChatProps) {
     }
     setMessages(prev => [...prev, userMessage])
 
-    // Add loading message
+    // Add loading message (typing indicator)
     const loadingMessage: SupportMessage = {
       id: `msg_${Date.now()}_loading`,
       role: 'assistant',
@@ -299,16 +447,12 @@ export default function SupportChat({ userContext }: SupportChatProps) {
 
   return (
     <>
-      {/* Floating Button */}
+      {/* Floating Button - Brand Blue Color (solid, no gradient) */}
       <motion.button
         onClick={() => setIsOpen(true)}
-        className={`fixed bottom-6 right-6 z-50 w-14 h-14 rounded-full shadow-lg flex items-center justify-center
-          ${isDark
-            ? 'bg-gradient-to-br from-blue-600 to-purple-600 hover:from-blue-500 hover:to-purple-500'
-            : 'bg-gradient-to-br from-blue-500 to-purple-500 hover:from-blue-600 hover:to-purple-600'
-          }`}
+        className="fixed bottom-6 right-6 z-50 w-14 h-14 rounded-full shadow-lg flex items-center justify-center bg-[#3B82F6] hover:bg-[#2563EB] transition-colors"
         style={{
-          boxShadow: '0 4px 20px rgba(59, 130, 246, 0.4)'
+          boxShadow: '0 4px 20px rgba(59, 130, 246, 0.5)'
         }}
         whileHover={{ scale: 1.1 }}
         whileTap={{ scale: 0.95 }}
@@ -337,19 +481,18 @@ export default function SupportChat({ userContext }: SupportChatProps) {
                 : '0 25px 50px -12px rgba(0, 0, 0, 0.25)'
             }}
           >
-            {/* Header */}
-            <div className={`px-4 py-3 flex items-center justify-between border-b
-              ${isDark ? 'border-gray-700 bg-gray-800/50' : 'border-gray-200 bg-gray-50'}`}>
+            {/* Header - Brand Blue */}
+            <div className={`px-4 py-3 flex items-center justify-between border-b bg-[#3B82F6]
+              ${isDark ? 'border-blue-600' : 'border-blue-400'}`}>
               <div className="flex items-center gap-3">
-                <div className={`w-9 h-9 rounded-full flex items-center justify-center
-                  bg-gradient-to-br from-blue-500 to-purple-500`}>
+                <div className="w-9 h-9 rounded-full flex items-center justify-center bg-white/20">
                   <Bot className="w-5 h-5 text-white" />
                 </div>
                 <div>
-                  <h3 className={`font-semibold text-sm ${isDark ? 'text-white' : 'text-gray-900'}`}>
+                  <h3 className="font-semibold text-sm text-white">
                     Asistente LogiRapid
                   </h3>
-                  <p className={`text-xs ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
+                  <p className="text-xs text-blue-100">
                     Siempre disponible
                   </p>
                 </div>
@@ -358,8 +501,7 @@ export default function SupportChat({ userContext }: SupportChatProps) {
                 {messages.length > 0 && (
                   <button
                     onClick={clearConversation}
-                    className={`p-2 rounded-lg transition-colors
-                      ${isDark ? 'hover:bg-gray-700 text-gray-400' : 'hover:bg-gray-200 text-gray-500'}`}
+                    className="p-2 rounded-lg transition-colors hover:bg-white/20 text-white/80"
                     title="Limpiar conversacion"
                   >
                     <Trash2 className="w-4 h-4" />
@@ -367,8 +509,7 @@ export default function SupportChat({ userContext }: SupportChatProps) {
                 )}
                 <button
                   onClick={() => setIsOpen(false)}
-                  className={`p-2 rounded-lg transition-colors
-                    ${isDark ? 'hover:bg-gray-700 text-gray-400' : 'hover:bg-gray-200 text-gray-500'}`}
+                  className="p-2 rounded-lg transition-colors hover:bg-white/20 text-white/80"
                 >
                   <X className="w-5 h-5" />
                 </button>
@@ -379,8 +520,7 @@ export default function SupportChat({ userContext }: SupportChatProps) {
             <div className="flex-1 overflow-y-auto p-4 space-y-4">
               {messages.length === 0 && (
                 <div className="text-center py-8">
-                  <div className={`w-16 h-16 mx-auto mb-4 rounded-full flex items-center justify-center
-                    bg-gradient-to-br from-blue-500/20 to-purple-500/20`}>
+                  <div className={`w-16 h-16 mx-auto mb-4 rounded-full flex items-center justify-center bg-blue-500/20`}>
                     <HelpCircle className={`w-8 h-8 ${isDark ? 'text-blue-400' : 'text-blue-500'}`} />
                   </div>
                   <h4 className={`font-medium mb-2 ${isDark ? 'text-white' : 'text-gray-900'}`}>
@@ -408,7 +548,7 @@ export default function SupportChat({ userContext }: SupportChatProps) {
                     <div className={`flex gap-2 max-w-[85%] ${msg.role === 'user' ? 'flex-row-reverse' : ''}`}>
                       <div className={`w-7 h-7 rounded-full flex-shrink-0 flex items-center justify-center
                         ${msg.role === 'user'
-                          ? 'bg-blue-500'
+                          ? 'bg-[#3B82F6]'
                           : isDark ? 'bg-gray-700' : 'bg-gray-200'}`}>
                         {msg.role === 'user'
                           ? <User className="w-4 h-4 text-white" />
@@ -416,16 +556,13 @@ export default function SupportChat({ userContext }: SupportChatProps) {
                       </div>
                       <div className={`rounded-2xl px-4 py-2.5 ${
                         msg.role === 'user'
-                          ? 'bg-blue-500 text-white rounded-br-md'
+                          ? 'bg-[#3B82F6] text-white rounded-br-md'
                           : isDark
                             ? 'bg-gray-800 text-gray-100 rounded-bl-md'
                             : 'bg-gray-100 text-gray-900 rounded-bl-md'
                       }`}>
                         {msg.isLoading ? (
-                          <div className="flex items-center gap-2">
-                            <Loader2 className="w-4 h-4 animate-spin" />
-                            <span className="text-sm">Escribiendo...</span>
-                          </div>
+                          <TypingIndicator />
                         ) : (
                           <>
                             {msg.imageUrl && (
@@ -436,7 +573,11 @@ export default function SupportChat({ userContext }: SupportChatProps) {
                                 onClick={() => window.open(msg.imageUrl, '_blank')}
                               />
                             )}
-                            <p className="text-sm whitespace-pre-wrap">{msg.content}</p>
+                            {msg.role === 'user' ? (
+                              <p className="text-sm whitespace-pre-wrap">{msg.content}</p>
+                            ) : (
+                              <FormattedMessage content={msg.content} isDark={isDark} />
+                            )}
                           </>
                         )}
                       </div>
@@ -528,14 +669,10 @@ export default function SupportChat({ userContext }: SupportChatProps) {
                   disabled={isLoading || (!inputMessage.trim() && !imageFile)}
                   className={`p-2 rounded-lg transition-colors
                     ${(inputMessage.trim() || imageFile) && !isLoading
-                      ? 'bg-blue-500 text-white hover:bg-blue-600'
+                      ? 'bg-[#3B82F6] text-white hover:bg-[#2563EB]'
                       : isDark ? 'bg-gray-700 text-gray-500' : 'bg-gray-200 text-gray-400'}`}
                 >
-                  {isLoading ? (
-                    <Loader2 className="w-5 h-5 animate-spin" />
-                  ) : (
-                    <Send className="w-5 h-5" />
-                  )}
+                  <Send className="w-5 h-5" />
                 </button>
               </div>
             </div>
