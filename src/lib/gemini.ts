@@ -1,14 +1,15 @@
 /**
  * Google Gemini AI Client
  * Funciones para generación de imagenes de productos
- * Usa Imagen 3 (modelo de generación de imágenes de Google)
+ * Usa Gemini 3 Pro Image Preview para generación de imágenes
  */
 
 import { GoogleGenerativeAI } from '@google/generative-ai'
 
 const GOOGLE_AI_API_KEY = process.env.GOOGLE_AI_API_KEY
 const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-2.0-flash-exp'
-const IMAGEN_MODEL = 'imagen-3.0-generate-002' // Modelo de generación de imágenes
+// Modelo para generación de imágenes de productos
+const IMAGE_GENERATION_MODEL = 'gemini-3-pro-image-preview'
 
 /**
  * Obtiene el cliente de Gemini AI
@@ -117,8 +118,8 @@ Responde en formato JSON:
 }
 
 /**
- * Genera una imagen de producto usando Google Imagen 3
- * API REST directa para generación de imágenes
+ * Genera una imagen de producto usando Gemini 3 Pro Image Preview
+ * Todas las imágenes son cuadradas (1024x1024) con fondo blanco
  */
 export async function generateProductImage(
   productName: string,
@@ -138,66 +139,77 @@ export async function generateProductImage(
   }
 
   try {
-    console.log('[Imagen] Generating image for:', productName)
+    console.log('[Gemini Image] Generating image for:', productName)
 
-    // Construir prompt profesional para imagen de producto
-    const imagePrompt = `Professional product photography of ${productName}${description ? `, ${description}` : ''}. Clean white background, studio lighting, high resolution, e-commerce style, centered product, sharp focus, no text or watermarks.`
+    // Prompt optimizado para imágenes de productos e-commerce
+    const imagePrompt = `Generate a professional product photograph of "${productName}"${description ? `. ${description}` : ''}.
+Requirements:
+- Pure white background (#FFFFFF)
+- Professional studio lighting
+- Product centered in frame
+- Sharp focus, high detail
+- E-commerce photography style
+- Square format 1024x1024 pixels
+- No text, labels, or watermarks
+- Clean, minimalist presentation`
 
-    console.log('[Imagen] Prompt:', imagePrompt)
+    console.log('[Gemini Image] Using model:', IMAGE_GENERATION_MODEL)
 
-    // Llamar a la API de Imagen 3 de Google
     const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${IMAGEN_MODEL}:generateImages?key=${GOOGLE_AI_API_KEY}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/${IMAGE_GENERATION_MODEL}:generateContent?key=${GOOGLE_AI_API_KEY}`,
       {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
-          prompt: imagePrompt,
-          number_of_images: 1,
-          aspect_ratio: '1:1',
-          safety_filter_level: 'BLOCK_LOW_AND_ABOVE',
-          person_generation: 'DONT_ALLOW'
+          contents: [{
+            parts: [{
+              text: imagePrompt
+            }]
+          }],
+          generationConfig: {
+            responseModalities: ['IMAGE', 'TEXT']
+          }
         })
       }
     )
 
     if (!response.ok) {
       const errorText = await response.text()
-      console.error('[Imagen] API Error:', response.status, errorText)
+      console.error('[Gemini Image] API Error:', response.status, errorText)
 
-      // Si Imagen 3 no está disponible, intentar con Gemini 2.0 Flash
-      console.log('[Imagen] Trying Gemini 2.0 Flash as fallback...')
-      return await generateImageWithGeminiFlash(productName, description)
+      // Fallback a Gemini 2.0 Flash
+      console.log('[Gemini Image] Trying fallback model...')
+      return await generateImageWithFallback(productName, description)
     }
 
     const data = await response.json()
-    console.log('[Imagen] Response received')
 
-    // Extraer imagen generada
-    if (data.images && data.images.length > 0) {
-      const imageData = data.images[0]
-
-      if (imageData.bytesBase64Encoded) {
-        return {
-          success: true,
-          imageBase64: imageData.bytesBase64Encoded,
-          imageDescription: `Imagen generada para ${productName}`
+    // Buscar imagen en la respuesta
+    if (data.candidates && data.candidates[0]?.content?.parts) {
+      for (const part of data.candidates[0].content.parts) {
+        if (part.inlineData?.data) {
+          console.log('[Gemini Image] Image generated successfully, size:', part.inlineData.data.length, 'chars')
+          return {
+            success: true,
+            imageBase64: part.inlineData.data,
+            imageDescription: `Imagen generada para ${productName}`
+          }
         }
       }
     }
 
-    // Si no hay imagen, intentar con Gemini Flash
-    console.log('[Imagen] No image in response, trying Gemini Flash...')
-    return await generateImageWithGeminiFlash(productName, description)
+    // Si no hay imagen, intentar con fallback
+    console.log('[Gemini Image] No image in response, trying fallback...')
+    return await generateImageWithFallback(productName, description)
 
   } catch (error) {
-    console.error('[Imagen] Error:', error)
+    console.error('[Gemini Image] Error:', error)
 
-    // Fallback a Gemini Flash
+    // Fallback
     try {
-      return await generateImageWithGeminiFlash(productName, description)
+      return await generateImageWithFallback(productName, description)
     } catch (fallbackError) {
       return {
         success: false,
@@ -210,7 +222,7 @@ export async function generateProductImage(
 /**
  * Genera imagen usando Gemini 2.0 Flash (fallback)
  */
-async function generateImageWithGeminiFlash(
+async function generateImageWithFallback(
   productName: string,
   description?: string
 ): Promise<{
@@ -220,9 +232,9 @@ async function generateImageWithGeminiFlash(
   error?: string
 }> {
   try {
-    console.log('[Gemini Flash] Generating image for:', productName)
+    console.log('[Gemini Fallback] Generating image for:', productName)
 
-    const prompt = `Generate a professional product image: ${productName}${description ? `. ${description}` : ''}. White background, studio lighting, e-commerce style.`
+    const prompt = `Generate a professional product photograph of "${productName}"${description ? `. ${description}` : ''}. Pure white background, studio lighting, centered product, e-commerce style, square format 1024x1024, no text or watermarks.`
 
     const response = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key=${GOOGLE_AI_API_KEY}`,
@@ -238,8 +250,7 @@ async function generateImageWithGeminiFlash(
             }]
           }],
           generationConfig: {
-            responseModalities: ['IMAGE', 'TEXT'],
-            responseMimeType: 'image/png'
+            responseModalities: ['IMAGE', 'TEXT']
           }
         })
       }
@@ -247,7 +258,7 @@ async function generateImageWithGeminiFlash(
 
     if (!response.ok) {
       const errorText = await response.text()
-      console.error('[Gemini Flash] Error:', errorText)
+      console.error('[Gemini Fallback] Error:', errorText)
       return {
         success: false,
         error: 'No se pudo generar la imagen'
@@ -260,7 +271,7 @@ async function generateImageWithGeminiFlash(
     if (data.candidates && data.candidates[0]?.content?.parts) {
       for (const part of data.candidates[0].content.parts) {
         if (part.inlineData?.data) {
-          console.log('[Gemini Flash] Image generated successfully')
+          console.log('[Gemini Fallback] Image generated successfully')
           return {
             success: true,
             imageBase64: part.inlineData.data,
@@ -276,7 +287,7 @@ async function generateImageWithGeminiFlash(
     }
 
   } catch (error) {
-    console.error('[Gemini Flash] Error:', error)
+    console.error('[Gemini Fallback] Error:', error)
     return {
       success: false,
       error: error instanceof Error ? error.message : 'Error al generar imagen'
