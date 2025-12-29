@@ -1,12 +1,14 @@
 /**
  * Google Gemini AI Client
- * Funciones para procesamiento de imagenes de productos
+ * Funciones para generación de imagenes de productos
+ * Usa Imagen 3 (modelo de generación de imágenes de Google)
  */
 
 import { GoogleGenerativeAI } from '@google/generative-ai'
 
 const GOOGLE_AI_API_KEY = process.env.GOOGLE_AI_API_KEY
 const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-2.0-flash-exp'
+const IMAGEN_MODEL = 'imagen-3.0-generate-002' // Modelo de generación de imágenes
 
 /**
  * Obtiene el cliente de Gemini AI
@@ -115,68 +117,169 @@ Responde en formato JSON:
 }
 
 /**
- * Genera una imagen de producto desde descripcion
- * Usa Gemini para crear una descripcion visual y buscar imagen similar
+ * Genera una imagen de producto usando Google Imagen 3
+ * API REST directa para generación de imágenes
  */
 export async function generateProductImage(
   productName: string,
   description?: string
 ): Promise<{
   success: boolean
+  imageBase64?: string
+  imageUrl?: string
   imageDescription?: string
-  searchTerms?: string[]
+  error?: string
+}> {
+  if (!GOOGLE_AI_API_KEY) {
+    return {
+      success: false,
+      error: 'GOOGLE_AI_API_KEY no configurada'
+    }
+  }
+
+  try {
+    console.log('[Imagen] Generating image for:', productName)
+
+    // Construir prompt profesional para imagen de producto
+    const imagePrompt = `Professional product photography of ${productName}${description ? `, ${description}` : ''}. Clean white background, studio lighting, high resolution, e-commerce style, centered product, sharp focus, no text or watermarks.`
+
+    console.log('[Imagen] Prompt:', imagePrompt)
+
+    // Llamar a la API de Imagen 3 de Google
+    const response = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/${IMAGEN_MODEL}:generateImages?key=${GOOGLE_AI_API_KEY}`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          prompt: imagePrompt,
+          number_of_images: 1,
+          aspect_ratio: '1:1',
+          safety_filter_level: 'BLOCK_LOW_AND_ABOVE',
+          person_generation: 'DONT_ALLOW'
+        })
+      }
+    )
+
+    if (!response.ok) {
+      const errorText = await response.text()
+      console.error('[Imagen] API Error:', response.status, errorText)
+
+      // Si Imagen 3 no está disponible, intentar con Gemini 2.0 Flash
+      console.log('[Imagen] Trying Gemini 2.0 Flash as fallback...')
+      return await generateImageWithGeminiFlash(productName, description)
+    }
+
+    const data = await response.json()
+    console.log('[Imagen] Response received')
+
+    // Extraer imagen generada
+    if (data.images && data.images.length > 0) {
+      const imageData = data.images[0]
+
+      if (imageData.bytesBase64Encoded) {
+        return {
+          success: true,
+          imageBase64: imageData.bytesBase64Encoded,
+          imageDescription: `Imagen generada para ${productName}`
+        }
+      }
+    }
+
+    // Si no hay imagen, intentar con Gemini Flash
+    console.log('[Imagen] No image in response, trying Gemini Flash...')
+    return await generateImageWithGeminiFlash(productName, description)
+
+  } catch (error) {
+    console.error('[Imagen] Error:', error)
+
+    // Fallback a Gemini Flash
+    try {
+      return await generateImageWithGeminiFlash(productName, description)
+    } catch (fallbackError) {
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Error al generar imagen'
+      }
+    }
+  }
+}
+
+/**
+ * Genera imagen usando Gemini 2.0 Flash (fallback)
+ */
+async function generateImageWithGeminiFlash(
+  productName: string,
+  description?: string
+): Promise<{
+  success: boolean
+  imageBase64?: string
+  imageDescription?: string
   error?: string
 }> {
   try {
-    const genAI = getGeminiClient()
-    const model = genAI.getGenerativeModel({ model: GEMINI_MODEL })
+    console.log('[Gemini Flash] Generating image for:', productName)
 
-    const prompt = `Eres un experto en fotografia de productos para e-commerce.
+    const prompt = `Generate a professional product image: ${productName}${description ? `. ${description}` : ''}. White background, studio lighting, e-commerce style.`
 
-Para el producto: "${productName}"
-${description ? `Descripcion: ${description}` : ''}
-
-Genera:
-1. Una descripcion visual detallada de como deberia verse la imagen del producto (para buscar stock photos similares)
-2. Terminos de busqueda en ingles para encontrar imagenes similares
-3. Caracteristicas visuales clave
-
-Responde en JSON:
-{
-  "visualDescription": "descripcion detallada de la imagen ideal",
-  "searchTerms": ["term1", "term2", "term3"],
-  "keyFeatures": ["feature1", "feature2"],
-  "suggestedBackground": "white/transparent/lifestyle"
-}`
-
-    const result = await model.generateContent(prompt)
-    const responseText = result.response.text()
-
-    // Parsear respuesta JSON
-    let imageInfo
-    try {
-      const jsonMatch = responseText.match(/\{[\s\S]*\}/)
-      if (jsonMatch) {
-        imageInfo = JSON.parse(jsonMatch[0])
+    const response = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key=${GOOGLE_AI_API_KEY}`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          contents: [{
+            parts: [{
+              text: prompt
+            }]
+          }],
+          generationConfig: {
+            responseModalities: ['IMAGE', 'TEXT'],
+            responseMimeType: 'image/png'
+          }
+        })
       }
-    } catch {
-      imageInfo = {
-        visualDescription: `Imagen profesional de ${productName}`,
-        searchTerms: [productName, 'product photo', 'white background'],
-        suggestedBackground: 'white'
+    )
+
+    if (!response.ok) {
+      const errorText = await response.text()
+      console.error('[Gemini Flash] Error:', errorText)
+      return {
+        success: false,
+        error: 'No se pudo generar la imagen'
       }
     }
 
-    return {
-      success: true,
-      imageDescription: imageInfo.visualDescription,
-      searchTerms: imageInfo.searchTerms
+    const data = await response.json()
+
+    // Buscar imagen en la respuesta
+    if (data.candidates && data.candidates[0]?.content?.parts) {
+      for (const part of data.candidates[0].content.parts) {
+        if (part.inlineData?.data) {
+          console.log('[Gemini Flash] Image generated successfully')
+          return {
+            success: true,
+            imageBase64: part.inlineData.data,
+            imageDescription: `Imagen generada para ${productName}`
+          }
+        }
+      }
     }
-  } catch (error) {
-    console.error('[Gemini] Error generating image description:', error)
+
     return {
       success: false,
-      error: error instanceof Error ? error.message : 'Error al generar descripcion'
+      error: 'No se generó imagen en la respuesta'
+    }
+
+  } catch (error) {
+    console.error('[Gemini Flash] Error:', error)
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Error al generar imagen'
     }
   }
 }
