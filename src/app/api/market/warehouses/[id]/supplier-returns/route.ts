@@ -178,6 +178,15 @@ export async function POST(
         WHERE id = $2
       `, [quantity, lot.order_line_id])
 
+      // Get current stock before updating
+      const stockResult = await client.query(`
+        SELECT quantity_on_hand FROM market_warehouse_stock
+        WHERE warehouse_id = $1 AND product_id = $2
+      `, [warehouseId, productId])
+
+      const quantityBefore = stockResult.rows.length > 0 ? parseInt(stockResult.rows[0].quantity_on_hand) : 0
+      const quantityAfter = quantityBefore - quantity
+
       // Update warehouse stock
       await client.query(`
         UPDATE market_warehouse_stock
@@ -190,14 +199,15 @@ export async function POST(
       // Create inventory movement
       await client.query(`
         INSERT INTO market_inventory_movements (
-          company_id, warehouse_id, product_id,
-          movement_type, quantity, reference_type, reference_id,
-          notes, created_by, created_at
-        ) VALUES ($1, $2, $3, 'return', $4, 'consignment_return', $5, $6, $7, NOW())
+          company_id, product_id,
+          movement_type, quantity, quantity_before, quantity_after,
+          reference_type, reference_id, notes, created_by, created_at
+        ) VALUES ($1, $2, 'return', $3, $4, $5, 'consignment_return', $6, $7, $8, NOW())
       `, [
-        payload.companyId, warehouseId, productId,
-        -quantity, returnId,
-        `Devolución a proveedor ${supplier.name}`,
+        payload.companyId, productId,
+        -quantity, quantityBefore, quantityAfter,
+        returnId,
+        `Devolución a proveedor ${supplier.name} - Almacén ID: ${warehouseId}`,
         payload.userId
       ])
 
