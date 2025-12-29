@@ -520,17 +520,58 @@ export default function CreateProductPage() {
 
     setLoading(true)
     try {
-      // Upload image if there's a file
+      // Determine image URL
       let imageUrl: string | null = null
+
+      // If there's a file to upload, upload it first
       if (formData.imageFile) {
         const uploadedUrl = await uploadImage()
         if (uploadedUrl) {
           imageUrl = uploadedUrl
         } else {
-          // If upload failed, show error but continue
           console.warn('Image upload failed, continuing without image')
         }
       }
+      // If we have a base64 data URL, upload it to storage first
+      else if (formData.imageUrl && formData.imageUrl.startsWith('data:')) {
+        console.log('[Product Create] Uploading base64 image to storage...')
+        try {
+          const barcodeToUse = formData.barcode || ensureBarcode()
+          const res = await fetch('/api/upload/product-image', {
+            method: 'POST',
+            body: (() => {
+              const fd = new FormData()
+              // Convert base64 to blob
+              const base64Data = formData.imageUrl.split(',')[1]
+              const mimeType = formData.imageUrl.split(';')[0].split(':')[1]
+              const byteCharacters = atob(base64Data)
+              const byteNumbers = new Array(byteCharacters.length)
+              for (let i = 0; i < byteCharacters.length; i++) {
+                byteNumbers[i] = byteCharacters.charCodeAt(i)
+              }
+              const byteArray = new Uint8Array(byteNumbers)
+              const blob = new Blob([byteArray], { type: mimeType })
+              fd.append('file', blob, `${barcodeToUse}.jpg`)
+              fd.append('barcode', barcodeToUse)
+              return fd
+            })()
+          })
+          const uploadData = await res.json()
+          if (uploadData.success && uploadData.data?.imageUrl) {
+            imageUrl = uploadData.data.imageUrl
+            console.log('[Product Create] Base64 uploaded:', imageUrl)
+          }
+        } catch (uploadError) {
+          console.error('[Product Create] Failed to upload base64:', uploadError)
+        }
+      }
+      // If we already have an imageUrl (from AI generation, cleaning, or existing),
+      // use it (but not if it's a blob URL which is temporary)
+      else if (formData.imageUrl && !formData.imageUrl.startsWith('blob:')) {
+        imageUrl = formData.imageUrl
+      }
+
+      console.log('[Product Create] Using image URL:', imageUrl)
 
       const response = await fetch('/api/market/products', {
         method: 'POST',
@@ -540,7 +581,7 @@ export default function CreateProductPage() {
           description: formData.description,
           category: formData.category,
           unitOfMeasure: formData.unitOfMeasure,
-          imageUrl: imageUrl || null,
+          imageUrl: imageUrl,
           costPrice: parseFloat(formData.costPrice),
           sellingPrice: parseFloat(formData.sellingPrice),
           currency: formData.currency,
