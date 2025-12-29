@@ -47,8 +47,9 @@ interface Purchase {
 
 interface Stats {
   draft: number
-  confirmed: number
-  received: number
+  comprada: number
+  pendiente: number
+  recibido: number
   cancelled: number
   totalReceivedAmount: number
 }
@@ -95,7 +96,7 @@ export default function MarketPurchasesPage() {
   const { theme } = useTheme()
   const [purchases, setPurchases] = useState<Purchase[]>([])
   const [loading, setLoading] = useState(true)
-  const [stats, setStats] = useState<Stats>({ draft: 0, confirmed: 0, received: 0, cancelled: 0, totalReceivedAmount: 0 })
+  const [stats, setStats] = useState<Stats>({ draft: 0, comprada: 0, pendiente: 0, recibido: 0, cancelled: 0, totalReceivedAmount: 0 })
   const [pagination, setPagination] = useState<Pagination>({ page: 1, limit: 20, total: 0, totalPages: 0 })
   const [selectedStatus, setSelectedStatus] = useState<string | null>(null)
   const [search, setSearch] = useState('')
@@ -171,7 +172,7 @@ export default function MarketPurchasesPage() {
   const handleManualRefresh = () => fetchPurchases(true)
 
   const getTotalCount = () => {
-    return stats.draft + stats.confirmed + stats.received + stats.cancelled
+    return stats.draft + stats.comprada + stats.pendiente + stats.recibido + stats.cancelled
   }
 
   const handleAction = async (purchaseId: number, action: 'confirm' | 'receive' | 'cancel') => {
@@ -421,14 +422,14 @@ export default function MarketPurchasesPage() {
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.3 }}
-                onClick={() => setSelectedStatus(selectedStatus === 'confirmed' ? null : 'confirmed')}
+                onClick={() => setSelectedStatus(selectedStatus === 'comprada' ? null : 'comprada')}
                 className={cn(
                   'relative overflow-hidden cursor-pointer',
                   theme === 'dark'
                     ? 'bg-gradient-to-br from-gray-800 to-gray-900 border-gray-700'
                     : 'bg-gradient-to-br from-slate-50 to-white border-slate-200',
                   'rounded-2xl border shadow-xl',
-                  selectedStatus === 'confirmed' && 'ring-2 ring-amber-500'
+                  selectedStatus === 'comprada' && 'ring-2 ring-amber-500'
                 )}
               >
                 <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-amber-400 to-orange-600"></div>
@@ -451,7 +452,7 @@ export default function MarketPurchasesPage() {
                         <p className={cn(
                           'text-3xl font-bold mt-1',
                           theme === 'dark' ? 'text-white' : 'text-slate-900'
-                        )}>{stats.confirmed}</p>
+                        )}>{stats.comprada + stats.pendiente}</p>
                       </div>
                     </div>
                   </div>
@@ -469,14 +470,14 @@ export default function MarketPurchasesPage() {
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.4 }}
-                onClick={() => setSelectedStatus(selectedStatus === 'received' ? null : 'received')}
+                onClick={() => setSelectedStatus(selectedStatus === 'recibido' ? null : 'recibido')}
                 className={cn(
                   'relative overflow-hidden cursor-pointer',
                   theme === 'dark'
                     ? 'bg-gradient-to-br from-gray-800 to-gray-900 border-gray-700'
                     : 'bg-gradient-to-br from-slate-50 to-white border-slate-200',
                   'rounded-2xl border shadow-xl',
-                  selectedStatus === 'received' && 'ring-2 ring-emerald-500'
+                  selectedStatus === 'recibido' && 'ring-2 ring-emerald-500'
                 )}
               >
                 <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-emerald-400 to-green-600"></div>
@@ -499,7 +500,7 @@ export default function MarketPurchasesPage() {
                         <p className={cn(
                           'text-3xl font-bold mt-1',
                           theme === 'dark' ? 'text-white' : 'text-slate-900'
-                        )}>{stats.received}</p>
+                        )}>{stats.recibido}</p>
                       </div>
                     </div>
                   </div>
