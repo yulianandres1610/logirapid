@@ -53,6 +53,16 @@ export async function POST(
 
     await client.query('BEGIN')
 
+    // Ensure schema is up to date (migration safe)
+    try {
+      await client.query(`ALTER TABLE consignment_returns ADD COLUMN IF NOT EXISTS notes TEXT`)
+      await client.query(`ALTER TABLE consignment_returns ALTER COLUMN order_id DROP NOT NULL`)
+      await client.query(`ALTER TABLE consignment_return_lines ADD COLUMN IF NOT EXISTS quantity INTEGER`)
+      await client.query(`ALTER TABLE consignment_return_lines ADD COLUMN IF NOT EXISTS total_value DECIMAL(12,2)`)
+    } catch {
+      // Columns might already be correct, continue anyway
+    }
+
     // Get supplier info
     const supplierResult = await client.query(
       'SELECT id, code, name FROM consignment_suppliers WHERE id = $1 AND company_id = $2',

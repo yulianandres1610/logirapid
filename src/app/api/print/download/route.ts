@@ -65,6 +65,16 @@ export async function POST(request: NextRequest) {
         filename = `factura-compra-${documentData.invoiceNumber || Date.now()}.pdf`
         break
 
+      case 'lot_label':
+        pdfBytes = await generateLotLabelPdf(documentData)
+        filename = `etiqueta-lote-${documentData.lotNumber || Date.now()}.pdf`
+        break
+
+      case 'unified_reception':
+        pdfBytes = await generateUnifiedReceptionPdf(documentData)
+        filename = `recepcion-${documentData.orderNumber || Date.now()}.pdf`
+        break
+
       default:
         return NextResponse.json({
           success: false,
@@ -572,6 +582,383 @@ async function generatePurchaseInvoicePdf(data: Record<string, unknown>): Promis
 
   // Footer
   drawText('--- Documento generado por LogiRapid ---', 200, 30, { size: 8, color: gray })
+
+  return pdfDoc.save()
+}
+
+// Lot Label PDF (4x6 inches = 288 x 432 points)
+async function generateLotLabelPdf(data: Record<string, unknown>): Promise<Uint8Array> {
+  const pdfDoc = await PDFDocument.create()
+  // 4x6 inches in points (1 inch = 72 points)
+  const pageWidth = 4 * 72  // 288 points
+  const pageHeight = 6 * 72 // 432 points
+  const page = pdfDoc.addPage([pageWidth, pageHeight])
+
+  const fontRegular = await pdfDoc.embedFont(StandardFonts.Helvetica)
+  const fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold)
+
+  const black = rgb(0, 0, 0)
+  const gray = rgb(0.3, 0.3, 0.3)
+  const darkGray = rgb(0.5, 0.5, 0.5)
+  const purple = rgb(0.4, 0.2, 0.6)
+
+  const margin = 12
+  let y = pageHeight - margin
+
+  const drawText = (text: string, x: number, yPos: number, options: { font?: PDFFont; size?: number; color?: typeof black; maxWidth?: number } = {}) => {
+    let displayText = text
+    const font = options.font || fontRegular
+    const size = options.size || 12
+
+    // Truncate if too long
+    if (options.maxWidth) {
+      while (font.widthOfTextAtSize(displayText, size) > options.maxWidth && displayText.length > 3) {
+        displayText = displayText.slice(0, -4) + '...'
+      }
+    }
+
+    page.drawText(displayText, {
+      x, y: yPos,
+      font,
+      size,
+      color: options.color || black
+    })
+  }
+
+  const centerText = (text: string, yPos: number, options: { font?: PDFFont; size?: number; color?: typeof black } = {}) => {
+    const font = options.font || fontRegular
+    const size = options.size || 12
+    const textWidth = font.widthOfTextAtSize(text, size)
+    const x = (pageWidth - textWidth) / 2
+    drawText(text, x, yPos, options)
+  }
+
+  // ============================================
+  // HEADER: Type indicator
+  // ============================================
+  const sourceType = (data.source as string) || 'consignment'
+  const sourceLabel = sourceType === 'consignment' ? 'CONSIGNACION' : sourceType === 'purchase' ? 'COMPRA' : 'LOTE'
+
+  page.drawRectangle({
+    x: 0, y: y - 20, width: pageWidth, height: 24,
+    color: purple
+  })
+  centerText(sourceLabel, y - 14, { font: fontBold, size: 14, color: rgb(1, 1, 1) })
+  y -= 35
+
+  // ============================================
+  // SUPPLIER NAME (VERY LARGE)
+  // ============================================
+  const supplierName = ((data.supplierName as string) || 'PROVEEDOR').toUpperCase()
+  centerText(supplierName, y, { font: fontBold, size: 24, color: black })
+  y -= 35
+
+  // ============================================
+  // PRODUCT NAME
+  // ============================================
+  const productName = (data.productName as string) || 'Producto'
+  centerText(productName, y, { font: fontBold, size: 16, color: gray })
+  y -= 25
+
+  // ============================================
+  // BARCODE FOR LOT NUMBER
+  // ============================================
+  const lotNumber = (data.lotNumber as string) || 'SIN-LOTE'
+
+  // Draw a simulated barcode (vertical lines pattern)
+  const barcodeHeight = 50
+  const barcodeWidth = pageWidth - (margin * 4)
+  const barcodeX = margin * 2
+  const barcodeY = y - barcodeHeight
+
+  // Generate barcode pattern from lot number
+  const barcodePattern = generateBarcodePattern(lotNumber)
+  const barWidth = barcodeWidth / barcodePattern.length
+
+  for (let i = 0; i < barcodePattern.length; i++) {
+    if (barcodePattern[i] === '1') {
+      page.drawRectangle({
+        x: barcodeX + (i * barWidth),
+        y: barcodeY,
+        width: barWidth,
+        height: barcodeHeight,
+        color: black
+      })
+    }
+  }
+
+  y = barcodeY - 8
+
+  // Lot number text below barcode
+  centerText(lotNumber, y, { font: fontBold, size: 18, color: black })
+  y -= 35
+
+  // ============================================
+  // DATES SECTION
+  // ============================================
+  const labelWidth = 70
+  const valueX = margin + labelWidth + 5
+
+  // Expiration date (LARGE)
+  const expirationDate = data.expirationDate
+    ? new Date(data.expirationDate as string).toLocaleDateString('es-ES', { day: '2-digit', month: 'short', year: 'numeric' })
+    : 'SIN VENCIMIENTO'
+
+  page.drawRectangle({
+    x: margin, y: y - 3, width: pageWidth - (margin * 2), height: 38,
+    color: rgb(0.95, 0.95, 0.95),
+    borderColor: black,
+    borderWidth: 1
+  })
+
+  drawText('VENCE:', margin + 8, y + 8, { font: fontBold, size: 12, color: darkGray })
+  centerText(expirationDate.toUpperCase(), y - 18, { font: fontBold, size: 22, color: black })
+  y -= 50
+
+  // Reception date
+  const receptionDate = data.receptionDate
+    ? new Date(data.receptionDate as string).toLocaleDateString('es-ES', { day: '2-digit', month: 'short', year: 'numeric' })
+    : new Date().toLocaleDateString('es-ES', { day: '2-digit', month: 'short', year: 'numeric' })
+
+  page.drawRectangle({
+    x: margin, y: y - 3, width: pageWidth - (margin * 2), height: 32,
+    color: rgb(0.9, 0.95, 0.9),
+    borderColor: gray,
+    borderWidth: 0.5
+  })
+
+  drawText('RECIBIDO:', margin + 8, y + 5, { font: fontBold, size: 10, color: darkGray })
+  drawText(receptionDate.toUpperCase(), margin + 75, y + 5, { font: fontBold, size: 16, color: black })
+  y -= 42
+
+  // ============================================
+  // QUANTITY AND COST
+  // ============================================
+  const quantity = data.quantity || 0
+  const unitCost = data.unitCost || 0
+
+  const halfWidth = (pageWidth - (margin * 3)) / 2
+
+  // Quantity box
+  page.drawRectangle({
+    x: margin, y: y - 3, width: halfWidth, height: 32,
+    color: rgb(0.95, 0.95, 1),
+    borderColor: gray,
+    borderWidth: 0.5
+  })
+  drawText('CANTIDAD', margin + 5, y + 10, { font: fontRegular, size: 8, color: darkGray })
+  drawText(String(quantity), margin + 5, y - 10, { font: fontBold, size: 20, color: black })
+
+  // Cost box
+  page.drawRectangle({
+    x: margin * 2 + halfWidth, y: y - 3, width: halfWidth, height: 32,
+    color: rgb(1, 0.98, 0.95),
+    borderColor: gray,
+    borderWidth: 0.5
+  })
+  drawText('COSTO', margin * 2 + halfWidth + 5, y + 10, { font: fontRegular, size: 8, color: darkGray })
+  drawText(`$${Number(unitCost).toFixed(2)}`, margin * 2 + halfWidth + 5, y - 10, { font: fontBold, size: 18, color: black })
+
+  y -= 45
+
+  // ============================================
+  // WAREHOUSE
+  // ============================================
+  const warehouseName = (data.warehouseName as string) || ''
+  if (warehouseName) {
+    drawText('Almacén:', margin, y, { font: fontRegular, size: 9, color: darkGray })
+    drawText(warehouseName, margin + 50, y, { font: fontBold, size: 10, color: black, maxWidth: pageWidth - margin - 60 })
+    y -= 18
+  }
+
+  // ============================================
+  // ORDER NUMBER
+  // ============================================
+  const orderNumber = (data.orderNumber as string) || ''
+  if (orderNumber) {
+    drawText('Orden:', margin, y, { font: fontRegular, size: 9, color: darkGray })
+    drawText(orderNumber, margin + 40, y, { font: fontBold, size: 10, color: purple })
+  }
+
+  return pdfDoc.save()
+}
+
+// Generate a simple barcode pattern from text (Code 128 inspired)
+function generateBarcodePattern(text: string): string {
+  // Simplified barcode pattern generator
+  // Returns a string of 1s and 0s representing bars and spaces
+  let pattern = '11010'  // Start pattern
+
+  for (const char of text) {
+    const code = char.charCodeAt(0)
+    // Convert each character to a 6-bit binary pattern
+    const binary = code.toString(2).padStart(8, '0')
+    // Take alternating bits and add spacers
+    pattern += binary.slice(0, 4) + '0' + binary.slice(4) + '0'
+  }
+
+  pattern += '11010'  // End pattern
+
+  // Add some randomization based on actual barcode rules
+  // This creates a more realistic-looking barcode
+  let result = ''
+  for (let i = 0; i < pattern.length; i++) {
+    result += pattern[i]
+    // Add some thickness variation
+    if (pattern[i] === '1' && i < pattern.length - 1 && pattern[i + 1] === '1') {
+      result += '1'
+    }
+  }
+
+  return result
+}
+
+// Generate Unified Reception PDF (80mm thermal receipt)
+async function generateUnifiedReceptionPdf(data: Record<string, unknown>): Promise<Uint8Array> {
+  const pdfDoc = await PDFDocument.create()
+  // 80mm thermal paper width (about 3.15 inches = 226 points), dynamic height
+  const pageWidth = 226
+  const pageHeight = 500 // Will adjust based on content
+  const page = pdfDoc.addPage([pageWidth, pageHeight])
+
+  const fontRegular = await pdfDoc.embedFont(StandardFonts.Helvetica)
+  const fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold)
+
+  const black = rgb(0, 0, 0)
+  const gray = rgb(0.4, 0.4, 0.4)
+
+  const margin = 10
+  let y = pageHeight - margin
+
+  const drawText = (text: string, x: number, yPos: number, options: { font?: PDFFont; size?: number; color?: typeof black; maxWidth?: number } = {}) => {
+    let displayText = text
+    const font = options.font || fontRegular
+    const size = options.size || 10
+
+    if (options.maxWidth) {
+      while (font.widthOfTextAtSize(displayText, size) > options.maxWidth && displayText.length > 3) {
+        displayText = displayText.slice(0, -4) + '...'
+      }
+    }
+
+    page.drawText(displayText, {
+      x, y: yPos,
+      font,
+      size,
+      color: options.color || black
+    })
+  }
+
+  const centerText = (text: string, yPos: number, options: { font?: PDFFont; size?: number; color?: typeof black } = {}) => {
+    const font = options.font || fontRegular
+    const size = options.size || 10
+    const textWidth = font.widthOfTextAtSize(text, size)
+    const x = (pageWidth - textWidth) / 2
+    drawText(text, x, yPos, options)
+  }
+
+  const drawLine = (yPos: number) => {
+    page.drawLine({
+      start: { x: margin, y: yPos },
+      end: { x: pageWidth - margin, y: yPos },
+      thickness: 0.5,
+      color: gray
+    })
+  }
+
+  // Header
+  const orderType = (data.orderType as string) || 'consignment'
+  const typeLabel = orderType === 'consignment' ? 'CONSIGNACION' : 'COMPRA'
+
+  centerText('RECEPCION DE ' + typeLabel, y, { font: fontBold, size: 12 })
+  y -= 18
+
+  const orderNumber = (data.orderNumber as string) || ''
+  centerText(orderNumber, y, { font: fontBold, size: 10 })
+  y -= 16
+
+  drawLine(y)
+  y -= 12
+
+  // Supplier info
+  const supplier = data.supplier as { name?: string; code?: string } | undefined
+  if (supplier) {
+    drawText('Proveedor:', margin, y, { font: fontBold, size: 9, color: gray })
+    y -= 12
+    drawText(supplier.name || '', margin, y, { font: fontBold, size: 10, maxWidth: pageWidth - margin * 2 })
+    y -= 10
+    drawText(`Codigo: ${supplier.code || ''}`, margin, y, { font: fontRegular, size: 8, color: gray })
+    y -= 14
+  }
+
+  // Warehouse info
+  const warehouse = data.warehouse as { name?: string; code?: string } | undefined
+  if (warehouse) {
+    drawText('Almacen:', margin, y, { font: fontBold, size: 9, color: gray })
+    y -= 12
+    drawText(warehouse.name || '', margin, y, { font: fontBold, size: 10 })
+    y -= 14
+  }
+
+  drawLine(y)
+  y -= 12
+
+  // Date
+  const receivedAt = data.receivedAt
+    ? new Date(data.receivedAt as string).toLocaleString('es-ES', {
+        day: '2-digit', month: '2-digit', year: 'numeric',
+        hour: '2-digit', minute: '2-digit'
+      })
+    : new Date().toLocaleString('es-ES')
+
+  drawText(`Fecha: ${receivedAt}`, margin, y, { font: fontRegular, size: 9 })
+  y -= 16
+
+  drawLine(y)
+  y -= 12
+
+  // Products header
+  drawText('PRODUCTOS', margin, y, { font: fontBold, size: 9 })
+  y -= 14
+
+  // Products list
+  const products = (data.products as Array<{
+    productName?: string
+    sku?: string
+    quantity?: number
+    lotNumber?: string
+  }>) || []
+
+  for (const product of products) {
+    drawText(product.productName || 'Producto', margin, y, { font: fontBold, size: 9, maxWidth: pageWidth - margin * 2 })
+    y -= 10
+    drawText(`SKU: ${product.sku || '-'}`, margin + 5, y, { font: fontRegular, size: 8, color: gray })
+    y -= 10
+    drawText(`Lote: ${product.lotNumber || '-'}`, margin + 5, y, { font: fontRegular, size: 8 })
+    drawText(`Cant: ${product.quantity || 0}`, pageWidth - margin - 40, y, { font: fontBold, size: 9 })
+    y -= 14
+  }
+
+  drawLine(y)
+  y -= 12
+
+  // Totals
+  const totalProducts = (data.totalProducts as number) || products.length
+  const totalUnits = (data.totalUnits as number) || 0
+
+  drawText(`Total Productos:`, margin, y, { font: fontRegular, size: 9 })
+  drawText(`${totalProducts}`, pageWidth - margin - 25, y, { font: fontBold, size: 9 })
+  y -= 12
+
+  drawText(`Total Unidades:`, margin, y, { font: fontRegular, size: 9 })
+  drawText(`${totalUnits}`, pageWidth - margin - 25, y, { font: fontBold, size: 11 })
+  y -= 16
+
+  drawLine(y)
+  y -= 12
+
+  // Footer
+  centerText('Recepcion completada', y, { font: fontRegular, size: 8, color: gray })
 
   return pdfDoc.save()
 }

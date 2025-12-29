@@ -191,6 +191,7 @@ export default function UnifiedReceptionView({
 
   // Print states
   const [printing, setPrinting] = useState(false)
+  const [printingLabels, setPrintingLabels] = useState(false)
   const [lastReceptionData, setLastReceptionData] = useState<{
     orderType: string
     orderId: number
@@ -532,6 +533,51 @@ export default function UnifiedReceptionView({
     }
   }
 
+  // Print lot labels (4x6)
+  const handlePrintLotLabels = async () => {
+    if (!lastReceptionData || !detectedOrder) return
+
+    setPrintingLabels(true)
+    try {
+      // Send one print job per product with lot info
+      const productLines = Array.from(receivedLines.values())
+        .filter(l => l.quantityReceived > 0)
+
+      for (const line of productLines) {
+        const orderLine = detectedOrder.lines.find(ol => ol.lineId === line.lineId)
+        if (!orderLine) continue
+
+        await fetch('/api/print/jobs', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            documentType: 'lot_label',
+            documentData: {
+              lotNumber: line.lotNumber,
+              supplierName: lastReceptionData.supplier.name,
+              productName: orderLine.productName,
+              expirationDate: line.expirationDate || null,
+              receptionDate: lastReceptionData.receivedAt,
+              quantity: line.quantityReceived,
+              unitCost: orderLine.unitCost,
+              warehouseName: lastReceptionData.warehouse.name,
+              orderNumber: lastReceptionData.orderNumber,
+              source: lastReceptionData.orderType
+            },
+            copies: 1,
+            sourceType: lastReceptionData.orderType === 'consignment' ? 'consignment_order' : 'purchase_order',
+            sourceId: lastReceptionData.orderId,
+            warehouseId: lastReceptionData.warehouse.id
+          })
+        })
+      }
+    } catch (err) {
+      console.error('Error sending lot label print jobs:', err)
+    } finally {
+      setPrintingLabels(false)
+    }
+  }
+
   // Handle success close
   const handleSuccessClose = () => {
     if (successData) {
@@ -699,7 +745,8 @@ export default function UnifiedReceptionView({
           <p className="text-3xl font-bold text-emerald-600 mb-6">
             {successData.unitsReceived} unidades
           </p>
-          <div className="flex gap-3">
+          {/* Print buttons row */}
+          <div className="flex gap-2 mb-3">
             <motion.button
               whileHover={{ scale: 1.02 }}
               whileTap={{ scale: 0.98 }}
@@ -714,21 +761,42 @@ export default function UnifiedReceptionView({
               )}
             >
               {printing ? (
-                <Loader2 className="w-5 h-5 animate-spin" />
+                <Loader2 className="w-4 h-4 animate-spin" />
               ) : (
-                <Printer className="w-5 h-5" />
+                <Printer className="w-4 h-4" />
               )}
-              Imprimir
+              <span className="text-sm">Recibo</span>
             </motion.button>
             <motion.button
               whileHover={{ scale: 1.02 }}
               whileTap={{ scale: 0.98 }}
-              onClick={handleSuccessClose}
-              className="flex-1 py-3 bg-emerald-500 text-white rounded-xl hover:bg-emerald-600 transition-colors font-medium"
+              onClick={handlePrintLotLabels}
+              disabled={printingLabels}
+              className={cn(
+                'flex-1 py-3 rounded-xl font-medium transition-colors flex items-center justify-center gap-2',
+                theme === 'dark'
+                  ? 'bg-purple-900/50 text-purple-300 hover:bg-purple-900/70'
+                  : 'bg-purple-100 text-purple-700 hover:bg-purple-200',
+                printingLabels && 'opacity-50 cursor-not-allowed'
+              )}
             >
-              Continuar
+              {printingLabels ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <Barcode className="w-4 h-4" />
+              )}
+              <span className="text-sm">Etiquetas 4x6</span>
             </motion.button>
           </div>
+          {/* Continue button */}
+          <motion.button
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
+            onClick={handleSuccessClose}
+            className="w-full py-3 bg-emerald-500 text-white rounded-xl hover:bg-emerald-600 transition-colors font-medium"
+          >
+            Continuar
+          </motion.button>
         </motion.div>
       </div>
     )
