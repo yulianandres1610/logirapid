@@ -238,6 +238,32 @@ export default function CreateProductPage() {
     }
   }
 
+  // Generate a random EAN-13 compatible barcode
+  const generateBarcode = (): string => {
+    // Prefijo de país (generamos uno aleatorio para productos internos)
+    const prefix = '200' // 200-299 son para uso interno
+    // Número de producto aleatorio (9 dígitos)
+    const product = Math.floor(Math.random() * 1000000000).toString().padStart(9, '0')
+    // Calcular dígito de control EAN-13
+    const code = prefix + product
+    let sum = 0
+    for (let i = 0; i < 12; i++) {
+      sum += parseInt(code[i]) * (i % 2 === 0 ? 1 : 3)
+    }
+    const checkDigit = (10 - (sum % 10)) % 10
+    return code + checkDigit
+  }
+
+  // Ensure barcode exists before image operations
+  const ensureBarcode = (): string => {
+    if (formData.barcode && formData.barcode.trim() !== '') {
+      return formData.barcode
+    }
+    const newBarcode = generateBarcode()
+    setFormData(prev => ({ ...prev, barcode: newBarcode }))
+    return newBarcode
+  }
+
   // Check for existing image by barcode
   useEffect(() => {
     const checkImageByBarcode = async () => {
@@ -284,6 +310,9 @@ export default function CreateProductPage() {
       return
     }
 
+    // Ensure we have a barcode before generating image
+    const barcodeToUse = ensureBarcode()
+
     setGeneratingImage(true)
     try {
       const res = await fetch('/api/ai/process-image', {
@@ -293,19 +322,22 @@ export default function CreateProductPage() {
           action: 'generate',
           productName: formData.name,
           productDescription: formData.description,
-          barcode: formData.barcode,
+          barcode: barcodeToUse,
           saveToStorage: true
         })
       })
 
       const data = await res.json()
-      if (data.success && data.data?.imageUrl) {
-        setFormData(prev => ({ ...prev, imageUrl: data.data.imageUrl }))
-      } else {
-        // Show search terms as suggestion
-        if (data.data?.searchTerms) {
-          setErrors({ ...errors, image: `Busca manualmente: ${data.data.searchTerms.join(', ')}` })
+      if (data.success && data.data?.generated) {
+        // Usar imageUrl si se guardó, o imageBase64 para preview
+        const imageToUse = data.data.imageUrl || data.data.imageBase64
+        if (imageToUse) {
+          setFormData(prev => ({ ...prev, imageUrl: imageToUse }))
+        } else {
+          setErrors({ ...errors, image: 'No se pudo generar la imagen' })
         }
+      } else {
+        setErrors({ ...errors, image: data.error || 'Error al generar imagen con IA' })
       }
     } catch (error) {
       console.error('Error generating image:', error)
@@ -351,6 +383,11 @@ export default function CreateProductPage() {
 
   const goToNextStep = () => {
     if (!validateStep(currentStep)) return
+
+    // Auto-generate barcode when leaving info step if empty
+    if (currentStep === 'info' && (!formData.barcode || formData.barcode.trim() === '')) {
+      ensureBarcode()
+    }
 
     const nextIndex = currentStepIndex + 1
     if (nextIndex < STEPS.length) {

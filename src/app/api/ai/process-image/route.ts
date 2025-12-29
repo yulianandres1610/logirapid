@@ -90,12 +90,8 @@ export async function POST(request: NextRequest) {
       }, { status: 400 })
     }
 
-    if (saveToStorage && !barcode) {
-      return NextResponse.json({
-        success: false,
-        error: 'barcode es requerido para guardar la imagen'
-      }, { status: 400 })
-    }
+    // Si quiere guardar pero no tiene barcode, no guardamos pero si generamos
+    const shouldSave = saveToStorage && barcode && barcode.trim() !== ''
 
     console.log(`[AI Process Image] Action: ${action}, Barcode: ${barcode || 'N/A'}`)
 
@@ -128,7 +124,7 @@ export async function POST(request: NextRequest) {
 
     // Si hay imagen procesada y se debe guardar
     let savedImage = null
-    if (saveToStorage && barcode && result.imageBase64) {
+    if (shouldSave && result.imageBase64) {
       try {
         const imageBuffer = Buffer.from(result.imageBase64, 'base64')
         const { url, path } = await uploadProductImageByBarcode(
@@ -207,8 +203,10 @@ export async function POST(request: NextRequest) {
       case 'generate':
         response.data = {
           imageDescription: result.imageDescription,
-          searchTerms: result.searchTerms,
-          imageUrl: savedImage?.url || null
+          imageUrl: savedImage?.url || null,
+          // Si no se guardó, devolver base64 para preview
+          imageBase64: !savedImage && result.imageBase64 ? `data:image/png;base64,${result.imageBase64}` : null,
+          generated: !!result.imageBase64
         }
         break
 

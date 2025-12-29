@@ -82,9 +82,11 @@ export async function uploadProductImageByBarcode(
 
 /**
  * Obtiene la URL de imagen de un producto por barcode
+ * Solo devuelve la URL si el archivo existe y tiene contenido
  */
 export async function getProductImageByBarcode(barcode: string): Promise<string | null> {
   const supabase = getSupabaseClient()
+  const safeBarcode = barcode.replace(/[^a-zA-Z0-9-_]/g, '')
 
   // Buscar en diferentes extensiones
   const extensions = ['webp', 'jpg', 'jpeg', 'png']
@@ -92,19 +94,23 @@ export async function getProductImageByBarcode(barcode: string): Promise<string 
   for (const ext of extensions) {
     const storagePath = getStoragePath(barcode, ext)
 
-    // Verificar si existe
+    // Verificar si existe y tiene contenido
     const { data } = await supabase.storage
       .from(BUCKET)
       .list(FOLDER, {
-        search: `${barcode.replace(/[^a-zA-Z0-9-_]/g, '')}.${ext}`
+        search: `${safeBarcode}.${ext}`
       })
 
     if (data && data.length > 0) {
-      const { data: publicUrlData } = supabase.storage
-        .from(BUCKET)
-        .getPublicUrl(storagePath)
+      // Verificar que el archivo tiene tamaño > 0
+      const file = data.find(f => f.name === `${safeBarcode}.${ext}`)
+      if (file && file.metadata?.size > 0) {
+        const { data: publicUrlData } = supabase.storage
+          .from(BUCKET)
+          .getPublicUrl(storagePath)
 
-      return publicUrlData.publicUrl
+        return publicUrlData.publicUrl
+      }
     }
   }
 
