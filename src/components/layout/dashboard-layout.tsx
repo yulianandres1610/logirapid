@@ -5,7 +5,9 @@ import { motion } from 'framer-motion'
 import { Sidebar } from './sidebar'
 import { Header } from './header'
 import { useTheme } from '@/contexts/theme-context'
+import { useAuth } from '@/hooks/useAuth'
 import { cn } from '@/lib/utils'
+import SupportChat from '@/components/support/SupportChat'
 
 interface DashboardLayoutProps {
   children: React.ReactNode
@@ -20,6 +22,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
     return false
   })
   const { theme } = useTheme()
+  const { user } = useAuth()
 
   // Persistir estado del sidebar en localStorage
   useEffect(() => {
@@ -89,6 +92,19 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
           </motion.main>
         </div>
       </div>
+
+      {/* Support Chat Widget */}
+      {user && (
+        <SupportChat
+          userContext={{
+            userId: parseInt(user.id) || 0,
+            role: user.role || 'user',
+            companyType: user.companyType || 'agency',
+            companyId: parseInt(user.companyId || '0') || 0,
+            companyName: user.name || 'Usuario'
+          }}
+        />
+      )}
     </div>
   )
 }

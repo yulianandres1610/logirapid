@@ -806,7 +806,7 @@ export function Sidebar({ isCollapsed, onToggle }: SidebarProps) {
           >
             <Button
               variant="ghost"
-              onClick={() => console.log('🚀 Sidebar - Soporte técnico solicitado')}
+              onClick={() => router.push('/dashboard/support')}
               className={cn(
                 "w-full justify-start gap-3 hover:bg-exa-primary/10",
                 theme === 'dark'
