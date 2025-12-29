@@ -356,6 +356,7 @@ export function Sidebar({ isCollapsed, onToggle }: SidebarProps) {
     { icon: Smartphone, label: "Recargas", href: "/dashboard/admin/recargas" },
     { icon: Package, label: "Rastreador", href: "/dashboard/admin/tracker" },
     { icon: ShoppingCart, label: "Mercado", href: "/dashboard/admin/marketplace" },
+    { icon: Store, label: "Aprobaciones Marketplace", href: "/dashboard/admin/marketplace-approvals" },
     {
       icon: ShoppingBag,
       label: "Paquetería",
@@ -474,6 +475,7 @@ export function Sidebar({ isCollapsed, onToggle }: SidebarProps) {
     { icon: Package, label: "Inventario", href: "/dashboard/market/inventory" },
     { icon: Warehouse, label: "Almacenes", href: "/dashboard/market/warehouses" },
     { icon: FileText, label: "Compras", href: "/dashboard/market/purchases" },
+    { icon: Store, label: "Marketplace", href: "/dashboard/market/marketplace" },
     {
       icon: Package,
       label: "Consignaciones",
