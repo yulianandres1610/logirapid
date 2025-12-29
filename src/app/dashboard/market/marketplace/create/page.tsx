@@ -19,7 +19,10 @@ import {
   TrendingDown,
   Minus,
   Store,
-  ImageIcon
+  ImageIcon,
+  Sparkles,
+  Wand2,
+  Edit3
 } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
@@ -72,8 +75,22 @@ interface PriceCheck {
   competitorCount: number
   percentDifference: number
   pricePosition: 'low' | 'average' | 'high'
-  alertType: 'none' | 'below_cost' | 'high_difference'
+  alertType: 'none' | 'below_cost' | 'no_margin' | 'low_margin' | 'high_difference' | 'above_market'
   alertMessage: string | null
+  suggestedRange: {
+    min: number
+    max: number
+    optimal: number
+  }
+  margins: {
+    proposedMargin: number
+    baseMargin: number
+    minRecommendedMargin: number
+  }
+  product: {
+    costPrice: number
+    sellingPrice: number
+  }
 }
 
 interface CreatedListing {
@@ -110,6 +127,14 @@ export default function CreateMarketplaceListingPage() {
   const [priceCheck, setPriceCheck] = useState<PriceCheck | null>(null)
   const [loadingPriceCheck, setLoadingPriceCheck] = useState(false)
   const [showPriceConfirmation, setShowPriceConfirmation] = useState(false)
+
+  // AI Suggestion states
+  const [aiLoading, setAiLoading] = useState(false)
+  const [aiSuggestion, setAiSuggestion] = useState<{
+    title: string
+    description: string
+  } | null>(null)
+  const [showAiSuggestion, setShowAiSuggestion] = useState(false)
 
   // Step 4: Confirmation
   const [createdListing, setCreatedListing] = useState<CreatedListing | null>(null)
@@ -194,6 +219,64 @@ export default function CreateMarketplaceListingPage() {
       return () => clearTimeout(timer)
     }
   }, [selectedProduct, priceMarketplace])
+
+  // AI Suggestion function
+  const fetchAiSuggestion = async () => {
+    if (!selectedProduct?.name || selectedProduct.name.trim().length < 2) {
+      return
+    }
+
+    setAiLoading(true)
+    setShowAiSuggestion(false)
+
+    try {
+      const response = await fetch('/api/ai/marketplace-suggest', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          productName: selectedProduct.name.trim(),
+          category: selectedProduct.category,
+          currentPrice: priceMarketplace || selectedProduct.sellingPrice
+        })
+      })
+
+      const data = await response.json()
+
+      if (data.success && data.data) {
+        setAiSuggestion({
+          title: data.data.title,
+          description: data.data.description
+        })
+        setShowAiSuggestion(true)
+      } else {
+        console.error('AI Suggestion error:', data.error)
+      }
+    } catch (error) {
+      console.error('AI Suggestion fetch error:', error)
+    } finally {
+      setAiLoading(false)
+    }
+  }
+
+  // Apply AI suggestions
+  const applyAiTitle = () => {
+    if (aiSuggestion?.title) {
+      setMarketplaceTitle(aiSuggestion.title)
+    }
+  }
+
+  const applyAiDescription = () => {
+    if (aiSuggestion?.description) {
+      setMarketplaceDescription(aiSuggestion.description)
+    }
+  }
+
+  const applyAllAiSuggestions = () => {
+    if (aiSuggestion) {
+      setMarketplaceTitle(aiSuggestion.title || marketplaceTitle)
+      setMarketplaceDescription(aiSuggestion.description || marketplaceDescription)
+    }
+  }
 
   // Validate step
   const validateStep = (step: Step): boolean => {
@@ -880,9 +963,9 @@ export default function CreateMarketplaceListingPage() {
                         animate={{ opacity: 1, y: 0 }}
                         className={cn(
                           'p-4 rounded-xl border',
-                          priceCheck.alertType === 'below_cost'
+                          priceCheck.alertType === 'below_cost' || priceCheck.alertType === 'no_margin'
                             ? 'border-red-300 bg-red-50 dark:bg-red-900/20 dark:border-red-800'
-                            : priceCheck.alertType === 'high_difference'
+                            : priceCheck.alertType === 'low_margin' || priceCheck.alertType === 'high_difference' || priceCheck.alertType === 'above_market'
                               ? 'border-amber-300 bg-amber-50 dark:bg-amber-900/20 dark:border-amber-800'
                               : 'border-emerald-300 bg-emerald-50 dark:bg-emerald-900/20 dark:border-emerald-800'
                         )}
@@ -893,27 +976,67 @@ export default function CreateMarketplaceListingPage() {
                           </div>
                         ) : (
                           <>
+                            {/* Alert Message */}
                             <div className="flex items-center gap-3 mb-3">
                               {priceCheck.alertType !== 'none' ? (
                                 <AlertTriangle className={cn(
-                                  'w-5 h-5',
-                                  priceCheck.alertType === 'below_cost' ? 'text-red-500' : 'text-amber-500'
+                                  'w-5 h-5 flex-shrink-0',
+                                  priceCheck.alertType === 'below_cost' || priceCheck.alertType === 'no_margin'
+                                    ? 'text-red-500'
+                                    : 'text-amber-500'
                                 )} />
                               ) : (
-                                <CheckCircle className="w-5 h-5 text-emerald-500" />
+                                <CheckCircle className="w-5 h-5 text-emerald-500 flex-shrink-0" />
                               )}
                               <span className={cn(
-                                'font-medium',
-                                priceCheck.alertType === 'below_cost' ? 'text-red-700 dark:text-red-400'
-                                  : priceCheck.alertType === 'high_difference' ? 'text-amber-700 dark:text-amber-400'
+                                'font-medium text-sm',
+                                priceCheck.alertType === 'below_cost' || priceCheck.alertType === 'no_margin'
+                                  ? 'text-red-700 dark:text-red-400'
+                                  : priceCheck.alertType === 'low_margin' || priceCheck.alertType === 'high_difference' || priceCheck.alertType === 'above_market'
+                                    ? 'text-amber-700 dark:text-amber-400'
                                     : 'text-emerald-700 dark:text-emerald-400'
                               )}>
                                 {priceCheck.alertMessage || 'Precio competitivo'}
                               </span>
                             </div>
 
+                            {/* Margin Info */}
+                            {priceCheck.margins && (
+                              <div className={cn(
+                                'grid grid-cols-3 gap-2 p-3 rounded-lg mb-3',
+                                theme === 'dark' ? 'bg-gray-800/50' : 'bg-white/80'
+                              )}>
+                                <div className="text-center">
+                                  <p className={cn(
+                                    "text-lg font-bold",
+                                    priceCheck.margins.proposedMargin < 0
+                                      ? 'text-red-500'
+                                      : priceCheck.margins.proposedMargin < 15
+                                        ? 'text-amber-500'
+                                        : 'text-emerald-600'
+                                  )}>
+                                    {priceCheck.margins.proposedMargin.toFixed(1)}%
+                                  </p>
+                                  <p className="text-xs text-gray-500">Tu Margen</p>
+                                </div>
+                                <div className="text-center">
+                                  <p className="text-lg font-bold text-gray-900 dark:text-white">
+                                    {priceCheck.margins.baseMargin.toFixed(1)}%
+                                  </p>
+                                  <p className="text-xs text-gray-500">Margen Base</p>
+                                </div>
+                                <div className="text-center">
+                                  <p className="text-lg font-bold text-blue-500">
+                                    {priceCheck.margins.minRecommendedMargin}%
+                                  </p>
+                                  <p className="text-xs text-gray-500">Recomendado</p>
+                                </div>
+                              </div>
+                            )}
+
+                            {/* Market Comparison */}
                             {priceCheck.competitorCount > 0 && (
-                              <div className="grid grid-cols-4 gap-3 text-center">
+                              <div className="grid grid-cols-4 gap-3 text-center mb-3">
                                 <div>
                                   <p className="text-lg font-bold text-gray-900 dark:text-white">
                                     {formatCurrency(priceCheck.averagePrice)}
@@ -941,8 +1064,9 @@ export default function CreateMarketplaceListingPage() {
                               </div>
                             )}
 
+                            {/* Price Position Badge */}
                             {priceCheck.competitorCount > 0 && (
-                              <div className="mt-3 flex items-center justify-center gap-2">
+                              <div className="flex items-center justify-center gap-2 mb-3">
                                 {(() => {
                                   const info = getPricePositionInfo(priceCheck.pricePosition)
                                   const Icon = info.icon
@@ -961,19 +1085,254 @@ export default function CreateMarketplaceListingPage() {
                                 })()}
                               </div>
                             )}
+
+                            {/* Suggested Optimal Price */}
+                            {priceCheck.suggestedRange && priceCheck.alertType !== 'none' && (
+                              <div className={cn(
+                                'flex items-center justify-between p-3 rounded-lg',
+                                theme === 'dark' ? 'bg-blue-900/20 border border-blue-800' : 'bg-blue-50 border border-blue-200'
+                              )}>
+                                <div>
+                                  <p className={cn(
+                                    'text-xs font-medium',
+                                    theme === 'dark' ? 'text-blue-400' : 'text-blue-600'
+                                  )}>
+                                    Precio Sugerido
+                                  </p>
+                                  <p className="text-lg font-bold text-blue-600">
+                                    {formatCurrency(priceCheck.suggestedRange.optimal)}
+                                  </p>
+                                  <p className="text-xs text-gray-500">
+                                    Rango: {formatCurrency(priceCheck.suggestedRange.min)} - {formatCurrency(priceCheck.suggestedRange.max)}
+                                  </p>
+                                </div>
+                                <motion.button
+                                  type="button"
+                                  onClick={() => setPriceMarketplace(priceCheck.suggestedRange.optimal.toFixed(2))}
+                                  whileHover={{ scale: 1.05 }}
+                                  whileTap={{ scale: 0.95 }}
+                                  className={cn(
+                                    'px-4 py-2 rounded-lg text-sm font-medium transition-all',
+                                    theme === 'dark'
+                                      ? 'bg-blue-600 hover:bg-blue-700 text-white'
+                                      : 'bg-blue-500 hover:bg-blue-600 text-white'
+                                  )}
+                                >
+                                  Aplicar
+                                </motion.button>
+                              </div>
+                            )}
                           </>
                         )}
                       </motion.div>
                     )}
 
-                    {/* Optional Fields */}
+                    {/* Optional Fields with AI */}
                     <div className="space-y-4">
+                      {/* Header with AI Button */}
+                      <div className="flex items-center justify-between">
+                        <h3 className={cn(
+                          "text-sm font-medium",
+                          theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
+                        )}>
+                          Personalizar Publicacion (opcional)
+                        </h3>
+                        <motion.button
+                          type="button"
+                          onClick={fetchAiSuggestion}
+                          disabled={aiLoading || !selectedProduct}
+                          whileHover={{ scale: 1.05 }}
+                          whileTap={{ scale: 0.95 }}
+                          className={cn(
+                            "flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium transition-all",
+                            "disabled:opacity-50 disabled:cursor-not-allowed",
+                            theme === 'dark'
+                              ? 'bg-violet-600 hover:bg-violet-700 text-white'
+                              : 'bg-violet-500 hover:bg-violet-600 text-white'
+                          )}
+                        >
+                          {aiLoading ? (
+                            <>
+                              <Loader2 className="w-4 h-4 animate-spin" />
+                              <span>Generando...</span>
+                            </>
+                          ) : (
+                            <>
+                              <Sparkles className="w-4 h-4" />
+                              <span>Generar con IA</span>
+                            </>
+                          )}
+                        </motion.button>
+                      </div>
+
+                      {/* AI Suggestion Panel */}
+                      <AnimatePresence>
+                        {showAiSuggestion && aiSuggestion && (
+                          <motion.div
+                            initial={{ opacity: 0, y: -10, height: 0 }}
+                            animate={{ opacity: 1, y: 0, height: 'auto' }}
+                            exit={{ opacity: 0, y: -10, height: 0 }}
+                            transition={{ duration: 0.3 }}
+                            className={cn(
+                              "p-4 rounded-xl border-2 border-dashed relative overflow-hidden",
+                              theme === 'dark'
+                                ? 'bg-gradient-to-br from-violet-900/20 to-purple-900/20 border-violet-500/50'
+                                : 'bg-gradient-to-br from-violet-50 to-purple-50 border-violet-300'
+                            )}
+                          >
+                            {/* Sparkle decoration */}
+                            <div className="absolute top-2 right-2">
+                              <motion.div
+                                animate={{ rotate: 360 }}
+                                transition={{ duration: 4, repeat: Infinity, ease: "linear" }}
+                              >
+                                <Wand2 className={cn(
+                                  "w-5 h-5",
+                                  theme === 'dark' ? 'text-violet-400' : 'text-violet-500'
+                                )} />
+                              </motion.div>
+                            </div>
+
+                            <div className="flex items-center gap-2 mb-3">
+                              <Sparkles className={cn(
+                                "w-4 h-4",
+                                theme === 'dark' ? 'text-violet-400' : 'text-violet-600'
+                              )} />
+                              <span className={cn(
+                                "text-sm font-semibold",
+                                theme === 'dark' ? 'text-violet-300' : 'text-violet-700'
+                              )}>
+                                Sugerencias de IA
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => setShowAiSuggestion(false)}
+                                className={cn(
+                                  "ml-auto p-1 rounded-full transition-colors",
+                                  theme === 'dark'
+                                    ? 'hover:bg-gray-700 text-gray-400'
+                                    : 'hover:bg-gray-200 text-gray-500'
+                                )}
+                              >
+                                <X className="w-4 h-4" />
+                              </button>
+                            </div>
+
+                            <div className="space-y-3">
+                              {/* Title suggestion */}
+                              <div className={cn(
+                                "flex items-center justify-between p-3 rounded-lg gap-3",
+                                theme === 'dark' ? 'bg-gray-800/50' : 'bg-white/80'
+                              )}>
+                                <div className="flex items-center gap-2 flex-1 min-w-0">
+                                  <FileText className={cn(
+                                    "w-4 h-4 flex-shrink-0",
+                                    theme === 'dark' ? 'text-blue-400' : 'text-blue-600'
+                                  )} />
+                                  <span className={cn(
+                                    "text-sm truncate",
+                                    theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
+                                  )}>
+                                    <strong>Titulo:</strong> {aiSuggestion.title}
+                                  </span>
+                                </div>
+                                <motion.button
+                                  type="button"
+                                  onClick={applyAiTitle}
+                                  whileHover={{ scale: 1.05 }}
+                                  whileTap={{ scale: 0.95 }}
+                                  className={cn(
+                                    "px-3 py-1 text-xs font-medium rounded-full transition-colors flex-shrink-0",
+                                    marketplaceTitle === aiSuggestion.title
+                                      ? theme === 'dark'
+                                        ? 'bg-green-900/50 text-green-300'
+                                        : 'bg-green-100 text-green-700'
+                                      : theme === 'dark'
+                                        ? 'bg-violet-600 hover:bg-violet-700 text-white'
+                                        : 'bg-violet-500 hover:bg-violet-600 text-white'
+                                  )}
+                                >
+                                  {marketplaceTitle === aiSuggestion.title ? (
+                                    <span className="flex items-center gap-1">
+                                      <Check className="w-3 h-3" /> Aplicado
+                                    </span>
+                                  ) : (
+                                    'Aplicar'
+                                  )}
+                                </motion.button>
+                              </div>
+
+                              {/* Description suggestion */}
+                              <div className={cn(
+                                "flex items-start justify-between p-3 rounded-lg gap-3",
+                                theme === 'dark' ? 'bg-gray-800/50' : 'bg-white/80'
+                              )}>
+                                <div className="flex items-start gap-2 flex-1">
+                                  <Edit3 className={cn(
+                                    "w-4 h-4 mt-0.5 flex-shrink-0",
+                                    theme === 'dark' ? 'text-amber-400' : 'text-amber-600'
+                                  )} />
+                                  <span className={cn(
+                                    "text-sm",
+                                    theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
+                                  )}>
+                                    {aiSuggestion.description}
+                                  </span>
+                                </div>
+                                <motion.button
+                                  type="button"
+                                  onClick={applyAiDescription}
+                                  whileHover={{ scale: 1.05 }}
+                                  whileTap={{ scale: 0.95 }}
+                                  className={cn(
+                                    "px-3 py-1 text-xs font-medium rounded-full transition-colors flex-shrink-0",
+                                    marketplaceDescription === aiSuggestion.description
+                                      ? theme === 'dark'
+                                        ? 'bg-green-900/50 text-green-300'
+                                        : 'bg-green-100 text-green-700'
+                                      : theme === 'dark'
+                                        ? 'bg-violet-600 hover:bg-violet-700 text-white'
+                                        : 'bg-violet-500 hover:bg-violet-600 text-white'
+                                  )}
+                                >
+                                  {marketplaceDescription === aiSuggestion.description ? (
+                                    <span className="flex items-center gap-1">
+                                      <Check className="w-3 h-3" /> Aplicado
+                                    </span>
+                                  ) : (
+                                    'Aplicar'
+                                  )}
+                                </motion.button>
+                              </div>
+                            </div>
+
+                            {/* Apply All Button */}
+                            <motion.button
+                              type="button"
+                              onClick={applyAllAiSuggestions}
+                              whileHover={{ scale: 1.02 }}
+                              whileTap={{ scale: 0.98 }}
+                              className={cn(
+                                "w-full mt-4 py-2.5 rounded-lg font-medium text-sm transition-all flex items-center justify-center gap-2",
+                                theme === 'dark'
+                                  ? 'bg-gradient-to-r from-violet-600 to-purple-600 hover:from-violet-700 hover:to-purple-700 text-white'
+                                  : 'bg-gradient-to-r from-violet-500 to-purple-500 hover:from-violet-600 hover:to-purple-600 text-white'
+                              )}
+                            >
+                              <Sparkles className="w-4 h-4" />
+                              Aplicar Todo
+                            </motion.button>
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
+
+                      {/* Title Input */}
                       <div>
                         <label className={cn(
                           "block text-sm font-medium mb-2",
                           theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
                         )}>
-                          Titulo Personalizado (opcional)
+                          Titulo Personalizado
                         </label>
                         <input
                           type="text"
@@ -990,12 +1349,13 @@ export default function CreateMarketplaceListingPage() {
                         />
                       </div>
 
+                      {/* Description Input */}
                       <div>
                         <label className={cn(
                           "block text-sm font-medium mb-2",
                           theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
                         )}>
-                          Descripcion (opcional)
+                          Descripcion
                         </label>
                         <textarea
                           value={marketplaceDescription}

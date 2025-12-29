@@ -106,55 +106,80 @@ export async function GET(request: NextRequest) {
       maxPrice = Math.max(...prices)
     }
 
+    // Calculate margins
+    const proposedMargin = costPrice > 0 ? ((proposedPriceNum - costPrice) / costPrice) * 100 : 0
+    const baseMargin = costPrice > 0 ? ((sellingPrice - costPrice) / costPrice) * 100 : 0
+
     // Calculate alerts
-    let alertTriggered = false
-    let alertReason = null
-    let alertSeverity = 'low'
-    let pricePosition: 'below' | 'average' | 'above' = 'average'
+    let alertType: 'none' | 'below_cost' | 'no_margin' | 'low_margin' | 'high_difference' | 'above_market' = 'none'
+    let alertMessage: string | null = null
+    let alertSeverity: 'low' | 'medium' | 'high' | 'critical' = 'low'
+    let pricePosition: 'low' | 'average' | 'high' = 'average'
     let priceDifferencePercent = 0
 
-    // Check vs cost price
+    // Check vs cost price - CRITICAL: Below cost
     if (proposedPriceNum < costPrice) {
-      alertTriggered = true
-      alertReason = `El precio propuesto ($${proposedPriceNum.toFixed(2)}) es menor al costo ($${costPrice.toFixed(2)})`
+      alertType = 'below_cost'
+      const loss = costPrice - proposedPriceNum
+      alertMessage = `PERDIDA: Precio ($${proposedPriceNum.toFixed(2)}) menor al costo ($${costPrice.toFixed(2)}). Perderas $${loss.toFixed(2)} por unidad.`
       alertSeverity = 'critical'
       priceDifferencePercent = ((proposedPriceNum - costPrice) / costPrice) * 100
+    }
+    // Check if price equals cost (no margin)
+    else if (Math.abs(proposedPriceNum - costPrice) < 0.01) {
+      alertType = 'no_margin'
+      alertMessage = `SIN MARGEN: El precio es igual al costo ($${costPrice.toFixed(2)}). No obtendras ganancia.`
+      alertSeverity = 'high'
+      priceDifferencePercent = 0
+    }
+    // Check if margin is too low (less than 5%)
+    else if (proposedMargin > 0 && proposedMargin < 5) {
+      alertType = 'low_margin'
+      alertMessage = `MARGEN BAJO: Solo ${proposedMargin.toFixed(1)}% de margen. Considera aumentar el precio.`
+      alertSeverity = 'medium'
+      priceDifferencePercent = proposedMargin
     }
     // Check vs selling price
     else if (sellingPrice > 0) {
       priceDifferencePercent = ((proposedPriceNum - sellingPrice) / sellingPrice) * 100
 
       if (priceDifferencePercent > 50) {
-        alertTriggered = true
-        alertReason = `Precio ${priceDifferencePercent.toFixed(1)}% mayor al precio base. Puede afectar competitividad.`
+        alertType = 'high_difference'
+        alertMessage = `PRECIO ALTO: ${priceDifferencePercent.toFixed(1)}% mayor al precio base ($${sellingPrice.toFixed(2)}). Puede afectar ventas.`
         alertSeverity = 'high'
       } else if (priceDifferencePercent > 30) {
-        alertTriggered = true
-        alertReason = `Precio ${priceDifferencePercent.toFixed(1)}% mayor al precio base.`
+        alertType = 'high_difference'
+        alertMessage = `Precio ${priceDifferencePercent.toFixed(1)}% mayor al precio base ($${sellingPrice.toFixed(2)}).`
         alertSeverity = 'medium'
-      } else if (priceDifferencePercent < -20) {
-        alertTriggered = true
-        alertReason = `Precio ${Math.abs(priceDifferencePercent).toFixed(1)}% menor al precio base. Margen reducido.`
+      } else if (priceDifferencePercent < -20 && proposedMargin < 15) {
+        alertType = 'low_margin'
+        alertMessage = `MARGEN REDUCIDO: ${Math.abs(priceDifferencePercent).toFixed(1)}% menor al precio base. Margen: ${proposedMargin.toFixed(1)}%`
         alertSeverity = 'medium'
       }
     }
 
     // Determine price position vs market
     if (competitorCount > 0) {
-      if (proposedPriceNum < averagePrice * 0.9) {
-        pricePosition = 'below'
-      } else if (proposedPriceNum > averagePrice * 1.1) {
-        pricePosition = 'above'
+      const marketDiff = ((proposedPriceNum - averagePrice) / averagePrice) * 100
+
+      if (proposedPriceNum < averagePrice * 0.85) {
+        pricePosition = 'low'
+      } else if (proposedPriceNum > averagePrice * 1.15) {
+        pricePosition = 'high'
       } else {
         pricePosition = 'average'
       }
 
-      // Additional alert if price is significantly above market average
-      if (!alertTriggered && proposedPriceNum > averagePrice * 1.3) {
-        alertTriggered = true
-        const diff = ((proposedPriceNum - averagePrice) / averagePrice) * 100
-        alertReason = `Precio ${diff.toFixed(1)}% mayor al promedio del marketplace ($${averagePrice.toFixed(2)})`
+      // Additional alert if price is significantly above market average (and no other alert)
+      if (alertType === 'none' && proposedPriceNum > averagePrice * 1.25) {
+        alertType = 'above_market'
+        alertMessage = `SOBRE EL MERCADO: Tu precio es ${marketDiff.toFixed(1)}% mayor al promedio ($${averagePrice.toFixed(2)}). Competidores venden mas barato.`
         alertSeverity = 'medium'
+      }
+      // Alert if below minimum market price
+      else if (alertType === 'none' && proposedPriceNum < minPrice && minPrice > 0) {
+        alertMessage = `PRECIO COMPETITIVO: Eres el mas barato del mercado. El siguiente precio mas bajo es $${minPrice.toFixed(2)}.`
+        alertSeverity = 'low'
       }
     }
 
@@ -162,13 +187,30 @@ export async function GET(request: NextRequest) {
     let recommendation: 'ok' | 'warning' | 'requires_justification' = 'ok'
     if (alertSeverity === 'critical') {
       recommendation = 'requires_justification'
-    } else if (alertSeverity === 'high' || (alertTriggered && alertSeverity === 'medium')) {
+    } else if (alertSeverity === 'high') {
+      recommendation = 'warning'
+    } else if (alertType !== 'none' && alertSeverity === 'medium') {
       recommendation = 'warning'
     }
 
     // Calculate suggested price range
-    const minSuggestedPrice = costPrice * 1.1 // At least 10% margin
-    const maxSuggestedPrice = competitorCount > 0 ? averagePrice * 1.2 : sellingPrice * 1.5
+    const minSuggestedPrice = costPrice * 1.15 // At least 15% margin
+    const maxSuggestedPrice = competitorCount > 0
+      ? Math.min(averagePrice * 1.1, maxPrice || averagePrice * 1.2)
+      : sellingPrice * 1.3
+
+    // Calculate optimal suggested price
+    let suggestedOptimalPrice = sellingPrice
+    if (competitorCount > 0) {
+      // Optimal: slightly below average but above minimum margin
+      suggestedOptimalPrice = Math.max(
+        minSuggestedPrice,
+        Math.min(averagePrice * 0.95, maxSuggestedPrice)
+      )
+    } else {
+      // No competitors: use base selling price with good margin
+      suggestedOptimalPrice = Math.max(minSuggestedPrice, sellingPrice)
+    }
 
     return NextResponse.json({
       success: true,
@@ -181,11 +223,21 @@ export async function GET(request: NextRequest) {
           sellingPrice
         },
         proposedPrice: proposedPriceNum,
+        // Simplified fields for the wizard
+        alertType,
+        alertMessage,
+        percentDifference: priceDifferencePercent,
+        pricePosition,
+        averagePrice: averagePrice || 0,
+        minPrice: minPrice || 0,
+        maxPrice: maxPrice || 0,
+        competitorCount,
+        // Detailed analysis
         priceAnalysis: {
           priceDifferencePercent,
           pricePosition,
-          alertTriggered,
-          alertReason,
+          alertType,
+          alertMessage,
           alertSeverity,
           recommendation
         },
@@ -202,11 +254,13 @@ export async function GET(request: NextRequest) {
         },
         suggestedRange: {
           min: minSuggestedPrice,
-          max: maxSuggestedPrice
+          max: maxSuggestedPrice,
+          optimal: suggestedOptimalPrice
         },
         margins: {
-          proposedMargin: costPrice > 0 ? ((proposedPriceNum - costPrice) / costPrice) * 100 : 0,
-          baseMargin: costPrice > 0 ? ((sellingPrice - costPrice) / costPrice) * 100 : 0
+          proposedMargin,
+          baseMargin,
+          minRecommendedMargin: 15
         }
       }
     })
