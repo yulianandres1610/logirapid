@@ -42,18 +42,36 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url)
     const search = searchParams.get('search') || ''
     const status = searchParams.get('status')
+    const productId = searchParams.get('productId')
 
-    let query = `
-      SELECT
-        mw.*,
-        (SELECT COUNT(*) FROM market_warehouse_stock mws WHERE mws.warehouse_id = mw.id) as products_count,
-        (SELECT COALESCE(SUM(mws.quantity_on_hand), 0) FROM market_warehouse_stock mws WHERE mws.warehouse_id = mw.id) as total_stock
-      FROM market_warehouses mw
-      WHERE mw.company_id = $1
-    `
-
+    let query: string
     const queryParams: (string | number)[] = [companyId]
     let paramIndex = 2
+
+    // If productId is provided, get stock for that specific product
+    if (productId) {
+      query = `
+        SELECT
+          mw.*,
+          COALESCE(mws.quantity_on_hand, 0) as stock_on_hand,
+          COALESCE(mws.quantity_reserved, 0) as stock_reserved,
+          COALESCE(mws.quantity_on_hand, 0) - COALESCE(mws.quantity_reserved, 0) as stock_available
+        FROM market_warehouses mw
+        LEFT JOIN market_warehouse_stock mws ON mws.warehouse_id = mw.id AND mws.product_id = $${paramIndex}
+        WHERE mw.company_id = $1 AND mw.is_active = true
+      `
+      queryParams.push(parseInt(productId))
+      paramIndex++
+    } else {
+      query = `
+        SELECT
+          mw.*,
+          (SELECT COUNT(*) FROM market_warehouse_stock mws WHERE mws.warehouse_id = mw.id) as products_count,
+          (SELECT COALESCE(SUM(mws.quantity_on_hand), 0) FROM market_warehouse_stock mws WHERE mws.warehouse_id = mw.id) as total_stock
+        FROM market_warehouses mw
+        WHERE mw.company_id = $1
+      `
+    }
 
     if (search) {
       query += ` AND (LOWER(mw.name) LIKE $${paramIndex} OR LOWER(mw.code) LIKE $${paramIndex} OR LOWER(mw.city) LIKE $${paramIndex})`
@@ -61,7 +79,7 @@ export async function GET(request: NextRequest) {
       paramIndex++
     }
 
-    if (status && status !== 'all') {
+    if (status && status !== 'all' && !productId) {
       const isActive = status === 'active'
       query += ` AND mw.is_active = ${isActive}`
     }
@@ -104,6 +122,10 @@ export async function GET(request: NextRequest) {
           allowNegativeStock: row.allow_negative_stock,
           productsCount: parseInt(row.products_count) || 0,
           totalStock: parseInt(row.total_stock) || 0,
+          // Stock fields when productId is provided
+          stockOnHand: row.stock_on_hand != null ? parseInt(row.stock_on_hand) : 0,
+          stockReserved: row.stock_reserved != null ? parseInt(row.stock_reserved) : 0,
+          stockAvailable: row.stock_available != null ? parseInt(row.stock_available) : 0,
           createdAt: row.created_at,
           updatedAt: row.updated_at
         })),

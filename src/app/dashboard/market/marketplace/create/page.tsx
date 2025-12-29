@@ -829,20 +829,43 @@ export default function CreateMarketplaceListingPage() {
                           <input
                             type="number"
                             value={quantityListed}
-                            onChange={(e) => setQuantityListed(e.target.value)}
+                            onChange={(e) => {
+                              const val = e.target.value
+                              const num = parseInt(val)
+                              const maxStock = selectedWarehouse?.stockAvailable || 0
+                              // Allow empty input or valid numbers within range
+                              if (val === '' || (num >= 0 && num <= maxStock)) {
+                                setQuantityListed(val)
+                                if (errors.quantity) {
+                                  setErrors(prev => ({ ...prev, quantity: '' }))
+                                }
+                              } else if (num > maxStock) {
+                                setQuantityListed(maxStock.toString())
+                                setErrors(prev => ({ ...prev, quantity: `Maximo disponible: ${maxStock} unidades` }))
+                              }
+                            }}
                             min="1"
-                            max={selectedWarehouse?.stockAvailable || 999}
+                            max={selectedWarehouse?.stockAvailable || 0}
                             placeholder="0"
                             className={cn(
                               'w-full pl-10 pr-4 py-3 rounded-xl border focus:outline-none focus:ring-2 transition-all text-lg font-semibold',
                               theme === 'dark'
                                 ? 'bg-gray-900/50 border-gray-600 text-white focus:border-emerald-500 focus:ring-emerald-500/20'
-                                : 'bg-gray-50 border-gray-200 text-gray-900 focus:border-emerald-500 focus:ring-emerald-500/20'
+                                : 'bg-gray-50 border-gray-200 text-gray-900 focus:border-emerald-500 focus:ring-emerald-500/20',
+                              (selectedWarehouse?.stockAvailable || 0) <= 0 && 'opacity-50 cursor-not-allowed'
                             )}
+                            disabled={(selectedWarehouse?.stockAvailable || 0) <= 0}
                           />
                         </div>
-                        <p className="text-xs text-gray-500 mt-2">
-                          Stock disponible: {selectedWarehouse?.stockAvailable} unidades
+                        <p className={cn(
+                          "text-xs mt-2",
+                          (selectedWarehouse?.stockAvailable || 0) <= 0
+                            ? 'text-red-500'
+                            : 'text-gray-500'
+                        )}>
+                          {(selectedWarehouse?.stockAvailable || 0) <= 0
+                            ? 'Sin stock disponible en este almacen'
+                            : `Stock disponible: ${selectedWarehouse?.stockAvailable} unidades`}
                         </p>
                         {errors.quantity && (
                           <p className="text-sm text-red-500 mt-1">{errors.quantity}</p>
