@@ -136,7 +136,8 @@ export async function POST(
         ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
         ON CONFLICT (warehouse_id, product_id, lot_number) DO UPDATE SET
           quantity_initial = consignment_lot_inventory.quantity_initial + EXCLUDED.quantity_initial,
-          quantity_available = consignment_lot_inventory.quantity_available + EXCLUDED.quantity_available
+          quantity_available = consignment_lot_inventory.quantity_available + EXCLUDED.quantity_available,
+          expiration_date = COALESCE(EXCLUDED.expiration_date, consignment_lot_inventory.expiration_date)
       `, [
         payload.companyId,
         parseInt(order.warehouse_id),
