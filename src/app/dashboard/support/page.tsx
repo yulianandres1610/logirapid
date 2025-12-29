@@ -334,174 +334,122 @@ export default function SupportPage() {
           animate={{ opacity: 1, y: 0 }}
           className="space-y-6"
         >
-          {/* Stats Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
-            {/* Total Tickets */}
+          {/* Quick Contact Cards */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <motion.div
-              initial={{ opacity: 0, y: 20 }}
+              initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.1 }}
-              onClick={() => setSelectedStatus(null)}
+              transition={{ delay: 0.6 }}
+              whileHover={{ scale: 1.02 }}
               className={cn(
-                'relative overflow-hidden cursor-pointer',
+                'relative overflow-hidden rounded-2xl border shadow-xl p-5',
                 isDark
                   ? 'bg-gradient-to-br from-gray-800 to-gray-900 border-gray-700'
-                  : 'bg-gradient-to-br from-slate-50 to-white border-slate-200',
-                'rounded-2xl border shadow-xl',
-                selectedStatus === null && 'ring-2 ring-blue-500'
+                  : 'bg-gradient-to-br from-slate-50 to-white border-slate-200'
               )}
             >
               <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-400 to-blue-600"></div>
-              <div className="p-6">
-                <div className="flex items-start justify-between mb-4">
-                  <div className="flex items-center gap-3">
-                    <div className={cn(
-                      'p-3 rounded-xl shadow-sm',
-                      isDark
-                        ? 'bg-blue-900/30 border border-blue-800/50'
-                        : 'bg-gradient-to-br from-blue-50 to-blue-100 border border-blue-200'
-                    )}>
-                      <Ticket className="w-6 h-6 text-blue-600" />
-                    </div>
-                    <div>
-                      <p className={cn(
-                        'text-sm font-medium',
-                        isDark ? 'text-gray-400' : 'text-black'
-                      )}>Total Tickets</p>
-                      <p className={cn(
-                        'text-3xl font-bold mt-1',
-                        isDark ? 'text-white' : 'text-slate-900'
-                      )}>{stats.total}</p>
-                    </div>
-                  </div>
+              <div className="flex items-center gap-3">
+                <div className={cn(
+                  'p-3 rounded-xl',
+                  isDark ? 'bg-blue-900/30' : 'bg-blue-100'
+                )}>
+                  <HelpCircle className="w-5 h-5 text-blue-500" />
+                </div>
+                <div>
+                  <h3 className={cn('font-medium', isDark ? 'text-white' : 'text-gray-900')}>
+                    Chat con AI
+                  </h3>
+                  <p className={cn('text-sm', isDark ? 'text-gray-400' : 'text-gray-500')}>
+                    Respuestas instantaneas 24/7
+                  </p>
                 </div>
               </div>
+              <p className={cn('mt-3 text-sm', isDark ? 'text-gray-300' : 'text-gray-600')}>
+                Usa el boton flotante en la esquina inferior derecha.
+              </p>
             </motion.div>
 
-            {/* Abiertos */}
             <motion.div
-              initial={{ opacity: 0, y: 20 }}
+              initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.2 }}
-              onClick={() => setSelectedStatus(selectedStatus === 'open' ? null : 'open')}
+              transition={{ delay: 0.7 }}
+              whileHover={{ scale: 1.02 }}
               className={cn(
-                'relative overflow-hidden cursor-pointer',
+                'relative overflow-hidden rounded-2xl border shadow-xl p-5',
                 isDark
                   ? 'bg-gradient-to-br from-gray-800 to-gray-900 border-gray-700'
-                  : 'bg-gradient-to-br from-slate-50 to-white border-slate-200',
-                'rounded-2xl border shadow-xl',
-                selectedStatus === 'open' && 'ring-2 ring-blue-500'
-              )}
-            >
-              <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-400 to-blue-600"></div>
-              <div className="p-6">
-                <div className="flex items-start justify-between mb-4">
-                  <div className="flex items-center gap-3">
-                    <div className={cn(
-                      'p-3 rounded-xl shadow-sm',
-                      isDark
-                        ? 'bg-blue-900/30 border border-blue-800/50'
-                        : 'bg-gradient-to-br from-blue-50 to-blue-100 border border-blue-200'
-                    )}>
-                      <Clock className="w-6 h-6 text-blue-600" />
-                    </div>
-                    <div>
-                      <p className={cn(
-                        'text-sm font-medium',
-                        isDark ? 'text-gray-400' : 'text-black'
-                      )}>Abiertos</p>
-                      <p className={cn(
-                        'text-3xl font-bold mt-1',
-                        isDark ? 'text-white' : 'text-slate-900'
-                      )}>{stats.open}</p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </motion.div>
-
-            {/* En Progreso */}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.3 }}
-              onClick={() => setSelectedStatus(selectedStatus === 'in_progress' ? null : 'in_progress')}
-              className={cn(
-                'relative overflow-hidden cursor-pointer',
-                isDark
-                  ? 'bg-gradient-to-br from-gray-800 to-gray-900 border-gray-700'
-                  : 'bg-gradient-to-br from-slate-50 to-white border-slate-200',
-                'rounded-2xl border shadow-xl',
-                selectedStatus === 'in_progress' && 'ring-2 ring-amber-500'
-              )}
-            >
-              <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-amber-400 to-orange-600"></div>
-              <div className="p-6">
-                <div className="flex items-start justify-between mb-4">
-                  <div className="flex items-center gap-3">
-                    <div className={cn(
-                      'p-3 rounded-xl shadow-sm',
-                      isDark
-                        ? 'bg-amber-900/30 border border-amber-800/50'
-                        : 'bg-gradient-to-br from-amber-50 to-orange-100 border border-amber-200'
-                    )}>
-                      <AlertCircle className="w-6 h-6 text-amber-600" />
-                    </div>
-                    <div>
-                      <p className={cn(
-                        'text-sm font-medium',
-                        isDark ? 'text-gray-400' : 'text-black'
-                      )}>En Progreso</p>
-                      <p className={cn(
-                        'text-3xl font-bold mt-1',
-                        isDark ? 'text-white' : 'text-slate-900'
-                      )}>{stats.inProgress}</p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </motion.div>
-
-            {/* Resueltos */}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.4 }}
-              onClick={() => setSelectedStatus(selectedStatus === 'resolved' ? null : 'resolved')}
-              className={cn(
-                'relative overflow-hidden cursor-pointer',
-                isDark
-                  ? 'bg-gradient-to-br from-gray-800 to-gray-900 border-gray-700'
-                  : 'bg-gradient-to-br from-slate-50 to-white border-slate-200',
-                'rounded-2xl border shadow-xl',
-                selectedStatus === 'resolved' && 'ring-2 ring-emerald-500'
+                  : 'bg-gradient-to-br from-slate-50 to-white border-slate-200'
               )}
             >
               <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-emerald-400 to-green-600"></div>
-              <div className="p-6">
-                <div className="flex items-start justify-between mb-4">
-                  <div className="flex items-center gap-3">
-                    <div className={cn(
-                      'p-3 rounded-xl shadow-sm',
-                      isDark
-                        ? 'bg-emerald-900/30 border border-emerald-800/50'
-                        : 'bg-gradient-to-br from-emerald-50 to-green-100 border border-emerald-200'
-                    )}>
-                      <CheckCircle2 className="w-6 h-6 text-emerald-600" />
-                    </div>
-                    <div>
-                      <p className={cn(
-                        'text-sm font-medium',
-                        isDark ? 'text-gray-400' : 'text-black'
-                      )}>Resueltos</p>
-                      <p className={cn(
-                        'text-3xl font-bold mt-1',
-                        isDark ? 'text-white' : 'text-slate-900'
-                      )}>{stats.resolved}</p>
-                    </div>
-                  </div>
+              <div className="flex items-center gap-3">
+                <div className={cn(
+                  'p-3 rounded-xl',
+                  isDark ? 'bg-emerald-900/30' : 'bg-emerald-100'
+                )}>
+                  <Mail className="w-5 h-5 text-emerald-500" />
+                </div>
+                <div>
+                  <h3 className={cn('font-medium', isDark ? 'text-white' : 'text-gray-900')}>
+                    Email de Soporte
+                  </h3>
+                  <p className={cn('text-sm', isDark ? 'text-gray-400' : 'text-gray-500')}>
+                    Respuesta en 24 horas
+                  </p>
                 </div>
               </div>
+              <a
+                href="mailto:soporte@logirapid.com"
+                className={cn(
+                  'mt-3 text-sm flex items-center gap-1',
+                  isDark ? 'text-blue-400 hover:text-blue-300' : 'text-blue-600 hover:text-blue-700'
+                )}
+              >
+                soporte@logirapid.com
+                <ExternalLink className="w-3 h-3" />
+              </a>
+            </motion.div>
+
+            <motion.div
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.8 }}
+              whileHover={{ scale: 1.02 }}
+              className={cn(
+                'relative overflow-hidden rounded-2xl border shadow-xl p-5',
+                isDark
+                  ? 'bg-gradient-to-br from-gray-800 to-gray-900 border-gray-700'
+                  : 'bg-gradient-to-br from-slate-50 to-white border-slate-200'
+              )}
+            >
+              <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-purple-400 to-purple-600"></div>
+              <div className="flex items-center gap-3">
+                <div className={cn(
+                  'p-3 rounded-xl',
+                  isDark ? 'bg-purple-900/30' : 'bg-purple-100'
+                )}>
+                  <Phone className="w-5 h-5 text-purple-500" />
+                </div>
+                <div>
+                  <h3 className={cn('font-medium', isDark ? 'text-white' : 'text-gray-900')}>
+                    Telefono
+                  </h3>
+                  <p className={cn('text-sm', isDark ? 'text-gray-400' : 'text-gray-500')}>
+                    Lun-Vie 9am-6pm EST
+                  </p>
+                </div>
+              </div>
+              <a
+                href="tel:+16452432403"
+                className={cn(
+                  'mt-3 text-sm flex items-center gap-1',
+                  isDark ? 'text-blue-400 hover:text-blue-300' : 'text-blue-600 hover:text-blue-700'
+                )}
+              >
+                +1 (645) 243-2403
+                <ExternalLink className="w-3 h-3" />
+              </a>
             </motion.div>
           </div>
 
@@ -509,7 +457,7 @@ export default function SupportPage() {
           <motion.div
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.5 }}
+            transition={{ delay: 0.4 }}
             className={cn(
               'p-4 rounded-2xl border shadow-xl',
               isDark
@@ -623,125 +571,6 @@ export default function SupportPage() {
               </motion.button>
             </div>
           </motion.div>
-
-          {/* Quick Contact Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <motion.div
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.6 }}
-              whileHover={{ scale: 1.02 }}
-              className={cn(
-                'relative overflow-hidden rounded-2xl border shadow-xl p-5',
-                isDark
-                  ? 'bg-gradient-to-br from-gray-800 to-gray-900 border-gray-700'
-                  : 'bg-gradient-to-br from-slate-50 to-white border-slate-200'
-              )}
-            >
-              <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-400 to-blue-600"></div>
-              <div className="flex items-center gap-3">
-                <div className={cn(
-                  'p-3 rounded-xl',
-                  isDark ? 'bg-blue-900/30' : 'bg-blue-100'
-                )}>
-                  <HelpCircle className="w-5 h-5 text-blue-500" />
-                </div>
-                <div>
-                  <h3 className={cn('font-medium', isDark ? 'text-white' : 'text-gray-900')}>
-                    Chat con AI
-                  </h3>
-                  <p className={cn('text-sm', isDark ? 'text-gray-400' : 'text-gray-500')}>
-                    Respuestas instantaneas 24/7
-                  </p>
-                </div>
-              </div>
-              <p className={cn('mt-3 text-sm', isDark ? 'text-gray-300' : 'text-gray-600')}>
-                Usa el boton flotante en la esquina inferior derecha.
-              </p>
-            </motion.div>
-
-            <motion.div
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.7 }}
-              whileHover={{ scale: 1.02 }}
-              className={cn(
-                'relative overflow-hidden rounded-2xl border shadow-xl p-5',
-                isDark
-                  ? 'bg-gradient-to-br from-gray-800 to-gray-900 border-gray-700'
-                  : 'bg-gradient-to-br from-slate-50 to-white border-slate-200'
-              )}
-            >
-              <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-emerald-400 to-green-600"></div>
-              <div className="flex items-center gap-3">
-                <div className={cn(
-                  'p-3 rounded-xl',
-                  isDark ? 'bg-emerald-900/30' : 'bg-emerald-100'
-                )}>
-                  <Mail className="w-5 h-5 text-emerald-500" />
-                </div>
-                <div>
-                  <h3 className={cn('font-medium', isDark ? 'text-white' : 'text-gray-900')}>
-                    Email de Soporte
-                  </h3>
-                  <p className={cn('text-sm', isDark ? 'text-gray-400' : 'text-gray-500')}>
-                    Respuesta en 24 horas
-                  </p>
-                </div>
-              </div>
-              <a
-                href="mailto:soporte@logirapid.com"
-                className={cn(
-                  'mt-3 text-sm flex items-center gap-1',
-                  isDark ? 'text-blue-400 hover:text-blue-300' : 'text-blue-600 hover:text-blue-700'
-                )}
-              >
-                soporte@logirapid.com
-                <ExternalLink className="w-3 h-3" />
-              </a>
-            </motion.div>
-
-            <motion.div
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.8 }}
-              whileHover={{ scale: 1.02 }}
-              className={cn(
-                'relative overflow-hidden rounded-2xl border shadow-xl p-5',
-                isDark
-                  ? 'bg-gradient-to-br from-gray-800 to-gray-900 border-gray-700'
-                  : 'bg-gradient-to-br from-slate-50 to-white border-slate-200'
-              )}
-            >
-              <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-purple-400 to-purple-600"></div>
-              <div className="flex items-center gap-3">
-                <div className={cn(
-                  'p-3 rounded-xl',
-                  isDark ? 'bg-purple-900/30' : 'bg-purple-100'
-                )}>
-                  <Phone className="w-5 h-5 text-purple-500" />
-                </div>
-                <div>
-                  <h3 className={cn('font-medium', isDark ? 'text-white' : 'text-gray-900')}>
-                    Telefono
-                  </h3>
-                  <p className={cn('text-sm', isDark ? 'text-gray-400' : 'text-gray-500')}>
-                    Lun-Vie 9am-6pm EST
-                  </p>
-                </div>
-              </div>
-              <a
-                href="tel:+13059997777"
-                className={cn(
-                  'mt-3 text-sm flex items-center gap-1',
-                  isDark ? 'text-blue-400 hover:text-blue-300' : 'text-blue-600 hover:text-blue-700'
-                )}
-              >
-                +1 (305) 999-7777
-                <ExternalLink className="w-3 h-3" />
-              </a>
-            </motion.div>
-          </div>
 
           {/* FAQ Section */}
           {activeTab === 'faq' && (
