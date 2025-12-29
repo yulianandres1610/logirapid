@@ -121,6 +121,24 @@ export default function CreateProductPage() {
   } | null>(null)
   const [showAiSuggestion, setShowAiSuggestion] = useState(false)
 
+  // Barcode image lookup states
+  const [existingImage, setExistingImage] = useState<{
+    url: string
+    usedBy: number
+    source: string
+  } | null>(null)
+  const [checkingImage, setCheckingImage] = useState(false)
+  const [useExistingImage, setUseExistingImage] = useState(false)
+
+  // AI Image processing states
+  const [processWithAI, setProcessWithAI] = useState(false)
+  const [aiProcessing, setAiProcessing] = useState(false)
+  const [aiImageResult, setAiImageResult] = useState<{
+    qualityScore?: number
+    suggestions?: string[]
+  } | null>(null)
+  const [generatingImage, setGeneratingImage] = useState(false)
+
   const [formData, setFormData] = useState({
     name: '',
     description: '',
@@ -218,6 +236,82 @@ export default function CreateProductPage() {
       }))
       setShowAiSuggestion(false)
     }
+  }
+
+  // Check for existing image by barcode
+  useEffect(() => {
+    const checkImageByBarcode = async () => {
+      if (formData.barcode && formData.barcode.length >= 8) {
+        setCheckingImage(true)
+        try {
+          const res = await fetch(`/api/products/image-by-barcode?barcode=${formData.barcode}`)
+          const data = await res.json()
+          if (data.success && data.found) {
+            setExistingImage({
+              url: data.data.imageUrl,
+              usedBy: data.data.usedBy || 1,
+              source: data.data.source || 'database'
+            })
+          } else {
+            setExistingImage(null)
+          }
+        } catch (error) {
+          console.error('Error checking barcode image:', error)
+          setExistingImage(null)
+        }
+        setCheckingImage(false)
+      } else {
+        setExistingImage(null)
+      }
+    }
+
+    const timer = setTimeout(checkImageByBarcode, 500)
+    return () => clearTimeout(timer)
+  }, [formData.barcode])
+
+  // Use existing image when user confirms
+  const useFoundImage = () => {
+    if (existingImage) {
+      setFormData(prev => ({ ...prev, imageUrl: existingImage.url }))
+      setUseExistingImage(true)
+    }
+  }
+
+  // Generate image with AI
+  const generateImageWithAI = async () => {
+    if (!formData.name.trim()) {
+      setErrors({ ...errors, image: 'Ingresa el nombre del producto primero' })
+      return
+    }
+
+    setGeneratingImage(true)
+    try {
+      const res = await fetch('/api/ai/process-image', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'generate',
+          productName: formData.name,
+          productDescription: formData.description,
+          barcode: formData.barcode,
+          saveToStorage: true
+        })
+      })
+
+      const data = await res.json()
+      if (data.success && data.data?.imageUrl) {
+        setFormData(prev => ({ ...prev, imageUrl: data.data.imageUrl }))
+      } else {
+        // Show search terms as suggestion
+        if (data.data?.searchTerms) {
+          setErrors({ ...errors, image: `Busca manualmente: ${data.data.searchTerms.join(', ')}` })
+        }
+      }
+    } catch (error) {
+      console.error('Error generating image:', error)
+      setErrors({ ...errors, image: 'Error al generar imagen' })
+    }
+    setGeneratingImage(false)
   }
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -1098,75 +1192,205 @@ export default function CreateProductPage() {
                       Imagen del Producto
                     </h2>
 
-                    <motion.div
-                      onClick={() => fileInputRef.current?.click()}
-                      whileHover={{ scale: 1.01 }}
-                      whileTap={{ scale: 0.99 }}
-                      className={cn(
-                        'border-2 border-dashed rounded-2xl p-12 text-center cursor-pointer transition-all',
-                        theme === 'dark'
-                          ? 'border-gray-600 hover:border-purple-500/50 hover:bg-purple-500/5'
-                          : 'border-gray-300 hover:border-purple-400 hover:bg-purple-50'
-                      )}
-                    >
-                      <input
-                        ref={fileInputRef}
-                        type="file"
-                        accept="image/*"
-                        onChange={handleFileChange}
-                        className="hidden"
-                      />
-                      {formData.imageUrl ? (
-                        <div className="relative inline-block">
+                    {/* Existing Image Found Section */}
+                    {existingImage && !formData.imageUrl && (
+                      <motion.div
+                        initial={{ opacity: 0, y: -10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        className={cn(
+                          "rounded-xl p-4 border-2",
+                          theme === 'dark'
+                            ? 'bg-green-500/10 border-green-500/30'
+                            : 'bg-green-50 border-green-200'
+                        )}
+                      >
+                        <div className="flex items-start gap-4">
                           <img
-                            src={formData.imageUrl}
-                            alt="Preview"
-                            className="max-w-xs max-h-64 rounded-xl mx-auto object-contain shadow-lg"
+                            src={existingImage.url}
+                            alt="Imagen existente"
+                            className="w-24 h-24 rounded-lg object-cover shadow"
                           />
-                          <motion.button
-                            whileHover={{ scale: 1.1 }}
-                            whileTap={{ scale: 0.9 }}
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              setFormData({ ...formData, imageUrl: '', imageFile: null })
-                            }}
-                            className="absolute -top-3 -right-3 w-8 h-8 bg-red-500 text-white rounded-full flex items-center justify-center shadow-lg"
-                          >
-                            <X className="w-4 h-4" />
-                          </motion.button>
-                        </div>
-                      ) : (
-                        <div className="space-y-4">
-                          <div className={cn(
-                            "w-20 h-20 mx-auto rounded-2xl flex items-center justify-center",
-                            theme === 'dark' ? 'bg-gray-700' : 'bg-gray-100'
-                          )}>
-                            <Upload className="w-10 h-10 text-gray-400" />
-                          </div>
-                          <div>
-                            <p className={cn(
-                              "font-medium",
-                              theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
+                          <div className="flex-1">
+                            <h4 className={cn(
+                              "font-semibold flex items-center gap-2",
+                              theme === 'dark' ? 'text-green-400' : 'text-green-700'
                             )}>
-                              Haz clic para seleccionar una imagen
-                            </p>
+                              <Check className="w-4 h-4" />
+                              Imagen encontrada
+                            </h4>
                             <p className={cn(
                               "text-sm mt-1",
-                              theme === 'dark' ? 'text-gray-500' : 'text-gray-500'
+                              theme === 'dark' ? 'text-gray-400' : 'text-gray-600'
                             )}>
-                              PNG, JPG o WEBP hasta 5MB
+                              Este codigo de barras ya tiene una imagen registrada.
+                              {existingImage.usedBy > 1 && ` Usada por ${existingImage.usedBy} productos.`}
                             </p>
+                            <div className="flex gap-2 mt-3">
+                              <motion.button
+                                whileHover={{ scale: 1.02 }}
+                                whileTap={{ scale: 0.98 }}
+                                onClick={useFoundImage}
+                                className="px-4 py-2 bg-green-500 text-white rounded-lg text-sm font-medium hover:bg-green-600 transition-colors"
+                              >
+                                Usar esta imagen
+                              </motion.button>
+                              <motion.button
+                                whileHover={{ scale: 1.02 }}
+                                whileTap={{ scale: 0.98 }}
+                                onClick={() => setExistingImage(null)}
+                                className={cn(
+                                  "px-4 py-2 rounded-lg text-sm font-medium transition-colors",
+                                  theme === 'dark'
+                                    ? 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                                    : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                                )}
+                              >
+                                Subir otra
+                              </motion.button>
+                            </div>
                           </div>
                         </div>
-                      )}
-                    </motion.div>
+                      </motion.div>
+                    )}
+
+                    {/* Checking barcode indicator */}
+                    {checkingImage && (
+                      <div className="flex items-center justify-center gap-2 py-2">
+                        <Loader2 className="w-4 h-4 animate-spin text-purple-500" />
+                        <span className={cn(
+                          "text-sm",
+                          theme === 'dark' ? 'text-gray-400' : 'text-gray-600'
+                        )}>
+                          Buscando imagen por codigo de barras...
+                        </span>
+                      </div>
+                    )}
+
+                    {/* Upload Area */}
+                    {(!existingImage || formData.imageUrl) && (
+                      <motion.div
+                        onClick={() => fileInputRef.current?.click()}
+                        whileHover={{ scale: 1.01 }}
+                        whileTap={{ scale: 0.99 }}
+                        className={cn(
+                          'border-2 border-dashed rounded-2xl p-8 text-center cursor-pointer transition-all',
+                          theme === 'dark'
+                            ? 'border-gray-600 hover:border-purple-500/50 hover:bg-purple-500/5'
+                            : 'border-gray-300 hover:border-purple-400 hover:bg-purple-50'
+                        )}
+                      >
+                        <input
+                          ref={fileInputRef}
+                          type="file"
+                          accept="image/*"
+                          onChange={handleFileChange}
+                          className="hidden"
+                        />
+                        {formData.imageUrl ? (
+                          <div className="relative inline-block">
+                            <img
+                              src={formData.imageUrl}
+                              alt="Preview"
+                              className="max-w-xs max-h-48 rounded-xl mx-auto object-contain shadow-lg"
+                            />
+                            <motion.button
+                              whileHover={{ scale: 1.1 }}
+                              whileTap={{ scale: 0.9 }}
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                setFormData({ ...formData, imageUrl: '', imageFile: null })
+                                setUseExistingImage(false)
+                              }}
+                              className="absolute -top-3 -right-3 w-8 h-8 bg-red-500 text-white rounded-full flex items-center justify-center shadow-lg"
+                            >
+                              <X className="w-4 h-4" />
+                            </motion.button>
+                          </div>
+                        ) : (
+                          <div className="space-y-3">
+                            <div className={cn(
+                              "w-16 h-16 mx-auto rounded-xl flex items-center justify-center",
+                              theme === 'dark' ? 'bg-gray-700' : 'bg-gray-100'
+                            )}>
+                              <Upload className="w-8 h-8 text-gray-400" />
+                            </div>
+                            <div>
+                              <p className={cn(
+                                "font-medium",
+                                theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
+                              )}>
+                                Arrastra o haz clic para subir
+                              </p>
+                              <p className={cn(
+                                "text-sm mt-1",
+                                theme === 'dark' ? 'text-gray-500' : 'text-gray-500'
+                              )}>
+                                PNG, JPG o WEBP hasta 5MB
+                              </p>
+                            </div>
+                          </div>
+                        )}
+                      </motion.div>
+                    )}
+
+                    {/* AI Options */}
+                    {!formData.imageUrl && !existingImage && (
+                      <div className="space-y-3">
+                        <div className={cn(
+                          "flex items-center gap-2 text-sm",
+                          theme === 'dark' ? 'text-gray-400' : 'text-gray-500'
+                        )}>
+                          <div className="flex-1 h-px bg-gradient-to-r from-transparent via-gray-300 to-transparent dark:via-gray-600" />
+                          <span className="flex items-center gap-1">
+                            <Sparkles className="w-4 h-4" />
+                            Opciones con IA
+                          </span>
+                          <div className="flex-1 h-px bg-gradient-to-r from-transparent via-gray-300 to-transparent dark:via-gray-600" />
+                        </div>
+
+                        <motion.button
+                          whileHover={{ scale: 1.01 }}
+                          whileTap={{ scale: 0.99 }}
+                          onClick={generateImageWithAI}
+                          disabled={generatingImage || !formData.name.trim()}
+                          className={cn(
+                            "w-full py-3 px-4 rounded-xl flex items-center justify-center gap-2 font-medium transition-all",
+                            generatingImage || !formData.name.trim()
+                              ? 'bg-gray-200 text-gray-400 cursor-not-allowed dark:bg-gray-700 dark:text-gray-500'
+                              : 'bg-gradient-to-r from-purple-500 to-indigo-500 text-white hover:from-purple-600 hover:to-indigo-600 shadow-lg shadow-purple-500/20'
+                          )}
+                        >
+                          {generatingImage ? (
+                            <>
+                              <Loader2 className="w-5 h-5 animate-spin" />
+                              Generando con Gemini AI...
+                            </>
+                          ) : (
+                            <>
+                              <Wand2 className="w-5 h-5" />
+                              Generar imagen con IA
+                            </>
+                          )}
+                        </motion.button>
+
+                        {!formData.name.trim() && (
+                          <p className={cn(
+                            "text-xs text-center",
+                            theme === 'dark' ? 'text-gray-500' : 'text-gray-400'
+                          )}>
+                            Ingresa el nombre del producto en el paso anterior para usar esta opcion
+                          </p>
+                        )}
+                      </div>
+                    )}
+
                     {errors.image && <p className="text-red-500 text-sm text-center">{errors.image}</p>}
 
                     <p className={cn(
                       "text-sm text-center",
                       theme === 'dark' ? 'text-gray-500' : 'text-gray-500'
                     )}>
-                      Este paso es opcional. Puedes agregar la imagen después.
+                      Este paso es opcional. Puedes agregar la imagen despues.
                     </p>
                   </motion.div>
                 )}
