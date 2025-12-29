@@ -155,8 +155,8 @@ export async function POST(
       // Create return line
       await client.query(`
         INSERT INTO consignment_return_lines (
-          return_id, product_id, lot_inventory_id, quantity, unit_cost, total_value
-        ) VALUES ($1, $2, $3, $4, $5, $6)
+          return_id, product_id, lot_inventory_id, quantity, quantity_to_return, unit_cost, total_value
+        ) VALUES ($1, $2, $3, $4, $4, $5, $6)
       `, [returnId, productId, lotInventoryId, quantity, lot.unit_cost, lineValue])
 
       // Update lot inventory: decrease available, increase returned
