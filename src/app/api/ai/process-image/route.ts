@@ -127,10 +127,22 @@ export async function POST(request: NextRequest) {
     if (shouldSave && result.imageBase64) {
       try {
         const imageBuffer = Buffer.from(result.imageBase64, 'base64')
+        // Detectar tipo de imagen desde los primeros bytes
+        let contentType = 'image/jpeg' // Default
+        if (result.imageBase64.startsWith('iVBORw0KGgo')) {
+          contentType = 'image/png'
+        } else if (result.imageBase64.startsWith('R0lGOD')) {
+          contentType = 'image/gif'
+        } else if (result.imageBase64.startsWith('UklGR')) {
+          contentType = 'image/webp'
+        }
+
+        console.log(`[AI Process Image] Saving image with content type: ${contentType}`)
+
         const { url, path } = await uploadProductImageByBarcode(
           barcode,
           imageBuffer,
-          'image/webp'
+          contentType
         )
 
         // Guardar en base de datos
@@ -169,8 +181,8 @@ export async function POST(request: NextRequest) {
           path,
           url,
           true,
-          'gemini-2.0-flash-exp',
-          'image/webp',
+          'gemini-3-pro-image-preview',
+          contentType,
           imageBuffer.length,
           payload.userId,
           payload.companyId

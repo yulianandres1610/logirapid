@@ -138,6 +138,7 @@ export default function CreateProductPage() {
     suggestions?: string[]
   } | null>(null)
   const [generatingImage, setGeneratingImage] = useState(false)
+  const [cleaningImage, setCleaningImage] = useState(false)
 
   const [formData, setFormData] = useState({
     name: '',
@@ -344,6 +345,90 @@ export default function CreateProductPage() {
       setErrors({ ...errors, image: 'Error al generar imagen' })
     }
     setGeneratingImage(false)
+  }
+
+  // Clean image with AI (remove background)
+  const cleanImageWithAI = async () => {
+    if (!formData.imageUrl && !formData.imageFile) {
+      setErrors({ ...errors, image: 'Primero sube una imagen para limpiar' })
+      return
+    }
+
+    setCleaningImage(true)
+    setErrors({ ...errors, image: '' })
+
+    try {
+      // Convertir imagen a base64
+      let imageBase64 = ''
+
+      if (formData.imageFile) {
+        // Si hay archivo, convertirlo
+        const reader = new FileReader()
+        imageBase64 = await new Promise((resolve) => {
+          reader.onload = () => resolve(reader.result as string)
+          reader.readAsDataURL(formData.imageFile!)
+        })
+      } else if (formData.imageUrl) {
+        // Si es URL, intentar descargar y convertir
+        if (formData.imageUrl.startsWith('data:')) {
+          imageBase64 = formData.imageUrl
+        } else {
+          // Fetch la imagen y convertir a base64
+          const response = await fetch(formData.imageUrl)
+          const blob = await response.blob()
+          const reader = new FileReader()
+          imageBase64 = await new Promise((resolve) => {
+            reader.onload = () => resolve(reader.result as string)
+            reader.readAsDataURL(blob)
+          })
+        }
+      }
+
+      if (!imageBase64) {
+        setErrors({ ...errors, image: 'No se pudo procesar la imagen' })
+        setCleaningImage(false)
+        return
+      }
+
+      // Ensure we have a barcode before cleaning
+      const barcodeToUse = ensureBarcode()
+
+      const res = await fetch('/api/ai/process-image', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'clean',
+          imageBase64: imageBase64,
+          barcode: barcodeToUse,
+          saveToStorage: true
+        })
+      })
+
+      const data = await res.json()
+
+      if (data.success) {
+        // Usar la URL guardada o el base64 devuelto
+        const cleanedImage = data.data?.imageUrl ||
+          (data.data?.imageBase64 ? `data:image/jpeg;base64,${data.data.imageBase64}` : null)
+
+        if (cleanedImage) {
+          setFormData(prev => ({
+            ...prev,
+            imageUrl: cleanedImage,
+            imageFile: null // Limpiar el archivo ya que ahora tenemos URL
+          }))
+        } else {
+          setErrors({ ...errors, image: 'La imagen no pudo ser limpiada' })
+        }
+      } else {
+        setErrors({ ...errors, image: data.error || 'Error al limpiar imagen' })
+      }
+    } catch (error) {
+      console.error('Error cleaning image:', error)
+      setErrors({ ...errors, image: 'Error al limpiar imagen con IA' })
+    }
+
+    setCleaningImage(false)
   }
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -1324,23 +1409,54 @@ export default function CreateProductPage() {
                           className="hidden"
                         />
                         {formData.imageUrl ? (
-                          <div className="relative inline-block">
-                            <img
-                              src={formData.imageUrl}
-                              alt="Preview"
-                              className="max-w-xs max-h-48 rounded-xl mx-auto object-contain shadow-lg"
-                            />
+                          <div className="space-y-4">
+                            <div className="relative inline-block">
+                              <img
+                                src={formData.imageUrl}
+                                alt="Preview"
+                                className="max-w-xs max-h-48 rounded-xl mx-auto object-contain shadow-lg"
+                              />
+                              <motion.button
+                                whileHover={{ scale: 1.1 }}
+                                whileTap={{ scale: 0.9 }}
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  setFormData({ ...formData, imageUrl: '', imageFile: null })
+                                  setUseExistingImage(false)
+                                }}
+                                className="absolute -top-3 -right-3 w-8 h-8 bg-red-500 text-white rounded-full flex items-center justify-center shadow-lg"
+                              >
+                                <X className="w-4 h-4" />
+                              </motion.button>
+                            </div>
+
+                            {/* Clean Image Button */}
                             <motion.button
-                              whileHover={{ scale: 1.1 }}
-                              whileTap={{ scale: 0.9 }}
+                              whileHover={{ scale: 1.02 }}
+                              whileTap={{ scale: 0.98 }}
                               onClick={(e) => {
                                 e.stopPropagation()
-                                setFormData({ ...formData, imageUrl: '', imageFile: null })
-                                setUseExistingImage(false)
+                                cleanImageWithAI()
                               }}
-                              className="absolute -top-3 -right-3 w-8 h-8 bg-red-500 text-white rounded-full flex items-center justify-center shadow-lg"
+                              disabled={cleaningImage}
+                              className={cn(
+                                "w-full py-2.5 px-4 rounded-xl flex items-center justify-center gap-2 font-medium transition-all text-sm",
+                                cleaningImage
+                                  ? 'bg-gray-200 text-gray-400 cursor-not-allowed dark:bg-gray-700 dark:text-gray-500'
+                                  : 'bg-gradient-to-r from-blue-500 to-cyan-500 text-white hover:from-blue-600 hover:to-cyan-600 shadow-md shadow-blue-500/20'
+                              )}
                             >
-                              <X className="w-4 h-4" />
+                              {cleaningImage ? (
+                                <>
+                                  <Loader2 className="w-4 h-4 animate-spin" />
+                                  Limpiando fondo...
+                                </>
+                              ) : (
+                                <>
+                                  <Sparkles className="w-4 h-4" />
+                                  Limpiar imagen (fondo blanco)
+                                </>
+                              )}
                             </motion.button>
                           </div>
                         ) : (

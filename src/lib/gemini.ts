@@ -62,7 +62,7 @@ function extractImageFromResponse(response: any): string | null {
 }
 
 /**
- * Limpia una imagen de producto
+ * Limpia una imagen de producto usando IA
  * - Remueve fondo distractivo
  * - Centra el producto
  * - Aplica fondo blanco profesional
@@ -73,46 +73,94 @@ export async function cleanProductImage(imageBase64: string): Promise<{
   description?: string
   error?: string
 }> {
-  try {
-    const genAI = getGeminiClient()
-    const model = genAI.getGenerativeModel({ model: GEMINI_MODEL })
-
-    const prompt = `Analiza esta imagen de producto y describe:
-1. Que producto es
-2. Sus caracteristicas visuales principales
-3. El estado del fondo (limpio, con ruido, etc)
-
-Responde en formato JSON:
-{"product": "nombre", "features": ["caracteristica1", "caracteristica2"], "backgroundStatus": "descripcion del fondo", "needsCleaning": true/false}`
-
-    const result = await model.generateContent([
-      prompt,
-      base64ToGeminiPart(imageBase64)
-    ])
-
-    const responseText = result.response.text()
-
-    // Intentar parsear JSON de la respuesta
-    let analysis
-    try {
-      const jsonMatch = responseText.match(/\{[\s\S]*\}/)
-      if (jsonMatch) {
-        analysis = JSON.parse(jsonMatch[0])
-      }
-    } catch {
-      analysis = { product: 'Producto', needsCleaning: false }
-    }
-
-    return {
-      success: true,
-      imageBase64: imageBase64, // Por ahora devolvemos la original
-      description: `Producto: ${analysis.product}. ${analysis.backgroundStatus || 'Fondo analizado'}`
-    }
-  } catch (error) {
-    console.error('[Gemini] Error cleaning image:', error)
+  if (!GOOGLE_AI_API_KEY) {
     return {
       success: false,
-      error: error instanceof Error ? error.message : 'Error al procesar imagen'
+      error: 'GOOGLE_AI_API_KEY no configurada'
+    }
+  }
+
+  try {
+    console.log('[Gemini Clean] Processing image to remove background...')
+
+    // Limpiar el base64 si tiene prefijo
+    const cleanBase64 = imageBase64.replace(/^data:image\/\w+;base64,/, '')
+
+    // Usar Gemini para editar la imagen y remover el fondo
+    const prompt = `Edit this product image:
+1. Remove the background completely
+2. Replace the background with pure white (#FFFFFF)
+3. Keep only the main product, removing all other elements
+4. Center the product in the frame
+5. Maintain the product's original colors and details
+6. Output the edited image with the clean white background
+
+This is for e-commerce product photography - the result should look professional with a clean white background.`
+
+    const response = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/${IMAGE_GENERATION_MODEL}:generateContent?key=${GOOGLE_AI_API_KEY}`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          contents: [{
+            parts: [
+              { text: prompt },
+              {
+                inlineData: {
+                  mimeType: 'image/jpeg',
+                  data: cleanBase64
+                }
+              }
+            ]
+          }],
+          generationConfig: {
+            responseModalities: ['IMAGE', 'TEXT']
+          }
+        })
+      }
+    )
+
+    if (!response.ok) {
+      const errorText = await response.text()
+      console.error('[Gemini Clean] API Error:', response.status, errorText)
+      return {
+        success: false,
+        error: 'No se pudo limpiar la imagen'
+      }
+    }
+
+    const data = await response.json()
+
+    // Buscar imagen en la respuesta
+    if (data.candidates && data.candidates[0]?.content?.parts) {
+      for (const part of data.candidates[0].content.parts) {
+        if (part.inlineData?.data) {
+          console.log('[Gemini Clean] Image cleaned successfully')
+          return {
+            success: true,
+            imageBase64: part.inlineData.data,
+            description: 'Imagen limpiada con fondo blanco'
+          }
+        }
+      }
+    }
+
+    // Si no devuelve imagen editada, devolver la original
+    console.log('[Gemini Clean] No edited image returned, keeping original')
+    return {
+      success: true,
+      imageBase64: cleanBase64,
+      description: 'No se pudo editar la imagen, se mantiene la original'
+    }
+
+  } catch (error) {
+    console.error('[Gemini Clean] Error:', error)
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Error al limpiar imagen'
     }
   }
 }
