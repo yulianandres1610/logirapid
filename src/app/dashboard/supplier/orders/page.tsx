@@ -5,14 +5,9 @@ import { useRouter } from 'next/navigation'
 import { motion } from 'framer-motion'
 import {
   Package,
-  ArrowLeft,
   Loader2,
-  Clock,
-  CheckCircle,
-  TrendingUp,
   Warehouse,
-  Calendar,
-  ChevronRight
+  Calendar
 } from 'lucide-react'
 
 interface Order {
@@ -85,47 +80,44 @@ export default function SupplierOrdersPage() {
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
-      {/* Header */}
-      <header className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-4 py-4">
-        <div className="max-w-4xl mx-auto flex items-center gap-3">
-          <button
-            onClick={() => router.push('/dashboard/supplier')}
-            className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
-          >
-            <ArrowLeft className="w-5 h-5 text-gray-600 dark:text-gray-300" />
-          </button>
-          <div className="flex items-center gap-2">
-            <Package className="w-6 h-6 text-teal-600" />
-            <h1 className="text-xl font-bold text-gray-900 dark:text-white">Mis Ordenes</h1>
+      {/* Header - Responsive */}
+      <header className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-4 py-4 md:px-8 md:py-6 lg:px-12">
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 md:w-12 md:h-12 bg-teal-100 dark:bg-teal-900/30 rounded-xl flex items-center justify-center">
+              <Package className="w-5 h-5 md:w-6 md:h-6 text-teal-600" />
+            </div>
+            <div>
+              <h1 className="text-xl md:text-2xl font-bold text-gray-900 dark:text-white">Mis Ordenes</h1>
+              <p className="text-sm text-gray-500">{pagination.total} ordenes en total</p>
+            </div>
+          </div>
+
+          {/* Filters - Desktop inline */}
+          <div className="flex gap-2 bg-gray-100 dark:bg-gray-700 rounded-xl p-1 md:w-auto">
+            {[
+              { key: 'all', label: 'Todas' },
+              { key: 'active', label: 'Activas' },
+              { key: 'completed', label: 'Completadas' }
+            ].map((f) => (
+              <button
+                key={f.key}
+                onClick={() => setFilter(f.key as typeof filter)}
+                className={`flex-1 md:flex-none py-2 px-4 md:px-6 rounded-lg font-medium transition-all ${
+                  filter === f.key
+                    ? 'bg-teal-500 text-white shadow-sm'
+                    : 'text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
+                }`}
+              >
+                {f.label}
+              </button>
+            ))}
           </div>
         </div>
       </header>
 
-      {/* Filters */}
-      <div className="max-w-4xl mx-auto px-4 py-4">
-        <div className="flex gap-2 bg-white dark:bg-gray-800 rounded-xl p-1">
-          {[
-            { key: 'all', label: 'Todas' },
-            { key: 'active', label: 'Activas' },
-            { key: 'completed', label: 'Completadas' }
-          ].map((f) => (
-            <button
-              key={f.key}
-              onClick={() => setFilter(f.key as typeof filter)}
-              className={`flex-1 py-2 px-4 rounded-lg font-medium transition-all ${
-                filter === f.key
-                  ? 'bg-teal-500 text-white'
-                  : 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
-              }`}
-            >
-              {f.label}
-            </button>
-          ))}
-        </div>
-      </div>
-
       {/* Orders List */}
-      <main className="max-w-4xl mx-auto px-4 pb-8">
+      <main className="px-4 py-6 md:px-8 lg:px-12 pb-24 md:pb-8">
         {loading ? (
           <div className="flex items-center justify-center py-12">
             <Loader2 className="w-8 h-8 text-teal-500 animate-spin" />
@@ -136,7 +128,7 @@ export default function SupplierOrdersPage() {
             <p className="text-gray-500">No hay ordenes</p>
           </div>
         ) : (
-          <div className="space-y-4">
+          <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4 md:gap-6">
             {orders.map((order, index) => {
               const statusConfig = STATUS_CONFIG[order.status] || STATUS_CONFIG.pending
               const progress = order.totalCost > 0 ? (order.totalSold / order.totalCost) * 100 : 0
@@ -147,11 +139,11 @@ export default function SupplierOrdersPage() {
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: index * 0.05 }}
-                  className="bg-white dark:bg-gray-800 rounded-2xl p-5 shadow-sm"
+                  className="bg-white dark:bg-gray-800 rounded-2xl p-5 md:p-6 shadow-sm hover:shadow-md transition-shadow"
                 >
                   <div className="flex items-start justify-between mb-4">
                     <div>
-                      <p className="font-mono font-bold text-lg text-gray-900 dark:text-white">
+                      <p className="font-mono font-bold text-lg md:text-xl text-gray-900 dark:text-white">
                         {order.orderNumber}
                       </p>
                       <div className="flex items-center gap-2 text-sm text-gray-500 mt-1">
@@ -159,7 +151,7 @@ export default function SupplierOrdersPage() {
                         {order.warehouse.name}
                       </div>
                     </div>
-                    <span className={`px-3 py-1 rounded-full text-xs font-medium ${statusConfig.bgColor} ${statusConfig.color}`}>
+                    <span className={`px-3 py-1.5 rounded-full text-xs font-medium ${statusConfig.bgColor} ${statusConfig.color}`}>
                       {statusConfig.label}
                     </span>
                   </div>
@@ -167,13 +159,13 @@ export default function SupplierOrdersPage() {
                   {/* Progress bar for active orders */}
                   {['received', 'selling'].includes(order.status) && (
                     <div className="mb-4">
-                      <div className="flex items-center justify-between text-sm mb-1">
+                      <div className="flex items-center justify-between text-sm mb-2">
                         <span className="text-gray-500">Progreso de venta</span>
                         <span className="font-medium text-gray-900 dark:text-white">
                           {progress.toFixed(0)}%
                         </span>
                       </div>
-                      <div className="h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
+                      <div className="h-2.5 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
                         <motion.div
                           initial={{ width: 0 }}
                           animate={{ width: `${Math.min(progress, 100)}%` }}
@@ -185,22 +177,22 @@ export default function SupplierOrdersPage() {
                   )}
 
                   {/* Stats */}
-                  <div className="grid grid-cols-3 gap-3 mb-4">
+                  <div className="grid grid-cols-3 gap-2 md:gap-3 mb-4">
                     <div className="bg-gray-50 dark:bg-gray-700/50 rounded-xl p-3 text-center">
-                      <p className="text-xs text-gray-500 mb-1">Consignado</p>
-                      <p className="font-bold text-gray-900 dark:text-white">
+                      <p className="text-[10px] md:text-xs text-gray-500 mb-1">Consignado</p>
+                      <p className="font-bold text-sm md:text-base text-gray-900 dark:text-white truncate">
                         {formatCurrency(order.totalCost)}
                       </p>
                     </div>
                     <div className="bg-gray-50 dark:bg-gray-700/50 rounded-xl p-3 text-center">
-                      <p className="text-xs text-gray-500 mb-1">Vendido</p>
-                      <p className="font-bold text-green-600">
+                      <p className="text-[10px] md:text-xs text-gray-500 mb-1">Vendido</p>
+                      <p className="font-bold text-sm md:text-base text-green-600 truncate">
                         {formatCurrency(order.totalSold)}
                       </p>
                     </div>
                     <div className="bg-gray-50 dark:bg-gray-700/50 rounded-xl p-3 text-center">
-                      <p className="text-xs text-gray-500 mb-1">Pagado</p>
-                      <p className="font-bold text-blue-600">
+                      <p className="text-[10px] md:text-xs text-gray-500 mb-1">Pagado</p>
+                      <p className="font-bold text-sm md:text-base text-blue-600 truncate">
                         {formatCurrency(order.totalPaid)}
                       </p>
                     </div>
@@ -208,12 +200,12 @@ export default function SupplierOrdersPage() {
 
                   {/* Footer */}
                   <div className="flex items-center justify-between pt-3 border-t border-gray-200 dark:border-gray-700">
-                    <div className="flex items-center gap-1 text-xs text-gray-500">
+                    <div className="flex items-center gap-1.5 text-xs md:text-sm text-gray-500">
                       <Calendar className="w-3.5 h-3.5" />
                       {formatDate(order.consignmentDate)}
                     </div>
-                    <div className="flex items-center gap-1 text-xs text-gray-500">
-                      {order.totalUnits} unidades • {order.totalItems} items
+                    <div className="text-xs md:text-sm text-gray-500">
+                      {order.totalUnits} uds • {order.totalItems} items
                     </div>
                   </div>
                 </motion.div>

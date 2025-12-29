@@ -115,7 +115,7 @@ export async function POST(
       orderNumber = order.order_number
       supplierCode = order.supplier_code
       supplierName = order.supplier_name
-      supplierId = order.supplier_id
+      supplierId = parseInt(order.supplier_id)
 
       // VALIDACIÓN: Verificar que ningún producto tenga stock de OTRO proveedor de consignación
       for (const line of lines) {
@@ -135,7 +135,7 @@ export async function POST(
             AND cli.quantity_available > 0
             AND cli.supplier_id != $3
           GROUP BY cli.supplier_id, cs.code, cs.name, cli.unit_cost
-        `, [warehouseId, line.productId, supplierId])
+        `, [warehouseId, parseInt(String(line.productId)), supplierId])
 
         if (conflictCheck.rows.length > 0) {
           const conflict = conflictCheck.rows[0]
@@ -204,31 +204,37 @@ export async function POST(
         ])
 
         // Create FIFO inventory entry
+        const productId = parseInt(orderLine.product_id)
+        const unitCost = parseFloat(orderLine.unit_cost) || 0
+        const qtyReceived = parseInt(String(line.quantityReceived))
+
         await db.query(`
           INSERT INTO consignment_lot_inventory (
             company_id, warehouse_id, product_id, order_line_id, supplier_id,
             lot_number, expiration_date, quantity_initial, quantity_available, unit_cost
-          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $8, $9)
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
           ON CONFLICT (warehouse_id, product_id, lot_number) DO UPDATE SET
-            quantity_initial = consignment_lot_inventory.quantity_initial + $8,
-            quantity_available = consignment_lot_inventory.quantity_available + $8
+            quantity_initial = consignment_lot_inventory.quantity_initial + EXCLUDED.quantity_initial,
+            quantity_available = consignment_lot_inventory.quantity_available + EXCLUDED.quantity_available,
+            expiration_date = COALESCE(EXCLUDED.expiration_date, consignment_lot_inventory.expiration_date)
         `, [
           payload.companyId,
           warehouseId,
-          orderLine.product_id,
+          productId,
           line.lineId,
           supplierId,
           lotNumber,
           line.expirationDate || null,
-          line.quantityReceived,
-          orderLine.unit_cost
+          qtyReceived,
+          qtyReceived,
+          unitCost
         ])
 
         // Update warehouse stock (upsert manual por índice con variant_id)
         const stockExists = await db.query(`
           SELECT id, quantity_on_hand FROM market_warehouse_stock
           WHERE warehouse_id = $1 AND product_id = $2 AND variant_id IS NULL
-        `, [warehouseId, orderLine.product_id])
+        `, [warehouseId, productId])
 
         if (stockExists.rows.length > 0) {
           await db.query(`
@@ -237,14 +243,14 @@ export async function POST(
               last_movement_at = NOW(),
               updated_at = NOW()
             WHERE warehouse_id = $2 AND product_id = $3 AND variant_id IS NULL
-          `, [line.quantityReceived, warehouseId, orderLine.product_id])
+          `, [qtyReceived, warehouseId, productId])
         } else {
           await db.query(`
             INSERT INTO market_warehouse_stock (
               warehouse_id, product_id, variant_id, quantity_on_hand, quantity_reserved,
               last_movement_at, created_at, updated_at
             ) VALUES ($1, $2, NULL, $3, 0, NOW(), NOW(), NOW())
-          `, [warehouseId, orderLine.product_id, line.quantityReceived])
+          `, [warehouseId, productId, qtyReceived])
         }
 
         totalUnitsReceived += line.quantityReceived
@@ -259,16 +265,16 @@ export async function POST(
 
       const newStatus = parseInt(pendingResult.rows[0].pending) === 0 ? 'received' : 'partial'
 
-      // Update order status
+      // Update order status (use $5 as duplicate of $1 to avoid type inference issue)
       await db.query(`
         UPDATE consignment_orders SET
           status = $1,
           warehouse_id = COALESCE(warehouse_id, $2),
-          received_at = CASE WHEN $1 = 'received' THEN NOW() ELSE received_at END,
+          received_at = CASE WHEN $5 = 'received' THEN NOW() ELSE received_at END,
           received_by = $3,
           updated_at = NOW()
         WHERE id = $4
-      `, [newStatus, warehouseId, payload.userId, orderId])
+      `, [newStatus, warehouseId, payload.userId, orderId, newStatus])
 
       // Create wallet transaction for received goods
       const walletResult = await db.query(
@@ -379,24 +385,29 @@ export async function POST(
         `)
 
         // Create FIFO inventory entry for purchase
+        const purchaseQty = parseInt(String(line.quantityReceived))
+        const purchaseUnitCost = parseFloat(purchaseLine.unit_price) || 0
+
         await db.query(`
           INSERT INTO purchase_lot_inventory (
             company_id, warehouse_id, product_id, purchase_line_id, supplier_id,
             lot_number, expiration_date, quantity_initial, quantity_available, unit_cost
-          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $8, $9)
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
           ON CONFLICT (warehouse_id, product_id, lot_number) DO UPDATE SET
-            quantity_initial = purchase_lot_inventory.quantity_initial + $8,
-            quantity_available = purchase_lot_inventory.quantity_available + $8
+            quantity_initial = purchase_lot_inventory.quantity_initial + EXCLUDED.quantity_initial,
+            quantity_available = purchase_lot_inventory.quantity_available + EXCLUDED.quantity_available,
+            expiration_date = COALESCE(EXCLUDED.expiration_date, purchase_lot_inventory.expiration_date)
         `, [
           payload.companyId,
           warehouseId,
-          purchaseLine.product_id,
+          parseInt(purchaseLine.product_id),
           line.lineId,
           supplierId,
           lotNumber,
           line.expirationDate || null,
-          line.quantityReceived,
-          purchaseLine.unit_price || 0
+          purchaseQty,
+          purchaseQty,
+          purchaseUnitCost
         ])
 
         // Update main product inventory
@@ -442,16 +453,16 @@ export async function POST(
 
       const newStatus = parseInt(pendingResult.rows[0].pending) === 0 ? 'recibido' : 'pendiente'
 
-      // Update purchase status
+      // Update purchase status (use $5 as duplicate of $1 to avoid type inference issue)
       await db.query(`
         UPDATE market_purchases SET
           status = $1,
           warehouse_id = COALESCE(warehouse_id, $2),
-          received_date = CASE WHEN $1 = 'recibido' THEN NOW() ELSE received_date END,
+          received_date = CASE WHEN $5 = 'recibido' THEN NOW() ELSE received_date END,
           received_by = $3,
           updated_at = NOW()
         WHERE id = $4
-      `, [newStatus, warehouseId, payload.userId, orderId])
+      `, [newStatus, warehouseId, payload.userId, orderId, newStatus])
 
       // Create inventory movement record
       await db.query(`

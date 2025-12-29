@@ -126,24 +126,29 @@ export async function POST(
       ])
 
       // Create FIFO inventory entry
+      const qtyReceived = parseInt(String(line.quantityReceived))
+      const unitCost = parseFloat(orderLine.unit_cost) || 0
+
       await db.query(`
         INSERT INTO consignment_lot_inventory (
           company_id, warehouse_id, product_id, order_line_id, supplier_id,
           lot_number, expiration_date, quantity_initial, quantity_available, unit_cost
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $8, $9)
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
         ON CONFLICT (warehouse_id, product_id, lot_number) DO UPDATE SET
-          quantity_initial = consignment_lot_inventory.quantity_initial + $8,
-          quantity_available = consignment_lot_inventory.quantity_available + $8
+          quantity_initial = consignment_lot_inventory.quantity_initial + EXCLUDED.quantity_initial,
+          quantity_available = consignment_lot_inventory.quantity_available + EXCLUDED.quantity_available,
+          expiration_date = COALESCE(EXCLUDED.expiration_date, consignment_lot_inventory.expiration_date)
       `, [
         payload.companyId,
-        order.warehouse_id,
-        orderLine.product_id,
+        parseInt(order.warehouse_id),
+        parseInt(orderLine.product_id),
         line.lineId,
-        order.supplier_id,
+        parseInt(order.supplier_id),
         lotNumber,
         line.expirationDate || null,
-        line.quantityReceived,
-        orderLine.unit_cost
+        qtyReceived,
+        qtyReceived,
+        unitCost
       ])
 
       // Update main inventory (market_product_inventory)
