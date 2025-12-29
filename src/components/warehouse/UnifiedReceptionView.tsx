@@ -26,6 +26,7 @@ import {
 import { cn } from '@/lib/utils'
 import { useTheme } from '@/contexts/theme-context'
 import { useBarcodeScan } from '@/hooks/useBarcodeScan'
+import { useNotifications } from '@/contexts/NotificationContext'
 
 interface Supplier {
   id: number
@@ -163,6 +164,7 @@ export default function UnifiedReceptionView({
   onNavigateToReturns
 }: UnifiedReceptionViewProps) {
   const { theme } = useTheme()
+  const { showNotification } = useNotifications()
   const searchInputRef = useRef<HTMLInputElement>(null)
   const productSearchRef = useRef<HTMLInputElement>(null)
 
@@ -468,7 +470,7 @@ export default function UnifiedReceptionView({
     }
   }
 
-  // Send print job
+  // Send print job for reception receipt
   const sendPrintJob = async (receptionData: {
     orderType: string
     orderId: number
@@ -478,7 +480,7 @@ export default function UnifiedReceptionView({
     linesProcessed: number
     unitsReceived: number
     receivedAt: string
-  }) => {
+  }): Promise<boolean> => {
     try {
       const productLines = Array.from(receivedLines.values())
         .filter(l => l.quantityReceived > 0)
@@ -495,7 +497,7 @@ export default function UnifiedReceptionView({
           }
         })
 
-      await fetch('/api/print/jobs', {
+      const response = await fetch('/api/print/jobs', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -516,12 +518,23 @@ export default function UnifiedReceptionView({
           warehouseId: receptionData.warehouse.id
         })
       })
+
+      const data = await response.json()
+
+      if (data.success) {
+        showNotification('success', 'Recibo enviado', `Trabajo ${data.data.jobNumber} en cola de impresión`)
+        return true
+      } else {
+        throw new Error(data.error || 'Error al crear trabajo de impresión')
+      }
     } catch (err) {
       console.error('Error sending print job:', err)
+      showNotification('error', 'Error', err instanceof Error ? err.message : 'Error al imprimir recibo')
+      return false
     }
   }
 
-  // Reprint reception
+  // Reprint reception receipt
   const handleReprint = async () => {
     if (!lastReceptionData) return
 
@@ -539,15 +552,16 @@ export default function UnifiedReceptionView({
 
     setPrintingLabels(true)
     try {
-      // Send one print job per product with lot info
       const productLines = Array.from(receivedLines.values())
         .filter(l => l.quantityReceived > 0)
+
+      let successCount = 0
 
       for (const line of productLines) {
         const orderLine = detectedOrder.lines.find(ol => ol.lineId === line.lineId)
         if (!orderLine) continue
 
-        await fetch('/api/print/jobs', {
+        const response = await fetch('/api/print/jobs', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -570,9 +584,21 @@ export default function UnifiedReceptionView({
             warehouseId: lastReceptionData.warehouse.id
           })
         })
+
+        const data = await response.json()
+        if (data.success) {
+          successCount++
+        }
+      }
+
+      if (successCount > 0) {
+        showNotification('success', 'Etiquetas enviadas', `${successCount} etiqueta(s) 4x6 en cola de impresión`)
+      } else {
+        showNotification('error', 'Error', 'No se pudieron crear las etiquetas')
       }
     } catch (err) {
       console.error('Error sending lot label print jobs:', err)
+      showNotification('error', 'Error', err instanceof Error ? err.message : 'Error al imprimir etiquetas')
     } finally {
       setPrintingLabels(false)
     }
