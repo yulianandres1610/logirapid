@@ -587,7 +587,7 @@ async function generatePurchaseInvoicePdf(data: Record<string, unknown>): Promis
 }
 
 // Lot Label PDF (4x6 inches = 288 x 432 points)
-// Diseño grande y limpio para etiquetas de lote
+// Diseño optimizado para impresoras térmicas (solo blanco y negro)
 async function generateLotLabelPdf(data: Record<string, unknown>): Promise<Uint8Array> {
   const pdfDoc = await PDFDocument.create()
   // 4x6 inches in points (1 inch = 72 points)
@@ -598,48 +598,43 @@ async function generateLotLabelPdf(data: Record<string, unknown>): Promise<Uint8
   const fontRegular = await pdfDoc.embedFont(StandardFonts.Helvetica)
   const fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold)
 
+  // Solo blanco y negro para impresoras térmicas
   const black = rgb(0, 0, 0)
   const white = rgb(1, 1, 1)
-  const darkGray = rgb(0.3, 0.3, 0.3)
 
-  const margin = 10
+  const margin = 8
   let y = pageHeight - margin
 
   const centerText = (text: string, yPos: number, font: PDFFont, size: number, color: typeof black = black) => {
-    const textWidth = font.widthOfTextAtSize(text, size)
-    let x = (pageWidth - textWidth) / 2
-    if (x < margin) x = margin
-
-    // Truncate if needed
     let displayText = text
     while (font.widthOfTextAtSize(displayText, size) > pageWidth - margin * 2 && displayText.length > 3) {
       displayText = displayText.slice(0, -4) + '...'
     }
-
+    const textWidth = font.widthOfTextAtSize(displayText, size)
+    const x = Math.max(margin, (pageWidth - textWidth) / 2)
     page.drawText(displayText, { x, y: yPos, font, size, color })
   }
 
   // ========================================
-  // PROVEEDOR - Muy grande en la parte superior
+  // PROVEEDOR - Fondo negro, texto blanco grande
   // ========================================
   const supplierName = ((data.supplierName as string) || 'PROVEEDOR').toUpperCase()
 
-  // Fondo oscuro para el nombre del proveedor
   page.drawRectangle({
-    x: 0, y: y - 55, width: pageWidth, height: 60,
+    x: 0, y: y - 58, width: pageWidth, height: 62,
     color: black
   })
 
-  centerText(supplierName, y - 38, fontBold, 28, white)
-  y -= 70
+  centerText(supplierName, y - 38, fontBold, 30, white)
+  y -= 72
 
   // ========================================
-  // NUMERO DE LOTE - Con código de barras
+  // NUMERO DE LOTE - Código de barras grande
   // ========================================
   const lotNumber = (data.lotNumber as string) || 'SIN-LOTE'
 
-  // Barcode
-  const barcodeHeight = 55
+  // Barcode más grande
+  const barcodeHeight = 60
   const barcodeWidth = pageWidth - margin * 4
   const barcodeX = margin * 2
   const barcodeY = y - barcodeHeight
@@ -659,12 +654,12 @@ async function generateLotLabelPdf(data: Record<string, unknown>): Promise<Uint8
     }
   }
 
-  y = barcodeY - 8
-  centerText(lotNumber, y, fontBold, 22, black)
-  y -= 35
+  y = barcodeY - 10
+  centerText(lotNumber, y, fontBold, 24, black)
+  y -= 38
 
   // ========================================
-  // FECHA DE VENCIMIENTO - MUY GRANDE
+  // FECHA DE VENCIMIENTO - MUY GRANDE con borde negro
   // ========================================
   const expirationDate = data.expirationDate
     ? new Date(data.expirationDate as string).toLocaleDateString('es-ES', {
@@ -674,24 +669,23 @@ async function generateLotLabelPdf(data: Record<string, unknown>): Promise<Uint8
       }).toUpperCase()
     : 'SIN VENCIMIENTO'
 
-  // Box para vencimiento
+  // Box con borde negro grueso
   page.drawRectangle({
-    x: margin, y: y - 65, width: pageWidth - margin * 2, height: 70,
-    color: rgb(0.95, 0.95, 0.95),
+    x: margin, y: y - 68, width: pageWidth - margin * 2, height: 72,
     borderColor: black,
-    borderWidth: 2
+    borderWidth: 3
   })
 
-  page.drawText('VENCE', {
-    x: margin + 8, y: y - 18,
-    font: fontBold, size: 14, color: darkGray
+  page.drawText('VENCE:', {
+    x: margin + 10, y: y - 20,
+    font: fontBold, size: 16, color: black
   })
 
-  centerText(expirationDate, y - 50, fontBold, 26, black)
-  y -= 80
+  centerText(expirationDate, y - 52, fontBold, 28, black)
+  y -= 82
 
   // ========================================
-  // FECHA DE RECEPCION - Grande
+  // FECHA DE RECEPCION - Grande con borde
   // ========================================
   const receptionDate = data.receptionDate
     ? new Date(data.receptionDate as string).toLocaleDateString('es-ES', {
@@ -701,41 +695,38 @@ async function generateLotLabelPdf(data: Record<string, unknown>): Promise<Uint8
       }).toUpperCase()
     : new Date().toLocaleDateString('es-ES').toUpperCase()
 
-  // Box para recepción
   page.drawRectangle({
-    x: margin, y: y - 50, width: pageWidth - margin * 2, height: 55,
-    color: rgb(0.92, 0.97, 0.92),
-    borderColor: darkGray,
-    borderWidth: 1
+    x: margin, y: y - 52, width: pageWidth - margin * 2, height: 56,
+    borderColor: black,
+    borderWidth: 2
   })
 
-  page.drawText('RECIBIDO', {
-    x: margin + 8, y: y - 15,
-    font: fontBold, size: 12, color: darkGray
+  page.drawText('RECIBIDO:', {
+    x: margin + 10, y: y - 18,
+    font: fontBold, size: 14, color: black
   })
 
-  centerText(receptionDate, y - 38, fontBold, 22, black)
-  y -= 65
+  centerText(receptionDate, y - 40, fontBold, 24, black)
+  y -= 66
 
   // ========================================
-  // CANTIDAD (grande, centrado)
+  // CANTIDAD - Grande y destacado
   // ========================================
   const quantity = data.quantity || 0
 
   page.drawRectangle({
-    x: margin, y: y - 45, width: pageWidth - margin * 2, height: 50,
-    color: rgb(0.95, 0.95, 1),
-    borderColor: darkGray,
-    borderWidth: 1
+    x: margin, y: y - 48, width: pageWidth - margin * 2, height: 52,
+    borderColor: black,
+    borderWidth: 2
   })
 
-  page.drawText('CANTIDAD', {
-    x: margin + 8, y: y - 15,
-    font: fontRegular, size: 11, color: darkGray
+  page.drawText('CANTIDAD:', {
+    x: margin + 10, y: y - 18,
+    font: fontBold, size: 14, color: black
   })
 
-  centerText(String(quantity) + ' UDS', y - 38, fontBold, 24, black)
-  y -= 55
+  centerText(String(quantity) + ' UDS', y - 40, fontBold, 26, black)
+  y -= 58
 
   // ========================================
   // PRODUCTO (parte inferior)
@@ -744,18 +735,17 @@ async function generateLotLabelPdf(data: Record<string, unknown>): Promise<Uint8
   if (productName) {
     page.drawText('Producto:', {
       x: margin, y: y,
-      font: fontRegular, size: 9, color: darkGray
+      font: fontRegular, size: 10, color: black
     })
-    y -= 12
+    y -= 14
 
-    // Truncate product name if too long
     let displayProduct = productName
-    while (fontBold.widthOfTextAtSize(displayProduct, 11) > pageWidth - margin * 2 && displayProduct.length > 3) {
+    while (fontBold.widthOfTextAtSize(displayProduct, 12) > pageWidth - margin * 2 && displayProduct.length > 3) {
       displayProduct = displayProduct.slice(0, -4) + '...'
     }
     page.drawText(displayProduct, {
       x: margin, y: y,
-      font: fontBold, size: 11, color: black
+      font: fontBold, size: 12, color: black
     })
   }
 

@@ -561,13 +561,29 @@ export default function POSTerminalPage() {
 
   // Add product to cart
   const addToCart = useCallback((product: Product) => {
+    // Validate stock if trackInventory is enabled
+    if (product.trackInventory && product.stock <= 0) {
+      setError(`Sin stock disponible: ${product.name}`)
+      setTimeout(() => setError(null), 3000)
+      return
+    }
+
     setCart(prev => {
       const existingIndex = prev.findIndex(item => item.product.id === product.id)
 
       if (existingIndex >= 0) {
         const updated = [...prev]
         const item = updated[existingIndex]
-        item.quantity += 1
+        const newQuantity = item.quantity + 1
+
+        // Validate stock for quantity increase
+        if (product.trackInventory && newQuantity > product.stock) {
+          setError(`Stock insuficiente. Disponible: ${product.stock}`)
+          setTimeout(() => setError(null), 3000)
+          return prev
+        }
+
+        item.quantity = newQuantity
         item.total = (item.quantity * item.unitPrice) - item.discountAmount
         setSelectedCartIndex(existingIndex)
         return updated
@@ -620,7 +636,21 @@ export default function POSTerminalPage() {
   const updateCartItem = useCallback((index: number, updates: Partial<CartItem>) => {
     setCart(prev => {
       const updated = [...prev]
-      const item = { ...updated[index], ...updates }
+      const currentItem = updated[index]
+
+      // Validate stock if updating quantity
+      if (updates.quantity !== undefined && currentItem.product.trackInventory) {
+        if (updates.quantity > currentItem.product.stock) {
+          setError(`Stock insuficiente. Disponible: ${currentItem.product.stock}`)
+          setTimeout(() => setError(null), 3000)
+          return prev
+        }
+        if (updates.quantity < 0) {
+          updates.quantity = 0
+        }
+      }
+
+      const item = { ...currentItem, ...updates }
 
       // Recalculate totals
       if (item.discountPercent > 0) {
