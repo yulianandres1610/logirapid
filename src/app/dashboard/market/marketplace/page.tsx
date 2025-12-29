@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
+import { useRouter } from 'next/navigation'
 import {
   Store,
   Plus,
@@ -165,6 +166,7 @@ const STATUS_CONFIG: Record<string, { label: string; color: string; icon: React.
 
 export default function MarketMarketplacePage() {
   const { theme } = useTheme()
+  const router = useRouter()
   const [listings, setListings] = useState<Listing[]>([])
   const [loading, setLoading] = useState(true)
   const [stats, setStats] = useState<Stats>({
@@ -272,18 +274,9 @@ export default function MarketMarketplacePage() {
     })
   }
 
-  // Open create modal
+  // Open create page
   const openCreateModal = () => {
-    setShowCreateModal(true)
-    setCreateStep(1)
-    setSelectedProduct(null)
-    setSelectedWarehouse(null)
-    setPriceMarketplace('')
-    setQuantityListed('')
-    setMarketplaceTitle('')
-    setMarketplaceDescription('')
-    setPriceCheck(null)
-    fetchAvailableProducts()
+    router.push('/dashboard/market/marketplace/create')
   }
 
   // Fetch products for selection
