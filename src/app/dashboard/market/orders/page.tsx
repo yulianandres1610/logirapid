@@ -13,16 +13,21 @@ import {
   Truck,
   XCircle,
   Eye,
-  MoreVertical,
   User,
   Phone,
   MapPin,
   DollarSign,
   AlertTriangle,
-  X
+  X,
+  ChevronLeft,
+  ChevronRight,
+  Calendar
 } from 'lucide-react'
+import Link from 'next/link'
 import { DashboardLayout } from '@/components/layout/dashboard-layout'
 import { ProtectedRoute } from '@/components/protected-route'
+import { useTheme } from '@/contexts/theme-context'
+import { cn } from '@/lib/utils'
 
 interface Order {
   id: number
@@ -50,56 +55,109 @@ interface Stats {
   delivered: number
   cancelled: number
   totalDeliveredAmount: number
+  totalActiveAmount: number
 }
 
-const STATUS_CONFIG: { [key: string]: { label: string; color: string; icon: any } } = {
-  pending: { label: 'Pendiente', color: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400', icon: Clock },
-  accepted: { label: 'Aceptada', color: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400', icon: CheckCircle },
-  preparing: { label: 'Preparando', color: 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400', icon: Package },
-  ready: { label: 'Lista', color: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400', icon: CheckCircle },
-  in_delivery: { label: 'En Reparto', color: 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400', icon: Truck },
-  delivered: { label: 'Entregada', color: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400', icon: CheckCircle },
-  cancelled: { label: 'Cancelada', color: 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300', icon: XCircle },
-  rejected: { label: 'Rechazada', color: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400', icon: XCircle }
+interface Pagination {
+  page: number
+  limit: number
+  total: number
+  totalPages: number
+}
+
+const STATUS_CONFIG: Record<string, { label: string; color: string; icon: React.ElementType; gradient: string }> = {
+  pending: { label: 'Pendiente', color: 'amber', icon: Clock, gradient: 'from-amber-400 to-orange-600' },
+  accepted: { label: 'Aceptada', color: 'blue', icon: CheckCircle, gradient: 'from-blue-400 to-blue-600' },
+  preparing: { label: 'Preparando', color: 'purple', icon: Package, gradient: 'from-purple-400 to-purple-600' },
+  ready: { label: 'Lista', color: 'emerald', icon: CheckCircle, gradient: 'from-emerald-400 to-green-600' },
+  in_delivery: { label: 'En Reparto', color: 'indigo', icon: Truck, gradient: 'from-indigo-400 to-indigo-600' },
+  delivered: { label: 'Entregada', color: 'emerald', icon: CheckCircle, gradient: 'from-emerald-400 to-green-600' },
+  cancelled: { label: 'Cancelada', color: 'gray', icon: XCircle, gradient: 'from-gray-400 to-gray-600' },
+  rejected: { label: 'Rechazada', color: 'red', icon: XCircle, gradient: 'from-red-400 to-rose-600' }
 }
 
 export default function MarketOrdersPage() {
   const router = useRouter()
+  const { theme } = useTheme()
   const [orders, setOrders] = useState<Order[]>([])
   const [loading, setLoading] = useState(true)
-  const [stats, setStats] = useState<Stats>({ pending: 0, accepted: 0, preparing: 0, ready: 0, inDelivery: 0, delivered: 0, cancelled: 0, totalDeliveredAmount: 0 })
-  const [activeTab, setActiveTab] = useState<string>('all')
-  const [searchTerm, setSearchTerm] = useState('')
+  const [stats, setStats] = useState<Stats>({
+    pending: 0, accepted: 0, preparing: 0, ready: 0,
+    inDelivery: 0, delivered: 0, cancelled: 0,
+    totalDeliveredAmount: 0, totalActiveAmount: 0
+  })
+  const [pagination, setPagination] = useState<Pagination>({ page: 1, limit: 20, total: 0, totalPages: 0 })
+  const [selectedStatus, setSelectedStatus] = useState<string | null>(null)
+  const [search, setSearch] = useState('')
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null)
   const [actionLoading, setActionLoading] = useState(false)
   const [showRejectModal, setShowRejectModal] = useState(false)
   const [rejectReason, setRejectReason] = useState('')
   const [rejectNotes, setRejectNotes] = useState('')
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null)
+  const [isRefreshing, setIsRefreshing] = useState(false)
 
   useEffect(() => {
     fetchOrders()
-  }, [activeTab])
+  }, [pagination.page, selectedStatus])
 
-  const fetchOrders = async () => {
-    setLoading(true)
+  useEffect(() => {
+    const debounce = setTimeout(() => {
+      if (pagination.page === 1) {
+        fetchOrders()
+      } else {
+        setPagination(p => ({ ...p, page: 1 }))
+      }
+    }, 300)
+    return () => clearTimeout(debounce)
+  }, [search])
+
+  const fetchOrders = async (silent = false) => {
+    if (!silent) setLoading(true)
+    else setIsRefreshing(true)
+
     try {
-      const statusParam = activeTab !== 'all' ? `&status=${activeTab}` : ''
-      const response = await fetch(`/api/market/orders?limit=50${statusParam}`)
+      const params = new URLSearchParams({
+        page: pagination.page.toString(),
+        limit: pagination.limit.toString()
+      })
+      if (search) params.set('search', search)
+      if (selectedStatus) params.set('status', selectedStatus)
+
+      const response = await fetch(`/api/market/orders?${params}`)
       if (response.ok) {
         const data = await response.json()
         if (data.success) {
           setOrders(data.data.orders)
           setStats(data.data.stats)
+          if (data.data.pagination) {
+            setPagination(data.data.pagination)
+          } else {
+            setPagination(p => ({
+              ...p,
+              total: data.data.orders.length,
+              totalPages: Math.ceil(data.data.orders.length / p.limit)
+            }))
+          }
+          setLastUpdated(new Date())
         }
       }
     } catch (error) {
       console.error('Error fetching orders:', error)
     } finally {
-      setLoading(false)
+      if (!silent) setLoading(false)
+      else setIsRefreshing(false)
     }
   }
 
-  const handleAction = async (orderId: number, action: string, extra?: any) => {
+  const handleManualRefresh = () => fetchOrders(true)
+
+  const getTotalCount = () => {
+    return stats.pending + stats.accepted + stats.preparing + stats.ready +
+           stats.inDelivery + stats.delivered + stats.cancelled
+  }
+
+  const handleAction = async (orderId: number, action: string, extra?: Record<string, unknown>) => {
     setActionLoading(true)
     try {
       const response = await fetch(`/api/market/orders/${orderId}`, {
@@ -139,33 +197,21 @@ export default function MarketOrdersPage() {
     }
   }
 
-  const filteredOrders = orders.filter(o =>
-    o.orderNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    o.customerName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    o.customerPhone.includes(searchTerm)
-  )
-
-  const formatCurrency = (amount: number) => {
-    return `$${amount.toLocaleString('en-US', { minimumFractionDigits: 2 })}`
+  const formatCurrency = (value: number) => {
+    return new Intl.NumberFormat('es-US', {
+      style: 'currency',
+      currency: 'USD'
+    }).format(value)
   }
 
-  const formatDate = (dateStr: string) => {
-    return new Date(dateStr).toLocaleDateString('es-ES', {
+  const formatDate = (date: string) => {
+    return new Date(date).toLocaleDateString('es-ES', {
       day: '2-digit',
       month: 'short',
       hour: '2-digit',
       minute: '2-digit'
     })
   }
-
-  const tabs = [
-    { id: 'all', label: 'Todas', count: Object.values(stats).reduce((a, b) => typeof b === 'number' ? a + b : a, 0) - stats.totalDeliveredAmount },
-    { id: 'pending', label: 'Pendientes', count: stats.pending },
-    { id: 'accepted', label: 'Aceptadas', count: stats.accepted },
-    { id: 'preparing', label: 'Preparando', count: stats.preparing },
-    { id: 'ready', label: 'Listas', count: stats.ready },
-    { id: 'delivered', label: 'Entregadas', count: stats.delivered }
-  ]
 
   const rejectionReasons = [
     'Sin stock',
@@ -179,359 +225,668 @@ export default function MarketOrdersPage() {
   return (
     <ProtectedRoute>
       <DashboardLayout>
-        <div className="p-6 space-y-6">
-          {/* Header */}
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
-                Ordenes Recibidas
-              </h1>
-              <p className="text-gray-500 dark:text-gray-400 mt-1">
-                Gestiona las ordenes de tus clientes
-              </p>
+        <div className="min-h-screen p-6">
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="space-y-6"
+          >
+            {/* Stats Cards */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
+              {/* Total Ordenes */}
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.1 }}
+                onClick={() => setSelectedStatus(null)}
+                className={cn(
+                  'relative overflow-hidden cursor-pointer',
+                  theme === 'dark'
+                    ? 'bg-gradient-to-br from-gray-800 to-gray-900 border-gray-700'
+                    : 'bg-gradient-to-br from-slate-50 to-white border-slate-200',
+                  'rounded-2xl border shadow-xl',
+                  selectedStatus === null && 'ring-2 ring-blue-500'
+                )}
+              >
+                <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-400 to-blue-600"></div>
+                <div className="p-6">
+                  <div className="flex items-start justify-between mb-4">
+                    <div className="flex items-center gap-3">
+                      <div className={cn(
+                        'p-3 rounded-xl shadow-sm',
+                        theme === 'dark'
+                          ? 'bg-blue-900/30 border border-blue-800/50'
+                          : 'bg-gradient-to-br from-blue-50 to-blue-100 border border-blue-200'
+                      )}>
+                        <ShoppingCart className="w-6 h-6 text-blue-600" />
+                      </div>
+                      <div>
+                        <p className={cn(
+                          'text-sm font-medium',
+                          theme === 'dark' ? 'text-gray-400' : 'text-black'
+                        )}>Total Ordenes</p>
+                        <p className={cn(
+                          'text-3xl font-bold mt-1',
+                          theme === 'dark' ? 'text-white' : 'text-slate-900'
+                        )}>{getTotalCount()}</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </motion.div>
+
+              {/* Pendientes */}
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.2 }}
+                onClick={() => setSelectedStatus(selectedStatus === 'pending' ? null : 'pending')}
+                className={cn(
+                  'relative overflow-hidden cursor-pointer',
+                  theme === 'dark'
+                    ? 'bg-gradient-to-br from-gray-800 to-gray-900 border-gray-700'
+                    : 'bg-gradient-to-br from-slate-50 to-white border-slate-200',
+                  'rounded-2xl border shadow-xl',
+                  selectedStatus === 'pending' && 'ring-2 ring-amber-500'
+                )}
+              >
+                <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-amber-400 to-orange-600"></div>
+                <div className="p-6">
+                  <div className="flex items-start justify-between mb-4">
+                    <div className="flex items-center gap-3">
+                      <div className={cn(
+                        'p-3 rounded-xl shadow-sm',
+                        theme === 'dark'
+                          ? 'bg-amber-900/30 border border-amber-800/50'
+                          : 'bg-gradient-to-br from-amber-50 to-orange-100 border border-amber-200'
+                      )}>
+                        <Clock className="w-6 h-6 text-amber-600" />
+                      </div>
+                      <div>
+                        <p className={cn(
+                          'text-sm font-medium',
+                          theme === 'dark' ? 'text-gray-400' : 'text-black'
+                        )}>Pendientes</p>
+                        <p className={cn(
+                          'text-3xl font-bold mt-1',
+                          theme === 'dark' ? 'text-white' : 'text-slate-900'
+                        )}>{stats.pending}</p>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className={cn(
+                      'text-xs font-medium',
+                      theme === 'dark' ? 'text-gray-500' : 'text-black'
+                    )}>Por aceptar</span>
+                  </div>
+                </div>
+              </motion.div>
+
+              {/* Preparando */}
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.3 }}
+                onClick={() => setSelectedStatus(selectedStatus === 'preparing' ? null : 'preparing')}
+                className={cn(
+                  'relative overflow-hidden cursor-pointer',
+                  theme === 'dark'
+                    ? 'bg-gradient-to-br from-gray-800 to-gray-900 border-gray-700'
+                    : 'bg-gradient-to-br from-slate-50 to-white border-slate-200',
+                  'rounded-2xl border shadow-xl',
+                  selectedStatus === 'preparing' && 'ring-2 ring-purple-500'
+                )}
+              >
+                <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-purple-400 to-purple-600"></div>
+                <div className="p-6">
+                  <div className="flex items-start justify-between mb-4">
+                    <div className="flex items-center gap-3">
+                      <div className={cn(
+                        'p-3 rounded-xl shadow-sm',
+                        theme === 'dark'
+                          ? 'bg-purple-900/30 border border-purple-800/50'
+                          : 'bg-gradient-to-br from-purple-50 to-purple-100 border border-purple-200'
+                      )}>
+                        <Package className="w-6 h-6 text-purple-600" />
+                      </div>
+                      <div>
+                        <p className={cn(
+                          'text-sm font-medium',
+                          theme === 'dark' ? 'text-gray-400' : 'text-black'
+                        )}>Preparando</p>
+                        <p className={cn(
+                          'text-3xl font-bold mt-1',
+                          theme === 'dark' ? 'text-white' : 'text-slate-900'
+                        )}>{stats.preparing + stats.accepted}</p>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className={cn(
+                      'text-xs font-medium',
+                      theme === 'dark' ? 'text-gray-500' : 'text-black'
+                    )}>En proceso</span>
+                  </div>
+                </div>
+              </motion.div>
+
+              {/* Entregadas */}
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.4 }}
+                onClick={() => setSelectedStatus(selectedStatus === 'delivered' ? null : 'delivered')}
+                className={cn(
+                  'relative overflow-hidden cursor-pointer',
+                  theme === 'dark'
+                    ? 'bg-gradient-to-br from-gray-800 to-gray-900 border-gray-700'
+                    : 'bg-gradient-to-br from-slate-50 to-white border-slate-200',
+                  'rounded-2xl border shadow-xl',
+                  selectedStatus === 'delivered' && 'ring-2 ring-emerald-500'
+                )}
+              >
+                <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-emerald-400 to-green-600"></div>
+                <div className="p-6">
+                  <div className="flex items-start justify-between mb-4">
+                    <div className="flex items-center gap-3">
+                      <div className={cn(
+                        'p-3 rounded-xl shadow-sm',
+                        theme === 'dark'
+                          ? 'bg-emerald-900/30 border border-emerald-800/50'
+                          : 'bg-gradient-to-br from-emerald-50 to-green-100 border border-emerald-200'
+                      )}>
+                        <DollarSign className="w-6 h-6 text-emerald-600" />
+                      </div>
+                      <div>
+                        <p className={cn(
+                          'text-sm font-medium',
+                          theme === 'dark' ? 'text-gray-400' : 'text-black'
+                        )}>Entregadas</p>
+                        <p className={cn(
+                          'text-3xl font-bold mt-1',
+                          theme === 'dark' ? 'text-white' : 'text-slate-900'
+                        )}>{stats.delivered}</p>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className={cn(
+                      'text-xs font-medium',
+                      theme === 'dark' ? 'text-gray-500' : 'text-black'
+                    )}>Total: {formatCurrency(stats.totalDeliveredAmount)}</span>
+                  </div>
+                </div>
+              </motion.div>
             </div>
-            <button
-              onClick={fetchOrders}
-              className="flex items-center gap-2 px-4 py-2 bg-gray-100 dark:bg-gray-700 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
-            >
-              <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-              Actualizar
-            </button>
-          </div>
 
-          {/* Stats Cards */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            {/* Filters */}
             <motion.div
-              initial={{ opacity: 0, y: 20 }}
+              initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
-              className="bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-200 dark:border-gray-700"
+              transition={{ delay: 0.5 }}
+              className={cn(
+                'p-4 rounded-2xl border shadow-xl',
+                theme === 'dark'
+                  ? 'bg-gradient-to-br from-gray-800 to-gray-900 border-gray-700'
+                  : 'bg-gradient-to-br from-slate-50 to-white border-slate-200'
+              )}
             >
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-yellow-100 dark:bg-yellow-900/30 rounded-lg">
-                  <Clock className="w-5 h-5 text-yellow-600 dark:text-yellow-400" />
+              <div className="flex flex-col sm:flex-row gap-4">
+                {/* Search */}
+                <div className="flex-1 relative">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                  <input
+                    type="text"
+                    placeholder="Buscar por orden, cliente o telefono..."
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                    className={cn(
+                      'w-full pl-10 pr-4 py-2.5 rounded-xl border focus:outline-none focus:ring-2 transition-all',
+                      theme === 'dark'
+                        ? 'bg-gray-800/50 border-gray-700 text-white focus:border-blue-500 focus:ring-blue-500/20'
+                        : 'bg-white border-gray-200 text-gray-900 focus:border-blue-500 focus:ring-blue-500/20'
+                    )}
+                  />
                 </div>
-                <div>
-                  <p className="text-sm text-gray-500 dark:text-gray-400">Pendientes</p>
-                  <p className="text-xl font-bold text-gray-900 dark:text-white">{stats.pending}</p>
-                </div>
-              </div>
-            </motion.div>
 
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.1 }}
-              className="bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-200 dark:border-gray-700"
-            >
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-purple-100 dark:bg-purple-900/30 rounded-lg">
-                  <Package className="w-5 h-5 text-purple-600 dark:text-purple-400" />
-                </div>
-                <div>
-                  <p className="text-sm text-gray-500 dark:text-gray-400">Preparando</p>
-                  <p className="text-xl font-bold text-gray-900 dark:text-white">{stats.preparing}</p>
-                </div>
-              </div>
-            </motion.div>
+                {/* Clear Filters */}
+                {(search || selectedStatus) && (
+                  <motion.button
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
+                    onClick={() => {
+                      setSearch('')
+                      setSelectedStatus(null)
+                    }}
+                    className={cn(
+                      'flex items-center gap-2 px-4 py-2.5 rounded-xl transition-all',
+                      theme === 'dark'
+                        ? 'bg-gray-800 text-gray-300 hover:bg-gray-700'
+                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                    )}
+                  >
+                    <X className="w-4 h-4" />
+                    Limpiar
+                  </motion.button>
+                )}
 
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.2 }}
-              className="bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-200 dark:border-gray-700"
-            >
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-green-100 dark:bg-green-900/30 rounded-lg">
-                  <CheckCircle className="w-5 h-5 text-green-600 dark:text-green-400" />
-                </div>
-                <div>
-                  <p className="text-sm text-gray-500 dark:text-gray-400">Listas</p>
-                  <p className="text-xl font-bold text-gray-900 dark:text-white">{stats.ready}</p>
-                </div>
-              </div>
-            </motion.div>
-
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.3 }}
-              className="bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-200 dark:border-gray-700"
-            >
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-emerald-100 dark:bg-emerald-900/30 rounded-lg">
-                  <DollarSign className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
-                </div>
-                <div>
-                  <p className="text-sm text-gray-500 dark:text-gray-400">Total Vendido</p>
-                  <p className="text-xl font-bold text-gray-900 dark:text-white">
-                    {formatCurrency(stats.totalDeliveredAmount)}
-                  </p>
-                </div>
-              </div>
-            </motion.div>
-          </div>
-
-          {/* Tabs and Search */}
-          <div className="flex flex-col md:flex-row gap-4 items-start md:items-center justify-between">
-            <div className="flex gap-2 overflow-x-auto pb-2">
-              {tabs.map(tab => (
-                <button
-                  key={tab.id}
-                  onClick={() => setActiveTab(tab.id)}
-                  className={`px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-colors ${
-                    activeTab === tab.id
-                      ? 'bg-green-600 dark:bg-green-700 text-white'
-                      : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
-                  }`}
-                >
-                  {tab.label}
-                  {tab.count > 0 && (
-                    <span className="ml-2 px-1.5 py-0.5 rounded-full bg-white/20 text-xs">
-                      {tab.count}
+                {/* Refresh */}
+                <div className="flex items-center gap-2">
+                  {lastUpdated && (
+                    <span className="text-xs text-gray-400 hidden sm:inline">
+                      {lastUpdated.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}
                     </span>
                   )}
-                </button>
-              ))}
-            </div>
-
-            <div className="relative w-full md:w-64">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-              <input
-                type="text"
-                value={searchTerm}
-                onChange={e => setSearchTerm(e.target.value)}
-                placeholder="Buscar ordenes..."
-                className="w-full pl-10 pr-4 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-green-600 dark:focus:ring-green-500 focus:border-transparent"
-              />
-            </div>
-          </div>
-
-          {/* Orders List */}
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden"
-          >
-            {loading ? (
-              <div className="p-8 text-center">
-                <RefreshCw className="w-8 h-8 animate-spin text-green-600 mx-auto mb-3" />
-                <p className="text-gray-500 dark:text-gray-400">Cargando ordenes...</p>
+                  <motion.button
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
+                    onClick={handleManualRefresh}
+                    disabled={loading || isRefreshing}
+                    className={cn(
+                      'flex items-center gap-2 px-4 py-2.5 rounded-xl transition-all',
+                      theme === 'dark'
+                        ? 'bg-gray-800 text-gray-300 hover:bg-gray-700'
+                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200',
+                      isRefreshing && 'opacity-75'
+                    )}
+                  >
+                    <RefreshCw className={cn('w-4 h-4', (loading || isRefreshing) && 'animate-spin')} />
+                  </motion.button>
+                </div>
               </div>
-            ) : filteredOrders.length === 0 ? (
-              <div className="p-12 text-center">
-                <ShoppingCart className="w-16 h-16 text-gray-300 dark:text-gray-600 mx-auto mb-4" />
-                <p className="text-gray-500 dark:text-gray-400">
-                  {searchTerm ? 'No se encontraron ordenes' : 'No hay ordenes registradas'}
-                </p>
-              </div>
-            ) : (
-              <div className="divide-y divide-gray-100 dark:divide-gray-700">
-                {filteredOrders.map((order, index) => {
-                  const statusConfig = STATUS_CONFIG[order.status] || STATUS_CONFIG.pending
-                  const StatusIcon = statusConfig.icon
+            </motion.div>
 
-                  return (
-                    <motion.div
-                      key={order.id}
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ delay: index * 0.03 }}
-                      className="p-4 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
-                    >
-                      <div className="flex items-center justify-between gap-4">
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-3 mb-2">
-                            <span className="font-semibold text-gray-900 dark:text-white">
-                              {order.orderNumber}
-                            </span>
-                            <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium ${statusConfig.color}`}>
-                              <StatusIcon className="w-3.5 h-3.5" />
-                              {statusConfig.label}
-                            </span>
-                          </div>
-                          <div className="flex flex-wrap items-center gap-4 text-sm text-gray-600 dark:text-gray-400">
-                            <span className="flex items-center gap-1">
-                              <User className="w-4 h-4" />
-                              {order.customerName}
-                            </span>
-                            <span className="flex items-center gap-1">
-                              <Phone className="w-4 h-4" />
-                              {order.customerPhone}
-                            </span>
-                            <span className="flex items-center gap-1">
-                              <MapPin className="w-4 h-4" />
-                              {order.deliveryMunicipality}, {order.deliveryProvince}
-                            </span>
-                          </div>
-                          <div className="flex items-center gap-4 mt-2 text-sm">
-                            <span className="text-gray-500 dark:text-gray-400">
-                              {order.lineCount} productos ({order.totalItems} items)
-                            </span>
-                            <span className="text-gray-500 dark:text-gray-400">
-                              {formatDate(order.createdAt)}
-                            </span>
-                            {order.agencyName && (
-                              <span className="text-gray-500 dark:text-gray-400">
-                                via {order.agencyName}
+            {/* Orders Table */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.6 }}
+              className={cn(
+                'rounded-2xl border shadow-xl overflow-hidden',
+                theme === 'dark'
+                  ? 'bg-gradient-to-br from-gray-800 to-gray-900 border-gray-700'
+                  : 'bg-gradient-to-br from-slate-50 to-white border-slate-200'
+              )}
+            >
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead>
+                    <tr className={cn(
+                      'border-b',
+                      theme === 'dark' ? 'border-gray-700 bg-gray-800/50' : 'border-gray-200 bg-gray-50'
+                    )}>
+                      <th className="text-left py-4 px-4 text-xs font-medium text-gray-500 uppercase tracking-wider"># Orden</th>
+                      <th className="text-left py-4 px-4 text-xs font-medium text-gray-500 uppercase tracking-wider">Cliente</th>
+                      <th className="text-left py-4 px-4 text-xs font-medium text-gray-500 uppercase tracking-wider">Ubicacion</th>
+                      <th className="text-center py-4 px-4 text-xs font-medium text-gray-500 uppercase tracking-wider">Items</th>
+                      <th className="text-right py-4 px-4 text-xs font-medium text-gray-500 uppercase tracking-wider">Total</th>
+                      <th className="text-center py-4 px-4 text-xs font-medium text-gray-500 uppercase tracking-wider">Fecha</th>
+                      <th className="text-center py-4 px-4 text-xs font-medium text-gray-500 uppercase tracking-wider">Estado</th>
+                      <th className="text-center py-4 px-4 text-xs font-medium text-gray-500 uppercase tracking-wider">Acciones</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
+                    {loading ? (
+                      [...Array(5)].map((_, i) => (
+                        <tr key={i}>
+                          <td colSpan={8} className="py-4 px-4">
+                            <div className="animate-pulse flex items-center gap-3">
+                              <div className="w-32 h-4 bg-gray-200 dark:bg-gray-700 rounded" />
+                              <div className="flex-1">
+                                <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-3/4" />
+                              </div>
+                            </div>
+                          </td>
+                        </tr>
+                      ))
+                    ) : orders.length === 0 ? (
+                      <tr>
+                        <td colSpan={8} className="py-12 text-center">
+                          <ShoppingCart className="w-12 h-12 mx-auto mb-3 text-gray-400" />
+                          <p className="text-gray-500 dark:text-gray-400">No hay ordenes registradas</p>
+                        </td>
+                      </tr>
+                    ) : (
+                      orders.map((order, index) => {
+                        const statusConfig = STATUS_CONFIG[order.status] || STATUS_CONFIG.pending
+                        const StatusIcon = statusConfig.icon
+
+                        return (
+                          <motion.tr
+                            key={order.id}
+                            initial={{ opacity: 0, y: 10 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ delay: index * 0.02 }}
+                            className={cn(
+                              'group transition-colors',
+                              theme === 'dark' ? 'hover:bg-gray-800/50' : 'hover:bg-gray-50'
+                            )}
+                          >
+                            <td className="py-4 px-4">
+                              <div className="flex items-center gap-2">
+                                <ShoppingCart className="w-4 h-4 text-gray-400" />
+                                <span className="font-mono font-medium text-gray-900 dark:text-white">
+                                  {order.orderNumber}
+                                </span>
+                              </div>
+                            </td>
+                            <td className="py-4 px-4">
+                              <div>
+                                <div className="flex items-center gap-2">
+                                  <User className="w-3.5 h-3.5 text-gray-400" />
+                                  <p className="font-medium text-gray-900 dark:text-white">
+                                    {order.customerName}
+                                  </p>
+                                </div>
+                                <div className="flex items-center gap-2 mt-1">
+                                  <Phone className="w-3.5 h-3.5 text-gray-400" />
+                                  <p className="text-xs text-gray-500">{order.customerPhone}</p>
+                                </div>
+                              </div>
+                            </td>
+                            <td className="py-4 px-4">
+                              <div className="flex items-center gap-2">
+                                <MapPin className="w-4 h-4 text-gray-400" />
+                                <span className="text-sm text-gray-600 dark:text-gray-300">
+                                  {order.deliveryMunicipality}, {order.deliveryProvince}
+                                </span>
+                              </div>
+                            </td>
+                            <td className="py-4 px-4 text-center">
+                              <span className="text-sm font-medium text-gray-900 dark:text-white">
+                                {order.lineCount} / {order.totalItems}
                               </span>
-                            )}
-                          </div>
-                        </div>
+                              <p className="text-xs text-gray-500">items / uds</p>
+                            </td>
+                            <td className="py-4 px-4 text-right">
+                              <span className="text-sm font-bold text-gray-900 dark:text-white">
+                                {formatCurrency(order.totalAmount)}
+                              </span>
+                            </td>
+                            <td className="py-4 px-4 text-center">
+                              <div className="flex items-center justify-center gap-1">
+                                <Calendar className="w-3.5 h-3.5 text-gray-400" />
+                                <span className="text-sm text-gray-600 dark:text-gray-300">
+                                  {formatDate(order.createdAt)}
+                                </span>
+                              </div>
+                            </td>
+                            <td className="py-4 px-4 text-center">
+                              <span className={cn(
+                                'inline-flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-medium',
+                                statusConfig.color === 'amber' && 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400',
+                                statusConfig.color === 'blue' && 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400',
+                                statusConfig.color === 'purple' && 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400',
+                                statusConfig.color === 'emerald' && 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400',
+                                statusConfig.color === 'indigo' && 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400',
+                                statusConfig.color === 'gray' && 'bg-gray-100 text-gray-700 dark:bg-gray-900/30 dark:text-gray-400',
+                                statusConfig.color === 'red' && 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'
+                              )}>
+                                <StatusIcon className="w-3.5 h-3.5" />
+                                {statusConfig.label}
+                              </span>
+                            </td>
+                            <td className="py-4 px-4 text-center">
+                              <div className="flex items-center justify-center gap-1">
+                                <Link href={`/dashboard/market/orders/${order.id}`}>
+                                  <motion.button
+                                    whileHover={{ scale: 1.1 }}
+                                    whileTap={{ scale: 0.9 }}
+                                    className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                                    title="Ver detalle"
+                                  >
+                                    <Eye className="w-4 h-4 text-blue-500" />
+                                  </motion.button>
+                                </Link>
 
-                        <div className="flex items-center gap-4">
-                          <div className="text-right">
-                            <p className="text-lg font-bold text-gray-900 dark:text-white">
-                              {formatCurrency(order.totalAmount)}
-                            </p>
-                          </div>
+                                {order.status === 'pending' && (
+                                  <>
+                                    <motion.button
+                                      whileHover={{ scale: 1.1 }}
+                                      whileTap={{ scale: 0.9 }}
+                                      onClick={() => handleAction(order.id, 'accept')}
+                                      disabled={actionLoading}
+                                      className="p-2 rounded-lg hover:bg-emerald-100 dark:hover:bg-emerald-900/30 transition-colors"
+                                      title="Aceptar"
+                                    >
+                                      <CheckCircle className="w-4 h-4 text-emerald-500" />
+                                    </motion.button>
+                                    <motion.button
+                                      whileHover={{ scale: 1.1 }}
+                                      whileTap={{ scale: 0.9 }}
+                                      onClick={() => {
+                                        setSelectedOrder(order)
+                                        setShowRejectModal(true)
+                                      }}
+                                      className="p-2 rounded-lg hover:bg-red-100 dark:hover:bg-red-900/30 transition-colors"
+                                      title="Rechazar"
+                                    >
+                                      <XCircle className="w-4 h-4 text-red-500" />
+                                    </motion.button>
+                                  </>
+                                )}
 
-                          <div className="flex items-center gap-2">
-                            <button
-                              onClick={() => router.push(`/dashboard/market/orders/${order.id}`)}
-                              className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
-                              title="Ver detalles"
-                            >
-                              <Eye className="w-5 h-5 text-gray-500" />
-                            </button>
+                                {order.status === 'accepted' && (
+                                  <motion.button
+                                    whileHover={{ scale: 1.1 }}
+                                    whileTap={{ scale: 0.9 }}
+                                    onClick={() => handleAction(order.id, 'prepare')}
+                                    disabled={actionLoading}
+                                    className="p-2 rounded-lg hover:bg-purple-100 dark:hover:bg-purple-900/30 transition-colors"
+                                    title="Preparar"
+                                  >
+                                    <Package className="w-4 h-4 text-purple-500" />
+                                  </motion.button>
+                                )}
 
-                            {order.status === 'pending' && (
-                              <>
-                                <button
-                                  onClick={() => handleAction(order.id, 'accept')}
-                                  disabled={actionLoading}
-                                  className="px-3 py-1.5 bg-green-600 text-white text-sm rounded-lg hover:opacity-90 transition-colors"
-                                >
-                                  Aceptar
-                                </button>
-                                <button
-                                  onClick={() => {
-                                    setSelectedOrder(order)
-                                    setShowRejectModal(true)
-                                  }}
-                                  className="px-3 py-1.5 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 text-sm rounded-lg hover:bg-red-100 dark:hover:bg-red-900/40 transition-colors"
-                                >
-                                  Rechazar
-                                </button>
-                              </>
-                            )}
-
-                            {order.status === 'accepted' && (
-                              <button
-                                onClick={() => handleAction(order.id, 'prepare')}
-                                disabled={actionLoading}
-                                className="px-3 py-1.5 bg-purple-600 text-white text-sm rounded-lg hover:opacity-90 transition-colors flex items-center gap-1.5"
-                              >
-                                <Package className="w-4 h-4" />
-                                Preparar
-                              </button>
-                            )}
-
-                            {order.status === 'preparing' && (
-                              <button
-                                onClick={() => handleAction(order.id, 'ready')}
-                                disabled={actionLoading}
-                                className="px-3 py-1.5 bg-green-600 text-white text-sm rounded-lg hover:opacity-90 transition-colors flex items-center gap-1.5"
-                              >
-                                <CheckCircle className="w-4 h-4" />
-                                Marcar Lista
-                              </button>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    </motion.div>
-                  )
-                })}
+                                {order.status === 'preparing' && (
+                                  <motion.button
+                                    whileHover={{ scale: 1.1 }}
+                                    whileTap={{ scale: 0.9 }}
+                                    onClick={() => handleAction(order.id, 'ready')}
+                                    disabled={actionLoading}
+                                    className="p-2 rounded-lg hover:bg-emerald-100 dark:hover:bg-emerald-900/30 transition-colors"
+                                    title="Marcar Lista"
+                                  >
+                                    <CheckCircle className="w-4 h-4 text-emerald-500" />
+                                  </motion.button>
+                                )}
+                              </div>
+                            </td>
+                          </motion.tr>
+                        )
+                      })
+                    )}
+                  </tbody>
+                </table>
               </div>
-            )}
+
+              {/* Pagination */}
+              {pagination.totalPages > 1 && (
+                <div className={cn(
+                  'flex items-center justify-between px-4 py-3 border-t',
+                  theme === 'dark' ? 'border-gray-700 bg-gray-800/50' : 'border-gray-200 bg-gray-50'
+                )}>
+                  <p className="text-sm text-gray-500">
+                    Mostrando {((pagination.page - 1) * pagination.limit) + 1} - {Math.min(pagination.page * pagination.limit, pagination.total)} de {pagination.total}
+                  </p>
+                  <div className="flex items-center gap-2">
+                    <motion.button
+                      whileHover={{ scale: 1.05 }}
+                      whileTap={{ scale: 0.95 }}
+                      onClick={() => setPagination(p => ({ ...p, page: p.page - 1 }))}
+                      disabled={pagination.page === 1}
+                      className={cn(
+                        'p-2 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed',
+                        theme === 'dark'
+                          ? 'hover:bg-gray-700 text-gray-300'
+                          : 'hover:bg-gray-200 text-gray-600'
+                      )}
+                    >
+                      <ChevronLeft className="w-5 h-5" />
+                    </motion.button>
+                    <span className="text-sm text-gray-600 dark:text-gray-300">
+                      {pagination.page} / {pagination.totalPages}
+                    </span>
+                    <motion.button
+                      whileHover={{ scale: 1.05 }}
+                      whileTap={{ scale: 0.95 }}
+                      onClick={() => setPagination(p => ({ ...p, page: p.page + 1 }))}
+                      disabled={pagination.page === pagination.totalPages}
+                      className={cn(
+                        'p-2 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed',
+                        theme === 'dark'
+                          ? 'hover:bg-gray-700 text-gray-300'
+                          : 'hover:bg-gray-200 text-gray-600'
+                      )}
+                    >
+                      <ChevronRight className="w-5 h-5" />
+                    </motion.button>
+                  </div>
+                </div>
+              )}
+            </motion.div>
           </motion.div>
 
           {/* Reject Modal */}
           <AnimatePresence>
             {showRejectModal && selectedOrder && (
-              <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
-                onClick={() => setShowRejectModal(false)}
-              >
+              <>
                 <motion.div
-                  initial={{ scale: 0.95, opacity: 0 }}
-                  animate={{ scale: 1, opacity: 1 }}
-                  exit={{ scale: 0.95, opacity: 0 }}
-                  onClick={e => e.stopPropagation()}
-                  className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl w-full max-w-md"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  onClick={() => setShowRejectModal(false)}
+                  className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50"
+                />
+
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.95, y: 20 }}
+                  animate={{ opacity: 1, scale: 1, y: 0 }}
+                  exit={{ opacity: 0, scale: 0.95, y: 20 }}
+                  transition={{ type: "spring", duration: 0.3 }}
+                  className="fixed inset-0 z-50 flex items-center justify-center p-4"
                 >
-                  <div className="p-5 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <div className="p-2 bg-red-100 dark:bg-red-900/30 rounded-lg">
-                        <AlertTriangle className="w-5 h-5 text-red-600 dark:text-red-400" />
+                  <div
+                    className={cn(
+                      "w-full max-w-md rounded-2xl shadow-2xl border",
+                      theme === 'dark'
+                        ? 'bg-gray-800 border-gray-700'
+                        : 'bg-white border-gray-200'
+                    )}
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <div className={cn(
+                      "px-6 py-4 border-b flex items-center justify-between",
+                      theme === 'dark' ? 'border-gray-700' : 'border-gray-200'
+                    )}>
+                      <div className="flex items-center gap-3">
+                        <div className="p-2 rounded-lg bg-red-100 dark:bg-red-900/30">
+                          <AlertTriangle className="w-5 h-5 text-red-600" />
+                        </div>
+                        <div>
+                          <h3 className={cn(
+                            "font-semibold",
+                            theme === 'dark' ? 'text-white' : 'text-gray-900'
+                          )}>
+                            Rechazar Orden
+                          </h3>
+                          <p className="text-xs text-gray-500">#{selectedOrder.orderNumber}</p>
+                        </div>
                       </div>
-                      <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-                        Rechazar Orden
-                      </h3>
-                    </div>
-                    <button
-                      onClick={() => setShowRejectModal(false)}
-                      className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
-                    >
-                      <X className="w-5 h-5" />
-                    </button>
-                  </div>
-
-                  <div className="p-5 space-y-4">
-                    <p className="text-gray-600 dark:text-gray-400">
-                      Esta accion rechazara la orden <strong>{selectedOrder.orderNumber}</strong> y notificara al cliente.
-                    </p>
-
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                        Motivo del rechazo *
-                      </label>
-                      <select
-                        value={rejectReason}
-                        onChange={e => setRejectReason(e.target.value)}
-                        className="w-full px-4 py-2.5 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-red-600 focus:border-transparent"
+                      <button
+                        onClick={() => setShowRejectModal(false)}
+                        className={cn(
+                          "p-2 rounded-lg transition-colors",
+                          theme === 'dark' ? 'hover:bg-gray-700' : 'hover:bg-gray-100'
+                        )}
                       >
-                        <option value="">Seleccionar motivo...</option>
-                        {rejectionReasons.map(reason => (
-                          <option key={reason} value={reason}>{reason}</option>
-                        ))}
-                      </select>
+                        <X className="w-5 h-5" />
+                      </button>
                     </div>
 
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                        Notas adicionales
-                      </label>
-                      <textarea
-                        value={rejectNotes}
-                        onChange={e => setRejectNotes(e.target.value)}
-                        placeholder="Detalles adicionales..."
-                        rows={3}
-                        className="w-full px-4 py-2.5 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-red-600 focus:border-transparent resize-none"
-                      />
-                    </div>
-                  </div>
+                    <div className="p-6 space-y-4">
+                      <p className="text-gray-600 dark:text-gray-400">
+                        Esta accion rechazara la orden y notificara al cliente.
+                      </p>
 
-                  <div className="p-5 border-t border-gray-200 dark:border-gray-700 flex gap-3">
-                    <button
-                      onClick={() => setShowRejectModal(false)}
-                      className="flex-1 py-2.5 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-xl hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors font-medium"
-                    >
-                      Cancelar
-                    </button>
-                    <button
-                      onClick={handleReject}
-                      disabled={actionLoading || !rejectReason}
-                      className="flex-1 py-2.5 bg-red-600 text-white rounded-xl hover:opacity-90 transition-colors font-medium disabled:opacity-50"
-                    >
-                      {actionLoading ? 'Procesando...' : 'Rechazar Orden'}
-                    </button>
+                      <div>
+                        <label className={cn(
+                          "block text-sm font-medium mb-2",
+                          theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
+                        )}>
+                          Motivo del rechazo *
+                        </label>
+                        <select
+                          value={rejectReason}
+                          onChange={e => setRejectReason(e.target.value)}
+                          className={cn(
+                            'w-full px-4 py-2.5 rounded-xl border focus:outline-none focus:ring-2 transition-all',
+                            theme === 'dark'
+                              ? 'bg-gray-700 border-gray-600 text-white focus:border-red-500 focus:ring-red-500/20'
+                              : 'bg-gray-50 border-gray-200 text-gray-900 focus:border-red-500 focus:ring-red-500/20'
+                          )}
+                        >
+                          <option value="">Seleccionar motivo...</option>
+                          {rejectionReasons.map(reason => (
+                            <option key={reason} value={reason}>{reason}</option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className={cn(
+                          "block text-sm font-medium mb-2",
+                          theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
+                        )}>
+                          Notas adicionales
+                        </label>
+                        <textarea
+                          value={rejectNotes}
+                          onChange={e => setRejectNotes(e.target.value)}
+                          placeholder="Detalles adicionales..."
+                          rows={3}
+                          className={cn(
+                            'w-full px-4 py-2.5 rounded-xl border focus:outline-none focus:ring-2 transition-all resize-none',
+                            theme === 'dark'
+                              ? 'bg-gray-700 border-gray-600 text-white focus:border-red-500 focus:ring-red-500/20'
+                              : 'bg-gray-50 border-gray-200 text-gray-900 focus:border-red-500 focus:ring-red-500/20'
+                          )}
+                        />
+                      </div>
+                    </div>
+
+                    <div className={cn(
+                      "flex gap-3 p-6 pt-4 border-t",
+                      theme === 'dark' ? 'border-gray-700' : 'border-gray-200'
+                    )}>
+                      <motion.button
+                        whileHover={{ scale: 1.02 }}
+                        whileTap={{ scale: 0.98 }}
+                        onClick={() => setShowRejectModal(false)}
+                        className={cn(
+                          "flex-1 py-3 rounded-xl font-medium transition-all",
+                          theme === 'dark'
+                            ? 'bg-gray-700 hover:bg-gray-600 text-white'
+                            : 'bg-gray-100 hover:bg-gray-200 text-gray-700'
+                        )}
+                      >
+                        Cancelar
+                      </motion.button>
+                      <motion.button
+                        whileHover={{ scale: 1.02 }}
+                        whileTap={{ scale: 0.98 }}
+                        onClick={handleReject}
+                        disabled={actionLoading || !rejectReason}
+                        className="flex-1 py-3 bg-red-600 text-white rounded-xl hover:bg-red-700 transition-all font-medium disabled:opacity-50"
+                      >
+                        {actionLoading ? 'Procesando...' : 'Rechazar Orden'}
+                      </motion.button>
+                    </div>
                   </div>
                 </motion.div>
-              </motion.div>
+              </>
             )}
           </AnimatePresence>
         </div>
