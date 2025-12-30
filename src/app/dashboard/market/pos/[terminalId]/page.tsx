@@ -35,7 +35,10 @@ import {
   ClipboardList,
   Menu,
   ChevronUp,
-  ChevronDown
+  ChevronDown,
+  Lock,
+  Eye,
+  EyeOff
 } from 'lucide-react'
 import { useRouter, useParams, useSearchParams } from 'next/navigation'
 import { useTheme } from '@/contexts/theme-context'
@@ -148,6 +151,13 @@ export default function POSTerminalPage() {
 
   // Mobile responsive state
   const [showMobileCart, setShowMobileCart] = useState(false)
+
+  // Password confirmation modal state (security feature)
+  const [showExitConfirmModal, setShowExitConfirmModal] = useState(false)
+  const [exitPassword, setExitPassword] = useState('')
+  const [exitPasswordError, setExitPasswordError] = useState<string | null>(null)
+  const [verifyingPassword, setVerifyingPassword] = useState(false)
+  const [showExitPassword, setShowExitPassword] = useState(false)
 
   // Initialize client-side state and fetch data
   useEffect(() => {
@@ -559,6 +569,45 @@ export default function POSTerminalPage() {
     return { subtotal, discounts, total, itemCount }
   }, [cart])
 
+  // Handle exit confirmation with password
+  const handleExitRequest = () => {
+    setShowExitConfirmModal(true)
+    setExitPassword('')
+    setExitPasswordError(null)
+  }
+
+  const handleExitConfirm = async () => {
+    if (!exitPassword.trim()) {
+      setExitPasswordError('Ingresa tu contraseña')
+      return
+    }
+
+    setVerifyingPassword(true)
+    setExitPasswordError(null)
+
+    try {
+      const res = await fetch('/api/auth/verify-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: exitPassword })
+      })
+
+      const data = await res.json()
+
+      if (data.success) {
+        // Password verified, navigate back
+        setShowExitConfirmModal(false)
+        router.push('/dashboard/market/pos')
+      } else {
+        setExitPasswordError(data.error || 'Contraseña incorrecta')
+      }
+    } catch {
+      setExitPasswordError('Error al verificar contraseña')
+    } finally {
+      setVerifyingPassword(false)
+    }
+  }
+
   // Add product to cart
   const addToCart = useCallback((product: Product) => {
     // Validate stock if trackInventory is enabled
@@ -842,8 +891,9 @@ export default function POSTerminalPage() {
       )}>
         <div className="flex items-center gap-2 sm:gap-4">
           <button
-            onClick={() => router.push('/dashboard/market/pos')}
+            onClick={handleExitRequest}
             className="p-1.5 sm:p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700"
+            title="Salir del POS (requiere contraseña)"
           >
             <ChevronLeft className="w-4 h-4 sm:w-5 sm:h-5" />
           </button>
@@ -1585,6 +1635,141 @@ export default function POSTerminalPage() {
                     theme === 'dark'
                       ? 'bg-gray-800 hover:bg-gray-700'
                       : 'bg-gray-100 hover:bg-gray-200'
+                  )}
+                >
+                  Cancelar
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+
+        {/* Exit Confirmation Modal - Password Required */}
+        {showExitConfirmModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[60] flex items-center justify-center p-4"
+            onClick={() => !verifyingPassword && setShowExitConfirmModal(false)}
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              onClick={(e) => e.stopPropagation()}
+              className={cn(
+                'w-full max-w-md rounded-2xl p-6',
+                theme === 'dark' ? 'bg-gray-800' : 'bg-white'
+              )}
+            >
+              <div className="flex items-center gap-3 mb-4">
+                <div className={cn(
+                  'p-3 rounded-xl',
+                  theme === 'dark' ? 'bg-amber-900/30' : 'bg-amber-100'
+                )}>
+                  <Lock className="w-6 h-6 text-amber-500" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold">Confirmar Salida</h3>
+                  <p className="text-sm text-gray-500">Ingresa tu contraseña para continuar</p>
+                </div>
+              </div>
+
+              <p className="text-sm text-gray-500 mb-4">
+                Por seguridad, debes confirmar tu identidad antes de salir del punto de venta.
+              </p>
+
+              {/* User Info */}
+              <div className={cn(
+                'flex items-center gap-3 p-3 rounded-xl mb-4',
+                theme === 'dark' ? 'bg-gray-700' : 'bg-gray-100'
+              )}>
+                <div className={cn(
+                  'w-10 h-10 rounded-full flex items-center justify-center',
+                  theme === 'dark' ? 'bg-gray-600' : 'bg-gray-200'
+                )}>
+                  <User className="w-5 h-5" />
+                </div>
+                <div>
+                  <p className="font-medium">{user?.name || user?.email}</p>
+                  <p className="text-xs text-gray-500">{user?.email}</p>
+                </div>
+              </div>
+
+              {/* Password Input */}
+              <div className="mb-4">
+                <label className="block text-sm font-medium mb-2">Contraseña</label>
+                <div className="relative">
+                  <input
+                    type={showExitPassword ? 'text' : 'password'}
+                    value={exitPassword}
+                    onChange={(e) => setExitPassword(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && handleExitConfirm()}
+                    placeholder="Ingresa tu contraseña"
+                    disabled={verifyingPassword}
+                    autoFocus
+                    className={cn(
+                      'w-full px-4 py-3 pr-12 rounded-xl border focus:outline-none focus:ring-2 focus:ring-blue-500',
+                      theme === 'dark'
+                        ? 'bg-gray-700 border-gray-600'
+                        : 'bg-white border-gray-300',
+                      exitPasswordError && 'border-red-500 focus:ring-red-500'
+                    )}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowExitPassword(!showExitPassword)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                  >
+                    {showExitPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                  </button>
+                </div>
+                {exitPasswordError && (
+                  <p className="text-sm text-red-500 mt-1 flex items-center gap-1">
+                    <AlertCircle className="w-4 h-4" />
+                    {exitPasswordError}
+                  </p>
+                )}
+              </div>
+
+              {/* Buttons */}
+              <div className="flex gap-3">
+                <button
+                  onClick={handleExitConfirm}
+                  disabled={verifyingPassword || !exitPassword.trim()}
+                  className={cn(
+                    'flex-1 py-3 rounded-xl font-medium flex items-center justify-center gap-2',
+                    verifyingPassword || !exitPassword.trim()
+                      ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                      : 'bg-blue-500 text-white hover:bg-blue-600'
+                  )}
+                >
+                  {verifyingPassword ? (
+                    <>
+                      <Loader2 className="w-5 h-5 animate-spin" />
+                      Verificando...
+                    </>
+                  ) : (
+                    <>
+                      <LogOut className="w-5 h-5" />
+                      Salir del POS
+                    </>
+                  )}
+                </button>
+                <button
+                  onClick={() => {
+                    setShowExitConfirmModal(false)
+                    setExitPassword('')
+                    setExitPasswordError(null)
+                  }}
+                  disabled={verifyingPassword}
+                  className={cn(
+                    'px-6 py-3 rounded-xl font-medium',
+                    theme === 'dark'
+                      ? 'bg-gray-700 hover:bg-gray-600'
+                      : 'bg-gray-100 hover:bg-gray-200',
+                    verifyingPassword && 'opacity-50 cursor-not-allowed'
                   )}
                 >
                   Cancelar
