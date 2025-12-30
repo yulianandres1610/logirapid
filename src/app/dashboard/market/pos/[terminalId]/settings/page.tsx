@@ -46,7 +46,7 @@ interface Terminal {
   acceptedCurrencies: string[]
   isActive: boolean
   users: TerminalUser[]
-  stats: {
+  stats?: {
     openSessions: number
     closedSessions: number
     totalSales: number
@@ -397,28 +397,28 @@ export default function POSSettingsPage() {
             theme === 'dark' ? 'bg-gray-800' : 'bg-white shadow-sm'
           )}>
             <p className="text-sm text-gray-500">Sesiones Abiertas</p>
-            <p className="text-2xl font-bold">{terminal.stats.openSessions}</p>
+            <p className="text-2xl font-bold">{terminal.stats?.openSessions ?? 0}</p>
           </div>
           <div className={cn(
             'p-4 rounded-xl',
             theme === 'dark' ? 'bg-gray-800' : 'bg-white shadow-sm'
           )}>
             <p className="text-sm text-gray-500">Sesiones Cerradas</p>
-            <p className="text-2xl font-bold">{terminal.stats.closedSessions}</p>
+            <p className="text-2xl font-bold">{terminal.stats?.closedSessions ?? 0}</p>
           </div>
           <div className={cn(
             'p-4 rounded-xl',
             theme === 'dark' ? 'bg-gray-800' : 'bg-white shadow-sm'
           )}>
             <p className="text-sm text-gray-500">Ventas Totales</p>
-            <p className="text-2xl font-bold">${terminal.stats.totalSales.toFixed(2)}</p>
+            <p className="text-2xl font-bold">${(terminal.stats?.totalSales ?? 0).toFixed(2)}</p>
           </div>
           <div className={cn(
             'p-4 rounded-xl',
             theme === 'dark' ? 'bg-gray-800' : 'bg-white shadow-sm'
           )}>
             <p className="text-sm text-gray-500">Órdenes Totales</p>
-            <p className="text-2xl font-bold">{terminal.stats.totalOrders}</p>
+            <p className="text-2xl font-bold">{terminal.stats?.totalOrders ?? 0}</p>
           </div>
         </div>
 
