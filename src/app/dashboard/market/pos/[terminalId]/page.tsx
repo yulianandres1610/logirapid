@@ -158,6 +158,8 @@ export default function POSTerminalPage() {
   const [exitPasswordError, setExitPasswordError] = useState<string | null>(null)
   const [verifyingPassword, setVerifyingPassword] = useState(false)
   const [showExitPassword, setShowExitPassword] = useState(false)
+  const [exitDestination, setExitDestination] = useState<string>('/dashboard/market/pos')
+  const [exitActionLabel, setExitActionLabel] = useState<string>('Salir del POS')
 
   // Initialize client-side state and fetch data
   useEffect(() => {
@@ -570,10 +572,14 @@ export default function POSTerminalPage() {
   }, [cart])
 
   // Handle exit confirmation with password
-  const handleExitRequest = () => {
+  const handleExitRequest = (destination: string = '/dashboard/market/pos', actionLabel: string = 'Salir del POS') => {
+    setExitDestination(destination)
+    setExitActionLabel(actionLabel)
     setShowExitConfirmModal(true)
+    setShowCloseSessionModal(false) // Close the close session modal if open
     setExitPassword('')
     setExitPasswordError(null)
+    setShowExitPassword(false)
   }
 
   const handleExitConfirm = async () => {
@@ -595,9 +601,9 @@ export default function POSTerminalPage() {
       const data = await res.json()
 
       if (data.success) {
-        // Password verified, navigate back
+        // Password verified, navigate to destination
         setShowExitConfirmModal(false)
-        router.push('/dashboard/market/pos')
+        router.push(exitDestination)
       } else {
         setExitPasswordError(data.error || 'Contraseña incorrecta')
       }
@@ -891,7 +897,7 @@ export default function POSTerminalPage() {
       )}>
         <div className="flex items-center gap-2 sm:gap-4">
           <button
-            onClick={handleExitRequest}
+            onClick={() => handleExitRequest()}
             className="p-1.5 sm:p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700"
             title="Salir del POS (requiere contraseña)"
           >
@@ -1615,14 +1621,14 @@ export default function POSTerminalPage() {
 
               <div className="flex flex-col gap-3">
                 <button
-                  onClick={() => router.push(`/dashboard/market/pos/${terminalId}/count`)}
+                  onClick={() => handleExitRequest(`/dashboard/market/pos/${terminalId}/count`, 'Iniciar Conteo')}
                   className="w-full py-3 rounded-xl bg-gradient-to-r from-blue-500 to-blue-600 text-white font-medium shadow-lg shadow-blue-500/25 hover:from-blue-600 hover:to-blue-700 flex items-center justify-center gap-2"
                 >
                   <ClipboardList className="w-5 h-5" />
                   Iniciar Conteo de Inventario
                 </button>
                 <button
-                  onClick={() => router.push(`/dashboard/market/pos/${terminalId}/close`)}
+                  onClick={() => handleExitRequest(`/dashboard/market/pos/${terminalId}/close`, 'Cerrar Sesión')}
                   className="w-full py-3 rounded-xl bg-gradient-to-r from-red-500 to-red-600 text-white font-medium shadow-lg shadow-red-500/25 hover:from-red-600 hover:to-red-700 flex items-center justify-center gap-2"
                 >
                   <LogOut className="w-5 h-5" />
@@ -1753,7 +1759,7 @@ export default function POSTerminalPage() {
                   ) : (
                     <>
                       <LogOut className="w-5 h-5" />
-                      Salir del POS
+                      {exitActionLabel}
                     </>
                   )}
                 </button>

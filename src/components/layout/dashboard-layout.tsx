@@ -11,9 +11,10 @@ import SupportChat from '@/components/support/SupportChat'
 
 interface DashboardLayoutProps {
   children: React.ReactNode
+  hideSidebar?: boolean // Used for POS mode to prevent navigation escape
 }
 
-export function DashboardLayout({ children }: DashboardLayoutProps) {
+export function DashboardLayout({ children, hideSidebar = false }: DashboardLayoutProps) {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
     if (typeof window !== 'undefined') {
       const saved = localStorage.getItem('sidebar-collapsed')
@@ -53,34 +54,38 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
         )}
       </div>
 
-      {/* Sidebar - Fixed */}
-      <div className="fixed left-0 top-0 h-full z-50">
-        <Sidebar
-          isCollapsed={sidebarCollapsed}
-          onToggle={() => setSidebarCollapsed(!sidebarCollapsed)}
-        />
-      </div>
+      {/* Sidebar - Fixed (hidden in POS mode) */}
+      {!hideSidebar && (
+        <div className="fixed left-0 top-0 h-full z-50">
+          <Sidebar
+            isCollapsed={sidebarCollapsed}
+            onToggle={() => setSidebarCollapsed(!sidebarCollapsed)}
+          />
+        </div>
+      )}
 
       {/* Main content - Fixed header and scrollable content */}
       <div className={cn(
         "flex flex-col flex-1 relative z-10",
-        sidebarCollapsed ? "ml-20" : "ml-72"
+        hideSidebar ? "ml-0" : (sidebarCollapsed ? "ml-20" : "ml-72")
       )}>
-        {/* Header - Fixed */}
-        <div className={cn(
-          "fixed top-0 right-0 z-40 transition-all duration-300",
-          sidebarCollapsed ? "left-20" : "left-72"
-        )}>
-          <Header
-            onToggleSidebar={() => setSidebarCollapsed(!sidebarCollapsed)}
-            sidebarCollapsed={sidebarCollapsed}
-          />
-        </div>
+        {/* Header - Fixed (hidden in POS mode) */}
+        {!hideSidebar && (
+          <div className={cn(
+            "fixed top-0 right-0 z-40 transition-all duration-300",
+            sidebarCollapsed ? "left-20" : "left-72"
+          )}>
+            <Header
+              onToggleSidebar={() => setSidebarCollapsed(!sidebarCollapsed)}
+              sidebarCollapsed={sidebarCollapsed}
+            />
+          </div>
+        )}
 
         {/* Page content - Scrollable */}
         <div className={cn(
           "flex-1 overflow-auto",
-          sidebarCollapsed ? "mt-16" : "mt-16"
+          hideSidebar ? "mt-0" : "mt-16"
         )}>
           <motion.main
             className="p-6"

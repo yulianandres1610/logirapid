@@ -286,7 +286,7 @@ export default function CloseSessionPage() {
   if (loading) {
     return (
       <ProtectedRoute>
-        <DashboardLayout>
+        <DashboardLayout hideSidebar>
           <div className="min-h-screen flex items-center justify-center">
             <div className="text-center">
               <Loader2 className="w-12 h-12 animate-spin mx-auto mb-4 text-blue-500" />
@@ -302,7 +302,7 @@ export default function CloseSessionPage() {
   if (countMissing) {
     return (
       <ProtectedRoute>
-        <DashboardLayout>
+        <DashboardLayout hideSidebar>
           <div className="min-h-screen flex items-center justify-center p-6">
             <motion.div
               initial={{ opacity: 0, y: 20 }}
@@ -353,7 +353,7 @@ export default function CloseSessionPage() {
   if (countPendingApproval && inventoryCount) {
     return (
       <ProtectedRoute>
-        <DashboardLayout>
+        <DashboardLayout hideSidebar>
           <div className="min-h-screen flex items-center justify-center p-6">
             <motion.div
               initial={{ opacity: 0, y: 20 }}
@@ -418,7 +418,7 @@ export default function CloseSessionPage() {
   if (!session) {
     return (
       <ProtectedRoute>
-        <DashboardLayout>
+        <DashboardLayout hideSidebar>
           <div className="min-h-screen flex items-center justify-center">
             <div className="text-center">
               <AlertCircle className="w-12 h-12 mx-auto mb-4 text-red-500" />
@@ -450,7 +450,7 @@ export default function CloseSessionPage() {
 
   return (
     <ProtectedRoute>
-      <DashboardLayout>
+      <DashboardLayout hideSidebar>
         <div className="min-h-screen p-4 md:p-6">
           <div className="max-w-6xl mx-auto space-y-4 md:space-y-6">
             {/* Header */}
