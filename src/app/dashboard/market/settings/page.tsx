@@ -1273,7 +1273,10 @@ const ALL_DOCUMENT_TYPES = [
   { id: 'inventory_count_report', label: 'Reporte de Conteo', description: 'Conteos de inventario' },
   { id: 'invoice', label: 'Factura', description: 'Facturas generales' },
   { id: 'product_label', label: 'Etiqueta Producto', description: 'Etiquetas de productos' },
-  { id: 'shipping_label', label: 'Etiqueta Envío', description: 'Etiquetas de paquetes' }
+  { id: 'shipping_label', label: 'Etiqueta Envío', description: 'Etiquetas de paquetes' },
+  { id: 'warehouse_operation', label: 'Operación Almacén', description: 'Documentos de almacén' },
+  { id: 'consignment_receipt', label: 'Recibo Consignación', description: 'Recibos de consignación' },
+  { id: 'unified_reception', label: 'Recepción Unificada', description: 'Documentos de recepción' }
 ]
 
 const PRINTER_TYPES = [
@@ -1310,6 +1313,7 @@ function PrintServicesTab({ theme }: { theme: string }) {
     supportedDocumentTypes: string[]
   }>({ printerType: 'standard', supportedDocumentTypes: [] })
   const [savingPrinter, setSavingPrinter] = useState(false)
+  const [refreshingPrinters, setRefreshingPrinters] = useState(false)
 
   useEffect(() => {
     fetchServices()
@@ -1342,6 +1346,13 @@ function PrintServicesTab({ theme }: { theme: string }) {
       const response = await fetch(`/api/print/services/${id}`)
       if (response.ok) {
         const data = await response.json()
+        console.log(`[Settings] Service ${id} details received:`, data.data)
+        console.log(`[Settings] Printers received: ${data.data?.printers?.length || 0}`)
+        if (data.data?.printers) {
+          data.data.printers.forEach((p: any, i: number) =>
+            console.log(`[Settings]   [${i + 1}] "${p.printerName}" (id: ${p.id}, type: ${p.printerType})`)
+          )
+        }
         return data.data
       }
     } catch (error) {
@@ -1390,6 +1401,22 @@ function PrintServicesTab({ theme }: { theme: string }) {
     if (details) {
       setSelectedService({ ...service, ...details.service, printers: details.printers })
       setShowDetailsModal(true)
+    }
+  }
+
+  const refreshPrinters = async () => {
+    if (!selectedService) return
+    setRefreshingPrinters(true)
+    try {
+      const details = await fetchServiceDetails(selectedService.id)
+      if (details) {
+        setSelectedService(prev => prev ? { ...prev, printers: details.printers } : null)
+        setMessage({ type: 'success', text: `${details.printers?.length || 0} impresoras encontradas` })
+      }
+    } catch (error) {
+      setMessage({ type: 'error', text: 'Error al refrescar impresoras' })
+    } finally {
+      setRefreshingPrinters(false)
     }
   }
 
@@ -2211,14 +2238,29 @@ function PrintServicesTab({ theme }: { theme: string }) {
               </div>
 
               {/* Printers */}
-              {selectedService.printers && selectedService.printers.length > 0 && (
-                <div>
+              <div>
+                <div className="flex items-center justify-between mb-2">
                   <label className={cn(
-                    "block text-sm font-medium mb-2",
+                    "block text-sm font-medium",
                     theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
                   )}>
-                    Impresoras Detectadas ({selectedService.printers.length})
+                    Impresoras Detectadas ({selectedService.printers?.length || 0})
                   </label>
+                  <button
+                    onClick={refreshPrinters}
+                    disabled={refreshingPrinters}
+                    className={cn(
+                      "px-3 py-1.5 text-xs font-medium rounded-lg flex items-center gap-1.5 transition-colors",
+                      theme === 'dark'
+                        ? 'bg-gray-700 hover:bg-gray-600 text-gray-200'
+                        : 'bg-gray-200 hover:bg-gray-300 text-gray-700'
+                    )}
+                  >
+                    <RefreshCw className={cn("w-3.5 h-3.5", refreshingPrinters && "animate-spin")} />
+                    {refreshingPrinters ? 'Actualizando...' : 'Actualizar'}
+                  </button>
+                </div>
+              {selectedService.printers && selectedService.printers.length > 0 ? (
                   <div className="space-y-2">
                     {selectedService.printers.map((printer: any) => (
                       <div
@@ -2285,8 +2327,21 @@ function PrintServicesTab({ theme }: { theme: string }) {
                       </div>
                     ))}
                   </div>
+              ) : (
+                <div className={cn(
+                  "p-4 rounded-xl border text-center",
+                  theme === 'dark' ? 'bg-gray-900/60 border-gray-700' : 'bg-gray-50 border-gray-200'
+                )}>
+                  <Printer className={cn("w-8 h-8 mx-auto mb-2", theme === 'dark' ? 'text-gray-600' : 'text-gray-400')} />
+                  <p className={cn("text-sm", theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}>
+                    No hay impresoras registradas
+                  </p>
+                  <p className={cn("text-xs mt-1", theme === 'dark' ? 'text-gray-500' : 'text-gray-400')}>
+                    Inicia la app LogiRapid Print Service para detectar impresoras
+                  </p>
                 </div>
               )}
+              </div>
             </div>
 
             <div className="flex gap-3 justify-between pt-6 mt-6 border-t border-gray-200 dark:border-gray-700">

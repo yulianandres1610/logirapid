@@ -33,6 +33,20 @@ export type DocumentType =
   | 'cash_register_report'
   | 'invoice'
   | 'shipping_label'
+  | 'lot_label'
+  | 'unified_reception'
+  | 'consignment_receipt'
+  | 'warehouse_operation'
+
+// Document types that should ONLY use label printers
+const LABEL_DOCUMENT_TYPES = ['product_label', 'shipping_label', 'lot_label']
+
+// Document types that should ONLY use standard/thermal printers (NOT label printers)
+const STANDARD_DOCUMENT_TYPES = [
+  'pos_receipt', 'inventory_count_report', 'purchase_invoice', 'sales_report',
+  'cash_register_report', 'invoice', 'unified_reception', 'consignment_receipt',
+  'warehouse_operation'
+]
 
 interface PrintDocumentModalProps {
   isOpen: boolean
@@ -53,7 +67,11 @@ const DOCUMENT_LABELS: Record<DocumentType, { label: string; icon: typeof FileTe
   product_label: { label: 'Etiqueta de Producto', icon: Package },
   cash_register_report: { label: 'Reporte de Caja', icon: FileText },
   invoice: { label: 'Factura', icon: FileText },
-  shipping_label: { label: 'Etiqueta de Envío', icon: Package }
+  shipping_label: { label: 'Etiqueta de Envío', icon: Package },
+  lot_label: { label: 'Etiqueta de Lote', icon: Package },
+  unified_reception: { label: 'Comprobante de Recepción', icon: Receipt },
+  consignment_receipt: { label: 'Recibo de Consignación', icon: Receipt },
+  warehouse_operation: { label: 'Operación de Almacén', icon: Package }
 }
 
 export function PrintDocumentModal({
@@ -91,11 +109,26 @@ export function PrintDocumentModal({
 
   // Helper to check if printer supports the document type
   const printerSupportsDocType = (printer: PrinterInfo, docType: string): boolean => {
-    // If no supported types defined, assume it supports all
-    if (!printer.supportedDocumentTypes || printer.supportedDocumentTypes.length === 0) {
-      return true
+    const isLabelPrinter = printer.printerType === 'label_4x6' || printer.printerType === 'label_barcode'
+    const isLabelDocument = LABEL_DOCUMENT_TYPES.includes(docType)
+    const isStandardDocument = STANDARD_DOCUMENT_TYPES.includes(docType)
+
+    // Label documents should ONLY go to label printers
+    if (isLabelDocument) {
+      return isLabelPrinter
     }
-    return printer.supportedDocumentTypes.includes(docType)
+
+    // Standard documents should NOT go to label printers
+    if (isStandardDocument) {
+      return !isLabelPrinter
+    }
+
+    // For other documents, check supportedDocumentTypes if defined
+    if (printer.supportedDocumentTypes && printer.supportedDocumentTypes.length > 0) {
+      return printer.supportedDocumentTypes.includes(docType)
+    }
+
+    return true
   }
 
   const fetchPrintServices = async () => {
@@ -122,11 +155,30 @@ export function PrintDocumentModal({
           const firstService = activeServices[0]
           setSelectedService(firstService)
 
-          // For receipts/reports, prefer thermal printers
-          const thermalPrinter = firstService.printers.find(
-            (p: PrinterInfo) => p.printerType === 'thermal_80mm' && p.isOnline
-          )
-          const defaultPrinter = thermalPrinter
+          // Select appropriate default printer based on document type
+          let defaultPrinter: PrinterInfo | undefined
+
+          if (LABEL_DOCUMENT_TYPES.includes(documentType)) {
+            // For labels, prefer label printers
+            defaultPrinter = firstService.printers.find(
+              (p: PrinterInfo) => (p.printerType === 'label_4x6' || p.printerType === 'label_barcode') && p.isOnline
+            )
+          } else if (STANDARD_DOCUMENT_TYPES.includes(documentType)) {
+            // For standard documents, prefer standard printers, then thermal
+            defaultPrinter = firstService.printers.find(
+              (p: PrinterInfo) => p.printerType === 'standard' && p.isOnline
+            ) || firstService.printers.find(
+              (p: PrinterInfo) => p.printerType === 'thermal_80mm' && p.isOnline
+            )
+          } else {
+            // For other documents, prefer thermal printers
+            defaultPrinter = firstService.printers.find(
+              (p: PrinterInfo) => p.printerType === 'thermal_80mm' && p.isOnline
+            )
+          }
+
+          // Fallback to default or first available printer
+          defaultPrinter = defaultPrinter
             || firstService.printers.find((p: PrinterInfo) => p.isDefault && p.isOnline)
             || firstService.printers.find((p: PrinterInfo) => p.isOnline)
             || firstService.printers[0]
@@ -300,10 +352,19 @@ export function PrintDocumentModal({
                         const service = services.find(s => s.id === parseInt(e.target.value))
                         setSelectedService(service || null)
                         if (service) {
-                          const thermalPrinter = service.printers.find(
-                            p => p.printerType === 'thermal_80mm' && p.isOnline
-                          )
-                          const defaultPrinter = thermalPrinter
+                          let defaultPrinter: PrinterInfo | undefined
+                          if (LABEL_DOCUMENT_TYPES.includes(documentType)) {
+                            defaultPrinter = service.printers.find(
+                              p => (p.printerType === 'label_4x6' || p.printerType === 'label_barcode') && p.isOnline
+                            )
+                          } else if (STANDARD_DOCUMENT_TYPES.includes(documentType)) {
+                            defaultPrinter = service.printers.find(
+                              p => p.printerType === 'standard' && p.isOnline
+                            ) || service.printers.find(
+                              p => p.printerType === 'thermal_80mm' && p.isOnline
+                            )
+                          }
+                          defaultPrinter = defaultPrinter
                             || service.printers.find(p => p.isDefault && p.isOnline)
                             || service.printers.find(p => p.isOnline)
                             || service.printers[0]

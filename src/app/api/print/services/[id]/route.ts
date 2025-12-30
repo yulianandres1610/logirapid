@@ -65,6 +65,7 @@ export async function GET(
     const service = serviceResult.rows[0]
 
     // Get printers for this service
+    console.log(`[Print Services API] Fetching printers for service ${serviceId}`)
     const printersResult = await db.query(`
       SELECT
         id,
@@ -88,10 +89,13 @@ export async function GET(
       WHERE print_service_id = $1
       ORDER BY is_default DESC, printer_name ASC
     `, [serviceId])
+    console.log(`[Print Services API] Found ${printersResult.rows.length} printers:`)
+    printersResult.rows.forEach((p, i) => console.log(`  [${i + 1}] "${p.printer_name}" (id: ${p.id}, type: ${p.printer_type})`))
 
     const ALL_DOCUMENT_TYPES = [
       'pos_receipt', 'product_label', 'invoice', 'purchase_invoice',
-      'sales_report', 'inventory_count_report', 'cash_register_report', 'shipping_label'
+      'sales_report', 'inventory_count_report', 'cash_register_report', 'shipping_label',
+      'warehouse_operation', 'consignment_receipt', 'unified_reception'
     ]
 
     // Get recent jobs for this service

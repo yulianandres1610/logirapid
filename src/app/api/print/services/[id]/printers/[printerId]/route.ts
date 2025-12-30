@@ -18,7 +18,10 @@ const ALL_DOCUMENT_TYPES = [
   'sales_report',
   'inventory_count_report',
   'cash_register_report',
-  'shipping_label'
+  'shipping_label',
+  'warehouse_operation',
+  'consignment_receipt',
+  'unified_reception'
 ]
 
 /**

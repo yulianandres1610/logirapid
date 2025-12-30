@@ -17,6 +17,8 @@ interface DetectedPrinter extends PrinterInfo {
   systemName: string
   isDefault: boolean
   isOnline: boolean
+  isZebra: boolean // True if this is a Zebra printer (uses ZPL)
+  rawQueueName?: string // Name of RAW queue for direct ZPL printing (macOS/Linux)
 }
 
 class PrinterService {
@@ -35,7 +37,19 @@ class PrinterService {
         systemPrinters = await this.detectLinuxPrinters()
       }
 
-      this.printers = systemPrinters.map(p => this.enrichPrinterInfo(p))
+      // Filter out RAW queues from the main printer list (they're auxiliary queues, not real printers)
+      const filteredPrinters = systemPrinters.filter(p => {
+        const name = p.name.toLowerCase()
+        return !name.endsWith('_raw') && !name.includes('_raw_')
+      })
+
+      this.printers = filteredPrinters.map(p => this.enrichPrinterInfo(p))
+
+      // On macOS/Linux, detect RAW queues for Zebra printers
+      if (process.platform !== 'win32') {
+        await this.detectRawQueues()
+      }
+
       this.lastRefresh = new Date()
 
       console.log(`[Printer Service] Detected ${this.printers.length} printers`)
@@ -43,6 +57,51 @@ class PrinterService {
     } catch (error) {
       console.error('[Printer Service] Detection failed:', error)
       return []
+    }
+  }
+
+  /**
+   * Detect RAW print queues for Zebra printers on macOS/Linux
+   * RAW queues allow sending ZPL commands directly without driver conversion
+   */
+  private async detectRawQueues(): Promise<void> {
+    try {
+      // Get all printer queues
+      const { stdout } = await execAsync('lpstat -p 2>/dev/null', { encoding: 'utf8' })
+      const lines = stdout.split('\n')
+
+      const rawQueues: string[] = []
+      for (const line of lines) {
+        const match = line.match(/(?:impresora|printer)\s+(\S+)/)
+        if (match) {
+          const queueName = match[1]
+          if (queueName.toLowerCase().includes('raw') || queueName.toLowerCase().includes('_raw')) {
+            rawQueues.push(queueName)
+          }
+        }
+      }
+
+      console.log(`[Printer Service] Found ${rawQueues.length} RAW queues: ${rawQueues.join(', ') || 'none'}`)
+
+      // Assign RAW queues to Zebra printers
+      for (const printer of this.printers) {
+        if (printer.isZebra) {
+          // Look for a RAW queue that matches this printer
+          const matchingRaw = rawQueues.find(q =>
+            q.toLowerCase().includes('zebra') ||
+            q === 'Zebra_RAW'
+          )
+
+          if (matchingRaw) {
+            printer.rawQueueName = matchingRaw
+            console.log(`[Printer Service] Assigned RAW queue "${matchingRaw}" to Zebra printer "${printer.printerName}"`)
+          } else {
+            console.log(`[Printer Service] No RAW queue found for Zebra printer "${printer.printerName}"`)
+          }
+        }
+      }
+    } catch (error) {
+      console.log('[Printer Service] RAW queue detection failed:', error)
     }
   }
 
@@ -85,25 +144,27 @@ class PrinterService {
 
   private async detectMacPrinters(): Promise<SystemPrinter[]> {
     try {
-      const printers: SystemPrinter[] = []
+      const printersMap = new Map<string, SystemPrinter>() // Use map to avoid duplicates
       let defaultPrinter = ''
-      const cupsNames = new Map<string, string>() // displayName -> cupsName
 
       // Method 1: Use lpstat to get REAL CUPS printer names
       try {
         const { stdout } = await execAsync('lpstat -p -d 2>/dev/null', { encoding: 'utf8' })
         const lines = stdout.split('\n')
 
+        console.log('[Printer Service] lpstat output:', stdout)
+
         for (const line of lines) {
-          // Parse "printer PrinterName is idle." or similar
+          // Parse "printer PrinterName is idle." or similar (multiple language support)
           const printerMatch = line.match(/^(?:la\s+)?(?:impresora\s+)?printer\s+(\S+)|^(?:la\s+)?impresora\s+(\S+)\s+/)
           if (printerMatch) {
             const cupsName = printerMatch[1] || printerMatch[2]
             const displayName = cupsName.replace(/_/g, ' ')
-            cupsNames.set(displayName, cupsName)
 
-            printers.push({
-              name: cupsName, // Use CUPS name directly
+            console.log(`[Printer Service] lpstat found: "${cupsName}" -> "${displayName}"`)
+
+            printersMap.set(cupsName, {
+              name: cupsName,
               displayName: displayName,
               isDefault: false,
               status: line.includes('idle') || line.includes('inactiva') ? 0 : 1
@@ -117,10 +178,10 @@ class PrinterService {
           }
         }
       } catch (e) {
-        console.log('[Printer Service] lpstat failed, trying alternative methods')
+        console.log('[Printer Service] lpstat failed, trying alternative methods:', e)
       }
 
-      // Method 2: Enrich with system_profiler data (URI, driver info, etc.)
+      // Method 2: Use system_profiler to get additional printers and enrich data
       try {
         const { stdout } = await execAsync(
           'system_profiler SPPrintersDataType -json 2>/dev/null',
@@ -131,15 +192,15 @@ class PrinterService {
           const data = JSON.parse(stdout)
           const printerData = data.SPPrintersDataType || []
 
+          console.log(`[Printer Service] system_profiler found ${printerData.length} printers`)
+
           for (const profilerPrinter of printerData) {
             const profilerName = profilerPrinter._name || ''
             const uri = profilerPrinter.uri || ''
+            // Generate CUPS-compatible name
+            const cupsName = profilerName.replace(/[^a-zA-Z0-9]/g, '_')
 
-            // Find matching printer from lpstat
-            const existingPrinter = printers.find(p =>
-              p.displayName === profilerName ||
-              p.name === profilerName.replace(/[\s-]/g, '_')
-            )
+            console.log(`[Printer Service] system_profiler printer: "${profilerName}" (cups: "${cupsName}")`)
 
             // Detect connection type from URI
             const isNetwork = uri.startsWith('ipp://') ||
@@ -150,8 +211,23 @@ class PrinterService {
                              uri.includes('._ipp') ||
                              uri.includes('network')
 
-            if (existingPrinter) {
+            // Find if this printer already exists in our map (check both name formats)
+            let existingKey: string | null = null
+            for (const [key, printer] of printersMap.entries()) {
+              if (
+                printer.displayName === profilerName ||
+                printer.displayName === profilerName.replace(/_/g, ' ') ||
+                key === cupsName ||
+                printer.name === cupsName
+              ) {
+                existingKey = key
+                break
+              }
+            }
+
+            if (existingKey) {
               // Enrich existing printer with additional info
+              const existingPrinter = printersMap.get(existingKey)!
               existingPrinter.description = profilerPrinter.ppd || profilerPrinter._name
               existingPrinter.options = {
                 driverName: profilerPrinter.ppd || '',
@@ -161,12 +237,11 @@ class PrinterService {
               if (profilerPrinter.default === 'yes' || profilerPrinter.default === 'Yes') {
                 existingPrinter.isDefault = true
               }
-            } else if (printers.length === 0) {
-              // Fallback: if lpstat failed, use system_profiler
-              // Generate CUPS-compatible name (replace all non-alnum with _)
-              const cupsName = profilerName.replace(/[^a-zA-Z0-9]/g, '_')
-
-              printers.push({
+              console.log(`[Printer Service] Enriched existing printer: "${existingKey}"`)
+            } else {
+              // Add as new printer (system_profiler found it but lpstat didn't)
+              console.log(`[Printer Service] Adding NEW printer from system_profiler: "${profilerName}"`)
+              printersMap.set(cupsName, {
                 name: cupsName,
                 displayName: profilerName,
                 description: profilerPrinter.ppd || profilerName,
@@ -185,8 +260,11 @@ class PrinterService {
         console.log('[Printer Service] system_profiler failed:', e)
       }
 
-      console.log(`[Printer Service] macOS: Found ${printers.length} printers`)
-      printers.forEach(p => console.log(`[Printer Service]   - ${p.name} (${p.displayName})`))
+      // Convert map to array
+      const printers = Array.from(printersMap.values())
+
+      console.log(`[Printer Service] macOS: Total ${printers.length} printers detected`)
+      printers.forEach((p, i) => console.log(`[Printer Service]   [${i + 1}] ${p.name} (${p.displayName})`))
 
       // Mark default printer
       return printers.map(p => ({
@@ -348,6 +426,19 @@ class PrinterService {
     // If no status info, assume online if printer was detected
     const isOnline = systemPrinter.status === 0 || systemPrinter.status === undefined
 
+    // Detect if this is a Zebra printer (uses ZPL language)
+    const isZebra = name.includes('zebra') ||
+                    name.includes('zpl') ||
+                    name.includes('ztc') ||
+                    name.includes('zd') || // Zebra ZD series
+                    displayName.includes('zebra') ||
+                    desc.includes('zebra') ||
+                    desc.includes('zpl')
+
+    if (isZebra) {
+      console.log(`[Printer Service] Detected Zebra printer: ${systemPrinter.name}`)
+    }
+
     return {
       systemName: systemPrinter.name,
       printerName: systemPrinter.displayName || systemPrinter.name,
@@ -360,7 +451,8 @@ class PrinterService {
       supportsRaw: true, // Most modern printers support raw
       paperWidthMm,
       isDefault: systemPrinter.isDefault,
-      isOnline
+      isOnline,
+      isZebra
     }
   }
 
@@ -386,6 +478,22 @@ class PrinterService {
     return this.printers.filter(
       p => p.printerType === 'label_4x6' || p.printerType === 'label_barcode'
     )
+  }
+
+  getStandardPrinters(): DetectedPrinter[] {
+    // Return non-thermal, non-label printers (like EPSON inkjet/laser)
+    return this.printers.filter(
+      p => p.printerType === 'standard' && !p.isZebra
+    )
+  }
+
+  getZebraPrinters(): DetectedPrinter[] {
+    return this.printers.filter(p => p.isZebra)
+  }
+
+  isZebraPrinter(printerName: string): boolean {
+    const printer = this.getPrinterByName(printerName)
+    return printer?.isZebra ?? false
   }
 
   async checkPrinterOnline(printerName: string): Promise<boolean> {
@@ -456,6 +564,11 @@ class PrinterService {
       }
 
       console.log(`[Printer Service] Printing test page to: ${printerName}`)
+      console.log(`[Printer Service]   - Is Zebra: ${printer.isZebra}`)
+      console.log(`[Printer Service]   - RAW Queue: ${printer.rawQueueName || 'none'}`)
+
+      const fs = await import('fs').then(m => m.promises)
+      const timestamp = Date.now()
 
       if (process.platform === 'win32') {
         // Windows: Use PowerShell to print a test page
@@ -463,12 +576,79 @@ class PrinterService {
           `powershell -Command "Start-Process -FilePath 'notepad' -ArgumentList '/p' -Wait"`,
           { encoding: 'utf8' }
         )
+      } else if (printer.isZebra) {
+        // Zebra printers: Send ZPL test label
+        const date = new Date().toLocaleString('es-ES')
+        const zplContent = `^XA
+^PW400
+^LL200
+^FO20,20^A0N,30,30^FDPRUEBA IMPRESION^FS
+^FO20,60^A0N,22,22^FDLogiRapid v1.14.0^FS
+^FO20,95^A0N,18,18^FD${date}^FS
+^FO20,130^A0N,18,18^FD${printer.printerName}^FS
+^FO20,160^BY2^BCN,40,Y,N,N^FD123456789^FS
+^XZ`
+
+        const tempFile = `/tmp/logirapid_test_zpl_${timestamp}.txt`
+        await fs.writeFile(tempFile, zplContent)
+
+        if (process.platform === 'darwin') {
+          // macOS: Use Python script with libusb for direct USB communication
+          // This bypasses CUPS driver filters completely
+          const scriptPath = require('path').join(__dirname, '../../scripts/zebra_print.py')
+
+          console.log(`[Printer Service] Using Python USB direct for Zebra test page`)
+          console.log(`[Printer Service] Script: ${scriptPath}`)
+
+          try {
+            const { stdout, stderr } = await execAsync(
+              `python3 '${scriptPath}' '${tempFile}'`,
+              { encoding: 'utf8' }
+            )
+            console.log(`[Printer Service] Python USB output:`, stdout || stderr)
+
+            if (stderr && stderr.includes('ERROR')) {
+              throw new Error(stderr)
+            }
+          } catch (pythonError) {
+            console.log(`[Printer Service] Python USB failed, trying CUPS backend...`)
+            // Fallback to CUPS backend
+            const deviceUri = await this.getZebraDeviceUri()
+            if (deviceUri) {
+              const { stdout, stderr } = await execAsync(
+                `cat '${tempFile}' | /usr/libexec/cups/backend/usb 1 user "Test Page" 1 ''`,
+                {
+                  encoding: 'utf8',
+                  env: { ...process.env, DEVICE_URI: deviceUri }
+                }
+              )
+              console.log(`[Printer Service] CUPS backend output:`, stdout || stderr)
+            }
+          }
+        } else {
+          // Linux: Use lp with raw option
+          const queueName = printer.rawQueueName || printer.systemName
+          const escapedQueue = queueName.replace(/'/g, "'\\''")
+
+          console.log(`[Printer Service] Sending ZPL to queue: ${queueName}`)
+          const { stdout, stderr } = await execAsync(`lp -d '${escapedQueue}' -o raw '${tempFile}'`, { encoding: 'utf8' })
+          console.log(`[Printer Service] ZPL sent:`, stdout || stderr)
+        }
+
+        // Clean up temp file after a delay
+        setTimeout(async () => {
+          try {
+            await fs.unlink(tempFile)
+          } catch {
+            // Ignore cleanup errors
+          }
+        }, 5000)
       } else {
-        // macOS/Linux: Create a simple test file and print it
+        // Standard printers: Send text test page
         const testContent = `
 =====================================
    PRUEBA DE IMPRESION
-   LogiRapid Print Service v1.6.0
+   LogiRapid Print Service v1.14.0
 =====================================
 
 Fecha: ${new Date().toLocaleString('es-ES')}
@@ -484,9 +664,7 @@ correctamente.
 
 =====================================
 `
-        // Write to temp file
-        const fs = await import('fs').then(m => m.promises)
-        const tempFile = `/tmp/logirapid_test_print_${Date.now()}.txt`
+        const tempFile = `/tmp/logirapid_test_print_${timestamp}.txt`
         await fs.writeFile(tempFile, testContent)
 
         // Print using lp command
@@ -532,6 +710,28 @@ correctamente.
 
   getLastRefresh(): Date | null {
     return this.lastRefresh
+  }
+
+  /**
+   * Get the USB device URI for Zebra printers on macOS
+   */
+  async getZebraDeviceUri(): Promise<string | null> {
+    try {
+      const { stdout } = await execAsync(`lpstat -v | grep -i zebra`, { encoding: 'utf8' })
+      const lines = stdout.split('\n')
+
+      for (const line of lines) {
+        // Parse: "dispositivo para PrinterName: usb://..."
+        const match = line.match(/:\s*(usb:\/\/[^\s]+)/)
+        if (match) {
+          return match[1]
+        }
+      }
+
+      return null
+    } catch {
+      return null
+    }
   }
 }
 

@@ -137,17 +137,24 @@ export async function POST(
 
     // Update printers
     if (printers && Array.isArray(printers)) {
+      console.log(`[Print Service Register] Received ${printers.length} printers from client:`)
+      printers.forEach((p, i) => console.log(`  [${i + 1}] "${p.printerName}" (id: ${p.printerId}, type: ${p.printerType})`))
+
       // Get existing printers
       const existingPrinters = await db.query(
         'SELECT id, printer_name FROM print_service_printers WHERE print_service_id = $1',
         [serviceId]
       )
+      console.log(`[Print Service Register] Existing printers in DB: ${existingPrinters.rows.length}`)
+      existingPrinters.rows.forEach((p, i) => console.log(`  [${i + 1}] "${p.printer_name}" (id: ${p.id})`))
+
       const existingNames = new Set(existingPrinters.rows.map(p => p.printer_name))
       const newNames = new Set(printers.map(p => p.printerName))
 
       // Remove printers that no longer exist
       for (const existing of existingPrinters.rows) {
         if (!newNames.has(existing.printer_name)) {
+          console.log(`[Print Service Register] Removing printer: "${existing.printer_name}"`)
           await db.query('DELETE FROM print_service_printers WHERE id = $1', [existing.id])
         }
       }
@@ -155,6 +162,7 @@ export async function POST(
       // Add or update printers
       for (const printer of printers) {
         if (existingNames.has(printer.printerName)) {
+          console.log(`[Print Service Register] Updating printer: "${printer.printerName}"`)
           // Update existing printer
           await db.query(`
             UPDATE print_service_printers SET
@@ -185,6 +193,7 @@ export async function POST(
             printer.printerName
           ])
         } else {
+          console.log(`[Print Service Register] Inserting NEW printer: "${printer.printerName}"`)
           // Insert new printer
           await db.query(`
             INSERT INTO print_service_printers (
@@ -219,6 +228,14 @@ export async function POST(
           ])
         }
       }
+
+      // Verify what's in DB now
+      const finalPrinters = await db.query(
+        'SELECT id, printer_name FROM print_service_printers WHERE print_service_id = $1',
+        [serviceId]
+      )
+      console.log(`[Print Service Register] Final printers in DB: ${finalPrinters.rows.length}`)
+      finalPrinters.rows.forEach((p, i) => console.log(`  [${i + 1}] "${p.printer_name}" (id: ${p.id})`))
     }
 
     // Get count of pending jobs for this service
