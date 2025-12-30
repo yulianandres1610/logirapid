@@ -140,6 +140,7 @@ export default function CreateProductPage() {
   } | null>(null)
   const [generatingImage, setGeneratingImage] = useState(false)
   const [cleaningImage, setCleaningImage] = useState(false)
+  const [generatingVariantImage, setGeneratingVariantImage] = useState<string | null>(null) // variant id being generated
 
   const [formData, setFormData] = useState({
     name: '',
@@ -346,6 +347,44 @@ export default function CreateProductPage() {
       setErrors({ ...errors, image: 'Error al generar imagen' })
     }
     setGeneratingImage(false)
+  }
+
+  // Generate image with AI for a variant
+  const generateVariantImageWithAI = async (variantId: string, variantName: string) => {
+    if (!formData.name.trim()) {
+      return
+    }
+
+    setGeneratingVariantImage(variantId)
+    try {
+      // Build description: "Product Name - Variant Name" (e.g. "Telefono - Rojo")
+      const fullProductName = `${formData.name} - ${variantName}`
+
+      const res = await fetch('/api/ai/process-image', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'generate',
+          productName: fullProductName,
+          productDescription: `${formData.description || ''} Variante: ${variantName}`,
+          saveToStorage: false // Don't save to storage until product is created
+        })
+      })
+
+      const data = await res.json()
+      if (data.success && data.data?.generated) {
+        // Use imageUrl if saved, or imageBase64 for preview
+        const imageToUse = data.data.imageUrl || data.data.imageBase64
+        if (imageToUse) {
+          updateVariant(variantId, 'imageUrl', imageToUse)
+        }
+      } else {
+        console.error('Error generating variant image:', data.error)
+      }
+    } catch (error) {
+      console.error('Error generating variant image:', error)
+    }
+    setGeneratingVariantImage(null)
   }
 
   // Clean image with AI (remove background)
@@ -2147,11 +2186,36 @@ export default function CreateProductPage() {
                                                 // Create preview URL
                                                 const previewUrl = URL.createObjectURL(file)
                                                 updateVariant(variant.id, 'imageUrl', previewUrl)
-                                                // TODO: Upload to storage when saving product
                                               }
                                             }}
                                           />
                                         </label>
+                                        {/* Generate with AI button */}
+                                        <button
+                                          type="button"
+                                          onClick={() => generateVariantImageWithAI(variant.id, variant.name)}
+                                          disabled={generatingVariantImage === variant.id || !formData.name.trim()}
+                                          className={cn(
+                                            "text-xs px-2 py-1 rounded-md transition-all flex items-center gap-1",
+                                            generatingVariantImage === variant.id
+                                              ? 'bg-purple-400 text-white cursor-wait'
+                                              : theme === 'dark'
+                                                ? 'bg-gradient-to-r from-purple-600 to-indigo-600 text-white hover:from-purple-700 hover:to-indigo-700'
+                                                : 'bg-gradient-to-r from-purple-500 to-indigo-500 text-white hover:from-purple-600 hover:to-indigo-600'
+                                          )}
+                                        >
+                                          {generatingVariantImage === variant.id ? (
+                                            <>
+                                              <Loader2 className="w-3 h-3 animate-spin" />
+                                              Generando...
+                                            </>
+                                          ) : (
+                                            <>
+                                              <Wand2 className="w-3 h-3" />
+                                              Generar IA
+                                            </>
+                                          )}
+                                        </button>
                                         {variant.imageUrl && (
                                           <button
                                             type="button"
