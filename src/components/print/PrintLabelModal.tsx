@@ -24,6 +24,15 @@ interface PrinterInfo {
   isDefault: boolean
 }
 
+interface ProductVariant {
+  id: number
+  name: string
+  barcode: string
+  sku?: string
+  price?: number
+  imageUrl?: string
+}
+
 interface ProductLabelData {
   productName: string
   sku: string
@@ -34,6 +43,7 @@ interface ProductLabelData {
   unitOfMeasure?: string
   category?: string
   description?: string
+  variants?: ProductVariant[]
 }
 
 interface PrintLabelModalProps {
@@ -53,7 +63,19 @@ export function PrintLabelModal({ isOpen, onClose, productData, onPrintSuccess }
   const [selectedService, setSelectedService] = useState<PrintService | null>(null)
   const [selectedPrinter, setSelectedPrinter] = useState<PrinterInfo | null>(null)
   const [copies, setCopies] = useState(1)
+  const [variantCopies, setVariantCopies] = useState<Record<number, number>>({})
   const [error, setError] = useState<string | null>(null)
+
+  // Calculate total copies
+  const hasVariants = productData.variants && productData.variants.length > 0
+  const totalCopies = copies + Object.values(variantCopies).reduce((a, b) => a + b, 0)
+
+  const updateVariantCopies = (variantId: number, delta: number) => {
+    setVariantCopies(prev => ({
+      ...prev,
+      [variantId]: Math.max(0, Math.min(50, (prev[variantId] || 0) + delta))
+    }))
+  }
 
   useEffect(() => {
     if (isOpen) {
@@ -104,12 +126,18 @@ export function PrintLabelModal({ isOpen, onClose, productData, onPrintSuccess }
       return
     }
 
+    if (totalCopies === 0) {
+      showNotification('error', 'Error', 'Seleccione al menos una etiqueta para imprimir')
+      return
+    }
+
     setPrinting(true)
     try {
-      const response = await fetch('/api/print/jobs', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
+      const jobs: { documentType: string; documentData: Record<string, unknown>; copies: number }[] = []
+
+      // Add base product job if copies > 0
+      if (copies > 0) {
+        jobs.push({
           documentType: 'product_label',
           documentData: {
             productName: productData.productName,
@@ -121,25 +149,66 @@ export function PrintLabelModal({ isOpen, onClose, productData, onPrintSuccess }
             unitOfMeasure: productData.unitOfMeasure,
             category: productData.category,
             description: productData.description,
-            labelSize: 'medium' // 2.5" x 1.5"
+            labelSize: 'medium'
           },
-          copies,
-          printServiceId: selectedService.id,
-          printerId: selectedPrinter.id,
-          sourceType: 'product',
-          priority: 1
+          copies
         })
-      })
-
-      const data = await response.json()
-
-      if (response.ok && data.success) {
-        showNotification('success', 'Imprimiendo', `Trabajo ${data.data.jobNumber} enviado a ${selectedPrinter.printerName}`)
-        onPrintSuccess?.(data.data.jobNumber)
-        onClose()
-      } else {
-        throw new Error(data.error || 'Error al enviar trabajo de impresión')
       }
+
+      // Add variant jobs
+      if (productData.variants) {
+        for (const variant of productData.variants) {
+          const qty = variantCopies[variant.id] || 0
+          if (qty > 0) {
+            jobs.push({
+              documentType: 'product_label',
+              documentData: {
+                productName: `${productData.productName} - ${variant.name}`,
+                sku: variant.sku || productData.sku,
+                barcode: variant.barcode,
+                barcodeType: detectBarcodeType(variant.barcode),
+                price: variant.price || productData.price,
+                currency: productData.currency,
+                unitOfMeasure: productData.unitOfMeasure,
+                category: productData.category,
+                labelSize: 'medium'
+              },
+              copies: qty
+            })
+          }
+        }
+      }
+
+      // Send all jobs
+      const jobNumbers: string[] = []
+      for (const job of jobs) {
+        const response = await fetch('/api/print/jobs', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            ...job,
+            printServiceId: selectedService.id,
+            printerId: selectedPrinter.id,
+            sourceType: 'product',
+            priority: 1
+          })
+        })
+
+        const data = await response.json()
+        if (response.ok && data.success) {
+          jobNumbers.push(data.data.jobNumber)
+        } else {
+          throw new Error(data.error || 'Error al enviar trabajo de impresión')
+        }
+      }
+
+      showNotification(
+        'success',
+        'Imprimiendo',
+        `${jobNumbers.length} trabajo(s) enviado(s) a ${selectedPrinter.printerName} (${totalCopies} etiquetas)`
+      )
+      onPrintSuccess?.(jobNumbers[0])
+      onClose()
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Error desconocido'
       showNotification('error', 'Error de impresión', errorMessage)
@@ -327,66 +396,152 @@ export function PrintLabelModal({ isOpen, onClose, productData, onPrintSuccess }
                   </div>
                 </div>
 
-                {/* Copies Selector */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                    Cantidad de copias
+                {/* Product and Variants Selection */}
+                <div className="space-y-3">
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                    Seleccionar etiquetas a imprimir
                   </label>
-                  <div className="flex items-center justify-center gap-4">
-                    <button
-                      onClick={() => setCopies(Math.max(1, copies - 1))}
-                      className={cn(
-                        'w-12 h-12 rounded-xl flex items-center justify-center transition-colors',
-                        theme === 'dark'
-                          ? 'bg-gray-700 hover:bg-gray-600 text-white'
-                          : 'bg-gray-100 hover:bg-gray-200 text-gray-900'
-                      )}
-                    >
-                      <Minus className="w-5 h-5" />
-                    </button>
-                    <div className={cn(
-                      'w-20 h-12 rounded-xl flex items-center justify-center text-2xl font-bold',
-                      theme === 'dark' ? 'bg-gray-700 text-white' : 'bg-gray-100 text-gray-900'
-                    )}>
-                      {copies}
-                    </div>
-                    <button
-                      onClick={() => setCopies(Math.min(50, copies + 1))}
-                      className={cn(
-                        'w-12 h-12 rounded-xl flex items-center justify-center transition-colors',
-                        theme === 'dark'
-                          ? 'bg-gray-700 hover:bg-gray-600 text-white'
-                          : 'bg-gray-100 hover:bg-gray-200 text-gray-900'
-                      )}
-                    >
-                      <Plus className="w-5 h-5" />
-                    </button>
-                  </div>
-                </div>
 
-                {/* Product Preview */}
-                <div className={cn(
-                  'p-4 rounded-xl',
-                  theme === 'dark' ? 'bg-gray-700/50' : 'bg-gray-50'
-                )}>
-                  <p className="text-xs text-gray-500 uppercase tracking-wide mb-2">Vista previa</p>
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="font-semibold text-gray-900 dark:text-white truncate max-w-[180px]">
-                        {productData.productName}
-                      </p>
-                      <p className="text-xs text-gray-500 font-mono">SKU: {productData.sku}</p>
-                      {productData.barcode && (
-                        <p className="text-xs text-gray-500 font-mono">{productData.barcode}</p>
-                      )}
+                  {/* Base Product */}
+                  <div className={cn(
+                    'p-4 rounded-xl border-2',
+                    copies > 0
+                      ? 'border-emerald-500 bg-emerald-50 dark:bg-emerald-900/20'
+                      : theme === 'dark'
+                        ? 'border-gray-600 bg-gray-700/50'
+                        : 'border-gray-200 bg-gray-50'
+                  )}>
+                    <div className="flex items-center justify-between">
+                      <div className="flex-1 min-w-0">
+                        <p className={cn(
+                          'font-semibold truncate',
+                          copies > 0 ? 'text-emerald-700 dark:text-emerald-400' : 'text-gray-900 dark:text-white'
+                        )}>
+                          {productData.productName}
+                        </p>
+                        <p className="text-xs text-gray-500 font-mono">
+                          {productData.barcode || productData.sku}
+                        </p>
+                        <p className="text-sm font-medium text-emerald-600">
+                          {productData.currency === 'USD' ? '$' : productData.currency}
+                          {productData.price.toFixed(2)}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-2 ml-4">
+                        <button
+                          onClick={() => setCopies(Math.max(0, copies - 1))}
+                          className={cn(
+                            'w-8 h-8 rounded-lg flex items-center justify-center transition-colors',
+                            theme === 'dark'
+                              ? 'bg-gray-600 hover:bg-gray-500 text-white'
+                              : 'bg-gray-200 hover:bg-gray-300 text-gray-900'
+                          )}
+                        >
+                          <Minus className="w-4 h-4" />
+                        </button>
+                        <div className={cn(
+                          'w-12 h-8 rounded-lg flex items-center justify-center text-lg font-bold',
+                          theme === 'dark' ? 'bg-gray-600 text-white' : 'bg-gray-200 text-gray-900'
+                        )}>
+                          {copies}
+                        </div>
+                        <button
+                          onClick={() => setCopies(Math.min(50, copies + 1))}
+                          className={cn(
+                            'w-8 h-8 rounded-lg flex items-center justify-center transition-colors',
+                            theme === 'dark'
+                              ? 'bg-gray-600 hover:bg-gray-500 text-white'
+                              : 'bg-gray-200 hover:bg-gray-300 text-gray-900'
+                          )}
+                        >
+                          <Plus className="w-4 h-4" />
+                        </button>
+                      </div>
                     </div>
-                    <div className="text-right">
-                      <p className="text-xl font-bold text-emerald-600">
-                        {productData.currency === 'USD' ? '$' : productData.currency}
-                        {productData.price.toFixed(2)}
+                  </div>
+
+                  {/* Variants */}
+                  {hasVariants && (
+                    <>
+                      <p className="text-xs text-gray-500 uppercase tracking-wide pt-2">
+                        Variantes ({productData.variants?.length})
                       </p>
-                      <p className="text-xs text-gray-500">/{productData.unitOfMeasure || 'unidad'}</p>
-                    </div>
+                      {productData.variants?.map(variant => {
+                        const qty = variantCopies[variant.id] || 0
+                        return (
+                          <div
+                            key={variant.id}
+                            className={cn(
+                              'p-4 rounded-xl border-2',
+                              qty > 0
+                                ? 'border-emerald-500 bg-emerald-50 dark:bg-emerald-900/20'
+                                : theme === 'dark'
+                                  ? 'border-gray-600 bg-gray-700/50'
+                                  : 'border-gray-200 bg-gray-50'
+                            )}
+                          >
+                            <div className="flex items-center justify-between">
+                              <div className="flex-1 min-w-0">
+                                <p className={cn(
+                                  'font-semibold truncate',
+                                  qty > 0 ? 'text-emerald-700 dark:text-emerald-400' : 'text-gray-900 dark:text-white'
+                                )}>
+                                  {variant.name}
+                                </p>
+                                <p className="text-xs text-gray-500 font-mono">
+                                  {variant.barcode || variant.sku || 'Sin codigo'}
+                                </p>
+                                {variant.price && (
+                                  <p className="text-sm font-medium text-emerald-600">
+                                    {productData.currency === 'USD' ? '$' : productData.currency}
+                                    {variant.price.toFixed(2)}
+                                  </p>
+                                )}
+                              </div>
+                              <div className="flex items-center gap-2 ml-4">
+                                <button
+                                  onClick={() => updateVariantCopies(variant.id, -1)}
+                                  className={cn(
+                                    'w-8 h-8 rounded-lg flex items-center justify-center transition-colors',
+                                    theme === 'dark'
+                                      ? 'bg-gray-600 hover:bg-gray-500 text-white'
+                                      : 'bg-gray-200 hover:bg-gray-300 text-gray-900'
+                                  )}
+                                >
+                                  <Minus className="w-4 h-4" />
+                                </button>
+                                <div className={cn(
+                                  'w-12 h-8 rounded-lg flex items-center justify-center text-lg font-bold',
+                                  theme === 'dark' ? 'bg-gray-600 text-white' : 'bg-gray-200 text-gray-900'
+                                )}>
+                                  {qty}
+                                </div>
+                                <button
+                                  onClick={() => updateVariantCopies(variant.id, 1)}
+                                  className={cn(
+                                    'w-8 h-8 rounded-lg flex items-center justify-center transition-colors',
+                                    theme === 'dark'
+                                      ? 'bg-gray-600 hover:bg-gray-500 text-white'
+                                      : 'bg-gray-200 hover:bg-gray-300 text-gray-900'
+                                  )}
+                                >
+                                  <Plus className="w-4 h-4" />
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </>
+                  )}
+
+                  {/* Total */}
+                  <div className={cn(
+                    'p-3 rounded-xl text-center',
+                    theme === 'dark' ? 'bg-gray-700/50' : 'bg-gray-100'
+                  )}>
+                    <p className="text-sm text-gray-500">Total de etiquetas</p>
+                    <p className="text-2xl font-bold text-emerald-600">{totalCopies}</p>
                   </div>
                 </div>
               </>
@@ -412,7 +567,7 @@ export function PrintLabelModal({ isOpen, onClose, productData, onPrintSuccess }
               </button>
               <button
                 onClick={handlePrint}
-                disabled={printing || !selectedPrinter}
+                disabled={printing || !selectedPrinter || totalCopies === 0}
                 className={cn(
                   'flex-1 py-3 rounded-xl font-medium flex items-center justify-center gap-2 transition-colors',
                   'bg-gradient-to-r from-emerald-500 to-emerald-600 text-white',
@@ -425,7 +580,7 @@ export function PrintLabelModal({ isOpen, onClose, productData, onPrintSuccess }
                 ) : (
                   <Printer className="w-5 h-5" />
                 )}
-                {printing ? 'Enviando...' : `Imprimir ${copies > 1 ? `(${copies})` : ''}`}
+                {printing ? 'Enviando...' : `Imprimir${totalCopies > 0 ? ` (${totalCopies})` : ''}`}
               </button>
             </div>
           )}

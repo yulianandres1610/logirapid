@@ -95,6 +95,7 @@ interface Variant {
   costPrice: string
   sellingPrice: string
   options: { type: string; value: string }[]
+  imageUrl: string
 }
 
 interface VariantType {
@@ -598,7 +599,8 @@ export default function CreateProductPage() {
             barcode: v.barcode,
             costPrice: parseFloat(v.costPrice) || 0,
             sellingPrice: parseFloat(v.sellingPrice) || 0,
-            options: v.options
+            options: v.options,
+            imageUrl: v.imageUrl || null
           })) : []
         })
       })
@@ -689,7 +691,8 @@ export default function CreateProductPage() {
       barcode: '',
       costPrice: formData.costPrice,
       sellingPrice: formData.sellingPrice,
-      options: combo
+      options: combo,
+      imageUrl: ''
     }))
 
     setVariants(newVariants)
@@ -1983,72 +1986,190 @@ export default function CreateProductPage() {
                               )}
                             >
                               <div className="flex items-start gap-4">
-                                <div className="flex-1 grid grid-cols-1 sm:grid-cols-4 gap-3">
-                                  <div className="sm:col-span-2">
-                                    <label className="block text-xs text-gray-500 mb-1">Nombre</label>
-                                    <p className={cn(
-                                      "font-medium",
-                                      theme === 'dark' ? 'text-white' : 'text-gray-900'
-                                    )}>
-                                      {variant.name}
-                                    </p>
-                                    <div className="flex gap-1 mt-1">
-                                      {variant.options.map((opt, i) => (
-                                        <span
-                                          key={i}
+                                <div className="flex-1 space-y-3">
+                                  {/* Row 1: Name and Options */}
+                                  <div className="flex items-center justify-between">
+                                    <div>
+                                      <p className={cn(
+                                        "font-medium",
+                                        theme === 'dark' ? 'text-white' : 'text-gray-900'
+                                      )}>
+                                        {variant.name}
+                                      </p>
+                                      <div className="flex gap-1 mt-1">
+                                        {variant.options.map((opt, i) => (
+                                          <span
+                                            key={i}
+                                            className={cn(
+                                              "text-xs px-2 py-0.5 rounded-full",
+                                              theme === 'dark'
+                                                ? 'bg-gray-700 text-gray-300'
+                                                : 'bg-gray-100 text-gray-600'
+                                            )}
+                                          >
+                                            {opt.value}
+                                          </span>
+                                        ))}
+                                      </div>
+                                    </div>
+                                    <button
+                                      onClick={() => removeVariant(variant.id)}
+                                      className="text-red-500 hover:text-red-600 p-1"
+                                    >
+                                      <Trash2 className="w-4 h-4" />
+                                    </button>
+                                  </div>
+
+                                  {/* Row 2: Prices, SKU, Barcode */}
+                                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                                    <div>
+                                      <label className="block text-xs text-gray-500 mb-1">Costo</label>
+                                      <div className="relative">
+                                        <span className="absolute left-2 top-1/2 -translate-y-1/2 text-xs text-gray-500">{symbol}</span>
+                                        <input
+                                          type="number"
+                                          value={variant.costPrice}
+                                          onChange={(e) => updateVariant(variant.id, 'costPrice', e.target.value)}
                                           className={cn(
-                                            "text-xs px-2 py-0.5 rounded-full",
+                                            'w-full pl-6 pr-2 py-1.5 rounded-lg border text-sm focus:outline-none',
                                             theme === 'dark'
-                                              ? 'bg-gray-700 text-gray-300'
-                                              : 'bg-gray-100 text-gray-600'
+                                              ? 'bg-gray-800 border-gray-600 text-white'
+                                              : 'bg-gray-50 border-gray-200 text-gray-900'
+                                          )}
+                                        />
+                                      </div>
+                                    </div>
+                                    <div>
+                                      <label className="block text-xs text-gray-500 mb-1">Venta</label>
+                                      <div className="relative">
+                                        <span className="absolute left-2 top-1/2 -translate-y-1/2 text-xs text-gray-500">{symbol}</span>
+                                        <input
+                                          type="number"
+                                          value={variant.sellingPrice}
+                                          onChange={(e) => updateVariant(variant.id, 'sellingPrice', e.target.value)}
+                                          className={cn(
+                                            'w-full pl-6 pr-2 py-1.5 rounded-lg border text-sm focus:outline-none',
+                                            theme === 'dark'
+                                              ? 'bg-gray-800 border-gray-600 text-white'
+                                              : 'bg-gray-50 border-gray-200 text-gray-900'
+                                          )}
+                                        />
+                                      </div>
+                                    </div>
+                                    <div>
+                                      <label className="block text-xs text-gray-500 mb-1">SKU</label>
+                                      <input
+                                        type="text"
+                                        value={variant.sku}
+                                        onChange={(e) => updateVariant(variant.id, 'sku', e.target.value)}
+                                        placeholder="Auto"
+                                        className={cn(
+                                          'w-full px-2 py-1.5 rounded-lg border text-sm focus:outline-none',
+                                          theme === 'dark'
+                                            ? 'bg-gray-800 border-gray-600 text-white placeholder:text-gray-500'
+                                            : 'bg-gray-50 border-gray-200 text-gray-900 placeholder:text-gray-400'
+                                        )}
+                                      />
+                                    </div>
+                                    <div>
+                                      <label className="block text-xs text-gray-500 mb-1">Codigo de Barras</label>
+                                      <input
+                                        type="text"
+                                        value={variant.barcode}
+                                        onChange={(e) => updateVariant(variant.id, 'barcode', e.target.value)}
+                                        placeholder="Auto"
+                                        className={cn(
+                                          'w-full px-2 py-1.5 rounded-lg border text-sm focus:outline-none',
+                                          theme === 'dark'
+                                            ? 'bg-gray-800 border-gray-600 text-white placeholder:text-gray-500'
+                                            : 'bg-gray-50 border-gray-200 text-gray-900 placeholder:text-gray-400'
+                                        )}
+                                      />
+                                    </div>
+                                  </div>
+
+                                  {/* Row 3: Image selector */}
+                                  <div className={cn(
+                                    "p-3 rounded-lg border",
+                                    theme === 'dark' ? 'bg-gray-800/50 border-gray-700' : 'bg-gray-50 border-gray-200'
+                                  )}>
+                                    <label className="block text-xs text-gray-500 mb-2">Imagen de la variante</label>
+                                    <div className="flex items-center gap-3">
+                                      {/* Image preview */}
+                                      <div className={cn(
+                                        "w-12 h-12 rounded-lg overflow-hidden flex-shrink-0 flex items-center justify-center",
+                                        theme === 'dark' ? 'bg-gray-700' : 'bg-gray-200'
+                                      )}>
+                                        {(variant.imageUrl || formData.imageUrl) ? (
+                                          <img
+                                            src={variant.imageUrl || formData.imageUrl}
+                                            alt={variant.name}
+                                            className="w-full h-full object-cover"
+                                          />
+                                        ) : (
+                                          <ImageIcon className="w-5 h-5 text-gray-400" />
+                                        )}
+                                      </div>
+
+                                      {/* Image options */}
+                                      <div className="flex flex-wrap gap-2">
+                                        <button
+                                          type="button"
+                                          onClick={() => updateVariant(variant.id, 'imageUrl', '')}
+                                          className={cn(
+                                            "text-xs px-2 py-1 rounded-md transition-all",
+                                            !variant.imageUrl
+                                              ? theme === 'dark'
+                                                ? 'bg-purple-600 text-white'
+                                                : 'bg-purple-500 text-white'
+                                              : theme === 'dark'
+                                                ? 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                                                : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
                                           )}
                                         >
-                                          {opt.value}
-                                        </span>
-                                      ))}
-                                    </div>
-                                  </div>
-                                  <div>
-                                    <label className="block text-xs text-gray-500 mb-1">Costo</label>
-                                    <div className="relative">
-                                      <span className="absolute left-2 top-1/2 -translate-y-1/2 text-xs text-gray-500">{symbol}</span>
-                                      <input
-                                        type="number"
-                                        value={variant.costPrice}
-                                        onChange={(e) => updateVariant(variant.id, 'costPrice', e.target.value)}
-                                        className={cn(
-                                          'w-full pl-6 pr-2 py-1.5 rounded-lg border text-sm focus:outline-none',
+                                          Usar del producto
+                                        </button>
+                                        <label className={cn(
+                                          "text-xs px-2 py-1 rounded-md cursor-pointer transition-all flex items-center gap-1",
                                           theme === 'dark'
-                                            ? 'bg-gray-800 border-gray-600 text-white'
-                                            : 'bg-gray-50 border-gray-200 text-gray-900'
+                                            ? 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                                            : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                                        )}>
+                                          <Upload className="w-3 h-3" />
+                                          Subir
+                                          <input
+                                            type="file"
+                                            accept="image/*"
+                                            className="hidden"
+                                            onChange={async (e) => {
+                                              const file = e.target.files?.[0]
+                                              if (file) {
+                                                // Create preview URL
+                                                const previewUrl = URL.createObjectURL(file)
+                                                updateVariant(variant.id, 'imageUrl', previewUrl)
+                                                // TODO: Upload to storage when saving product
+                                              }
+                                            }}
+                                          />
+                                        </label>
+                                        {variant.imageUrl && (
+                                          <button
+                                            type="button"
+                                            onClick={() => updateVariant(variant.id, 'imageUrl', '')}
+                                            className={cn(
+                                              "text-xs px-2 py-1 rounded-md transition-all",
+                                              theme === 'dark'
+                                                ? 'bg-red-900/50 text-red-300 hover:bg-red-900'
+                                                : 'bg-red-100 text-red-700 hover:bg-red-200'
+                                            )}
+                                          >
+                                            <X className="w-3 h-3" />
+                                          </button>
                                         )}
-                                      />
-                                    </div>
-                                  </div>
-                                  <div>
-                                    <label className="block text-xs text-gray-500 mb-1">Venta</label>
-                                    <div className="relative">
-                                      <span className="absolute left-2 top-1/2 -translate-y-1/2 text-xs text-gray-500">{symbol}</span>
-                                      <input
-                                        type="number"
-                                        value={variant.sellingPrice}
-                                        onChange={(e) => updateVariant(variant.id, 'sellingPrice', e.target.value)}
-                                        className={cn(
-                                          'w-full pl-6 pr-2 py-1.5 rounded-lg border text-sm focus:outline-none',
-                                          theme === 'dark'
-                                            ? 'bg-gray-800 border-gray-600 text-white'
-                                            : 'bg-gray-50 border-gray-200 text-gray-900'
-                                        )}
-                                      />
+                                      </div>
                                     </div>
                                   </div>
                                 </div>
-                                <button
-                                  onClick={() => removeVariant(variant.id)}
-                                  className="text-red-500 hover:text-red-600 p-1 mt-4"
-                                >
-                                  <Trash2 className="w-4 h-4" />
-                                </button>
                               </div>
                             </motion.div>
                           ))}

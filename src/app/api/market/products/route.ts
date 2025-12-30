@@ -285,7 +285,9 @@ export async function POST(request: NextRequest) {
       supplierName,
       supplierContact,
       supplierReference,
-      minimumStock = 0
+      minimumStock = 0,
+      hasVariants = false,
+      variants = []
     } = body
 
     // Validate required fields
@@ -402,14 +404,74 @@ export async function POST(request: NextRequest) {
       // Don't fail the product creation if logging fails
     }
 
+    // Save variants if the product has variants
+    const savedVariants: { id: number; name: string; barcode: string; sku: string }[] = []
+    if (hasVariants && variants.length > 0) {
+      try {
+        console.log('[Market Products] Saving', variants.length, 'variants for product:', productId)
+
+        for (let i = 0; i < variants.length; i++) {
+          const v = variants[i]
+          // Auto-generate barcode if empty
+          const variantBarcode = v.barcode || generateBarcode()
+          // Auto-generate SKU if empty
+          const variantSku = v.sku || `${finalSku}-V${(i + 1).toString().padStart(2, '0')}`
+          // Use variant image or fall back to product image
+          const variantImageUrl = v.imageUrl || imageUrl || null
+
+          const variantResult = await db.query(`
+            INSERT INTO market_product_variants (
+              product_id, variant_name, sku, barcode, cost_price, selling_price,
+              quantity_on_hand, image_url, is_active, created_at, updated_at
+            ) VALUES ($1, $2, $3, $4, $5, $6, 0, $7, true, NOW(), NOW())
+            RETURNING id
+          `, [
+            productId,
+            v.name,
+            variantSku,
+            variantBarcode,
+            parseFloat(v.costPrice) || costPrice,
+            parseFloat(v.sellingPrice) || sellingPrice,
+            variantImageUrl
+          ])
+
+          const variantId = variantResult.rows[0].id
+          savedVariants.push({
+            id: variantId,
+            name: v.name,
+            barcode: variantBarcode,
+            sku: variantSku
+          })
+
+          // Save variant options
+          if (v.options && v.options.length > 0) {
+            for (const opt of v.options) {
+              await db.query(`
+                INSERT INTO market_variant_options (variant_id, option_type, option_value, created_at)
+                VALUES ($1, $2, $3, NOW())
+              `, [variantId, opt.type, opt.value])
+            }
+          }
+        }
+
+        console.log('[Market Products] Saved', savedVariants.length, 'variants successfully')
+      } catch (variantError) {
+        console.error('[Market Products] Error saving variants:', variantError)
+        // Don't fail the product creation if variant saving fails
+      }
+    }
+
     return NextResponse.json({
       success: true,
       data: {
         id: productId,
         sku: finalSku,
-        barcode: finalBarcode
+        barcode: finalBarcode,
+        variants: savedVariants
       },
-      message: 'Producto creado exitosamente'
+      message: hasVariants
+        ? `Producto creado exitosamente con ${savedVariants.length} variantes`
+        : 'Producto creado exitosamente'
     })
 
   } catch (error) {
