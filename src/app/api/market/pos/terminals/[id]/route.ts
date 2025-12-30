@@ -87,18 +87,25 @@ export async function GET(
       ORDER BY u.firstname, u.lastname
     `, [terminalId])
 
-    // Get session stats
-    const sessionStats = await db.query(`
-      SELECT
-        COUNT(*) FILTER (WHERE status = 'open') as open_sessions,
-        COUNT(*) FILTER (WHERE status = 'closed') as closed_sessions,
-        SUM(total_sales) FILTER (WHERE status = 'closed') as total_sales,
-        SUM(total_orders) FILTER (WHERE status = 'closed') as total_orders
-      FROM market_pos_sessions
-      WHERE pos_terminal_id = $1
-    `, [terminalId])
-
-    const stats = sessionStats.rows[0]
+    // Get session stats (handle case where table might not exist yet)
+    let stats = { open_sessions: 0, closed_sessions: 0, total_sales: 0, total_orders: 0 }
+    try {
+      const sessionStats = await db.query(`
+        SELECT
+          COUNT(*) FILTER (WHERE status = 'open') as open_sessions,
+          COUNT(*) FILTER (WHERE status = 'closed') as closed_sessions,
+          SUM(total_sales) FILTER (WHERE status = 'closed') as total_sales,
+          SUM(total_orders) FILTER (WHERE status = 'closed') as total_orders
+        FROM market_pos_sessions
+        WHERE pos_terminal_id = $1
+      `, [terminalId])
+      if (sessionStats.rows[0]) {
+        stats = sessionStats.rows[0]
+      }
+    } catch {
+      // Table might not exist yet, use default stats
+      console.log('[POS Terminal API] Sessions table not ready, using default stats')
+    }
 
     return NextResponse.json({
       success: true,
@@ -135,10 +142,10 @@ export async function GET(
           }
         })),
         stats: {
-          openSessions: parseInt(stats.open_sessions) || 0,
-          closedSessions: parseInt(stats.closed_sessions) || 0,
-          totalSales: parseFloat(stats.total_sales) || 0,
-          totalOrders: parseInt(stats.total_orders) || 0
+          openSessions: Number(stats.open_sessions) || 0,
+          closedSessions: Number(stats.closed_sessions) || 0,
+          totalSales: Number(stats.total_sales) || 0,
+          totalOrders: Number(stats.total_orders) || 0
         }
       }
     })
