@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, Component, ErrorInfo, ReactNode } from 'react'
 import { motion } from 'framer-motion'
 import {
   Settings,
@@ -29,6 +29,54 @@ import { useRouter, useParams } from 'next/navigation'
 import { useTheme } from '@/contexts/theme-context'
 import { cn } from '@/lib/utils'
 import { DashboardLayout } from '@/components/layout/dashboard-layout'
+
+// Error Boundary para capturar errores de renderizado
+interface ErrorBoundaryState {
+  hasError: boolean
+  error: Error | null
+}
+
+class ErrorBoundary extends Component<{ children: ReactNode }, ErrorBoundaryState> {
+  constructor(props: { children: ReactNode }) {
+    super(props)
+    this.state = { hasError: false, error: null }
+  }
+
+  static getDerivedStateFromError(error: Error): ErrorBoundaryState {
+    return { hasError: true, error }
+  }
+
+  componentDidCatch(error: Error, errorInfo: ErrorInfo) {
+    console.error('POS Settings Error:', error, errorInfo)
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <DashboardLayout>
+          <div className="flex flex-col items-center justify-center min-h-[60vh] p-6">
+            <AlertCircle className="w-16 h-16 text-red-500 mb-4" />
+            <h2 className="text-xl font-bold text-red-500 mb-2">Error en la página</h2>
+            <p className="text-gray-600 dark:text-gray-400 mb-4 text-center max-w-md">
+              {this.state.error?.message || 'Ocurrió un error inesperado'}
+            </p>
+            <pre className="bg-gray-100 dark:bg-gray-800 p-4 rounded-lg text-xs max-w-lg overflow-auto mb-4">
+              {this.state.error?.stack?.slice(0, 500)}
+            </pre>
+            <button
+              onClick={() => window.location.reload()}
+              className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600"
+            >
+              Recargar página
+            </button>
+          </div>
+        </DashboardLayout>
+      )
+    }
+
+    return this.props.children
+  }
+}
 
 interface Terminal {
   id: number
@@ -95,7 +143,7 @@ const PAYMENT_METHODS = [
   { id: 'credit', label: 'Crédito', icon: FileText, description: 'Ventas a crédito' }
 ]
 
-export default function POSSettingsPage() {
+function POSSettingsPageContent() {
   const { theme } = useTheme()
   const router = useRouter()
   const params = useParams()
@@ -829,5 +877,14 @@ export default function POSSettingsPage() {
         </div>
       </div>
     </DashboardLayout>
+  )
+}
+
+// Wrapper con ErrorBoundary
+export default function POSSettingsPage() {
+  return (
+    <ErrorBoundary>
+      <POSSettingsPageContent />
+    </ErrorBoundary>
   )
 }
