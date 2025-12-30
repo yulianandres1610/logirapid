@@ -42,7 +42,13 @@ import {
   Edit3,
   RefreshCcw,
   Info,
-  AlertCircle
+  AlertCircle,
+  Download,
+  ExternalLink,
+  ChevronRight,
+  Tag,
+  Receipt,
+  FileText
 } from 'lucide-react'
 import { DashboardLayout } from '@/components/layout/dashboard-layout'
 import { ProtectedRoute } from '@/components/protected-route'
@@ -1637,6 +1643,130 @@ function PrintServicesTab({ theme }: { theme: string }) {
           </motion.button>
         </div>
 
+        {/* Quick Actions */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+          {/* Download App Card */}
+          <div className={cn(
+            "p-4 rounded-xl border",
+            theme === 'dark' ? 'bg-gradient-to-br from-green-900/40 to-emerald-900/40 border-green-700' : 'bg-gradient-to-br from-green-50 to-emerald-50 border-green-200'
+          )}>
+            <div className="flex items-start gap-3">
+              <div className={cn(
+                "w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0",
+                theme === 'dark' ? 'bg-green-800' : 'bg-green-100'
+              )}>
+                <Download className={cn("w-5 h-5", theme === 'dark' ? 'text-green-400' : 'text-green-600')} />
+              </div>
+              <div className="flex-1">
+                <h3 className={cn("font-semibold", theme === 'dark' ? 'text-green-200' : 'text-green-900')}>
+                  Descargar LogiRapid Print Service
+                </h3>
+                <p className={cn("text-sm mt-1", theme === 'dark' ? 'text-green-300' : 'text-green-700')}>
+                  Aplicación para Windows que permite imprimir recibos y etiquetas automáticamente
+                </p>
+                <a
+                  href="https://github.com/anthropics/claude-code/releases"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className={cn(
+                    "inline-flex items-center gap-2 mt-3 px-4 py-2 rounded-lg text-sm font-medium transition-all",
+                    theme === 'dark'
+                      ? 'bg-green-600 hover:bg-green-500 text-white'
+                      : 'bg-green-600 hover:bg-green-700 text-white'
+                  )}
+                >
+                  <Download className="w-4 h-4" />
+                  Descargar para Windows
+                  <ExternalLink className="w-3 h-3" />
+                </a>
+              </div>
+            </div>
+          </div>
+
+          {/* Admin Link Card */}
+          <div className={cn(
+            "p-4 rounded-xl border",
+            theme === 'dark' ? 'bg-gradient-to-br from-purple-900/40 to-indigo-900/40 border-purple-700' : 'bg-gradient-to-br from-purple-50 to-indigo-50 border-purple-200'
+          )}>
+            <div className="flex items-start gap-3">
+              <div className={cn(
+                "w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0",
+                theme === 'dark' ? 'bg-purple-800' : 'bg-purple-100'
+              )}>
+                <Settings className={cn("w-5 h-5", theme === 'dark' ? 'text-purple-400' : 'text-purple-600')} />
+              </div>
+              <div className="flex-1">
+                <h3 className={cn("font-semibold", theme === 'dark' ? 'text-purple-200' : 'text-purple-900')}>
+                  Administrador de Impresoras
+                </h3>
+                <p className={cn("text-sm mt-1", theme === 'dark' ? 'text-purple-300' : 'text-purple-700')}>
+                  Configura impresoras de tickets, etiquetas y documentos. Asigna tipos de documento a cada impresora.
+                </p>
+                <a
+                  href="/dashboard/market/print-services"
+                  className={cn(
+                    "inline-flex items-center gap-2 mt-3 px-4 py-2 rounded-lg text-sm font-medium transition-all",
+                    theme === 'dark'
+                      ? 'bg-purple-600 hover:bg-purple-500 text-white'
+                      : 'bg-purple-600 hover:bg-purple-700 text-white'
+                  )}
+                >
+                  <Settings className="w-4 h-4" />
+                  Ir al Administrador
+                  <ChevronRight className="w-4 h-4" />
+                </a>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Printer Types Info */}
+        <div className={cn(
+          "p-4 rounded-xl mb-6 border",
+          theme === 'dark' ? 'bg-gray-800/50 border-gray-700' : 'bg-gray-50 border-gray-200'
+        )}>
+          <h3 className={cn("font-semibold mb-3 flex items-center gap-2", theme === 'dark' ? 'text-white' : 'text-gray-900')}>
+            <Tag className="w-4 h-4" />
+            Tipos de Impresoras Soportadas
+          </h3>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {PRINTER_TYPES.map((type) => (
+              <div
+                key={type.id}
+                className={cn(
+                  "flex items-center gap-3 p-3 rounded-lg",
+                  theme === 'dark' ? 'bg-gray-900/60' : 'bg-white'
+                )}
+              >
+                <div className={cn(
+                  "w-8 h-8 rounded-lg flex items-center justify-center",
+                  type.id === 'thermal_80mm'
+                    ? theme === 'dark' ? 'bg-orange-900/50 text-orange-400' : 'bg-orange-100 text-orange-600'
+                    : type.id.startsWith('label_')
+                    ? theme === 'dark' ? 'bg-blue-900/50 text-blue-400' : 'bg-blue-100 text-blue-600'
+                    : theme === 'dark' ? 'bg-gray-700 text-gray-400' : 'bg-gray-200 text-gray-600'
+                )}>
+                  {type.id === 'thermal_80mm' ? (
+                    <Receipt className="w-4 h-4" />
+                  ) : type.id.startsWith('label_') ? (
+                    <Tag className="w-4 h-4" />
+                  ) : (
+                    <FileText className="w-4 h-4" />
+                  )}
+                </div>
+                <div>
+                  <p className={cn("text-sm font-medium", theme === 'dark' ? 'text-white' : 'text-gray-900')}>
+                    {type.label}
+                  </p>
+                  <p className={cn("text-xs", theme === 'dark' ? 'text-gray-500' : 'text-gray-500')}>
+                    {type.description}
+                  </p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
         {/* Info Card */}
         <div className={cn(
           "p-4 rounded-xl mb-6 border",
@@ -1646,13 +1776,14 @@ function PrintServicesTab({ theme }: { theme: string }) {
             <Server className={cn("w-5 h-5 mt-0.5 flex-shrink-0", theme === 'dark' ? 'text-blue-400' : 'text-blue-600')} />
             <div>
               <h3 className={cn("font-medium", theme === 'dark' ? 'text-blue-200' : 'text-blue-900')}>
-                Impresión silenciosa para tu POS
+                Cómo configurar la impresión silenciosa
               </h3>
               <ol className={cn("text-sm mt-2 space-y-1 list-decimal list-inside", theme === 'dark' ? 'text-blue-300' : 'text-blue-700')}>
-                <li>Crea un servicio y guarda las credenciales</li>
-                <li>Descarga e instala LogiRapid Print Service</li>
-                <li>Configura las credenciales en la aplicación</li>
-                <li>Las impresoras se detectarán automáticamente</li>
+                <li>Crea un servicio de impresión y guarda las credenciales</li>
+                <li>Descarga e instala LogiRapid Print Service en tu PC</li>
+                <li>Abre la aplicación y configura las credenciales</li>
+                <li>Las impresoras conectadas se detectarán automáticamente</li>
+                <li>Desde el Administrador, asigna el tipo de impresora (Tickets, Etiquetas, etc.)</li>
               </ol>
             </div>
           </div>
