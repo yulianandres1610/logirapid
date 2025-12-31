@@ -140,12 +140,12 @@ export function PrintLabelModal({ isOpen, onClose, productData, onPrintSuccess }
         jobs.push({
           documentType: 'product_label',
           documentData: {
-            productName: productData.productName,
-            sku: productData.sku,
-            barcode: productData.barcode,
-            barcodeType: detectBarcodeType(productData.barcode),
-            price: productData.price,
-            currency: productData.currency,
+            productName: productData.productName || 'Producto',
+            sku: productData.sku || '',
+            barcode: productData.barcode || '',
+            barcodeType: detectBarcodeType(productData.barcode || ''),
+            price: productData.price || 0,
+            currency: productData.currency || 'USD',
             unitOfMeasure: productData.unitOfMeasure,
             category: productData.category,
             description: productData.description,
@@ -163,12 +163,12 @@ export function PrintLabelModal({ isOpen, onClose, productData, onPrintSuccess }
             jobs.push({
               documentType: 'product_label',
               documentData: {
-                productName: `${productData.productName} - ${variant.name}`,
-                sku: variant.sku || productData.sku,
-                barcode: variant.barcode,
-                barcodeType: detectBarcodeType(variant.barcode),
-                price: variant.price || productData.price,
-                currency: productData.currency,
+                productName: `${productData.productName || 'Producto'} - ${variant.name || 'Variante'}`,
+                sku: variant.sku || productData.sku || '',
+                barcode: variant.barcode || '',
+                barcodeType: detectBarcodeType(variant.barcode || ''),
+                price: variant.price || productData.price || 0,
+                currency: productData.currency || 'USD',
                 unitOfMeasure: productData.unitOfMeasure,
                 category: productData.category,
                 labelSize: 'medium'
@@ -424,7 +424,7 @@ export function PrintLabelModal({ isOpen, onClose, productData, onPrintSuccess }
                         </p>
                         <p className="text-sm font-medium text-emerald-600">
                           {productData.currency === 'USD' ? '$' : productData.currency}
-                          {productData.price.toFixed(2)}
+                          {(productData.price || 0).toFixed(2)}
                         </p>
                       </div>
                       <div className="flex items-center gap-2 ml-4">
@@ -491,12 +491,10 @@ export function PrintLabelModal({ isOpen, onClose, productData, onPrintSuccess }
                                 <p className="text-xs text-gray-500 font-mono">
                                   {variant.barcode || variant.sku || 'Sin codigo'}
                                 </p>
-                                {variant.price && (
-                                  <p className="text-sm font-medium text-emerald-600">
-                                    {productData.currency === 'USD' ? '$' : productData.currency}
-                                    {variant.price.toFixed(2)}
-                                  </p>
-                                )}
+                                <p className="text-sm font-medium text-emerald-600">
+                                  {productData.currency === 'USD' ? '$' : productData.currency}
+                                  {(variant.price || productData.price || 0).toFixed(2)}
+                                </p>
                               </div>
                               <div className="flex items-center gap-2 ml-4">
                                 <button

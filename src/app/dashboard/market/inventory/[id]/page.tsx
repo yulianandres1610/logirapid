@@ -449,63 +449,27 @@ export default function ProductDetailPage() {
   return (
     <ProtectedRoute>
       <DashboardLayout>
-        <div className="min-h-screen p-6">
+        <div className="min-h-screen p-4 md:p-6">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            className="space-y-6"
+            className="space-y-6 max-w-7xl mx-auto"
           >
-            {/* Header */}
-            <div className="flex items-start justify-between flex-wrap gap-4">
-              <div className="flex items-start gap-4">
-                <Link href="/dashboard/market/inventory">
-                  <motion.button
-                    whileHover={{ scale: 1.05 }}
-                    whileTap={{ scale: 0.95 }}
-                    className={cn(
-                      'p-2 rounded-xl transition-colors',
-                      theme === 'dark' ? 'bg-gray-800 hover:bg-gray-700' : 'bg-gray-100 hover:bg-gray-200'
-                    )}
-                  >
-                    <ArrowLeft className="w-5 h-5 text-gray-600 dark:text-gray-300" />
-                  </motion.button>
-                </Link>
-                <div className="flex items-center gap-4">
-                  <div className={cn(
-                    'w-20 h-20 rounded-xl overflow-hidden flex items-center justify-center shadow-lg border',
-                    theme === 'dark' ? 'bg-gray-700 border-gray-600' : 'bg-gray-100 border-gray-200'
-                  )}>
-                    {product.imageUrl ? (
-                      <img src={product.imageUrl} alt={product.name} className="w-full h-full object-cover" />
-                    ) : (
-                      <ImageIcon className="w-8 h-8 text-gray-400" />
-                    )}
-                  </div>
-                  <div>
-                    <h1 className="text-2xl md:text-3xl font-bold text-gray-900 dark:text-white">{product.name}</h1>
-                    <div className="flex items-center gap-3 mt-1 flex-wrap">
-                      {product.category && (
-                        <span className={cn(
-                          'px-3 py-1 rounded-full text-xs font-medium',
-                          theme === 'dark' ? 'bg-gray-700 text-gray-300' : 'bg-gray-200 text-gray-600'
-                        )}>
-                          {product.category}
-                        </span>
-                      )}
-                      <span className="text-sm text-gray-500 font-mono">SKU: {product.sku}</span>
-                      <span className={cn(
-                        'inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium',
-                        status.color === 'green' && 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400',
-                        status.color === 'amber' && 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400',
-                        status.color === 'red' && 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'
-                      )}>
-                        <status.icon className="w-3.5 h-3.5" />
-                        {status.label}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              </div>
+            {/* Header with back button and actions */}
+            <div className="flex items-center justify-between">
+              <Link href="/dashboard/market/inventory">
+                <motion.button
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                  className={cn(
+                    'flex items-center gap-2 px-4 py-2 rounded-xl transition-colors',
+                    theme === 'dark' ? 'bg-gray-800 hover:bg-gray-700 text-gray-300' : 'bg-white hover:bg-gray-100 text-gray-600 shadow-sm border border-gray-200'
+                  )}
+                >
+                  <ArrowLeft className="w-4 h-4" />
+                  <span className="hidden sm:inline">Volver</span>
+                </motion.button>
+              </Link>
               <div className="flex items-center gap-2">
                 <motion.button
                   whileHover={{ scale: 1.05 }}
@@ -513,11 +477,11 @@ export default function ProductDetailPage() {
                   onClick={() => setShowPrintModal(true)}
                   className={cn(
                     'flex items-center gap-2 px-4 py-2.5 rounded-xl transition-colors',
-                    theme === 'dark' ? 'bg-gray-800 text-gray-300 hover:bg-gray-700' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                    theme === 'dark' ? 'bg-gray-800 text-gray-300 hover:bg-gray-700' : 'bg-white text-gray-600 hover:bg-gray-100 shadow-sm border border-gray-200'
                   )}
                 >
                   <Printer className="w-4 h-4" />
-                  <span className="hidden sm:inline">Imprimir Etiqueta</span>
+                  <span className="hidden sm:inline">Imprimir</span>
                 </motion.button>
                 <Link href={`/dashboard/market/inventory/${product.id}/edit`}>
                   <motion.button
@@ -526,381 +490,219 @@ export default function ProductDetailPage() {
                     className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-emerald-500 to-emerald-600 text-white rounded-xl hover:from-emerald-600 hover:to-emerald-700 transition-all shadow-lg shadow-emerald-500/25"
                   >
                     <Edit className="w-4 h-4" />
-                    Editar
+                    <span className="hidden sm:inline">Editar</span>
                   </motion.button>
                 </Link>
               </div>
             </div>
 
-            {/* Quick Stats */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.1 }}
-                className={cn(
-                  'p-4 rounded-2xl border shadow-lg',
-                  theme === 'dark' ? 'bg-gray-800/50 border-gray-700' : 'bg-white border-gray-200'
-                )}
-              >
-                <div className="flex items-center gap-3">
-                  <div className={cn(
-                    'p-2 rounded-lg',
-                    theme === 'dark' ? 'bg-blue-900/30' : 'bg-blue-100'
-                  )}>
-                    <DollarSign className="w-5 h-5 text-blue-600" />
-                  </div>
-                  <div>
-                    <p className="text-xs text-gray-500">Precio Costo</p>
-                    <p className="text-lg font-bold text-gray-900 dark:text-white">{symbol}{Number(product.costPrice).toFixed(2)}</p>
-                  </div>
-                </div>
-              </motion.div>
-
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.15 }}
-                className={cn(
-                  'p-4 rounded-2xl border shadow-lg',
-                  theme === 'dark' ? 'bg-gray-800/50 border-gray-700' : 'bg-white border-gray-200'
-                )}
-              >
-                <div className="flex items-center gap-3">
-                  <div className={cn(
-                    'p-2 rounded-lg',
-                    theme === 'dark' ? 'bg-emerald-900/30' : 'bg-emerald-100'
-                  )}>
-                    <DollarSign className="w-5 h-5 text-emerald-600" />
-                  </div>
-                  <div>
-                    <p className="text-xs text-gray-500">Precio Venta</p>
-                    <p className="text-lg font-bold text-emerald-600">{symbol}{Number(product.sellingPrice).toFixed(2)}</p>
-                  </div>
-                </div>
-              </motion.div>
-
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.2 }}
-                className={cn(
-                  'p-4 rounded-2xl border shadow-lg',
-                  theme === 'dark' ? 'bg-gray-800/50 border-gray-700' : 'bg-white border-gray-200'
-                )}
-              >
-                <div className="flex items-center gap-3">
-                  <div className={cn(
-                    'p-2 rounded-lg',
-                    theme === 'dark' ? 'bg-purple-900/30' : 'bg-purple-100'
-                  )}>
-                    <TrendingUp className={cn('w-5 h-5', margin >= 20 ? 'text-purple-600' : 'text-red-500')} />
-                  </div>
-                  <div>
-                    <p className="text-xs text-gray-500">Margen</p>
-                    <p className={cn('text-lg font-bold', margin >= 20 ? 'text-purple-600' : 'text-red-500')}>{margin}%</p>
-                  </div>
-                </div>
-              </motion.div>
-
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.25 }}
-                className={cn(
-                  'p-4 rounded-2xl border shadow-lg',
-                  theme === 'dark' ? 'bg-gray-800/50 border-gray-700' : 'bg-white border-gray-200'
-                )}
-              >
-                <div className="flex items-center gap-3">
-                  <div className={cn(
-                    'p-2 rounded-lg',
-                    status.color === 'green' && (theme === 'dark' ? 'bg-green-900/30' : 'bg-green-100'),
-                    status.color === 'amber' && (theme === 'dark' ? 'bg-amber-900/30' : 'bg-amber-100'),
-                    status.color === 'red' && (theme === 'dark' ? 'bg-red-900/30' : 'bg-red-100')
-                  )}>
-                    <Package className={cn(
-                      'w-5 h-5',
-                      status.color === 'green' && 'text-green-600',
-                      status.color === 'amber' && 'text-amber-600',
-                      status.color === 'red' && 'text-red-600'
-                    )} />
-                  </div>
-                  <div>
-                    <p className="text-xs text-gray-500">Stock Actual</p>
-                    <p className="text-lg font-bold text-gray-900 dark:text-white">
-                      {product.quantityOnHand} <span className="text-xs font-normal text-gray-500">{product.unitOfMeasure}</span>
-                    </p>
-                  </div>
-                </div>
-              </motion.div>
-            </div>
-
-            {/* Web Preview Card + Sales Chart */}
-            <motion.div
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.25 }}
-              className={cn(
-                'rounded-2xl border shadow-xl overflow-hidden',
-                theme === 'dark' ? 'bg-gray-800/50 border-gray-700' : 'bg-white border-gray-200'
-              )}
-            >
-              <div className={cn(
-                'px-6 py-4 flex items-center justify-between border-b',
-                theme === 'dark' ? 'border-gray-700 bg-gray-800' : 'border-gray-200 bg-gray-50'
-              )}>
-                <div className="flex items-center gap-3">
-                  <Globe className="w-5 h-5 text-emerald-500" />
-                  <h3 className="font-semibold text-gray-900 dark:text-white">Vista Previa y Análisis de Ventas</h3>
-                </div>
-              </div>
-              <div className="p-6">
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                  {/* Left - Product Card Preview */}
-                  <div>
-                    <p className="text-xs text-gray-500 mb-3 uppercase tracking-wide">Vista Tienda Online</p>
-                    <div className={cn(
-                      'rounded-2xl border overflow-hidden transition-transform hover:scale-[1.01]',
-                      theme === 'dark' ? 'bg-gray-900 border-gray-700' : 'bg-white border-gray-200 shadow-lg'
-                    )}>
-                      {/* Product Image */}
-                      <div className="aspect-square relative overflow-hidden bg-gradient-to-br from-gray-100 to-gray-200 dark:from-gray-800 dark:to-gray-700">
-                        {product.imageUrl ? (
-                          <img
-                            src={product.imageUrl}
-                            alt={product.name}
-                            className="w-full h-full object-cover"
-                          />
-                        ) : (
-                          <div className="w-full h-full flex items-center justify-center">
-                            <ImageIcon className="w-20 h-20 text-gray-300 dark:text-gray-600" />
-                          </div>
-                        )}
-                        {/* Category Badge */}
-                        {product.category && (
-                          <span className={cn(
-                            'absolute top-4 left-4 px-3 py-1 rounded-full text-xs font-medium backdrop-blur-sm',
-                            theme === 'dark'
-                              ? 'bg-gray-900/70 text-gray-200 border border-gray-700'
-                              : 'bg-white/80 text-gray-700 border border-gray-200'
-                          )}>
-                            <Tag className="w-3 h-3 inline mr-1" />
-                            {product.category}
-                          </span>
-                        )}
-                        {/* Stock Badge */}
-                        <span className={cn(
-                          'absolute top-4 right-4 px-3 py-1 rounded-full text-xs font-medium',
-                          status.color === 'green' && 'bg-green-500 text-white',
-                          status.color === 'amber' && 'bg-amber-500 text-white',
-                          status.color === 'red' && 'bg-red-500 text-white'
-                        )}>
-                          {status.label}
-                        </span>
-                      </div>
-
-                      {/* Product Info */}
-                      <div className="p-5 space-y-4">
-                        <div>
-                          <h4 className="text-lg font-bold text-gray-900 dark:text-white line-clamp-2">
-                            {product.name}
-                          </h4>
-                          {product.description && (
-                            <p className="text-sm text-gray-500 mt-1 line-clamp-2">
-                              {product.description}
-                            </p>
-                          )}
-                        </div>
-
-                        {/* Price & Unit */}
-                        <div className="flex items-end justify-between">
-                          <div>
-                            <div className="flex items-baseline gap-2">
-                              <span className="text-3xl font-bold text-emerald-600">
-                                {symbol}{Number(product.sellingPrice).toFixed(2)}
-                              </span>
-                              <span className="text-sm text-gray-400">/ {product.unitOfMeasure}</span>
-                            </div>
-                            {product.costPrice > 0 && (
-                              <div className="flex items-center gap-2 mt-1">
-                                <span className="text-xs text-gray-400 line-through">
-                                  {symbol}{(Number(product.sellingPrice) * 1.15).toFixed(2)}
-                                </span>
-                                <span className="text-xs font-medium text-emerald-500 bg-emerald-50 dark:bg-emerald-900/30 px-2 py-0.5 rounded">
-                                  -15%
-                                </span>
-                              </div>
-                            )}
-                          </div>
-                          <div className="flex items-center gap-2 text-xs text-gray-400">
-                            <Scale className="w-4 h-4" />
-                            {product.quantityOnHand} disponibles
-                          </div>
-                        </div>
-
-                        {/* Add to Cart Button (Preview) */}
-                        <button className={cn(
-                          'w-full py-3 px-4 rounded-xl font-semibold text-white transition-all',
-                          status.color === 'red'
-                            ? 'bg-gray-400 cursor-not-allowed'
-                            : 'bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 shadow-lg shadow-emerald-500/25'
-                        )} disabled={status.color === 'red'}>
-                          {status.color === 'red' ? 'Sin Stock' : 'Añadir al Carrito'}
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Right - Sales Chart */}
-                  <div className="flex flex-col">
-                    <div className="flex items-center justify-between mb-3">
-                      <p className="text-xs text-gray-500 uppercase tracking-wide">Análisis de Ventas</p>
-                      <div className="flex items-center gap-1">
-                        {(['week', 'month', 'year'] as const).map((period) => (
-                          <button
-                            key={period}
-                            onClick={() => setSalesPeriod(period)}
-                            className={cn(
-                              'px-2 py-1 rounded text-xs font-medium transition-all',
-                              salesPeriod === period
-                                ? 'bg-emerald-500 text-white'
-                                : theme === 'dark'
-                                  ? 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-                                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                            )}
-                          >
-                            {period === 'week' ? '7D' : period === 'month' ? '30D' : '12M'}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-
-                    {salesLoading ? (
-                      <div className="flex-1 flex items-center justify-center">
-                        <RefreshCw className="w-6 h-6 animate-spin text-gray-400" />
-                      </div>
-                    ) : salesData.length === 0 ? (
-                      <div className={cn(
-                        'flex-1 flex flex-col items-center justify-center rounded-xl',
-                        theme === 'dark' ? 'bg-gray-700/30' : 'bg-gray-50'
-                      )}>
-                        <ShoppingCart className="w-12 h-12 mb-3 text-gray-400" />
-                        <p className="text-gray-500 text-sm">Sin datos de ventas</p>
-                        <p className="text-xs text-gray-400">para este período</p>
-                      </div>
+            {/* Main Content - Two Column Layout */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              {/* Left Column - Product Image and Basic Info */}
+              <div className="lg:col-span-1 space-y-4">
+                {/* Product Image Card */}
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.95 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  className={cn(
+                    'rounded-2xl overflow-hidden shadow-xl border',
+                    theme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'
+                  )}
+                >
+                  <div className="aspect-square relative bg-gradient-to-br from-gray-100 to-gray-200 dark:from-gray-700 dark:to-gray-800">
+                    {product.imageUrl ? (
+                      <img
+                        src={product.imageUrl}
+                        alt={product.name}
+                        className="w-full h-full object-cover"
+                      />
                     ) : (
-                      <div className="flex-1 flex flex-col">
-                        {/* Summary Stats */}
-                        <div className="grid grid-cols-3 gap-3 mb-4">
-                          <div className={cn(
-                            'p-3 rounded-xl text-center',
-                            theme === 'dark' ? 'bg-gray-700/50' : 'bg-gray-50'
-                          )}>
-                            <p className="text-xs text-gray-500 mb-1">Unidades</p>
-                            <p className="text-xl font-bold text-gray-900 dark:text-white">{getTotalSales()}</p>
-                          </div>
-                          <div className={cn(
-                            'p-3 rounded-xl text-center',
-                            theme === 'dark' ? 'bg-gray-700/50' : 'bg-gray-50'
-                          )}>
-                            <p className="text-xs text-gray-500 mb-1">Ingresos</p>
-                            <p className="text-xl font-bold text-emerald-600">{symbol}{Number(getTotalRevenue()).toFixed(0)}</p>
-                          </div>
-                          <div className={cn(
-                            'p-3 rounded-xl text-center',
-                            theme === 'dark' ? 'bg-gray-700/50' : 'bg-gray-50'
-                          )}>
-                            <p className="text-xs text-gray-500 mb-1">Órdenes</p>
-                            <p className="text-xl font-bold text-gray-900 dark:text-white">{getTotalOrders()}</p>
-                          </div>
-                        </div>
-
-                        {/* Bar Chart */}
-                        <div className={cn(
-                          'flex-1 rounded-xl p-4 min-h-[200px]',
-                          theme === 'dark' ? 'bg-gray-700/30' : 'bg-gray-50'
-                        )}>
-                          <div className="h-full flex flex-col">
-                            {/* Chart bars */}
-                            <div className="flex-1 flex items-end gap-1">
-                              {salesData.map((sale, idx) => {
-                                const maxQty = Math.max(...salesData.map(s => s.quantity))
-                                const heightPercent = maxQty > 0 ? (sale.quantity / maxQty) * 100 : 0
-                                return (
-                                  <div key={idx} className="flex-1 flex flex-col items-center justify-end h-full group">
-                                    {/* Tooltip on hover */}
-                                    <div className={cn(
-                                      'mb-2 px-2 py-1 rounded text-xs opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap',
-                                      theme === 'dark' ? 'bg-gray-800 text-white' : 'bg-gray-900 text-white'
-                                    )}>
-                                      {sale.quantity} uds | {symbol}{Number(sale.revenue).toFixed(0)}
-                                    </div>
-                                    {/* Bar */}
-                                    <motion.div
-                                      initial={{ height: 0 }}
-                                      animate={{ height: `${Math.max(heightPercent, 5)}%` }}
-                                      transition={{ delay: idx * 0.05, duration: 0.3 }}
-                                      className={cn(
-                                        'w-full rounded-t-md min-h-[8px] cursor-pointer transition-colors',
-                                        theme === 'dark'
-                                          ? 'bg-emerald-500 hover:bg-emerald-400'
-                                          : 'bg-emerald-500 hover:bg-emerald-600'
-                                      )}
-                                    />
-                                  </div>
-                                )
-                              })}
-                            </div>
-                            {/* X-axis labels */}
-                            <div className="flex gap-1 mt-2 border-t border-gray-200 dark:border-gray-600 pt-2">
-                              {salesData.map((sale, idx) => (
-                                <div key={idx} className="flex-1 text-center">
-                                  <span className="text-[10px] text-gray-400 truncate block">
-                                    {sale.period.length > 5 ? sale.period.slice(0, 5) : sale.period}
-                                  </span>
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                        </div>
-
-                        {/* Legend */}
-                        <div className="flex items-center justify-center gap-4 mt-3 text-xs text-gray-500">
-                          <div className="flex items-center gap-1">
-                            <div className="w-3 h-3 rounded bg-emerald-500" />
-                            <span>Unidades Vendidas</span>
-                          </div>
-                        </div>
+                      <div className="w-full h-full flex items-center justify-center">
+                        <ImageIcon className="w-24 h-24 text-gray-300 dark:text-gray-600" />
                       </div>
                     )}
+                    {/* Status Badge */}
+                    <span className={cn(
+                      'absolute top-4 right-4 px-3 py-1.5 rounded-full text-xs font-semibold shadow-lg',
+                      status.color === 'green' && 'bg-green-500 text-white',
+                      status.color === 'amber' && 'bg-amber-500 text-white',
+                      status.color === 'red' && 'bg-red-500 text-white'
+                    )}>
+                      {status.label}
+                    </span>
+                    {/* Category Badge */}
+                    {product.category && (
+                      <span className={cn(
+                        'absolute top-4 left-4 px-3 py-1.5 rounded-full text-xs font-medium backdrop-blur-sm',
+                        theme === 'dark' ? 'bg-black/50 text-white' : 'bg-white/80 text-gray-700'
+                      )}>
+                        {product.category}
+                      </span>
+                    )}
                   </div>
-                </div>
-              </div>
-            </motion.div>
+                  {/* Quick Actions */}
+                  <div className="p-4 flex gap-2">
+                    <motion.button
+                      whileHover={{ scale: 1.02 }}
+                      whileTap={{ scale: 0.98 }}
+                      onClick={() => setShowPrintModal(true)}
+                      className={cn(
+                        'flex-1 flex items-center justify-center gap-2 py-3 rounded-xl font-medium transition-all',
+                        theme === 'dark'
+                          ? 'bg-gray-700 text-gray-200 hover:bg-gray-600'
+                          : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                      )}
+                    >
+                      <Printer className="w-4 h-4" />
+                      Imprimir Etiqueta
+                    </motion.button>
+                  </div>
+                </motion.div>
 
-            {/* Barcode Section */}
-            {product.barcode && (
-              <motion.div
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.3 }}
-                className={cn(
-                  'p-4 rounded-2xl border shadow-lg flex items-center justify-between',
-                  theme === 'dark' ? 'bg-gray-800/50 border-gray-700' : 'bg-white border-gray-200'
+                {/* Barcode Card */}
+                {product.barcode && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.1 }}
+                    className={cn(
+                      'p-4 rounded-2xl border shadow-lg',
+                      theme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'
+                    )}
+                  >
+                    <div className="flex items-center gap-3 mb-2">
+                      <Barcode className="w-5 h-5 text-gray-400" />
+                      <p className="text-xs text-gray-500 uppercase tracking-wide">Código de Barras</p>
+                    </div>
+                    <p className="font-mono text-xl font-bold text-gray-900 dark:text-white tracking-widest text-center py-2">
+                      {product.barcode}
+                    </p>
+                  </motion.div>
                 )}
-              >
-                <div className="flex items-center gap-4">
-                  <Barcode className="w-8 h-8 text-gray-400" />
-                  <div>
-                    <p className="text-xs text-gray-500">Código de Barras EAN-13</p>
-                    <p className="font-mono text-2xl font-bold text-gray-900 dark:text-white tracking-widest">{product.barcode}</p>
-                  </div>
-                </div>
-              </motion.div>
-            )}
 
-            {/* Variants Section */}
+                {/* Supplier Card */}
+                {product.supplierName && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.15 }}
+                    className={cn(
+                      'p-4 rounded-2xl border shadow-lg',
+                      theme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'
+                    )}
+                  >
+                    <div className="flex items-center gap-3 mb-2">
+                      <Truck className="w-5 h-5 text-gray-400" />
+                      <p className="text-xs text-gray-500 uppercase tracking-wide">Proveedor</p>
+                    </div>
+                    <p className="font-medium text-gray-900 dark:text-white">{product.supplierName}</p>
+                    {product.supplierContact && (
+                      <p className="text-sm text-gray-500 mt-1">{product.supplierContact}</p>
+                    )}
+                  </motion.div>
+                )}
+              </div>
+
+              {/* Right Column - Product Details */}
+              <div className="lg:col-span-2 space-y-4">
+                {/* Product Title and Info Card */}
+                <motion.div
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className={cn(
+                    'p-6 rounded-2xl border shadow-xl',
+                    theme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'
+                  )}
+                >
+                  <h1 className="text-2xl md:text-3xl font-bold text-gray-900 dark:text-white mb-2">
+                    {product.name}
+                  </h1>
+                  {product.description && (
+                    <p className="text-gray-600 dark:text-gray-400 mb-4">{product.description}</p>
+                  )}
+                  <div className="flex flex-wrap items-center gap-3">
+                    <span className="text-sm text-gray-500 font-mono bg-gray-100 dark:bg-gray-700 px-3 py-1 rounded-lg">
+                      SKU: {product.sku}
+                    </span>
+                    <span className="text-sm text-gray-500 bg-gray-100 dark:bg-gray-700 px-3 py-1 rounded-lg">
+                      {product.unitOfMeasure}
+                    </span>
+                  </div>
+                </motion.div>
+
+                {/* Price & Stock Grid */}
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  {/* Selling Price - Highlighted */}
+                  <motion.div
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.1 }}
+                    className={cn(
+                      'p-5 rounded-2xl border-2 col-span-2 md:col-span-1',
+                      'bg-gradient-to-br from-emerald-500/10 to-emerald-600/10 border-emerald-500/30'
+                    )}
+                  >
+                    <p className="text-xs text-emerald-600 dark:text-emerald-400 uppercase tracking-wide mb-1">Precio Venta</p>
+                    <p className="text-3xl font-bold text-emerald-600">{symbol}{Number(product.sellingPrice).toFixed(2)}</p>
+                  </motion.div>
+
+                  {/* Cost Price */}
+                  <motion.div
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.15 }}
+                    className={cn(
+                      'p-5 rounded-2xl border shadow-lg',
+                      theme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'
+                    )}
+                  >
+                    <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">Precio Costo</p>
+                    <p className="text-2xl font-bold text-gray-900 dark:text-white">{symbol}{Number(product.costPrice).toFixed(2)}</p>
+                  </motion.div>
+
+                  {/* Margin */}
+                  <motion.div
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.2 }}
+                    className={cn(
+                      'p-5 rounded-2xl border shadow-lg',
+                      theme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'
+                    )}
+                  >
+                    <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">Margen</p>
+                    <p className={cn(
+                      'text-2xl font-bold flex items-center gap-1',
+                      margin >= 30 ? 'text-green-600' : margin >= 15 ? 'text-amber-600' : 'text-red-600'
+                    )}>
+                      <TrendingUp className="w-5 h-5" />
+                      {margin}%
+                    </p>
+                  </motion.div>
+
+                  {/* Stock */}
+                  <motion.div
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.25 }}
+                    className={cn(
+                      'p-5 rounded-2xl border shadow-lg',
+                      theme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'
+                    )}
+                  >
+                    <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">Stock</p>
+                    <p className={cn(
+                      'text-2xl font-bold',
+                      status.color === 'green' ? 'text-green-600' : status.color === 'amber' ? 'text-amber-600' : 'text-red-600'
+                    )}>
+                      {product.quantityOnHand}
+                      <span className="text-sm font-normal text-gray-500 ml-1">{product.unitOfMeasure}</span>
+                    </p>
+                    <p className="text-xs text-gray-500 mt-1">Mínimo: {product.minimumStock}</p>
+                  </motion.div>
+                </div>
+
+                {/* Variants Section - Inside Right Column */}
             {product.variants && product.variants.length > 0 && (
               <motion.div
                 initial={{ opacity: 0, y: 10 }}
@@ -1037,6 +839,8 @@ export default function ProductDetailPage() {
                 </div>
               </motion.div>
             )}
+              </div>
+            </div>
 
             {/* Tabs */}
             <div className={cn(
