@@ -39,6 +39,24 @@ import { useTheme } from '@/contexts/theme-context'
 import { cn } from '@/lib/utils'
 import { PrintLabelModal } from '@/components/print/PrintLabelModal'
 
+interface VariantOption {
+  type: string
+  value: string
+}
+
+interface Variant {
+  id: number
+  name: string
+  sku: string
+  barcode: string
+  costPrice: number
+  sellingPrice: number
+  quantityOnHand: number
+  imageUrl: string | null
+  isActive: boolean
+  options?: VariantOption[]
+}
+
 interface Product {
   id: number
   name: string
@@ -60,6 +78,7 @@ interface Product {
   unitOfMeasure: string
   createdAt: string
   updatedAt: string
+  variants?: Variant[]
 }
 
 interface SalesData {
@@ -192,6 +211,7 @@ export default function ProductDetailPage() {
   const [lots, setLots] = useState<ProductLot[]>([])
   const [lotsLoading, setLotsLoading] = useState(false)
   const [showPrintModal, setShowPrintModal] = useState(false)
+  const [printVariant, setPrintVariant] = useState<Variant | null>(null)
 
   useEffect(() => {
     fetchProduct()
@@ -876,6 +896,144 @@ export default function ProductDetailPage() {
                     <p className="text-xs text-gray-500">Código de Barras EAN-13</p>
                     <p className="font-mono text-2xl font-bold text-gray-900 dark:text-white tracking-widest">{product.barcode}</p>
                   </div>
+                </div>
+              </motion.div>
+            )}
+
+            {/* Variants Section */}
+            {product.variants && product.variants.length > 0 && (
+              <motion.div
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.35 }}
+                className={cn(
+                  'rounded-2xl border shadow-xl overflow-hidden',
+                  theme === 'dark' ? 'bg-gray-800/50 border-gray-700' : 'bg-white border-gray-200'
+                )}
+              >
+                <div className={cn(
+                  'px-6 py-4 flex items-center justify-between border-b',
+                  theme === 'dark' ? 'border-gray-700 bg-gray-800' : 'border-gray-200 bg-gray-50'
+                )}>
+                  <div className="flex items-center gap-3">
+                    <Package className="w-5 h-5 text-purple-500" />
+                    <h3 className="font-semibold text-gray-900 dark:text-white">
+                      Variantes ({product.variants.length})
+                    </h3>
+                  </div>
+                  <motion.button
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
+                    onClick={() => setShowPrintModal(true)}
+                    className={cn(
+                      'flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-all',
+                      theme === 'dark'
+                        ? 'bg-purple-900/30 text-purple-400 hover:bg-purple-900/50'
+                        : 'bg-purple-100 text-purple-700 hover:bg-purple-200'
+                    )}
+                  >
+                    <Printer className="w-4 h-4" />
+                    Imprimir Todas
+                  </motion.button>
+                </div>
+                <div className="p-4 space-y-3">
+                  {product.variants.map((variant, idx) => (
+                    <motion.div
+                      key={variant.id}
+                      initial={{ opacity: 0, x: -10 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ delay: 0.35 + idx * 0.05 }}
+                      className={cn(
+                        'flex items-center gap-4 p-4 rounded-xl border transition-all hover:shadow-md',
+                        theme === 'dark'
+                          ? 'bg-gray-900/50 border-gray-700 hover:border-gray-600'
+                          : 'bg-gray-50 border-gray-200 hover:border-gray-300'
+                      )}
+                    >
+                      {/* Variant Image */}
+                      <div className={cn(
+                        'w-16 h-16 rounded-lg overflow-hidden flex-shrink-0 flex items-center justify-center shadow-sm border',
+                        theme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'
+                      )}>
+                        {variant.imageUrl ? (
+                          <img
+                            src={variant.imageUrl}
+                            alt={variant.name}
+                            className="w-full h-full object-cover"
+                          />
+                        ) : product.imageUrl ? (
+                          <img
+                            src={product.imageUrl}
+                            alt={variant.name}
+                            className="w-full h-full object-cover opacity-50"
+                          />
+                        ) : (
+                          <Package className="w-6 h-6 text-gray-400" />
+                        )}
+                      </div>
+
+                      {/* Variant Info */}
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <h4 className="font-medium text-gray-900 dark:text-white truncate">{variant.name}</h4>
+                          {/* Option badges (color, size, etc.) */}
+                          {variant.options && variant.options.length > 0 && variant.options.map((opt, optIdx) => (
+                            <span
+                              key={optIdx}
+                              className={cn(
+                                'px-2 py-0.5 rounded-full text-[10px] font-medium uppercase',
+                                opt.type === 'color'
+                                  ? 'bg-gradient-to-r from-pink-100 to-purple-100 text-purple-700 dark:from-pink-900/30 dark:to-purple-900/30 dark:text-purple-300'
+                                  : 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300'
+                              )}
+                            >
+                              {opt.value}
+                            </span>
+                          ))}
+                        </div>
+                        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-1">
+                          <span className="text-xs text-gray-500 font-mono">SKU: {variant.sku}</span>
+                          {variant.barcode && (
+                            <span className="text-xs text-gray-500 font-mono flex items-center gap-1">
+                              <Barcode className="w-3 h-3" />
+                              {variant.barcode}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Price & Stock */}
+                      <div className="text-right flex-shrink-0">
+                        <p className="text-lg font-bold text-emerald-600">
+                          {symbol}{Number(variant.sellingPrice).toFixed(2)}
+                        </p>
+                        <p className={cn(
+                          'text-sm',
+                          variant.quantityOnHand === 0 ? 'text-red-500' :
+                          variant.quantityOnHand <= product.minimumStock ? 'text-amber-500' :
+                          'text-gray-500'
+                        )}>
+                          Stock: {variant.quantityOnHand}
+                        </p>
+                      </div>
+
+                      {/* Print Button */}
+                      <motion.button
+                        whileHover={{ scale: 1.1 }}
+                        whileTap={{ scale: 0.9 }}
+                        onClick={() => { setPrintVariant(variant); setShowPrintModal(true); }}
+                        className={cn(
+                          'p-2.5 rounded-xl transition-all flex-shrink-0',
+                          theme === 'dark'
+                            ? 'bg-gray-800 hover:bg-gray-700 text-gray-300'
+                            : 'bg-white hover:bg-gray-100 text-gray-600 shadow-sm border border-gray-200'
+                        )}
+                        title={`Imprimir etiqueta: ${variant.name}`}
+                      >
+                        <Printer className="w-5 h-5" />
+                      </motion.button>
+                    </motion.div>
+                  ))}
                 </div>
               </motion.div>
             )}
@@ -1647,8 +1805,17 @@ export default function ProductDetailPage() {
         {/* Print Label Modal */}
         <PrintLabelModal
           isOpen={showPrintModal}
-          onClose={() => setShowPrintModal(false)}
-          productData={{
+          onClose={() => { setShowPrintModal(false); setPrintVariant(null); }}
+          productData={printVariant ? {
+            productName: `${product.name} - ${printVariant.name}`,
+            sku: printVariant.sku,
+            barcode: printVariant.barcode,
+            price: printVariant.sellingPrice,
+            currency: product.currency,
+            unitOfMeasure: product.unitOfMeasure,
+            category: product.category || undefined,
+            description: product.description || undefined
+          } : {
             productName: product.name,
             sku: product.sku,
             barcode: product.barcode,
@@ -1656,10 +1823,19 @@ export default function ProductDetailPage() {
             currency: product.currency,
             unitOfMeasure: product.unitOfMeasure,
             category: product.category || undefined,
-            description: product.description || undefined
+            description: product.description || undefined,
+            variants: product.variants?.map(v => ({
+              id: v.id,
+              name: v.name,
+              barcode: v.barcode,
+              sku: v.sku,
+              price: v.sellingPrice,
+              imageUrl: v.imageUrl
+            }))
           }}
           onPrintSuccess={(jobNumber) => {
             console.log('Print job created:', jobNumber)
+            setPrintVariant(null)
           }}
         />
       </DashboardLayout>

@@ -15,13 +15,13 @@ import {
   ChevronRight,
   X,
   Image as ImageIcon,
-  Eye,
   TrendingUp,
   Barcode,
   Printer,
   Trash2
 } from 'lucide-react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { DashboardLayout } from '@/components/layout/dashboard-layout'
 import { ProtectedRoute } from '@/components/protected-route'
 import { useTheme } from '@/contexts/theme-context'
@@ -77,6 +77,7 @@ const CURRENCY_SYMBOLS: Record<string, string> = {
 export default function MarketInventoryPage() {
   const { theme } = useTheme()
   const { user } = useAuth()
+  const router = useRouter()
   const [products, setProducts] = useState<Product[]>([])
   const [categories, setCategories] = useState<string[]>([])
   const [stats, setStats] = useState<Stats>({ total: 0, inStock: 0, lowStock: 0, outOfStock: 0 })
@@ -647,8 +648,9 @@ export default function MarketInventoryPage() {
                             initial={{ opacity: 0, y: 10 }}
                             animate={{ opacity: 1, y: 0 }}
                             transition={{ delay: index * 0.02 }}
+                            onClick={() => router.push(`/dashboard/market/inventory/${product.id}`)}
                             className={cn(
-                              'group transition-colors',
+                              'group transition-colors cursor-pointer',
                               theme === 'dark' ? 'hover:bg-gray-800/50' : 'hover:bg-gray-50'
                             )}
                           >
@@ -731,40 +733,29 @@ export default function MarketInventoryPage() {
                             </td>
                             <td className="py-4 px-4 text-center">
                               <div className="flex items-center justify-center gap-1">
-                                <Link href={`/dashboard/market/inventory/${product.id}`}>
-                                  <motion.button
-                                    whileHover={{ scale: 1.1 }}
-                                    whileTap={{ scale: 0.9 }}
-                                    className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-                                    title="Ver detalles completos"
-                                  >
-                                    <Eye className="w-4 h-4 text-blue-500" />
-                                  </motion.button>
-                                </Link>
                                 <motion.button
                                   whileHover={{ scale: 1.1 }}
                                   whileTap={{ scale: 0.9 }}
-                                  onClick={() => setPrintProduct(product)}
+                                  onClick={(e) => { e.stopPropagation(); setPrintProduct(product); }}
                                   className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
                                   title="Imprimir etiqueta"
                                 >
                                   <Printer className="w-4 h-4 text-gray-500" />
                                 </motion.button>
-                                <Link href={`/dashboard/market/inventory/${product.id}/edit`}>
-                                  <motion.button
-                                    whileHover={{ scale: 1.1 }}
-                                    whileTap={{ scale: 0.9 }}
-                                    className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-                                    title="Editar producto"
-                                  >
-                                    <Edit className="w-4 h-4 text-amber-500" />
-                                  </motion.button>
-                                </Link>
+                                <motion.button
+                                  whileHover={{ scale: 1.1 }}
+                                  whileTap={{ scale: 0.9 }}
+                                  onClick={(e) => { e.stopPropagation(); router.push(`/dashboard/market/inventory/${product.id}/edit`); }}
+                                  className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                                  title="Editar producto"
+                                >
+                                  <Edit className="w-4 h-4 text-amber-500" />
+                                </motion.button>
                                 {isAdmin && (
                                   <motion.button
                                     whileHover={{ scale: 1.1 }}
                                     whileTap={{ scale: 0.9 }}
-                                    onClick={() => setDeleteProduct(product)}
+                                    onClick={(e) => { e.stopPropagation(); setDeleteProduct(product); }}
                                     className="p-2 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
                                     title="Eliminar producto"
                                   >

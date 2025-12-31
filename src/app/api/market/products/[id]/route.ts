@@ -136,6 +136,20 @@ export async function GET(
         ORDER BY id
       `, [productId])
       variants = variantsResult.rows
+
+      // Get options for each variant (color, size, etc.)
+      for (const variant of variants) {
+        try {
+          const optionsResult = await db.query(`
+            SELECT option_type as "type", option_value as "value"
+            FROM market_variant_options
+            WHERE variant_id = $1
+          `, [variant.id])
+          variant.options = optionsResult.rows
+        } catch {
+          variant.options = []
+        }
+      }
     } catch {
       // Variants table may not exist
     }
