@@ -28,6 +28,18 @@ import { DashboardLayout } from '@/components/layout/dashboard-layout'
 import { ProtectedRoute } from '@/components/protected-route'
 import { useTheme } from '@/contexts/theme-context'
 import { cn } from '@/lib/utils'
+import { VariantSelectorModal, Variant } from '@/components/market/VariantSelectorModal'
+
+interface ProductVariant {
+  id: number
+  name: string
+  sku: string
+  barcode: string
+  price: number
+  costPrice?: number
+  stock: number
+  imageUrl: string | null
+}
 
 type Step = 'supplier' | 'products' | 'lots' | 'review'
 
@@ -74,10 +86,15 @@ interface Product {
   sellingPrice: number
   currency: string
   quantityOnHand: number
+  hasVariants?: boolean
+  variants?: ProductVariant[]
 }
 
 interface PurchaseLine {
   productId: number
+  variantId: number | null
+  variantName: string | null
+  variantSku: string | null
   product: Product
   quantity: number
   unitPrice: number
@@ -116,6 +133,10 @@ export default function CreatePurchasePage() {
   const [productResults, setProductResults] = useState<Product[]>([])
   const [searchingProducts, setSearchingProducts] = useState(false)
   const [showProductModal, setShowProductModal] = useState(false)
+
+  // Variant modal state
+  const [showVariantModal, setShowVariantModal] = useState(false)
+  const [selectedProductForVariant, setSelectedProductForVariant] = useState<Product | null>(null)
 
   // Step 4: Review
   const [purchaseDate, setPurchaseDate] = useState(new Date().toISOString().split('T')[0])
@@ -212,22 +233,32 @@ export default function CreatePurchasePage() {
     }
   }
 
-  // Add product to purchase
-  const addProductToPurchase = (product: Product) => {
-    const existing = purchaseLines.find(l => l.productId === product.id)
+  // Add product to purchase (with optional variant)
+  const addProductToPurchase = (product: Product, variant?: ProductVariant | null) => {
+    const variantId = variant?.id ?? null
+    const unitPrice = variant?.costPrice ?? variant?.price ?? product.costPrice
+
+    // Find existing line by product.id + variant.id combination
+    const existing = purchaseLines.find(l =>
+      l.productId === product.id && l.variantId === variantId
+    )
+
     if (existing) {
       setPurchaseLines(prev => prev.map(l =>
-        l.productId === product.id
+        l.productId === product.id && l.variantId === variantId
           ? { ...l, quantity: l.quantity + 1, totalPrice: (l.quantity + 1) * l.unitPrice }
           : l
       ))
     } else {
       setPurchaseLines(prev => [...prev, {
         productId: product.id,
+        variantId,
+        variantName: variant?.name ?? null,
+        variantSku: variant?.sku ?? null,
         product,
         quantity: 1,
-        unitPrice: product.costPrice,
-        totalPrice: product.costPrice,
+        unitPrice: unitPrice,
+        totalPrice: unitPrice,
         lotNumber: '',
         expirationDate: '',
         manufacturingDate: ''
@@ -236,38 +267,67 @@ export default function CreatePurchasePage() {
     setProductSearch('')
     setProductResults([])
     setShowProductModal(false)
+    setShowVariantModal(false)
+    setSelectedProductForVariant(null)
+  }
+
+  // Handle product click - show variant modal if product has variants
+  const handleProductClick = (product: Product) => {
+    if (product.hasVariants && product.variants && product.variants.length > 0) {
+      setSelectedProductForVariant(product)
+      setShowVariantModal(true)
+    } else {
+      addProductToPurchase(product, null)
+    }
+  }
+
+  // Handle variant selection from modal
+  const handleVariantSelect = (variant: Variant) => {
+    if (selectedProductForVariant) {
+      const productVariant: ProductVariant = {
+        id: variant.id,
+        name: variant.name,
+        sku: variant.sku,
+        barcode: variant.barcode,
+        price: variant.price,
+        costPrice: variant.costPrice,
+        stock: variant.stock,
+        imageUrl: variant.imageUrl
+      }
+      addProductToPurchase(selectedProductForVariant, productVariant)
+    }
   }
 
   // Update line quantity
-  const updateLineQuantity = (productId: number, quantity: number) => {
+  const updateLineQuantity = (productId: number, variantId: number | null, quantity: number) => {
     if (quantity < 1) return
     setPurchaseLines(prev => prev.map(l =>
-      l.productId === productId
+      l.productId === productId && l.variantId === variantId
         ? { ...l, quantity, totalPrice: quantity * l.unitPrice }
         : l
     ))
   }
 
   // Update line price
-  const updateLinePrice = (productId: number, unitPrice: number) => {
+  const updateLinePrice = (productId: number, variantId: number | null, unitPrice: number) => {
     if (unitPrice < 0) return
     setPurchaseLines(prev => prev.map(l =>
-      l.productId === productId
+      l.productId === productId && l.variantId === variantId
         ? { ...l, unitPrice, totalPrice: l.quantity * unitPrice }
         : l
     ))
   }
 
   // Update lot info
-  const updateLotInfo = (productId: number, field: 'lotNumber' | 'expirationDate' | 'manufacturingDate', value: string) => {
+  const updateLotInfo = (productId: number, variantId: number | null, field: 'lotNumber' | 'expirationDate' | 'manufacturingDate', value: string) => {
     setPurchaseLines(prev => prev.map(l =>
-      l.productId === productId ? { ...l, [field]: value } : l
+      l.productId === productId && l.variantId === variantId ? { ...l, [field]: value } : l
     ))
   }
 
   // Remove line
-  const removeLine = (productId: number) => {
-    setPurchaseLines(prev => prev.filter(l => l.productId !== productId))
+  const removeLine = (productId: number, variantId: number | null) => {
+    setPurchaseLines(prev => prev.filter(l => !(l.productId === productId && l.variantId === variantId)))
   }
 
   // Calculate totals
@@ -739,25 +799,29 @@ export default function CreatePurchasePage() {
                                       </div>
                                     )}
                                     <div>
-                                      <p className={cn('font-medium', theme === 'dark' ? 'text-white' : 'text-gray-900')}>{line.product.name}</p>
-                                      <p className={cn('text-sm', theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}>SKU: {line.product.sku}</p>
+                                      <p className={cn('font-medium', theme === 'dark' ? 'text-white' : 'text-gray-900')}>
+                                        {line.variantName ? `${line.product.name} - ${line.variantName}` : line.product.name}
+                                      </p>
+                                      <p className={cn('text-sm', theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}>
+                                        SKU: {line.variantSku || line.product.sku}
+                                      </p>
                                     </div>
                                   </div>
                                 </td>
                                 <td className="px-4 py-4">
                                   <div className="flex items-center justify-center gap-2">
                                     <button
-                                      onClick={() => updateLineQuantity(line.productId, line.quantity - 1)}
+                                      onClick={() => updateLineQuantity(line.productId, line.variantId, line.quantity - 1)}
                                       className={cn('w-8 h-8 rounded-lg flex items-center justify-center', theme === 'dark' ? 'bg-gray-700 hover:bg-gray-600 text-gray-300' : 'bg-gray-100 hover:bg-gray-200 text-gray-600')}
                                     >-</button>
                                     <input
                                       type="number"
                                       value={line.quantity}
-                                      onChange={(e) => updateLineQuantity(line.productId, parseInt(e.target.value) || 1)}
+                                      onChange={(e) => updateLineQuantity(line.productId, line.variantId, parseInt(e.target.value) || 1)}
                                       className={cn('w-16 text-center rounded-lg py-2 border', theme === 'dark' ? 'bg-gray-700 text-white border-gray-600' : 'bg-gray-50 text-gray-900 border-gray-200')}
                                     />
                                     <button
-                                      onClick={() => updateLineQuantity(line.productId, line.quantity + 1)}
+                                      onClick={() => updateLineQuantity(line.productId, line.variantId, line.quantity + 1)}
                                       className={cn('w-8 h-8 rounded-lg flex items-center justify-center', theme === 'dark' ? 'bg-gray-700 hover:bg-gray-600 text-gray-300' : 'bg-gray-100 hover:bg-gray-200 text-gray-600')}
                                     >+</button>
                                   </div>
@@ -769,7 +833,7 @@ export default function CreatePurchasePage() {
                                       type="number"
                                       step="0.01"
                                       value={line.unitPrice}
-                                      onChange={(e) => updateLinePrice(line.productId, parseFloat(e.target.value) || 0)}
+                                      onChange={(e) => updateLinePrice(line.productId, line.variantId, parseFloat(e.target.value) || 0)}
                                       className={cn('w-24 text-center rounded-lg py-2 border', theme === 'dark' ? 'bg-gray-700 text-white border-gray-600' : 'bg-gray-50 text-gray-900 border-gray-200')}
                                     />
                                   </div>
@@ -778,7 +842,7 @@ export default function CreatePurchasePage() {
                                   {CURRENCY_SYMBOLS[currency]}{line.totalPrice.toFixed(2)}
                                 </td>
                                 <td className="px-4 py-4">
-                                  <button onClick={() => removeLine(line.productId)} className="p-2 rounded-lg text-red-500 hover:bg-red-500/10">
+                                  <button onClick={() => removeLine(line.productId, line.variantId)} className="p-2 rounded-lg text-red-500 hover:bg-red-500/10">
                                     <Trash2 className="w-4 h-4" />
                                   </button>
                                 </td>
@@ -858,7 +922,9 @@ export default function CreatePurchasePage() {
                                 </div>
                               )}
                               <div>
-                                <p className={cn('font-medium', theme === 'dark' ? 'text-white' : 'text-gray-900')}>{line.product.name}</p>
+                                <p className={cn('font-medium', theme === 'dark' ? 'text-white' : 'text-gray-900')}>
+                                  {line.variantName ? `${line.product.name} - ${line.variantName}` : line.product.name}
+                                </p>
                                 <p className={cn('text-sm', theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}>{line.quantity} unidades</p>
                               </div>
                             </div>
@@ -871,7 +937,7 @@ export default function CreatePurchasePage() {
                                   type="text"
                                   placeholder="LOT-2024-XXXX"
                                   value={line.lotNumber}
-                                  onChange={(e) => updateLotInfo(line.productId, 'lotNumber', e.target.value)}
+                                  onChange={(e) => updateLotInfo(line.productId, line.variantId, 'lotNumber', e.target.value)}
                                   className={cn('w-full px-4 py-2 rounded-lg border', theme === 'dark' ? 'bg-gray-800 border-gray-600 text-white placeholder:text-gray-500' : 'bg-white border-gray-300 text-gray-900 placeholder:text-gray-400')}
                                 />
                               </div>
@@ -882,7 +948,7 @@ export default function CreatePurchasePage() {
                                 <input
                                   type="date"
                                   value={line.expirationDate}
-                                  onChange={(e) => updateLotInfo(line.productId, 'expirationDate', e.target.value)}
+                                  onChange={(e) => updateLotInfo(line.productId, line.variantId, 'expirationDate', e.target.value)}
                                   className={cn('w-full px-4 py-2 rounded-lg border', theme === 'dark' ? 'bg-gray-800 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900')}
                                 />
                                 {daysUntil !== null && (
@@ -902,7 +968,7 @@ export default function CreatePurchasePage() {
                                 <input
                                   type="date"
                                   value={line.manufacturingDate}
-                                  onChange={(e) => updateLotInfo(line.productId, 'manufacturingDate', e.target.value)}
+                                  onChange={(e) => updateLotInfo(line.productId, line.variantId, 'manufacturingDate', e.target.value)}
                                   className={cn('w-full px-4 py-2 rounded-lg border', theme === 'dark' ? 'bg-gray-800 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900')}
                                 />
                               </div>
@@ -1014,7 +1080,9 @@ export default function CreatePurchasePage() {
                                 </div>
                               )}
                               <div>
-                                <p className={cn('font-medium', theme === 'dark' ? 'text-white' : 'text-gray-900')}>{line.product.name}</p>
+                                <p className={cn('font-medium', theme === 'dark' ? 'text-white' : 'text-gray-900')}>
+                                  {line.variantName ? `${line.product.name} - ${line.variantName}` : line.product.name}
+                                </p>
                                 <p className={cn('text-sm', theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}>
                                   x{line.quantity} @ {CURRENCY_SYMBOLS[currency]}{line.unitPrice.toFixed(2)}
                                   {line.lotNumber && ` • Lote: ${line.lotNumber}`}
@@ -1156,7 +1224,7 @@ export default function CreatePurchasePage() {
                           <motion.button
                             key={product.id}
                             whileHover={{ backgroundColor: theme === 'dark' ? 'rgba(55, 65, 81, 0.5)' : 'rgba(249, 250, 251, 1)' }}
-                            onClick={() => addProductToPurchase(product)}
+                            onClick={() => handleProductClick(product)}
                             className="w-full p-4 flex items-center gap-4 text-left"
                           >
                             {product.imageUrl ? (
@@ -1167,7 +1235,14 @@ export default function CreatePurchasePage() {
                               </div>
                             )}
                             <div className="flex-1">
-                              <p className={cn('font-medium', theme === 'dark' ? 'text-white' : 'text-gray-900')}>{product.name}</p>
+                              <div className="flex items-center gap-2">
+                                <p className={cn('font-medium', theme === 'dark' ? 'text-white' : 'text-gray-900')}>{product.name}</p>
+                                {product.hasVariants && (
+                                  <span className="bg-purple-500 text-white px-1.5 py-0.5 rounded text-[10px] font-medium">
+                                    {product.variants?.length || 0} var
+                                  </span>
+                                )}
+                              </div>
                               <p className={cn('text-sm', theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}>
                                 SKU: {product.sku}{product.barcode && ` • ${product.barcode}`}
                               </p>
@@ -1383,6 +1458,34 @@ export default function CreatePurchasePage() {
               </>
             )}
           </AnimatePresence>
+
+          {/* Variant Selector Modal */}
+          <VariantSelectorModal
+            isOpen={showVariantModal}
+            onClose={() => {
+              setShowVariantModal(false)
+              setSelectedProductForVariant(null)
+            }}
+            product={selectedProductForVariant ? {
+              id: selectedProductForVariant.id,
+              name: selectedProductForVariant.name,
+              imageUrl: selectedProductForVariant.imageUrl,
+              variants: (selectedProductForVariant.variants || []).map(v => ({
+                id: v.id,
+                name: v.name,
+                sku: v.sku,
+                barcode: v.barcode,
+                price: v.price,
+                costPrice: v.costPrice,
+                stock: v.stock,
+                imageUrl: v.imageUrl
+              }))
+            } : null}
+            onSelect={handleVariantSelect}
+            mode="purchase"
+            showOutOfStock={true}
+            currency={currency}
+          />
         </div>
       </DashboardLayout>
     </ProtectedRoute>

@@ -93,11 +93,12 @@ export async function GET(
 
     const purchase = purchaseResult.rows[0]
 
-    // Get lines with lot info
+    // Get lines with lot info and variant info
     const linesResult = await db.query(`
       SELECT
         mpl.id,
         mpl.product_id,
+        mpl.variant_id,
         mpl.quantity,
         mpl.unit_price,
         mpl.total_price,
@@ -107,9 +108,12 @@ export async function GET(
         mpl.manufacturing_date,
         mp.name as product_name,
         mp.sku as product_sku,
-        mp.image_url as product_image
+        mp.image_url as product_image,
+        mpv.variant_name as variant_name,
+        mpv.sku as variant_sku
       FROM market_purchase_lines mpl
       JOIN market_products mp ON mpl.product_id = mp.id
+      LEFT JOIN market_product_variants mpv ON mpl.variant_id = mpv.id
       WHERE mpl.purchase_id = $1
       ORDER BY mpl.id
     `, [purchaseId])
@@ -146,6 +150,9 @@ export async function GET(
         lines: linesResult.rows.map(line => ({
           id: line.id,
           productId: line.product_id,
+          variantId: line.variant_id || null,
+          variantName: line.variant_name || null,
+          variantSku: line.variant_sku || null,
           productName: line.product_name,
           productSku: line.product_sku,
           productImage: line.product_image,
@@ -278,9 +285,9 @@ export async function PUT(
       }
 
       await db.transaction(async (client) => {
-        // Get current lines
+        // Get current lines with variant info
         const linesResult = await client.query(`
-          SELECT id, product_id, quantity, quantity_received
+          SELECT id, product_id, variant_id, quantity, quantity_received
           FROM market_purchase_lines
           WHERE purchase_id = $1
         `, [purchaseId])
@@ -291,6 +298,7 @@ export async function PUT(
         for (const line of linesResult.rows) {
           const lineId = line.id
           const productId = line.product_id
+          const variantId = line.variant_id || null
           const totalQuantity = parseInt(line.quantity)
           const alreadyReceived = parseInt(line.quantity_received) || 0
           const remaining = totalQuantity - alreadyReceived
@@ -350,27 +358,39 @@ export async function PUT(
               userId
             ])
 
+            // Update variant stock if this line has a variant
+            if (variantId) {
+              await client.query(`
+                UPDATE market_product_variants
+                SET quantity_on_hand = COALESCE(quantity_on_hand, 0) + $1,
+                    updated_at = NOW()
+                WHERE id = $2
+              `, [quantityToReceive, variantId])
+            }
+
             // Update warehouse stock if warehouse is specified
             if (targetWarehouseId) {
-              // Check if stock record exists
+              // Check if stock record exists (with or without variant)
               const existingStock = await client.query(`
                 SELECT id, quantity_on_hand FROM market_warehouse_stock
-                WHERE warehouse_id = $1 AND product_id = $2 AND variant_id IS NULL
-              `, [targetWarehouseId, productId])
+                WHERE warehouse_id = $1 AND product_id = $2
+                  AND ${variantId ? 'variant_id = $3' : 'variant_id IS NULL'}
+              `, variantId ? [targetWarehouseId, productId, variantId] : [targetWarehouseId, productId])
 
               if (existingStock.rows.length > 0) {
                 // Update existing stock
                 await client.query(`
                   UPDATE market_warehouse_stock
                   SET quantity_on_hand = quantity_on_hand + $1, updated_at = NOW()
-                  WHERE warehouse_id = $2 AND product_id = $3 AND variant_id IS NULL
-                `, [quantityToReceive, targetWarehouseId, productId])
+                  WHERE warehouse_id = $2 AND product_id = $3
+                    AND ${variantId ? 'variant_id = $4' : 'variant_id IS NULL'}
+                `, variantId ? [quantityToReceive, targetWarehouseId, productId, variantId] : [quantityToReceive, targetWarehouseId, productId])
               } else {
                 // Insert new stock record
                 await client.query(`
                   INSERT INTO market_warehouse_stock (warehouse_id, product_id, variant_id, quantity_on_hand, created_at, updated_at)
-                  VALUES ($1, $2, NULL, $3, NOW(), NOW())
-                `, [targetWarehouseId, productId, quantityToReceive])
+                  VALUES ($1, $2, $3, $4, NOW(), NOW())
+                `, [targetWarehouseId, productId, variantId, quantityToReceive])
               }
             }
 

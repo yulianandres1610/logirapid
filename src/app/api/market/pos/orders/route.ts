@@ -340,18 +340,21 @@ export async function POST(request: NextRequest) {
       const lineDiscount = discountAmountInput || (lineSubtotal * discountPercent / 100)
       const lineTotal = lineSubtotal - lineDiscount + taxAmount
 
+      const variantId = line.variantId ? parseInt(line.variantId) : null
+
       await db.query(`
         INSERT INTO market_pos_order_lines (
-          order_id, product_id, product_name, product_sku,
+          order_id, product_id, variant_id, product_name, product_sku,
           quantity, unit_price,
           discount_percent, discount_amount,
           subtotal, tax_amount, total,
           promotion_id, promotion_name,
           created_at
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, NOW())
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, NOW())
       `, [
         orderId,
         parseInt(line.productId) || null,
+        variantId,
         line.productName,
         line.productSku || null,
         quantity,
@@ -371,6 +374,7 @@ export async function POST(request: NextRequest) {
 
         console.log('[POS Orders] Reducing stock for product:', {
           productId: line.productId,
+          variantId: variantId,
           quantity: quantityToReduce,
           warehouseId
         })
@@ -382,12 +386,33 @@ export async function POST(request: NextRequest) {
 
         const quantityBefore = parseFloat(currentStockResult.rows[0]?.quantity_on_hand) || 0
 
-        // If warehouse specified, also update warehouse stock
-        if (warehouseId) {
+        // If variant specified, update variant stock
+        if (variantId) {
+          // Update variant stock in market_product_variants
+          await db.query(`
+            UPDATE market_product_variants
+            SET quantity_on_hand = GREATEST(0, quantity_on_hand - $1), updated_at = NOW()
+            WHERE id = $2
+          `, [quantityToReduce, variantId])
+
+          // If warehouse specified, update warehouse stock for variant
+          if (warehouseId) {
+            await db.query(`
+              UPDATE market_warehouse_stock
+              SET quantity_on_hand = GREATEST(0, quantity_on_hand - $1), updated_at = NOW()
+              WHERE product_id = $2 AND variant_id = $3 AND warehouse_id = $4
+            `, [quantityToReduce, line.productId, variantId, warehouseId])
+          }
+
+          console.log('[POS Orders] Variant stock updated:', variantId)
+        }
+
+        // If warehouse specified, also update warehouse stock (for product without variant)
+        if (warehouseId && !variantId) {
           const warehouseStockResult = await db.query(`
             UPDATE market_warehouse_stock
             SET quantity_on_hand = GREATEST(0, quantity_on_hand - $1), updated_at = NOW()
-            WHERE product_id = $2 AND warehouse_id = $3
+            WHERE product_id = $2 AND warehouse_id = $3 AND variant_id IS NULL
             RETURNING id, quantity_on_hand
           `, [quantityToReduce, line.productId, warehouseId])
 

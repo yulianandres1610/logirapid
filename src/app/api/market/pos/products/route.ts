@@ -175,7 +175,51 @@ export async function GET(request: NextRequest) {
       return p.pos_terminal_ids.includes(parseInt(terminalId))
     })
 
-    // Build products with calculated prices
+    // Get variants for all products
+    const variantsResult = await db.query(`
+      SELECT
+        v.id,
+        v.product_id,
+        v.variant_name as name,
+        v.sku,
+        v.barcode,
+        v.selling_price as price,
+        v.image_url,
+        v.is_active,
+        COALESCE(ws.quantity_on_hand, v.quantity_on_hand, 0) as stock
+      FROM market_product_variants v
+      LEFT JOIN market_warehouse_stock ws ON v.product_id = ws.product_id AND v.id = ws.variant_id AND ws.warehouse_id = $1
+      WHERE v.company_id = $2 AND v.is_active = true
+      ORDER BY v.product_id, v.variant_name ASC
+    `, [effectiveWarehouseId || null, companyId])
+
+    // Group variants by product
+    const variantsByProduct: Record<number, Array<{
+      id: number
+      name: string
+      sku: string
+      barcode: string
+      price: number
+      stock: number
+      imageUrl: string | null
+    }>> = {}
+
+    for (const v of variantsResult.rows) {
+      if (!variantsByProduct[v.product_id]) {
+        variantsByProduct[v.product_id] = []
+      }
+      variantsByProduct[v.product_id].push({
+        id: v.id,
+        name: v.name,
+        sku: v.sku,
+        barcode: v.barcode,
+        price: parseFloat(v.price) || 0,
+        stock: parseFloat(v.stock) || 0,
+        imageUrl: v.image_url
+      })
+    }
+
+    // Build products with calculated prices and variants
     const products = productsResult.rows.map(p => {
       const pricelistItem = pricelistItems[p.id]
       let finalPrice = parseFloat(p.sale_price) || 0
@@ -187,6 +231,14 @@ export async function GET(request: NextRequest) {
           finalPrice = finalPrice * (1 - pricelistItem.discountPercent / 100)
         }
       }
+
+      const variants = variantsByProduct[p.id] || []
+      const hasVariants = variants.length > 0
+
+      // If product has variants, calculate total stock from variants
+      const totalStock = hasVariants
+        ? variants.reduce((sum, v) => sum + v.stock, 0)
+        : parseFloat(p.stock) || 0
 
       return {
         id: p.id,
@@ -202,8 +254,10 @@ export async function GET(request: NextRequest) {
         costPrice: parseFloat(p.cost_price) || 0,
         taxRate: parseFloat(p.tax_rate) || 0,
         imageUrl: p.image_url,
-        stock: parseFloat(p.stock) || 0,
-        trackInventory: p.track_inventory
+        stock: totalStock,
+        trackInventory: p.track_inventory,
+        hasVariants,
+        variants: hasVariants ? variants : undefined
       }
     })
 

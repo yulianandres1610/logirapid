@@ -53,6 +53,17 @@ import {
 } from '@/lib/pos-db'
 import { usePOSOffline } from '@/hooks/usePOSOffline'
 import { useBarcodeScan } from '@/hooks/useBarcodeScan'
+import { VariantSelectorModal, Variant } from '@/components/market/VariantSelectorModal'
+
+interface ProductVariant {
+  id: number
+  name: string
+  sku: string
+  barcode: string
+  price: number
+  stock: number
+  imageUrl: string | null
+}
 
 interface Product {
   id: number
@@ -69,6 +80,8 @@ interface Product {
   imageUrl: string | null
   stock: number
   trackInventory: boolean
+  hasVariants: boolean
+  variants?: ProductVariant[]
 }
 
 interface Category {
@@ -81,6 +94,10 @@ interface Category {
 
 interface CartItem {
   product: Product
+  variantId: number | null
+  variantName: string | null
+  variantSku: string | null
+  variantBarcode: string | null
   quantity: number
   unitPrice: number
   discountPercent: number
@@ -161,6 +178,10 @@ export default function POSTerminalPage() {
   const [exitDestination, setExitDestination] = useState<string>('/dashboard/market/pos')
   const [exitActionLabel, setExitActionLabel] = useState<string>('Salir del POS')
 
+  // Variant selection modal state
+  const [showVariantModal, setShowVariantModal] = useState(false)
+  const [selectedProductForVariant, setSelectedProductForVariant] = useState<Product | null>(null)
+
   // Initialize client-side state and fetch data
   useEffect(() => {
     setMounted(true)
@@ -237,7 +258,9 @@ export default function POSTerminalPage() {
                 taxRate: 0,
                 imageUrl: p.imageUrl,
                 stock: p.stock,
-                trackInventory: p.trackInventory
+                trackInventory: p.trackInventory,
+                hasVariants: (p as unknown as { hasVariants?: boolean }).hasVariants || false,
+                variants: (p as unknown as { variants?: ProductVariant[] }).variants
               })))
               setCategories(cachedCategories.map(c => ({
                 id: c.id,
@@ -344,7 +367,9 @@ export default function POSTerminalPage() {
               taxRate: 0,
               imageUrl: p.imageUrl,
               stock: p.stock,
-              trackInventory: p.trackInventory
+              trackInventory: p.trackInventory,
+              hasVariants: (p as unknown as { hasVariants?: boolean }).hasVariants || false,
+              variants: (p as unknown as { variants?: ProductVariant[] }).variants
             })))
             setCategories(cachedCategories.map(c => ({
               id: c.id,
@@ -430,6 +455,10 @@ export default function POSTerminalPage() {
               if (product) {
                 restoredCart.push({
                   product,
+                  variantId: item.variantId ?? null,
+                  variantName: item.variantName ?? null,
+                  variantSku: item.variantSku ?? null,
+                  variantBarcode: item.variantBarcode ?? null,
                   quantity: item.quantity,
                   unitPrice: item.unitPrice,
                   discountPercent: item.discountPercent,
@@ -614,17 +643,26 @@ export default function POSTerminalPage() {
     }
   }
 
-  // Add product to cart
-  const addToCart = useCallback((product: Product) => {
+  // Add product to cart (with optional variant)
+  const addToCart = useCallback((product: Product, variant: ProductVariant | null = null) => {
+    // Get price and stock from variant if provided, otherwise from product
+    const price = variant?.price ?? product.price
+    const stock = variant?.stock ?? product.stock
+    const itemName = variant ? `${product.name} - ${variant.name}` : product.name
+
     // Validate stock if trackInventory is enabled
-    if (product.trackInventory && product.stock <= 0) {
-      setError(`Sin stock disponible: ${product.name}`)
+    if (product.trackInventory && stock <= 0) {
+      setError(`Sin stock disponible: ${itemName}`)
       setTimeout(() => setError(null), 3000)
       return
     }
 
     setCart(prev => {
-      const existingIndex = prev.findIndex(item => item.product.id === product.id)
+      // Find existing item by product.id + variant.id combination
+      const existingIndex = prev.findIndex(item =>
+        item.product.id === product.id &&
+        item.variantId === (variant?.id ?? null)
+      )
 
       if (existingIndex >= 0) {
         const updated = [...prev]
@@ -632,8 +670,8 @@ export default function POSTerminalPage() {
         const newQuantity = item.quantity + 1
 
         // Validate stock for quantity increase
-        if (product.trackInventory && newQuantity > product.stock) {
-          setError(`Stock insuficiente. Disponible: ${product.stock}`)
+        if (product.trackInventory && newQuantity > stock) {
+          setError(`Stock insuficiente. Disponible: ${stock}`)
           setTimeout(() => setError(null), 3000)
           return prev
         }
@@ -645,11 +683,15 @@ export default function POSTerminalPage() {
       } else {
         const newItem: CartItem = {
           product,
+          variantId: variant?.id ?? null,
+          variantName: variant?.name ?? null,
+          variantSku: variant?.sku ?? null,
+          variantBarcode: variant?.barcode ?? null,
           quantity: 1,
-          unitPrice: product.price,
+          unitPrice: price,
           discountPercent: 0,
           discountAmount: 0,
-          total: product.price
+          total: price
         }
         setSelectedCartIndex(prev.length)
         return [...prev, newItem]
@@ -661,15 +703,39 @@ export default function POSTerminalPage() {
 
   // Handle barcode scan - auto add to cart (like Odoo)
   const handleBarcodeScan = useCallback((barcode: string) => {
-    // Search for product by exact barcode or SKU match
+    const barcodeLower = barcode.toLowerCase()
+
+    // 1. First search in product variants
+    for (const product of products) {
+      if (product.hasVariants && product.variants) {
+        const variant = product.variants.find(v =>
+          v.barcode?.toLowerCase() === barcodeLower ||
+          v.sku?.toLowerCase() === barcodeLower
+        )
+        if (variant) {
+          // Found variant - add directly to cart
+          addToCart(product, variant)
+          setSearch('')
+          return
+        }
+      }
+    }
+
+    // 2. Search for product by barcode or SKU
     const product = products.find(p =>
-      p.barcode?.toLowerCase() === barcode.toLowerCase() ||
-      p.sku?.toLowerCase() === barcode.toLowerCase()
+      p.barcode?.toLowerCase() === barcodeLower ||
+      p.sku?.toLowerCase() === barcodeLower
     )
 
     if (product) {
-      addToCart(product)
-      // Clear search field if it has text
+      if (product.hasVariants && product.variants && product.variants.length > 0) {
+        // Product has variants - show selection modal
+        setSelectedProductForVariant(product)
+        setShowVariantModal(true)
+      } else {
+        // No variants - add directly
+        addToCart(product, null)
+      }
       setSearch('')
     } else {
       // Show error - product not found
@@ -684,8 +750,37 @@ export default function POSTerminalPage() {
     onError: (error) => console.warn('Barcode scan:', error),
     minLength: 3,
     maxTimeBetweenKeys: 50,
-    enabled: !showPaymentModal && !showCloseSessionModal && !loading
+    enabled: !showPaymentModal && !showCloseSessionModal && !showVariantModal && !loading
   })
+
+  // Handle product click - show variant modal if product has variants
+  const handleProductClick = useCallback((product: Product) => {
+    if (product.hasVariants && product.variants && product.variants.length > 0) {
+      setSelectedProductForVariant(product)
+      setShowVariantModal(true)
+    } else {
+      addToCart(product, null)
+    }
+  }, [addToCart])
+
+  // Handle variant selection from modal
+  const handleVariantSelect = useCallback((variant: Variant) => {
+    if (selectedProductForVariant) {
+      // Convert Variant to ProductVariant
+      const productVariant: ProductVariant = {
+        id: variant.id,
+        name: variant.name,
+        sku: variant.sku,
+        barcode: variant.barcode,
+        price: variant.price,
+        stock: variant.stock,
+        imageUrl: variant.imageUrl
+      }
+      addToCart(selectedProductForVariant, productVariant)
+    }
+    setShowVariantModal(false)
+    setSelectedProductForVariant(null)
+  }, [selectedProductForVariant, addToCart])
 
   // Update cart item
   const updateCartItem = useCallback((index: number, updates: Partial<CartItem>) => {
@@ -792,8 +887,11 @@ export default function POSTerminalPage() {
         currency: paymentCurrency,
         lines: cart.map(item => ({
           productId: item.product.id,
-          productName: item.product.name,
-          productSku: item.product.sku,
+          variantId: item.variantId,
+          productName: item.variantName
+            ? `${item.product.name} - ${item.variantName}`
+            : item.product.name,
+          productSku: item.variantSku || item.product.sku,
           quantity: item.quantity,
           unitPrice: item.unitPrice,
           discountPercent: item.discountPercent,
@@ -1055,7 +1153,11 @@ export default function POSTerminalPage() {
                   >
                     <div className="flex items-center justify-between gap-2">
                       <div className="flex-1 min-w-0">
-                        <p className="font-medium text-xs lg:text-sm truncate">{item.product.name}</p>
+                        <p className="font-medium text-xs lg:text-sm truncate">
+                          {item.variantName
+                            ? `${item.product.name} - ${item.variantName}`
+                            : item.product.name}
+                        </p>
                         <p className="text-[10px] lg:text-xs text-gray-500">
                           {item.quantity} x ${item.unitPrice.toFixed(2)}
                           {item.discountPercent > 0 && (
@@ -1219,6 +1321,10 @@ export default function POSTerminalPage() {
                   if (cart.length === 0 || !session) return
                   const cartData = cart.map(item => ({
                     productId: item.product.id,
+                    variantId: item.variantId,
+                    variantName: item.variantName,
+                    variantSku: item.variantSku,
+                    variantBarcode: item.variantBarcode,
                     productName: item.product.name,
                     productSku: item.product.sku,
                     quantity: item.quantity,
@@ -1325,7 +1431,7 @@ export default function POSTerminalPage() {
                   <motion.button
                     key={product.id}
                     whileTap={{ scale: 0.98 }}
-                    onClick={() => addToCart(product)}
+                    onClick={() => handleProductClick(product)}
                     disabled={product.trackInventory && product.stock <= 0}
                     className={cn(
                       'relative p-1.5 sm:p-2 lg:p-3 rounded-lg lg:rounded-xl text-left transition-all border',
@@ -1371,6 +1477,15 @@ export default function POSTerminalPage() {
                       )}>
                         Stock: {product.stock}
                       </p>
+                    )}
+
+                    {/* Variants badge */}
+                    {product.hasVariants && (
+                      <div className="absolute top-1 right-1 lg:top-2 lg:right-2">
+                        <span className="bg-purple-500 text-white px-1.5 py-0.5 lg:px-2 lg:py-0.5 rounded-md text-[8px] lg:text-[10px] font-medium">
+                          {product.variants?.length || 0} var
+                        </span>
+                      </div>
                     )}
 
                     {/* Out of stock overlay */}
@@ -1785,6 +1900,32 @@ export default function POSTerminalPage() {
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* Variant Selector Modal */}
+      <VariantSelectorModal
+        isOpen={showVariantModal}
+        onClose={() => {
+          setShowVariantModal(false)
+          setSelectedProductForVariant(null)
+        }}
+        product={selectedProductForVariant ? {
+          id: selectedProductForVariant.id,
+          name: selectedProductForVariant.name,
+          imageUrl: selectedProductForVariant.imageUrl,
+          variants: (selectedProductForVariant.variants || []).map(v => ({
+            id: v.id,
+            name: v.name,
+            sku: v.sku,
+            barcode: v.barcode,
+            price: v.price,
+            stock: v.stock,
+            imageUrl: v.imageUrl
+          }))
+        } : null}
+        onSelect={handleVariantSelect}
+        mode="sale"
+        currency={paymentCurrency}
+      />
     </motion.div>
   )
 }

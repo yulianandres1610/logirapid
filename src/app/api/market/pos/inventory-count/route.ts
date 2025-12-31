@@ -13,6 +13,8 @@ interface JWTPayload {
 
 interface CountLine {
   productId: number
+  variantId?: number | null
+  variantName?: string
   productName?: string
   productSku?: string
   productBarcode?: string
@@ -325,28 +327,36 @@ export async function POST(request: NextRequest) {
         salesMap[row.product_id] = parseFloat(row.total_sold) || 0
       })
 
-      // Obtener stock actual del almacén
+      // Obtener stock actual del almacén (productos y variantes)
       const productIds = lines.map(l => l.productId)
       const stockResult = await db.query(`
-        SELECT product_id, COALESCE(quantity_on_hand, 0) as stock
+        SELECT product_id, variant_id, COALESCE(quantity_on_hand, 0) as stock
         FROM market_warehouse_stock
         WHERE warehouse_id = $1 AND product_id = ANY($2::int[])
       `, [warehouseId, productIds])
 
-      const stockMap: Record<number, number> = {}
+      // Mapa de stock con clave compuesta: productId:variantId
+      const stockMap: Record<string, number> = {}
       stockResult.rows.forEach(row => {
-        stockMap[row.product_id] = parseFloat(row.stock) || 0
+        const key = `${row.product_id}:${row.variant_id || 'null'}`
+        stockMap[key] = parseFloat(row.stock) || 0
       })
 
       // Insertar nuevas líneas
       for (const line of lines) {
         const soldToday = salesMap[line.productId] || 0
-        const currentStock = stockMap[line.productId] || 0
+        const stockKey = `${line.productId}:${line.variantId || 'null'}`
+        const currentStock = stockMap[stockKey] || 0
         const expectedQuantity = currentStock // Stock actual del sistema
         const countedQuantity = line.countedQuantity || 0
         const difference = countedQuantity - expectedQuantity
         const unitPrice = line.unitPrice || 0
         const differenceValue = difference * unitPrice
+
+        // Nombre del producto incluyendo variante si aplica
+        const displayName = line.variantName
+          ? `${line.productName} - ${line.variantName}`
+          : (line.productName || '')
 
         await db.query(`
           INSERT INTO market_inventory_count_lines (
@@ -357,8 +367,8 @@ export async function POST(request: NextRequest) {
         `, [
           countId,
           line.productId,
-          null, // variant_id
-          line.productName || '',
+          line.variantId || null,
+          displayName,
           line.productSku || '',
           line.productBarcode || '',
           line.productImage || null,
@@ -522,6 +532,7 @@ export async function POST(request: NextRequest) {
         lines: finalLines.rows.map(line => ({
           id: line.id,
           productId: line.product_id,
+          variantId: line.variant_id || null,
           productName: line.product_name,
           productSku: line.product_sku,
           productBarcode: line.product_barcode,

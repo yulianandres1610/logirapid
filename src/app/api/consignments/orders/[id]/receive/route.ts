@@ -28,6 +28,7 @@ interface ReceivedLine {
   quantityReceived: number
   lotNumber?: string
   expirationDate?: string
+  variantId?: number | null
 }
 
 /**
@@ -91,14 +92,18 @@ export async function POST(
     for (const line of lines) {
       if (line.quantityReceived <= 0) continue
 
-      // Get order line details
+      // Get order line details with variant info
       const lineResult = await db.query(`
-        SELECT * FROM consignment_order_lines WHERE id = $1 AND order_id = $2
+        SELECT col.*, mpv.variant_name, mpv.sku as variant_sku
+        FROM consignment_order_lines col
+        LEFT JOIN market_product_variants mpv ON col.variant_id = mpv.id
+        WHERE col.id = $1 AND col.order_id = $2
       `, [line.lineId, orderId])
 
       if (lineResult.rows.length === 0) continue
 
       const orderLine = lineResult.rows[0]
+      const variantId = orderLine.variant_id || null
 
       // Generate lot number if not provided: {SUPPLIER_CODE}{YYMMDD}{SEQ}
       let lotNumber = line.lotNumber
@@ -131,10 +136,10 @@ export async function POST(
 
       await db.query(`
         INSERT INTO consignment_lot_inventory (
-          company_id, warehouse_id, product_id, order_line_id, supplier_id,
+          company_id, warehouse_id, product_id, variant_id, order_line_id, supplier_id,
           lot_number, expiration_date, quantity_initial, quantity_available, unit_cost
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-        ON CONFLICT (warehouse_id, product_id, lot_number) DO UPDATE SET
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+        ON CONFLICT (warehouse_id, product_id, COALESCE(variant_id, 0), lot_number) DO UPDATE SET
           quantity_initial = consignment_lot_inventory.quantity_initial + EXCLUDED.quantity_initial,
           quantity_available = consignment_lot_inventory.quantity_available + EXCLUDED.quantity_available,
           expiration_date = COALESCE(EXCLUDED.expiration_date, consignment_lot_inventory.expiration_date)
@@ -142,6 +147,7 @@ export async function POST(
         payload.companyId,
         parseInt(order.warehouse_id),
         parseInt(orderLine.product_id),
+        variantId,
         line.lineId,
         parseInt(order.supplier_id),
         lotNumber,
@@ -150,6 +156,16 @@ export async function POST(
         qtyReceived,
         unitCost
       ])
+
+      // Update variant stock if this line has a variant
+      if (variantId) {
+        await db.query(`
+          UPDATE market_product_variants
+          SET quantity_on_hand = COALESCE(quantity_on_hand, 0) + $1,
+              updated_at = NOW()
+          WHERE id = $2
+        `, [qtyReceived, variantId])
+      }
 
       // Update main inventory (market_product_inventory)
       await db.query(`

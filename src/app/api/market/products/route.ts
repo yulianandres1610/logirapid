@@ -171,6 +171,54 @@ export async function GET(request: NextRequest) {
       ORDER BY category
     `, [companyId])
 
+    // Get variants for all products
+    const productIds = result.rows.map(p => p.id)
+    let variantsByProduct: Record<number, Array<{
+      id: number
+      name: string
+      sku: string
+      barcode: string
+      price: number
+      costPrice: number
+      stock: number
+      imageUrl: string | null
+    }>> = {}
+
+    if (productIds.length > 0) {
+      const variantsResult = await db.query(`
+        SELECT
+          id,
+          product_id,
+          variant_name as name,
+          sku,
+          barcode,
+          selling_price as price,
+          cost_price as "costPrice",
+          quantity_on_hand as stock,
+          image_url as "imageUrl",
+          is_active
+        FROM market_product_variants
+        WHERE product_id = ANY($1) AND is_active = true
+        ORDER BY product_id, variant_name ASC
+      `, [productIds])
+
+      for (const v of variantsResult.rows) {
+        if (!variantsByProduct[v.product_id]) {
+          variantsByProduct[v.product_id] = []
+        }
+        variantsByProduct[v.product_id].push({
+          id: v.id,
+          name: v.name,
+          sku: v.sku,
+          barcode: v.barcode,
+          price: parseFloat(v.price) || 0,
+          costPrice: parseFloat(v.costPrice) || 0,
+          stock: parseFloat(v.stock) || 0,
+          imageUrl: v.imageUrl
+        })
+      }
+    }
+
     // Calculate stock stats using warehouse stock
     const statsResult = await db.query(`
       SELECT
@@ -190,30 +238,39 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({
       success: true,
       data: {
-        products: result.rows.map(row => ({
-          id: row.id,
-          name: row.name,
-          description: row.description,
-          imageUrl: row.image_url,
-          category: row.category,
-          costPrice: parseFloat(row.cost_price) || 0,
-          sellingPrice: parseFloat(row.selling_price) || 0,
-          currency: row.currency || 'USD',
-          sku: row.sku,
-          barcode: row.barcode,
-          supplierName: row.supplier_name,
-          supplierContact: row.supplier_contact,
-          supplierReference: row.supplier_reference,
-          quantityOnHand: parseInt(row.quantity_on_hand) || 0,
-          quantityExpected: parseInt(row.quantity_expected) || 0,
-          minimumStock: parseInt(row.minimum_stock) || 0,
-          isActive: row.is_active,
-          unitOfMeasure: row.unit_of_measure || 'unidad',
-          odooProductId: row.odoo_product_id,
-          odooLastSync: row.odoo_last_sync,
-          createdAt: row.created_at,
-          updatedAt: row.updated_at
-        })),
+        products: result.rows.map(row => {
+          const variants = variantsByProduct[row.id] || []
+          const hasVariants = variants.length > 0
+
+          return {
+            id: row.id,
+            name: row.name,
+            description: row.description,
+            imageUrl: row.image_url,
+            category: row.category,
+            costPrice: parseFloat(row.cost_price) || 0,
+            sellingPrice: parseFloat(row.selling_price) || 0,
+            currency: row.currency || 'USD',
+            sku: row.sku,
+            barcode: row.barcode,
+            supplierName: row.supplier_name,
+            supplierContact: row.supplier_contact,
+            supplierReference: row.supplier_reference,
+            quantityOnHand: hasVariants
+              ? variants.reduce((sum, v) => sum + v.stock, 0)
+              : parseInt(row.quantity_on_hand) || 0,
+            quantityExpected: parseInt(row.quantity_expected) || 0,
+            minimumStock: parseInt(row.minimum_stock) || 0,
+            isActive: row.is_active,
+            unitOfMeasure: row.unit_of_measure || 'unidad',
+            odooProductId: row.odoo_product_id,
+            odooLastSync: row.odoo_last_sync,
+            createdAt: row.created_at,
+            updatedAt: row.updated_at,
+            hasVariants,
+            variants: hasVariants ? variants : undefined
+          }
+        }),
         categories: categoriesResult.rows.map(r => r.category),
         stats: {
           total: parseInt(statsResult.rows[0]?.total) || 0,

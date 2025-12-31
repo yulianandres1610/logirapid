@@ -26,6 +26,18 @@ import { DashboardLayout } from '@/components/layout/dashboard-layout'
 import { ProtectedRoute } from '@/components/protected-route'
 import { useTheme } from '@/contexts/theme-context'
 import { cn } from '@/lib/utils'
+import { VariantSelectorModal, Variant } from '@/components/market/VariantSelectorModal'
+
+interface ProductVariant {
+  id: number
+  name: string
+  sku: string
+  barcode: string
+  price: number
+  costPrice?: number
+  stock: number
+  imageUrl: string | null
+}
 
 type Step = 'supplier' | 'products' | 'review' | 'confirmation'
 
@@ -68,10 +80,15 @@ interface Product {
   sellingPrice: number
   currency: string
   quantityOnHand: number
+  hasVariants?: boolean
+  variants?: ProductVariant[]
 }
 
 interface OrderLine {
   productId: number
+  variantId: number | null
+  variantName: string | null
+  variantSku: string | null
   product: Product
   quantity: number
   unitCost: number
@@ -111,6 +128,10 @@ export default function CreateConsignmentOrderPage() {
   const [productResults, setProductResults] = useState<Product[]>([])
   const [searchingProducts, setSearchingProducts] = useState(false)
   const [barcodeInput, setBarcodeInput] = useState('')
+
+  // Variant modal state
+  const [showVariantModal, setShowVariantModal] = useState(false)
+  const [selectedProductForVariant, setSelectedProductForVariant] = useState<Product | null>(null)
 
   // Step 4: Confirmation
   const [createdOrder, setCreatedOrder] = useState<CreatedOrder | null>(null)
@@ -212,37 +233,77 @@ export default function CreateConsignmentOrderPage() {
     }
   }
 
-  // Add product to order
-  const addProductToOrder = (product: Product) => {
-    const existing = orderLines.find(l => l.productId === product.id)
+  // Add product to order (with optional variant)
+  const addProductToOrder = (product: Product, variant?: ProductVariant | null) => {
+    const variantId = variant?.id ?? null
+    const unitCost = variant?.costPrice ?? variant?.price ?? product.costPrice
+    const unitPrice = variant?.price ?? product.sellingPrice
+
+    // Find existing line by product.id + variant.id combination
+    const existing = orderLines.find(l =>
+      l.productId === product.id && l.variantId === variantId
+    )
+
     if (existing) {
       setOrderLines(prev => prev.map(l =>
-        l.productId === product.id
+        l.productId === product.id && l.variantId === variantId
           ? { ...l, quantity: l.quantity + 1, totalCost: (l.quantity + 1) * l.unitCost }
           : l
       ))
     } else {
       setOrderLines(prev => [...prev, {
         productId: product.id,
+        variantId,
+        variantName: variant?.name ?? null,
+        variantSku: variant?.sku ?? null,
         product,
         quantity: 1,
-        unitCost: product.costPrice,
-        unitPrice: product.sellingPrice,
-        totalCost: product.costPrice
+        unitCost: unitCost,
+        unitPrice: unitPrice,
+        totalCost: unitCost
       }])
     }
     setProductSearch('')
     setProductResults([])
+    setShowVariantModal(false)
+    setSelectedProductForVariant(null)
     setErrors({})
   }
 
+  // Handle product click - show variant modal if product has variants
+  const handleProductClick = (product: Product) => {
+    if (product.hasVariants && product.variants && product.variants.length > 0) {
+      setSelectedProductForVariant(product)
+      setShowVariantModal(true)
+    } else {
+      addProductToOrder(product, null)
+    }
+  }
+
+  // Handle variant selection from modal
+  const handleVariantSelect = (variant: Variant) => {
+    if (selectedProductForVariant) {
+      const productVariant: ProductVariant = {
+        id: variant.id,
+        name: variant.name,
+        sku: variant.sku,
+        barcode: variant.barcode,
+        price: variant.price,
+        costPrice: variant.costPrice,
+        stock: variant.stock,
+        imageUrl: variant.imageUrl
+      }
+      addProductToOrder(selectedProductForVariant, productVariant)
+    }
+  }
+
   // Update line
-  const updateLine = (productId: number, field: 'quantity' | 'unitCost' | 'unitPrice', value: number) => {
+  const updateLine = (productId: number, variantId: number | null, field: 'quantity' | 'unitCost' | 'unitPrice', value: number) => {
     if (value < 0) return
     if (field === 'quantity' && value < 1) return
 
     setOrderLines(prev => prev.map(l => {
-      if (l.productId !== productId) return l
+      if (l.productId !== productId || l.variantId !== variantId) return l
       const updated = { ...l, [field]: value }
       if (field === 'quantity' || field === 'unitCost') {
         updated.totalCost = updated.quantity * updated.unitCost
@@ -252,8 +313,8 @@ export default function CreateConsignmentOrderPage() {
   }
 
   // Remove line
-  const removeLine = (productId: number) => {
-    setOrderLines(prev => prev.filter(l => l.productId !== productId))
+  const removeLine = (productId: number, variantId: number | null) => {
+    setOrderLines(prev => prev.filter(l => !(l.productId === productId && l.variantId === variantId)))
   }
 
   // Calculate totals
@@ -828,7 +889,7 @@ export default function CreateConsignmentOrderPage() {
                           {productResults.map(product => (
                             <button
                               key={product.id}
-                              onClick={() => addProductToOrder(product)}
+                              onClick={() => handleProductClick(product)}
                               className={cn(
                                 'w-full p-3 flex items-center gap-3 text-left transition-colors',
                                 theme === 'dark' ? 'hover:bg-gray-700' : 'hover:bg-gray-50'
@@ -877,7 +938,9 @@ export default function CreateConsignmentOrderPage() {
                           >
                             <div className="flex items-start gap-4">
                               <div className="flex-1">
-                                <p className="font-medium text-gray-900 dark:text-white">{line.product.name}</p>
+                                <p className="font-medium text-gray-900 dark:text-white">
+                                  {line.variantName ? `${line.product.name} - ${line.variantName}` : line.product.name}
+                                </p>
                                 <p className="text-xs text-gray-500">SKU: {line.product.sku}</p>
                               </div>
 
@@ -888,7 +951,7 @@ export default function CreateConsignmentOrderPage() {
                                   <input
                                     type="number"
                                     value={line.quantity}
-                                    onChange={(e) => updateLine(line.productId, 'quantity', parseInt(e.target.value) || 1)}
+                                    onChange={(e) => updateLine(line.productId, line.variantId, 'quantity', parseInt(e.target.value) || 1)}
                                     min={1}
                                     className={cn(
                                       'w-20 px-3 py-1.5 rounded-lg border text-center',
@@ -903,7 +966,7 @@ export default function CreateConsignmentOrderPage() {
                                   <input
                                     type="number"
                                     value={line.unitCost}
-                                    onChange={(e) => updateLine(line.productId, 'unitCost', parseFloat(e.target.value) || 0)}
+                                    onChange={(e) => updateLine(line.productId, line.variantId, 'unitCost', parseFloat(e.target.value) || 0)}
                                     step="0.01"
                                     min={0}
                                     className={cn(
@@ -919,7 +982,7 @@ export default function CreateConsignmentOrderPage() {
                                   <input
                                     type="number"
                                     value={line.unitPrice}
-                                    onChange={(e) => updateLine(line.productId, 'unitPrice', parseFloat(e.target.value) || 0)}
+                                    onChange={(e) => updateLine(line.productId, line.variantId, 'unitPrice', parseFloat(e.target.value) || 0)}
                                     step="0.01"
                                     min={0}
                                     className={cn(
@@ -939,7 +1002,7 @@ export default function CreateConsignmentOrderPage() {
                                 <motion.button
                                   whileHover={{ scale: 1.1 }}
                                   whileTap={{ scale: 0.9 }}
-                                  onClick={() => removeLine(line.productId)}
+                                  onClick={() => removeLine(line.productId, line.variantId)}
                                   className="p-2 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg"
                                 >
                                   <Trash2 className="w-4 h-4" />
@@ -1084,10 +1147,12 @@ export default function CreateConsignmentOrderPage() {
                         </thead>
                         <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
                           {orderLines.map(line => (
-                            <tr key={line.productId}>
+                            <tr key={`${line.productId}-${line.variantId || 'base'}`}>
                               <td className="py-3 px-4">
-                                <p className="font-medium text-gray-900 dark:text-white text-sm">{line.product.name}</p>
-                                <p className="text-xs text-gray-500">SKU: {line.product.sku}</p>
+                                <p className="font-medium text-gray-900 dark:text-white text-sm">
+                                  {line.variantName ? `${line.product.name} - ${line.variantName}` : line.product.name}
+                                </p>
+                                <p className="text-xs text-gray-500">SKU: {line.variantSku || line.product.sku}</p>
                               </td>
                               <td className="py-3 px-4 text-center font-medium text-gray-900 dark:text-white">{line.quantity}</td>
                               <td className="py-3 px-4 text-right text-gray-600 dark:text-gray-300">{formatCurrency(line.unitCost)}</td>
@@ -1590,6 +1655,34 @@ export default function CreateConsignmentOrderPage() {
               </>
             )}
           </AnimatePresence>
+
+          {/* Variant Selector Modal */}
+          <VariantSelectorModal
+            isOpen={showVariantModal}
+            onClose={() => {
+              setShowVariantModal(false)
+              setSelectedProductForVariant(null)
+            }}
+            product={selectedProductForVariant ? {
+              id: selectedProductForVariant.id,
+              name: selectedProductForVariant.name,
+              imageUrl: selectedProductForVariant.imageUrl,
+              variants: (selectedProductForVariant.variants || []).map(v => ({
+                id: v.id,
+                name: v.name,
+                sku: v.sku,
+                barcode: v.barcode,
+                price: v.price,
+                costPrice: v.costPrice,
+                stock: v.stock,
+                imageUrl: v.imageUrl
+              }))
+            } : null}
+            onSelect={handleVariantSelect}
+            mode="purchase"
+            showOutOfStock={true}
+            currency="USD"
+          />
         </div>
       </DashboardLayout>
     </ProtectedRoute>
