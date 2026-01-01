@@ -521,7 +521,7 @@ export default function CreateConsignmentOrderPage() {
       <DashboardLayout>
         <div className={cn(
           "min-h-screen pt-12 sm:pt-16 lg:pt-20 pb-20 px-4 sm:px-6 lg:px-8",
-          theme === 'dark' ? 'bg-gray-900' : 'bg-gray-50'
+          theme === 'dark' ? 'bg-gray-800' : 'bg-gray-50'
         )}>
           <div className="max-w-4xl xl:max-w-5xl mx-auto space-y-6 sm:space-y-8 relative">
 
@@ -665,7 +665,7 @@ export default function CreateConsignmentOrderPage() {
               className={cn(
                 "rounded-2xl border p-6 sm:p-8 shadow-lg",
                 theme === 'dark'
-                  ? 'bg-gray-800/95 border-gray-700/50 backdrop-blur-sm'
+                  ? 'bg-gray-900 border-gray-700 backdrop-blur-sm'
                   : 'bg-white border-gray-200 backdrop-blur-sm'
               )}
               initial={{ opacity: 0, y: 20 }}
@@ -717,25 +717,67 @@ export default function CreateConsignmentOrderPage() {
                         />
                       </div>
 
+                      {/* Selected Supplier Display */}
+                      {selectedSupplier && !supplierSearch && (
+                        <div className={cn(
+                          'p-4 rounded-xl border mb-3',
+                          theme === 'dark'
+                            ? 'border-emerald-600 bg-emerald-900/20'
+                            : 'border-emerald-500 bg-emerald-50'
+                        )}>
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-3">
+                              <div className="px-2 py-1 rounded-lg text-xs font-mono font-bold bg-emerald-500 text-white">
+                                {selectedSupplier.code}
+                              </div>
+                              <div>
+                                <p className={cn(
+                                  'font-medium',
+                                  theme === 'dark' ? 'text-white' : 'text-gray-900'
+                                )}>{selectedSupplier.name}</p>
+                                {selectedSupplier.contactName && (
+                                  <p className="text-xs text-gray-500">{selectedSupplier.contactName}</p>
+                                )}
+                              </div>
+                            </div>
+                            <button
+                              onClick={() => setSelectedSupplier(null)}
+                              className={cn(
+                                'p-1.5 rounded-lg transition-colors',
+                                theme === 'dark' ? 'hover:bg-gray-700 text-gray-400' : 'hover:bg-gray-200 text-gray-500'
+                              )}
+                            >
+                              <X className="w-4 h-4" />
+                            </button>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Search Results */}
                       {loadingSuppliers ? (
                         <div className="flex items-center justify-center py-8">
                           <Loader2 className="w-6 h-6 animate-spin text-emerald-500" />
                         </div>
-                      ) : (
+                      ) : supplierSearch.length > 0 ? (
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-3 max-h-60 overflow-y-auto">
                           {filteredSuppliers.map(supplier => (
                             <motion.button
                               key={supplier.id}
                               whileHover={{ scale: 1.02 }}
                               whileTap={{ scale: 0.98 }}
-                              onClick={() => setSelectedSupplier(supplier)}
+                              onClick={() => {
+                                setSelectedSupplier(supplier)
+                                setSupplierSearch('')
+                              }}
                               className={cn(
                                 'p-4 rounded-xl border text-left transition-all',
                                 selectedSupplier?.id === supplier.id
-                                  ? 'border-emerald-500 bg-emerald-50 dark:bg-emerald-900/20'
+                                  ? theme === 'dark'
+                                    ? 'border-emerald-600 bg-emerald-900/20'
+                                    : 'border-emerald-500 bg-emerald-50'
                                   : theme === 'dark'
-                                    ? 'border-gray-700 hover:border-gray-600'
-                                    : 'border-gray-200 hover:border-gray-300'
+                                    ? 'border-gray-700 bg-gray-800 hover:border-gray-600'
+                                    : 'border-gray-200 bg-white hover:border-gray-300'
                               )}
                             >
                               <div className="flex items-center gap-3">
@@ -748,7 +790,10 @@ export default function CreateConsignmentOrderPage() {
                                   {supplier.code}
                                 </div>
                                 <div>
-                                  <p className="font-medium text-gray-900 dark:text-white">{supplier.name}</p>
+                                  <p className={cn(
+                                    'font-medium',
+                                    theme === 'dark' ? 'text-white' : 'text-gray-900'
+                                  )}>{supplier.name}</p>
                                   {supplier.contactName && (
                                     <p className="text-xs text-gray-500">{supplier.contactName}</p>
                                   )}
@@ -759,7 +804,10 @@ export default function CreateConsignmentOrderPage() {
                           {filteredSuppliers.length === 0 && (
                             <div className="col-span-2 text-center py-8">
                               <Users className="w-8 h-8 mx-auto mb-2 text-gray-400" />
-                              <p className="text-gray-500">No hay proveedores</p>
+                              <p className={cn(
+                                'font-medium',
+                                theme === 'dark' ? 'text-gray-400' : 'text-gray-500'
+                              )}>No se encontraron proveedores</p>
                               <Link href="/dashboard/market/consignments/suppliers/create">
                                 <button className="mt-2 text-sm text-emerald-500 hover:text-emerald-600">
                                   Crear proveedor
@@ -768,7 +816,22 @@ export default function CreateConsignmentOrderPage() {
                             </div>
                           )}
                         </div>
-                      )}
+                      ) : !selectedSupplier ? (
+                        <div className={cn(
+                          'text-center py-8 rounded-xl border-2 border-dashed',
+                          theme === 'dark' ? 'border-gray-700' : 'border-gray-200'
+                        )}>
+                          <Search className="w-8 h-8 mx-auto mb-2 text-gray-400" />
+                          <p className={cn(
+                            'font-medium',
+                            theme === 'dark' ? 'text-gray-400' : 'text-gray-500'
+                          )}>Busca un proveedor</p>
+                          <p className={cn(
+                            'text-sm mt-1',
+                            theme === 'dark' ? 'text-gray-500' : 'text-gray-400'
+                          )}>Escribe el nombre o codigo del proveedor</p>
+                        </div>
+                      ) : null}
                       {errors.supplier && (
                         <p className="text-sm text-red-500 mt-2">{errors.supplier}</p>
                       )}
@@ -792,10 +855,12 @@ export default function CreateConsignmentOrderPage() {
                             className={cn(
                               'p-4 rounded-xl border text-left transition-all flex items-center gap-3',
                               selectedWarehouse?.id === warehouse.id
-                                ? 'border-emerald-500 bg-emerald-50 dark:bg-emerald-900/20'
+                                ? theme === 'dark'
+                                  ? 'border-emerald-600 bg-emerald-900/20'
+                                  : 'border-emerald-500 bg-emerald-50'
                                 : theme === 'dark'
-                                  ? 'border-gray-700 hover:border-gray-600'
-                                  : 'border-gray-200 hover:border-gray-300'
+                                  ? 'border-gray-700 bg-gray-800 hover:border-gray-600'
+                                  : 'border-gray-200 bg-white hover:border-gray-300'
                             )}
                           >
                             <Warehouse className={cn(
@@ -803,7 +868,10 @@ export default function CreateConsignmentOrderPage() {
                               selectedWarehouse?.id === warehouse.id ? 'text-emerald-500' : 'text-gray-400'
                             )} />
                             <div>
-                              <p className="font-medium text-gray-900 dark:text-white">{warehouse.name}</p>
+                              <p className={cn(
+                                'font-medium',
+                                theme === 'dark' ? 'text-white' : 'text-gray-900'
+                              )}>{warehouse.name}</p>
                               <p className="text-xs text-gray-500">{warehouse.code}</p>
                             </div>
                           </motion.button>
