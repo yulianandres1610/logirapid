@@ -21,6 +21,7 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { DashboardLayout } from '@/components/layout/dashboard-layout'
 import { ProtectedRoute } from '@/components/protected-route'
+import { PasswordConfirmModal } from '@/components/auth/PasswordConfirmModal'
 import { useTheme } from '@/contexts/theme-context'
 import { cn } from '@/lib/utils'
 
@@ -84,6 +85,10 @@ export default function CreateScrapPage() {
   const [loading, setLoading] = useState(false)
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [showCancelModal, setShowCancelModal] = useState(false)
+
+  // Password verification
+  const [isAuthorized, setIsAuthorized] = useState(false)
+  const [showPasswordModal, setShowPasswordModal] = useState(true)
 
   // Warehouse
   const [warehouses, setWarehouses] = useState<WarehouseOption[]>([])
@@ -270,9 +275,44 @@ export default function CreateScrapPage() {
     (p.barcode && p.barcode.includes(productSearch))
   )
 
+  const handlePasswordConfirm = () => {
+    setIsAuthorized(true)
+    setShowPasswordModal(false)
+  }
+
+  const handlePasswordClose = () => {
+    router.push('/dashboard/market/warehouses/scrap')
+  }
+
   return (
     <ProtectedRoute>
       <DashboardLayout>
+        {/* Password Confirmation Modal */}
+        <PasswordConfirmModal
+          isOpen={showPasswordModal && !isAuthorized}
+          onClose={handlePasswordClose}
+          onConfirm={handlePasswordConfirm}
+          title="Autorizar Scrap"
+          description="Esta operacion eliminara productos del inventario. Confirma tu identidad."
+          operationType="scrap"
+        />
+
+        {!isAuthorized ? (
+          <div className={cn(
+            "min-h-screen flex items-center justify-center",
+            theme === 'dark' ? 'bg-gray-900' : 'bg-gray-50'
+          )}>
+            <div className="text-center">
+              <Loader2 className="w-8 h-8 animate-spin mx-auto text-red-500" />
+              <p className={cn(
+                "mt-4 text-sm",
+                theme === 'dark' ? 'text-gray-400' : 'text-gray-600'
+              )}>
+                Verificando autorizacion...
+              </p>
+            </div>
+          </div>
+        ) : (
         <div className={cn(
           "min-h-screen pt-12 sm:pt-16 lg:pt-20 pb-20 px-4 sm:px-6 lg:px-8",
           theme === 'dark' ? 'bg-gray-900' : 'bg-gray-50'
@@ -1094,6 +1134,7 @@ export default function CreateScrapPage() {
             )}
           </AnimatePresence>
         </div>
+        )}
       </DashboardLayout>
     </ProtectedRoute>
   )

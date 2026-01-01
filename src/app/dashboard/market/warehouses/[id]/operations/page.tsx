@@ -30,6 +30,7 @@ import UnifiedReceptionView from '@/components/warehouse/UnifiedReceptionView'
 import ReturnTypeSelector, { type ReturnType } from '@/components/warehouse/ReturnTypeSelector'
 import SupplierReturnView from '@/components/warehouse/SupplierReturnView'
 import POSReturnReceiveView from '@/components/warehouse/POSReturnReceiveView'
+import { PasswordConfirmModal } from '@/components/auth/PasswordConfirmModal'
 
 interface WarehouseData {
   id: number
@@ -418,6 +419,10 @@ export default function WarehouseOperationsPage() {
   // Return operation state
   const [returnType, setReturnType] = useState<ReturnType | null>(null)
 
+  // Password verification for sensitive operations
+  const [showPasswordModal, setShowPasswordModal] = useState(false)
+  const [pendingOperationType, setPendingOperationType] = useState<OperationType | null>(null)
+
   // Fetch warehouse data
   useEffect(() => {
     const fetchWarehouse = async () => {
@@ -467,6 +472,17 @@ export default function WarehouseOperationsPage() {
   }, [warehouseId])
 
   const handleOperationTypeSelect = (type: OperationType) => {
+    // Require password for scrap and adjustment operations
+    if (type === 'scrap' || type === 'adjustment') {
+      setPendingOperationType(type)
+      setShowPasswordModal(true)
+      return
+    }
+
+    proceedWithOperation(type)
+  }
+
+  const proceedWithOperation = (type: OperationType) => {
     if (type === 'receive_transfer') {
       setOperation({ ...initialOperationState, operationType: type })
       fetchPendingTransfers()
@@ -485,6 +501,19 @@ export default function WarehouseOperationsPage() {
     setSelectedTransfer(null)
     setShowValidationView(false)
     setReturnType(null)
+  }
+
+  const handlePasswordConfirm = () => {
+    if (pendingOperationType) {
+      proceedWithOperation(pendingOperationType)
+    }
+    setShowPasswordModal(false)
+    setPendingOperationType(null)
+  }
+
+  const handlePasswordClose = () => {
+    setShowPasswordModal(false)
+    setPendingOperationType(null)
   }
 
   const handleReturnTypeSelect = (type: ReturnType) => {
@@ -735,6 +764,20 @@ export default function WarehouseOperationsPage() {
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
+      {/* Password Confirmation Modal */}
+      <PasswordConfirmModal
+        isOpen={showPasswordModal}
+        onClose={handlePasswordClose}
+        onConfirm={handlePasswordConfirm}
+        title={pendingOperationType === 'scrap' ? 'Autorizar Scrap' : 'Autorizar Ajuste'}
+        description={
+          pendingOperationType === 'scrap'
+            ? 'Esta operacion eliminara productos del inventario permanentemente.'
+            : 'Esta operacion modificara las cantidades del inventario.'
+        }
+        operationType={pendingOperationType === 'scrap' ? 'scrap' : 'adjustment'}
+      />
+
       {/* Header */}
       <header className="sticky top-0 z-50 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-4 py-3">
         <div className="flex items-center justify-between max-w-7xl mx-auto">
