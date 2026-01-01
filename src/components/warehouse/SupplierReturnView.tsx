@@ -3,7 +3,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
-  ArrowLeft,
   Package,
   Search,
   Loader2,
@@ -293,23 +292,6 @@ export default function SupplierReturnView({
 
   return (
     <div className="flex flex-col min-h-[60vh] w-full">
-      {/* Header */}
-      <div className="flex items-center gap-4 mb-6">
-        <motion.button
-          whileHover={{ scale: 1.05 }}
-          whileTap={{ scale: 0.95 }}
-          onClick={onBack}
-          className="flex items-center gap-2 px-4 py-2 bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 rounded-lg text-gray-700 dark:text-gray-200 transition-colors"
-        >
-          <ArrowLeft className="w-5 h-5" />
-          <span>Volver</span>
-        </motion.button>
-        <div>
-          <h2 className="text-2xl font-bold text-gray-800 dark:text-white">Devolución a Proveedor</h2>
-          <p className="text-sm text-gray-500 dark:text-gray-400">{warehouseName}</p>
-        </div>
-      </div>
-
       {/* Error Banner */}
       <AnimatePresence>
         {error && (
