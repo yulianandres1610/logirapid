@@ -4,64 +4,28 @@ import { useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
 import {
   Package,
-  Clock,
-  CheckCircle,
   ArrowRight,
   ShoppingCart,
   RefreshCw,
   TrendingUp,
   TrendingDown,
   DollarSign,
-  BarChart3,
-  AlertCircle,
   Calendar,
   Target,
-  Bell,
-  ChevronRight,
-  Eye,
   Boxes,
-  AlertTriangle,
   Store,
   Truck,
-  FileBox,
-  PackageCheck
+  FileBox
 } from 'lucide-react'
 import Link from 'next/link'
 import { DashboardLayout } from '@/components/layout/dashboard-layout'
 import { ProtectedRoute } from '@/components/protected-route'
-
-interface OrderStats {
-  pending: number
-  preparing: number
-  ready: number
-  delivered: number
-  thisMonth: number
-  totalInvoicedMonth: number
-  totalSoldMonth: number
-}
 
 interface ProductStats {
   total: number
   inStock: number
   lowStock: number
   outOfStock: number
-}
-
-interface OrderByMonth {
-  month: string
-  monthName: string
-  orderCount: number
-  totalAmount: number
-}
-
-interface RecentOrder {
-  id: number
-  orderNumber: string
-  customerName: string
-  totalAmount: number
-  currency: string
-  status: string
-  createdAt: string
 }
 
 interface ConsignmentStats {
@@ -96,21 +60,10 @@ interface PurchaseStats {
 }
 
 interface DashboardData {
-  orders: OrderStats
-  ordersByMonth: OrderByMonth[]
-  recentOrders: RecentOrder[]
   products: ProductStats
   consignments: ConsignmentStats
   recentConsignments: RecentConsignment[]
   purchases: PurchaseStats
-}
-
-// Currency symbols
-const CURRENCY_SYMBOLS: Record<string, string> = {
-  USD: '$',
-  CUP: '₱',
-  EUR: '€',
-  MLC: '$'
 }
 
 // Animated number component
@@ -210,65 +163,6 @@ function MetricCard({
   )
 }
 
-// Alert Card for urgent items
-function AlertCard({
-  title,
-  count,
-  description,
-  icon: Icon,
-  href,
-  color = 'amber',
-  delay = 0
-}: {
-  title: string
-  count: number
-  description: string
-  icon: any
-  href: string
-  color?: 'amber' | 'red' | 'blue' | 'green'
-  delay?: number
-}) {
-  const colors = {
-    amber: 'border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/50',
-    red: 'border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-950/50',
-    blue: 'border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-950/50',
-    green: 'border-green-200 dark:border-green-800 bg-green-50 dark:bg-green-950/50'
-  }
-
-  const iconColors = {
-    amber: 'text-amber-600 bg-amber-100 dark:bg-amber-900/50',
-    red: 'text-red-600 bg-red-100 dark:bg-red-900/50',
-    blue: 'text-blue-600 bg-blue-100 dark:bg-blue-900/50',
-    green: 'text-green-600 bg-green-100 dark:bg-green-900/50'
-  }
-
-  if (count === 0) return null
-
-  return (
-    <motion.div
-      initial={{ opacity: 0, x: -20 }}
-      animate={{ opacity: 1, x: 0 }}
-      transition={{ delay }}
-    >
-      <Link href={href}>
-        <div className={`flex items-center gap-4 p-4 rounded-xl border-2 ${colors[color]} hover:scale-[1.01] transition-all cursor-pointer group`}>
-          <div className={`p-3 rounded-xl ${iconColors[color]}`}>
-            <Icon className="w-5 h-5" />
-          </div>
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2">
-              <span className="text-2xl font-bold text-gray-900 dark:text-white">{count}</span>
-              <span className="font-semibold text-gray-900 dark:text-white">{title}</span>
-            </div>
-            <p className="text-sm text-gray-600 dark:text-gray-400 truncate">{description}</p>
-          </div>
-          <ChevronRight className="w-5 h-5 text-gray-400 group-hover:translate-x-1 transition-transform" />
-        </div>
-      </Link>
-    </motion.div>
-  )
-}
-
 // Consignment Card
 function ConsignmentCard({
   consignment,
@@ -364,105 +258,6 @@ function QuickAction({
   )
 }
 
-// Mini Chart for orders by month
-function MiniChart({ data }: { data: OrderByMonth[] }) {
-  const maxCount = Math.max(...data.map(d => d.orderCount), 1)
-  const totalOrders = data.reduce((sum, d) => sum + d.orderCount, 0)
-  const totalAmount = data.reduce((sum, d) => sum + d.totalAmount, 0)
-
-  return (
-    <div className="space-y-4">
-      <div className="flex items-end justify-between gap-1 h-24">
-        {data.map((item, index) => {
-          const height = (item.orderCount / maxCount) * 100
-          const isLatest = index === data.length - 1
-
-          return (
-            <div key={item.month} className="flex-1 flex flex-col items-center gap-1 group">
-              <div className="relative w-full">
-                <motion.div
-                  initial={{ height: 0 }}
-                  animate={{ height: `${Math.max(height, 8)}%` }}
-                  transition={{ delay: index * 0.05, duration: 0.5 }}
-                  className={`w-full rounded-t-md transition-colors ${
-                    isLatest
-                      ? 'bg-gradient-to-t from-blue-600 to-blue-400'
-                      : 'bg-gradient-to-t from-gray-300 to-gray-200 dark:from-gray-600 dark:to-gray-500 group-hover:from-blue-400 group-hover:to-blue-300'
-                  }`}
-                  style={{ minHeight: '4px' }}
-                />
-                <div className="absolute -top-8 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity bg-gray-900 text-white text-[10px] py-1 px-2 rounded whitespace-nowrap z-10">
-                  {item.orderCount} órdenes
-                </div>
-              </div>
-              <span className={`text-[10px] font-medium ${isLatest ? 'text-blue-600 dark:text-blue-400' : 'text-gray-500 dark:text-gray-400'}`}>
-                {item.monthName}
-              </span>
-            </div>
-          )
-        })}
-      </div>
-      <div className="flex items-center justify-between text-sm">
-        <div>
-          <span className="text-gray-500 dark:text-gray-400">Total periodo: </span>
-          <span className="font-bold text-gray-900 dark:text-white">{totalOrders} órdenes</span>
-        </div>
-        <div>
-          <span className="text-gray-500 dark:text-gray-400">Monto: </span>
-          <span className="font-bold text-green-600 dark:text-green-400">
-            ${totalAmount.toLocaleString()}
-          </span>
-        </div>
-      </div>
-    </div>
-  )
-}
-
-// Recent Order Row
-function OrderRow({ order, index }: { order: RecentOrder; index: number }) {
-  const statusConfig: Record<string, { bg: string; text: string; label: string }> = {
-    pending: { bg: 'bg-amber-100 dark:bg-amber-900/30', text: 'text-amber-700 dark:text-amber-400', label: 'Pendiente' },
-    accepted: { bg: 'bg-blue-100 dark:bg-blue-900/30', text: 'text-blue-700 dark:text-blue-400', label: 'Aceptada' },
-    preparing: { bg: 'bg-purple-100 dark:bg-purple-900/30', text: 'text-purple-700 dark:text-purple-400', label: 'Preparando' },
-    ready: { bg: 'bg-cyan-100 dark:bg-cyan-900/30', text: 'text-cyan-700 dark:text-cyan-400', label: 'Lista' },
-    in_delivery: { bg: 'bg-indigo-100 dark:bg-indigo-900/30', text: 'text-indigo-700 dark:text-indigo-400', label: 'En entrega' },
-    delivered: { bg: 'bg-green-100 dark:bg-green-900/30', text: 'text-green-700 dark:text-green-400', label: 'Entregada' },
-    cancelled: { bg: 'bg-red-100 dark:bg-red-900/30', text: 'text-red-700 dark:text-red-400', label: 'Cancelada' },
-    rejected: { bg: 'bg-red-100 dark:bg-red-900/30', text: 'text-red-700 dark:text-red-400', label: 'Rechazada' }
-  }
-
-  const status = statusConfig[order.status] || statusConfig.pending
-  const symbol = CURRENCY_SYMBOLS[order.currency] || '$'
-
-  return (
-    <motion.div
-      initial={{ opacity: 0, x: -10 }}
-      animate={{ opacity: 1, x: 0 }}
-      transition={{ delay: index * 0.05 }}
-      className="flex items-center gap-3 p-3 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors group"
-    >
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2">
-          <p className="font-semibold text-sm text-gray-900 dark:text-white">{order.orderNumber}</p>
-          <span className={`text-[10px] px-2 py-0.5 rounded-full ${status.bg} ${status.text}`}>
-            {status.label}
-          </span>
-        </div>
-        <p className="text-xs text-gray-500 dark:text-gray-400 truncate">{order.customerName}</p>
-      </div>
-      <div className="text-right">
-        <p className="font-bold text-sm text-gray-900 dark:text-white">
-          {symbol}{order.totalAmount.toLocaleString()}
-        </p>
-        <p className="text-[10px] text-gray-500">{order.currency}</p>
-      </div>
-      <Link href={`/dashboard/market/orders/${order.id}`}>
-        <Eye className="w-4 h-4 text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity hover:text-blue-500" />
-      </Link>
-    </motion.div>
-  )
-}
-
 export default function MarketDashboardPage() {
   const [data, setData] = useState<DashboardData | null>(null)
   const [loading, setLoading] = useState(true)
@@ -514,8 +309,6 @@ export default function MarketDashboardPage() {
   }
 
   // Calculate KPIs
-  const pendingActions = (data?.orders?.pending || 0) + (data?.orders?.preparing || 0)
-  const consignmentProfit = (data?.consignments?.totalSold || 0) - (data?.consignments?.totalCost || 0)
   const stockHealth = data?.products?.total
     ? Math.round((data.products.inStock / data.products.total) * 100)
     : 0
@@ -578,203 +371,83 @@ export default function MarketDashboardPage() {
           {/* Key Metrics */}
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
             <MetricCard
-              title="Órdenes Pendientes"
-              value={pendingActions}
-              subtitle="Requieren tu atención"
-              icon={Clock}
+              title="Total Consignaciones"
+              value={data?.consignments?.total || 0}
+              subtitle={`${data?.consignments?.pending || 0} pendientes`}
+              icon={FileBox}
               color="amber"
               delay={0.1}
             />
             <MetricCard
-              title="Facturado Este Mes"
-              value={`$${(data?.orders?.totalInvoicedMonth || 0).toLocaleString()}`}
-              subtitle={`${data?.orders?.thisMonth || 0} órdenes`}
+              title="Costo Consignaciones"
+              value={`$${(data?.consignments?.totalCost || 0).toLocaleString()}`}
+              subtitle={`$${(data?.consignments?.costThisMonth || 0).toLocaleString()} este mes`}
               icon={DollarSign}
               color="green"
               delay={0.15}
             />
             <MetricCard
-              title="Vendido Este Mes"
-              value={`$${(data?.orders?.totalSoldMonth || 0).toLocaleString()}`}
-              subtitle="Órdenes entregadas"
+              title="Vendido Consignaciones"
+              value={`$${(data?.consignments?.totalSold || 0).toLocaleString()}`}
+              subtitle={`${data?.consignments?.received || 0} recibidas`}
               icon={ShoppingCart}
               color="purple"
               delay={0.2}
             />
             <MetricCard
-              title="Consignaciones"
-              value={`$${(data?.consignments?.costThisMonth || 0).toLocaleString()}`}
-              subtitle={`${data?.consignments?.thisMonth || 0} este mes`}
-              icon={FileBox}
+              title="Compras"
+              value={`$${(data?.purchases?.totalAmount || 0).toLocaleString()}`}
+              subtitle={`${data?.purchases?.total || 0} total`}
+              icon={Truck}
               color="blue"
               delay={0.25}
             />
           </div>
 
-          {/* Urgent Actions */}
-          {(data?.orders?.pending || 0) + (data?.orders?.preparing || 0) + (data?.orders?.ready || 0) + (data?.products?.lowStock || 0) + (data?.products?.outOfStock || 0) > 0 && (
-            <motion.div
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.3 }}
-              className="bg-gradient-to-r from-amber-50 to-orange-50 dark:from-amber-950/30 dark:to-orange-950/30 rounded-2xl p-4 border border-amber-200 dark:border-amber-800"
-            >
-              <div className="flex items-center gap-2 mb-3">
-                <Bell className="w-5 h-5 text-amber-600" />
-                <h3 className="font-bold text-gray-900 dark:text-white">Acciones Pendientes</h3>
-              </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
-                <AlertCard
-                  title="Nuevas"
-                  count={data?.orders?.pending || 0}
-                  description="Órdenes por aceptar"
-                  icon={AlertCircle}
-                  href="/dashboard/market/orders?status=pending"
-                  color="amber"
-                  delay={0.35}
-                />
-                <AlertCard
-                  title="En Preparación"
-                  count={data?.orders?.preparing || 0}
-                  description="Órdenes en proceso"
-                  icon={Package}
-                  href="/dashboard/market/orders?status=preparing"
-                  color="blue"
-                  delay={0.4}
-                />
-                <AlertCard
-                  title="Listas"
-                  count={data?.orders?.ready || 0}
-                  description="Para entregar"
-                  icon={CheckCircle}
-                  href="/dashboard/market/orders?status=ready"
-                  color="green"
-                  delay={0.45}
-                />
-                <AlertCard
-                  title="Stock Bajo"
-                  count={(data?.products?.lowStock || 0) + (data?.products?.outOfStock || 0)}
-                  description="Productos que reponer"
-                  icon={AlertTriangle}
-                  href="/dashboard/market/inventory?filter=low-stock"
-                  color="red"
-                  delay={0.5}
-                />
-              </div>
-            </motion.div>
-          )}
-
           {/* Quick Actions */}
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             <QuickAction
-              title="Ver Órdenes"
+              title="Consignaciones"
               description="Gestionar pedidos"
-              icon={Package}
-              href="/dashboard/market/orders"
+              icon={FileBox}
+              href="/dashboard/market/consignments"
               color="from-blue-500 to-blue-600 shadow-blue-500/25"
-              badge={pendingActions}
+              badge={data?.consignments?.pending}
               delay={0.5}
+            />
+            <QuickAction
+              title="Compras"
+              description="Ver compras"
+              icon={ShoppingCart}
+              href="/dashboard/market/purchases"
+              color="from-emerald-500 to-emerald-600 shadow-emerald-500/25"
+              badge={data?.purchases?.pending}
+              delay={0.55}
             />
             <QuickAction
               title="Inventario"
               description="Gestionar productos"
               icon={Boxes}
               href="/dashboard/market/inventory"
-              color="from-emerald-500 to-emerald-600 shadow-emerald-500/25"
-              badge={data?.products?.outOfStock}
-              delay={0.55}
-            />
-            <QuickAction
-              title="Consignaciones"
-              description="Gestionar pedidos"
-              icon={FileBox}
-              href="/dashboard/market/consignments"
               color="from-purple-500 to-purple-600 shadow-purple-500/25"
-              badge={data?.consignments?.pending}
+              badge={data?.products?.outOfStock}
               delay={0.6}
             />
             <QuickAction
-              title="Entregas"
-              description="Crear rutas"
-              icon={Truck}
-              href="/dashboard/market/deliveries"
+              title="Almacenes"
+              description="Operaciones"
+              icon={Package}
+              href="/dashboard/market/warehouses"
               color="from-cyan-500 to-cyan-600 shadow-cyan-500/25"
               delay={0.65}
             />
-          </div>
-
-          {/* Main Content */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            {/* Performance Chart */}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.65 }}
-              className="lg:col-span-2 bg-white dark:bg-[#1e1e2f] rounded-2xl border border-gray-200 dark:border-gray-700/50 p-5 shadow-sm"
-            >
-              <div className="flex items-center justify-between mb-4">
-                <div>
-                  <h3 className="font-bold text-lg text-gray-900 dark:text-white flex items-center gap-2">
-                    <BarChart3 className="w-5 h-5 text-blue-500" />
-                    Órdenes por Mes
-                  </h3>
-                  <p className="text-sm text-gray-500 dark:text-gray-400">Últimos 6 meses</p>
-                </div>
-                <div className="text-right">
-                  <p className="text-2xl font-bold text-gray-900 dark:text-white">
-                    <AnimatedNumber value={data?.orders?.thisMonth || 0} />
-                  </p>
-                  <p className="text-xs text-gray-500">este mes</p>
-                </div>
-              </div>
-              {data?.ordersByMonth && data.ordersByMonth.length > 0 ? (
-                <MiniChart data={data.ordersByMonth} />
-              ) : (
-                <div className="h-32 flex items-center justify-center text-gray-400">
-                  <div className="text-center">
-                    <BarChart3 className="w-10 h-10 mx-auto mb-2 opacity-50" />
-                    <p className="text-sm">Sin datos de órdenes</p>
-                  </div>
-                </div>
-              )}
-            </motion.div>
-
-            {/* Recent Orders */}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.7 }}
-              className="bg-white dark:bg-[#1e1e2f] rounded-2xl border border-gray-200 dark:border-gray-700/50 p-5 shadow-sm"
-            >
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="font-bold text-lg text-gray-900 dark:text-white flex items-center gap-2">
-                  <Package className="w-5 h-5 text-purple-500" />
-                  Recientes
-                </h3>
-                <Link href="/dashboard/market/orders" className="text-sm text-blue-500 hover:text-blue-600 flex items-center gap-1">
-                  Ver todas <ArrowRight className="w-4 h-4" />
-                </Link>
-              </div>
-              <div className="space-y-1">
-                {data?.recentOrders && data.recentOrders.length > 0 ? (
-                  data.recentOrders.map((order, i) => (
-                    <OrderRow key={order.id} order={order} index={i} />
-                  ))
-                ) : (
-                  <div className="py-8 text-center text-gray-400">
-                    <Package className="w-10 h-10 mx-auto mb-2 opacity-50" />
-                    <p className="text-sm">Sin órdenes recientes</p>
-                  </div>
-                )}
-              </div>
-            </motion.div>
           </div>
 
           {/* Consignments Summary */}
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.75 }}
+            transition={{ delay: 0.7 }}
             className="bg-white dark:bg-[#1e1e2f] rounded-2xl border border-gray-200 dark:border-gray-700/50 p-5 shadow-sm"
           >
             <div className="flex items-center justify-between mb-4">
@@ -791,12 +464,12 @@ export default function MarketDashboardPage() {
                 Ver todas <ArrowRight className="w-4 h-4" />
               </Link>
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
               {data?.recentConsignments?.map((consignment, i) => (
                 <ConsignmentCard
                   key={consignment.id}
                   consignment={consignment}
-                  delay={0.8 + i * 0.05}
+                  delay={0.75 + i * 0.05}
                 />
               ))}
               {(!data?.recentConsignments || data.recentConsignments.length === 0) && (
@@ -808,7 +481,7 @@ export default function MarketDashboardPage() {
             </div>
           </motion.div>
 
-          {/* Product & Order Stats */}
+          {/* Product & Consignment Stats */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {/* Product Stats */}
             <motion.div
@@ -845,7 +518,7 @@ export default function MarketDashboardPage() {
               </div>
             </motion.div>
 
-            {/* Order Stats Summary */}
+            {/* Consignment Stats Summary */}
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
@@ -854,14 +527,14 @@ export default function MarketDashboardPage() {
             >
               <h3 className="font-bold text-lg text-gray-900 dark:text-white flex items-center gap-2 mb-4">
                 <Target className="w-5 h-5 text-purple-500" />
-                Resumen de Órdenes
+                Resumen de Consignaciones
               </h3>
               <div className="grid grid-cols-2 gap-3">
                 {[
-                  { label: 'Pendientes', value: data?.orders?.pending || 0, color: 'text-amber-600 bg-amber-50 dark:bg-amber-900/20' },
-                  { label: 'Preparando', value: data?.orders?.preparing || 0, color: 'text-purple-600 bg-purple-50 dark:bg-purple-900/20' },
-                  { label: 'Listas', value: data?.orders?.ready || 0, color: 'text-cyan-600 bg-cyan-50 dark:bg-cyan-900/20' },
-                  { label: 'Entregadas', value: data?.orders?.delivered || 0, color: 'text-green-600 bg-green-50 dark:bg-green-900/20' }
+                  { label: 'Pendientes', value: data?.consignments?.pending || 0, color: 'text-amber-600 bg-amber-50 dark:bg-amber-900/20' },
+                  { label: 'Parciales', value: data?.consignments?.partial || 0, color: 'text-blue-600 bg-blue-50 dark:bg-blue-900/20' },
+                  { label: 'Recibidas', value: data?.consignments?.received || 0, color: 'text-green-600 bg-green-50 dark:bg-green-900/20' },
+                  { label: 'Este Mes', value: data?.consignments?.thisMonth || 0, color: 'text-purple-600 bg-purple-50 dark:bg-purple-900/20' }
                 ].map((stat) => (
                   <div key={stat.label} className={`p-3 rounded-xl ${stat.color} text-center`}>
                     <p className="text-2xl font-bold">{stat.value}</p>
