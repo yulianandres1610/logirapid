@@ -108,39 +108,51 @@ export async function GET(request: NextRequest) {
       WHERE company_id = $1 AND is_active = true
     `, [companyId])
 
-    // Get wallet balances
-    const walletBalances = await db.query(`
+    // Get consignment statistics
+    const consignmentStats = await db.query(`
       SELECT
-        currency,
-        COALESCE(available_balance, 0) as available_balance,
-        COALESCE(reserved_balance, 0) as reserved_balance,
-        COALESCE(total_deposits, 0) as total_deposits,
-        COALESCE(total_withdrawals, 0) as total_withdrawals
-      FROM broker_wallet_balances
+        COUNT(*) as total_orders,
+        COUNT(*) FILTER (WHERE status = 'pending') as pending_orders,
+        COUNT(*) FILTER (WHERE status = 'partial') as partial_orders,
+        COUNT(*) FILTER (WHERE status = 'received') as received_orders,
+        COALESCE(SUM(total_cost), 0) as total_cost,
+        COALESCE(SUM(total_sold), 0) as total_sold,
+        COALESCE(SUM(total_returned), 0) as total_returned,
+        COUNT(*) FILTER (WHERE DATE_TRUNC('month', consignment_date) = DATE_TRUNC('month', CURRENT_DATE)) as orders_this_month,
+        COALESCE(SUM(total_cost) FILTER (WHERE DATE_TRUNC('month', consignment_date) = DATE_TRUNC('month', CURRENT_DATE)), 0) as cost_this_month
+      FROM consignment_orders
       WHERE company_id = $1
-      ORDER BY
-        CASE currency
-          WHEN 'USD' THEN 1
-          WHEN 'EUR' THEN 2
-          WHEN 'CUP' THEN 3
-          WHEN 'MLC' THEN 4
-          ELSE 5
-        END
     `, [companyId])
 
-    // Format wallet data
-    const wallet = {
-      balances: walletBalances.rows.map(row => ({
-        currency: row.currency,
-        availableBalance: parseFloat(row.available_balance) || 0,
-        reservedBalance: parseFloat(row.reserved_balance) || 0,
-        totalDeposits: parseFloat(row.total_deposits) || 0,
-        totalWithdrawals: parseFloat(row.total_withdrawals) || 0
-      })),
-      primaryBalance: walletBalances.rows.find(r => r.currency === 'USD')
-        ? parseFloat(walletBalances.rows.find(r => r.currency === 'USD')!.available_balance)
-        : 0
-    }
+    // Get recent consignments
+    const recentConsignments = await db.query(`
+      SELECT
+        co.id,
+        co.order_number,
+        co.status,
+        co.total_cost,
+        co.total_sold,
+        co.consignment_date,
+        cs.name as supplier_name
+      FROM consignment_orders co
+      LEFT JOIN consignment_suppliers cs ON co.supplier_id = cs.id
+      WHERE co.company_id = $1
+      ORDER BY co.created_at DESC
+      LIMIT 5
+    `, [companyId])
+
+    // Get purchase statistics
+    const purchaseStats = await db.query(`
+      SELECT
+        COUNT(*) as total_orders,
+        COUNT(*) FILTER (WHERE status = 'pending') as pending_orders,
+        COUNT(*) FILTER (WHERE status = 'received') as received_orders,
+        COALESCE(SUM(total_amount), 0) as total_amount,
+        COUNT(*) FILTER (WHERE DATE_TRUNC('month', purchase_date) = DATE_TRUNC('month', CURRENT_DATE)) as orders_this_month,
+        COALESCE(SUM(total_amount) FILTER (WHERE DATE_TRUNC('month', purchase_date) = DATE_TRUNC('month', CURRENT_DATE)), 0) as amount_this_month
+      FROM market_purchases
+      WHERE company_id = $1
+    `, [companyId])
 
     return NextResponse.json({
       success: true,
@@ -175,7 +187,34 @@ export async function GET(request: NextRequest) {
           lowStock: parseInt(productStats.rows[0]?.low_stock_products) || 0,
           outOfStock: parseInt(productStats.rows[0]?.out_of_stock_products) || 0
         },
-        wallet
+        consignments: {
+          total: parseInt(consignmentStats.rows[0]?.total_orders) || 0,
+          pending: parseInt(consignmentStats.rows[0]?.pending_orders) || 0,
+          partial: parseInt(consignmentStats.rows[0]?.partial_orders) || 0,
+          received: parseInt(consignmentStats.rows[0]?.received_orders) || 0,
+          totalCost: parseFloat(consignmentStats.rows[0]?.total_cost) || 0,
+          totalSold: parseFloat(consignmentStats.rows[0]?.total_sold) || 0,
+          totalReturned: parseFloat(consignmentStats.rows[0]?.total_returned) || 0,
+          thisMonth: parseInt(consignmentStats.rows[0]?.orders_this_month) || 0,
+          costThisMonth: parseFloat(consignmentStats.rows[0]?.cost_this_month) || 0
+        },
+        recentConsignments: recentConsignments.rows.map(row => ({
+          id: row.id,
+          orderNumber: row.order_number,
+          supplierName: row.supplier_name || 'Sin proveedor',
+          status: row.status,
+          totalCost: parseFloat(row.total_cost) || 0,
+          totalSold: parseFloat(row.total_sold) || 0,
+          consignmentDate: row.consignment_date
+        })),
+        purchases: {
+          total: parseInt(purchaseStats.rows[0]?.total_orders) || 0,
+          pending: parseInt(purchaseStats.rows[0]?.pending_orders) || 0,
+          received: parseInt(purchaseStats.rows[0]?.received_orders) || 0,
+          totalAmount: parseFloat(purchaseStats.rows[0]?.total_amount) || 0,
+          thisMonth: parseInt(purchaseStats.rows[0]?.orders_this_month) || 0,
+          amountThisMonth: parseFloat(purchaseStats.rows[0]?.amount_this_month) || 0
+        }
       }
     })
 

@@ -3,11 +3,9 @@
 import { useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
 import {
-  Wallet,
   Package,
   Clock,
   CheckCircle,
-  MapPin,
   ArrowRight,
   ShoppingCart,
   RefreshCw,
@@ -20,12 +18,13 @@ import {
   Target,
   Bell,
   ChevronRight,
-  CircleDollarSign,
   Eye,
   Boxes,
   AlertTriangle,
   Store,
-  Truck
+  Truck,
+  FileBox,
+  PackageCheck
 } from 'lucide-react'
 import Link from 'next/link'
 import { DashboardLayout } from '@/components/layout/dashboard-layout'
@@ -65,12 +64,35 @@ interface RecentOrder {
   createdAt: string
 }
 
-interface CurrencyBalance {
-  currency: string
-  availableBalance: number
-  reservedBalance: number
-  totalDeposits: number
-  totalWithdrawals: number
+interface ConsignmentStats {
+  total: number
+  pending: number
+  partial: number
+  received: number
+  totalCost: number
+  totalSold: number
+  totalReturned: number
+  thisMonth: number
+  costThisMonth: number
+}
+
+interface RecentConsignment {
+  id: number
+  orderNumber: string
+  supplierName: string
+  status: string
+  totalCost: number
+  totalSold: number
+  consignmentDate: string
+}
+
+interface PurchaseStats {
+  total: number
+  pending: number
+  received: number
+  totalAmount: number
+  thisMonth: number
+  amountThisMonth: number
 }
 
 interface DashboardData {
@@ -78,10 +100,9 @@ interface DashboardData {
   ordersByMonth: OrderByMonth[]
   recentOrders: RecentOrder[]
   products: ProductStats
-  wallet: {
-    balances: CurrencyBalance[]
-    primaryBalance: number
-  }
+  consignments: ConsignmentStats
+  recentConsignments: RecentConsignment[]
+  purchases: PurchaseStats
 }
 
 // Currency symbols
@@ -248,19 +269,21 @@ function AlertCard({
   )
 }
 
-// Balance Card
-function BalanceCard({
-  currency,
-  available,
-  reserved,
+// Consignment Card
+function ConsignmentCard({
+  consignment,
   delay = 0
 }: {
-  currency: string
-  available: number
-  reserved: number
+  consignment: RecentConsignment
   delay?: number
 }) {
-  const symbol = CURRENCY_SYMBOLS[currency] || '$'
+  const statusConfig: Record<string, { bg: string; text: string; label: string }> = {
+    pending: { bg: 'bg-amber-100 dark:bg-amber-900/30', text: 'text-amber-700 dark:text-amber-400', label: 'Pendiente' },
+    partial: { bg: 'bg-blue-100 dark:bg-blue-900/30', text: 'text-blue-700 dark:text-blue-400', label: 'Parcial' },
+    received: { bg: 'bg-green-100 dark:bg-green-900/30', text: 'text-green-700 dark:text-green-400', label: 'Recibido' }
+  }
+
+  const status = statusConfig[consignment.status] || statusConfig.pending
 
   return (
     <motion.div
@@ -269,23 +292,27 @@ function BalanceCard({
       transition={{ delay }}
       className="bg-white dark:bg-[#1e1e2f] rounded-xl p-4 border border-gray-200 dark:border-gray-700/50 hover:border-blue-300 dark:hover:border-blue-700 transition-colors"
     >
-      <div className="flex items-center justify-between mb-3">
-        <div className="flex items-center gap-2">
-          <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white text-xs font-bold">
-            {currency}
-          </div>
-          <span className="font-medium text-gray-700 dark:text-gray-300">{currency}</span>
-        </div>
-        {reserved > 0 && (
-          <span className="text-xs px-2 py-1 rounded-full bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400">
-            {symbol}{reserved.toLocaleString()} reservado
-          </span>
-        )}
+      <div className="flex items-center justify-between mb-2">
+        <span className="font-semibold text-sm text-gray-900 dark:text-white">{consignment.orderNumber}</span>
+        <span className={`text-[10px] px-2 py-0.5 rounded-full ${status.bg} ${status.text}`}>
+          {status.label}
+        </span>
       </div>
-      <p className="text-2xl font-bold text-gray-900 dark:text-white">
-        {symbol}<AnimatedNumber value={available} />
-      </p>
-      <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Disponible</p>
+      <p className="text-xs text-gray-500 dark:text-gray-400 truncate mb-2">{consignment.supplierName}</p>
+      <div className="flex items-center justify-between">
+        <div>
+          <p className="text-lg font-bold text-gray-900 dark:text-white">
+            ${consignment.totalCost.toLocaleString()}
+          </p>
+          <p className="text-[10px] text-gray-500">Costo</p>
+        </div>
+        <div className="text-right">
+          <p className="text-lg font-bold text-green-600 dark:text-green-400">
+            ${consignment.totalSold.toLocaleString()}
+          </p>
+          <p className="text-[10px] text-gray-500">Vendido</p>
+        </div>
+      </div>
     </motion.div>
   )
 }
@@ -488,8 +515,7 @@ export default function MarketDashboardPage() {
 
   // Calculate KPIs
   const pendingActions = (data?.orders?.pending || 0) + (data?.orders?.preparing || 0)
-  const totalBalance = data?.wallet?.balances?.reduce((sum, b) => sum + b.availableBalance, 0) || 0
-  const totalReserved = data?.wallet?.balances?.reduce((sum, b) => sum + b.reservedBalance, 0) || 0
+  const consignmentProfit = (data?.consignments?.totalSold || 0) - (data?.consignments?.totalCost || 0)
   const stockHealth = data?.products?.total
     ? Math.round((data.products.inStock / data.products.total) * 100)
     : 0
@@ -576,10 +602,10 @@ export default function MarketDashboardPage() {
               delay={0.2}
             />
             <MetricCard
-              title="Saldo Disponible"
-              value={`$${totalBalance.toLocaleString()}`}
-              subtitle={totalReserved > 0 ? `$${totalReserved.toLocaleString()} reservado` : 'Todo disponible'}
-              icon={Wallet}
+              title="Consignaciones"
+              value={`$${(data?.consignments?.costThisMonth || 0).toLocaleString()}`}
+              subtitle={`${data?.consignments?.thisMonth || 0} este mes`}
+              icon={FileBox}
               color="blue"
               delay={0.25}
             />
@@ -659,11 +685,12 @@ export default function MarketDashboardPage() {
               delay={0.55}
             />
             <QuickAction
-              title="Mi Wallet"
-              description="Ver movimientos"
-              icon={Wallet}
-              href="/dashboard/market/wallet"
+              title="Consignaciones"
+              description="Gestionar pedidos"
+              icon={FileBox}
+              href="/dashboard/market/consignments"
               color="from-purple-500 to-purple-600 shadow-purple-500/25"
+              badge={data?.consignments?.pending}
               delay={0.6}
             />
             <QuickAction
@@ -743,7 +770,7 @@ export default function MarketDashboardPage() {
             </motion.div>
           </div>
 
-          {/* Wallet Balances */}
+          {/* Consignments Summary */}
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -753,29 +780,29 @@ export default function MarketDashboardPage() {
             <div className="flex items-center justify-between mb-4">
               <div>
                 <h3 className="font-bold text-lg text-gray-900 dark:text-white flex items-center gap-2">
-                  <CircleDollarSign className="w-5 h-5 text-green-500" />
-                  Saldos por Moneda
+                  <FileBox className="w-5 h-5 text-purple-500" />
+                  Consignaciones Recientes
                 </h3>
-                <p className="text-sm text-gray-500 dark:text-gray-400">Fondos disponibles</p>
+                <p className="text-sm text-gray-500 dark:text-gray-400">
+                  {data?.consignments?.total || 0} total • ${(data?.consignments?.totalSold || 0).toLocaleString()} vendido
+                </p>
               </div>
-              <Link href="/dashboard/market/wallet" className="text-sm text-blue-500 hover:text-blue-600 flex items-center gap-1">
-                Ver detalles <ArrowRight className="w-4 h-4" />
+              <Link href="/dashboard/market/consignments" className="text-sm text-blue-500 hover:text-blue-600 flex items-center gap-1">
+                Ver todas <ArrowRight className="w-4 h-4" />
               </Link>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-              {data?.wallet?.balances?.map((balance, i) => (
-                <BalanceCard
-                  key={balance.currency}
-                  currency={balance.currency}
-                  available={balance.availableBalance}
-                  reserved={balance.reservedBalance}
+              {data?.recentConsignments?.map((consignment, i) => (
+                <ConsignmentCard
+                  key={consignment.id}
+                  consignment={consignment}
                   delay={0.8 + i * 0.05}
                 />
               ))}
-              {(!data?.wallet?.balances || data.wallet.balances.length === 0) && (
+              {(!data?.recentConsignments || data.recentConsignments.length === 0) && (
                 <div className="col-span-full py-8 text-center text-gray-400">
-                  <Wallet className="w-10 h-10 mx-auto mb-2 opacity-50" />
-                  <p className="text-sm">Sin saldos disponibles</p>
+                  <FileBox className="w-10 h-10 mx-auto mb-2 opacity-50" />
+                  <p className="text-sm">Sin consignaciones recientes</p>
                 </div>
               )}
             </div>
