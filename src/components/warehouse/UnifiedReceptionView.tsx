@@ -4,7 +4,6 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   Package,
-  ArrowLeft,
   Loader2,
   CheckCircle,
   Search,
@@ -832,40 +831,6 @@ export default function UnifiedReceptionView({
   if (showHistory) {
     return (
       <div className="p-4 space-y-4">
-        {/* Header */}
-        <div className="flex items-center gap-4">
-          <motion.button
-            whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.95 }}
-            onClick={() => {
-              if (selectedOrder) {
-                setSelectedOrder(null)
-              } else {
-                setShowHistory(false)
-                setHistoryItems([])
-              }
-            }}
-            className={cn(
-              'p-2 rounded-lg transition-colors',
-              theme === 'dark' ? 'hover:bg-gray-800' : 'hover:bg-gray-100'
-            )}
-          >
-            <ArrowLeft className="w-5 h-5" />
-          </motion.button>
-          <div>
-            <h2 className="text-xl font-bold text-gray-900 dark:text-white">
-              {selectedOrder ? selectedOrder.order.orderNumber : (
-                historyType === 'consignment' ? 'Consignaciones Recibidas' : 'Compras Recibidas'
-              )}
-            </h2>
-            <p className="text-sm text-gray-500">
-              {selectedOrder ? (
-                `${selectedOrder.order.supplier.name} - ${formatDate(selectedOrder.order.receivedAt)}`
-              ) : warehouseName}
-            </p>
-          </div>
-        </div>
-
         {/* Order Detail View */}
         {selectedOrder ? (
           <div className="space-y-4">
@@ -1063,45 +1028,6 @@ export default function UnifiedReceptionView({
   if (detectedOrder) {
     return (
       <div className="p-4 space-y-4">
-        {/* Header */}
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <motion.button
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
-              onClick={handleCancel}
-              className={cn(
-                'p-2 rounded-lg transition-colors',
-                theme === 'dark' ? 'hover:bg-gray-800' : 'hover:bg-gray-100'
-              )}
-            >
-              <ArrowLeft className="w-5 h-5" />
-            </motion.button>
-            <div>
-              <div className="flex items-center gap-2">
-                <h2 className="text-xl font-bold text-gray-900 dark:text-white">
-                  {detectedOrder.orderNumber}
-                </h2>
-                <span className={cn(
-                  'px-2 py-0.5 rounded-full text-xs font-medium',
-                  detectedOrder.orderType === 'consignment'
-                    ? 'bg-teal-100 text-teal-700 dark:bg-teal-900/30 dark:text-teal-400'
-                    : 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400'
-                )}>
-                  {detectedOrder.orderType === 'consignment' ? (
-                    <><Truck className="w-3 h-3 inline mr-1" />Consignacion</>
-                  ) : (
-                    <><ShoppingCart className="w-3 h-3 inline mr-1" />Compra</>
-                  )}
-                </span>
-              </div>
-              <p className="text-sm text-gray-500">
-                {detectedOrder.supplier.name} ({detectedOrder.supplier.code})
-              </p>
-            </div>
-          </div>
-        </div>
-
         {/* Progress Bar */}
         <div className={cn(
           'p-4 rounded-xl',
@@ -1416,27 +1342,6 @@ export default function UnifiedReceptionView({
   // Search View
   return (
     <div className="p-4 max-w-2xl mx-auto">
-      {/* Header */}
-      <div className="flex items-center gap-4 mb-6">
-        <motion.button
-          whileHover={{ scale: 1.05 }}
-          whileTap={{ scale: 0.95 }}
-          onClick={onBack}
-          className={cn(
-            'p-2 rounded-lg transition-colors',
-            theme === 'dark' ? 'hover:bg-gray-800' : 'hover:bg-gray-100'
-          )}
-        >
-          <ArrowLeft className="w-5 h-5" />
-        </motion.button>
-        <div>
-          <h2 className="text-xl font-bold text-gray-900 dark:text-white">
-            Recepcion de Orden
-          </h2>
-          <p className="text-sm text-gray-500">{warehouseName}</p>
-        </div>
-      </div>
-
       {/* Search Card */}
       <div className={cn(
         'p-6 rounded-2xl border',

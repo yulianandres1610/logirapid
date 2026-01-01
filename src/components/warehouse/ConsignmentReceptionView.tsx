@@ -4,7 +4,6 @@ import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   Package,
-  ArrowLeft,
   Loader2,
   CheckCircle,
   Barcode,
@@ -266,29 +265,6 @@ export default function ConsignmentReceptionView({
 
     return (
       <div className="p-4 space-y-4">
-        {/* Header */}
-        <div className="flex items-center gap-4">
-          <motion.button
-            whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.95 }}
-            onClick={() => setSelectedOrder(null)}
-            className={cn(
-              'p-2 rounded-lg transition-colors',
-              theme === 'dark' ? 'hover:bg-gray-800' : 'hover:bg-gray-100'
-            )}
-          >
-            <ArrowLeft className="w-5 h-5" />
-          </motion.button>
-          <div>
-            <h2 className="text-xl font-bold text-gray-900 dark:text-white">
-              {selectedOrder.orderNumber}
-            </h2>
-            <p className="text-sm text-gray-500">
-              {selectedOrder.supplier.name} ({selectedOrder.supplier.code})
-            </p>
-          </div>
-        </div>
-
         {/* Lines */}
         <div className="space-y-3">
           {selectedOrder.lines.map(line => {
@@ -412,27 +388,6 @@ export default function ConsignmentReceptionView({
   // Orders List View
   return (
     <div className="p-4 space-y-4">
-      {/* Header */}
-      <div className="flex items-center gap-4">
-        <motion.button
-          whileHover={{ scale: 1.05 }}
-          whileTap={{ scale: 0.95 }}
-          onClick={onBack}
-          className={cn(
-            'p-2 rounded-lg transition-colors',
-            theme === 'dark' ? 'hover:bg-gray-800' : 'hover:bg-gray-100'
-          )}
-        >
-          <ArrowLeft className="w-5 h-5" />
-        </motion.button>
-        <div>
-          <h2 className="text-xl font-bold text-gray-900 dark:text-white">
-            Consignaciones Pendientes
-          </h2>
-          <p className="text-sm text-gray-500">{warehouseName}</p>
-        </div>
-      </div>
-
       {/* Orders List */}
       {loading ? (
         <div className="flex items-center justify-center py-12">
