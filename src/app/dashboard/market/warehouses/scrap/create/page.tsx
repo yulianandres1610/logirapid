@@ -300,7 +300,7 @@ export default function CreateScrapPage() {
         {!isAuthorized ? (
           <div className={cn(
             "min-h-screen flex items-center justify-center",
-            theme === 'dark' ? 'bg-gray-900' : 'bg-gray-50'
+            theme === 'dark' ? 'bg-gray-800' : 'bg-gray-50'
           )}>
             <div className="text-center">
               <Loader2 className="w-8 h-8 animate-spin mx-auto text-red-500" />
@@ -315,7 +315,7 @@ export default function CreateScrapPage() {
         ) : (
         <div className={cn(
           "min-h-screen pt-12 sm:pt-16 lg:pt-20 pb-20 px-4 sm:px-6 lg:px-8",
-          theme === 'dark' ? 'bg-gray-900' : 'bg-gray-50'
+          theme === 'dark' ? 'bg-gray-800' : 'bg-gray-50'
         )}>
           <div className="max-w-4xl xl:max-w-5xl mx-auto space-y-6 sm:space-y-8 relative">
 
@@ -467,7 +467,7 @@ export default function CreateScrapPage() {
               className={cn(
                 "rounded-2xl border p-6 sm:p-8 shadow-lg",
                 theme === 'dark'
-                  ? 'bg-gray-800/95 border-gray-700/50 backdrop-blur-sm'
+                  ? 'bg-gray-900 border-gray-700 backdrop-blur-sm'
                   : 'bg-white border-gray-200 backdrop-blur-sm'
               )}
               initial={{ opacity: 0, y: 20 }}
