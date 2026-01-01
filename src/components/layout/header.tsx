@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
@@ -19,8 +19,21 @@ import {
   AlertCircle,
   AlertTriangle,
   Info,
-  Wallet
+  Wallet,
+  Package,
+  ShoppingCart,
+  Truck,
+  FileText,
+  Users,
+  Box,
+  Loader2,
+  ArrowRight,
+  LayoutDashboard,
+  CreditCard,
+  MapPin,
+  BarChart3
 } from 'lucide-react'
+import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { useAuth } from '@/hooks/useAuth'
@@ -28,6 +41,45 @@ import { useTheme } from '@/contexts/theme-context'
 import { useNotifications } from '@/contexts/NotificationContext'
 import { useWalletBalance } from '@/hooks/useWalletBalance'
 import { AnimatedCounter } from '@/components/ui/animated-counter'
+
+// Navigation pages for quick search
+interface NavPage {
+  name: string
+  path: string
+  icon: React.ElementType
+  keywords: string[]
+}
+
+const NAV_PAGES: NavPage[] = [
+  { name: 'Dashboard', path: '/dashboard', icon: LayoutDashboard, keywords: ['inicio', 'home', 'principal'] },
+  { name: 'Inventario', path: '/dashboard/market/inventory', icon: Box, keywords: ['productos', 'stock', 'almacen'] },
+  { name: 'Crear Producto', path: '/dashboard/market/inventory/create', icon: Box, keywords: ['nuevo producto', 'agregar producto'] },
+  { name: 'Almacenes', path: '/dashboard/market/warehouses', icon: MapPin, keywords: ['bodega', 'deposito', 'ubicacion'] },
+  { name: 'Marketplace', path: '/dashboard/market/marketplace', icon: ShoppingCart, keywords: ['tienda', 'catalogo', 'vender'] },
+  { name: 'Compras', path: '/dashboard/market/purchases', icon: ShoppingCart, keywords: ['ordenes compra', 'proveedores'] },
+  { name: 'Nueva Compra', path: '/dashboard/market/purchases/create', icon: ShoppingCart, keywords: ['crear compra', 'agregar compra'] },
+  { name: 'Consignaciones', path: '/dashboard/market/consignments', icon: Package, keywords: ['ordenes consignacion'] },
+  { name: 'Nueva Consignacion', path: '/dashboard/market/consignments/create', icon: Package, keywords: ['crear consignacion'] },
+  { name: 'Proveedores', path: '/dashboard/market/consignments/suppliers', icon: Truck, keywords: ['supplier', 'proveedor'] },
+  { name: 'Punto de Venta', path: '/dashboard/market/pos', icon: CreditCard, keywords: ['pos', 'caja', 'ventas'] },
+  { name: 'Ordenes Pickup', path: '/dashboard/agency/orders', icon: Truck, keywords: ['paquetes', 'envios', 'pickup'] },
+  { name: 'Ordenes Oficina', path: '/dashboard/agency/office-orders', icon: FileText, keywords: ['oficina', 'envios'] },
+  { name: 'Clientes', path: '/dashboard/agency/clients', icon: Users, keywords: ['crm', 'contactos'] },
+  { name: 'Rutas', path: '/dashboard/agency/routes', icon: MapPin, keywords: ['entregas', 'drivers'] },
+  { name: 'Wallet', path: '/dashboard/wallet', icon: Wallet, keywords: ['billetera', 'saldo', 'dinero'] },
+  { name: 'Reportes', path: '/dashboard/reports', icon: BarChart3, keywords: ['estadisticas', 'graficos', 'informes'] },
+  { name: 'Configuracion', path: '/dashboard/settings', icon: Settings, keywords: ['ajustes', 'preferencias'] },
+  { name: 'Soporte', path: '/dashboard/support', icon: HelpCircle, keywords: ['ayuda', 'chat', 'asistencia'] }
+]
+
+interface SearchResult {
+  id: number | string
+  type: string
+  title: string
+  subtitle: string
+  status?: string
+  url: string
+}
 
 interface HeaderProps {
   onToggleSidebar: () => void
@@ -49,8 +101,102 @@ export function Header({ onToggleSidebar, sidebarCollapsed }: HeaderProps) {
     loading: walletLoading
   } = useWalletBalance()
   const [searchFocused, setSearchFocused] = useState(false)
+  const [searchQuery, setSearchQuery] = useState('')
+  const [searchResults, setSearchResults] = useState<SearchResult[]>([])
+  const [searchLoading, setSearchLoading] = useState(false)
+  const [showSearchDropdown, setShowSearchDropdown] = useState(false)
+  const searchRef = useRef<HTMLDivElement>(null)
+  const searchInputRef = useRef<HTMLInputElement>(null)
   const [showNotifications, setShowNotifications] = useState(false)
   const [showUserMenu, setShowUserMenu] = useState(false)
+
+  // Filter navigation pages based on search query
+  const filteredPages = searchQuery.length > 0
+    ? NAV_PAGES.filter(page => {
+        const query = searchQuery.toLowerCase()
+        return page.name.toLowerCase().includes(query) ||
+               page.keywords.some(k => k.toLowerCase().includes(query))
+      }).slice(0, 5)
+    : []
+
+  // Debounced search for documents
+  useEffect(() => {
+    if (searchQuery.length < 2) {
+      setSearchResults([])
+      return
+    }
+
+    const timer = setTimeout(async () => {
+      setSearchLoading(true)
+      try {
+        const response = await fetch(`/api/search?q=${encodeURIComponent(searchQuery)}&limit=5`)
+        const data = await response.json()
+        if (data.success) {
+          setSearchResults(data.data.results || [])
+        }
+      } catch (error) {
+        console.error('Search error:', error)
+      } finally {
+        setSearchLoading(false)
+      }
+    }, 300)
+
+    return () => clearTimeout(timer)
+  }, [searchQuery])
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (searchRef.current && !searchRef.current.contains(event.target as Node)) {
+        setShowSearchDropdown(false)
+      }
+    }
+
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
+
+  const handleSearchSubmit = (e: React.FormEvent) => {
+    e.preventDefault()
+    if (searchQuery.length >= 2) {
+      router.push(`/dashboard/search?q=${encodeURIComponent(searchQuery)}`)
+      setShowSearchDropdown(false)
+      setSearchQuery('')
+    }
+  }
+
+  const handleSearchFocus = () => {
+    setSearchFocused(true)
+    setShowSearchDropdown(true)
+  }
+
+  const handleSearchBlur = () => {
+    setSearchFocused(false)
+    // Delay hiding dropdown to allow clicking on results
+    setTimeout(() => {
+      if (!searchRef.current?.contains(document.activeElement)) {
+        setShowSearchDropdown(false)
+      }
+    }, 200)
+  }
+
+  const handleNavigate = (path: string) => {
+    router.push(path)
+    setShowSearchDropdown(false)
+    setSearchQuery('')
+  }
+
+  const getResultIcon = (type: string) => {
+    switch (type) {
+      case 'consignment': return Package
+      case 'purchase': return ShoppingCart
+      case 'pickup_order': return Truck
+      case 'office_order': return FileText
+      case 'product': return Box
+      case 'customer': return Users
+      default: return FileText
+    }
+  }
 
   const unreadCount = getUnreadCount()
 
@@ -184,56 +330,211 @@ export function Header({ onToggleSidebar, sidebarCollapsed }: HeaderProps) {
           {/* Left section */}
           <div className="flex items-center gap-4">
             {/* Search bar */}
-            <motion.div
-              className={cn(
-                "relative flex items-center border rounded-2xl transition-all duration-300",
-                theme === 'dark'
-                  ? "bg-gray-800/50 border-gray-700"
-                  : "bg-white/80 border-gray-200 shadow-sm backdrop-blur-sm",
-                searchFocused
-                  ? `ring-2 ${
-                      theme === 'dark'
-                        ? 'border-exa-secondary ring-exa-secondary/30 bg-gray-800/70'
-                        : 'border-exa-primary ring-exa-primary/20 bg-white shadow-md'
-                    }`
-                  : theme === 'dark'
-                    ? "hover:border-gray-600"
-                    : "hover:border-exa-primary/40 hover:shadow-md"
-              )}
-              animate={{ width: searchFocused ? 340 : 300 }}
-              transition={{ duration: 0.3 }}
-            >
-              <Search className={cn(
-                "absolute left-4 w-5 h-5 transition-all duration-300",
-                searchFocused
-                  ? theme === 'dark' ? "text-exa-secondary scale-110" : "text-exa-primary scale-110"
-                  : theme === 'dark'
-                    ? "text-gray-400"
-                    : "text-gray-500"
-              )} />
-              <input
-                type="text"
-                placeholder="Buscar..."
-                onFocus={() => setSearchFocused(true)}
-                onBlur={() => setSearchFocused(false)}
-                className={cn(
-                  "w-full pl-12 pr-4 py-3 bg-transparent rounded-2xl focus:outline-none transition-all duration-300",
-                  theme === 'dark'
-                    ? "text-white placeholder-gray-400"
-                    : "text-black placeholder-gray-500"
-                )}
-              />
-              {searchFocused && (
+            <div ref={searchRef} className="relative">
+              <form onSubmit={handleSearchSubmit}>
                 <motion.div
-                  initial={{ opacity: 0, scale: 0.8 }}
-                  animate={{ opacity: 1, scale: 1 }}
                   className={cn(
-                    "absolute right-2 w-1 h-1 rounded-full",
-                    theme === 'dark' ? "bg-exa-secondary" : "bg-exa-primary"
+                    "relative flex items-center border rounded-2xl transition-all duration-300",
+                    theme === 'dark'
+                      ? "bg-gray-800/50 border-gray-700"
+                      : "bg-white/80 border-gray-200 shadow-sm backdrop-blur-sm",
+                    searchFocused
+                      ? `ring-2 ${
+                          theme === 'dark'
+                            ? 'border-exa-secondary ring-exa-secondary/30 bg-gray-800/70'
+                            : 'border-exa-primary ring-exa-primary/20 bg-white shadow-md'
+                        }`
+                      : theme === 'dark'
+                        ? "hover:border-gray-600"
+                        : "hover:border-exa-primary/40 hover:shadow-md"
                   )}
-                />
-              )}
-            </motion.div>
+                  animate={{ width: searchFocused ? 380 : 300 }}
+                  transition={{ duration: 0.3 }}
+                >
+                  <Search className={cn(
+                    "absolute left-4 w-5 h-5 transition-all duration-300",
+                    searchFocused
+                      ? theme === 'dark' ? "text-exa-secondary scale-110" : "text-exa-primary scale-110"
+                      : theme === 'dark'
+                        ? "text-gray-400"
+                        : "text-gray-500"
+                  )} />
+                  <input
+                    ref={searchInputRef}
+                    type="text"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    onFocus={handleSearchFocus}
+                    onBlur={handleSearchBlur}
+                    placeholder="Buscar ordenes, vistas..."
+                    className={cn(
+                      "w-full pl-12 pr-4 py-3 bg-transparent rounded-2xl focus:outline-none transition-all duration-300",
+                      theme === 'dark'
+                        ? "text-white placeholder-gray-400"
+                        : "text-black placeholder-gray-500"
+                    )}
+                  />
+                  {searchLoading && (
+                    <Loader2 className="absolute right-4 w-4 h-4 animate-spin text-gray-400" />
+                  )}
+                </motion.div>
+              </form>
+
+              {/* Search Dropdown */}
+              <AnimatePresence>
+                {showSearchDropdown && (searchQuery.length > 0 || searchFocused) && (
+                  <motion.div
+                    initial={{ opacity: 0, y: -10, scale: 0.95 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    exit={{ opacity: 0, y: -10, scale: 0.95 }}
+                    className={cn(
+                      "absolute top-full left-0 right-0 mt-2 rounded-2xl border shadow-2xl overflow-hidden z-50",
+                      theme === 'dark'
+                        ? "bg-gray-900 border-gray-700"
+                        : "bg-white border-gray-200"
+                    )}
+                  >
+                    {/* Navigation Pages */}
+                    {filteredPages.length > 0 && (
+                      <div className={cn(
+                        "p-2 border-b",
+                        theme === 'dark' ? 'border-gray-800' : 'border-gray-100'
+                      )}>
+                        <p className={cn(
+                          "text-xs font-medium px-3 py-1.5",
+                          theme === 'dark' ? 'text-gray-500' : 'text-gray-400'
+                        )}>
+                          Ir a...
+                        </p>
+                        {filteredPages.map((page) => {
+                          const Icon = page.icon
+                          return (
+                            <button
+                              key={page.path}
+                              onClick={() => handleNavigate(page.path)}
+                              className={cn(
+                                "w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-colors text-left",
+                                theme === 'dark'
+                                  ? 'hover:bg-gray-800 text-gray-300'
+                                  : 'hover:bg-gray-100 text-gray-700'
+                              )}
+                            >
+                              <Icon className="w-4 h-4 text-blue-500" />
+                              <span className="font-medium">{page.name}</span>
+                              <ArrowRight className="w-4 h-4 ml-auto opacity-50" />
+                            </button>
+                          )
+                        })}
+                      </div>
+                    )}
+
+                    {/* Search Results */}
+                    {searchResults.length > 0 && (
+                      <div className="p-2">
+                        <p className={cn(
+                          "text-xs font-medium px-3 py-1.5",
+                          theme === 'dark' ? 'text-gray-500' : 'text-gray-400'
+                        )}>
+                          Documentos
+                        </p>
+                        {searchResults.map((result) => {
+                          const Icon = getResultIcon(result.type)
+                          return (
+                            <button
+                              key={`${result.type}-${result.id}`}
+                              onClick={() => handleNavigate(result.url)}
+                              className={cn(
+                                "w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-colors text-left",
+                                theme === 'dark'
+                                  ? 'hover:bg-gray-800'
+                                  : 'hover:bg-gray-100'
+                              )}
+                            >
+                              <div className={cn(
+                                "w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0",
+                                theme === 'dark' ? 'bg-gray-800' : 'bg-gray-100'
+                              )}>
+                                <Icon className="w-4 h-4 text-gray-500" />
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <p className={cn(
+                                  "font-medium truncate text-sm",
+                                  theme === 'dark' ? 'text-white' : 'text-gray-900'
+                                )}>
+                                  {result.title}
+                                </p>
+                                <p className={cn(
+                                  "text-xs truncate",
+                                  theme === 'dark' ? 'text-gray-500' : 'text-gray-500'
+                                )}>
+                                  {result.subtitle}
+                                </p>
+                              </div>
+                              {result.status && (
+                                <span className={cn(
+                                  "text-xs px-2 py-0.5 rounded-full",
+                                  theme === 'dark'
+                                    ? 'bg-gray-800 text-gray-400'
+                                    : 'bg-gray-100 text-gray-500'
+                                )}>
+                                  {result.status}
+                                </span>
+                              )}
+                            </button>
+                          )
+                        })}
+                      </div>
+                    )}
+
+                    {/* View All Results */}
+                    {searchQuery.length >= 2 && (
+                      <div className={cn(
+                        "p-2 border-t",
+                        theme === 'dark' ? 'border-gray-800' : 'border-gray-100'
+                      )}>
+                        <button
+                          onClick={() => handleNavigate(`/dashboard/search?q=${encodeURIComponent(searchQuery)}`)}
+                          className={cn(
+                            "w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl font-medium transition-colors",
+                            theme === 'dark'
+                              ? 'bg-blue-600 hover:bg-blue-700 text-white'
+                              : 'bg-blue-500 hover:bg-blue-600 text-white'
+                          )}
+                        >
+                          <Search className="w-4 h-4" />
+                          Ver todos los resultados
+                        </button>
+                      </div>
+                    )}
+
+                    {/* Empty State */}
+                    {searchQuery.length > 0 && filteredPages.length === 0 && searchResults.length === 0 && !searchLoading && (
+                      <div className="p-8 text-center">
+                        <Search className="w-8 h-8 mx-auto mb-2 text-gray-400 opacity-50" />
+                        <p className={cn(
+                          "text-sm",
+                          theme === 'dark' ? 'text-gray-500' : 'text-gray-500'
+                        )}>
+                          {searchQuery.length < 2 ? 'Escribe al menos 2 caracteres' : 'No se encontraron resultados'}
+                        </p>
+                      </div>
+                    )}
+
+                    {/* Initial State */}
+                    {searchQuery.length === 0 && (
+                      <div className="p-4 text-center">
+                        <p className={cn(
+                          "text-sm",
+                          theme === 'dark' ? 'text-gray-500' : 'text-gray-500'
+                        )}>
+                          Busca ordenes, productos, clientes o navega a una vista
+                        </p>
+                      </div>
+                    )}
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
           </div>
 
           {/* Right section */}
