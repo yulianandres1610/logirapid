@@ -18,7 +18,8 @@ import {
   Calendar,
   Barcode,
   Printer,
-  CheckCircle
+  CheckCircle,
+  FileUp
 } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
@@ -27,6 +28,7 @@ import { ProtectedRoute } from '@/components/protected-route'
 import { useTheme } from '@/contexts/theme-context'
 import { cn } from '@/lib/utils'
 import { VariantSelectorModal, Variant } from '@/components/market/VariantSelectorModal'
+import { InvoiceUploader, InvoiceFile } from '@/components/orders/InvoiceUploader'
 
 interface ProductVariant {
   id: number
@@ -39,7 +41,7 @@ interface ProductVariant {
   imageUrl: string | null
 }
 
-type Step = 'supplier' | 'products' | 'review' | 'confirmation'
+type Step = 'supplier' | 'products' | 'invoices' | 'review' | 'confirmation'
 
 interface WizardStep {
   id: Step
@@ -51,6 +53,7 @@ interface WizardStep {
 const STEPS: WizardStep[] = [
   { id: 'supplier', title: 'Proveedor', description: 'Seleccionar', icon: Users },
   { id: 'products', title: 'Productos', description: 'Agregar lineas', icon: Package },
+  { id: 'invoices', title: 'Facturas', description: 'Adjuntar', icon: FileUp },
   { id: 'review', title: 'Revision', description: 'Verificar orden', icon: FileText },
   { id: 'confirmation', title: 'Confirmacion', description: 'Finalizar', icon: Check }
 ]
@@ -132,6 +135,9 @@ export default function CreateConsignmentOrderPage() {
   // Variant modal state
   const [showVariantModal, setShowVariantModal] = useState(false)
   const [selectedProductForVariant, setSelectedProductForVariant] = useState<Product | null>(null)
+
+  // Step 3: Invoices
+  const [invoiceFiles, setInvoiceFiles] = useState<InvoiceFile[]>([])
 
   // Step 4: Confirmation
   const [createdOrder, setCreatedOrder] = useState<CreatedOrder | null>(null)
@@ -374,6 +380,28 @@ export default function CreateConsignmentOrderPage() {
 
       const data = await response.json()
       if (data.success) {
+        const orderId = data.data.id
+
+        // Upload invoices if any
+        if (invoiceFiles.length > 0) {
+          try {
+            const formData = new FormData()
+            invoiceFiles.forEach(inv => {
+              formData.append('files', inv.file)
+            })
+            formData.append('orderType', 'consignment')
+            formData.append('orderId', orderId.toString())
+
+            await fetch('/api/upload/order-invoices', {
+              method: 'POST',
+              body: formData
+            })
+          } catch (uploadError) {
+            console.error('Error uploading invoices:', uploadError)
+            // Continue even if invoice upload fails
+          }
+        }
+
         setCreatedOrder(data.data)
         setCurrentStep('confirmation')
       } else {
@@ -1041,7 +1069,42 @@ export default function CreateConsignmentOrderPage() {
                   </motion.div>
                 )}
 
-                {/* Step 3: Review */}
+                {/* Step 3: Invoices */}
+                {currentStep === 'invoices' && (
+                  <motion.div
+                    key="invoices"
+                    initial={{ opacity: 0, x: 20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    exit={{ opacity: 0, x: -20 }}
+                    transition={{ duration: 0.3 }}
+                    className="space-y-6"
+                  >
+                    <h2 className={cn(
+                      "text-xl font-bold flex items-center gap-3",
+                      theme === 'dark' ? 'text-white' : 'text-gray-900'
+                    )}>
+                      <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-purple-500 to-purple-600 flex items-center justify-center">
+                        <FileUp className="w-5 h-5 text-white" />
+                      </div>
+                      Facturas Originales
+                    </h2>
+
+                    <p className={cn(
+                      "text-sm",
+                      theme === 'dark' ? 'text-gray-400' : 'text-gray-600'
+                    )}>
+                      Adjunta las facturas o recibos originales del proveedor. Este paso es opcional.
+                    </p>
+
+                    <InvoiceUploader
+                      invoices={invoiceFiles}
+                      onInvoicesChange={setInvoiceFiles}
+                      orderType="consignment"
+                    />
+                  </motion.div>
+                )}
+
+                {/* Step 4: Review */}
                 {currentStep === 'review' && (
                   <motion.div
                     key="review"
@@ -1175,6 +1238,35 @@ export default function CreateConsignmentOrderPage() {
                         </tfoot>
                       </table>
                     </div>
+
+                    {/* Invoices Summary */}
+                    {invoiceFiles.length > 0 && (
+                      <div className={cn(
+                        'p-4 rounded-xl border flex items-center gap-4',
+                        theme === 'dark' ? 'bg-purple-900/20 border-purple-800' : 'bg-purple-50 border-purple-200'
+                      )}>
+                        <div className={cn(
+                          'w-12 h-12 rounded-xl flex items-center justify-center',
+                          theme === 'dark' ? 'bg-purple-900/50' : 'bg-purple-100'
+                        )}>
+                          <FileUp className="w-6 h-6 text-purple-500" />
+                        </div>
+                        <div>
+                          <p className={cn(
+                            'font-medium',
+                            theme === 'dark' ? 'text-white' : 'text-gray-900'
+                          )}>
+                            {invoiceFiles.length} {invoiceFiles.length === 1 ? 'factura adjunta' : 'facturas adjuntas'}
+                          </p>
+                          <p className={cn(
+                            'text-sm',
+                            theme === 'dark' ? 'text-purple-300' : 'text-purple-600'
+                          )}>
+                            Se subiran al crear la orden
+                          </p>
+                        </div>
+                      </div>
+                    )}
 
                     {/* Notes */}
                     <div>
