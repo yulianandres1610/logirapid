@@ -670,8 +670,8 @@ export default function CreatePurchasePage() {
                           initial={{ opacity: 0, y: -10 }}
                           animate={{ opacity: 1, y: 0 }}
                           className={cn(
-                            'absolute z-10 w-full mt-2 rounded-xl border shadow-xl overflow-hidden',
-                            theme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'
+                            'absolute z-50 w-full mt-2 rounded-xl border shadow-2xl overflow-hidden',
+                            theme === 'dark' ? 'bg-gray-800 border-gray-600' : 'bg-white border-gray-200'
                           )}
                         >
                           {supplierResults.length > 0 ? (
