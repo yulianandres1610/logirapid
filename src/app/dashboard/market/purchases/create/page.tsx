@@ -612,10 +612,10 @@ export default function CreatePurchasePage() {
             {/* Step Content */}
             <motion.div
               className={cn(
-                "rounded-2xl border p-6 sm:p-8 shadow-lg",
+                "rounded-2xl p-6 sm:p-8 shadow-lg",
                 theme === 'dark'
-                  ? 'bg-gray-900 border-gray-700 backdrop-blur-sm'
-                  : 'bg-white border-gray-200 backdrop-blur-sm'
+                  ? 'bg-gray-900 backdrop-blur-sm'
+                  : 'bg-white border border-gray-200 backdrop-blur-sm'
               )}
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
