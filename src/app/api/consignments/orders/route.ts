@@ -309,6 +309,13 @@ export async function POST(request: NextRequest) {
 
     // Crear líneas
     for (const line of lines) {
+      // Debug log to verify variant_id is being saved
+      console.log('[Order POST] Saving line:', {
+        productId: line.productId,
+        variantId: line.variantId,
+        quantity: line.quantity
+      })
+
       await db.query(`
         INSERT INTO consignment_order_lines (
           order_id, product_id, variant_id, quantity_ordered, unit_cost, unit_price

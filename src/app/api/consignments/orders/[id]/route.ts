@@ -95,6 +95,13 @@ export async function GET(
       ORDER BY ol.id
     `, [orderId])
 
+    // Debug log to check variant data
+    console.log('[Order GET] Lines data:', linesResult.rows.map(l => ({
+      id: l.id,
+      variant_id: l.variant_id,
+      variant_name: l.variant_name
+    })))
+
     const order = {
       id: o.id,
       orderNumber: o.order_number,
