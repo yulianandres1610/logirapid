@@ -391,6 +391,7 @@ export default function CreatePurchasePage() {
           currency,
           lines: purchaseLines.map(l => ({
             productId: l.productId,
+            variantId: l.variantId,
             quantity: l.quantity,
             unitPrice: l.unitPrice,
             lotNumber: l.lotNumber || null,

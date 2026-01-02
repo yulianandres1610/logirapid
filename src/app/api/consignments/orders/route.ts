@@ -311,11 +311,12 @@ export async function POST(request: NextRequest) {
     for (const line of lines) {
       await db.query(`
         INSERT INTO consignment_order_lines (
-          order_id, product_id, quantity_ordered, unit_cost, unit_price
-        ) VALUES ($1, $2, $3, $4, $5)
+          order_id, product_id, variant_id, quantity_ordered, unit_cost, unit_price
+        ) VALUES ($1, $2, $3, $4, $5, $6)
       `, [
         orderId,
         line.productId,
+        line.variantId || null,
         line.quantity,
         line.unitCost,
         line.unitPrice || null

@@ -227,7 +227,8 @@ export default function CreateConsignmentOrderPage() {
       const response = await fetch(`/api/market/products?search=${encodeURIComponent(barcodeInput)}&limit=1`)
       const data = await response.json()
       if (data.success && data.data.products?.length > 0) {
-        addProductToOrder(data.data.products[0])
+        // Use handleProductClick to properly check for variants
+        handleProductClick(data.data.products[0])
       } else {
         setErrors({ barcode: 'Producto no encontrado' })
       }
@@ -371,6 +372,7 @@ export default function CreateConsignmentOrderPage() {
           notes: notes || null,
           lines: orderLines.map(l => ({
             productId: l.productId,
+            variantId: l.variantId,
             quantity: l.quantity,
             unitCost: l.unitCost,
             unitPrice: l.unitPrice

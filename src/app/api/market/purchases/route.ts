@@ -364,6 +364,7 @@ export async function POST(request: NextRequest) {
           INSERT INTO market_purchase_lines (
             purchase_id,
             product_id,
+            variant_id,
             quantity,
             unit_price,
             total_price,
@@ -372,10 +373,11 @@ export async function POST(request: NextRequest) {
             expiration_date,
             manufacturing_date,
             created_at
-          ) VALUES ($1, $2, $3, $4, $5, 0, $6, $7, $8, NOW())
+          ) VALUES ($1, $2, $3, $4, $5, $6, 0, $7, $8, $9, NOW())
         `, [
           purchaseId,
           line.productId,
+          line.variantId || null,
           line.quantity,
           line.unitPrice,
           lineTotal,
