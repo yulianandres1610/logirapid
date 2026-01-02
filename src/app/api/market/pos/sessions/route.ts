@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
 import jwt from 'jsonwebtoken'
+import bcrypt from 'bcryptjs'
 import { db } from '@/lib/database'
 
 interface JWTPayload {
@@ -164,6 +165,10 @@ export async function GET(request: NextRequest) {
 /**
  * POST /api/market/pos/sessions
  * Open a new session
+ * Supports authentication via:
+ * - Logged-in user (default)
+ * - Employee PIN (employeePin parameter)
+ * - Employee Badge (employeeBadge parameter)
  */
 export async function POST(request: NextRequest) {
   try {
@@ -189,7 +194,9 @@ export async function POST(request: NextRequest) {
     }
 
     const companyId = payload.companyId
-    const userId = payload.userId
+    let userId = payload.userId
+    let employeeId: number | null = null
+    let employeeName: string | null = null
 
     const body = await request.json()
     const {
@@ -198,7 +205,9 @@ export async function POST(request: NextRequest) {
       openingCashCup,
       openingCashMlc,
       openingNotes,
-      openingDenominations
+      openingDenominations,
+      employeePin,
+      employeeBadge
     } = body
 
     if (!terminalId) {
@@ -241,18 +250,132 @@ export async function POST(request: NextRequest) {
       }, { status: 400 })
     }
 
-    // Check user has permission to open session
-    if (!['ADMIN', 'SUPER_ADMIN'].includes(payload.role)) {
-      const userPerm = await db.query(`
-        SELECT can_open_session FROM market_pos_users
-        WHERE pos_terminal_id = $1 AND user_id = $2
-      `, [terminalId, userId])
+    // ============================================================
+    // EMPLOYEE PIN/BADGE AUTHENTICATION
+    // ============================================================
+    if (employeePin || employeeBadge) {
+      let employee = null
 
-      if (userPerm.rows.length === 0 || !userPerm.rows[0].can_open_session) {
+      if (employeeBadge) {
+        // Authenticate by badge code
+        const result = await db.query(`
+          SELECT
+            e.id as employee_id,
+            e.employee_code,
+            e.user_id,
+            u.firstname,
+            u.lastname,
+            u.email,
+            e.status
+          FROM market_employees e
+          JOIN users u ON e.user_id = u.id
+          WHERE e.company_id = $1
+            AND e.pos_badge_code = $2
+            AND e.status = 'active'
+        `, [companyId, employeeBadge])
+
+        if (result.rows.length === 0) {
+          return NextResponse.json({
+            success: false,
+            error: 'Badge no reconocido'
+          }, { status: 401 })
+        }
+
+        employee = result.rows[0]
+
+      } else if (employeePin) {
+        // Authenticate by PIN - need to check all employees with PINs
+        const result = await db.query(`
+          SELECT
+            e.id as employee_id,
+            e.employee_code,
+            e.user_id,
+            e.pos_pin,
+            u.firstname,
+            u.lastname,
+            u.email,
+            e.status
+          FROM market_employees e
+          JOIN users u ON e.user_id = u.id
+          WHERE e.company_id = $1
+            AND e.pos_pin IS NOT NULL
+            AND e.status = 'active'
+        `, [companyId])
+
+        // Check each employee's PIN
+        for (const emp of result.rows) {
+          const isValidPin = await bcrypt.compare(employeePin, emp.pos_pin)
+          if (isValidPin) {
+            employee = emp
+            break
+          }
+        }
+
+        if (!employee) {
+          return NextResponse.json({
+            success: false,
+            error: 'PIN inválido'
+          }, { status: 401 })
+        }
+      }
+
+      // Check employee has permission to open session on this terminal
+      const permissions = await db.query(`
+        SELECT can_open_session
+        FROM market_employee_terminals
+        WHERE employee_id = $1 AND terminal_id = $2
+      `, [employee.employee_id, terminalId])
+
+      if (permissions.rows.length === 0 || !permissions.rows[0].can_open_session) {
         return NextResponse.json({
           success: false,
           error: 'No tienes permiso para abrir sesiones en este terminal'
         }, { status: 403 })
+      }
+
+      // Use employee's user_id for the session
+      userId = employee.user_id
+      employeeId = employee.employee_id
+      employeeName = `${employee.firstname || ''} ${employee.lastname || ''}`.trim() || employee.email
+
+      console.log('[POS Sessions] Employee PIN/Badge auth:', employee.employee_code)
+
+    } else {
+      // ============================================================
+      // REGULAR USER AUTHENTICATION
+      // ============================================================
+      // Check user has permission to open session
+      if (!['ADMIN', 'SUPER_ADMIN'].includes(payload.role)) {
+        // First check market_employee_terminals
+        const empTerminal = await db.query(`
+          SELECT et.can_open_session, e.id as employee_id
+          FROM market_employee_terminals et
+          JOIN market_employees e ON et.employee_id = e.id
+          WHERE et.terminal_id = $1 AND e.user_id = $2 AND e.status = 'active'
+        `, [terminalId, userId])
+
+        if (empTerminal.rows.length > 0) {
+          if (!empTerminal.rows[0].can_open_session) {
+            return NextResponse.json({
+              success: false,
+              error: 'No tienes permiso para abrir sesiones en este terminal'
+            }, { status: 403 })
+          }
+          employeeId = empTerminal.rows[0].employee_id
+        } else {
+          // Fallback to market_pos_users table
+          const userPerm = await db.query(`
+            SELECT can_open_session FROM market_pos_users
+            WHERE pos_terminal_id = $1 AND user_id = $2
+          `, [terminalId, userId])
+
+          if (userPerm.rows.length === 0 || !userPerm.rows[0].can_open_session) {
+            return NextResponse.json({
+              success: false,
+              error: 'No tienes permiso para abrir sesiones en este terminal'
+            }, { status: 403 })
+          }
+        }
       }
     }
 
@@ -264,28 +387,30 @@ export async function POST(request: NextRequest) {
     const count = parseInt(countResult.rows[0].count) + 1
     const sessionCode = `SESS-${year}-${String(count).padStart(5, '0')}`
 
-    // Ensure denominations columns exist
+    // Ensure employee_id column exists
     try {
+      await db.query(`ALTER TABLE market_pos_sessions ADD COLUMN IF NOT EXISTS employee_id INTEGER REFERENCES market_employees(id)`)
       await db.query(`ALTER TABLE market_pos_sessions ADD COLUMN IF NOT EXISTS opening_denominations JSONB`)
       await db.query(`ALTER TABLE market_pos_sessions ADD COLUMN IF NOT EXISTS closing_denominations JSONB`)
     } catch {
       // Columns may already exist
     }
 
-    // Create session
+    // Create session with employee_id if authenticated via PIN/Badge
     const result = await db.query(`
       INSERT INTO market_pos_sessions (
         company_id, pos_terminal_id, session_code,
-        opened_by, opened_at,
+        opened_by, employee_id, opened_at,
         opening_cash_usd, opening_cash_cup, opening_cash_mlc,
         opening_notes, opening_denominations, status, created_at
-      ) VALUES ($1, $2, $3, $4, NOW(), $5, $6, $7, $8, $9, 'open', NOW())
+      ) VALUES ($1, $2, $3, $4, $5, NOW(), $6, $7, $8, $9, $10, 'open', NOW())
       RETURNING id
     `, [
       companyId,
       terminalId,
       sessionCode,
       userId,
+      employeeId,
       openingCashUsd || 0,
       openingCashCup || 0,
       openingCashMlc || 0,
@@ -293,14 +418,16 @@ export async function POST(request: NextRequest) {
       openingDenominations ? JSON.stringify(openingDenominations) : null
     ])
 
-    console.log('[POS Sessions] Opened session:', sessionCode, 'Terminal:', terminalId)
+    console.log('[POS Sessions] Opened session:', sessionCode, 'Terminal:', terminalId, 'Employee:', employeeId || 'N/A')
 
     return NextResponse.json({
       success: true,
       data: {
         id: result.rows[0].id,
         sessionCode,
-        terminalName: terminal.rows[0].name
+        terminalName: terminal.rows[0].name,
+        employeeId,
+        employeeName
       },
       message: 'Sesión abierta exitosamente'
     })

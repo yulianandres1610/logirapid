@@ -40,7 +40,10 @@ import {
   Globe,
   Monitor,
   Tag,
-  ClipboardList
+  ClipboardList,
+  Calculator,
+  Receipt,
+  FileCheck
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
@@ -497,6 +500,19 @@ export function Sidebar({ isCollapsed, onToggle }: SidebarProps) {
       submenuItems: [
         { icon: Monitor, label: "Terminales", href: "/dashboard/market/pos" },
         { icon: ClipboardList, label: "Conteos Inventario", href: "/dashboard/market/pos/inventory-counts" },
+      ]
+    },
+    {
+      icon: Calculator,
+      label: "Contabilidad",
+      href: "/dashboard/market/accounting",
+      hasSubmenu: true,
+      submenuItems: [
+        { icon: BarChart3, label: "Dashboard", href: "/dashboard/market/accounting" },
+        { icon: Receipt, label: "Gastos", href: "/dashboard/market/accounting/expenses" },
+        { icon: Wallet, label: "Nomina", href: "/dashboard/market/accounting/payroll" },
+        { icon: Users, label: "Empleados", href: "/dashboard/market/accounting/employees" },
+        { icon: FileCheck, label: "Solicitudes", href: "/dashboard/market/accounting/requests" },
       ]
     },
     { icon: Tag, label: "Listas de Precios", href: "/dashboard/market/pricelists" },

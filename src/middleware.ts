@@ -71,6 +71,70 @@ export async function middleware(request: NextRequest) {
   }
 
   // ============================================================
+  // EMPLOYEE SUBDOMAIN HANDLING - empleados.logirapid.com
+  // ============================================================
+  const isEmployeeSubdomain = host.startsWith('empleados.') || host.includes('empleados.logirapid')
+
+  if (isEmployeeSubdomain) {
+    // Allow static resources
+    if (pathname.startsWith('/_next') || pathname.startsWith('/images') || pathname === '/favicon.ico') {
+      return NextResponse.next()
+    }
+
+    // Allow employee login page
+    if (pathname === '/employee/login') {
+      return NextResponse.next()
+    }
+
+    // Allow employee API routes
+    if (pathname.startsWith('/api/employee')) {
+      return NextResponse.next()
+    }
+
+    // Check for employee-auth-token on employee dashboard routes
+    if (pathname.startsWith('/employee/')) {
+      const employeeToken = request.cookies.get('employee-auth-token')?.value
+
+      if (!employeeToken) {
+        console.log('[MIDDLEWARE] Employee subdomain - no token, redirecting to login')
+        const loginUrl = new URL('/employee/login', request.url)
+        return NextResponse.redirect(loginUrl)
+      }
+
+      // Validate employee JWT
+      try {
+        const jwtSecret = process.env.JWT_SECRET || 'fallback-secret-change-in-production'
+        const secret = new TextEncoder().encode(jwtSecret)
+        const { payload } = await jwtVerify(employeeToken, secret)
+
+        if (payload.type !== 'employee') {
+          throw new Error('Invalid token type')
+        }
+
+        console.log('[MIDDLEWARE] Employee authenticated:', payload.employeeCode)
+        return NextResponse.next()
+      } catch (error) {
+        console.error('[MIDDLEWARE] Invalid employee token:', error)
+        const loginUrl = new URL('/employee/login', request.url)
+        return NextResponse.redirect(loginUrl)
+      }
+    }
+
+    // Redirect root to employee login or dashboard
+    if (pathname === '/') {
+      const employeeToken = request.cookies.get('employee-auth-token')?.value
+      if (employeeToken) {
+        return NextResponse.redirect(new URL('/employee/dashboard', request.url))
+      }
+      return NextResponse.redirect(new URL('/employee/login', request.url))
+    }
+
+    // Block other routes on employee subdomain
+    console.log('[MIDDLEWARE] Employee subdomain - blocking route:', pathname)
+    return NextResponse.redirect(new URL('/employee/login', request.url))
+  }
+
+  // ============================================================
   // REGULAR DOMAIN HANDLING
   // ============================================================
 
@@ -90,6 +154,7 @@ export async function middleware(request: NextRequest) {
     '/developers/documentacion',
     '/developers/playground',
     '/supplier/login',  // Supplier login is also public on main domain
+    '/employee/login',  // Employee login is also public on main domain
   ]
 
   // Recursos estáticos (pero NO API)
@@ -138,6 +203,11 @@ export async function middleware(request: NextRequest) {
 
   // Supplier API routes don't need auth-token, they use supplier-token
   if (pathname.startsWith('/api/supplier')) {
+    return NextResponse.next()
+  }
+
+  // Employee API routes don't need auth-token, they use employee-auth-token
+  if (pathname.startsWith('/api/employee')) {
     return NextResponse.next()
   }
 
