@@ -12,8 +12,8 @@ const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
 
 const BUCKET_NAME = 'company-documents'
-const MAX_FILE_SIZE = 5 * 1024 * 1024 // 5MB
-const ALLOWED_TYPES = ['image/png', 'image/jpeg', 'image/jpg', 'image/webp', 'image/gif']
+const MAX_FILE_SIZE = 10 * 1024 * 1024 // 10MB
+const ALLOWED_TYPES = ['image/png', 'image/jpeg', 'image/jpg', 'image/webp', 'image/gif', 'application/pdf']
 
 /**
  * POST /api/upload/image
@@ -75,7 +75,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         {
           success: false,
-          error: 'Tipo de archivo no permitido. Solo se aceptan PNG, JPG, WEBP y GIF'
+          error: 'Tipo de archivo no permitido. Solo se aceptan PNG, JPG, WEBP, GIF y PDF'
         },
         {
           status: 400,
@@ -89,7 +89,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         {
           success: false,
-          error: 'El archivo es demasiado grande. Tamaño máximo: 5MB'
+          error: 'El archivo es demasiado grande. Tamaño máximo: 10MB'
         },
         {
           status: 400,

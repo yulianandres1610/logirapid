@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { motion } from 'framer-motion'
 import {
   Receipt,
@@ -11,7 +12,8 @@ import {
   Sparkles,
   X,
   Check,
-  AlertCircle
+  AlertCircle,
+  Image as ImageIcon
 } from 'lucide-react'
 import { DashboardLayout } from '@/components/layout/dashboard-layout'
 import { ProtectedRoute } from '@/components/protected-route'
@@ -29,6 +31,7 @@ interface Expense {
   aiSuggestion: string | null
   aiConfidence: number | null
   vendorName: string | null
+  receiptPath: string | null
   createdByName: string
   createdAt: string
 }
@@ -41,26 +44,15 @@ interface Category {
 }
 
 export default function ExpensesPage() {
+  const router = useRouter()
   const [expenses, setExpenses] = useState<Expense[]>([])
   const [categories, setCategories] = useState<Category[]>([])
   const [loading, setLoading] = useState(true)
-  const [showModal, setShowModal] = useState(false)
   const [categoryFilter, setCategoryFilter] = useState<string>('')
   const [startDate, setStartDate] = useState('')
   const [endDate, setEndDate] = useState('')
   const [byCategory, setByCategory] = useState<Array<{ categoryName: string; total: number }>>([])
-
-  // Form state
-  const [formData, setFormData] = useState({
-    description: '',
-    amount: '',
-    expenseDate: new Date().toISOString().split('T')[0],
-    categoryId: '',
-    vendorName: ''
-  })
-  const [aiSuggestion, setAiSuggestion] = useState<{ categoryName: string; confidence: number } | null>(null)
-  const [categorizing, setCategorizing] = useState(false)
-  const [saving, setSaving] = useState(false)
+  const [selectedExpense, setSelectedExpense] = useState<Expense | null>(null)
 
   useEffect(() => {
     fetchData()
@@ -96,79 +88,6 @@ export default function ExpensesPage() {
       console.error('Error fetching data:', error)
     } finally {
       setLoading(false)
-    }
-  }
-
-  const categorizeWithAI = async () => {
-    if (!formData.description) return
-
-    setCategorizing(true)
-    try {
-      const response = await fetch('/api/market/accounting/expenses/categorize', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          description: formData.description,
-          amount: formData.amount,
-          vendorName: formData.vendorName
-        })
-      })
-
-      if (response.ok) {
-        const result = await response.json()
-        if (result.success && result.data.suggestedCategory) {
-          setAiSuggestion({
-            categoryName: result.data.suggestedCategory.name,
-            confidence: result.data.confidence
-          })
-          setFormData(prev => ({
-            ...prev,
-            categoryId: String(result.data.suggestedCategory.id)
-          }))
-        }
-      }
-    } catch (error) {
-      console.error('Error categorizing:', error)
-    } finally {
-      setCategorizing(false)
-    }
-  }
-
-  const saveExpense = async () => {
-    if (!formData.description || !formData.amount || !formData.expenseDate) return
-
-    setSaving(true)
-    try {
-      const response = await fetch('/api/market/accounting/expenses', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          description: formData.description,
-          amount: parseFloat(formData.amount),
-          expenseDate: formData.expenseDate,
-          categoryId: formData.categoryId ? parseInt(formData.categoryId) : null,
-          vendorName: formData.vendorName || null,
-          aiSuggestion: aiSuggestion?.categoryName,
-          aiConfidence: aiSuggestion?.confidence
-        })
-      })
-
-      if (response.ok) {
-        setShowModal(false)
-        setFormData({
-          description: '',
-          amount: '',
-          expenseDate: new Date().toISOString().split('T')[0],
-          categoryId: '',
-          vendorName: ''
-        })
-        setAiSuggestion(null)
-        fetchData()
-      }
-    } catch (error) {
-      console.error('Error saving expense:', error)
-    } finally {
-      setSaving(false)
     }
   }
 
@@ -209,7 +128,7 @@ export default function ExpensesPage() {
               </p>
             </div>
             <button
-              onClick={() => setShowModal(true)}
+              onClick={() => router.push('/dashboard/market/accounting/expenses/create')}
               className="flex items-center gap-2 px-4 py-2.5 bg-orange-600 hover:bg-orange-700 text-white rounded-xl font-medium transition-colors shadow-lg"
             >
               <Plus className="w-5 h-5" />
@@ -296,7 +215,7 @@ export default function ExpensesPage() {
                 Registra tu primer gasto
               </p>
               <button
-                onClick={() => setShowModal(true)}
+                onClick={() => router.push('/dashboard/market/accounting/expenses/create')}
                 className="inline-flex items-center gap-2 px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700"
               >
                 <Plus className="w-4 h-4" />
@@ -351,124 +270,6 @@ export default function ExpensesPage() {
             </div>
           )}
 
-          {/* New Expense Modal */}
-          {showModal && (
-            <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-              <motion.div
-                initial={{ opacity: 0, scale: 0.95 }}
-                animate={{ opacity: 1, scale: 1 }}
-                className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl max-w-md w-full"
-              >
-                <div className="p-6 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
-                  <h2 className="text-xl font-bold text-gray-900 dark:text-white">Nuevo Gasto</h2>
-                  <button
-                    onClick={() => setShowModal(false)}
-                    className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg"
-                  >
-                    <X className="w-5 h-5" />
-                  </button>
-                </div>
-                <div className="p-6 space-y-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                      Descripción *
-                    </label>
-                    <div className="relative">
-                      <input
-                        type="text"
-                        value={formData.description}
-                        onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
-                        onBlur={categorizeWithAI}
-                        placeholder="Ej: Pago de electricidad del mes"
-                        className="w-full px-4 py-2.5 border border-gray-200 dark:border-gray-700 rounded-xl bg-white dark:bg-gray-900 focus:ring-2 focus:ring-orange-500"
-                      />
-                      {categorizing && (
-                        <div className="absolute right-3 top-1/2 -translate-y-1/2">
-                          <Sparkles className="w-5 h-5 text-orange-500 animate-pulse" />
-                        </div>
-                      )}
-                    </div>
-                    {aiSuggestion && (
-                      <p className="mt-1 text-xs text-green-600 dark:text-green-400 flex items-center gap-1">
-                        <Check className="w-3 h-3" />
-                        IA sugiere: {aiSuggestion.categoryName} ({Math.round(aiSuggestion.confidence * 100)}% confianza)
-                      </p>
-                    )}
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                        Monto *
-                      </label>
-                      <input
-                        type="number"
-                        value={formData.amount}
-                        onChange={(e) => setFormData(prev => ({ ...prev, amount: e.target.value }))}
-                        placeholder="0.00"
-                        className="w-full px-4 py-2.5 border border-gray-200 dark:border-gray-700 rounded-xl bg-white dark:bg-gray-900 focus:ring-2 focus:ring-orange-500"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                        Fecha *
-                      </label>
-                      <input
-                        type="date"
-                        value={formData.expenseDate}
-                        onChange={(e) => setFormData(prev => ({ ...prev, expenseDate: e.target.value }))}
-                        className="w-full px-4 py-2.5 border border-gray-200 dark:border-gray-700 rounded-xl bg-white dark:bg-gray-900 focus:ring-2 focus:ring-orange-500"
-                      />
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                      Categoría
-                    </label>
-                    <select
-                      value={formData.categoryId}
-                      onChange={(e) => setFormData(prev => ({ ...prev, categoryId: e.target.value }))}
-                      className="w-full px-4 py-2.5 border border-gray-200 dark:border-gray-700 rounded-xl bg-white dark:bg-gray-900 focus:ring-2 focus:ring-orange-500"
-                    >
-                      <option value="">Seleccionar categoría</option>
-                      {categories.map(cat => (
-                        <option key={cat.id} value={cat.id}>{cat.name}</option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                      Proveedor/Vendedor
-                    </label>
-                    <input
-                      type="text"
-                      value={formData.vendorName}
-                      onChange={(e) => setFormData(prev => ({ ...prev, vendorName: e.target.value }))}
-                      placeholder="Opcional"
-                      className="w-full px-4 py-2.5 border border-gray-200 dark:border-gray-700 rounded-xl bg-white dark:bg-gray-900 focus:ring-2 focus:ring-orange-500"
-                    />
-                  </div>
-                </div>
-                <div className="p-6 border-t border-gray-200 dark:border-gray-700 flex justify-end gap-3">
-                  <button
-                    onClick={() => setShowModal(false)}
-                    className="px-4 py-2 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-xl"
-                  >
-                    Cancelar
-                  </button>
-                  <button
-                    onClick={saveExpense}
-                    disabled={saving || !formData.description || !formData.amount}
-                    className="px-4 py-2 bg-orange-600 hover:bg-orange-700 text-white rounded-xl disabled:opacity-50 flex items-center gap-2"
-                  >
-                    {saving ? 'Guardando...' : 'Guardar'}
-                  </button>
-                </div>
-              </motion.div>
-            </div>
-          )}
         </div>
       </DashboardLayout>
     </ProtectedRoute>
