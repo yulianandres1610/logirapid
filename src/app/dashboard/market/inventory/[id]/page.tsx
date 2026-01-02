@@ -1700,29 +1700,29 @@ export default function ProductDetailPage() {
           onClose={() => { setShowPrintModal(false); setPrintVariant(null); }}
           productData={printVariant ? {
             productName: `${product.name} - ${printVariant.name}`,
-            sku: printVariant.sku,
-            barcode: printVariant.barcode,
-            price: printVariant.sellingPrice,
-            currency: product.currency,
-            unitOfMeasure: product.unitOfMeasure,
+            sku: printVariant.sku || '',
+            barcode: printVariant.barcode || '',
+            price: printVariant.sellingPrice || 0,
+            currency: product.currency || 'USD',
+            unitOfMeasure: product.unitOfMeasure || 'unidad',
             category: product.category || undefined,
             description: product.description || undefined
           } : {
-            productName: product.name,
-            sku: product.sku,
-            barcode: product.barcode,
-            price: product.sellingPrice,
-            currency: product.currency,
-            unitOfMeasure: product.unitOfMeasure,
+            productName: product.name || 'Producto',
+            sku: product.sku || '',
+            barcode: product.barcode || '',
+            price: product.sellingPrice || 0,
+            currency: product.currency || 'USD',
+            unitOfMeasure: product.unitOfMeasure || 'unidad',
             category: product.category || undefined,
             description: product.description || undefined,
             variants: product.variants?.map(v => ({
               id: v.id,
-              name: v.name,
-              barcode: v.barcode,
-              sku: v.sku,
-              price: v.sellingPrice,
-              imageUrl: v.imageUrl
+              name: v.name || '',
+              barcode: v.barcode || '',
+              sku: v.sku || '',
+              price: v.sellingPrice || 0,
+              imageUrl: v.imageUrl || undefined
             }))
           }}
           onPrintSuccess={(jobNumber) => {
