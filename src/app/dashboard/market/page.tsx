@@ -422,7 +422,7 @@ export default function MarketDashboardPage() {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.5 }}
-              className="bg-white dark:bg-[#1e1e2f] rounded-2xl border border-gray-200 dark:border-gray-700/50 p-5 shadow-sm"
+              className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-700/50 p-5 shadow-sm"
             >
               <div className="flex items-center justify-between mb-4">
                 <h3 className="font-bold text-lg text-gray-900 dark:text-white flex items-center gap-2">
@@ -469,7 +469,7 @@ export default function MarketDashboardPage() {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.6 }}
-              className="bg-white dark:bg-[#1e1e2f] rounded-2xl border border-gray-200 dark:border-gray-700/50 p-5 shadow-sm"
+              className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-700/50 p-5 shadow-sm"
             >
               <div className="flex items-center justify-between mb-4">
                 <h3 className="font-bold text-lg text-gray-900 dark:text-white flex items-center gap-2">
@@ -487,7 +487,7 @@ export default function MarketDashboardPage() {
                     initial={{ opacity: 0, scale: 0.95 }}
                     animate={{ opacity: 1, scale: 1 }}
                     transition={{ delay: 0.65 + i * 0.05 }}
-                    className="bg-gray-800 dark:bg-[#252538] rounded-xl p-4"
+                    className="bg-gray-100 dark:bg-gray-800 rounded-xl p-4"
                   >
                     <p className="font-semibold text-sm text-white mb-1 truncate">{supplier.supplierName}</p>
                     <p className="text-xs text-gray-400 mb-2">{supplier.totalOrders} órdenes</p>
@@ -507,7 +507,7 @@ export default function MarketDashboardPage() {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.7 }}
-              className="bg-white dark:bg-[#1e1e2f] rounded-2xl border border-gray-200 dark:border-gray-700/50 p-5 shadow-sm"
+              className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-700/50 p-5 shadow-sm"
             >
               <div className="flex items-center justify-between mb-4">
                 <h3 className="font-bold text-lg text-gray-900 dark:text-white flex items-center gap-2">
@@ -525,7 +525,7 @@ export default function MarketDashboardPage() {
                     initial={{ opacity: 0, scale: 0.95 }}
                     animate={{ opacity: 1, scale: 1 }}
                     transition={{ delay: 0.75 + i * 0.05 }}
-                    className="bg-gray-800 dark:bg-[#252538] rounded-xl p-4"
+                    className="bg-gray-100 dark:bg-gray-800 rounded-xl p-4"
                   >
                     <div className="flex items-center justify-between mb-1">
                       <span className="font-semibold text-sm text-white">{purchase.orderNumber}</span>
@@ -552,7 +552,7 @@ export default function MarketDashboardPage() {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.8 }}
-            className="bg-white dark:bg-[#1e1e2f] rounded-2xl border border-gray-200 dark:border-gray-700/50 p-5 shadow-sm"
+            className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-700/50 p-5 shadow-sm"
           >
             <div className="flex items-center justify-between mb-4">
               <div>
@@ -577,7 +577,7 @@ export default function MarketDashboardPage() {
                     initial={{ opacity: 0, scale: 0.95 }}
                     animate={{ opacity: 1, scale: 1 }}
                     transition={{ delay: 0.85 + i * 0.05 }}
-                    className="bg-gray-800 dark:bg-[#252538] rounded-xl p-4"
+                    className="bg-gray-100 dark:bg-gray-800 rounded-xl p-4"
                   >
                     <div className="flex items-center justify-between mb-1">
                       <span className="font-semibold text-sm text-white">{consignment.orderNumber}</span>
@@ -625,7 +625,7 @@ export default function MarketDashboardPage() {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.9 }}
-              className="bg-white dark:bg-[#1e1e2f] rounded-2xl border border-gray-200 dark:border-gray-700/50 p-5 shadow-sm"
+              className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-700/50 p-5 shadow-sm"
             >
               <div className="flex items-center justify-between mb-4">
                 <h3 className="font-bold text-lg text-gray-900 dark:text-white flex items-center gap-2">
@@ -653,7 +653,7 @@ export default function MarketDashboardPage() {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.95 }}
-              className="bg-white dark:bg-[#1e1e2f] rounded-2xl border border-gray-200 dark:border-gray-700/50 p-5 shadow-sm"
+              className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-700/50 p-5 shadow-sm"
             >
               <h3 className="font-bold text-lg text-gray-900 dark:text-white flex items-center gap-2 mb-4">
                 <Target className="w-5 h-5 text-purple-500" />

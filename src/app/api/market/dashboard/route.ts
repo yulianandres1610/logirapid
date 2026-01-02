@@ -53,8 +53,18 @@ export async function GET(request: NextRequest) {
       }, { status: 403 })
     }
 
+    // Helper function to safely execute queries
+    const safeQuery = async (query: string, params: any[]) => {
+      try {
+        return await db.query(query, params)
+      } catch (error) {
+        console.log('[Dashboard] Query skipped (table may not exist):', error instanceof Error ? error.message : error)
+        return { rows: [] }
+      }
+    }
+
     // Get order stats
-    const orderStats = await db.query(`
+    const orderStats = await safeQuery(`
       SELECT
         COUNT(*) FILTER (WHERE status = 'pending') as pending_orders,
         COUNT(*) FILTER (WHERE status IN ('accepted', 'preparing')) as preparing_orders,
@@ -68,7 +78,7 @@ export async function GET(request: NextRequest) {
     `, [companyId])
 
     // Get orders by month (last 6 months)
-    const ordersByMonth = await db.query(`
+    const ordersByMonth = await safeQuery(`
       SELECT
         TO_CHAR(DATE_TRUNC('month', created_at), 'YYYY-MM') as month,
         TO_CHAR(DATE_TRUNC('month', created_at), 'Mon') as month_name,
@@ -82,7 +92,7 @@ export async function GET(request: NextRequest) {
     `, [companyId])
 
     // Get recent orders
-    const recentOrders = await db.query(`
+    const recentOrders = await safeQuery(`
       SELECT
         id,
         order_number,
@@ -98,7 +108,7 @@ export async function GET(request: NextRequest) {
     `, [companyId])
 
     // Get product stats
-    const productStats = await db.query(`
+    const productStats = await safeQuery(`
       SELECT
         COUNT(*) as total_products,
         COUNT(*) FILTER (WHERE quantity_on_hand > 0) as products_in_stock,
@@ -109,7 +119,7 @@ export async function GET(request: NextRequest) {
     `, [companyId])
 
     // Get consignment statistics
-    const consignmentStats = await db.query(`
+    const consignmentStats = await safeQuery(`
       SELECT
         COUNT(*) as total_orders,
         COUNT(*) FILTER (WHERE status = 'pending') as pending_orders,
@@ -125,7 +135,7 @@ export async function GET(request: NextRequest) {
     `, [companyId])
 
     // Get recent consignments
-    const recentConsignments = await db.query(`
+    const recentConsignments = await safeQuery(`
       SELECT
         co.id,
         co.order_number,
@@ -142,7 +152,7 @@ export async function GET(request: NextRequest) {
     `, [companyId])
 
     // Get purchase statistics
-    const purchaseStats = await db.query(`
+    const purchaseStats = await safeQuery(`
       SELECT
         COUNT(*) as total_orders,
         COUNT(*) FILTER (WHERE status = 'pending') as pending_orders,
@@ -155,7 +165,7 @@ export async function GET(request: NextRequest) {
     `, [companyId])
 
     // Get recent purchases
-    const recentPurchases = await db.query(`
+    const recentPurchases = await safeQuery(`
       SELECT
         mp.id,
         mp.order_number,
@@ -171,7 +181,7 @@ export async function GET(request: NextRequest) {
     `, [companyId])
 
     // Get POS sales statistics (day, month, year)
-    const posSales = await db.query(`
+    const posSales = await safeQuery(`
       SELECT
         COALESCE(SUM(total_amount) FILTER (WHERE DATE(created_at) = CURRENT_DATE), 0) as sales_today,
         COUNT(*) FILTER (WHERE DATE(created_at) = CURRENT_DATE) as orders_today,
@@ -184,7 +194,7 @@ export async function GET(request: NextRequest) {
     `, [companyId])
 
     // Get POS sales by terminal
-    const posByTerminal = await db.query(`
+    const posByTerminal = await safeQuery(`
       SELECT
         t.id as terminal_id,
         t.name as terminal_name,
@@ -198,7 +208,7 @@ export async function GET(request: NextRequest) {
     `, [companyId])
 
     // Get consignments by supplier (with pending to pay)
-    const consignmentsBySupplier = await db.query(`
+    const consignmentsBySupplier = await safeQuery(`
       SELECT
         cs.id as supplier_id,
         cs.name as supplier_name,
