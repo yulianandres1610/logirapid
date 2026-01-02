@@ -54,6 +54,9 @@ interface ProductInfo {
 interface OrderLine {
   id: number
   product: ProductInfo
+  variantId: number | null
+  variantName: string | null
+  variantSku: string | null
   quantityOrdered: number
   quantityReceived: number
   quantitySold: number
@@ -432,7 +435,12 @@ export default function ConsignmentOrderDetailPage({ params }: { params: Promise
                         <td className="py-3 px-4">
                           <div>
                             <p className="font-medium text-gray-900 dark:text-white">{line.product.name}</p>
-                            <p className="text-xs text-gray-500">SKU: {line.product.sku}</p>
+                            {line.variantName && (
+                              <p className="text-xs text-purple-600 dark:text-purple-400 font-medium">
+                                Variante: {line.variantName}
+                              </p>
+                            )}
+                            <p className="text-xs text-gray-500">SKU: {line.variantSku || line.product.sku}</p>
                           </div>
                         </td>
                         <td className="py-3 px-4 text-center font-medium text-gray-900 dark:text-white">

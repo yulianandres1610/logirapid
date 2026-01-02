@@ -32,6 +32,9 @@ interface PurchaseLine {
   productSku: string
   productBarcode: string | null
   productImageUrl: string | null
+  variantId: number | null
+  variantName: string | null
+  variantSku: string | null
   quantity: number
   quantityReceived: number
   unitPrice: number
@@ -405,7 +408,12 @@ export default function PurchaseOrderDetailPage({ params }: { params: Promise<{ 
                             )}
                             <div>
                               <p className="font-medium text-gray-900 dark:text-white">{line.productName}</p>
-                              <p className="text-xs text-gray-500">SKU: {line.productSku}</p>
+                              {line.variantName && (
+                                <p className="text-xs text-purple-600 dark:text-purple-400 font-medium">
+                                  Variante: {line.variantName}
+                                </p>
+                              )}
+                              <p className="text-xs text-gray-500">SKU: {line.variantSku || line.productSku}</p>
                             </div>
                           </div>
                         </td>

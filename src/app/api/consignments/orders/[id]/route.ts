@@ -68,16 +68,20 @@ export async function GET(
 
     const o = orderResult.rows[0]
 
-    // Get order lines with product info
+    // Get order lines with product and variant info
     const linesResult = await db.query(`
       SELECT
         ol.*,
         p.name as product_name,
         p.sku as product_sku,
         p.barcode as product_barcode,
-        p.image_url as product_image
+        p.image_url as product_image,
+        v.id as variant_id,
+        v.variant_name,
+        v.sku as variant_sku
       FROM consignment_order_lines ol
       JOIN market_products p ON p.id = ol.product_id
+      LEFT JOIN market_product_variants v ON v.id = ol.variant_id
       WHERE ol.order_id = $1
       ORDER BY ol.id
     `, [orderId])
@@ -120,6 +124,9 @@ export async function GET(
           barcode: l.product_barcode,
           imageUrl: l.product_image
         },
+        variantId: l.variant_id || null,
+        variantName: l.variant_name || null,
+        variantSku: l.variant_sku || null,
         quantityOrdered: parseInt(l.quantity_ordered) || 0,
         quantityReceived: parseInt(l.quantity_received) || 0,
         quantitySold: parseInt(l.quantity_sold) || 0,
