@@ -66,7 +66,8 @@ export default function CreateExpensePage() {
     categoryId: '',
     vendorName: '',
     receiptFile: null as File | null,
-    receiptPreview: '' as string
+    receiptPreview: '' as string,
+    isPdf: false
   })
 
   // AI/OCR states
@@ -126,58 +127,71 @@ export default function CreateExpensePage() {
       return
     }
 
+    const isPdf = file.type === 'application/pdf'
+
     setFormData(prev => ({
       ...prev,
       receiptFile: file,
-      receiptPreview: URL.createObjectURL(file)
+      receiptPreview: isPdf ? '' : URL.createObjectURL(file),
+      isPdf
     }))
     setErrors({ ...errors, file: '' })
 
-    // Auto-process with OCR if we're in OCR mode
-    if (entryMethod === 'ocr') {
+    // Auto-process with OCR if we're in OCR mode (only for images, not PDFs)
+    if (entryMethod === 'ocr' && !isPdf) {
       await processWithOCR(file)
+    } else if (entryMethod === 'ocr' && isPdf) {
+      setErrors({ ...errors, ocr: 'Los PDFs no pueden ser procesados con OCR. Solo se guardarán como referencia.' })
     }
   }
 
   const processWithOCR = async (file: File) => {
     setProcessingOCR(true)
     setOcrResult(null)
+    setErrors(prev => ({ ...prev, ocr: '' }))
 
     try {
       // Convert file to base64
-      const base64 = await new Promise<string>((resolve) => {
+      const base64 = await new Promise<string>((resolve, reject) => {
         const reader = new FileReader()
         reader.onload = () => resolve(reader.result as string)
+        reader.onerror = () => reject(new Error('Error al leer el archivo'))
         reader.readAsDataURL(file)
       })
 
+      console.log('[OCR] Sending image to API...')
       const response = await fetch('/api/market/accounting/expenses/ocr', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ imageBase64: base64 })
       })
 
-      if (response.ok) {
-        const result = await response.json()
-        if (result.success && result.data) {
-          setOcrResult(result.data)
-          // Auto-fill form with OCR results
-          setFormData(prev => ({
-            ...prev,
-            description: result.data.description || prev.description,
-            amount: result.data.amount ? String(result.data.amount) : prev.amount,
-            vendorName: result.data.vendorName || prev.vendorName,
-            expenseDate: result.data.date || prev.expenseDate
-          }))
-          // Auto-categorize
-          if (result.data.description) {
-            await categorizeWithAI(result.data.description, result.data.amount, result.data.vendorName)
-          }
+      const result = await response.json()
+      console.log('[OCR] API Response:', result)
+
+      if (response.ok && result.success && result.data) {
+        setOcrResult(result.data)
+        // Auto-fill form with OCR results
+        setFormData(prev => ({
+          ...prev,
+          description: result.data.description || prev.description,
+          amount: result.data.amount ? String(result.data.amount) : prev.amount,
+          vendorName: result.data.vendorName || prev.vendorName,
+          expenseDate: result.data.date || prev.expenseDate
+        }))
+        // Auto-categorize
+        if (result.data.description) {
+          await categorizeWithAI(result.data.description, result.data.amount, result.data.vendorName)
         }
+      } else {
+        // Show error from API
+        const errorMsg = result.error || 'Error al procesar el recibo'
+        console.error('[OCR] API Error:', errorMsg)
+        setErrors(prev => ({ ...prev, ocr: errorMsg }))
       }
     } catch (error) {
-      console.error('OCR Error:', error)
-      setErrors({ ...errors, ocr: 'Error al procesar el recibo' })
+      console.error('[OCR] Error:', error)
+      setErrors(prev => ({ ...prev, ocr: 'Error de conexion al procesar el recibo' }))
     }
     setProcessingOCR(false)
   }
@@ -558,13 +572,27 @@ export default function CreateExpensePage() {
                           className="hidden"
                         />
 
-                        {formData.receiptPreview ? (
+                        {formData.receiptFile ? (
                           <div className="space-y-4">
-                            <img
-                              src={formData.receiptPreview}
-                              alt="Receipt preview"
-                              className="max-h-48 mx-auto rounded-lg shadow-lg"
-                            />
+                            {formData.isPdf ? (
+                              <div className="flex flex-col items-center gap-2 p-4">
+                                <div className="w-20 h-24 bg-red-100 dark:bg-red-900/30 rounded-lg flex items-center justify-center">
+                                  <FileText className="w-10 h-10 text-red-600" />
+                                </div>
+                                <p className="text-sm font-medium text-gray-900 dark:text-white">
+                                  {formData.receiptFile.name}
+                                </p>
+                                <p className="text-xs text-gray-500">
+                                  PDF - {(formData.receiptFile.size / 1024).toFixed(1)} KB
+                                </p>
+                              </div>
+                            ) : (
+                              <img
+                                src={formData.receiptPreview}
+                                alt="Receipt preview"
+                                className="max-h-48 mx-auto rounded-lg shadow-lg"
+                              />
+                            )}
                             {processingOCR && (
                               <div className="flex items-center justify-center gap-2 text-orange-600">
                                 <Loader2 className="w-5 h-5 animate-spin" />
@@ -577,12 +605,19 @@ export default function CreateExpensePage() {
                                 Datos extraidos correctamente ({Math.round((ocrResult.confidence || 0) * 100)}% confianza)
                               </div>
                             )}
+                            {errors.ocr && (
+                              <div className="p-3 bg-amber-50 dark:bg-amber-900/20 rounded-xl text-sm text-amber-700 dark:text-amber-400 flex items-center gap-2">
+                                <AlertCircle className="w-4 h-4" />
+                                {errors.ocr}
+                              </div>
+                            )}
                             <button
                               type="button"
                               onClick={(e) => {
                                 e.stopPropagation()
-                                setFormData(prev => ({ ...prev, receiptFile: null, receiptPreview: '' }))
+                                setFormData(prev => ({ ...prev, receiptFile: null, receiptPreview: '', isPdf: false }))
                                 setOcrResult(null)
+                                setErrors({ ...errors, ocr: '' })
                               }}
                               className="text-red-500 text-sm hover:underline"
                             >
@@ -634,26 +669,32 @@ export default function CreateExpensePage() {
                           className="hidden"
                         />
 
-                        {formData.receiptPreview ? (
+                        {formData.receiptFile ? (
                           <div className="flex items-center gap-4">
-                            <img
-                              src={formData.receiptPreview}
-                              alt="Receipt"
-                              className="w-16 h-16 object-cover rounded-lg"
-                            />
+                            {formData.isPdf ? (
+                              <div className="w-16 h-16 bg-red-100 dark:bg-red-900/30 rounded-lg flex items-center justify-center">
+                                <FileText className="w-8 h-8 text-red-600" />
+                              </div>
+                            ) : (
+                              <img
+                                src={formData.receiptPreview}
+                                alt="Receipt"
+                                className="w-16 h-16 object-cover rounded-lg"
+                              />
+                            )}
                             <div className="flex-1 text-left">
                               <p className="font-medium text-gray-900 dark:text-white">
                                 {formData.receiptFile?.name}
                               </p>
                               <p className="text-sm text-gray-500">
-                                {((formData.receiptFile?.size || 0) / 1024).toFixed(1)} KB
+                                {formData.isPdf ? 'PDF - ' : ''}{((formData.receiptFile?.size || 0) / 1024).toFixed(1)} KB
                               </p>
                             </div>
                             <button
                               type="button"
                               onClick={(e) => {
                                 e.stopPropagation()
-                                setFormData(prev => ({ ...prev, receiptFile: null, receiptPreview: '' }))
+                                setFormData(prev => ({ ...prev, receiptFile: null, receiptPreview: '', isPdf: false }))
                               }}
                               className="p-2 hover:bg-red-100 dark:hover:bg-red-900/30 rounded-lg"
                             >
@@ -820,17 +861,26 @@ export default function CreateExpensePage() {
 
                   <div className="p-6 space-y-4">
                     {/* Receipt Preview */}
-                    {formData.receiptPreview && (
+                    {formData.receiptFile && (
                       <div className="flex items-start gap-4 p-4 bg-gray-50 dark:bg-gray-900 rounded-xl">
-                        <img
-                          src={formData.receiptPreview}
-                          alt="Receipt"
-                          className="w-24 h-24 object-cover rounded-lg"
-                        />
+                        {formData.isPdf ? (
+                          <div className="w-24 h-24 bg-red-100 dark:bg-red-900/30 rounded-lg flex items-center justify-center">
+                            <FileText className="w-10 h-10 text-red-600" />
+                          </div>
+                        ) : (
+                          <img
+                            src={formData.receiptPreview}
+                            alt="Receipt"
+                            className="w-24 h-24 object-cover rounded-lg"
+                          />
+                        )}
                         <div>
                           <p className="text-sm text-gray-500">Recibo adjunto</p>
                           <p className="font-medium text-gray-900 dark:text-white">
                             {formData.receiptFile?.name}
+                          </p>
+                          <p className="text-xs text-gray-500">
+                            {formData.isPdf ? 'PDF - ' : ''}{((formData.receiptFile?.size || 0) / 1024).toFixed(1)} KB
                           </p>
                         </div>
                       </div>

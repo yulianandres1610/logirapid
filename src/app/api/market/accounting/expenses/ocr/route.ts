@@ -3,6 +3,10 @@ import { cookies } from 'next/headers'
 import jwt from 'jsonwebtoken'
 import { GoogleGenerativeAI } from '@google/generative-ai'
 
+// Usar las mismas variables de entorno que el resto del proyecto
+const GOOGLE_AI_API_KEY = process.env.GOOGLE_AI_API_KEY
+const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-2.0-flash-exp'
+
 interface JWTPayload {
   userId: number
   email: string
@@ -48,17 +52,18 @@ export async function POST(request: NextRequest) {
       }, { status: 400 })
     }
 
-    // Initialize Gemini
-    const apiKey = process.env.GEMINI_API_KEY
-    if (!apiKey) {
+    // Initialize Gemini with correct API key
+    if (!GOOGLE_AI_API_KEY) {
+      console.error('[OCR] GOOGLE_AI_API_KEY not configured')
       return NextResponse.json({
         success: false,
-        error: 'API de IA no configurada'
+        error: 'API de IA no configurada. Configure GOOGLE_AI_API_KEY en las variables de entorno.'
       }, { status: 500 })
     }
 
-    const genAI = new GoogleGenerativeAI(apiKey)
-    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' })
+    console.log('[OCR] Using model:', GEMINI_MODEL)
+    const genAI = new GoogleGenerativeAI(GOOGLE_AI_API_KEY)
+    const model = genAI.getGenerativeModel({ model: GEMINI_MODEL })
 
     // Prepare the image data
     const base64Data = imageBase64.includes(',')
