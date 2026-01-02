@@ -45,18 +45,35 @@ export async function POST(request: NextRequest) {
     const companyId = payload.companyId
 
     const body = await request.json()
-    const { description, amount, vendorName } = body
+    const { description, amount, vendorName, items } = body
 
-    if (!description) {
+    // Validar que venga description o items
+    if (!description && (!items || !Array.isArray(items) || items.length === 0)) {
       return NextResponse.json({
         success: false,
-        error: 'Descripción del gasto requerida'
+        error: 'Descripción del gasto o lista de items requerida'
       }, { status: 400 })
     }
+
+    // Si viene un array de items, procesarlos en lote
+    const isMultipleItems = items && Array.isArray(items) && items.length > 0
 
     // Check if Gemini is configured
     if (!GOOGLE_AI_API_KEY) {
       console.log('[Categorize API] Gemini not configured, returning default')
+      if (isMultipleItems) {
+        return NextResponse.json({
+          success: true,
+          data: {
+            categorizedItems: items.map((item: { id?: string; description?: string; amount?: number; suggestedCategory?: string }) => ({
+              ...item,
+              categoryId: null,
+              categoryName: item.suggestedCategory || 'Otros',
+              confidence: 0.5
+            }))
+          }
+        })
+      }
       return NextResponse.json({
         success: true,
         data: {
@@ -116,12 +133,78 @@ export async function POST(request: NextRequest) {
     const categories = categoriesResult.rows
     console.log('[Categorize API] Found categories:', categories.length)
 
+    // Función helper para hacer matching de categoría por nombre
+    const findCategoryByName = (suggestedName: string) => {
+      if (!suggestedName) return categories.find(c => c.name === 'Otros' || c.code === 'OTHER')
+
+      const searchTerm = suggestedName.toLowerCase()
+
+      // Exact match
+      let found = categories.find(c => c.name.toLowerCase() === searchTerm)
+      if (found) return found
+
+      // Partial match
+      found = categories.find(c =>
+        c.name.toLowerCase().includes(searchTerm) ||
+        searchTerm.includes(c.name.toLowerCase()) ||
+        (c.description && c.description.toLowerCase().includes(searchTerm))
+      )
+      if (found) return found
+
+      // Term mappings
+      const termMappings: Record<string, string> = {
+        'suministros': 'Suministros', 'supplies': 'Suministros', 'oficina': 'Suministros',
+        'electricidad': 'Servicios', 'agua': 'Servicios', 'internet': 'Servicios',
+        'telefono': 'Servicios', 'gas': 'Servicios', 'utilities': 'Servicios', 'luz': 'Servicios',
+        'mantenimiento': 'Mantenimiento', 'limpieza': 'Mantenimiento', 'reparacion': 'Mantenimiento',
+        'transporte': 'Transporte', 'gasolina': 'Transporte', 'combustible': 'Transporte', 'envio': 'Transporte',
+        'inventario': 'Inventario', 'mercancia': 'Inventario', 'productos': 'Inventario',
+        'alimentos': 'Alimentos', 'comida': 'Alimentos', 'snacks': 'Alimentos', 'bebidas': 'Alimentos',
+        'marketing': 'Marketing', 'publicidad': 'Marketing',
+        'equipamiento': 'Equipamiento', 'equipo': 'Equipamiento', 'muebles': 'Equipamiento',
+        'salarios': 'Salarios', 'nomina': 'Salarios', 'sueldo': 'Salarios',
+        'impuestos': 'Impuestos', 'tax': 'Impuestos',
+        'alquiler': 'Alquiler', 'renta': 'Alquiler', 'arriendo': 'Alquiler'
+      }
+
+      for (const [term, categoryName] of Object.entries(termMappings)) {
+        if (searchTerm.includes(term)) {
+          const mapped = categories.find(c => c.name === categoryName)
+          if (mapped) return mapped
+        }
+      }
+
+      return categories.find(c => c.name === 'Otros' || c.code === 'OTHER')
+    }
+
+    // Si es procesamiento de múltiples items, hacer matching directo sin IA
+    if (isMultipleItems) {
+      console.log('[Categorize API] Processing multiple items:', items.length)
+
+      const categorizedItems = items.map((item: { id?: string; description?: string; amount?: number; suggestedCategory?: string }) => {
+        const category = findCategoryByName(item.suggestedCategory || item.description || '')
+        return {
+          ...item,
+          categoryId: category?.id || null,
+          categoryName: category?.name || 'Otros',
+          confidence: category ? 0.85 : 0.5
+        }
+      })
+
+      return NextResponse.json({
+        success: true,
+        data: {
+          categorizedItems
+        }
+      })
+    }
+
     // Build category list for prompt
     const categoryList = categories.map(c =>
       `- ${c.name} (${c.code || 'N/A'}): ${c.description || c.accounting_type}`
     ).join('\n')
 
-    // Build prompt for Gemini
+    // Build prompt for Gemini (solo para categorización individual)
     const prompt = `Eres un asistente de contabilidad. Analiza el siguiente gasto y sugiere la categoría más apropiada.
 
 GASTO A CATEGORIZAR:

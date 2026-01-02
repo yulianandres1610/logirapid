@@ -211,6 +211,72 @@ export async function POST(request: NextRequest) {
     const userId = payload.userId
 
     const body = await request.json()
+
+    // Detectar si es creación en lote (array de expenses con sharedData)
+    if (body.expenses && Array.isArray(body.expenses) && body.sharedData) {
+      const { expenses, sharedData } = body
+
+      if (expenses.length === 0) {
+        return NextResponse.json({
+          success: false,
+          error: 'No hay gastos para registrar'
+        }, { status: 400 })
+      }
+
+      console.log('[Expenses API] Batch creation:', expenses.length, 'expenses')
+
+      const createdExpenses: { id: number; description: string }[] = []
+
+      for (const expense of expenses) {
+        if (!expense.description || !expense.amount) {
+          console.warn('[Expenses API] Skipping invalid expense:', expense)
+          continue
+        }
+
+        const result = await db.query(`
+          INSERT INTO market_expenses (
+            company_id, description, amount, currency, expense_date,
+            category_id, vendor_name, receipt_path, receipt_type,
+            ai_category_suggestion, ai_confidence, ai_analysis,
+            created_by, created_at, updated_at
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, NOW(), NOW())
+          RETURNING id
+        `, [
+          companyId,
+          expense.description,
+          expense.amount,
+          sharedData.currency || 'USD',
+          sharedData.expenseDate,
+          expense.categoryId || null,
+          sharedData.vendorName || null,
+          sharedData.receiptPath || null,  // Mismo recibo para todos
+          sharedData.receiptType || null,
+          expense.aiSuggestion || expense.categoryName || null,
+          expense.aiConfidence || null,
+          null,
+          userId
+        ])
+
+        createdExpenses.push({
+          id: result.rows[0].id,
+          description: expense.description
+        })
+      }
+
+      console.log('[Expenses API] Batch created:', createdExpenses.length, 'expenses')
+
+      return NextResponse.json({
+        success: true,
+        data: {
+          count: createdExpenses.length,
+          ids: createdExpenses.map(e => e.id),
+          expenses: createdExpenses
+        },
+        message: `${createdExpenses.length} gastos registrados exitosamente`
+      })
+    }
+
+    // Creación individual (flujo original)
     const {
       description,
       amount,

@@ -77,14 +77,20 @@ export async function GET(request: NextRequest) {
         mp.selling_price as product_selling_price,
         mw.name as warehouse_name,
         mw.code as warehouse_code,
-        COALESCE(mws.quantity_on_hand, 0) as warehouse_stock,
-        COALESCE(mws.quantity_reserved, 0) as warehouse_reserved,
+        COALESCE(stock_agg.total_on_hand, 0) as warehouse_stock,
+        COALESCE(stock_agg.total_reserved, 0) as warehouse_reserved,
         COALESCE(u1.firstname || ' ' || u1.lastname, u1.email) as created_by_name,
         COALESCE(u2.firstname || ' ' || u2.lastname, u2.email) as approved_by_name
       FROM marketplace_listings ml
       JOIN market_products mp ON ml.product_id = mp.id
       JOIN market_warehouses mw ON ml.warehouse_id = mw.id
-      LEFT JOIN market_warehouse_stock mws ON mws.warehouse_id = ml.warehouse_id AND mws.product_id = ml.product_id
+      LEFT JOIN (
+        SELECT warehouse_id, product_id,
+          SUM(quantity_on_hand) as total_on_hand,
+          SUM(quantity_reserved) as total_reserved
+        FROM market_warehouse_stock
+        GROUP BY warehouse_id, product_id
+      ) stock_agg ON stock_agg.warehouse_id = ml.warehouse_id AND stock_agg.product_id = ml.product_id
       LEFT JOIN users u1 ON ml.created_by = u1.id
       LEFT JOIN users u2 ON ml.approved_by = u2.id
       WHERE ml.company_id = $1
@@ -309,18 +315,18 @@ export async function POST(request: NextRequest) {
       }, { status: 400 })
     }
 
-    // Check stock availability
+    // Check stock availability (sum base product + all variants)
     const stockResult = await db.query(`
       SELECT
-        COALESCE(quantity_on_hand, 0) as on_hand,
-        COALESCE(quantity_reserved, 0) as reserved
+        COALESCE(SUM(quantity_on_hand), 0) as on_hand,
+        COALESCE(SUM(quantity_reserved), 0) as reserved
       FROM market_warehouse_stock
       WHERE warehouse_id = $1 AND product_id = $2
     `, [warehouseId, productId])
 
     let availableStock = 0
     if (stockResult.rows.length > 0) {
-      availableStock = stockResult.rows[0].on_hand - stockResult.rows[0].reserved
+      availableStock = parseInt(stockResult.rows[0].on_hand) - parseInt(stockResult.rows[0].reserved)
     }
 
     if (quantityListed > availableStock) {
@@ -383,21 +389,28 @@ export async function POST(request: NextRequest) {
 
     const listing = result.rows[0]
 
-    // Reserve stock in warehouse
-    await db.query(`
-      UPDATE market_warehouse_stock
-      SET quantity_reserved = COALESCE(quantity_reserved, 0) + $1,
-          updated_at = NOW()
-      WHERE warehouse_id = $2 AND product_id = $3
-    `, [quantityListed, warehouseId, productId])
+    // Reserve stock in warehouse (for base product, variant_id IS NULL)
+    // First check if stock record exists
+    const existingStock = await db.query(`
+      SELECT id FROM market_warehouse_stock
+      WHERE warehouse_id = $1 AND product_id = $2 AND variant_id IS NULL
+    `, [warehouseId, productId])
 
-    // If stock entry doesn't exist, create it
-    await db.query(`
-      INSERT INTO market_warehouse_stock (warehouse_id, product_id, quantity_on_hand, quantity_reserved)
-      VALUES ($1, $2, 0, $3)
-      ON CONFLICT (warehouse_id, product_id) DO UPDATE
-      SET quantity_reserved = COALESCE(market_warehouse_stock.quantity_reserved, 0) + $3
-    `, [warehouseId, productId, quantityListed])
+    if (existingStock.rows.length > 0) {
+      // Update existing stock record
+      await db.query(`
+        UPDATE market_warehouse_stock
+        SET quantity_reserved = COALESCE(quantity_reserved, 0) + $1,
+            updated_at = NOW()
+        WHERE warehouse_id = $2 AND product_id = $3 AND variant_id IS NULL
+      `, [quantityListed, warehouseId, productId])
+    } else {
+      // Create new stock record for base product (variant_id IS NULL)
+      await db.query(`
+        INSERT INTO market_warehouse_stock (warehouse_id, product_id, variant_id, quantity_on_hand, quantity_reserved)
+        VALUES ($1, $2, NULL, 0, $3)
+      `, [warehouseId, productId, quantityListed])
+    }
 
     // Create price alert if needed
     if (priceAlertTriggered) {

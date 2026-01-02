@@ -87,24 +87,48 @@ export async function POST(request: NextRequest) {
     const isPdf = mimeType === 'application/pdf'
     console.log('[OCR] Processing file:', { mimeType, isPdf, model: OCR_MODEL })
 
-    const prompt = `Analiza esta imagen de un recibo o factura y extrae la siguiente información:
+    const prompt = `Analiza este recibo/factura y extrae CADA LÍNEA de producto o servicio por separado.
 
-1. DESCRIPCIÓN: Un resumen breve del gasto (ej: "Compra de suministros de oficina", "Pago de electricidad")
-2. MONTO TOTAL: El monto total a pagar (solo el número, sin símbolos de moneda)
-3. NOMBRE DEL VENDEDOR/PROVEEDOR: El nombre del negocio o empresa
-4. FECHA: La fecha del recibo en formato YYYY-MM-DD
+INSTRUCCIONES:
+1. PROVEEDOR: Nombre del negocio o empresa
+2. FECHA: En formato YYYY-MM-DD
+3. ITEMS: Un array con CADA producto/servicio individual. Para cada item extrae:
+   - description: Nombre o descripción del producto/servicio
+   - amount: Monto del item (sin impuesto si es posible identificarlo)
+   - suggestedCategory: Categoría sugerida entre estas opciones:
+     * Suministros (papelería, artículos de oficina)
+     * Mantenimiento (limpieza, reparaciones)
+     * Servicios (electricidad, agua, internet, teléfono)
+     * Transporte (combustible, pasajes, envíos)
+     * Inventario (mercancía para venta)
+     * Alimentos (comida, bebidas, snacks)
+     * Marketing (publicidad, promoción)
+     * Equipamiento (muebles, equipos, herramientas)
+     * Otros (lo que no encaje en las anteriores)
+4. SUBTOTAL: Suma de todos los items antes de impuesto
+5. TAX: Monto del impuesto (IVA, ITBIS, etc.) - usar 0 si no hay impuesto visible
+6. TOTAL: Monto total con impuesto incluido
 
-Responde ÚNICAMENTE en formato JSON con esta estructura exacta:
+IMPORTANTE:
+- Si el recibo tiene una sola línea general, crea UN solo item con la descripción general
+- Si hay múltiples productos, crea un item por cada uno
+- Los montos deben ser números sin símbolos de moneda
+
+Responde ÚNICAMENTE en formato JSON con esta estructura:
 {
-  "description": "descripción del gasto",
-  "amount": 123.45,
-  "vendorName": "nombre del vendedor",
-  "date": "2024-01-15",
+  "vendorName": "nombre del negocio",
+  "date": "YYYY-MM-DD",
+  "items": [
+    { "description": "descripción del item", "amount": 0.00, "suggestedCategory": "Categoria" }
+  ],
+  "subtotal": 0.00,
+  "tax": 0.00,
+  "total": 0.00,
   "confidence": 0.95
 }
 
-Si no puedes identificar algún campo con certeza, usa null.
-El campo "confidence" debe ser un número entre 0 y 1 indicando qué tan seguro estás de la extracción.
+Si no puedes identificar algún campo, usa null para strings y 0 para números.
+El campo "confidence" indica qué tan seguro estás de la extracción (0 a 1).
 
 IMPORTANTE: Solo responde con el JSON, sin texto adicional, sin markdown.`
 
@@ -129,14 +153,39 @@ IMPORTANTE: Solo responde con el JSON, sin texto adicional, sin markdown.`
     try {
       const extractedData = JSON.parse(text)
 
+      // Procesar items y asegurar estructura correcta
+      const items = Array.isArray(extractedData.items)
+        ? extractedData.items.map((item: { description?: string; amount?: number; suggestedCategory?: string }, index: number) => ({
+            id: `item-${index}`,
+            description: item.description || 'Item sin descripción',
+            amount: typeof item.amount === 'number' ? item.amount : 0,
+            suggestedCategory: item.suggestedCategory || 'Otros'
+          }))
+        : []
+
+      // Si no hay items pero hay un total, crear un item genérico
+      if (items.length === 0 && extractedData.total) {
+        items.push({
+          id: 'item-0',
+          description: extractedData.description || 'Gasto general',
+          amount: extractedData.total,
+          suggestedCategory: 'Otros'
+        })
+      }
+
       return NextResponse.json({
         success: true,
         data: {
-          description: extractedData.description || null,
-          amount: typeof extractedData.amount === 'number' ? extractedData.amount : null,
           vendorName: extractedData.vendorName || null,
           date: extractedData.date || null,
-          confidence: extractedData.confidence || 0.5
+          items,
+          subtotal: typeof extractedData.subtotal === 'number' ? extractedData.subtotal : 0,
+          tax: typeof extractedData.tax === 'number' ? extractedData.tax : 0,
+          total: typeof extractedData.total === 'number' ? extractedData.total : 0,
+          confidence: extractedData.confidence || 0.5,
+          // Mantener compatibilidad con formato anterior
+          description: items.length === 1 ? items[0].description : `${items.length} items detectados`,
+          amount: extractedData.total || items.reduce((sum: number, i: { amount: number }) => sum + i.amount, 0)
         }
       })
     } catch (parseError) {

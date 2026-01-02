@@ -21,7 +21,8 @@ import {
   Image as ImageIcon,
   Brain,
   Scan,
-  Zap
+  Zap,
+  Layers
 } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { DashboardLayout } from '@/components/layout/dashboard-layout'
@@ -50,6 +51,28 @@ interface Category {
   name: string
   code: string | null
   accountingType: string | null
+}
+
+// Tipos para items extraídos por OCR
+interface ExtractedItem {
+  id: string
+  description: string
+  amount: number
+  suggestedCategory: string
+  categoryId: number | null
+  categoryName: string | null
+}
+
+// Grupos de items por categoría
+interface CategoryGroup {
+  categoryId: number | null
+  categoryName: string
+  items: ExtractedItem[]
+  subtotal: number
+  tax: number
+  total: number
+  selected: boolean
+  customDescription: string
 }
 
 export default function CreateExpensePage() {
@@ -85,8 +108,17 @@ export default function CreateExpensePage() {
     vendorName?: string
     date?: string
     confidence?: number
+    items?: ExtractedItem[]
+    subtotal?: number
+    tax?: number
+    total?: number
   } | null>(null)
   const [categorizing, setCategorizing] = useState(false)
+
+  // Multi-item states (para gastos con múltiples categorías)
+  const [extractedItems, setExtractedItems] = useState<ExtractedItem[]>([])
+  const [categoryGroups, setCategoryGroups] = useState<CategoryGroup[]>([])
+  const [hasMultipleItems, setHasMultipleItems] = useState(false)
 
   // OCR step animation
   const ocrSteps = [
@@ -199,16 +231,28 @@ export default function CreateExpensePage() {
 
       if (response.ok && result.success && result.data) {
         setOcrResult(result.data)
-        // Auto-fill form with OCR results
+
+        // Verificar si hay múltiples items
+        const items = result.data.items || []
+        const hasMultiple = items.length > 1
+
+        setHasMultipleItems(hasMultiple)
+        setExtractedItems(items)
+
+        // Auto-fill form with OCR results (datos compartidos)
         setFormData(prev => ({
           ...prev,
-          description: result.data.description || prev.description,
-          amount: result.data.amount ? String(result.data.amount) : prev.amount,
           vendorName: result.data.vendorName || prev.vendorName,
-          expenseDate: result.data.date || prev.expenseDate
+          expenseDate: result.data.date || prev.expenseDate,
+          description: hasMultiple ? `${items.length} items detectados` : (result.data.description || prev.description),
+          amount: hasMultiple ? String(result.data.total || 0) : (result.data.amount ? String(result.data.amount) : prev.amount)
         }))
-        // Auto-categorize
-        if (result.data.description) {
+
+        if (hasMultiple && items.length > 0) {
+          // Categorizar items y agrupar por categoría
+          await categorizeAndGroupItems(items, result.data.subtotal || 0, result.data.tax || 0)
+        } else if (result.data.description) {
+          // Flujo original para un solo item
           await categorizeWithAI(result.data.description, result.data.amount, result.data.vendorName)
         }
       } else {
@@ -257,6 +301,110 @@ export default function CreateExpensePage() {
       console.error('Categorize error:', error)
     }
     setCategorizing(false)
+  }
+
+  // Categorizar y agrupar múltiples items por categoría
+  const categorizeAndGroupItems = async (items: ExtractedItem[], subtotal: number, tax: number) => {
+    setCategorizing(true)
+    try {
+      // Llamar al API de categorización en lote
+      const response = await fetch('/api/market/accounting/expenses/categorize', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ items })
+      })
+
+      const result = await response.json()
+
+      let categorizedItems = items
+      if (result.success && result.data?.categorizedItems) {
+        categorizedItems = result.data.categorizedItems
+      }
+
+      // Agrupar items por categoría
+      const groupsMap = new Map<string, CategoryGroup>()
+
+      for (const item of categorizedItems) {
+        const key = item.categoryName || item.suggestedCategory || 'Otros'
+
+        if (!groupsMap.has(key)) {
+          groupsMap.set(key, {
+            categoryId: item.categoryId || null,
+            categoryName: key,
+            items: [],
+            subtotal: 0,
+            tax: 0,
+            total: 0,
+            selected: true,
+            customDescription: `Gastos de ${key.toLowerCase()}`
+          })
+        }
+
+        const group = groupsMap.get(key)!
+        group.items.push(item)
+        group.subtotal += item.amount
+      }
+
+      // Calcular impuesto proporcional para cada grupo
+      const taxRate = subtotal > 0 ? tax / subtotal : 0
+
+      for (const group of groupsMap.values()) {
+        group.tax = group.subtotal * taxRate
+        group.total = group.subtotal + group.tax
+      }
+
+      const groups = Array.from(groupsMap.values())
+      setCategoryGroups(groups)
+
+      console.log('[Categorize] Grouped into', groups.length, 'categories:', groups.map(g => g.categoryName))
+
+    } catch (error) {
+      console.error('[Categorize] Error:', error)
+      // Crear un grupo por defecto si falla
+      const totalAmount = items.reduce((sum, i) => sum + i.amount, 0)
+      setCategoryGroups([{
+        categoryId: null,
+        categoryName: 'Otros',
+        items,
+        subtotal: totalAmount,
+        tax: tax,
+        total: totalAmount + tax,
+        selected: true,
+        customDescription: 'Gastos varios'
+      }])
+    } finally {
+      setCategorizing(false)
+    }
+  }
+
+  // Toggle selección de un grupo
+  const toggleGroupSelection = (categoryName: string) => {
+    setCategoryGroups(prev => prev.map(group =>
+      group.categoryName === categoryName
+        ? { ...group, selected: !group.selected }
+        : group
+    ))
+  }
+
+  // Cambiar categoría de un grupo
+  const changeGroupCategory = (oldCategoryName: string, newCategoryId: number) => {
+    const newCategory = categories.find(c => c.id === newCategoryId)
+    if (!newCategory) return
+
+    setCategoryGroups(prev => prev.map(group =>
+      group.categoryName === oldCategoryName
+        ? { ...group, categoryId: newCategoryId, categoryName: newCategory.name }
+        : group
+    ))
+  }
+
+  // Actualizar descripción personalizada de un grupo
+  const updateGroupDescription = (categoryName: string, description: string) => {
+    setCategoryGroups(prev => prev.map(group =>
+      group.categoryName === categoryName
+        ? { ...group, customDescription: description }
+        : group
+    ))
   }
 
   const validateStep = (step: Step): boolean => {
@@ -339,7 +487,16 @@ export default function CreateExpensePage() {
   }
 
   const handleSubmit = async () => {
-    if (!validateStep('input')) return
+    // Si hay múltiples grupos, validar que haya al menos uno seleccionado
+    if (hasMultipleItems && categoryGroups.length > 0) {
+      const selectedGroups = categoryGroups.filter(g => g.selected)
+      if (selectedGroups.length === 0) {
+        setErrors({ submit: 'Selecciona al menos un grupo de gastos' })
+        return
+      }
+    } else {
+      if (!validateStep('input')) return
+    }
 
     setLoading(true)
     try {
@@ -349,27 +506,65 @@ export default function CreateExpensePage() {
         receiptPath = await uploadReceiptToS3()
       }
 
-      const response = await fetch('/api/market/accounting/expenses', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          description: formData.description,
-          amount: parseFloat(formData.amount),
-          currency: formData.currency,
-          expenseDate: formData.expenseDate,
-          categoryId: formData.categoryId ? parseInt(formData.categoryId) : null,
-          vendorName: formData.vendorName || null,
-          receiptPath,
-          aiSuggestion: aiSuggestion?.categoryName,
-          aiConfidence: aiSuggestion?.confidence
-        })
-      })
+      // Si hay múltiples grupos seleccionados, enviar en lote
+      if (hasMultipleItems && categoryGroups.length > 0) {
+        const selectedGroups = categoryGroups.filter(g => g.selected)
 
-      if (response.ok) {
-        router.push('/dashboard/market/accounting/expenses')
+        const expenses = selectedGroups.map(group => ({
+          description: group.customDescription,
+          amount: parseFloat(group.total.toFixed(2)),
+          categoryId: group.categoryId,
+          categoryName: group.categoryName,
+          aiConfidence: 0.85
+        }))
+
+        const response = await fetch('/api/market/accounting/expenses', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            expenses,
+            sharedData: {
+              currency: formData.currency,
+              expenseDate: formData.expenseDate,
+              vendorName: formData.vendorName || null,
+              receiptPath,
+              receiptType: formData.receiptFile?.type || null
+            }
+          })
+        })
+
+        if (response.ok) {
+          const result = await response.json()
+          console.log('[Submit] Batch created:', result.data?.count, 'expenses')
+          router.push('/dashboard/market/accounting/expenses')
+        } else {
+          const data = await response.json()
+          setErrors({ submit: data.error || 'Error al guardar gastos' })
+        }
       } else {
-        const data = await response.json()
-        setErrors({ submit: data.error || 'Error al guardar gasto' })
+        // Flujo original para un solo gasto
+        const response = await fetch('/api/market/accounting/expenses', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            description: formData.description,
+            amount: parseFloat(formData.amount),
+            currency: formData.currency,
+            expenseDate: formData.expenseDate,
+            categoryId: formData.categoryId ? parseInt(formData.categoryId) : null,
+            vendorName: formData.vendorName || null,
+            receiptPath,
+            aiSuggestion: aiSuggestion?.categoryName,
+            aiConfidence: aiSuggestion?.confidence
+          })
+        })
+
+        if (response.ok) {
+          router.push('/dashboard/market/accounting/expenses')
+        } else {
+          const data = await response.json()
+          setErrors({ submit: data.error || 'Error al guardar gasto' })
+        }
       }
     } catch (error) {
       console.error('Error saving expense:', error)
@@ -1043,7 +1238,158 @@ export default function CreateExpensePage() {
                     </div>
                   )}
 
-                  {/* Form Fields */}
+                  {/* Multi-Item Groups by Category - Solo mostrar si hay múltiples items */}
+                  {hasMultipleItems && categoryGroups.length > 0 && (
+                    <div className="mb-6">
+                      <div className="flex items-center justify-between mb-4">
+                        <h3 className="text-lg font-semibold text-gray-900 dark:text-white flex items-center gap-2">
+                          <Layers className="w-5 h-5 text-purple-500" />
+                          Items agrupados por categoría
+                        </h3>
+                        <span className="text-sm text-gray-500">
+                          {categoryGroups.filter(g => g.selected).length} de {categoryGroups.length} grupos seleccionados
+                        </span>
+                      </div>
+
+                      <div className="space-y-3">
+                        {categoryGroups.map((group) => (
+                          <motion.div
+                            key={group.categoryName}
+                            initial={{ opacity: 0, y: 10 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            className={cn(
+                              "border rounded-xl p-4 transition-all",
+                              group.selected
+                                ? "border-purple-300 bg-purple-50 dark:bg-purple-900/10 dark:border-purple-700"
+                                : "border-gray-200 dark:border-gray-700 opacity-60"
+                            )}
+                          >
+                            <div className="flex items-start gap-3">
+                              {/* Checkbox */}
+                              <input
+                                type="checkbox"
+                                checked={group.selected}
+                                onChange={() => toggleGroupSelection(group.categoryName)}
+                                className="mt-1 w-5 h-5 rounded border-gray-300 text-purple-600 focus:ring-purple-500"
+                              />
+
+                              <div className="flex-1">
+                                {/* Category Selector */}
+                                <div className="flex items-center gap-2 mb-2">
+                                  <select
+                                    value={group.categoryId || ''}
+                                    onChange={(e) => changeGroupCategory(group.categoryName, parseInt(e.target.value))}
+                                    disabled={!group.selected}
+                                    className={cn(
+                                      "px-3 py-1.5 text-sm font-medium rounded-lg border",
+                                      "bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600",
+                                      "focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+                                    )}
+                                  >
+                                    <option value="">Sin categoría</option>
+                                    {categories.map(cat => (
+                                      <option key={cat.id} value={cat.id}>{cat.name}</option>
+                                    ))}
+                                  </select>
+                                  <span className={cn(
+                                    "text-xs px-2 py-0.5 rounded-full",
+                                    "bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300"
+                                  )}>
+                                    {group.items.length} {group.items.length === 1 ? 'item' : 'items'}
+                                  </span>
+                                </div>
+
+                                {/* Items List */}
+                                <ul className="text-sm text-gray-600 dark:text-gray-400 mb-2 space-y-0.5">
+                                  {group.items.map((item) => (
+                                    <li key={item.id} className="flex justify-between">
+                                      <span className="truncate max-w-[200px]">• {item.description}</span>
+                                      <span className="font-medium">${item.amount.toFixed(2)}</span>
+                                    </li>
+                                  ))}
+                                </ul>
+
+                                {/* Totals */}
+                                <div className="flex items-center justify-between text-sm border-t pt-2 mt-2 border-gray-200 dark:border-gray-700">
+                                  <span className="text-gray-500">
+                                    Subtotal: ${group.subtotal.toFixed(2)} + Tax: ${group.tax.toFixed(2)}
+                                  </span>
+                                  <span className="font-bold text-purple-600 dark:text-purple-400">
+                                    Total: ${group.total.toFixed(2)}
+                                  </span>
+                                </div>
+
+                                {/* Custom Description */}
+                                <input
+                                  type="text"
+                                  value={group.customDescription}
+                                  onChange={(e) => updateGroupDescription(group.categoryName, e.target.value)}
+                                  disabled={!group.selected}
+                                  placeholder="Descripción del gasto..."
+                                  className={cn(
+                                    "mt-2 w-full px-3 py-2 text-sm border rounded-lg",
+                                    "bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600",
+                                    "focus:ring-2 focus:ring-purple-500 focus:border-purple-500",
+                                    !group.selected && "opacity-50 cursor-not-allowed"
+                                  )}
+                                />
+                              </div>
+                            </div>
+                          </motion.div>
+                        ))}
+                      </div>
+
+                      {/* Summary */}
+                      <div className="mt-4 p-4 bg-gradient-to-r from-purple-50 to-orange-50 dark:from-purple-900/20 dark:to-orange-900/20 rounded-xl border border-purple-200 dark:border-purple-800">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <p className="text-sm text-gray-600 dark:text-gray-400">
+                              Se crearán <span className="font-bold text-purple-600">{categoryGroups.filter(g => g.selected).length}</span> gastos
+                            </p>
+                            <p className="text-xs text-gray-500 mt-1">
+                              Cada categoría generará un gasto separado con el mismo recibo
+                            </p>
+                          </div>
+                          <div className="text-right">
+                            <p className="text-xs text-gray-500">Total seleccionado</p>
+                            <p className="text-xl font-bold text-purple-600 dark:text-purple-400">
+                              ${categoryGroups.filter(g => g.selected).reduce((sum, g) => sum + g.total, 0).toFixed(2)}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Shared Data Section */}
+                      <div className="mt-4 grid grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                            Fecha del gasto *
+                          </label>
+                          <input
+                            type="date"
+                            value={formData.expenseDate}
+                            onChange={(e) => setFormData(prev => ({ ...prev, expenseDate: e.target.value }))}
+                            className="w-full px-4 py-2 border rounded-xl bg-white dark:bg-gray-900 border-gray-300 dark:border-gray-600"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                            Proveedor
+                          </label>
+                          <input
+                            type="text"
+                            value={formData.vendorName}
+                            onChange={(e) => setFormData(prev => ({ ...prev, vendorName: e.target.value }))}
+                            placeholder="Nombre del proveedor"
+                            className="w-full px-4 py-2 border rounded-xl bg-white dark:bg-gray-900 border-gray-300 dark:border-gray-600"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Form Fields - Solo mostrar si NO hay múltiples items */}
+                  {!hasMultipleItems && (
                   <div className="space-y-4">
                     {/* Description */}
                     <div>
@@ -1168,6 +1514,7 @@ export default function CreateExpensePage() {
                       </div>
                     </div>
                   </div>
+                  )}
                 </div>
               </motion.div>
             )}
