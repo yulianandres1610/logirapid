@@ -205,14 +205,15 @@ export async function POST(
 
         // Create FIFO inventory entry
         const productId = parseInt(orderLine.product_id)
+        const variantId = orderLine.variant_id ? parseInt(orderLine.variant_id) : null
         const unitCost = parseFloat(orderLine.unit_cost) || 0
         const qtyReceived = parseInt(String(line.quantityReceived))
 
         await db.query(`
           INSERT INTO consignment_lot_inventory (
-            company_id, warehouse_id, product_id, order_line_id, supplier_id,
+            company_id, warehouse_id, product_id, variant_id, order_line_id, supplier_id,
             lot_number, expiration_date, quantity_initial, quantity_available, unit_cost
-          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
           ON CONFLICT (warehouse_id, product_id, lot_number) DO UPDATE SET
             quantity_initial = consignment_lot_inventory.quantity_initial + EXCLUDED.quantity_initial,
             quantity_available = consignment_lot_inventory.quantity_available + EXCLUDED.quantity_available,
@@ -221,6 +222,7 @@ export async function POST(
           payload.companyId,
           warehouseId,
           productId,
+          variantId,
           line.lineId,
           supplierId,
           lotNumber,
@@ -230,11 +232,20 @@ export async function POST(
           unitCost
         ])
 
-        // Update warehouse stock (upsert manual por índice con variant_id)
+        // Update variant quantity_on_hand if variant exists
+        if (variantId) {
+          await db.query(`
+            UPDATE market_product_variants SET
+              quantity_on_hand = COALESCE(quantity_on_hand, 0) + $1
+            WHERE id = $2
+          `, [qtyReceived, variantId])
+        }
+
+        // Update warehouse stock for the specific variant (or base product if no variant)
         const stockExists = await db.query(`
           SELECT id, quantity_on_hand FROM market_warehouse_stock
-          WHERE warehouse_id = $1 AND product_id = $2 AND variant_id IS NULL
-        `, [warehouseId, productId])
+          WHERE warehouse_id = $1 AND product_id = $2 AND (variant_id = $3 OR ($3 IS NULL AND variant_id IS NULL))
+        `, [warehouseId, productId, variantId])
 
         if (stockExists.rows.length > 0) {
           await db.query(`
@@ -242,15 +253,15 @@ export async function POST(
               quantity_on_hand = quantity_on_hand + $1,
               last_movement_at = NOW(),
               updated_at = NOW()
-            WHERE warehouse_id = $2 AND product_id = $3 AND variant_id IS NULL
-          `, [qtyReceived, warehouseId, productId])
+            WHERE warehouse_id = $2 AND product_id = $3 AND (variant_id = $4 OR ($4 IS NULL AND variant_id IS NULL))
+          `, [qtyReceived, warehouseId, productId, variantId])
         } else {
           await db.query(`
             INSERT INTO market_warehouse_stock (
               warehouse_id, product_id, variant_id, quantity_on_hand, quantity_reserved,
               last_movement_at, created_at, updated_at
-            ) VALUES ($1, $2, NULL, $3, 0, NOW(), NOW(), NOW())
-          `, [warehouseId, productId, qtyReceived])
+            ) VALUES ($1, $2, $3, $4, 0, NOW(), NOW(), NOW())
+          `, [warehouseId, productId, variantId, qtyReceived])
         }
 
         totalUnitsReceived += line.quantityReceived
@@ -369,6 +380,7 @@ export async function POST(
             company_id INTEGER NOT NULL,
             warehouse_id INTEGER NOT NULL,
             product_id INTEGER NOT NULL,
+            variant_id INTEGER,
             purchase_line_id INTEGER,
             supplier_id INTEGER,
             lot_number VARCHAR(50) NOT NULL,
@@ -383,16 +395,24 @@ export async function POST(
             UNIQUE(warehouse_id, product_id, lot_number)
           )
         `)
+        // Add variant_id column if table already existed without it
+        try {
+          await db.query(`ALTER TABLE purchase_lot_inventory ADD COLUMN IF NOT EXISTS variant_id INTEGER`)
+        } catch {
+          // Column might already exist
+        }
 
         // Create FIFO inventory entry for purchase
+        const purchaseProductId = parseInt(purchaseLine.product_id)
+        const purchaseVariantId = purchaseLine.variant_id ? parseInt(purchaseLine.variant_id) : null
         const purchaseQty = parseInt(String(line.quantityReceived))
         const purchaseUnitCost = parseFloat(purchaseLine.unit_price) || 0
 
         await db.query(`
           INSERT INTO purchase_lot_inventory (
-            company_id, warehouse_id, product_id, purchase_line_id, supplier_id,
+            company_id, warehouse_id, product_id, variant_id, purchase_line_id, supplier_id,
             lot_number, expiration_date, quantity_initial, quantity_available, unit_cost
-          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
           ON CONFLICT (warehouse_id, product_id, lot_number) DO UPDATE SET
             quantity_initial = purchase_lot_inventory.quantity_initial + EXCLUDED.quantity_initial,
             quantity_available = purchase_lot_inventory.quantity_available + EXCLUDED.quantity_available,
@@ -400,7 +420,8 @@ export async function POST(
         `, [
           payload.companyId,
           warehouseId,
-          parseInt(purchaseLine.product_id),
+          purchaseProductId,
+          purchaseVariantId,
           line.lineId,
           supplierId,
           lotNumber,
@@ -410,19 +431,28 @@ export async function POST(
           purchaseUnitCost
         ])
 
-        // Update main product inventory
-        await db.query(`
-          UPDATE market_products SET
-            quantity_on_hand = COALESCE(quantity_on_hand, 0) + $1,
-            quantity_expected = GREATEST(0, COALESCE(quantity_expected, 0) - $1)
-          WHERE id = $2
-        `, [line.quantityReceived, purchaseLine.product_id])
+        // Update main product inventory (only if no variant)
+        if (!purchaseVariantId) {
+          await db.query(`
+            UPDATE market_products SET
+              quantity_on_hand = COALESCE(quantity_on_hand, 0) + $1,
+              quantity_expected = GREATEST(0, COALESCE(quantity_expected, 0) - $1)
+            WHERE id = $2
+          `, [line.quantityReceived, purchaseProductId])
+        } else {
+          // Update variant quantity
+          await db.query(`
+            UPDATE market_product_variants SET
+              quantity_on_hand = COALESCE(quantity_on_hand, 0) + $1
+            WHERE id = $2
+          `, [line.quantityReceived, purchaseVariantId])
+        }
 
-        // Update warehouse stock (upsert manual por índice con variant_id)
+        // Update warehouse stock for the specific variant (or base product if no variant)
         const stockExists = await db.query(`
           SELECT id, quantity_on_hand FROM market_warehouse_stock
-          WHERE warehouse_id = $1 AND product_id = $2 AND variant_id IS NULL
-        `, [warehouseId, purchaseLine.product_id])
+          WHERE warehouse_id = $1 AND product_id = $2 AND (variant_id = $3 OR ($3 IS NULL AND variant_id IS NULL))
+        `, [warehouseId, purchaseProductId, purchaseVariantId])
 
         if (stockExists.rows.length > 0) {
           await db.query(`
@@ -430,15 +460,15 @@ export async function POST(
               quantity_on_hand = quantity_on_hand + $1,
               last_movement_at = NOW(),
               updated_at = NOW()
-            WHERE warehouse_id = $2 AND product_id = $3 AND variant_id IS NULL
-          `, [line.quantityReceived, warehouseId, purchaseLine.product_id])
+            WHERE warehouse_id = $2 AND product_id = $3 AND (variant_id = $4 OR ($4 IS NULL AND variant_id IS NULL))
+          `, [purchaseQty, warehouseId, purchaseProductId, purchaseVariantId])
         } else {
           await db.query(`
             INSERT INTO market_warehouse_stock (
               warehouse_id, product_id, variant_id, quantity_on_hand, quantity_reserved,
               last_movement_at, created_at, updated_at
-            ) VALUES ($1, $2, NULL, $3, 0, NOW(), NOW(), NOW())
-          `, [warehouseId, purchaseLine.product_id, line.quantityReceived])
+            ) VALUES ($1, $2, $3, $4, 0, NOW(), NOW(), NOW())
+          `, [warehouseId, purchaseProductId, purchaseVariantId, purchaseQty])
         }
 
         totalUnitsReceived += line.quantityReceived
