@@ -55,6 +55,12 @@ interface DashboardData {
     accountingType: string
     total: number
   }>
+  allTimeExpenses?: {
+    total: number
+    count: number
+    firstDate: string
+    lastDate: string
+  }
   topEmployees: Array<{
     employeeCode: string
     name: string
@@ -315,11 +321,18 @@ export default function AccountingDashboardPage() {
             />
             <MetricCard
               title="Gastos"
-              value={data?.summary?.totalExpenses || 0}
-              subtitle={`${data?.summary?.expenseCount || 0} registros`}
+              value={(data?.summary?.totalExpenses || 0) > 0
+                ? (data?.summary?.totalExpenses || 0)
+                : (data?.allTimeExpenses?.total || 0)}
+              subtitle={(data?.summary?.expenseCount || 0) > 0
+                ? `${data?.summary?.expenseCount || 0} registros`
+                : (data?.allTimeExpenses?.count || 0) > 0
+                  ? `${data?.allTimeExpenses?.count} total (fuera del período)`
+                  : 'Sin registros'}
               icon={Receipt}
               color="red"
               delay={0.1}
+              href="/dashboard/market/accounting/expenses"
             />
             <MetricCard
               title="Nómina"

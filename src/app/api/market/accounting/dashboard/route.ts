@@ -64,18 +64,20 @@ export async function GET(request: NextRequest) {
         endDate = now.toISOString().split('T')[0]
     }
 
-    // Helper for safe queries
-    const safeQuery = async (query: string, params: any[]) => {
+    // Helper for safe queries with logging
+    const safeQuery = async (queryName: string, query: string, params: any[]) => {
       try {
-        return await db.query(query, params)
+        const result = await db.query(query, params)
+        console.log(`[Dashboard] ${queryName}: ${result.rows.length} rows`)
+        return result
       } catch (error) {
-        console.log('[Dashboard] Query skipped:', error instanceof Error ? error.message : error)
-        return { rows: [] }
+        console.error(`[Dashboard] ${queryName} failed:`, error instanceof Error ? error.message : error)
+        return { rows: [{}] }
       }
     }
 
     // Get POS sales
-    const posSales = await safeQuery(`
+    const posSales = await safeQuery('POS Sales', `
       SELECT
         COALESCE(SUM(total_amount), 0) as total_sales,
         COUNT(*) as order_count
@@ -87,7 +89,7 @@ export async function GET(request: NextRequest) {
     `, [companyId, startDate, endDate])
 
     // Get order sales (online orders)
-    const orderSales = await safeQuery(`
+    const orderSales = await safeQuery('Order Sales', `
       SELECT
         COALESCE(SUM(total_amount), 0) as total_sales,
         COUNT(*) as order_count
@@ -98,8 +100,8 @@ export async function GET(request: NextRequest) {
         AND status = 'delivered'
     `, [companyId, startDate, endDate])
 
-    // Get expenses
-    const expenses = await safeQuery(`
+    // Get expenses for period
+    const expenses = await safeQuery('Expenses Period', `
       SELECT
         COALESCE(SUM(amount), 0) as total_expenses,
         COUNT(*) as expense_count
@@ -109,8 +111,22 @@ export async function GET(request: NextRequest) {
         AND expense_date <= $3
     `, [companyId, startDate, endDate])
 
+    // Get ALL expenses (no date filter) for debugging
+    const allExpenses = await safeQuery('All Expenses', `
+      SELECT
+        COALESCE(SUM(amount), 0) as total_expenses,
+        COUNT(*) as expense_count,
+        MIN(expense_date) as first_expense,
+        MAX(expense_date) as last_expense
+      FROM market_expenses
+      WHERE company_id = $1
+    `, [companyId])
+
+    console.log('[Dashboard] All expenses for company:', allExpenses.rows[0])
+    console.log('[Dashboard] Date range:', startDate, 'to', endDate)
+
     // Get expenses by category
-    const expensesByCategory = await safeQuery(`
+    const expensesByCategory = await safeQuery('Expenses by Category', `
       SELECT
         c.name as category_name,
         c.accounting_type,
@@ -125,8 +141,25 @@ export async function GET(request: NextRequest) {
       LIMIT 10
     `, [companyId, startDate, endDate])
 
+    // If no expenses in period, get all-time categories
+    let finalExpensesByCategory = expensesByCategory
+    if (expensesByCategory.rows.length === 0 || !expensesByCategory.rows[0].category_name) {
+      finalExpensesByCategory = await safeQuery('All Expenses by Category', `
+        SELECT
+          c.name as category_name,
+          c.accounting_type,
+          COALESCE(SUM(e.amount), 0) as total
+        FROM market_expenses e
+        LEFT JOIN market_expense_categories c ON e.category_id = c.id
+        WHERE e.company_id = $1
+        GROUP BY c.id, c.name, c.accounting_type
+        ORDER BY total DESC
+        LIMIT 10
+      `, [companyId])
+    }
+
     // Get payroll totals
-    const payroll = await safeQuery(`
+    const payroll = await safeQuery('Payroll', `
       SELECT
         COALESCE(SUM(net_pay) FILTER (WHERE status = 'pending'), 0) as pending_payroll,
         COALESCE(SUM(net_pay) FILTER (WHERE status = 'paid'), 0) as paid_payroll,
@@ -139,7 +172,7 @@ export async function GET(request: NextRequest) {
     `, [companyId, startDate, endDate])
 
     // Get employee stats
-    const employees = await safeQuery(`
+    const employees = await safeQuery('Employees', `
       SELECT
         COUNT(*) FILTER (WHERE status = 'active') as active_count,
         COUNT(*) FILTER (WHERE status = 'terminated') as terminated_count
@@ -148,7 +181,7 @@ export async function GET(request: NextRequest) {
     `, [companyId])
 
     // Get payment requests
-    const requests = await safeQuery(`
+    const requests = await safeQuery('Payment Requests', `
       SELECT
         COUNT(*) FILTER (WHERE status = 'pending') as pending_count,
         COALESCE(SUM(amount) FILTER (WHERE status = 'pending'), 0) as pending_amount
@@ -157,7 +190,7 @@ export async function GET(request: NextRequest) {
     `, [companyId])
 
     // Get consignment costs
-    const consignments = await safeQuery(`
+    const consignments = await safeQuery('Consignments', `
       SELECT
         COALESCE(SUM(total_cost), 0) as total_cost,
         COALESCE(SUM(total_sold), 0) as total_sold
@@ -169,7 +202,7 @@ export async function GET(request: NextRequest) {
     `, [companyId, startDate, endDate])
 
     // Get purchases
-    const purchases = await safeQuery(`
+    const purchases = await safeQuery('Purchases', `
       SELECT
         COALESCE(SUM(total_amount), 0) as total_purchases
       FROM market_purchases
@@ -189,7 +222,7 @@ export async function GET(request: NextRequest) {
     const netProfit = grossProfit - totalExpenses - totalPayroll
 
     // Get daily sales for chart
-    const dailySales = await safeQuery(`
+    const dailySales = await safeQuery('Daily Sales', `
       SELECT
         DATE(created_at) as date,
         COALESCE(SUM(total_amount), 0) as sales
@@ -203,7 +236,7 @@ export async function GET(request: NextRequest) {
     `, [companyId, startDate, endDate])
 
     // Get daily expenses for chart
-    const dailyExpenses = await safeQuery(`
+    const dailyExpenses = await safeQuery('Daily Expenses', `
       SELECT
         expense_date as date,
         COALESCE(SUM(amount), 0) as expenses
@@ -216,7 +249,7 @@ export async function GET(request: NextRequest) {
     `, [companyId, startDate, endDate])
 
     // Get top selling employees
-    const topEmployees = await safeQuery(`
+    const topEmployees = await safeQuery('Top Employees', `
       SELECT
         e.employee_code,
         COALESCE(u.firstname || ' ' || u.lastname, u.email) as name,
@@ -266,11 +299,18 @@ export async function GET(request: NextRequest) {
           count: parseInt(requests.rows[0]?.pending_count) || 0,
           amount: parseFloat(requests.rows[0]?.pending_amount) || 0
         },
-        expensesByCategory: expensesByCategory.rows.map(row => ({
+        expensesByCategory: finalExpensesByCategory.rows.filter(row => row.category_name).map(row => ({
           categoryName: row.category_name || 'Sin categoría',
           accountingType: row.accounting_type,
           total: parseFloat(row.total) || 0
         })),
+        // Debug info
+        allTimeExpenses: {
+          total: parseFloat(allExpenses.rows[0]?.total_expenses) || 0,
+          count: parseInt(allExpenses.rows[0]?.expense_count) || 0,
+          firstDate: allExpenses.rows[0]?.first_expense,
+          lastDate: allExpenses.rows[0]?.last_expense
+        },
         topEmployees: topEmployees.rows.map(row => ({
           employeeCode: row.employee_code,
           name: row.name,
