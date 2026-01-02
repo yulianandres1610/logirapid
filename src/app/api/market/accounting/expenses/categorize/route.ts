@@ -68,25 +68,53 @@ export async function POST(request: NextRequest) {
     }
 
     // Get company's expense categories
-    const categoriesResult = await db.query(`
+    let categoriesResult = await db.query(`
       SELECT id, name, code, description, accounting_type
       FROM market_expense_categories
       WHERE company_id = $1 AND is_active = true
       ORDER BY name
     `, [companyId])
 
-    const categories = categoriesResult.rows
+    // Si no hay categorías, crear las predeterminadas
+    if (categoriesResult.rows.length === 0) {
+      console.log('[Categorize API] No categories found, creating defaults for company:', companyId)
 
-    if (categories.length === 0) {
-      return NextResponse.json({
-        success: true,
-        data: {
-          suggestedCategory: null,
-          confidence: 0,
-          reasoning: 'No hay categorías definidas'
+      const defaultCategories = [
+        { name: 'Alquiler', code: 'RENT', type: 'opex', desc: 'Gastos de alquiler del local' },
+        { name: 'Servicios', code: 'UTIL', type: 'opex', desc: 'Electricidad, agua, internet, telefono' },
+        { name: 'Salarios', code: 'SAL', type: 'opex', desc: 'Pago de nominas y salarios' },
+        { name: 'Inventario', code: 'INV', type: 'cogs', desc: 'Compra de mercancia para venta' },
+        { name: 'Transporte', code: 'TRANS', type: 'opex', desc: 'Gastos de transporte y combustible' },
+        { name: 'Marketing', code: 'MKT', type: 'opex', desc: 'Publicidad y promocion' },
+        { name: 'Mantenimiento', code: 'MAINT', type: 'opex', desc: 'Reparaciones y mantenimiento' },
+        { name: 'Impuestos', code: 'TAX', type: 'opex', desc: 'Pagos de impuestos' },
+        { name: 'Equipamiento', code: 'EQUIP', type: 'capex', desc: 'Compra de equipos y mobiliario' },
+        { name: 'Otros', code: 'OTHER', type: 'opex', desc: 'Gastos varios no categorizados' }
+      ]
+
+      for (const cat of defaultCategories) {
+        try {
+          await db.query(`
+            INSERT INTO market_expense_categories (company_id, name, code, accounting_type, description)
+            VALUES ($1, $2, $3, $4, $5)
+            ON CONFLICT (company_id, name) DO NOTHING
+          `, [companyId, cat.name, cat.code, cat.type, cat.desc])
+        } catch (e) {
+          console.error('[Categorize API] Error creating category:', cat.name, e)
         }
-      })
+      }
+
+      // Recargar categorías
+      categoriesResult = await db.query(`
+        SELECT id, name, code, description, accounting_type
+        FROM market_expense_categories
+        WHERE company_id = $1 AND is_active = true
+        ORDER BY name
+      `, [companyId])
     }
+
+    const categories = categoriesResult.rows
+    console.log('[Categorize API] Found categories:', categories.length)
 
     // Build category list for prompt
     const categoryList = categories.map(c =>

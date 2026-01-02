@@ -42,6 +42,41 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url)
     const activeOnly = searchParams.get('activeOnly') !== 'false'
 
+    // Primero verificar si existen categorías, si no, crearlas
+    const checkResult = await db.query(
+      'SELECT COUNT(*) as count FROM market_expense_categories WHERE company_id = $1',
+      [companyId]
+    )
+
+    if (parseInt(checkResult.rows[0].count) === 0) {
+      console.log('[Categories API] No categories found, creating defaults for company:', companyId)
+
+      const defaultCategories = [
+        { name: 'Alquiler', code: 'RENT', type: 'opex', desc: 'Gastos de alquiler del local' },
+        { name: 'Servicios', code: 'UTIL', type: 'opex', desc: 'Electricidad, agua, internet, telefono' },
+        { name: 'Salarios', code: 'SAL', type: 'opex', desc: 'Pago de nominas y salarios' },
+        { name: 'Inventario', code: 'INV', type: 'cogs', desc: 'Compra de mercancia para venta' },
+        { name: 'Transporte', code: 'TRANS', type: 'opex', desc: 'Gastos de transporte y combustible' },
+        { name: 'Marketing', code: 'MKT', type: 'opex', desc: 'Publicidad y promocion' },
+        { name: 'Mantenimiento', code: 'MAINT', type: 'opex', desc: 'Reparaciones y mantenimiento' },
+        { name: 'Impuestos', code: 'TAX', type: 'opex', desc: 'Pagos de impuestos' },
+        { name: 'Equipamiento', code: 'EQUIP', type: 'capex', desc: 'Compra de equipos y mobiliario' },
+        { name: 'Otros', code: 'OTHER', type: 'opex', desc: 'Gastos varios no categorizados' }
+      ]
+
+      for (const cat of defaultCategories) {
+        try {
+          await db.query(`
+            INSERT INTO market_expense_categories (company_id, name, code, accounting_type, description)
+            VALUES ($1, $2, $3, $4, $5)
+            ON CONFLICT (company_id, name) DO NOTHING
+          `, [companyId, cat.name, cat.code, cat.type, cat.desc])
+        } catch (e) {
+          console.error('[Categories API] Error creating category:', cat.name, e)
+        }
+      }
+    }
+
     let query = `
       SELECT
         c.id,
