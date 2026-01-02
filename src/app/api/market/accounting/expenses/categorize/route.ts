@@ -165,12 +165,74 @@ Responde ÚNICAMENTE en formato JSON:
         suggestion = { suggestedCategoryName: 'Otros', confidence: 0.5, reasoning: 'No se pudo analizar' }
       }
 
-      // Find category ID
-      const suggestedCategory = categories.find(
+      // Find category ID - first try exact match
+      let suggestedCategory = categories.find(
         c => c.name.toLowerCase() === suggestion.suggestedCategoryName?.toLowerCase()
       )
 
-      console.log('[Categorize API] Gemini suggestion:', suggestion.suggestedCategoryName, 'confidence:', suggestion.confidence)
+      // If no exact match, try partial match
+      if (!suggestedCategory && suggestion.suggestedCategoryName) {
+        const searchTerm = suggestion.suggestedCategoryName.toLowerCase()
+        suggestedCategory = categories.find(c =>
+          c.name.toLowerCase().includes(searchTerm) ||
+          searchTerm.includes(c.name.toLowerCase()) ||
+          (c.description && c.description.toLowerCase().includes(searchTerm))
+        )
+      }
+
+      // Map common terms to categories
+      if (!suggestedCategory && suggestion.suggestedCategoryName) {
+        const termMappings: Record<string, string> = {
+          'electricidad': 'Servicios',
+          'electricity': 'Servicios',
+          'agua': 'Servicios',
+          'water': 'Servicios',
+          'internet': 'Servicios',
+          'telefono': 'Servicios',
+          'phone': 'Servicios',
+          'gas': 'Servicios',
+          'utilities': 'Servicios',
+          'luz': 'Servicios',
+          'renta': 'Alquiler',
+          'rent': 'Alquiler',
+          'arriendo': 'Alquiler',
+          'nomina': 'Salarios',
+          'payroll': 'Salarios',
+          'sueldo': 'Salarios',
+          'salary': 'Salarios',
+          'mercancia': 'Inventario',
+          'productos': 'Inventario',
+          'inventory': 'Inventario',
+          'gasolina': 'Transporte',
+          'fuel': 'Transporte',
+          'combustible': 'Transporte',
+          'publicidad': 'Marketing',
+          'advertising': 'Marketing',
+          'reparacion': 'Mantenimiento',
+          'repair': 'Mantenimiento',
+          'impuesto': 'Impuestos',
+          'tax': 'Impuestos',
+          'equipo': 'Equipamiento',
+          'equipment': 'Equipamiento',
+          'mueble': 'Equipamiento',
+          'furniture': 'Equipamiento'
+        }
+
+        const searchTerm = suggestion.suggestedCategoryName.toLowerCase()
+        for (const [term, categoryName] of Object.entries(termMappings)) {
+          if (searchTerm.includes(term)) {
+            suggestedCategory = categories.find(c => c.name === categoryName)
+            if (suggestedCategory) break
+          }
+        }
+      }
+
+      // Fallback to "Otros" if still no match
+      if (!suggestedCategory) {
+        suggestedCategory = categories.find(c => c.name === 'Otros' || c.code === 'OTHER')
+      }
+
+      console.log('[Categorize API] Gemini suggestion:', suggestion.suggestedCategoryName, '-> Mapped to:', suggestedCategory?.name, 'confidence:', suggestion.confidence)
 
       return NextResponse.json({
         success: true,
@@ -191,13 +253,20 @@ Responde ÚNICAMENTE en formato JSON:
     } catch (aiError) {
       console.error('[Categorize API] Gemini error:', aiError)
 
-      // Return without AI suggestion
+      // Fallback to "Otros" category
+      const fallbackCategory = categories.find(c => c.name === 'Otros' || c.code === 'OTHER')
+
       return NextResponse.json({
         success: true,
         data: {
-          suggestedCategory: null,
-          confidence: 0,
-          reasoning: 'Error al consultar IA'
+          suggestedCategory: fallbackCategory ? {
+            id: fallbackCategory.id,
+            name: fallbackCategory.name,
+            code: fallbackCategory.code,
+            accountingType: fallbackCategory.accounting_type
+          } : null,
+          confidence: 0.3,
+          reasoning: 'Categoría por defecto (IA no disponible)'
         }
       })
     }
