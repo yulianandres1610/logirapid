@@ -175,7 +175,7 @@ export async function GET(request: NextRequest) {
       return p.pos_terminal_ids.includes(parseInt(terminalId))
     })
 
-    // Get variants for all products
+    // Get variants for all products (join with products to filter by company)
     const variantsResult = await db.query(`
       SELECT
         v.id,
@@ -188,8 +188,9 @@ export async function GET(request: NextRequest) {
         v.is_active,
         COALESCE(ws.quantity_on_hand, v.quantity_on_hand, 0) as stock
       FROM market_product_variants v
+      JOIN market_products p ON v.product_id = p.id
       LEFT JOIN market_warehouse_stock ws ON v.product_id = ws.product_id AND v.id = ws.variant_id AND ws.warehouse_id = $1
-      WHERE v.company_id = $2 AND v.is_active = true
+      WHERE p.company_id = $2 AND v.is_active = true
       ORDER BY v.product_id, v.variant_name ASC
     `, [effectiveWarehouseId || null, companyId])
 
