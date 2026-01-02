@@ -42,29 +42,35 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url)
     const activeOnly = searchParams.get('activeOnly') !== 'false'
 
-    // Primero verificar si existen categorías, si no, crearlas
-    const checkResult = await db.query(
-      'SELECT COUNT(*) as count FROM market_expense_categories WHERE company_id = $1',
+    // Lista completa de categorías predeterminadas
+    const defaultCategories = [
+      { name: 'Alquiler', code: 'RENT', type: 'opex', desc: 'Gastos de alquiler del local' },
+      { name: 'Servicios', code: 'UTIL', type: 'opex', desc: 'Electricidad, agua, internet, telefono' },
+      { name: 'Salarios', code: 'SAL', type: 'opex', desc: 'Pago de nominas y salarios' },
+      { name: 'Inventario', code: 'INV', type: 'cogs', desc: 'Compra de mercancia para venta' },
+      { name: 'Transporte', code: 'TRANS', type: 'opex', desc: 'Gastos de transporte y combustible' },
+      { name: 'Marketing', code: 'MKT', type: 'opex', desc: 'Publicidad y promocion' },
+      { name: 'Mantenimiento', code: 'MAINT', type: 'opex', desc: 'Reparaciones y mantenimiento' },
+      { name: 'Impuestos', code: 'TAX', type: 'opex', desc: 'Pagos de impuestos' },
+      { name: 'Equipamiento', code: 'EQUIP', type: 'capex', desc: 'Compra de equipos y mobiliario' },
+      { name: 'Suministros', code: 'SUPPLY', type: 'opex', desc: 'Suministros de oficina, papeleria, articulos de escritorio' },
+      { name: 'Alimentos', code: 'FOOD', type: 'opex', desc: 'Alimentos, bebidas, snacks para empleados' },
+      { name: 'Otros', code: 'OTHER', type: 'opex', desc: 'Gastos varios no categorizados' }
+    ]
+
+    // Crear categorías faltantes (para empresas nuevas y existentes)
+    const existingCategories = await db.query(
+      'SELECT name FROM market_expense_categories WHERE company_id = $1',
       [companyId]
     )
+    const existingNames = new Set(existingCategories.rows.map(r => r.name))
 
-    if (parseInt(checkResult.rows[0].count) === 0) {
-      console.log('[Categories API] No categories found, creating defaults for company:', companyId)
+    const missingCategories = defaultCategories.filter(cat => !existingNames.has(cat.name))
 
-      const defaultCategories = [
-        { name: 'Alquiler', code: 'RENT', type: 'opex', desc: 'Gastos de alquiler del local' },
-        { name: 'Servicios', code: 'UTIL', type: 'opex', desc: 'Electricidad, agua, internet, telefono' },
-        { name: 'Salarios', code: 'SAL', type: 'opex', desc: 'Pago de nominas y salarios' },
-        { name: 'Inventario', code: 'INV', type: 'cogs', desc: 'Compra de mercancia para venta' },
-        { name: 'Transporte', code: 'TRANS', type: 'opex', desc: 'Gastos de transporte y combustible' },
-        { name: 'Marketing', code: 'MKT', type: 'opex', desc: 'Publicidad y promocion' },
-        { name: 'Mantenimiento', code: 'MAINT', type: 'opex', desc: 'Reparaciones y mantenimiento' },
-        { name: 'Impuestos', code: 'TAX', type: 'opex', desc: 'Pagos de impuestos' },
-        { name: 'Equipamiento', code: 'EQUIP', type: 'capex', desc: 'Compra de equipos y mobiliario' },
-        { name: 'Otros', code: 'OTHER', type: 'opex', desc: 'Gastos varios no categorizados' }
-      ]
+    if (missingCategories.length > 0) {
+      console.log('[Categories API] Adding missing categories for company:', companyId, missingCategories.map(c => c.name))
 
-      for (const cat of defaultCategories) {
+      for (const cat of missingCategories) {
         try {
           await db.query(`
             INSERT INTO market_expense_categories (company_id, name, code, accounting_type, description)
