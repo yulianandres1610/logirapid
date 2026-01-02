@@ -154,6 +154,68 @@ export async function GET(request: NextRequest) {
       WHERE company_id = $1
     `, [companyId])
 
+    // Get recent purchases
+    const recentPurchases = await db.query(`
+      SELECT
+        mp.id,
+        mp.order_number,
+        mp.status,
+        mp.total_amount,
+        mp.purchase_date,
+        ps.name as supplier_name
+      FROM market_purchases mp
+      LEFT JOIN purchase_suppliers ps ON mp.supplier_id = ps.id
+      WHERE mp.company_id = $1
+      ORDER BY mp.created_at DESC
+      LIMIT 5
+    `, [companyId])
+
+    // Get POS sales statistics (day, month, year)
+    const posSales = await db.query(`
+      SELECT
+        COALESCE(SUM(total_amount) FILTER (WHERE DATE(created_at) = CURRENT_DATE), 0) as sales_today,
+        COUNT(*) FILTER (WHERE DATE(created_at) = CURRENT_DATE) as orders_today,
+        COALESCE(SUM(total_amount) FILTER (WHERE DATE_TRUNC('month', created_at) = DATE_TRUNC('month', CURRENT_DATE)), 0) as sales_month,
+        COUNT(*) FILTER (WHERE DATE_TRUNC('month', created_at) = DATE_TRUNC('month', CURRENT_DATE)) as orders_month,
+        COALESCE(SUM(total_amount) FILTER (WHERE DATE_TRUNC('year', created_at) = DATE_TRUNC('year', CURRENT_DATE)), 0) as sales_year,
+        COUNT(*) FILTER (WHERE DATE_TRUNC('year', created_at) = DATE_TRUNC('year', CURRENT_DATE)) as orders_year
+      FROM market_pos_orders
+      WHERE company_id = $1 AND status IN ('paid', 'completed')
+    `, [companyId])
+
+    // Get POS sales by terminal
+    const posByTerminal = await db.query(`
+      SELECT
+        t.id as terminal_id,
+        t.name as terminal_name,
+        COALESCE(SUM(o.total_amount) FILTER (WHERE DATE(o.created_at) = CURRENT_DATE), 0) as sales_today,
+        COALESCE(SUM(o.total_amount) FILTER (WHERE DATE_TRUNC('month', o.created_at) = DATE_TRUNC('month', CURRENT_DATE)), 0) as sales_month
+      FROM market_pos_terminals t
+      LEFT JOIN market_pos_orders o ON t.id = o.pos_terminal_id AND o.status IN ('paid', 'completed')
+      WHERE t.company_id = $1 AND t.is_active = true
+      GROUP BY t.id, t.name
+      ORDER BY sales_today DESC
+    `, [companyId])
+
+    // Get consignments by supplier (with pending to pay)
+    const consignmentsBySupplier = await db.query(`
+      SELECT
+        cs.id as supplier_id,
+        cs.name as supplier_name,
+        COUNT(co.id) as total_orders,
+        COALESCE(SUM(co.total_cost), 0) as total_cost,
+        COALESCE(SUM(co.total_sold), 0) as total_sold,
+        COALESCE(SUM(co.total_returned), 0) as total_returned,
+        COALESCE(SUM(co.total_cost - co.total_sold - COALESCE(co.total_returned, 0)), 0) as pending_to_pay
+      FROM consignment_suppliers cs
+      LEFT JOIN consignment_orders co ON cs.id = co.supplier_id AND co.status != 'cancelled'
+      WHERE cs.company_id = $1
+      GROUP BY cs.id, cs.name
+      HAVING SUM(co.total_cost) > 0
+      ORDER BY pending_to_pay DESC
+      LIMIT 5
+    `, [companyId])
+
     return NextResponse.json({
       success: true,
       data: {
@@ -214,7 +276,37 @@ export async function GET(request: NextRequest) {
           totalAmount: parseFloat(purchaseStats.rows[0]?.total_amount) || 0,
           thisMonth: parseInt(purchaseStats.rows[0]?.orders_this_month) || 0,
           amountThisMonth: parseFloat(purchaseStats.rows[0]?.amount_this_month) || 0
-        }
+        },
+        recentPurchases: recentPurchases.rows.map(row => ({
+          id: row.id,
+          orderNumber: row.order_number,
+          supplierName: row.supplier_name || 'Sin proveedor',
+          status: row.status,
+          totalAmount: parseFloat(row.total_amount) || 0,
+          purchaseDate: row.purchase_date
+        })),
+        posSales: {
+          today: parseFloat(posSales.rows[0]?.sales_today) || 0,
+          ordersToday: parseInt(posSales.rows[0]?.orders_today) || 0,
+          month: parseFloat(posSales.rows[0]?.sales_month) || 0,
+          ordersMonth: parseInt(posSales.rows[0]?.orders_month) || 0,
+          year: parseFloat(posSales.rows[0]?.sales_year) || 0,
+          ordersYear: parseInt(posSales.rows[0]?.orders_year) || 0
+        },
+        posByTerminal: posByTerminal.rows.map(row => ({
+          terminalId: row.terminal_id,
+          terminalName: row.terminal_name,
+          salesToday: parseFloat(row.sales_today) || 0,
+          salesMonth: parseFloat(row.sales_month) || 0
+        })),
+        consignmentsBySupplier: consignmentsBySupplier.rows.map(row => ({
+          supplierId: row.supplier_id,
+          supplierName: row.supplier_name,
+          totalOrders: parseInt(row.total_orders) || 0,
+          totalCost: parseFloat(row.total_cost) || 0,
+          totalSold: parseFloat(row.total_sold) || 0,
+          pendingToPay: parseFloat(row.pending_to_pay) || 0
+        }))
       }
     })
 
