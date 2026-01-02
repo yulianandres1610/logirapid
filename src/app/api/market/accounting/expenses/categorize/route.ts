@@ -106,6 +106,7 @@ export async function POST(request: NextRequest) {
         { name: 'Mantenimiento', code: 'MAINT', type: 'opex', desc: 'Reparaciones y mantenimiento' },
         { name: 'Impuestos', code: 'TAX', type: 'opex', desc: 'Pagos de impuestos' },
         { name: 'Equipamiento', code: 'EQUIP', type: 'capex', desc: 'Compra de equipos y mobiliario' },
+        { name: 'Suministros', code: 'SUPPLY', type: 'opex', desc: 'Suministros de oficina, papeleria, articulos de escritorio' },
         { name: 'Otros', code: 'OTHER', type: 'opex', desc: 'Gastos varios no categorizados' }
       ]
 
@@ -153,17 +154,39 @@ export async function POST(request: NextRequest) {
 
       // Term mappings
       const termMappings: Record<string, string> = {
+        // Suministros de oficina / Office Supplies
         'suministros': 'Suministros', 'supplies': 'Suministros', 'oficina': 'Suministros',
+        'office': 'Suministros', 'office supply': 'Suministros', 'office supplies': 'Suministros',
+        'papeleria': 'Suministros', 'papel': 'Suministros', 'paper': 'Suministros',
+        'boligrafo': 'Suministros', 'pen': 'Suministros', 'lapiz': 'Suministros', 'pencil': 'Suministros',
+        'tinta': 'Suministros', 'ink': 'Suministros', 'toner': 'Suministros', 'cartucho': 'Suministros',
+        'folder': 'Suministros', 'carpeta': 'Suministros', 'archivador': 'Suministros',
+        'grapadora': 'Suministros', 'stapler': 'Suministros', 'grapas': 'Suministros', 'staples': 'Suministros',
+        'clips': 'Suministros', 'cinta': 'Suministros', 'tape': 'Suministros',
+        'sobre': 'Suministros', 'envelope': 'Suministros', 'etiqueta': 'Suministros', 'label': 'Suministros',
+        'notas': 'Suministros', 'post-it': 'Suministros', 'sticky': 'Suministros',
+        'cuaderno': 'Suministros', 'notebook': 'Suministros', 'libreta': 'Suministros',
+        'escritorio': 'Suministros', 'desk': 'Suministros',
+        // Servicios
         'electricidad': 'Servicios', 'agua': 'Servicios', 'internet': 'Servicios',
         'telefono': 'Servicios', 'gas': 'Servicios', 'utilities': 'Servicios', 'luz': 'Servicios',
+        // Mantenimiento
         'mantenimiento': 'Mantenimiento', 'limpieza': 'Mantenimiento', 'reparacion': 'Mantenimiento',
+        // Transporte
         'transporte': 'Transporte', 'gasolina': 'Transporte', 'combustible': 'Transporte', 'envio': 'Transporte',
-        'inventario': 'Inventario', 'mercancia': 'Inventario', 'productos': 'Inventario',
+        // Inventario
+        'inventario': 'Inventario', 'mercancia': 'Inventario',
+        // Alimentos
         'alimentos': 'Alimentos', 'comida': 'Alimentos', 'snacks': 'Alimentos', 'bebidas': 'Alimentos',
+        // Marketing
         'marketing': 'Marketing', 'publicidad': 'Marketing',
+        // Equipamiento
         'equipamiento': 'Equipamiento', 'equipo': 'Equipamiento', 'muebles': 'Equipamiento',
+        // Salarios
         'salarios': 'Salarios', 'nomina': 'Salarios', 'sueldo': 'Salarios',
+        // Impuestos
         'impuestos': 'Impuestos', 'tax': 'Impuestos',
+        // Alquiler
         'alquiler': 'Alquiler', 'renta': 'Alquiler', 'arriendo': 'Alquiler'
       }
 
@@ -266,6 +289,35 @@ Responde ÚNICAMENTE en formato JSON:
       // Map common terms to categories
       if (!suggestedCategory && suggestion.suggestedCategoryName) {
         const termMappings: Record<string, string> = {
+          // Suministros de oficina / Office Supplies
+          'suministros': 'Suministros',
+          'supplies': 'Suministros',
+          'office': 'Suministros',
+          'oficina': 'Suministros',
+          'papeleria': 'Suministros',
+          'papel': 'Suministros',
+          'paper': 'Suministros',
+          'boligrafo': 'Suministros',
+          'pen': 'Suministros',
+          'lapiz': 'Suministros',
+          'tinta': 'Suministros',
+          'ink': 'Suministros',
+          'toner': 'Suministros',
+          'cartucho': 'Suministros',
+          'folder': 'Suministros',
+          'carpeta': 'Suministros',
+          'grapadora': 'Suministros',
+          'stapler': 'Suministros',
+          'clips': 'Suministros',
+          'cinta': 'Suministros',
+          'tape': 'Suministros',
+          'sobre': 'Suministros',
+          'envelope': 'Suministros',
+          'etiqueta': 'Suministros',
+          'label': 'Suministros',
+          'cuaderno': 'Suministros',
+          'notebook': 'Suministros',
+          // Servicios
           'electricidad': 'Servicios',
           'electricity': 'Servicios',
           'agua': 'Servicios',
@@ -276,25 +328,32 @@ Responde ÚNICAMENTE en formato JSON:
           'gas': 'Servicios',
           'utilities': 'Servicios',
           'luz': 'Servicios',
+          // Alquiler
           'renta': 'Alquiler',
           'rent': 'Alquiler',
           'arriendo': 'Alquiler',
+          // Salarios
           'nomina': 'Salarios',
           'payroll': 'Salarios',
           'sueldo': 'Salarios',
           'salary': 'Salarios',
+          // Inventario
           'mercancia': 'Inventario',
-          'productos': 'Inventario',
           'inventory': 'Inventario',
+          // Transporte
           'gasolina': 'Transporte',
           'fuel': 'Transporte',
           'combustible': 'Transporte',
+          // Marketing
           'publicidad': 'Marketing',
           'advertising': 'Marketing',
+          // Mantenimiento
           'reparacion': 'Mantenimiento',
           'repair': 'Mantenimiento',
+          // Impuestos
           'impuesto': 'Impuestos',
           'tax': 'Impuestos',
+          // Equipamiento
           'equipo': 'Equipamiento',
           'equipment': 'Equipamiento',
           'mueble': 'Equipamiento',
