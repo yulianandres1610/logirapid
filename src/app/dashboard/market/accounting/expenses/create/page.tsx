@@ -23,6 +23,7 @@ import {
 import { useRouter } from 'next/navigation'
 import { DashboardLayout } from '@/components/layout/dashboard-layout'
 import { ProtectedRoute } from '@/components/protected-route'
+import { useTheme } from '@/contexts/theme-context'
 import { cn } from '@/lib/utils'
 
 type Step = 'method' | 'input' | 'review'
@@ -49,6 +50,7 @@ interface Category {
 }
 
 export default function CreateExpensePage() {
+  const { theme } = useTheme()
   const router = useRouter()
   const [currentStep, setCurrentStep] = useState<Step>('method')
   const [entryMethod, setEntryMethod] = useState<EntryMethod>(null)
@@ -56,6 +58,7 @@ export default function CreateExpensePage() {
   const [categories, setCategories] = useState<Category[]>([])
   const [categoriesLoaded, setCategoriesLoaded] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const [showCancelModal, setShowCancelModal] = useState(false)
 
   // Form data
   const [formData, setFormData] = useState({
@@ -356,90 +359,149 @@ export default function CreateExpensePage() {
   return (
     <ProtectedRoute>
       <DashboardLayout>
-        <div className="p-4 md:p-6 max-w-4xl mx-auto">
-          {/* Header */}
-          <motion.div
-            initial={{ opacity: 0, y: -10 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="flex items-center justify-between mb-8"
-          >
-            <div className="flex items-center gap-4">
-              <button
-                onClick={() => router.push('/dashboard/market/accounting/expenses')}
-                className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-xl transition-colors"
-              >
-                <ArrowLeft className="w-5 h-5" />
-              </button>
-              <div>
-                <h1 className="text-2xl md:text-3xl font-bold text-gray-900 dark:text-white flex items-center gap-3">
-                  <Receipt className="w-8 h-8 text-orange-600" />
-                  Nuevo Gasto
-                </h1>
-                <p className="text-gray-500 dark:text-gray-400 mt-1">
-                  Registra un nuevo gasto con recibo o manualmente
-                </p>
+        <div className={cn(
+          "min-h-screen pt-12 sm:pt-16 lg:pt-20 pb-20 px-4 sm:px-6 lg:px-8",
+          theme === 'dark' ? 'bg-gray-900' : 'bg-gray-50'
+        )}>
+          <div className="max-w-4xl xl:max-w-5xl mx-auto space-y-6 sm:space-y-8 relative">
+
+            {/* Close Button */}
+            <motion.button
+              onClick={() => setShowCancelModal(true)}
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+              className={cn(
+                "absolute -top-8 right-0 z-10 w-8 h-8 rounded-full flex items-center justify-center",
+                "transition-colors duration-200",
+                theme === 'dark'
+                  ? 'text-gray-400 hover:text-gray-200 hover:bg-gray-800'
+                  : 'text-gray-500 hover:text-gray-700 hover:bg-gray-200'
+              )}
+            >
+              <X className="w-5 h-5" />
+            </motion.button>
+
+            {/* Progress Indicator */}
+            <div className="mb-8 sm:mb-12">
+              <div className="flex items-center justify-between">
+                {STEPS.map((step, index) => (
+                  <React.Fragment key={step.id}>
+                    <div className="flex flex-col items-center">
+                      <div className="relative w-14 h-14">
+                        {/* Pulsing ring for active step */}
+                        {currentStep === step.id && (
+                          <motion.div
+                            className="absolute inset-0 rounded-full"
+                            animate={{
+                              scale: [1, 1.2, 1],
+                              opacity: [0.5, 0, 0.5]
+                            }}
+                            transition={{
+                              duration: 2,
+                              repeat: Infinity,
+                              ease: "easeInOut"
+                            }}
+                            style={{
+                              background: theme === 'dark'
+                                ? 'rgba(249, 115, 22, 0.5)'
+                                : 'rgba(234, 88, 12, 0.5)'
+                            }}
+                          />
+                        )}
+
+                        <motion.div
+                          initial={false}
+                          animate={{
+                            scale: currentStep === step.id ? 1.1 : 1,
+                            backgroundColor: currentStep === step.id
+                              ? theme === 'dark' ? '#F97316' : '#EA580C'
+                              : currentStepIndex > index
+                                ? theme === 'dark' ? '#10B981' : '#059669'
+                                : theme === 'dark' ? '#374151' : '#E5E7EB'
+                          }}
+                          transition={{
+                            scale: { duration: 0.3 },
+                            backgroundColor: { duration: 0.3 }
+                          }}
+                          whileHover={{ scale: currentStepIndex >= index ? 1.15 : 1.05 }}
+                          className={cn(
+                            "w-14 h-14 rounded-full flex items-center justify-center relative z-10",
+                            "transition-shadow duration-300",
+                            currentStep === step.id && (
+                              theme === 'dark'
+                                ? 'shadow-lg shadow-orange-500/50'
+                                : 'shadow-lg shadow-orange-400/50'
+                            ),
+                            currentStepIndex > index && (
+                              theme === 'dark'
+                                ? 'shadow-md shadow-green-500/30'
+                                : 'shadow-md shadow-green-400/30'
+                            )
+                          )}
+                        >
+                          {currentStepIndex > index ? (
+                            <motion.div
+                              initial={{ scale: 0 }}
+                              animate={{ scale: 1 }}
+                              transition={{ type: "spring", stiffness: 200, damping: 15 }}
+                            >
+                              <Check className="w-7 h-7 text-white" />
+                            </motion.div>
+                          ) : (
+                            <step.icon className={cn(
+                              "w-7 h-7",
+                              currentStep === step.id ? 'text-white' : theme === 'dark' ? 'text-gray-500' : 'text-gray-400'
+                            )} />
+                          )}
+                        </motion.div>
+                      </div>
+
+                      <div className="mt-3 text-center">
+                        <p className={cn(
+                          "text-xs sm:text-sm font-semibold",
+                          currentStep === step.id
+                            ? theme === 'dark' ? 'text-orange-400' : 'text-orange-600'
+                            : currentStepIndex > index
+                              ? theme === 'dark' ? 'text-green-400' : 'text-green-600'
+                              : theme === 'dark' ? 'text-gray-500' : 'text-gray-400'
+                        )}>
+                          {step.title}
+                        </p>
+                        <p className={cn(
+                          "text-xs hidden sm:block mt-0.5",
+                          theme === 'dark' ? 'text-gray-600' : 'text-gray-500'
+                        )}>
+                          {step.description}
+                        </p>
+                      </div>
+                    </div>
+
+                    {index < STEPS.length - 1 && (
+                      <div className="flex-1 h-0.5 mx-2 sm:mx-3 mb-8 sm:mb-10 relative">
+                        <div className={cn(
+                          "absolute inset-0 rounded-full",
+                          theme === 'dark' ? 'bg-gray-700' : 'bg-gray-200'
+                        )} />
+                        <motion.div
+                          initial={false}
+                          animate={{
+                            scaleX: currentStepIndex > index ? 1 : 0
+                          }}
+                          transition={{ duration: 0.5, ease: "easeInOut" }}
+                          className={cn(
+                            "h-full origin-left rounded-full",
+                            theme === 'dark' ? 'bg-green-500' : 'bg-green-600'
+                          )}
+                        />
+                      </div>
+                    )}
+                  </React.Fragment>
+                ))}
               </div>
             </div>
-          </motion.div>
 
-          {/* Step Indicator */}
-          <motion.div
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="mb-8"
-          >
-            <div className="flex items-center justify-between relative">
-              {/* Progress Bar Background */}
-              <div className="absolute left-0 right-0 top-1/2 h-1 bg-gray-200 dark:bg-gray-700 -translate-y-1/2 z-0" />
-              {/* Progress Bar Fill */}
-              <motion.div
-                className="absolute left-0 top-1/2 h-1 bg-orange-500 -translate-y-1/2 z-0"
-                initial={{ width: '0%' }}
-                animate={{ width: `${(currentStepIndex / (STEPS.length - 1)) * 100}%` }}
-                transition={{ duration: 0.3 }}
-              />
-
-              {STEPS.map((step, idx) => {
-                const isActive = currentStep === step.id
-                const isCompleted = currentStepIndex > idx
-                const Icon = step.icon
-
-                return (
-                  <div key={step.id} className="relative z-10 flex flex-col items-center">
-                    <motion.div
-                      className={cn(
-                        "w-12 h-12 rounded-full flex items-center justify-center transition-all",
-                        isCompleted
-                          ? "bg-orange-500 text-white"
-                          : isActive
-                          ? "bg-orange-500 text-white ring-4 ring-orange-500/30"
-                          : "bg-gray-200 dark:bg-gray-700 text-gray-500"
-                      )}
-                      animate={{ scale: isActive ? 1.1 : 1 }}
-                    >
-                      {isCompleted ? (
-                        <Check className="w-5 h-5" />
-                      ) : (
-                        <Icon className="w-5 h-5" />
-                      )}
-                    </motion.div>
-                    <div className="mt-2 text-center">
-                      <p className={cn(
-                        "text-sm font-medium",
-                        isActive ? "text-orange-600 dark:text-orange-400" : "text-gray-500"
-                      )}>
-                        {step.title}
-                      </p>
-                      <p className="text-xs text-gray-400 hidden sm:block">{step.description}</p>
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
-          </motion.div>
-
-          {/* Step Content */}
-          <AnimatePresence mode="wait">
+            {/* Step Content */}
+            <AnimatePresence mode="wait">
             {/* Step 1: Method Selection */}
             {currentStep === 'method' && (
               <motion.div
@@ -937,46 +999,109 @@ export default function CreateExpensePage() {
             )}
           </AnimatePresence>
 
-          {/* Navigation Buttons */}
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            className="flex items-center justify-between mt-8"
-          >
-            <button
-              onClick={currentStep === 'method' ? () => router.push('/dashboard/market/accounting/expenses') : goToPrevStep}
-              className="flex items-center gap-2 px-6 py-3 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-xl transition-colors"
+            {/* Navigation Buttons */}
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              className="flex items-center justify-between mt-8"
             >
-              <ArrowLeft className="w-5 h-5" />
-              {currentStep === 'method' ? 'Cancelar' : 'Atras'}
-            </button>
-
-            {currentStep !== 'method' && (
               <button
-                onClick={currentStep === 'review' ? handleSubmit : goToNextStep}
-                disabled={loading || processingOCR}
-                className="flex items-center gap-2 px-6 py-3 bg-orange-600 hover:bg-orange-700 text-white rounded-xl font-medium transition-colors disabled:opacity-50"
-              >
-                {loading || uploadingReceipt ? (
-                  <>
-                    <Loader2 className="w-5 h-5 animate-spin" />
-                    {uploadingReceipt ? 'Subiendo recibo...' : 'Guardando...'}
-                  </>
-                ) : currentStep === 'review' ? (
-                  <>
-                    <Check className="w-5 h-5" />
-                    Guardar Gasto
-                  </>
-                ) : (
-                  <>
-                    Siguiente
-                    <ArrowRight className="w-5 h-5" />
-                  </>
+                onClick={currentStep === 'method' ? () => setShowCancelModal(true) : goToPrevStep}
+                className={cn(
+                  "flex items-center gap-2 px-6 py-3 rounded-xl transition-colors",
+                  theme === 'dark'
+                    ? 'text-gray-400 hover:bg-gray-800'
+                    : 'text-gray-600 hover:bg-gray-100'
                 )}
+              >
+                <ArrowLeft className="w-5 h-5" />
+                {currentStep === 'method' ? 'Cancelar' : 'Atras'}
               </button>
-            )}
-          </motion.div>
+
+              {currentStep !== 'method' && (
+                <button
+                  onClick={currentStep === 'review' ? handleSubmit : goToNextStep}
+                  disabled={loading || processingOCR}
+                  className="flex items-center gap-2 px-6 py-3 bg-orange-600 hover:bg-orange-700 text-white rounded-xl font-medium transition-colors disabled:opacity-50"
+                >
+                  {loading || uploadingReceipt ? (
+                    <>
+                      <Loader2 className="w-5 h-5 animate-spin" />
+                      {uploadingReceipt ? 'Subiendo recibo...' : 'Guardando...'}
+                    </>
+                  ) : currentStep === 'review' ? (
+                    <>
+                      <Check className="w-5 h-5" />
+                      Guardar Gasto
+                    </>
+                  ) : (
+                    <>
+                      Siguiente
+                      <ArrowRight className="w-5 h-5" />
+                    </>
+                  )}
+                </button>
+              )}
+            </motion.div>
+
+          </div>
         </div>
+
+        {/* Cancel Modal */}
+        <AnimatePresence>
+          {showCancelModal && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
+              onClick={() => setShowCancelModal(false)}
+            >
+              <motion.div
+                initial={{ scale: 0.9, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                exit={{ scale: 0.9, opacity: 0 }}
+                onClick={e => e.stopPropagation()}
+                className={cn(
+                  "w-full max-w-md rounded-2xl p-6",
+                  theme === 'dark' ? 'bg-gray-800' : 'bg-white'
+                )}
+              >
+                <h3 className={cn(
+                  "text-lg font-bold mb-2",
+                  theme === 'dark' ? 'text-white' : 'text-gray-900'
+                )}>
+                  Cancelar registro?
+                </h3>
+                <p className={cn(
+                  "mb-6",
+                  theme === 'dark' ? 'text-gray-400' : 'text-gray-500'
+                )}>
+                  Los datos ingresados se perderan. Estas seguro?
+                </p>
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => setShowCancelModal(false)}
+                    className={cn(
+                      "flex-1 px-4 py-2.5 rounded-xl font-medium transition-colors",
+                      theme === 'dark'
+                        ? 'bg-gray-700 text-white hover:bg-gray-600'
+                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                    )}
+                  >
+                    Continuar editando
+                  </button>
+                  <button
+                    onClick={() => router.push('/dashboard/market/accounting/expenses')}
+                    className="flex-1 px-4 py-2.5 bg-red-600 text-white rounded-xl font-medium hover:bg-red-700 transition-colors"
+                  >
+                    Si, cancelar
+                  </button>
+                </div>
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </DashboardLayout>
     </ProtectedRoute>
   )

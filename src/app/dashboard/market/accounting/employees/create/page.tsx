@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
@@ -20,10 +20,11 @@ import {
   Eye,
   EyeOff,
   AlertCircle,
-  Loader2
+  Loader2,
+  X
 } from 'lucide-react'
-import { DashboardLayout } from '@/components/layout/dashboard-layout'
-import { ProtectedRoute } from '@/components/protected-route'
+import { useTheme } from '@/contexts/theme-context'
+import { cn } from '@/lib/utils'
 
 interface Terminal {
   id: number
@@ -44,10 +45,10 @@ interface TerminalPermission {
 }
 
 const STEPS = [
-  { id: 1, title: 'Datos Personales', icon: User },
-  { id: 2, title: 'Datos Laborales', icon: Briefcase },
-  { id: 3, title: 'Acceso POS', icon: CreditCard },
-  { id: 4, title: 'Confirmación', icon: CheckCircle }
+  { id: 'personal', title: 'Datos Personales', icon: User },
+  { id: 'employment', title: 'Datos Laborales', icon: Briefcase },
+  { id: 'pos', title: 'Acceso POS', icon: CreditCard },
+  { id: 'confirm', title: 'Confirmación', icon: CheckCircle }
 ]
 
 const ROLES = [
@@ -65,12 +66,16 @@ const PAY_TYPES = [
 
 export default function CreateEmployeePage() {
   const router = useRouter()
-  const [currentStep, setCurrentStep] = useState(1)
+  const { theme } = useTheme()
+  const [currentStep, setCurrentStep] = useState<string>('personal')
   const [terminals, setTerminals] = useState<Terminal[]>([])
   const [showPassword, setShowPassword] = useState(false)
   const [showPin, setShowPin] = useState(false)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
+  const [showCancelModal, setShowCancelModal] = useState(false)
+
+  const currentStepIndex = STEPS.findIndex(s => s.id === currentStep)
 
   // Form data
   const [formData, setFormData] = useState({
@@ -146,11 +151,11 @@ export default function CreateEmployeePage() {
     )
   }
 
-  const validateStep = (step: number): boolean => {
+  const validateStep = (step: string): boolean => {
     setError('')
 
     switch (step) {
-      case 1:
+      case 'personal':
         if (!formData.email || !formData.password) {
           setError('Email y contraseña son requeridos')
           return false
@@ -165,7 +170,7 @@ export default function CreateEmployeePage() {
         }
         return true
 
-      case 2:
+      case 'employment':
         if (!formData.role || !formData.payType || !formData.payRate || !formData.hireDate) {
           setError('Rol, tipo de pago, tarifa y fecha de ingreso son requeridos')
           return false
@@ -176,7 +181,7 @@ export default function CreateEmployeePage() {
         }
         return true
 
-      case 3:
+      case 'pos':
         if (formData.posPin && (formData.posPin.length < 4 || formData.posPin.length > 6)) {
           setError('El PIN debe tener entre 4 y 6 dígitos')
           return false
@@ -194,12 +199,18 @@ export default function CreateEmployeePage() {
 
   const nextStep = () => {
     if (validateStep(currentStep)) {
-      setCurrentStep(prev => Math.min(prev + 1, 4))
+      const nextIndex = currentStepIndex + 1
+      if (nextIndex < STEPS.length) {
+        setCurrentStep(STEPS[nextIndex].id)
+      }
     }
   }
 
   const prevStep = () => {
-    setCurrentStep(prev => Math.max(prev - 1, 1))
+    const prevIndex = currentStepIndex - 1
+    if (prevIndex >= 0) {
+      setCurrentStep(STEPS[prevIndex].id)
+    }
     setError('')
   }
 
@@ -261,67 +272,125 @@ export default function CreateEmployeePage() {
   }
 
   return (
-    <ProtectedRoute>
-      <DashboardLayout>
-        <div className="p-4 md:p-6 max-w-4xl mx-auto">
-          {/* Header */}
-          <div className="mb-8">
-            <button
-              onClick={() => router.back()}
-              className="flex items-center gap-2 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white mb-4"
-            >
-              <ArrowLeft className="w-5 h-5" />
-              Volver
-            </button>
-            <h1 className="text-2xl md:text-3xl font-bold text-gray-900 dark:text-white">
-              Nuevo Empleado
-            </h1>
-          </div>
+    <div className={cn(
+      "min-h-screen pt-12 sm:pt-16 lg:pt-20 pb-20 px-4 sm:px-6 lg:px-8",
+      theme === 'dark' ? 'bg-gray-900' : 'bg-gray-50'
+    )}>
+      <div className="max-w-4xl xl:max-w-5xl mx-auto space-y-6 sm:space-y-8 relative">
+        {/* Close Button */}
+        <motion.button
+          onClick={() => setShowCancelModal(true)}
+          className={cn(
+            "absolute -top-2 right-0 sm:right-0 p-2 rounded-full transition-colors z-10",
+            theme === 'dark'
+              ? 'bg-gray-800 text-gray-400 hover:text-white hover:bg-gray-700'
+              : 'bg-white text-gray-500 hover:text-gray-900 hover:bg-gray-100 shadow-sm'
+          )}
+          whileHover={{ scale: 1.1 }}
+          whileTap={{ scale: 0.95 }}
+        >
+          <X className="w-5 h-5" />
+        </motion.button>
 
-          {/* Progress Steps */}
-          <div className="mb-8">
-            <div className="flex items-center justify-between">
-              {STEPS.map((step, index) => {
-                const Icon = step.icon
-                const isActive = currentStep === step.id
-                const isCompleted = currentStep > step.id
+        {/* Header */}
+        <div className="text-center">
+          <h1 className={cn(
+            "text-2xl sm:text-3xl lg:text-4xl font-bold mb-2",
+            theme === 'dark' ? 'text-white' : 'text-gray-900'
+          )}>
+            Nuevo Empleado
+          </h1>
+          <p className={cn(
+            "text-sm sm:text-base",
+            theme === 'dark' ? 'text-gray-400' : 'text-gray-600'
+          )}>
+            Complete los datos del nuevo empleado
+          </p>
+        </div>
 
-                return (
-                  <div key={step.id} className="flex items-center">
-                    <div className="flex flex-col items-center">
-                      <div
-                        className={`w-10 h-10 rounded-full flex items-center justify-center transition-colors ${
-                          isCompleted
-                            ? 'bg-green-500 text-white'
-                            : isActive
-                              ? 'bg-purple-600 text-white'
-                              : 'bg-gray-200 dark:bg-gray-700 text-gray-500'
-                        }`}
-                      >
-                        {isCompleted ? (
-                          <CheckCircle className="w-5 h-5" />
-                        ) : (
-                          <Icon className="w-5 h-5" />
-                        )}
-                      </div>
-                      <span className={`text-xs mt-2 hidden sm:block ${
-                        isActive ? 'text-purple-600 font-medium' : 'text-gray-500'
-                      }`}>
-                        {step.title}
-                      </span>
-                    </div>
-                    {index < STEPS.length - 1 && (
-                      <div
-                        className={`w-12 md:w-24 h-0.5 mx-2 ${
-                          isCompleted ? 'bg-green-500' : 'bg-gray-200 dark:bg-gray-700'
-                        }`}
+        {/* Progress Steps */}
+        <div className="flex items-center justify-center gap-2 sm:gap-4">
+          {STEPS.map((step, index) => {
+            const Icon = step.icon
+            const isActive = currentStep === step.id
+            const isCompleted = currentStepIndex > index
+
+            return (
+              <React.Fragment key={step.id}>
+                <div className="flex flex-col items-center">
+                  <div className="relative w-14 h-14">
+                    {/* Pulsing ring for active step */}
+                    {isActive && (
+                      <motion.div
+                        className="absolute inset-0 rounded-full bg-purple-500"
+                        animate={{
+                          scale: [1, 1.2, 1],
+                          opacity: [0.5, 0, 0.5]
+                        }}
+                        transition={{
+                          duration: 2,
+                          repeat: Infinity,
+                          ease: "easeInOut"
+                        }}
                       />
                     )}
+                    <motion.div
+                      className={cn(
+                        "relative w-14 h-14 rounded-full flex items-center justify-center transition-colors",
+                        isCompleted
+                          ? 'bg-green-500 text-white'
+                          : isActive
+                            ? 'bg-purple-600 text-white'
+                            : theme === 'dark'
+                              ? 'bg-gray-800 text-gray-500'
+                              : 'bg-gray-200 text-gray-500'
+                      )}
+                      animate={{
+                        scale: isActive ? 1 : 0.9,
+                        backgroundColor: isCompleted
+                          ? '#22c55e'
+                          : isActive
+                            ? '#9333ea'
+                            : theme === 'dark'
+                              ? '#1f2937'
+                              : '#e5e7eb'
+                      }}
+                    >
+                      {isCompleted ? (
+                        <CheckCircle className="w-6 h-6" />
+                      ) : (
+                        <Icon className="w-6 h-6" />
+                      )}
+                    </motion.div>
                   </div>
-                )
-              })}
-            </div>
-          </div>
+                  <span className={cn(
+                    "text-xs mt-2 hidden sm:block text-center font-medium",
+                    isActive
+                      ? 'text-purple-600'
+                      : isCompleted
+                        ? 'text-green-600'
+                        : theme === 'dark'
+                          ? 'text-gray-500'
+                          : 'text-gray-400'
+                  )}>
+                    {step.title}
+                  </span>
+                </div>
+                {index < STEPS.length - 1 && (
+                  <div className="relative w-8 sm:w-16 lg:w-24 h-1 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
+                    <motion.div
+                      className="absolute inset-y-0 left-0 bg-green-500 rounded-full"
+                      initial={{ scaleX: 0 }}
+                      animate={{ scaleX: currentStepIndex > index ? 1 : 0 }}
+                      style={{ originX: 0 }}
+                      transition={{ duration: 0.5, ease: "easeOut" }}
+                    />
+                  </div>
+                )}
+              </React.Fragment>
+            )
+          })}
+        </div>
 
           {/* Error Message */}
           <AnimatePresence>
@@ -339,10 +408,13 @@ export default function CreateEmployeePage() {
           </AnimatePresence>
 
           {/* Step Content */}
-          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-6">
+          <div className={cn(
+            "rounded-2xl shadow-lg p-6",
+            theme === 'dark' ? 'bg-gray-800' : 'bg-white'
+          )}>
             <AnimatePresence mode="wait">
               {/* Step 1: Personal Data */}
-              {currentStep === 1 && (
+              {currentStep === 'personal' && (
                 <motion.div
                   key="step1"
                   initial={{ opacity: 0, x: 20 }}
@@ -438,7 +510,7 @@ export default function CreateEmployeePage() {
               )}
 
               {/* Step 2: Employment Data */}
-              {currentStep === 2 && (
+              {currentStep === 'employment' && (
                 <motion.div
                   key="step2"
                   initial={{ opacity: 0, x: 20 }}
@@ -561,7 +633,7 @@ export default function CreateEmployeePage() {
               )}
 
               {/* Step 3: POS Access */}
-              {currentStep === 3 && (
+              {currentStep === 'pos' && (
                 <motion.div
                   key="step3"
                   initial={{ opacity: 0, x: 20 }}
@@ -710,7 +782,7 @@ export default function CreateEmployeePage() {
               )}
 
               {/* Step 4: Confirmation */}
-              {currentStep === 4 && (
+              {currentStep === 'confirm' && (
                 <motion.div
                   key="step4"
                   initial={{ opacity: 0, x: 20 }}
@@ -828,33 +900,45 @@ export default function CreateEmployeePage() {
             </AnimatePresence>
 
             {/* Navigation Buttons */}
-            <div className="flex items-center justify-between mt-8 pt-6 border-t border-gray-200 dark:border-gray-700">
-              <button
+            <div className={cn(
+              "flex items-center justify-between mt-8 pt-6 border-t",
+              theme === 'dark' ? 'border-gray-700' : 'border-gray-200'
+            )}>
+              <motion.button
                 onClick={prevStep}
-                disabled={currentStep === 1}
-                className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-medium transition-colors ${
-                  currentStep === 1
+                disabled={currentStepIndex === 0}
+                className={cn(
+                  "flex items-center gap-2 px-4 py-2.5 rounded-xl font-medium transition-colors",
+                  currentStepIndex === 0
                     ? 'text-gray-400 cursor-not-allowed'
-                    : 'text-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700'
-                }`}
+                    : theme === 'dark'
+                      ? 'text-gray-300 hover:bg-gray-700'
+                      : 'text-gray-600 hover:bg-gray-100'
+                )}
+                whileHover={currentStepIndex > 0 ? { scale: 1.02 } : {}}
+                whileTap={currentStepIndex > 0 ? { scale: 0.98 } : {}}
               >
                 <ArrowLeft className="w-5 h-5" />
                 Anterior
-              </button>
+              </motion.button>
 
-              {currentStep < 4 ? (
-                <button
+              {currentStepIndex < STEPS.length - 1 ? (
+                <motion.button
                   onClick={nextStep}
                   className="flex items-center gap-2 px-6 py-2.5 bg-purple-600 hover:bg-purple-700 text-white rounded-xl font-medium transition-colors"
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
                 >
                   Siguiente
                   <ArrowRight className="w-5 h-5" />
-                </button>
+                </motion.button>
               ) : (
-                <button
+                <motion.button
                   onClick={createEmployee}
                   disabled={saving}
                   className="flex items-center gap-2 px-6 py-2.5 bg-green-600 hover:bg-green-700 text-white rounded-xl font-medium transition-colors disabled:opacity-50"
+                  whileHover={!saving ? { scale: 1.02 } : {}}
+                  whileTap={!saving ? { scale: 0.98 } : {}}
                 >
                   {saving ? (
                     <>
@@ -867,12 +951,67 @@ export default function CreateEmployeePage() {
                       Crear Empleado
                     </>
                   )}
-                </button>
+                </motion.button>
               )}
             </div>
           </div>
         </div>
-      </DashboardLayout>
-    </ProtectedRoute>
+
+      {/* Cancel Confirmation Modal */}
+      <AnimatePresence>
+        {showCancelModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
+            onClick={() => setShowCancelModal(false)}
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className={cn(
+                "rounded-2xl p-6 max-w-md w-full shadow-xl",
+                theme === 'dark' ? 'bg-gray-800' : 'bg-white'
+              )}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <h3 className={cn(
+                "text-lg font-bold mb-2",
+                theme === 'dark' ? 'text-white' : 'text-gray-900'
+              )}>
+                ¿Cancelar creación?
+              </h3>
+              <p className={cn(
+                "mb-6",
+                theme === 'dark' ? 'text-gray-400' : 'text-gray-600'
+              )}>
+                Perderás todos los datos ingresados. ¿Estás seguro?
+              </p>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setShowCancelModal(false)}
+                  className={cn(
+                    "flex-1 py-2.5 rounded-xl font-medium transition-colors",
+                    theme === 'dark'
+                      ? 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  )}
+                >
+                  Continuar editando
+                </button>
+                <button
+                  onClick={() => router.push('/dashboard/market/accounting/employees')}
+                  className="flex-1 py-2.5 bg-red-600 hover:bg-red-700 text-white rounded-xl font-medium transition-colors"
+                >
+                  Sí, cancelar
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
   )
 }
