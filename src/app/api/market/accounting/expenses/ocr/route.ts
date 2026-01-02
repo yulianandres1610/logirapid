@@ -6,9 +6,8 @@ import { GoogleGenerativeAI } from '@google/generative-ai'
 // API Key para Gemini (misma que el resto del proyecto)
 const GOOGLE_AI_API_KEY = process.env.GOOGLE_AI_API_KEY
 
-// Modelo específico para OCR de documentos/facturas (soporta PDFs e imágenes)
-// Gemini 1.5 Pro es ideal para análisis de documentos
-const OCR_MODEL = 'gemini-1.5-pro'
+// Modelo para OCR de documentos/facturas (soporta PDFs e imágenes)
+const OCR_MODEL = process.env.GEMINI_MODEL || 'gemini-2.0-flash-exp'
 
 interface JWTPayload {
   userId: number
