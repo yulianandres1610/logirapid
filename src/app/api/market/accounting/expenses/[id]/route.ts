@@ -88,6 +88,22 @@ export async function GET(
 
     const row = result.rows[0]
 
+    // Obtener los items/productos del gasto
+    const itemsResult = await db.query(`
+      SELECT id, description, amount, suggested_category, created_at
+      FROM market_expense_items
+      WHERE expense_id = $1
+      ORDER BY id
+    `, [expenseId])
+
+    const items = itemsResult.rows.map(item => ({
+      id: item.id,
+      description: item.description,
+      amount: parseFloat(item.amount),
+      suggestedCategory: item.suggested_category,
+      createdAt: item.created_at
+    }))
+
     return NextResponse.json({
       success: true,
       data: {
@@ -110,7 +126,10 @@ export async function GET(
         createdByName: row.created_by_name || 'Usuario',
         createdByEmail: row.created_by_email,
         createdAt: row.created_at,
-        updatedAt: row.updated_at
+        updatedAt: row.updated_at,
+        // Items/productos del recibo
+        items,
+        hasItems: items.length > 0
       }
     })
 

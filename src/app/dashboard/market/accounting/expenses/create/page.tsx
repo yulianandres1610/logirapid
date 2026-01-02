@@ -515,7 +515,13 @@ export default function CreateExpensePage() {
           amount: parseFloat(group.total.toFixed(2)),
           categoryId: group.categoryId,
           categoryName: group.categoryName,
-          aiConfidence: 0.85
+          aiConfidence: 0.85,
+          // Incluir los items/productos del grupo
+          items: group.items.map(item => ({
+            description: item.description,
+            amount: item.amount,
+            suggestedCategory: item.suggestedCategory
+          }))
         }))
 
         const response = await fetch('/api/market/accounting/expenses', {

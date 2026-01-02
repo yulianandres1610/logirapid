@@ -22,7 +22,9 @@ import {
   Image as ImageIcon,
   FileIcon,
   Trash2,
-  Edit
+  Edit,
+  ShoppingBag,
+  Package
 } from 'lucide-react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
@@ -30,6 +32,14 @@ import { DashboardLayout } from '@/components/layout/dashboard-layout'
 import { ProtectedRoute } from '@/components/protected-route'
 import { useTheme } from '@/contexts/theme-context'
 import { cn } from '@/lib/utils'
+
+interface ExpenseItem {
+  id: number
+  description: string
+  amount: number
+  suggestedCategory: string | null
+  createdAt: string
+}
 
 interface ExpenseDetail {
   id: number
@@ -52,6 +62,8 @@ interface ExpenseDetail {
   createdByEmail: string
   createdAt: string
   updatedAt: string
+  items: ExpenseItem[]
+  hasItems: boolean
 }
 
 const ACCOUNTING_TYPE_CONFIG: Record<string, { label: string; color: string; description: string }> = {
@@ -383,6 +395,67 @@ export default function ExpenseDetailPage({ params }: { params: Promise<{ id: st
                     )}
                   </div>
                 </div>
+
+                {/* Productos/Items del Recibo */}
+                {expense.hasItems && expense.items.length > 0 && (
+                  <div className={cn(
+                    'p-5 rounded-2xl border',
+                    theme === 'dark' ? 'bg-gray-800/50 border-gray-700' : 'bg-white border-gray-200'
+                  )}>
+                    <h3 className="text-sm font-medium text-gray-500 mb-4 flex items-center gap-2">
+                      <ShoppingBag className="w-4 h-4" />
+                      Productos del Recibo ({expense.items.length})
+                    </h3>
+                    <div className="space-y-3">
+                      {expense.items.map((item, index) => (
+                        <div
+                          key={item.id}
+                          className={cn(
+                            'flex items-center justify-between p-3 rounded-xl',
+                            theme === 'dark' ? 'bg-gray-700/50' : 'bg-gray-50'
+                          )}
+                        >
+                          <div className="flex items-center gap-3">
+                            <div className={cn(
+                              'w-8 h-8 rounded-lg flex items-center justify-center text-sm font-medium',
+                              theme === 'dark' ? 'bg-gray-600 text-gray-300' : 'bg-gray-200 text-gray-600'
+                            )}>
+                              {index + 1}
+                            </div>
+                            <div>
+                              <p className="font-medium text-gray-900 dark:text-white text-sm">
+                                {item.description}
+                              </p>
+                              {item.suggestedCategory && (
+                                <p className="text-xs text-gray-500">
+                                  {item.suggestedCategory}
+                                </p>
+                              )}
+                            </div>
+                          </div>
+                          <p className="font-semibold text-orange-600">
+                            {formatCurrency(item.amount, expense.currency)}
+                          </p>
+                        </div>
+                      ))}
+                      {/* Total de items */}
+                      <div className={cn(
+                        'flex items-center justify-between pt-3 mt-3 border-t',
+                        theme === 'dark' ? 'border-gray-700' : 'border-gray-200'
+                      )}>
+                        <p className="font-medium text-gray-500">
+                          Subtotal productos
+                        </p>
+                        <p className="font-bold text-gray-900 dark:text-white">
+                          {formatCurrency(
+                            expense.items.reduce((sum, item) => sum + item.amount, 0),
+                            expense.currency
+                          )}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                )}
 
                 {/* AI Analysis */}
                 {(expense.aiSuggestion || expense.aiAnalysis) && (

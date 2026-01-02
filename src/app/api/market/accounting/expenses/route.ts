@@ -11,6 +11,33 @@ interface JWTPayload {
   companyName: string
 }
 
+// Migración: Crear tabla de items de gastos si no existe
+async function ensureExpenseItemsTable() {
+  try {
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS market_expense_items (
+        id SERIAL PRIMARY KEY,
+        expense_id INTEGER NOT NULL REFERENCES market_expenses(id) ON DELETE CASCADE,
+        description VARCHAR(500) NOT NULL,
+        amount DECIMAL(12, 2) NOT NULL,
+        suggested_category VARCHAR(100),
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `)
+    // Índice para búsqueda rápida por expense_id
+    await db.query(`
+      CREATE INDEX IF NOT EXISTS idx_expense_items_expense_id
+      ON market_expense_items(expense_id)
+    `)
+  } catch (error) {
+    // Tabla ya existe, ignorar error
+    console.log('[Expenses API] Table check completed')
+  }
+}
+
+// Ejecutar migración al cargar el módulo
+ensureExpenseItemsTable()
+
 /**
  * GET /api/market/accounting/expenses
  * List expenses with filters
@@ -257,8 +284,26 @@ export async function POST(request: NextRequest) {
           userId
         ])
 
+        const expenseId = result.rows[0].id
+
+        // Guardar los items/productos del gasto si existen
+        if (expense.items && Array.isArray(expense.items) && expense.items.length > 0) {
+          for (const item of expense.items) {
+            await db.query(`
+              INSERT INTO market_expense_items (expense_id, description, amount, suggested_category)
+              VALUES ($1, $2, $3, $4)
+            `, [
+              expenseId,
+              item.description || 'Item sin descripción',
+              item.amount || 0,
+              item.suggestedCategory || null
+            ])
+          }
+          console.log('[Expenses API] Saved', expense.items.length, 'items for expense', expenseId)
+        }
+
         createdExpenses.push({
-          id: result.rows[0].id,
+          id: expenseId,
           description: expense.description
         })
       }
