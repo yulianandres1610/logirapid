@@ -29,6 +29,10 @@ interface OrderLine {
   productName: string
   sku: string
   barcode: string | null
+  variantId: number | null
+  variantName: string | null
+  variantSku: string | null
+  variantBarcode: string | null
   quantityOrdered: number
   quantityReceived: number
   quantityPending: number
@@ -113,19 +117,24 @@ export async function GET(
           }, { status: 400 })
         }
 
-        // Get order lines with pending quantities
+        // Get order lines with pending quantities (including variant info)
         const linesResult = await db.query(`
           SELECT
             col.id as line_id,
             col.product_id,
+            col.variant_id,
             col.quantity_ordered,
             COALESCE(col.quantity_received, 0) as quantity_received,
             col.unit_cost,
             mp.name as product_name,
             mp.sku,
-            mp.barcode
+            mp.barcode,
+            v.variant_name,
+            v.sku as variant_sku,
+            v.barcode as variant_barcode
           FROM consignment_order_lines col
           JOIN market_products mp ON mp.id = col.product_id
+          LEFT JOIN market_product_variants v ON v.id = col.variant_id
           WHERE col.order_id = $1
             AND col.quantity_ordered > COALESCE(col.quantity_received, 0)
         `, [order.id])
@@ -136,6 +145,10 @@ export async function GET(
           productName: row.product_name,
           sku: row.sku,
           barcode: row.barcode,
+          variantId: row.variant_id || null,
+          variantName: row.variant_name || null,
+          variantSku: row.variant_sku || null,
+          variantBarcode: row.variant_barcode || null,
           quantityOrdered: parseInt(row.quantity_ordered),
           quantityReceived: parseInt(row.quantity_received),
           quantityPending: parseInt(row.quantity_ordered) - parseInt(row.quantity_received),
@@ -189,19 +202,24 @@ export async function GET(
           }, { status: 400 })
         }
 
-        // Get purchase lines with pending quantities
+        // Get purchase lines with pending quantities (including variant info)
         const linesResult = await db.query(`
           SELECT
             pl.id as line_id,
             pl.product_id,
+            pl.variant_id,
             pl.quantity,
             COALESCE(pl.quantity_received, 0) as quantity_received,
             pl.unit_price as unit_cost,
             mp.name as product_name,
             mp.sku,
-            mp.barcode
+            mp.barcode,
+            v.variant_name,
+            v.sku as variant_sku,
+            v.barcode as variant_barcode
           FROM market_purchase_lines pl
           JOIN market_products mp ON mp.id = pl.product_id
+          LEFT JOIN market_product_variants v ON v.id = pl.variant_id
           WHERE pl.purchase_id = $1
             AND pl.quantity > COALESCE(pl.quantity_received, 0)
         `, [purchase.id])
@@ -212,6 +230,10 @@ export async function GET(
           productName: row.product_name,
           sku: row.sku,
           barcode: row.barcode,
+          variantId: row.variant_id || null,
+          variantName: row.variant_name || null,
+          variantSku: row.variant_sku || null,
+          variantBarcode: row.variant_barcode || null,
           quantityOrdered: parseInt(row.quantity),
           quantityReceived: parseInt(row.quantity_received),
           quantityPending: parseInt(row.quantity) - parseInt(row.quantity_received),
