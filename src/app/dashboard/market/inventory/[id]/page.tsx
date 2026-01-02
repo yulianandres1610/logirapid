@@ -98,6 +98,23 @@ interface WarehouseStock {
   location?: string
 }
 
+interface VariantStock {
+  variantId: number
+  variantName: string
+  variantSku: string
+  variantBarcode: string | null
+  totalOnHand: number
+  totalReserved: number
+  totalAvailable: number
+  byWarehouse: Array<{
+    warehouseId: number
+    warehouseName: string
+    quantityOnHand: number
+    quantityReserved: number
+    quantityAvailable: number
+  }>
+}
+
 interface Supplier {
   supplierName: string
   supplierContact: string
@@ -202,6 +219,7 @@ export default function ProductDetailPage() {
   } | null>(null)
   const [salesLoading, setSalesLoading] = useState(false)
   const [warehouseStock, setWarehouseStock] = useState<WarehouseStock[]>([])
+  const [variantStock, setVariantStock] = useState<VariantStock[]>([])
   const [stockLoading, setStockLoading] = useState(false)
   const [suppliers, setSuppliers] = useState<Supplier[]>([])
   const [suppliersLoading, setSuppliersLoading] = useState(false)
@@ -282,6 +300,7 @@ export default function ProductDetailPage() {
         const data = await response.json()
         if (data.success) {
           setWarehouseStock(data.data.warehouses || [])
+          setVariantStock(data.data.variantStock || [])
         }
       }
     } catch (error) {
@@ -1065,6 +1084,75 @@ export default function ProductDetailPage() {
                               )}
                             </div>
                           ))}
+                        </div>
+                      )}
+
+                      {/* Variant Stock Section */}
+                      {variantStock.length > 0 && (
+                        <div className="mt-8">
+                          <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+                            <Package className="w-5 h-5 text-purple-500" />
+                            Stock por Variante
+                          </h3>
+                          <div className="grid gap-4">
+                            {variantStock.map((variant) => (
+                              <div
+                                key={variant.variantId}
+                                className={cn(
+                                  'p-4 rounded-xl border transition-colors',
+                                  theme === 'dark'
+                                    ? 'bg-purple-900/20 border-purple-800/50 hover:bg-purple-900/30'
+                                    : 'bg-purple-50 border-purple-200 hover:bg-purple-100'
+                                )}
+                              >
+                                <div className="flex items-center justify-between mb-3">
+                                  <div>
+                                    <p className="font-semibold text-gray-900 dark:text-white">{variant.variantName}</p>
+                                    <div className="flex items-center gap-3 mt-1">
+                                      <span className="text-xs text-gray-500 font-mono">SKU: {variant.variantSku}</span>
+                                      {variant.variantBarcode && (
+                                        <span className="text-xs text-gray-500 font-mono flex items-center gap-1">
+                                          <Barcode className="w-3 h-3" />
+                                          {variant.variantBarcode}
+                                        </span>
+                                      )}
+                                    </div>
+                                  </div>
+                                  <div className="text-right">
+                                    <p className={cn(
+                                      'text-2xl font-bold',
+                                      variant.totalOnHand === 0 ? 'text-red-500' :
+                                      variant.totalOnHand <= (product?.minimumStock || 0) ? 'text-amber-500' :
+                                      'text-purple-600'
+                                    )}>
+                                      {variant.totalOnHand}
+                                    </p>
+                                    <p className="text-xs text-gray-500">
+                                      Disponible: <span className="text-emerald-600 font-medium">{variant.totalAvailable}</span>
+                                    </p>
+                                  </div>
+                                </div>
+                                {variant.byWarehouse.length > 0 && (
+                                  <div className={cn(
+                                    'mt-3 pt-3 border-t grid gap-2',
+                                    theme === 'dark' ? 'border-purple-700/50' : 'border-purple-200'
+                                  )}>
+                                    {variant.byWarehouse.map((wh) => (
+                                      <div key={wh.warehouseId} className="flex items-center justify-between text-sm">
+                                        <span className="text-gray-600 dark:text-gray-400 flex items-center gap-2">
+                                          <Warehouse className="w-3 h-3" />
+                                          {wh.warehouseName}
+                                        </span>
+                                        <span className="font-medium text-gray-900 dark:text-white">
+                                          {wh.quantityOnHand} <span className="text-gray-400 font-normal">({wh.quantityAvailable} disp.)</span>
+                                        </span>
+                                      </div>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
+                            ))}
+                          </div>
                         </div>
                       )}
                     </motion.div>

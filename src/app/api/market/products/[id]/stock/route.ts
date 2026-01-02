@@ -73,10 +73,80 @@ export async function GET(
       }
     })
 
+    // Get variant stock data
+    const variantStockResult = await db.query(`
+      SELECT
+        mpv.id as variant_id,
+        mpv.variant_name,
+        mpv.sku as variant_sku,
+        mpv.barcode as variant_barcode,
+        mws.warehouse_id,
+        mw.name as warehouse_name,
+        COALESCE(mws.quantity_on_hand, 0) as quantity_on_hand,
+        COALESCE(mws.quantity_reserved, 0) as quantity_reserved,
+        (COALESCE(mws.quantity_on_hand, 0) - COALESCE(mws.quantity_reserved, 0)) as quantity_available
+      FROM market_product_variants mpv
+      LEFT JOIN market_warehouse_stock mws ON mws.variant_id = mpv.id AND mws.product_id = $1
+      LEFT JOIN market_warehouses mw ON mws.warehouse_id = mw.id AND mw.company_id = $2
+      WHERE mpv.product_id = $1 AND mpv.is_active = true
+      ORDER BY mpv.variant_name, mw.name
+    `, [productId, parseInt(companyId)])
+
+    // Group variant stock by variant
+    const variantStockMap = new Map<number, {
+      variantId: number
+      variantName: string
+      variantSku: string
+      variantBarcode: string | null
+      totalOnHand: number
+      totalReserved: number
+      totalAvailable: number
+      byWarehouse: Array<{
+        warehouseId: number
+        warehouseName: string
+        quantityOnHand: number
+        quantityReserved: number
+        quantityAvailable: number
+      }>
+    }>()
+
+    for (const row of variantStockResult.rows) {
+      if (!variantStockMap.has(row.variant_id)) {
+        variantStockMap.set(row.variant_id, {
+          variantId: row.variant_id,
+          variantName: row.variant_name,
+          variantSku: row.variant_sku,
+          variantBarcode: row.variant_barcode,
+          totalOnHand: 0,
+          totalReserved: 0,
+          totalAvailable: 0,
+          byWarehouse: []
+        })
+      }
+      const variant = variantStockMap.get(row.variant_id)!
+      if (row.warehouse_id) {
+        const qty = parseInt(row.quantity_on_hand) || 0
+        const reserved = parseInt(row.quantity_reserved) || 0
+        variant.totalOnHand += qty
+        variant.totalReserved += reserved
+        variant.totalAvailable += qty - reserved
+        variant.byWarehouse.push({
+          warehouseId: row.warehouse_id,
+          warehouseName: row.warehouse_name,
+          quantityOnHand: qty,
+          quantityReserved: reserved,
+          quantityAvailable: qty - reserved
+        })
+      }
+    }
+
+    const variantStock = Array.from(variantStockMap.values())
+
     return NextResponse.json({
       success: true,
       data: {
         warehouses: stockByWarehouse,
+        variantStock,
         totals,
         warehouseCount: warehousesResult.rows.length
       }
