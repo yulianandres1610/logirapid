@@ -39,6 +39,10 @@ interface OrderLine {
   productName: string
   sku: string
   barcode: string | null
+  variantId: number | null
+  variantName: string | null
+  variantSku: string | null
+  variantBarcode: string | null
   quantityOrdered: number
   quantityReceived: number
   quantityPending: number
@@ -341,8 +345,12 @@ export default function UnifiedReceptionView({
   const incrementProductByBarcode = (barcode: string) => {
     if (!detectedOrder) return
 
+    // Search by variant barcode/sku first, then product barcode/sku
     const line = detectedOrder.lines.find(l =>
-      l.barcode === barcode || l.sku === barcode
+      l.variantBarcode === barcode ||
+      l.variantSku === barcode ||
+      l.barcode === barcode ||
+      l.sku === barcode
     )
 
     if (line) {
@@ -1144,14 +1152,19 @@ export default function UnifiedReceptionView({
                       <p className="font-medium text-gray-900 dark:text-white truncate">
                         {line.productName}
                       </p>
+                      {line.variantName && (
+                        <p className="text-sm text-purple-600 dark:text-purple-400 font-medium">
+                          Variante: {line.variantName}
+                        </p>
+                      )}
                       <div className="flex items-center gap-2 text-xs text-gray-500">
-                        <span>SKU: {line.sku}</span>
-                        {line.barcode && (
+                        <span>SKU: {line.variantSku || line.sku}</span>
+                        {(line.variantBarcode || line.barcode) && (
                           <>
                             <span>|</span>
                             <span className="flex items-center gap-1">
                               <Barcode className="w-3 h-3" />
-                              {line.barcode}
+                              {line.variantBarcode || line.barcode}
                             </span>
                           </>
                         )}
