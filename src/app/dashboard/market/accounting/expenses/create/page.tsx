@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useRef } from 'react'
+import React, { useState, useRef, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   Receipt,
@@ -18,7 +18,10 @@ import {
   Building,
   Tag,
   AlertCircle,
-  Image as ImageIcon
+  Image as ImageIcon,
+  Brain,
+  Scan,
+  Zap
 } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { DashboardLayout } from '@/components/layout/dashboard-layout'
@@ -75,6 +78,7 @@ export default function CreateExpensePage() {
 
   // AI/OCR states
   const [processingOCR, setProcessingOCR] = useState(false)
+  const [ocrStep, setOcrStep] = useState(0) // 0-4 for animation steps
   const [ocrResult, setOcrResult] = useState<{
     description?: string
     amount?: number
@@ -83,6 +87,24 @@ export default function CreateExpensePage() {
     confidence?: number
   } | null>(null)
   const [categorizing, setCategorizing] = useState(false)
+
+  // OCR step animation
+  const ocrSteps = [
+    { icon: Scan, text: 'Escaneando documento...' },
+    { icon: Brain, text: 'Analizando contenido con IA...' },
+    { icon: FileText, text: 'Extrayendo datos...' },
+    { icon: Zap, text: 'Categorizando gasto...' },
+  ]
+
+  useEffect(() => {
+    if (processingOCR) {
+      setOcrStep(0)
+      const interval = setInterval(() => {
+        setOcrStep(prev => (prev + 1) % ocrSteps.length)
+      }, 1500)
+      return () => clearInterval(interval)
+    }
+  }, [processingOCR])
   const [aiSuggestion, setAiSuggestion] = useState<{
     categoryId: number
     categoryName: string
@@ -638,38 +660,283 @@ export default function CreateExpensePage() {
                         />
 
                         {formData.receiptFile ? (
-                          <div className="space-y-4">
-                            {formData.isPdf ? (
-                              <div className="flex flex-col items-center gap-2 p-4">
-                                <div className="w-20 h-24 bg-red-100 dark:bg-red-900/30 rounded-lg flex items-center justify-center">
-                                  <FileText className="w-10 h-10 text-red-600" />
+                          <div className="space-y-4 relative">
+                            {/* Receipt Preview Container */}
+                            <div className="relative inline-block mx-auto">
+                              {formData.isPdf ? (
+                                <div className="flex flex-col items-center gap-2 p-4 relative">
+                                  <div className={cn(
+                                    "relative w-24 h-28 rounded-lg flex items-center justify-center overflow-hidden transition-all duration-500",
+                                    processingOCR
+                                      ? "bg-gradient-to-br from-red-100 to-cyan-100 dark:from-red-900/30 dark:to-cyan-900/30"
+                                      : "bg-red-100 dark:bg-red-900/30"
+                                  )}>
+                                    <FileText className={cn(
+                                      "w-12 h-12 transition-colors duration-500",
+                                      processingOCR ? "text-cyan-600" : "text-red-600"
+                                    )} />
+                                    {/* PDF Scanning Effect */}
+                                    {processingOCR && (
+                                      <motion.div
+                                        className="absolute left-0 right-0 h-1 bg-gradient-to-r from-transparent via-cyan-400 to-transparent shadow-[0_0_15px_rgba(34,211,238,0.8)]"
+                                        initial={{ top: '0%' }}
+                                        animate={{ top: ['0%', '100%', '0%'] }}
+                                        transition={{
+                                          duration: 1.5,
+                                          repeat: Infinity,
+                                          ease: "linear"
+                                        }}
+                                      />
+                                    )}
+                                  </div>
+                                  <p className="text-sm font-medium text-gray-900 dark:text-white">
+                                    {formData.receiptFile.name}
+                                  </p>
+                                  <p className="text-xs text-gray-500">
+                                    PDF - {(formData.receiptFile.size / 1024).toFixed(1)} KB
+                                  </p>
                                 </div>
-                                <p className="text-sm font-medium text-gray-900 dark:text-white">
-                                  {formData.receiptFile.name}
-                                </p>
-                                <p className="text-xs text-gray-500">
-                                  PDF - {(formData.receiptFile.size / 1024).toFixed(1)} KB
-                                </p>
-                              </div>
-                            ) : (
-                              <img
-                                src={formData.receiptPreview}
-                                alt="Receipt preview"
-                                className="max-h-48 mx-auto rounded-lg shadow-lg"
-                              />
+                              ) : (
+                                <div className="relative">
+                                  <img
+                                    src={formData.receiptPreview}
+                                    alt="Receipt preview"
+                                    className={cn(
+                                      "max-h-48 mx-auto rounded-lg shadow-lg transition-all duration-500",
+                                      processingOCR && "brightness-75"
+                                    )}
+                                  />
+                                  {/* Scanning Line Effect */}
+                                  {processingOCR && (
+                                    <motion.div
+                                      className="absolute left-0 right-0 h-1 bg-gradient-to-r from-transparent via-cyan-400 to-transparent shadow-[0_0_15px_rgba(34,211,238,0.8)]"
+                                      initial={{ top: '0%' }}
+                                      animate={{ top: ['0%', '100%', '0%'] }}
+                                      transition={{
+                                        duration: 2,
+                                        repeat: Infinity,
+                                        ease: "linear"
+                                      }}
+                                    />
+                                  )}
+                                </div>
+                              )}
+                            </div>
+
+                            {/* AI Processing Overlay */}
+                            <AnimatePresence>
+                              {processingOCR && (
+                                <motion.div
+                                  initial={{ opacity: 0, scale: 0.9 }}
+                                  animate={{ opacity: 1, scale: 1 }}
+                                  exit={{ opacity: 0, scale: 0.9 }}
+                                  className="relative"
+                                >
+                                  {/* Glassmorphism Card */}
+                                  <div className={cn(
+                                    "relative overflow-hidden rounded-2xl p-6",
+                                    "backdrop-blur-xl border",
+                                    theme === 'dark'
+                                      ? 'bg-gray-900/80 border-cyan-500/30'
+                                      : 'bg-white/80 border-cyan-400/40'
+                                  )}>
+                                    {/* Animated Border Glow */}
+                                    <div className="absolute inset-0 rounded-2xl">
+                                      <motion.div
+                                        className="absolute inset-0 rounded-2xl"
+                                        animate={{
+                                          boxShadow: [
+                                            '0 0 20px rgba(34,211,238,0.3), inset 0 0 20px rgba(34,211,238,0.1)',
+                                            '0 0 40px rgba(34,211,238,0.5), inset 0 0 30px rgba(34,211,238,0.2)',
+                                            '0 0 20px rgba(34,211,238,0.3), inset 0 0 20px rgba(34,211,238,0.1)',
+                                          ]
+                                        }}
+                                        transition={{ duration: 2, repeat: Infinity }}
+                                      />
+                                    </div>
+
+                                    {/* Particle Effects */}
+                                    <div className="absolute inset-0 overflow-hidden">
+                                      {[...Array(12)].map((_, i) => (
+                                        <motion.div
+                                          key={i}
+                                          className="absolute w-1 h-1 bg-cyan-400 rounded-full"
+                                          initial={{
+                                            x: Math.random() * 100 + '%',
+                                            y: '100%',
+                                            opacity: 0
+                                          }}
+                                          animate={{
+                                            y: '-20%',
+                                            opacity: [0, 1, 0],
+                                          }}
+                                          transition={{
+                                            duration: 2 + Math.random() * 2,
+                                            repeat: Infinity,
+                                            delay: Math.random() * 2,
+                                            ease: "easeOut"
+                                          }}
+                                        />
+                                      ))}
+                                    </div>
+
+                                    {/* Content */}
+                                    <div className="relative z-10 flex flex-col items-center gap-4">
+                                      {/* Animated Icon Container */}
+                                      <div className="relative">
+                                        {/* Outer Ring */}
+                                        <motion.div
+                                          className="absolute inset-0 rounded-full border-2 border-cyan-400/50"
+                                          animate={{
+                                            scale: [1, 1.3, 1],
+                                            opacity: [0.5, 0, 0.5]
+                                          }}
+                                          transition={{ duration: 2, repeat: Infinity }}
+                                          style={{ width: 80, height: 80, margin: -10 }}
+                                        />
+                                        <motion.div
+                                          className="absolute inset-0 rounded-full border-2 border-cyan-400/30"
+                                          animate={{
+                                            scale: [1, 1.5, 1],
+                                            opacity: [0.3, 0, 0.3]
+                                          }}
+                                          transition={{ duration: 2, repeat: Infinity, delay: 0.3 }}
+                                          style={{ width: 80, height: 80, margin: -10 }}
+                                        />
+
+                                        {/* Icon Background */}
+                                        <motion.div
+                                          className="w-16 h-16 rounded-full bg-gradient-to-br from-cyan-400 to-blue-500 flex items-center justify-center shadow-lg shadow-cyan-500/50"
+                                          animate={{
+                                            rotate: [0, 360],
+                                          }}
+                                          transition={{
+                                            duration: 8,
+                                            repeat: Infinity,
+                                            ease: "linear"
+                                          }}
+                                        >
+                                          <motion.div
+                                            animate={{ rotate: [360, 0] }}
+                                            transition={{ duration: 8, repeat: Infinity, ease: "linear" }}
+                                          >
+                                            <AnimatePresence mode="wait">
+                                              <motion.div
+                                                key={ocrStep}
+                                                initial={{ scale: 0, rotate: -180 }}
+                                                animate={{ scale: 1, rotate: 0 }}
+                                                exit={{ scale: 0, rotate: 180 }}
+                                                transition={{ duration: 0.3 }}
+                                              >
+                                                {React.createElement(ocrSteps[ocrStep].icon, {
+                                                  className: "w-8 h-8 text-white"
+                                                })}
+                                              </motion.div>
+                                            </AnimatePresence>
+                                          </motion.div>
+                                        </motion.div>
+                                      </div>
+
+                                      {/* Step Text */}
+                                      <div className="text-center">
+                                        <AnimatePresence mode="wait">
+                                          <motion.p
+                                            key={ocrStep}
+                                            initial={{ opacity: 0, y: 10 }}
+                                            animate={{ opacity: 1, y: 0 }}
+                                            exit={{ opacity: 0, y: -10 }}
+                                            className={cn(
+                                              "font-semibold text-lg",
+                                              theme === 'dark' ? 'text-cyan-300' : 'text-cyan-600'
+                                            )}
+                                          >
+                                            {ocrSteps[ocrStep].text}
+                                          </motion.p>
+                                        </AnimatePresence>
+                                        <p className={cn(
+                                          "text-sm mt-1",
+                                          theme === 'dark' ? 'text-gray-400' : 'text-gray-500'
+                                        )}>
+                                          Gemini AI procesando tu recibo
+                                        </p>
+                                      </div>
+
+                                      {/* Progress Bar */}
+                                      <div className="w-full max-w-xs">
+                                        <div className={cn(
+                                          "h-1.5 rounded-full overflow-hidden",
+                                          theme === 'dark' ? 'bg-gray-700' : 'bg-gray-200'
+                                        )}>
+                                          <motion.div
+                                            className="h-full bg-gradient-to-r from-cyan-400 via-blue-500 to-cyan-400 rounded-full"
+                                            initial={{ x: '-100%' }}
+                                            animate={{ x: '100%' }}
+                                            transition={{
+                                              duration: 1.5,
+                                              repeat: Infinity,
+                                              ease: "easeInOut"
+                                            }}
+                                            style={{ width: '50%' }}
+                                          />
+                                        </div>
+                                      </div>
+
+                                      {/* Neural Network Dots */}
+                                      <div className="flex items-center gap-2 mt-2">
+                                        {[...Array(5)].map((_, i) => (
+                                          <motion.div
+                                            key={i}
+                                            className={cn(
+                                              "w-2 h-2 rounded-full",
+                                              theme === 'dark' ? 'bg-cyan-400' : 'bg-cyan-500'
+                                            )}
+                                            animate={{
+                                              scale: [1, 1.5, 1],
+                                              opacity: [0.3, 1, 0.3]
+                                            }}
+                                            transition={{
+                                              duration: 1,
+                                              repeat: Infinity,
+                                              delay: i * 0.15
+                                            }}
+                                          />
+                                        ))}
+                                      </div>
+                                    </div>
+                                  </div>
+                                </motion.div>
+                              )}
+                            </AnimatePresence>
+
+                            {/* Success State */}
+                            {ocrResult && !processingOCR && (
+                              <motion.div
+                                initial={{ opacity: 0, y: 10 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                className="p-4 bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-900/20 dark:to-emerald-900/20 rounded-xl border border-green-200 dark:border-green-800"
+                              >
+                                <div className="flex items-center gap-3">
+                                  <motion.div
+                                    initial={{ scale: 0 }}
+                                    animate={{ scale: 1 }}
+                                    transition={{ type: "spring", stiffness: 200, delay: 0.2 }}
+                                    className="w-10 h-10 bg-green-500 rounded-full flex items-center justify-center shadow-lg shadow-green-500/30"
+                                  >
+                                    <Check className="w-5 h-5 text-white" />
+                                  </motion.div>
+                                  <div className="flex-1">
+                                    <p className="font-semibold text-green-700 dark:text-green-400">
+                                      Datos extraidos correctamente
+                                    </p>
+                                    <p className="text-sm text-green-600 dark:text-green-500">
+                                      Confianza: {Math.round((ocrResult.confidence || 0) * 100)}%
+                                    </p>
+                                  </div>
+                                  <Sparkles className="w-5 h-5 text-green-500 animate-pulse" />
+                                </div>
+                              </motion.div>
                             )}
-                            {processingOCR && (
-                              <div className="flex items-center justify-center gap-2 text-orange-600">
-                                <Loader2 className="w-5 h-5 animate-spin" />
-                                <span>Procesando con IA...</span>
-                              </div>
-                            )}
-                            {ocrResult && (
-                              <div className="p-3 bg-green-50 dark:bg-green-900/20 rounded-xl text-sm text-green-700 dark:text-green-400 flex items-center gap-2">
-                                <Check className="w-4 h-4" />
-                                Datos extraidos correctamente ({Math.round((ocrResult.confidence || 0) * 100)}% confianza)
-                              </div>
-                            )}
+
                             {errors.ocr && (
                               <div className="p-3 bg-amber-50 dark:bg-amber-900/20 rounded-xl text-sm text-amber-700 dark:text-amber-400 flex items-center gap-2">
                                 <AlertCircle className="w-4 h-4" />

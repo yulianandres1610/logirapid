@@ -69,7 +69,7 @@ export async function GET(
         e.receipt_path,
         e.receipt_type,
         e.created_by,
-        u.name as created_by_name,
+        COALESCE(u.firstname || ' ' || u.lastname, u.email) as created_by_name,
         u.email as created_by_email,
         e.created_at,
         e.updated_at
