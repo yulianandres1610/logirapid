@@ -137,11 +137,9 @@ export default function CreateExpensePage() {
     }))
     setErrors({ ...errors, file: '' })
 
-    // Auto-process with OCR if we're in OCR mode (only for images, not PDFs)
-    if (entryMethod === 'ocr' && !isPdf) {
+    // Auto-process with OCR if we're in OCR mode (supports both images and PDFs)
+    if (entryMethod === 'ocr') {
       await processWithOCR(file)
-    } else if (entryMethod === 'ocr' && isPdf) {
-      setErrors({ ...errors, ocr: 'Los PDFs no pueden ser procesados con OCR. Solo se guardarán como referencia.' })
     }
   }
 
@@ -159,11 +157,16 @@ export default function CreateExpensePage() {
         reader.readAsDataURL(file)
       })
 
-      console.log('[OCR] Sending image to API...')
+      const isPdf = file.type === 'application/pdf'
+      console.log('[OCR] Sending file to API...', { type: file.type, isPdf, size: file.size })
+
       const response = await fetch('/api/market/accounting/expenses/ocr', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ imageBase64: base64 })
+        body: JSON.stringify({
+          fileBase64: base64,
+          mimeType: file.type
+        })
       })
 
       const result = await response.json()

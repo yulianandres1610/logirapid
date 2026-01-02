@@ -3,9 +3,12 @@ import { cookies } from 'next/headers'
 import jwt from 'jsonwebtoken'
 import { GoogleGenerativeAI } from '@google/generative-ai'
 
-// Usar las mismas variables de entorno que el resto del proyecto
+// API Key para Gemini (misma que el resto del proyecto)
 const GOOGLE_AI_API_KEY = process.env.GOOGLE_AI_API_KEY
-const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-2.0-flash-exp'
+
+// Modelo específico para OCR de documentos/facturas (soporta PDFs e imágenes)
+// Gemini 1.5 Pro es ideal para análisis de documentos
+const OCR_MODEL = 'gemini-1.5-pro'
 
 interface JWTPayload {
   userId: number
@@ -17,7 +20,8 @@ interface JWTPayload {
 
 /**
  * POST /api/market/accounting/expenses/ocr
- * Extract expense data from a receipt image using Gemini Vision
+ * Extract expense data from a receipt/invoice using Gemini Vision
+ * Supports: JPG, PNG, WebP, PDF
  */
 export async function POST(request: NextRequest) {
   try {
@@ -43,16 +47,19 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json()
-    const { imageBase64 } = body
+    const { fileBase64, mimeType: providedMimeType } = body
 
-    if (!imageBase64) {
+    // Soporte para el parámetro anterior (imageBase64) para compatibilidad
+    const base64Input = fileBase64 || body.imageBase64
+
+    if (!base64Input) {
       return NextResponse.json({
         success: false,
-        error: 'Imagen requerida'
+        error: 'Archivo requerido (imagen o PDF)'
       }, { status: 400 })
     }
 
-    // Initialize Gemini with correct API key
+    // Initialize Gemini
     if (!GOOGLE_AI_API_KEY) {
       console.error('[OCR] GOOGLE_AI_API_KEY not configured')
       return NextResponse.json({
@@ -61,18 +68,25 @@ export async function POST(request: NextRequest) {
       }, { status: 500 })
     }
 
-    console.log('[OCR] Using model:', GEMINI_MODEL)
     const genAI = new GoogleGenerativeAI(GOOGLE_AI_API_KEY)
-    const model = genAI.getGenerativeModel({ model: GEMINI_MODEL })
+    const model = genAI.getGenerativeModel({ model: OCR_MODEL })
 
-    // Prepare the image data
-    const base64Data = imageBase64.includes(',')
-      ? imageBase64.split(',')[1]
-      : imageBase64
+    // Prepare file data - extract base64 and detect mimeType
+    const base64Data = base64Input.includes(',')
+      ? base64Input.split(',')[1]
+      : base64Input
 
-    const mimeType = imageBase64.includes('data:')
-      ? imageBase64.split(';')[0].split(':')[1]
-      : 'image/jpeg'
+    // Detect mimeType from data URL or use provided
+    let mimeType = providedMimeType
+    if (!mimeType && base64Input.includes('data:')) {
+      mimeType = base64Input.split(';')[0].split(':')[1]
+    }
+    if (!mimeType) {
+      mimeType = 'image/jpeg' // Default fallback
+    }
+
+    const isPdf = mimeType === 'application/pdf'
+    console.log('[OCR] Processing file:', { mimeType, isPdf, model: OCR_MODEL })
 
     const prompt = `Analiza esta imagen de un recibo o factura y extrae la siguiente información:
 
