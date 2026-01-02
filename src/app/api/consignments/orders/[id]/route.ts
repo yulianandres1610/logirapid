@@ -71,12 +71,21 @@ export async function GET(
     // Get order lines with product and variant info
     const linesResult = await db.query(`
       SELECT
-        ol.*,
+        ol.id,
+        ol.product_id,
+        ol.variant_id,
+        ol.quantity_ordered,
+        ol.quantity_received,
+        ol.quantity_sold,
+        ol.quantity_returned,
+        ol.unit_cost,
+        ol.unit_price,
+        ol.lot_number,
+        ol.expiration_date,
         p.name as product_name,
         p.sku as product_sku,
         p.barcode as product_barcode,
         p.image_url as product_image,
-        v.id as variant_id,
         v.variant_name,
         v.sku as variant_sku
       FROM consignment_order_lines ol
