@@ -10,6 +10,58 @@ interface JWTPayload {
   companyId: number
 }
 
+interface NewProduct {
+  tempId: number // ID temporal negativo para mapear con las líneas
+  name: string
+  sku?: string | null
+  barcode?: string | null
+  unitCost: number
+  sellingPrice?: number
+  unitOfMeasure?: string
+  category?: string
+}
+
+/**
+ * Genera un SKU único basado en el nombre del producto
+ */
+function generateSku(name: string, existingSku: string | null): string {
+  if (existingSku) return existingSku
+
+  const prefix = name
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-zA-Z0-9\s]/g, '')
+    .split(' ')
+    .filter(Boolean)
+    .slice(0, 3)
+    .map(w => w.substring(0, 3).toUpperCase())
+    .join('-')
+
+  const timestamp = Date.now().toString(36).toUpperCase().slice(-4)
+  return `${prefix}-${timestamp}`
+}
+
+/**
+ * Genera un código de barras EAN-13 válido
+ */
+function generateBarcode(existingBarcode: string | null): string {
+  if (existingBarcode) return existingBarcode
+
+  // Prefijo para productos internos: 200-299 (uso interno según GS1)
+  const prefix = '200'
+  const timestamp = Date.now().toString().slice(-9)
+  const baseCode = prefix + timestamp
+
+  // Calcular dígito de verificación EAN-13
+  let sum = 0
+  for (let i = 0; i < 12; i++) {
+    sum += parseInt(baseCode[i]) * (i % 2 === 0 ? 1 : 3)
+  }
+  const checkDigit = (10 - (sum % 10)) % 10
+
+  return baseCode + checkDigit
+}
+
 async function getPayload(): Promise<JWTPayload | null> {
   const cookieStore = await cookies()
   const token = cookieStore.get('auth-token')?.value
@@ -231,7 +283,21 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json()
-    const { supplierId, warehouseId, consignmentDate, notes, lines } = body
+    const { supplierId, warehouseId, consignmentDate, notes, lines, newProducts } = body as {
+      supplierId: number
+      warehouseId: number
+      consignmentDate?: string
+      notes?: string
+      lines: Array<{
+        productId: number
+        variantId?: number | null
+        quantity: number
+        unitCost: number
+        unitPrice?: number
+        isNewProduct?: boolean
+      }>
+      newProducts?: NewProduct[]
+    }
 
     // Validaciones
     if (!supplierId || !warehouseId || !lines || lines.length === 0) {
@@ -239,6 +305,59 @@ export async function POST(request: NextRequest) {
         success: false,
         error: 'Proveedor, almacén y productos son requeridos'
       }, { status: 400 })
+    }
+
+    // Crear mapa para productos nuevos (tempId -> realId)
+    const productIdMap = new Map<number, number>()
+    const createdProducts: Array<{ tempId: number; id: number; name: string; sku: string; barcode: string }> = []
+
+    // Crear productos nuevos si existen
+    if (newProducts && newProducts.length > 0) {
+      console.log('[Consignment Orders] Creating', newProducts.length, 'new products')
+
+      for (const newProduct of newProducts) {
+        const sku = generateSku(newProduct.name, newProduct.sku || null)
+        // Add small delay to ensure unique barcodes
+        await new Promise(resolve => setTimeout(resolve, 10))
+        const barcode = generateBarcode(newProduct.barcode || null)
+        const sellingPrice = newProduct.sellingPrice || newProduct.unitCost * 1.3 // 30% margen por defecto
+
+        console.log('[Consignment Orders] Creating product:', {
+          name: newProduct.name,
+          sku,
+          barcode,
+          costPrice: newProduct.unitCost,
+          sellingPrice
+        })
+
+        const result = await db.query(`
+          INSERT INTO market_products (
+            company_id, name, sku, barcode, cost_price, selling_price,
+            currency, quantity_on_hand, is_active, category, created_at
+          ) VALUES ($1, $2, $3, $4, $5, $6, 'USD', 0, true, $7, NOW())
+          RETURNING id
+        `, [
+          payload.companyId,
+          newProduct.name,
+          sku,
+          barcode,
+          newProduct.unitCost,
+          sellingPrice,
+          newProduct.category || 'General'
+        ])
+
+        const realId = result.rows[0].id
+        productIdMap.set(newProduct.tempId, realId)
+        createdProducts.push({
+          tempId: newProduct.tempId,
+          id: realId,
+          name: newProduct.name,
+          sku,
+          barcode
+        })
+
+        console.log('[Consignment Orders] Product created:', { tempId: newProduct.tempId, realId })
+      }
     }
 
     // Verificar proveedor existe
@@ -309,11 +428,24 @@ export async function POST(request: NextRequest) {
 
     // Crear líneas
     for (const line of lines) {
+      // Si es un producto nuevo (ID negativo), usar el ID real creado
+      let productId = line.productId
+      if (line.isNewProduct && line.productId < 0) {
+        const realId = productIdMap.get(line.productId)
+        if (!realId) {
+          console.error('[Order POST] Product ID not found in map:', line.productId)
+          continue
+        }
+        productId = realId
+      }
+
       // Debug log to verify variant_id is being saved
       console.log('[Order POST] Saving line:', {
-        productId: line.productId,
+        originalProductId: line.productId,
+        mappedProductId: productId,
         variantId: line.variantId,
-        quantity: line.quantity
+        quantity: line.quantity,
+        isNewProduct: line.isNewProduct
       })
 
       await db.query(`
@@ -322,7 +454,7 @@ export async function POST(request: NextRequest) {
         ) VALUES ($1, $2, $3, $4, $5, $6)
       `, [
         orderId,
-        line.productId,
+        productId,
         line.variantId || null,
         line.quantity,
         line.unitCost,
@@ -333,6 +465,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       success: true,
       message: 'Orden de consignación creada exitosamente',
+      createdProducts: createdProducts.length > 0 ? createdProducts : undefined,
       data: {
         id: orderId,
         orderNumber,

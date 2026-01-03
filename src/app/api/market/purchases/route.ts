@@ -11,6 +11,58 @@ interface JWTPayload {
   companyName: string
 }
 
+interface NewProduct {
+  tempId: number // ID temporal negativo para mapear con las líneas
+  name: string
+  sku?: string | null
+  barcode?: string | null
+  unitCost: number
+  sellingPrice?: number
+  unitOfMeasure?: string
+  category?: string
+}
+
+/**
+ * Genera un SKU único basado en el nombre del producto
+ */
+function generateSku(name: string, existingSku: string | null): string {
+  if (existingSku) return existingSku
+
+  const prefix = name
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-zA-Z0-9\s]/g, '')
+    .split(' ')
+    .filter(Boolean)
+    .slice(0, 3)
+    .map(w => w.substring(0, 3).toUpperCase())
+    .join('-')
+
+  const timestamp = Date.now().toString(36).toUpperCase().slice(-4)
+  return `${prefix}-${timestamp}`
+}
+
+/**
+ * Genera un código de barras EAN-13 válido
+ */
+function generateBarcode(existingBarcode: string | null): string {
+  if (existingBarcode) return existingBarcode
+
+  // Prefijo para productos internos: 200-299 (uso interno según GS1)
+  const prefix = '200'
+  const timestamp = Date.now().toString().slice(-9)
+  const baseCode = prefix + timestamp
+
+  // Calcular dígito de verificación EAN-13
+  let sum = 0
+  for (let i = 0; i < 12; i++) {
+    sum += parseInt(baseCode[i]) * (i % 2 === 0 ? 1 : 3)
+  }
+  const checkDigit = (10 - (sum % 10)) % 10
+
+  return baseCode + checkDigit
+}
+
 /**
  * GET /api/market/purchases
  * List all purchases for a market company
@@ -221,8 +273,62 @@ export async function POST(request: NextRequest) {
       notes,
       currency = 'USD',
       lines = [],
-      saveAsDraft = false
+      saveAsDraft = false,
+      newProducts = [] as NewProduct[]
     } = body
+
+    // Crear mapa para productos nuevos (tempId -> realId)
+    const productIdMap = new Map<number, number>()
+    const createdProducts: Array<{ tempId: number; id: number; name: string; sku: string; barcode: string }> = []
+
+    // Crear productos nuevos si existen
+    if (newProducts && newProducts.length > 0) {
+      console.log('[Market Purchases] Creating', newProducts.length, 'new products')
+
+      for (const newProduct of newProducts) {
+        const sku = generateSku(newProduct.name, newProduct.sku || null)
+        // Add small delay to ensure unique barcodes
+        await new Promise(resolve => setTimeout(resolve, 10))
+        const barcode = generateBarcode(newProduct.barcode || null)
+        const sellingPrice = newProduct.sellingPrice || newProduct.unitCost * 1.3 // 30% margen por defecto
+
+        console.log('[Market Purchases] Creating product:', {
+          name: newProduct.name,
+          sku,
+          barcode,
+          costPrice: newProduct.unitCost,
+          sellingPrice
+        })
+
+        const result = await db.query(`
+          INSERT INTO market_products (
+            company_id, name, sku, barcode, cost_price, selling_price,
+            currency, quantity_on_hand, is_active, category, created_at
+          ) VALUES ($1, $2, $3, $4, $5, $6, 'USD', 0, true, $7, NOW())
+          RETURNING id
+        `, [
+          companyId,
+          newProduct.name,
+          sku,
+          barcode,
+          newProduct.unitCost,
+          sellingPrice,
+          newProduct.category || 'General'
+        ])
+
+        const realId = result.rows[0].id
+        productIdMap.set(newProduct.tempId, realId)
+        createdProducts.push({
+          tempId: newProduct.tempId,
+          id: realId,
+          name: newProduct.name,
+          sku,
+          barcode
+        })
+
+        console.log('[Market Purchases] Product created:', { tempId: newProduct.tempId, realId })
+      }
+    }
 
     // Determine supplier info
     let finalSupplierName = supplierName
@@ -280,9 +386,10 @@ export async function POST(request: NextRequest) {
       }, { status: 400 })
     }
 
-    // Validate lines
+    // Validate lines (allow negative productIds for new products that will be created)
     for (const line of lines) {
-      if (!line.productId || !line.quantity || !line.unitPrice) {
+      // For new products, productId can be negative
+      if (line.productId === undefined || line.productId === null || !line.quantity || !line.unitPrice) {
         return NextResponse.json({
           success: false,
           error: 'Cada línea debe tener producto, cantidad y precio unitario'
@@ -359,6 +466,23 @@ export async function POST(request: NextRequest) {
 
       // Create lines with lot info
       for (const line of lines) {
+        // Si es un producto nuevo (ID negativo), usar el ID real creado
+        let productId = line.productId
+        if (line.isNewProduct && line.productId < 0) {
+          const realId = productIdMap.get(line.productId)
+          if (!realId) {
+            console.error('[Market Purchases] Product ID not found in map:', line.productId)
+            continue
+          }
+          productId = realId
+        }
+
+        console.log('[Market Purchases] Saving line:', {
+          originalProductId: line.productId,
+          mappedProductId: productId,
+          isNewProduct: line.isNewProduct
+        })
+
         const lineTotal = line.quantity * line.unitPrice
         await client.query(`
           INSERT INTO market_purchase_lines (
@@ -376,7 +500,7 @@ export async function POST(request: NextRequest) {
           ) VALUES ($1, $2, $3, $4, $5, $6, 0, $7, $8, $9, NOW())
         `, [
           purchaseId,
-          line.productId,
+          productId,
           line.variantId || null,
           line.quantity,
           line.unitPrice,
@@ -386,16 +510,16 @@ export async function POST(request: NextRequest) {
           line.manufacturingDate || null
         ])
 
-        // Update product expected quantity
+        // Update product expected quantity (use mapped productId)
         await client.query(`
           UPDATE market_products
           SET quantity_expected = COALESCE(quantity_expected, 0) + $1,
               updated_at = NOW()
           WHERE id = $2
-        `, [line.quantity, line.productId])
+        `, [line.quantity, productId])
       }
 
-      return { purchaseId, purchaseNumber }
+      return { purchaseId, purchaseNumber, createdProducts }
     })
 
     console.log('[Market Purchases] Created purchase:', result.purchaseNumber, 'status:', initialStatus)
@@ -409,6 +533,7 @@ export async function POST(request: NextRequest) {
         totalAmount,
         currency
       },
+      createdProducts: result.createdProducts && result.createdProducts.length > 0 ? result.createdProducts : undefined,
       message: saveAsDraft ? 'Borrador guardado exitosamente' : 'Orden de compra creada exitosamente'
     })
 

@@ -88,6 +88,7 @@ interface ScannedItem {
   id: string
   name: string
   quantity: number
+  unitOfMeasure: string
   unitCost: number
   totalCost: number
   sku: string | null
@@ -1666,7 +1667,7 @@ export default function CreatePurchasePage() {
                                         'text-sm',
                                         theme === 'dark' ? 'text-gray-500' : 'text-gray-500'
                                       )}>
-                                        x{item.quantity} @ ${item.unitCost.toFixed(2)}
+                                        {item.quantity} {item.unitOfMeasure || 'unidad'} × ${item.unitCost.toFixed(2)}
                                       </span>
                                       <span className={cn(
                                         'text-xs px-2 py-0.5 rounded-full',
@@ -1786,7 +1787,7 @@ export default function CreatePurchasePage() {
                                         'text-sm',
                                         theme === 'dark' ? 'text-gray-500' : 'text-gray-500'
                                       )}>
-                                        x{item.quantity} @ ${item.unitCost.toFixed(2)}
+                                        {item.quantity} {item.unitOfMeasure || 'unidad'} × ${item.unitCost.toFixed(2)}
                                       </span>
                                     </div>
                                   </div>

@@ -87,6 +87,7 @@ interface ScannedItem {
   id: string
   name: string
   quantity: number
+  unitOfMeasure: string
   unitCost: number
   totalCost: number
   sku: string | null
@@ -799,6 +800,26 @@ export default function CreateConsignmentOrderPage() {
   const handleSubmitOrder = async () => {
     setSubmitting(true)
     try {
+      // Preparar los productos nuevos que necesitan ser creados
+      const newProducts = orderLines
+        .filter(l => l.isNewProduct && l.productId < 0)
+        .map(l => ({
+          tempId: l.productId, // ID temporal negativo
+          name: l.product.name,
+          sku: l.product.sku || null,
+          barcode: l.product.barcode || null,
+          unitCost: l.unitCost,
+          sellingPrice: l.unitPrice || l.unitCost * 1.3,
+          category: 'General'
+        }))
+
+      console.log('[Submit Order] New products to create:', newProducts)
+      console.log('[Submit Order] Order lines:', orderLines.map(l => ({
+        productId: l.productId,
+        name: l.product.name,
+        isNewProduct: l.isNewProduct
+      })))
+
       const response = await fetch('/api/consignments/orders', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -812,8 +833,10 @@ export default function CreateConsignmentOrderPage() {
             variantId: l.variantId,
             quantity: l.quantity,
             unitCost: l.unitCost,
-            unitPrice: l.unitPrice
-          }))
+            unitPrice: l.unitPrice,
+            isNewProduct: l.isNewProduct || false
+          })),
+          newProducts: newProducts.length > 0 ? newProducts : undefined
         })
       })
 
@@ -1410,7 +1433,7 @@ export default function CreateConsignmentOrderPage() {
                                 <div className="flex-1">
                                   <p className={cn('font-medium', theme === 'dark' ? 'text-white' : 'text-gray-900')}>{item.name}</p>
                                   <p className={cn('text-sm', theme === 'dark' ? 'text-gray-400' : 'text-gray-600')}>→ {item.matchedProduct?.name}</p>
-                                  <span className={cn('text-sm', theme === 'dark' ? 'text-gray-500' : 'text-gray-500')}>x{item.quantity} @ ${item.unitCost.toFixed(2)}</span>
+                                  <span className={cn('text-sm', theme === 'dark' ? 'text-gray-500' : 'text-gray-500')}>{item.quantity} {item.unitOfMeasure || 'unidad'} × ${item.unitCost.toFixed(2)}</span>
                                 </div>
                                 <div className="flex items-center gap-2">
                                   <span className={cn('font-bold', theme === 'dark' ? 'text-white' : 'text-gray-900')}>${item.totalCost.toFixed(2)}</span>
@@ -1436,7 +1459,7 @@ export default function CreateConsignmentOrderPage() {
                               <div className="flex items-center justify-between">
                                 <div className="flex-1">
                                   <p className={cn('font-medium', theme === 'dark' ? 'text-white' : 'text-gray-900')}>{item.name}</p>
-                                  <span className={cn('text-sm', theme === 'dark' ? 'text-gray-500' : 'text-gray-500')}>x{item.quantity} @ ${item.unitCost.toFixed(2)}</span>
+                                  <span className={cn('text-sm', theme === 'dark' ? 'text-gray-500' : 'text-gray-500')}>{item.quantity} {item.unitOfMeasure || 'unidad'} × ${item.unitCost.toFixed(2)}</span>
                                 </div>
                                 <div className="flex items-center gap-2">
                                   <span className={cn('font-bold', theme === 'dark' ? 'text-white' : 'text-gray-900')}>${item.totalCost.toFixed(2)}</span>

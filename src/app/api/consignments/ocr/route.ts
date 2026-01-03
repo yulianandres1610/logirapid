@@ -107,6 +107,7 @@ EXTRAE LA SIGUIENTE INFORMACIÓN:
 PARA CADA ITEM EN LA FACTURA EXTRAE:
 - name: Nombre del producto EXACTAMENTE como aparece
 - quantity: Cantidad (número entero o decimal)
+- unitOfMeasure: Unidad de medida (ej: "unidad", "kg", "lb", "caja", "paquete", "litro", etc.)
 - unitCost: Precio por unidad
 - totalCost: Total de esa línea (quantity × unitCost)
 - sku: Código del producto si existe, sino null
@@ -118,12 +119,12 @@ EJEMPLO DE RESPUESTA ESPERADA:
   "invoiceNumber": "FAC-2025-001",
   "invoiceDate": "2025-01-03",
   "items": [
-    { "name": "Coca Cola 2L", "quantity": 10, "unitCost": 1.50, "totalCost": 15.00, "sku": "COC-2L", "barcode": null },
-    { "name": "Pepsi 500ml", "quantity": 24, "unitCost": 0.80, "totalCost": 19.20, "sku": null, "barcode": null }
+    { "name": "Coca Cola 2L", "quantity": 10, "unitOfMeasure": "unidad", "unitCost": 1.50, "totalCost": 15.00, "sku": "COC-2L", "barcode": null },
+    { "name": "Arroz Premium", "quantity": 50, "unitOfMeasure": "lb", "unitCost": 0.80, "totalCost": 40.00, "sku": null, "barcode": null }
   ],
-  "subtotal": 34.20,
-  "tax": 2.74,
-  "total": 36.94,
+  "subtotal": 55.00,
+  "tax": 4.40,
+  "total": 59.40,
   "confidence": 0.95
 }
 
@@ -181,6 +182,9 @@ RESPONDE ÚNICAMENTE CON EL JSON. Sin explicaciones, sin markdown, sin \`\`\`.`
             quantity?: number
             cantidad?: number
             qty?: number
+            unitOfMeasure?: string
+            unidadMedida?: string
+            unit?: string
             unitCost?: number
             precioUnitario?: number
             precio?: number
@@ -197,6 +201,7 @@ RESPONDE ÚNICAMENTE CON EL JSON. Sin explicaciones, sin markdown, sin \`\`\`.`
             const quantity = typeof item.quantity === 'number' ? item.quantity :
                             typeof item.cantidad === 'number' ? item.cantidad :
                             typeof item.qty === 'number' ? item.qty : 1
+            const unitOfMeasure = item.unitOfMeasure || item.unidadMedida || item.unit || 'unidad'
             const unitCost = typeof item.unitCost === 'number' ? item.unitCost :
                             typeof item.precioUnitario === 'number' ? item.precioUnitario :
                             typeof item.precio === 'number' ? item.precio :
@@ -210,6 +215,7 @@ RESPONDE ÚNICAMENTE CON EL JSON. Sin explicaciones, sin markdown, sin \`\`\`.`
               id: `item-${index}`,
               name,
               quantity,
+              unitOfMeasure,
               unitCost,
               totalCost,
               sku,
@@ -227,6 +233,7 @@ RESPONDE ÚNICAMENTE CON EL JSON. Sin explicaciones, sin markdown, sin \`\`\`.`
           id: 'item-0',
           name: 'Producto general',
           quantity: 1,
+          unitOfMeasure: 'unidad',
           unitCost: extractedData.total,
           totalCost: extractedData.total,
           sku: null,
