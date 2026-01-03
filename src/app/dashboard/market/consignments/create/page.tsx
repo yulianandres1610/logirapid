@@ -692,10 +692,8 @@ export default function CreateConsignmentOrderPage() {
         setSelectedSupplier(matchingSupplier)
       } else {
         console.log('[Consignment] No matching supplier found for:', vendorName, '- Normalized:', normalizedVendor)
-        // Log all normalized supplier names for debugging
-        suppliers.forEach(s => {
-          console.log('[Consignment] Available:', normalize(s.name))
-        })
+        // Pre-fill search with detected vendor name so user can see results immediately
+        setSupplierSearch(vendorName)
       }
     }
 
@@ -889,6 +887,7 @@ export default function CreateConsignmentOrderPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           supplierId: selectedSupplier?.id,
+          supplierName: selectedSupplier?.name, // For auto-creating new suppliers
           warehouseId: selectedWarehouse?.id,
           consignmentDate,
           notes: notes || null,
@@ -1691,84 +1690,114 @@ export default function CreateConsignmentOrderPage() {
                         </div>
                       )}
 
-                      {/* Search Results */}
+                      {/* Search Results - Always show suppliers */}
                       {loadingSuppliers ? (
                         <div className="flex items-center justify-center py-8">
                           <Loader2 className="w-6 h-6 animate-spin text-emerald-500" />
                         </div>
-                      ) : supplierSearch.length > 0 ? (
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 max-h-60 overflow-y-auto">
-                          {filteredSuppliers.map(supplier => (
-                            <motion.button
-                              key={supplier.id}
-                              whileHover={{ scale: 1.02 }}
-                              whileTap={{ scale: 0.98 }}
-                              onClick={() => {
-                                setSelectedSupplier(supplier)
-                                setSupplierSearch('')
-                              }}
-                              className={cn(
-                                'p-4 rounded-xl border text-left transition-all',
-                                selectedSupplier?.id === supplier.id
-                                  ? theme === 'dark'
-                                    ? 'border-emerald-600 bg-emerald-900/20'
-                                    : 'border-emerald-500 bg-emerald-50'
-                                  : theme === 'dark'
-                                    ? 'border-gray-700 bg-gray-800 hover:border-gray-600'
-                                    : 'border-gray-200 bg-white hover:border-gray-300'
-                              )}
-                            >
-                              <div className="flex items-center gap-3">
-                                <div className={cn(
-                                  'px-2 py-1 rounded-lg text-xs font-mono font-bold',
-                                  selectedSupplier?.id === supplier.id
-                                    ? 'bg-emerald-500 text-white'
-                                    : theme === 'dark' ? 'bg-gray-700 text-gray-300' : 'bg-gray-100 text-gray-600'
-                                )}>
-                                  {supplier.supplierCode}
+                      ) : !selectedSupplier ? (
+                        <>
+                          {/* Show suppliers grid */}
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 max-h-60 overflow-y-auto">
+                            {(supplierSearch ? filteredSuppliers : suppliers.slice(0, 20)).map(supplier => (
+                              <motion.button
+                                key={supplier.id}
+                                whileHover={{ scale: 1.02 }}
+                                whileTap={{ scale: 0.98 }}
+                                onClick={() => {
+                                  setSelectedSupplier(supplier)
+                                  setSupplierSearch('')
+                                }}
+                                className={cn(
+                                  'p-4 rounded-xl border text-left transition-all',
+                                  theme === 'dark'
+                                    ? 'border-gray-700 bg-gray-800 hover:border-emerald-600'
+                                    : 'border-gray-200 bg-white hover:border-emerald-500'
+                                )}
+                              >
+                                <div className="flex items-center gap-3">
+                                  <div className={cn(
+                                    'px-2 py-1 rounded-lg text-xs font-mono font-bold',
+                                    theme === 'dark' ? 'bg-gray-700 text-gray-300' : 'bg-gray-100 text-gray-600'
+                                  )}>
+                                    {supplier.supplierCode}
+                                  </div>
+                                  <div>
+                                    <p className={cn(
+                                      'font-medium',
+                                      theme === 'dark' ? 'text-white' : 'text-gray-900'
+                                    )}>{supplier.name}</p>
+                                    {supplier.phone && (
+                                      <p className="text-xs text-gray-500">{supplier.phone}</p>
+                                    )}
+                                  </div>
                                 </div>
-                                <div>
-                                  <p className={cn(
-                                    'font-medium',
-                                    theme === 'dark' ? 'text-white' : 'text-gray-900'
-                                  )}>{supplier.name}</p>
-                                  {supplier.phone && (
-                                    <p className="text-xs text-gray-500">{supplier.phone}</p>
-                                  )}
-                                </div>
-                              </div>
-                            </motion.button>
-                          ))}
-                          {filteredSuppliers.length === 0 && (
-                            <div className="col-span-2 text-center py-8">
+                              </motion.button>
+                            ))}
+                          </div>
+
+                          {/* No results - option to create */}
+                          {supplierSearch && filteredSuppliers.length === 0 && (
+                            <div className={cn(
+                              'mt-3 p-4 rounded-xl border-2 border-dashed text-center',
+                              theme === 'dark' ? 'border-emerald-600/50 bg-emerald-900/10' : 'border-emerald-400 bg-emerald-50'
+                            )}>
+                              <p className={cn(
+                                'font-medium mb-2',
+                                theme === 'dark' ? 'text-emerald-400' : 'text-emerald-700'
+                              )}>
+                                No se encontró &quot;{supplierSearch}&quot;
+                              </p>
+                              <motion.button
+                                whileHover={{ scale: 1.02 }}
+                                whileTap={{ scale: 0.98 }}
+                                onClick={() => {
+                                  // Create supplier with detected name
+                                  const newSupplier: Supplier = {
+                                    id: -Date.now(),
+                                    supplierCode: 'NUEVO',
+                                    name: supplierSearch || scannedData?.vendorName || 'Nuevo Proveedor',
+                                    phone: null,
+                                    email: null,
+                                    address: null,
+                                    city: null,
+                                    state: null,
+                                    fullAddress: ''
+                                  }
+                                  setSelectedSupplier(newSupplier)
+                                  setSupplierSearch('')
+                                }}
+                                className={cn(
+                                  'px-4 py-2 rounded-lg font-medium inline-flex items-center gap-2',
+                                  theme === 'dark'
+                                    ? 'bg-emerald-600 hover:bg-emerald-700 text-white'
+                                    : 'bg-emerald-500 hover:bg-emerald-600 text-white'
+                                )}
+                              >
+                                <Plus className="w-4 h-4" />
+                                Crear proveedor &quot;{supplierSearch}&quot;
+                              </motion.button>
+                            </div>
+                          )}
+
+                          {/* Empty state when no suppliers at all */}
+                          {!supplierSearch && suppliers.length === 0 && (
+                            <div className={cn(
+                              'text-center py-8 rounded-xl border-2 border-dashed',
+                              theme === 'dark' ? 'border-gray-700' : 'border-gray-200'
+                            )}>
                               <Users className="w-8 h-8 mx-auto mb-2 text-gray-400" />
                               <p className={cn(
                                 'font-medium',
                                 theme === 'dark' ? 'text-gray-400' : 'text-gray-500'
-                              )}>No se encontraron proveedores</p>
-                              <Link href="/dashboard/market/suppliers/create">
-                                <button className="mt-2 text-sm text-emerald-500 hover:text-emerald-600">
-                                  Crear proveedor
-                                </button>
-                              </Link>
+                              )}>No hay proveedores registrados</p>
+                              <p className={cn(
+                                'text-sm mt-1',
+                                theme === 'dark' ? 'text-gray-500' : 'text-gray-400'
+                              )}>Escribe un nombre para crear uno nuevo</p>
                             </div>
                           )}
-                        </div>
-                      ) : !selectedSupplier ? (
-                        <div className={cn(
-                          'text-center py-8 rounded-xl border-2 border-dashed',
-                          theme === 'dark' ? 'border-gray-700' : 'border-gray-200'
-                        )}>
-                          <Search className="w-8 h-8 mx-auto mb-2 text-gray-400" />
-                          <p className={cn(
-                            'font-medium',
-                            theme === 'dark' ? 'text-gray-400' : 'text-gray-500'
-                          )}>Busca un proveedor</p>
-                          <p className={cn(
-                            'text-sm mt-1',
-                            theme === 'dark' ? 'text-gray-500' : 'text-gray-400'
-                          )}>Escribe el nombre o codigo del proveedor</p>
-                        </div>
+                        </>
                       ) : null}
                       {errors.supplier && (
                         <p className="text-sm text-red-500 mt-2">{errors.supplier}</p>

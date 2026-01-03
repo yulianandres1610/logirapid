@@ -283,8 +283,9 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json()
-    const { supplierId, warehouseId, consignmentDate, notes, lines, newProducts } = body as {
+    const { supplierId: rawSupplierId, supplierName, warehouseId, consignmentDate, notes, lines, newProducts } = body as {
       supplierId: number
+      supplierName?: string // Name for new supplier
       warehouseId: number
       consignmentDate?: string
       notes?: string
@@ -300,11 +301,41 @@ export async function POST(request: NextRequest) {
     }
 
     // Validaciones
-    if (!supplierId || !warehouseId || !lines || lines.length === 0) {
+    if (!rawSupplierId || !warehouseId || !lines || lines.length === 0) {
       return NextResponse.json({
         success: false,
         error: 'Proveedor, almacén y productos son requeridos'
       }, { status: 400 })
+    }
+
+    // Create new supplier if ID is negative
+    let supplierId = rawSupplierId
+    let createdSupplier: { id: number; supplierCode: string; name: string } | null = null
+    if (rawSupplierId < 0 && supplierName) {
+      console.log('[Consignment Orders] Creating new supplier:', supplierName)
+
+      // Generate supplier code
+      const year = new Date().getFullYear()
+      const countResult = await db.query(`
+        SELECT COUNT(*) as count
+        FROM market_suppliers
+        WHERE company_id = $1 AND supplier_code LIKE $2
+      `, [payload.companyId, `SUP-${year}-%`])
+
+      const count = parseInt(countResult.rows[0]?.count) || 0
+      const supplierCode = `SUP-${year}-${(count + 1).toString().padStart(4, '0')}`
+
+      const result = await db.query(`
+        INSERT INTO market_suppliers (
+          company_id, supplier_code, name, is_active, rating,
+          created_by, created_at, updated_at
+        ) VALUES ($1, $2, $3, true, 3, $4, NOW(), NOW())
+        RETURNING id
+      `, [payload.companyId, supplierCode, supplierName, payload.userId])
+
+      supplierId = result.rows[0].id
+      createdSupplier = { id: supplierId, supplierCode, name: supplierName }
+      console.log('[Consignment Orders] Created supplier:', createdSupplier)
     }
 
     // Crear mapa para productos nuevos (tempId -> realId)
@@ -476,6 +507,7 @@ export async function POST(request: NextRequest) {
       success: true,
       message: 'Orden de consignación creada exitosamente',
       createdProducts: createdProducts.length > 0 ? createdProducts : undefined,
+      createdSupplier: createdSupplier || undefined,
       data: {
         id: orderId,
         orderNumber,

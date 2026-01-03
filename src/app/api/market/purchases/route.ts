@@ -335,9 +335,38 @@ export async function POST(request: NextRequest) {
     let finalSupplierContact = supplierContact
     let finalSupplierAddress = supplierAddress
     let finalSupplierId = supplierId || null
+    let createdSupplier: { id: number; supplierCode: string; name: string } | null = null
 
-    // If supplierId is provided, fetch supplier details
-    if (supplierId) {
+    // Create new supplier if ID is negative (auto-create from AI scan)
+    if (supplierId && supplierId < 0 && supplierName) {
+      console.log('[Market Purchases] Creating new supplier:', supplierName)
+
+      // Generate supplier code
+      const year = new Date().getFullYear()
+      const countResult = await db.query(`
+        SELECT COUNT(*) as count
+        FROM market_suppliers
+        WHERE company_id = $1 AND supplier_code LIKE $2
+      `, [companyId, `SUP-${year}-%`])
+
+      const count = parseInt(countResult.rows[0]?.count) || 0
+      const supplierCode = `SUP-${year}-${(count + 1).toString().padStart(4, '0')}`
+
+      const result = await db.query(`
+        INSERT INTO market_suppliers (
+          company_id, supplier_code, name, is_active, rating,
+          created_by, created_at, updated_at
+        ) VALUES ($1, $2, $3, true, 3, $4, NOW(), NOW())
+        RETURNING id
+      `, [companyId, supplierCode, supplierName, userId])
+
+      finalSupplierId = result.rows[0].id
+      createdSupplier = { id: finalSupplierId, supplierCode, name: supplierName }
+      finalSupplierName = supplierName
+      console.log('[Market Purchases] Created supplier:', createdSupplier)
+    }
+    // If supplierId is provided and positive, fetch supplier details
+    else if (supplierId && supplierId > 0) {
       const supplierResult = await db.query(`
         SELECT name, phone, address, city, state
         FROM market_suppliers
@@ -534,6 +563,7 @@ export async function POST(request: NextRequest) {
         currency
       },
       createdProducts: result.createdProducts && result.createdProducts.length > 0 ? result.createdProducts : undefined,
+      createdSupplier: createdSupplier || undefined,
       message: saveAsDraft ? 'Borrador guardado exitosamente' : 'Orden de compra creada exitosamente'
     })
 
