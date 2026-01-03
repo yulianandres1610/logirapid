@@ -145,11 +145,14 @@ interface MatchedItem extends ScannedItem {
 
 interface Supplier {
   id: number
-  code: string
+  supplierCode: string
   name: string
-  contactName: string | null
-  email: string | null
   phone: string | null
+  email: string | null
+  address: string | null
+  city: string | null
+  state: string | null
+  fullAddress: string
 }
 
 interface WarehouseInfo {
@@ -292,19 +295,19 @@ export default function CreateConsignmentOrderPage() {
 
   const currentStepIndex = STEPS.findIndex(s => s.id === currentStep)
 
-  // Load suppliers and warehouses
+  // Load suppliers and warehouses (usando market_suppliers unificado)
   useEffect(() => {
     const fetchData = async () => {
       setLoadingSuppliers(true)
       try {
         const [suppliersRes, warehousesRes] = await Promise.all([
-          fetch('/api/consignments/suppliers?limit=100'),
+          fetch('/api/market/suppliers?limit=100'),
           fetch('/api/market/warehouses')
         ])
 
         if (suppliersRes.ok) {
           const data = await suppliersRes.json()
-          if (data.success) setSuppliers(data.data.suppliers)
+          if (data.success) setSuppliers(data.data || [])
         }
 
         if (warehousesRes.ok) {
@@ -917,9 +920,9 @@ export default function CreateConsignmentOrderPage() {
           documentData: {
             orderNumber: createdOrder.orderNumber,
             supplier: {
-              code: selectedSupplier.code,
+              code: selectedSupplier.supplierCode,
               name: selectedSupplier.name,
-              contactName: selectedSupplier.contactName
+              phone: selectedSupplier.phone
             },
             warehouse: {
               code: selectedWarehouse.code,
@@ -970,7 +973,7 @@ export default function CreateConsignmentOrderPage() {
 
   const filteredSuppliers = suppliers.filter(s =>
     s.name.toLowerCase().includes(supplierSearch.toLowerCase()) ||
-    s.code.toLowerCase().includes(supplierSearch.toLowerCase())
+    (s.supplierCode && s.supplierCode.toLowerCase().includes(supplierSearch.toLowerCase()))
   )
 
   return (
@@ -1570,15 +1573,15 @@ export default function CreateConsignmentOrderPage() {
                           <div className="flex items-center justify-between">
                             <div className="flex items-center gap-3">
                               <div className="px-2 py-1 rounded-lg text-xs font-mono font-bold bg-emerald-500 text-white">
-                                {selectedSupplier.code}
+                                {selectedSupplier.supplierCode}
                               </div>
                               <div>
                                 <p className={cn(
                                   'font-medium',
                                   theme === 'dark' ? 'text-white' : 'text-gray-900'
                                 )}>{selectedSupplier.name}</p>
-                                {selectedSupplier.contactName && (
-                                  <p className="text-xs text-gray-500">{selectedSupplier.contactName}</p>
+                                {selectedSupplier.phone && (
+                                  <p className="text-xs text-gray-500">{selectedSupplier.phone}</p>
                                 )}
                               </div>
                             </div>
@@ -1629,15 +1632,15 @@ export default function CreateConsignmentOrderPage() {
                                     ? 'bg-emerald-500 text-white'
                                     : theme === 'dark' ? 'bg-gray-700 text-gray-300' : 'bg-gray-100 text-gray-600'
                                 )}>
-                                  {supplier.code}
+                                  {supplier.supplierCode}
                                 </div>
                                 <div>
                                   <p className={cn(
                                     'font-medium',
                                     theme === 'dark' ? 'text-white' : 'text-gray-900'
                                   )}>{supplier.name}</p>
-                                  {supplier.contactName && (
-                                    <p className="text-xs text-gray-500">{supplier.contactName}</p>
+                                  {supplier.phone && (
+                                    <p className="text-xs text-gray-500">{supplier.phone}</p>
                                   )}
                                 </div>
                               </div>
@@ -1650,7 +1653,7 @@ export default function CreateConsignmentOrderPage() {
                                 'font-medium',
                                 theme === 'dark' ? 'text-gray-400' : 'text-gray-500'
                               )}>No se encontraron proveedores</p>
-                              <Link href="/dashboard/market/consignments/suppliers/create">
+                              <Link href="/dashboard/market/suppliers/create">
                                 <button className="mt-2 text-sm text-emerald-500 hover:text-emerald-600">
                                   Crear proveedor
                                 </button>
@@ -2050,12 +2053,12 @@ export default function CreateConsignmentOrderPage() {
                               'px-2 py-1 rounded-lg text-xs font-mono font-bold',
                               theme === 'dark' ? 'bg-emerald-900/30 text-emerald-400' : 'bg-emerald-100 text-emerald-600'
                             )}>
-                              {selectedSupplier?.code}
+                              {selectedSupplier?.supplierCode}
                             </div>
                             <div>
                               <p className="font-medium text-gray-900 dark:text-white">{selectedSupplier?.name}</p>
-                              {selectedSupplier?.contactName && (
-                                <p className="text-xs text-gray-500">{selectedSupplier.contactName}</p>
+                              {selectedSupplier?.phone && (
+                                <p className="text-xs text-gray-500">{selectedSupplier.phone}</p>
                               )}
                             </div>
                           </div>

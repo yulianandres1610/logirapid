@@ -98,14 +98,14 @@ export async function GET(request: NextRequest) {
     let query = `
       SELECT
         o.*,
-        s.code as supplier_code,
+        s.supplier_code as supplier_code,
         s.name as supplier_name,
         w.name as warehouse_name,
         w.code as warehouse_code,
         u.firstname || ' ' || u.lastname as created_by_name,
         (SELECT COUNT(*) FROM consignment_order_lines WHERE order_id = o.id) as line_count
       FROM consignment_orders o
-      JOIN consignment_suppliers s ON s.id = o.supplier_id
+      JOIN market_suppliers s ON s.id = o.supplier_id
       JOIN market_warehouses w ON w.id = o.warehouse_id
       LEFT JOIN users u ON u.id = o.created_by
       WHERE o.company_id = $1
@@ -141,7 +141,7 @@ export async function GET(request: NextRequest) {
     let countQuery = `
       SELECT COUNT(*) as total
       FROM consignment_orders o
-      JOIN consignment_suppliers s ON s.id = o.supplier_id
+      JOIN market_suppliers s ON s.id = o.supplier_id
       JOIN market_warehouses w ON w.id = o.warehouse_id
       LEFT JOIN users u ON u.id = o.created_by
       WHERE o.company_id = $1
@@ -360,9 +360,9 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Verificar proveedor existe
+    // Verificar proveedor existe (usando tabla unificada market_suppliers)
     const supplierCheck = await db.query(
-      'SELECT id, code FROM consignment_suppliers WHERE id = $1 AND company_id = $2',
+      'SELECT id, supplier_code FROM market_suppliers WHERE id = $1 AND company_id = $2',
       [supplierId, payload.companyId]
     )
     if (supplierCheck.rows.length === 0) {
