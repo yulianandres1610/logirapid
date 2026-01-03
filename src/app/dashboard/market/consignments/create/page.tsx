@@ -145,8 +145,10 @@ interface MatchedItem extends ScannedItem {
   linkedProductId?: number
   // Imagen y descripción generadas con IA
   generatedImageUrl?: string
+  generatedImageBase64?: string // Raw base64 para guardar en S3 al crear producto
   generatedDescription?: string
   isGeneratingImage?: boolean
+  isCleaningImage?: boolean
 }
 
 interface Supplier {
@@ -538,10 +540,13 @@ export default function CreateConsignmentOrderPage() {
 
       if (data.success && data.data) {
         console.log('[Consignment] AI image generated successfully')
+        // Guardar tanto la URL de preview como el base64 raw para S3
+        const imageBase64 = data.data.imageBase64 || data.data.imageUrl
         setMatchedProducts(prev => prev.map(p =>
           p.id === itemId ? {
             ...p,
-            generatedImageUrl: data.data.imageUrl || data.data.imageBase64,
+            generatedImageUrl: imageBase64,
+            generatedImageBase64: imageBase64, // Guardar base64 para crear producto después
             generatedDescription: data.data.imageDescription,
             isGeneratingImage: false
           } : p
@@ -556,6 +561,66 @@ export default function CreateConsignmentOrderPage() {
       console.error('[Consignment] Error generating AI image:', error)
       setMatchedProducts(prev => prev.map(p =>
         p.id === itemId ? { ...p, isGeneratingImage: false } : p
+      ))
+    }
+  }, [matchedProducts])
+
+  // Upload real image and clean with AI
+  const uploadAndCleanImage = useCallback(async (itemId: string, file: File) => {
+    const item = matchedProducts.find(p => p.id === itemId)
+    if (!item) return
+
+    // Mark as cleaning
+    setMatchedProducts(prev => prev.map(p =>
+      p.id === itemId ? { ...p, isCleaningImage: true } : p
+    ))
+
+    try {
+      console.log('[Consignment] Uploading and cleaning image for:', item.name)
+
+      // Convert file to base64
+      const reader = new FileReader()
+      const base64Promise = new Promise<string>((resolve, reject) => {
+        reader.onload = () => resolve(reader.result as string)
+        reader.onerror = reject
+      })
+      reader.readAsDataURL(file)
+      const base64Data = await base64Promise
+
+      const response = await fetch('/api/ai/process-image', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'clean',
+          imageBase64: base64Data,
+          productName: item.name,
+          saveToStorage: false // No guardamos aún, solo preview
+        })
+      })
+
+      const data = await response.json()
+
+      if (data.success && data.data) {
+        console.log('[Consignment] Image cleaned successfully')
+        const cleanedBase64 = data.data.imageBase64 || data.data.imageUrl
+        setMatchedProducts(prev => prev.map(p =>
+          p.id === itemId ? {
+            ...p,
+            generatedImageUrl: cleanedBase64,
+            generatedImageBase64: cleanedBase64,
+            isCleaningImage: false
+          } : p
+        ))
+      } else {
+        console.error('[Consignment] Image cleaning failed:', data.error)
+        setMatchedProducts(prev => prev.map(p =>
+          p.id === itemId ? { ...p, isCleaningImage: false } : p
+        ))
+      }
+    } catch (error) {
+      console.error('[Consignment] Error cleaning image:', error)
+      setMatchedProducts(prev => prev.map(p =>
+        p.id === itemId ? { ...p, isCleaningImage: false } : p
       ))
     }
   }, [matchedProducts])
@@ -1592,27 +1657,63 @@ export default function CreateConsignmentOrderPage() {
                                       <ImageIcon className="w-6 h-6 text-gray-400" />
                                     </div>
                                   )}
-                                  {/* Boton para generar imagen con IA */}
-                                  <button
-                                    onClick={() => generateImageWithAI(item.id)}
-                                    disabled={item.isGeneratingImage || item.action === 'ignore'}
-                                    className={cn(
-                                      'absolute -bottom-1 -right-1 p-1.5 rounded-full shadow-lg transition-all',
-                                      item.isGeneratingImage
-                                        ? 'bg-purple-500 cursor-wait'
-                                        : item.generatedImageUrl
-                                          ? 'bg-green-500 hover:bg-green-600'
-                                          : 'bg-purple-500 hover:bg-purple-600',
-                                      item.action === 'ignore' && 'opacity-50 cursor-not-allowed'
-                                    )}
-                                    title={item.generatedImageUrl ? 'Regenerar imagen con IA' : 'Generar imagen con IA'}
-                                  >
-                                    {item.isGeneratingImage ? (
-                                      <Loader2 className="w-3 h-3 text-white animate-spin" />
-                                    ) : (
-                                      <Wand2 className="w-3 h-3 text-white" />
-                                    )}
-                                  </button>
+                                  {/* Botones para imagen: subir y limpiar O generar */}
+                                  <div className="absolute -bottom-1 -right-1 flex gap-1">
+                                    {/* Input file oculto para subir imagen */}
+                                    <input
+                                      type="file"
+                                      id={`upload-image-${item.id}`}
+                                      accept="image/*"
+                                      className="hidden"
+                                      onChange={(e) => {
+                                        const file = e.target.files?.[0]
+                                        if (file) {
+                                          uploadAndCleanImage(item.id, file)
+                                        }
+                                        e.target.value = '' // Reset para permitir subir el mismo archivo
+                                      }}
+                                    />
+                                    {/* Botón para subir imagen real y limpiar con IA */}
+                                    <button
+                                      onClick={() => document.getElementById(`upload-image-${item.id}`)?.click()}
+                                      disabled={item.isCleaningImage || item.isGeneratingImage || item.action === 'ignore'}
+                                      className={cn(
+                                        'p-1.5 rounded-full shadow-lg transition-all',
+                                        item.isCleaningImage
+                                          ? 'bg-blue-500 cursor-wait'
+                                          : 'bg-blue-500 hover:bg-blue-600',
+                                        (item.action === 'ignore' || item.isGeneratingImage) && 'opacity-50 cursor-not-allowed'
+                                      )}
+                                      title="Subir foto y limpiar con IA"
+                                    >
+                                      {item.isCleaningImage ? (
+                                        <Loader2 className="w-3 h-3 text-white animate-spin" />
+                                      ) : (
+                                        <Upload className="w-3 h-3 text-white" />
+                                      )}
+                                    </button>
+                                    {/* Botón para generar imagen desde cero con IA */}
+                                    <button
+                                      onClick={() => generateImageWithAI(item.id)}
+                                      disabled={item.isGeneratingImage || item.isCleaningImage || item.action === 'ignore'}
+                                      className={cn(
+                                        'p-1.5 rounded-full shadow-lg transition-all',
+                                        item.isGeneratingImage
+                                          ? 'bg-purple-500 cursor-wait'
+                                          : item.generatedImageUrl
+                                            ? 'bg-green-500 hover:bg-green-600'
+                                            : 'bg-purple-500 hover:bg-purple-600',
+                                        (item.action === 'ignore' || item.isCleaningImage) && 'opacity-50 cursor-not-allowed'
+                                      )}
+                                      title={item.generatedImageUrl ? 'Regenerar imagen con IA' : 'Generar imagen con IA'}
+                                    >
+                                      {item.isGeneratingImage ? (
+                                        <Loader2 className="w-3 h-3 text-white animate-spin" />
+                                      ) : (
+                                        <Wand2 className="w-3 h-3 text-white" />
+                                      )}
+                                    </button>
+                                  </div>
                                 </div>
                                 {/* Info del producto */}
                                 <div className="flex-1 min-w-0">
