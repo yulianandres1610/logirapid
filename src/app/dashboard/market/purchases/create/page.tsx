@@ -32,9 +32,11 @@ import {
   RefreshCw,
   Scan,
   Brain,
-  Zap
+  Zap,
+  Warehouse,
+  Users
 } from 'lucide-react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams, usePathname } from 'next/navigation'
 import Link from 'next/link'
 import { useTheme } from '@/contexts/theme-context'
 import { cn } from '@/lib/utils'
@@ -196,10 +198,22 @@ interface PurchaseLine {
 export default function CreatePurchasePage() {
   const { theme } = useTheme()
   const router = useRouter()
-  const [currentStep, setCurrentStep] = useState<Step>('method')
+  const searchParams = useSearchParams()
+  const pathname = usePathname()
+
+  // Read initial step from URL
+  const initialStep = (searchParams.get('step') as Step) || 'method'
+  const [currentStep, setCurrentStep] = useState<Step>(initialStep)
   const [loading, setLoading] = useState(false)
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [showCancelModal, setShowCancelModal] = useState(false)
+
+  // Sync step with URL
+  useEffect(() => {
+    const params = new URLSearchParams(searchParams.toString())
+    params.set('step', currentStep)
+    router.replace(`${pathname}?${params.toString()}`, { scroll: false })
+  }, [currentStep, pathname, router, searchParams])
 
   // Método de entrada (IA o manual)
   const [entryMethod, setEntryMethod] = useState<'ai' | 'manual' | null>(null)
@@ -244,11 +258,13 @@ export default function CreatePurchasePage() {
   // Steps dinámicos basados en método
   const STEPS = entryMethod === 'ai' ? STEPS_AI : STEPS_MANUAL
 
-  // Step: Supplier
+  // Step: Supplier & Warehouse (same as consignments)
+  const [suppliers, setSuppliers] = useState<Supplier[]>([])
+  const [warehouses, setWarehouses] = useState<{ id: number; code: string; name: string }[]>([])
+  const [loadingSuppliers, setLoadingSuppliers] = useState(true)
   const [supplierSearch, setSupplierSearch] = useState('')
-  const [supplierResults, setSupplierResults] = useState<Supplier[]>([])
-  const [searchingSupplier, setSearchingSupplier] = useState(false)
   const [selectedSupplier, setSelectedSupplier] = useState<Supplier | null>(null)
+  const [selectedWarehouse, setSelectedWarehouse] = useState<{ id: number; code: string; name: string } | null>(null)
   const [showNewSupplierModal, setShowNewSupplierModal] = useState(false)
   const [newSupplierData, setNewSupplierData] = useState({
     name: '',
@@ -281,29 +297,57 @@ export default function CreatePurchasePage() {
 
   const currentStepIndex = STEPS.findIndex(s => s.id === currentStep)
 
-  // Search suppliers with debounce
+  // Load suppliers and warehouses on mount (same as consignments)
   useEffect(() => {
-    const timer = setTimeout(async () => {
-      if (supplierSearch.length >= 2) {
-        setSearchingSupplier(true)
-        try {
-          const response = await fetch(`/api/market/suppliers/search?q=${encodeURIComponent(supplierSearch)}&limit=10`)
-          const data = await response.json()
-          if (data.success) {
-            setSupplierResults(data.data)
-          }
-        } catch (error) {
-          console.error('Error searching suppliers:', error)
-        } finally {
-          setSearchingSupplier(false)
-        }
-      } else {
-        setSupplierResults([])
-      }
-    }, 300)
+    const fetchData = async () => {
+      setLoadingSuppliers(true)
+      try {
+        const [suppliersRes, warehousesRes] = await Promise.all([
+          fetch('/api/market/suppliers?limit=100'),
+          fetch('/api/market/warehouses')
+        ])
 
-    return () => clearTimeout(timer)
-  }, [supplierSearch])
+        if (suppliersRes.ok) {
+          const data = await suppliersRes.json()
+          console.log('[Purchase] Loaded suppliers:', data)
+          if (data.success) {
+            // API returns data.data.suppliers
+            const suppliersList = data.data?.suppliers || data.data || []
+            // Map API response to expected Supplier interface
+            const mappedSuppliers = suppliersList.map((s: { id: number; supplier_code?: string; supplierCode?: string; name: string; phone?: string | null; email?: string | null; address?: string | null; city?: string | null; state?: string | null }) => ({
+              id: s.id,
+              supplierCode: s.supplier_code || s.supplierCode || '',
+              name: s.name,
+              phone: s.phone || null,
+              email: s.email || null,
+              address: s.address || null,
+              city: s.city || null,
+              state: s.state || null,
+              fullAddress: [s.address, s.city, s.state].filter(Boolean).join(', ')
+            }))
+            console.log('[Purchase] Mapped suppliers:', mappedSuppliers.length)
+            setSuppliers(mappedSuppliers)
+          }
+        }
+
+        if (warehousesRes.ok) {
+          const data = await warehousesRes.json()
+          if (data.success) setWarehouses(data.data.warehouses || data.data || [])
+        }
+      } catch (error) {
+        console.error('Error loading data:', error)
+      } finally {
+        setLoadingSuppliers(false)
+      }
+    }
+    fetchData()
+  }, [])
+
+  // Filter suppliers locally (same as consignments)
+  const filteredSuppliers = suppliers.filter(s =>
+    s.name.toLowerCase().includes(supplierSearch.toLowerCase()) ||
+    (s.supplierCode && s.supplierCode.toLowerCase().includes(supplierSearch.toLowerCase()))
+  )
 
   // Search products
   const searchProducts = useCallback(async (query: string) => {
@@ -618,22 +662,53 @@ export default function CreatePurchasePage() {
     // Set purchase lines
     setPurchaseLines(newLines)
 
-    // Pre-fill supplier if detected
+    // Pre-fill supplier if detected - improved matching algorithm (same as consignments)
     if (scannedData?.vendorName) {
-      // Search for supplier by name
-      try {
-        const response = await fetch(`/api/market/suppliers/search?q=${encodeURIComponent(scannedData.vendorName)}&limit=5`)
-        const data = await response.json()
-        if (data.success && data.data.length > 0) {
-          // Found a matching supplier
-          setSelectedSupplier(data.data[0])
-        } else {
-          // Pre-fill search with detected name
-          setSupplierSearch(scannedData.vendorName)
-        }
-      } catch (error) {
-        console.error('Error searching supplier:', error)
-        setSupplierSearch(scannedData.vendorName || '')
+      const vendorName = scannedData.vendorName
+      console.log('[Purchase] Trying to match vendor:', vendorName)
+      console.log('[Purchase] Available suppliers:', suppliers.map(s => s.name))
+
+      // Normalize function: remove accents, special chars, extra spaces
+      const normalize = (str: string) => str
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '') // remove accents
+        .replace(/[^a-z0-9\s]/g, ' ') // replace special chars with space
+        .replace(/\s+/g, ' ') // collapse multiple spaces
+        .trim()
+
+      const normalizedVendor = normalize(vendorName)
+      const vendorWords = normalizedVendor.split(' ').filter(w => w.length > 2)
+
+      // Try multiple matching strategies
+      const matchingSupplier = suppliers.find(s => {
+        const normalizedSupplier = normalize(s.name)
+
+        // Strategy 1: Exact match after normalization
+        if (normalizedSupplier === normalizedVendor) return true
+
+        // Strategy 2: One contains the other
+        if (normalizedSupplier.includes(normalizedVendor) || normalizedVendor.includes(normalizedSupplier)) return true
+
+        // Strategy 3: Key words match (at least 60% of vendor words found in supplier)
+        const supplierWords = normalizedSupplier.split(' ').filter(w => w.length > 2)
+        const matchedWords = vendorWords.filter(vw =>
+          supplierWords.some(sw => sw.includes(vw) || vw.includes(sw))
+        )
+        if (vendorWords.length > 0 && matchedWords.length / vendorWords.length >= 0.6) return true
+
+        return false
+      })
+
+      if (matchingSupplier) {
+        console.log('[Purchase] Auto-matched supplier:', matchingSupplier.name, 'from', vendorName)
+        setSelectedSupplier(matchingSupplier)
+      } else {
+        console.log('[Purchase] No matching supplier found for:', vendorName, '- Normalized:', normalizedVendor)
+        // Log all normalized supplier names for debugging
+        suppliers.forEach(s => {
+          console.log('[Purchase] Available:', normalize(s.name))
+        })
       }
     }
 
@@ -644,7 +719,7 @@ export default function CreatePurchasePage() {
 
     // Move to supplier step
     setCurrentStep('supplier')
-  }, [matchedProducts, scannedData])
+  }, [matchedProducts, scannedData, suppliers])
 
   // Reset AI scan data
   const resetAIScan = useCallback(() => {
@@ -798,6 +873,7 @@ export default function CreatePurchasePage() {
     switch (step) {
       case 'supplier':
         if (!selectedSupplier) newErrors.supplier = 'Selecciona un proveedor'
+        if (!selectedWarehouse) newErrors.warehouse = 'Selecciona un almacen destino'
         break
       case 'products':
         if (purchaseLines.length === 0) newErrors.products = 'Agrega al menos un producto'
@@ -836,6 +912,7 @@ export default function CreatePurchasePage() {
           supplierName: selectedSupplier!.name,
           supplierContact: selectedSupplier!.phone,
           supplierAddress: selectedSupplier!.fullAddress,
+          warehouseId: selectedWarehouse?.id || null,
           purchaseDate,
           expectedDate: expectedDate || null,
           notes: notes || null,
@@ -1949,7 +2026,7 @@ export default function CreatePurchasePage() {
                   </motion.div>
                 )}
 
-                {/* Step: Supplier */}
+                {/* Step: Supplier & Warehouse (same design as consignments) */}
                 {currentStep === 'supplier' && (
                   <motion.div
                     key="supplier"
@@ -1963,124 +2040,228 @@ export default function CreatePurchasePage() {
                       "text-xl font-bold flex items-center gap-3",
                       theme === 'dark' ? 'text-white' : 'text-gray-900'
                     )}>
-                      <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center">
-                        <Truck className="w-5 h-5 text-white" />
+                      <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-500 to-emerald-600 flex items-center justify-center">
+                        <Users className="w-5 h-5 text-white" />
                       </div>
-                      Seleccionar Proveedor
+                      Seleccionar Proveedor y Almacen
                     </h2>
 
-                    {/* Search Input */}
-                    <div className="relative">
-                      <div className={cn(
-                        'flex items-center gap-3 p-4 rounded-xl border-2 transition-all',
-                        theme === 'dark'
-                          ? 'bg-gray-900/50 border-gray-600 focus-within:border-blue-500'
-                          : 'bg-gray-50 border-gray-200 focus-within:border-blue-500'
+                    {/* Supplier Selection */}
+                    <div>
+                      <label className={cn(
+                        "block text-sm font-medium mb-2",
+                        theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
                       )}>
-                        <Search className={cn('w-5 h-5', theme === 'dark' ? 'text-gray-400' : 'text-gray-500')} />
+                        Proveedor *
+                      </label>
+
+                      {/* Show detected vendor name if AI scanned but no match found */}
+                      {scannedData?.vendorName && !selectedSupplier && (
+                        <div className={cn(
+                          'p-3 rounded-xl border mb-3 flex items-start gap-3',
+                          theme === 'dark'
+                            ? 'border-amber-600/50 bg-amber-900/20'
+                            : 'border-amber-400 bg-amber-50'
+                        )}>
+                          <AlertTriangle className="w-5 h-5 text-amber-500 flex-shrink-0 mt-0.5" />
+                          <div>
+                            <p className={cn(
+                              'font-medium text-sm',
+                              theme === 'dark' ? 'text-amber-300' : 'text-amber-700'
+                            )}>
+                              Proveedor detectado: <strong>{scannedData.vendorName}</strong>
+                            </p>
+                            <p className={cn(
+                              'text-xs mt-0.5',
+                              theme === 'dark' ? 'text-amber-400' : 'text-amber-600'
+                            )}>
+                              No se encontro coincidencia automatica. Busca y selecciona el proveedor correcto.
+                            </p>
+                          </div>
+                        </div>
+                      )}
+
+                      <div className="relative mb-3">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
                         <input
                           type="text"
-                          placeholder="Buscar por nombre, código o teléfono..."
                           value={supplierSearch}
                           onChange={(e) => setSupplierSearch(e.target.value)}
+                          placeholder={scannedData?.vendorName ? `Buscar "${scannedData.vendorName}"...` : "Buscar proveedor..."}
                           className={cn(
-                            'flex-1 bg-transparent outline-none text-lg',
-                            theme === 'dark' ? 'text-white placeholder:text-gray-500' : 'text-gray-900 placeholder:text-gray-400'
+                            'w-full pl-10 pr-4 py-3 rounded-xl border focus:outline-none focus:ring-2 transition-all',
+                            theme === 'dark'
+                              ? 'bg-gray-900/50 border-gray-600 text-white focus:border-emerald-500 focus:ring-emerald-500/20'
+                              : 'bg-gray-50 border-gray-200 text-gray-900 focus:border-emerald-500 focus:ring-emerald-500/20'
                           )}
                         />
-                        {searchingSupplier && <Loader2 className="w-5 h-5 animate-spin text-blue-500" />}
                       </div>
 
-                      {/* Search Results */}
-                      {supplierSearch.length >= 2 && (
-                        <motion.div
-                          initial={{ opacity: 0, y: -10 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          className={cn(
-                            'absolute z-50 w-full mt-2 rounded-xl border shadow-2xl overflow-hidden',
-                            theme === 'dark' ? 'bg-gray-800 border-gray-600' : 'bg-white border-gray-200'
-                          )}
-                        >
-                          {supplierResults.length > 0 ? (
-                            <div className="max-h-64 overflow-y-auto">
-                              {supplierResults.map((supplier) => (
-                                <motion.button
-                                  key={supplier.id}
-                                  whileHover={{ backgroundColor: theme === 'dark' ? 'rgba(55, 65, 81, 0.5)' : 'rgba(249, 250, 251, 1)' }}
-                                  onClick={() => { setSelectedSupplier(supplier); setSupplierSearch(''); setSupplierResults([]) }}
-                                  className={cn('w-full p-4 flex items-start gap-3 text-left border-b last:border-b-0', theme === 'dark' ? 'border-gray-700' : 'border-gray-100')}
-                                >
-                                  <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center flex-shrink-0">
-                                    <Building2 className="w-5 h-5 text-white" />
-                                  </div>
-                                  <div className="flex-1 min-w-0">
-                                    <div className="flex items-center gap-2">
-                                      <span className={cn('font-medium', theme === 'dark' ? 'text-white' : 'text-gray-900')}>{supplier.name}</span>
-                                      <span className="text-xs px-2 py-0.5 rounded-full bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400">{supplier.supplierCode}</span>
-                                    </div>
-                                    <div className={cn('flex items-center gap-4 text-sm mt-1', theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}>
-                                      {supplier.phone && <span className="flex items-center gap-1"><Phone className="w-3 h-3" />{supplier.phone}</span>}
-                                      {supplier.fullAddress && <span className="flex items-center gap-1 truncate"><MapPin className="w-3 h-3" />{supplier.fullAddress}</span>}
-                                    </div>
-                                  </div>
-                                </motion.button>
-                              ))}
+                      {/* Selected Supplier Display */}
+                      {selectedSupplier && !supplierSearch && (
+                        <div className={cn(
+                          'p-4 rounded-xl border mb-3',
+                          theme === 'dark'
+                            ? 'border-emerald-600 bg-emerald-900/20'
+                            : 'border-emerald-500 bg-emerald-50'
+                        )}>
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-3">
+                              <div className="px-2 py-1 rounded-lg text-xs font-mono font-bold bg-emerald-500 text-white">
+                                {selectedSupplier.supplierCode}
+                              </div>
+                              <div>
+                                <p className={cn(
+                                  'font-medium',
+                                  theme === 'dark' ? 'text-white' : 'text-gray-900'
+                                )}>{selectedSupplier.name}</p>
+                                {selectedSupplier.phone && (
+                                  <p className="text-xs text-gray-500">{selectedSupplier.phone}</p>
+                                )}
+                              </div>
                             </div>
-                          ) : !searchingSupplier && (
-                            <div className="p-4 text-center">
-                              <p className={cn('text-sm mb-3', theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}>No se encontraron proveedores</p>
-                            </div>
-                          )}
+                            <button
+                              onClick={() => setSelectedSupplier(null)}
+                              className={cn(
+                                'p-1.5 rounded-lg transition-colors',
+                                theme === 'dark' ? 'hover:bg-gray-700 text-gray-400' : 'hover:bg-gray-200 text-gray-500'
+                              )}
+                            >
+                              <X className="w-4 h-4" />
+                            </button>
+                          </div>
+                        </div>
+                      )}
 
-                          <motion.button
-                            whileHover={{ backgroundColor: theme === 'dark' ? 'rgba(30, 64, 175, 0.2)' : 'rgba(219, 234, 254, 1)' }}
-                            onClick={() => { setNewSupplierData({ ...newSupplierData, name: supplierSearch }); setShowNewSupplierModal(true) }}
-                            className={cn('w-full p-4 flex items-center gap-3 text-blue-600 dark:text-blue-400', theme === 'dark' ? 'bg-blue-900/20' : 'bg-blue-50')}
-                          >
-                            <Plus className="w-5 h-5" />
-                            <span className="font-medium">Crear nuevo proveedor &quot;{supplierSearch}&quot;</span>
-                          </motion.button>
-                        </motion.div>
+                      {/* Search Results */}
+                      {loadingSuppliers ? (
+                        <div className="flex items-center justify-center py-8">
+                          <Loader2 className="w-6 h-6 animate-spin text-emerald-500" />
+                        </div>
+                      ) : supplierSearch.length > 0 ? (
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 max-h-60 overflow-y-auto">
+                          {filteredSuppliers.map(supplier => (
+                            <motion.button
+                              key={supplier.id}
+                              whileHover={{ scale: 1.02 }}
+                              whileTap={{ scale: 0.98 }}
+                              onClick={() => {
+                                setSelectedSupplier(supplier)
+                                setSupplierSearch('')
+                              }}
+                              className={cn(
+                                'p-4 rounded-xl border text-left transition-all',
+                                selectedSupplier?.id === supplier.id
+                                  ? theme === 'dark'
+                                    ? 'border-emerald-600 bg-emerald-900/20'
+                                    : 'border-emerald-500 bg-emerald-50'
+                                  : theme === 'dark'
+                                    ? 'border-gray-700 bg-gray-800 hover:border-gray-600'
+                                    : 'border-gray-200 bg-white hover:border-gray-300'
+                              )}
+                            >
+                              <div className="flex items-center gap-3">
+                                <div className={cn(
+                                  'px-2 py-1 rounded-lg text-xs font-mono font-bold',
+                                  selectedSupplier?.id === supplier.id
+                                    ? 'bg-emerald-500 text-white'
+                                    : theme === 'dark' ? 'bg-gray-700 text-gray-300' : 'bg-gray-100 text-gray-600'
+                                )}>
+                                  {supplier.supplierCode}
+                                </div>
+                                <div>
+                                  <p className={cn(
+                                    'font-medium',
+                                    theme === 'dark' ? 'text-white' : 'text-gray-900'
+                                  )}>{supplier.name}</p>
+                                  {supplier.phone && (
+                                    <p className="text-xs text-gray-500">{supplier.phone}</p>
+                                  )}
+                                </div>
+                              </div>
+                            </motion.button>
+                          ))}
+                          {filteredSuppliers.length === 0 && (
+                            <div className="col-span-2 text-center py-8">
+                              <Users className="w-8 h-8 mx-auto mb-2 text-gray-400" />
+                              <p className={cn(
+                                'font-medium',
+                                theme === 'dark' ? 'text-gray-400' : 'text-gray-500'
+                              )}>No se encontraron proveedores</p>
+                              <button
+                                onClick={() => { setNewSupplierData({ ...newSupplierData, name: supplierSearch }); setShowNewSupplierModal(true) }}
+                                className="mt-2 text-sm text-emerald-500 hover:text-emerald-600"
+                              >
+                                Crear proveedor
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      ) : !selectedSupplier ? (
+                        <div className={cn(
+                          'text-center py-8 rounded-xl border-2 border-dashed',
+                          theme === 'dark' ? 'border-gray-700' : 'border-gray-200'
+                        )}>
+                          <Search className="w-8 h-8 mx-auto mb-2 text-gray-400" />
+                          <p className={cn(
+                            'font-medium',
+                            theme === 'dark' ? 'text-gray-400' : 'text-gray-500'
+                          )}>Busca un proveedor</p>
+                          <p className={cn(
+                            'text-sm mt-1',
+                            theme === 'dark' ? 'text-gray-500' : 'text-gray-400'
+                          )}>Escribe el nombre o codigo del proveedor</p>
+                        </div>
+                      ) : null}
+                      {errors.supplier && (
+                        <p className="text-sm text-red-500 mt-2">{errors.supplier}</p>
                       )}
                     </div>
 
-                    {/* Selected Supplier Card */}
-                    {selectedSupplier && (
-                      <motion.div
-                        initial={{ opacity: 0, scale: 0.95 }}
-                        animate={{ opacity: 1, scale: 1 }}
-                        className={cn(
-                          'p-6 rounded-xl border-2',
-                          theme === 'dark' ? 'bg-green-900/20 border-green-500/50' : 'bg-green-50 border-green-200'
-                        )}
-                      >
-                        <div className="flex items-start justify-between">
-                          <div className="flex items-start gap-4">
-                            <div className="w-14 h-14 rounded-full bg-gradient-to-br from-green-500 to-emerald-600 flex items-center justify-center">
-                              <Building2 className="w-7 h-7 text-white" />
-                            </div>
-                            <div>
-                              <div className="flex items-center gap-2 mb-1">
-                                <h3 className={cn('text-lg font-bold', theme === 'dark' ? 'text-white' : 'text-gray-900')}>{selectedSupplier.name}</h3>
-                                <span className="text-xs px-2 py-0.5 rounded-full bg-green-100 text-green-600 dark:bg-green-900/30 dark:text-green-400">{selectedSupplier.supplierCode}</span>
-                              </div>
-                              {selectedSupplier.phone && <p className={cn('flex items-center gap-2 text-sm', theme === 'dark' ? 'text-gray-300' : 'text-gray-600')}><Phone className="w-4 h-4" />{selectedSupplier.phone}</p>}
-                              {selectedSupplier.fullAddress && <p className={cn('flex items-center gap-2 text-sm mt-1', theme === 'dark' ? 'text-gray-300' : 'text-gray-600')}><MapPin className="w-4 h-4" />{selectedSupplier.fullAddress}</p>}
-                            </div>
-                          </div>
+                    {/* Warehouse Selection */}
+                    <div>
+                      <label className={cn(
+                        "block text-sm font-medium mb-2",
+                        theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
+                      )}>
+                        Almacen Destino *
+                      </label>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        {warehouses.map(warehouse => (
                           <motion.button
-                            whileHover={{ scale: 1.05 }}
-                            whileTap={{ scale: 0.95 }}
-                            onClick={() => setSelectedSupplier(null)}
-                            className={cn('px-4 py-2 rounded-lg text-sm font-medium', theme === 'dark' ? 'bg-gray-700 hover:bg-gray-600 text-gray-200' : 'bg-white hover:bg-gray-50 text-gray-700 shadow-sm')}
+                            key={warehouse.id}
+                            whileHover={{ scale: 1.02 }}
+                            whileTap={{ scale: 0.98 }}
+                            onClick={() => setSelectedWarehouse(warehouse)}
+                            className={cn(
+                              'p-4 rounded-xl border text-left transition-all flex items-center gap-3',
+                              selectedWarehouse?.id === warehouse.id
+                                ? theme === 'dark'
+                                  ? 'border-emerald-600 bg-emerald-900/20'
+                                  : 'border-emerald-500 bg-emerald-50'
+                                : theme === 'dark'
+                                  ? 'border-gray-700 bg-gray-800 hover:border-gray-600'
+                                  : 'border-gray-200 bg-white hover:border-gray-300'
+                            )}
                           >
-                            Cambiar
+                            <Warehouse className={cn(
+                              'w-5 h-5',
+                              selectedWarehouse?.id === warehouse.id ? 'text-emerald-500' : 'text-gray-400'
+                            )} />
+                            <div>
+                              <p className={cn(
+                                'font-medium',
+                                theme === 'dark' ? 'text-white' : 'text-gray-900'
+                              )}>{warehouse.name}</p>
+                              <p className="text-xs text-gray-500">{warehouse.code}</p>
+                            </div>
                           </motion.button>
-                        </div>
-                      </motion.div>
-                    )}
-
-                    {errors.supplier && <p className="text-red-500 text-sm flex items-center gap-2"><AlertTriangle className="w-4 h-4" />{errors.supplier}</p>}
+                        ))}
+                      </div>
+                      {errors.warehouse && (
+                        <p className="text-sm text-red-500 mt-2">{errors.warehouse}</p>
+                      )}
+                    </div>
                   </motion.div>
                 )}
 

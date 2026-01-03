@@ -33,7 +33,7 @@ import {
   Brain,
   Zap
 } from 'lucide-react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams, usePathname } from 'next/navigation'
 import Link from 'next/link'
 import { useTheme } from '@/contexts/theme-context'
 import { cn } from '@/lib/utils'
@@ -200,10 +200,22 @@ interface CreatedOrder {
 export default function CreateConsignmentOrderPage() {
   const { theme } = useTheme()
   const router = useRouter()
-  const [currentStep, setCurrentStep] = useState<Step>('method')
+  const searchParams = useSearchParams()
+  const pathname = usePathname()
+
+  // Read initial step from URL
+  const initialStep = (searchParams.get('step') as Step) || 'method'
+  const [currentStep, setCurrentStep] = useState<Step>(initialStep)
   const [loading, setLoading] = useState(false)
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [showCancelModal, setShowCancelModal] = useState(false)
+
+  // Sync step with URL
+  useEffect(() => {
+    const params = new URLSearchParams(searchParams.toString())
+    params.set('step', currentStep)
+    router.replace(`${pathname}?${params.toString()}`, { scroll: false })
+  }, [currentStep, pathname, router, searchParams])
 
   // Método de entrada (IA o manual)
   const [entryMethod, setEntryMethod] = useState<'ai' | 'manual' | null>(null)
@@ -307,12 +319,30 @@ export default function CreateConsignmentOrderPage() {
 
         if (suppliersRes.ok) {
           const data = await suppliersRes.json()
-          if (data.success) setSuppliers(data.data || [])
+          console.log('[Consignment] Loaded suppliers:', data)
+          if (data.success) {
+            // API returns data.data.suppliers
+            const suppliersList = data.data?.suppliers || data.data || []
+            // Map API response to expected Supplier interface
+            const mappedSuppliers = suppliersList.map((s: { id: number; supplier_code?: string; supplierCode?: string; name: string; phone?: string | null; email?: string | null; address?: string | null; city?: string | null; state?: string | null }) => ({
+              id: s.id,
+              supplierCode: s.supplier_code || s.supplierCode || '',
+              name: s.name,
+              phone: s.phone || null,
+              email: s.email || null,
+              address: s.address || null,
+              city: s.city || null,
+              state: s.state || null,
+              fullAddress: [s.address, s.city, s.state].filter(Boolean).join(', ')
+            }))
+            console.log('[Consignment] Mapped suppliers:', mappedSuppliers.length)
+            setSuppliers(mappedSuppliers)
+          }
         }
 
         if (warehousesRes.ok) {
           const data = await warehousesRes.json()
-          if (data.success) setWarehouses(data.data.warehouses || data.data)
+          if (data.success) setWarehouses(data.data.warehouses || data.data || [])
         }
       } catch (error) {
         console.error('Error loading data:', error)
@@ -619,17 +649,53 @@ export default function CreateConsignmentOrderPage() {
     console.log('[Consignment] Order lines created:', newLines.length)
     setOrderLines(newLines)
 
-    // Pre-fill supplier if detected
+    // Pre-fill supplier if detected - improved matching algorithm
     if (scannedData?.vendorName) {
-      const matchingSupplier = suppliers.find(s =>
-        s.name.toLowerCase().includes(scannedData.vendorName!.toLowerCase()) ||
-        scannedData.vendorName!.toLowerCase().includes(s.name.toLowerCase())
-      )
+      const vendorName = scannedData.vendorName
+      console.log('[Consignment] Trying to match vendor:', vendorName)
+      console.log('[Consignment] Available suppliers:', suppliers.map(s => s.name))
+
+      // Normalize function: remove accents, special chars, extra spaces
+      const normalize = (str: string) => str
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '') // remove accents
+        .replace(/[^a-z0-9\s]/g, ' ') // replace special chars with space
+        .replace(/\s+/g, ' ') // collapse multiple spaces
+        .trim()
+
+      const normalizedVendor = normalize(vendorName)
+      const vendorWords = normalizedVendor.split(' ').filter(w => w.length > 2)
+
+      // Try multiple matching strategies
+      let matchingSupplier = suppliers.find(s => {
+        const normalizedSupplier = normalize(s.name)
+
+        // Strategy 1: Exact match after normalization
+        if (normalizedSupplier === normalizedVendor) return true
+
+        // Strategy 2: One contains the other
+        if (normalizedSupplier.includes(normalizedVendor) || normalizedVendor.includes(normalizedSupplier)) return true
+
+        // Strategy 3: Key words match (at least 60% of vendor words found in supplier)
+        const supplierWords = normalizedSupplier.split(' ').filter(w => w.length > 2)
+        const matchedWords = vendorWords.filter(vw =>
+          supplierWords.some(sw => sw.includes(vw) || vw.includes(sw))
+        )
+        if (vendorWords.length > 0 && matchedWords.length / vendorWords.length >= 0.6) return true
+
+        return false
+      })
+
       if (matchingSupplier) {
-        console.log('[Consignment] Auto-matched supplier:', matchingSupplier.name)
+        console.log('[Consignment] Auto-matched supplier:', matchingSupplier.name, 'from', vendorName)
         setSelectedSupplier(matchingSupplier)
       } else {
-        console.log('[Consignment] No matching supplier found for:', scannedData.vendorName)
+        console.log('[Consignment] No matching supplier found for:', vendorName, '- Normalized:', normalizedVendor)
+        // Log all normalized supplier names for debugging
+        suppliers.forEach(s => {
+          console.log('[Consignment] Available:', normalize(s.name))
+        })
       }
     }
 
@@ -1546,13 +1612,40 @@ export default function CreateConsignmentOrderPage() {
                       )}>
                         Proveedor *
                       </label>
+
+                      {/* Show detected vendor name if AI scanned but no match found */}
+                      {scannedData?.vendorName && !selectedSupplier && (
+                        <div className={cn(
+                          'p-3 rounded-xl border mb-3 flex items-start gap-3',
+                          theme === 'dark'
+                            ? 'border-amber-600/50 bg-amber-900/20'
+                            : 'border-amber-400 bg-amber-50'
+                        )}>
+                          <AlertTriangle className="w-5 h-5 text-amber-500 flex-shrink-0 mt-0.5" />
+                          <div>
+                            <p className={cn(
+                              'font-medium text-sm',
+                              theme === 'dark' ? 'text-amber-300' : 'text-amber-700'
+                            )}>
+                              Proveedor detectado: <strong>{scannedData.vendorName}</strong>
+                            </p>
+                            <p className={cn(
+                              'text-xs mt-0.5',
+                              theme === 'dark' ? 'text-amber-400' : 'text-amber-600'
+                            )}>
+                              No se encontro coincidencia automatica. Busca y selecciona el proveedor correcto.
+                            </p>
+                          </div>
+                        </div>
+                      )}
+
                       <div className="relative mb-3">
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
                         <input
                           type="text"
                           value={supplierSearch}
                           onChange={(e) => setSupplierSearch(e.target.value)}
-                          placeholder="Buscar proveedor..."
+                          placeholder={scannedData?.vendorName ? `Buscar "${scannedData.vendorName}"...` : "Buscar proveedor..."}
                           className={cn(
                             'w-full pl-10 pr-4 py-3 rounded-xl border focus:outline-none focus:ring-2 transition-all',
                             theme === 'dark'
