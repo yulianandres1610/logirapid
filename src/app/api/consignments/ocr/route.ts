@@ -89,47 +89,52 @@ export async function POST(request: NextRequest) {
 
     // Construir el prompt con contexto del usuario si existe
     const contextSection = userContext
-      ? `\nCONTEXTO DEL USUARIO: ${userContext}\n`
+      ? `\nCONTEXTO ADICIONAL DEL USUARIO: ${userContext}\n`
       : ''
 
-    const prompt = `Analiza esta factura de consignación y extrae CADA LÍNEA de producto por separado.
+    const prompt = `Eres un experto en OCR de facturas de consignación. Tu tarea es extraer TODOS los productos/items de esta factura.
 ${contextSection}
-INSTRUCCIONES:
-1. PROVEEDOR: Nombre del negocio o empresa que entrega en consignación
-2. NÚMERO FACTURA: Número o código de la factura
-3. FECHA: En formato YYYY-MM-DD
-4. ITEMS: Un array con CADA producto individual. Para cada item extrae:
-   - name: Nombre del producto exactamente como aparece
-   - quantity: Cantidad (número)
-   - unitCost: Precio unitario
-   - totalCost: Total de la línea (quantity × unitCost)
-   - sku: Código SKU si aparece (null si no)
-   - barcode: Código de barras si aparece (null si no)
-5. SUBTOTAL: Suma de todos los items antes de impuesto
-6. TAX: Monto del impuesto (IVA, ITBIS, etc.) - usar 0 si no hay
-7. TOTAL: Monto total con impuesto
+EXTRAE LA SIGUIENTE INFORMACIÓN:
 
-IMPORTANTE:
-- Extrae TODOS los productos que veas en la factura
-- Los montos deben ser números sin símbolos de moneda
-- Si hay múltiples productos, crea un item por cada uno
+1. vendorName: Nombre del proveedor o empresa que entrega en consignación
+2. invoiceNumber: Número de factura (ej: FAC-001, 12345, etc.)
+3. invoiceDate: Fecha en formato YYYY-MM-DD
+4. items: ARRAY con CADA producto. ESTO ES LO MÁS IMPORTANTE.
+5. subtotal: Subtotal antes de impuestos
+6. tax: Impuesto (IVA, ITBIS, etc.) - usa 0 si no hay
+7. total: Total de la factura
 
-Responde ÚNICAMENTE en formato JSON con esta estructura:
+PARA CADA ITEM EN LA FACTURA EXTRAE:
+- name: Nombre del producto EXACTAMENTE como aparece
+- quantity: Cantidad (número entero o decimal)
+- unitCost: Precio por unidad
+- totalCost: Total de esa línea (quantity × unitCost)
+- sku: Código del producto si existe, sino null
+- barcode: Código de barras si existe, sino null
+
+EJEMPLO DE RESPUESTA ESPERADA:
 {
-  "vendorName": "nombre del proveedor",
-  "invoiceNumber": "número de factura",
-  "invoiceDate": "YYYY-MM-DD",
+  "vendorName": "Distribuidora ABC",
+  "invoiceNumber": "FAC-2025-001",
+  "invoiceDate": "2025-01-03",
   "items": [
-    { "name": "producto", "quantity": 1, "unitCost": 0.00, "totalCost": 0.00, "sku": null, "barcode": null }
+    { "name": "Coca Cola 2L", "quantity": 10, "unitCost": 1.50, "totalCost": 15.00, "sku": "COC-2L", "barcode": null },
+    { "name": "Pepsi 500ml", "quantity": 24, "unitCost": 0.80, "totalCost": 19.20, "sku": null, "barcode": null }
   ],
-  "subtotal": 0.00,
-  "tax": 0.00,
-  "total": 0.00,
+  "subtotal": 34.20,
+  "tax": 2.74,
+  "total": 36.94,
   "confidence": 0.95
 }
 
-Si no puedes identificar algún campo, usa null para strings y 0 para números.
-IMPORTANTE: Solo responde con el JSON, sin texto adicional, sin markdown.`
+REGLAS CRÍTICAS:
+- El array "items" DEBE contener todos los productos de la factura
+- Si ves una lista de productos, cada línea es un item separado
+- Los números deben ser sin símbolos de moneda (1.50 no $1.50)
+- Si no puedes leer un campo, usa null para texto y 0 para números
+- El campo confidence indica tu certeza (0.0 a 1.0)
+
+RESPONDE ÚNICAMENTE CON EL JSON. Sin explicaciones, sin markdown, sin \`\`\`.`
 
     const result = await model.generateContent([
       prompt,
@@ -147,33 +152,68 @@ IMPORTANTE: Solo responde con el JSON, sin texto adicional, sin markdown.`
     // Clean up the response - remove markdown code blocks if present
     text = text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim()
 
-    console.log('[Consignment OCR] Raw response:', text.substring(0, 500) + '...')
+    console.log('[Consignment OCR] Raw response (full):', text)
 
     try {
       const extractedData = JSON.parse(text)
+      console.log('[Consignment OCR] Parsed data:', JSON.stringify(extractedData, null, 2))
 
-      // Procesar items y asegurar estructura correcta
-      const items = Array.isArray(extractedData.items)
-        ? extractedData.items.map((item: {
+      // Verificar la estructura de la respuesta
+      console.log('[Consignment OCR] Response keys:', Object.keys(extractedData))
+      console.log('[Consignment OCR] Items type:', typeof extractedData.items, Array.isArray(extractedData.items))
+      console.log('[Consignment OCR] Items raw:', extractedData.items)
+
+      // Procesar items - buscar en múltiples ubicaciones posibles
+      let rawItems = extractedData.items
+
+      // Fallback: buscar items en otras ubicaciones posibles
+      if (!rawItems || !Array.isArray(rawItems) || rawItems.length === 0) {
+        rawItems = extractedData.products || extractedData.productos || extractedData.lineas || []
+        console.log('[Consignment OCR] Using fallback items source:', rawItems.length)
+      }
+
+      const items = Array.isArray(rawItems)
+        ? rawItems.map((item: {
             name?: string
+            nombre?: string
+            description?: string
+            descripcion?: string
             quantity?: number
+            cantidad?: number
+            qty?: number
             unitCost?: number
+            precioUnitario?: number
+            precio?: number
+            price?: number
             totalCost?: number
+            total?: number
             sku?: string | null
+            codigo?: string | null
             barcode?: string | null
+            codigoBarras?: string | null
           }, index: number) => {
-            const quantity = typeof item.quantity === 'number' ? item.quantity : 1
-            const unitCost = typeof item.unitCost === 'number' ? item.unitCost : 0
-            const totalCost = typeof item.totalCost === 'number' ? item.totalCost : quantity * unitCost
+            // Handle multiple possible field names
+            const name = item.name || item.nombre || item.description || item.descripcion || 'Producto sin nombre'
+            const quantity = typeof item.quantity === 'number' ? item.quantity :
+                            typeof item.cantidad === 'number' ? item.cantidad :
+                            typeof item.qty === 'number' ? item.qty : 1
+            const unitCost = typeof item.unitCost === 'number' ? item.unitCost :
+                            typeof item.precioUnitario === 'number' ? item.precioUnitario :
+                            typeof item.precio === 'number' ? item.precio :
+                            typeof item.price === 'number' ? item.price : 0
+            const totalCost = typeof item.totalCost === 'number' ? item.totalCost :
+                             typeof item.total === 'number' ? item.total : quantity * unitCost
+            const sku = item.sku || item.codigo || null
+            const barcode = item.barcode || item.codigoBarras || null
 
             return {
               id: `item-${index}`,
-              name: item.name || 'Producto sin nombre',
+              name,
               quantity,
               unitCost,
               totalCost,
-              sku: item.sku || null,
-              barcode: item.barcode || null,
+              sku,
+              barcode,
               description: null,
               isVariantOf: null
             }
@@ -182,6 +222,7 @@ IMPORTANTE: Solo responde con el JSON, sin texto adicional, sin markdown.`
 
       // Si no hay items pero hay un total, crear un item genérico
       if (items.length === 0 && extractedData.total) {
+        console.log('[Consignment OCR] No items found, creating generic item from total')
         items.push({
           id: 'item-0',
           name: 'Producto general',
@@ -195,11 +236,7 @@ IMPORTANTE: Solo responde con el JSON, sin texto adicional, sin markdown.`
         })
       }
 
-      console.log('[Consignment OCR] Processed:', {
-        vendorName: extractedData.vendorName,
-        itemCount: items.length,
-        total: extractedData.total
-      })
+      console.log('[Consignment OCR] Final processed items:', items.length, items)
 
       return NextResponse.json({
         success: true,
