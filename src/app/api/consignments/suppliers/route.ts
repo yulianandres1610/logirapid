@@ -26,7 +26,7 @@ async function getPayload(): Promise<JWTPayload | null> {
 
 /**
  * GET /api/consignments/suppliers
- * Lista proveedores de consignacion
+ * Lista proveedores - UNIFICADO con market_suppliers
  */
 export async function GET(request: NextRequest) {
   try {
@@ -41,38 +41,32 @@ export async function GET(request: NextRequest) {
     const limit = parseInt(searchParams.get('limit') || '20')
     const offset = (page - 1) * limit
 
-    // Build WHERE clause
-    let whereClause = 'WHERE s.company_id = $1'
+    // Build WHERE clause - using market_suppliers (unified table)
+    let whereClause = 'WHERE s.company_id = $1 AND s.is_active = true'
     const countParams: (string | number)[] = [payload.companyId]
 
     if (search) {
-      whereClause += ` AND (s.name ILIKE $2 OR s.code ILIKE $2 OR s.email ILIKE $2 OR s.phone ILIKE $2)`
+      whereClause += ` AND (s.name ILIKE $2 OR s.supplier_code ILIKE $2 OR s.email ILIKE $2 OR s.phone ILIKE $2)`
       countParams.push(`%${search}%`)
     }
 
     // Count total first (simple query)
     const countResult = await db.query(
-      `SELECT COUNT(*) as total FROM consignment_suppliers s ${whereClause}`,
+      `SELECT COUNT(*) as total FROM market_suppliers s ${whereClause}`,
       countParams
     )
     const total = parseInt(countResult.rows[0]?.total || '0')
 
-    // Build main query with all fields
+    // Build main query with all fields from market_suppliers
+    // Also get stats from consignment_orders if they exist
     const query = `
       SELECT
         s.*,
-        u.id as linked_user_id,
-        u.firstname as linked_user_firstname,
-        u.lastname as linked_user_lastname,
-        u.email as linked_user_email,
         COALESCE((SELECT COUNT(*) FROM consignment_orders WHERE supplier_id = s.id), 0) as total_orders,
         COALESCE((SELECT SUM(total_cost) FROM consignment_orders WHERE supplier_id = s.id), 0) as total_consigned,
-        COALESCE(w.balance_available, 0) as balance_available,
-        COALESCE(w.total_earned, 0) as total_earned,
-        COALESCE(w.total_paid, 0) as total_paid
-      FROM consignment_suppliers s
-      LEFT JOIN consignment_supplier_wallets w ON w.supplier_id = s.id
-      LEFT JOIN users u ON u.id = s.user_id
+        COALESCE((SELECT SUM(total_sold) FROM consignment_orders WHERE supplier_id = s.id), 0) as total_sold,
+        COALESCE((SELECT SUM(total_paid) FROM consignment_orders WHERE supplier_id = s.id), 0) as total_paid
+      FROM market_suppliers s
       ${whereClause}
       ORDER BY s.name ASC
       LIMIT $${countParams.length + 1} OFFSET $${countParams.length + 2}
@@ -83,7 +77,8 @@ export async function GET(request: NextRequest) {
 
     const suppliers = result.rows.map(s => ({
       id: s.id,
-      code: s.code,
+      code: s.supplier_code,
+      supplierCode: s.supplier_code,
       name: s.name,
       legalName: s.legal_name,
       taxId: s.tax_id,
@@ -91,21 +86,22 @@ export async function GET(request: NextRequest) {
       email: s.email,
       phone: s.phone,
       address: s.address,
-      username: s.username,
-      userId: s.user_id,
-      linkedUser: s.linked_user_id ? {
-        id: s.linked_user_id,
-        name: `${s.linked_user_firstname || ''} ${s.linked_user_lastname || ''}`.trim(),
-        email: s.linked_user_email
-      } : null,
+      city: s.city,
+      state: s.state,
+      country: s.country,
+      postalCode: s.postal_code,
+      paymentTerms: s.payment_terms,
+      creditLimit: parseFloat(s.credit_limit) || 0,
+      notes: s.notes,
+      rating: s.rating || 3,
       isActive: s.is_active,
       createdAt: s.created_at,
       stats: {
         totalOrders: parseInt(s.total_orders) || 0,
         totalConsigned: parseFloat(s.total_consigned) || 0,
-        balanceAvailable: parseFloat(s.balance_available) || 0,
-        totalEarned: parseFloat(s.total_earned) || 0,
-        totalPaid: parseFloat(s.total_paid) || 0
+        totalSold: parseFloat(s.total_sold) || 0,
+        totalPaid: parseFloat(s.total_paid) || 0,
+        balanceAvailable: (parseFloat(s.total_sold) || 0) - (parseFloat(s.total_paid) || 0)
       }
     }))
 
@@ -123,7 +119,7 @@ export async function GET(request: NextRequest) {
     })
 
   } catch (error) {
-    console.error('[Suppliers GET] Error:', error)
+    console.error('[Consignment Suppliers GET] Error:', error)
     return NextResponse.json({
       success: false,
       error: error instanceof Error ? error.message : 'Error al obtener proveedores'
@@ -131,16 +127,9 @@ export async function GET(request: NextRequest) {
   }
 }
 
-interface BankAccount {
-  bankName: string
-  accountNumber: string
-  accountType: string
-  holderName: string
-}
-
 /**
  * POST /api/consignments/suppliers
- * Crear proveedor de consignacion
+ * Crear proveedor - UNIFICADO con market_suppliers
  */
 export async function POST(request: NextRequest) {
   try {
@@ -150,90 +139,39 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json()
-    const { code, name, legalName, taxId, contactName, email, phone, address, username, password, userId, bankAccounts } = body
+    const { name, legalName, taxId, contactName, email, phone, address, city, state, country, postalCode, paymentTerms, creditLimit, notes } = body
 
     // Validaciones
-    if (!code || !name) {
+    if (!name) {
       return NextResponse.json({
         success: false,
-        error: 'Código y nombre son requeridos'
+        error: 'El nombre del proveedor es requerido'
       }, { status: 400 })
     }
 
-    if (code.length > 10) {
-      return NextResponse.json({
-        success: false,
-        error: 'El código debe tener máximo 10 caracteres'
-      }, { status: 400 })
-    }
+    // Generate supplier code
+    const year = new Date().getFullYear()
+    const countResult = await db.query(`
+      SELECT COUNT(*) as count
+      FROM market_suppliers
+      WHERE company_id = $1 AND supplier_code LIKE $2
+    `, [payload.companyId, `SUP-${year}-%`])
 
-    // Verificar código único
-    const existingCode = await db.query(
-      'SELECT id FROM consignment_suppliers WHERE company_id = $1 AND code = $2',
-      [payload.companyId, code.toUpperCase()]
-    )
-    if (existingCode.rows.length > 0) {
-      return NextResponse.json({
-        success: false,
-        error: 'Ya existe un proveedor con este código'
-      }, { status: 400 })
-    }
+    const count = parseInt(countResult.rows[0]?.count) || 0
+    const supplierCode = `SUP-${year}-${(count + 1).toString().padStart(4, '0')}`
 
-    // Si tiene username, verificar que sea único
-    if (username) {
-      const existingUsername = await db.query(
-        'SELECT id FROM consignment_suppliers WHERE username = $1',
-        [username]
-      )
-      if (existingUsername.rows.length > 0) {
-        return NextResponse.json({
-          success: false,
-          error: 'El nombre de usuario ya está en uso'
-        }, { status: 400 })
-      }
-    }
-
-    // Si tiene userId, verificar que el usuario existe y no está vinculado a otro proveedor
-    if (userId) {
-      const userCheck = await db.query(
-        'SELECT id FROM users WHERE id = $1',
-        [userId]
-      )
-      if (userCheck.rows.length === 0) {
-        return NextResponse.json({
-          success: false,
-          error: 'Usuario no encontrado'
-        }, { status: 400 })
-      }
-
-      const linkedCheck = await db.query(
-        'SELECT id FROM consignment_suppliers WHERE user_id = $1',
-        [userId]
-      )
-      if (linkedCheck.rows.length > 0) {
-        return NextResponse.json({
-          success: false,
-          error: 'Este usuario ya está vinculado a otro proveedor'
-        }, { status: 400 })
-      }
-    }
-
-    // Hash password si se proporciona
-    let passwordHash = null
-    if (password) {
-      passwordHash = await bcrypt.hash(password, 10)
-    }
-
-    // Crear proveedor
+    // Crear proveedor en market_suppliers
     const result = await db.query(`
-      INSERT INTO consignment_suppliers (
-        company_id, code, name, legal_name, tax_id, contact_name,
-        email, phone, address, username, password_hash, user_id, is_active
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, true)
-      RETURNING id
+      INSERT INTO market_suppliers (
+        company_id, supplier_code, name, legal_name, tax_id, contact_name,
+        email, phone, address, city, state, country, postal_code,
+        payment_terms, credit_limit, notes, rating, is_active,
+        created_by, created_at, updated_at
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, 3, true, $17, NOW(), NOW())
+      RETURNING *
     `, [
       payload.companyId,
-      code.toUpperCase(),
+      supplierCode,
       name,
       legalName || null,
       taxId || null,
@@ -241,57 +179,31 @@ export async function POST(request: NextRequest) {
       email || null,
       phone || null,
       address || null,
-      username || null,
-      passwordHash,
-      userId || null
+      city || null,
+      state || null,
+      country || null,
+      postalCode || null,
+      paymentTerms || null,
+      creditLimit || 0,
+      notes || null,
+      payload.userId
     ])
 
-    const supplierId = result.rows[0].id
-
-    // Crear wallet para el proveedor
-    await db.query(`
-      INSERT INTO consignment_supplier_wallets (supplier_id)
-      VALUES ($1)
-    `, [supplierId])
-
-    // Crear tabla de cuentas bancarias si no existe
-    await db.query(`
-      CREATE TABLE IF NOT EXISTS consignment_supplier_bank_accounts (
-        id SERIAL PRIMARY KEY,
-        supplier_id INTEGER NOT NULL REFERENCES consignment_suppliers(id) ON DELETE CASCADE,
-        bank_name VARCHAR(100) NOT NULL,
-        account_number VARCHAR(50) NOT NULL,
-        account_type VARCHAR(20) DEFAULT 'checking',
-        holder_name VARCHAR(200),
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-      )
-    `)
-
-    // Insertar cuentas bancarias si se proporcionaron
-    if (bankAccounts && Array.isArray(bankAccounts) && bankAccounts.length > 0) {
-      for (const account of bankAccounts as BankAccount[]) {
-        await db.query(`
-          INSERT INTO consignment_supplier_bank_accounts (
-            supplier_id, bank_name, account_number, account_type, holder_name
-          ) VALUES ($1, $2, $3, $4, $5)
-        `, [
-          supplierId,
-          account.bankName,
-          account.accountNumber,
-          account.accountType || 'checking',
-          account.holderName || name
-        ])
-      }
-    }
+    const supplier = result.rows[0]
 
     return NextResponse.json({
       success: true,
       message: 'Proveedor creado exitosamente',
-      data: { id: supplierId, code: code.toUpperCase() }
+      data: {
+        id: supplier.id,
+        code: supplier.supplier_code,
+        supplierCode: supplier.supplier_code,
+        name: supplier.name
+      }
     })
 
   } catch (error) {
-    console.error('[Suppliers POST] Error:', error)
+    console.error('[Consignment Suppliers POST] Error:', error)
     return NextResponse.json({
       success: false,
       error: error instanceof Error ? error.message : 'Error al crear proveedor'
