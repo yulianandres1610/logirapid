@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
 import jwt from 'jsonwebtoken'
 import { db } from '@/lib/database'
+import { uploadProductImageByBarcode } from '@/lib/product-images'
 
 interface JWTPayload {
   userId: number
@@ -19,6 +20,7 @@ interface NewProduct {
   sellingPrice?: number
   unitOfMeasure?: string
   category?: string
+  imageBase64?: string | null // Imagen generada/limpiada con IA en base64
 }
 
 /**
@@ -379,6 +381,44 @@ export async function POST(request: NextRequest) {
 
         const realId = result.rows[0].id
         productIdMap.set(newProduct.tempId, realId)
+
+        // Si hay imagen generada con IA, subirla a storage
+        let productImageUrl: string | null = null
+        if (newProduct.imageBase64 && barcode) {
+          try {
+            console.log('[Consignment Orders] Uploading AI-generated image for product:', newProduct.name)
+
+            // Limpiar el base64 si tiene prefijo data:image
+            let cleanBase64 = newProduct.imageBase64
+            if (cleanBase64.startsWith('data:')) {
+              cleanBase64 = cleanBase64.replace(/^data:image\/\w+;base64,/, '')
+            }
+
+            const imageBuffer = Buffer.from(cleanBase64, 'base64')
+
+            // Detectar tipo de imagen
+            let contentType = 'image/png'
+            if (cleanBase64.startsWith('/9j/')) {
+              contentType = 'image/jpeg'
+            } else if (cleanBase64.startsWith('UklGR')) {
+              contentType = 'image/webp'
+            }
+
+            const { url } = await uploadProductImageByBarcode(barcode, imageBuffer, contentType)
+            productImageUrl = url
+
+            // Actualizar el producto con la URL de la imagen
+            await db.query(`
+              UPDATE market_products SET image_url = $1 WHERE id = $2
+            `, [url, realId])
+
+            console.log('[Consignment Orders] Image uploaded successfully:', url)
+          } catch (imgError) {
+            console.error('[Consignment Orders] Error uploading image:', imgError)
+            // No fallar la creación del producto si falla la imagen
+          }
+        }
+
         createdProducts.push({
           tempId: newProduct.tempId,
           id: realId,
@@ -387,7 +427,7 @@ export async function POST(request: NextRequest) {
           barcode
         })
 
-        console.log('[Consignment Orders] Product created:', { tempId: newProduct.tempId, realId })
+        console.log('[Consignment Orders] Product created:', { tempId: newProduct.tempId, realId, imageUrl: productImageUrl })
       }
     }
 

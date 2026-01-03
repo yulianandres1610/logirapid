@@ -182,6 +182,7 @@ interface Product {
   hasVariants?: boolean
   variants?: ProductVariant[]
   isNewProduct?: boolean
+  generatedImageBase64?: string // Para productos nuevos creados con OCR + IA
 }
 
 interface PurchaseLine {
@@ -194,6 +195,7 @@ interface PurchaseLine {
   unitPrice: number
   totalPrice: number
   isNewProduct?: boolean
+  generatedImageBase64?: string // Para productos nuevos creados con OCR + IA
 }
 
 export default function CreatePurchasePage() {
@@ -747,13 +749,14 @@ export default function CreatePurchasePage() {
           name: item.name,
           sku: item.sku || '',
           barcode: item.barcode,
-          imageUrl: null,
+          imageUrl: item.generatedImageUrl || null, // Usar imagen generada si existe
           costPrice: item.unitCost,
           sellingPrice: item.unitCost * 1.3,
           currency: 'USD',
           quantityOnHand: 0,
           hasVariants: false,
-          isNewProduct: true
+          isNewProduct: true,
+          generatedImageBase64: item.generatedImageBase64 // Guardar base64 para S3
         }
 
         newLines.push({
@@ -765,7 +768,8 @@ export default function CreatePurchasePage() {
           quantity: item.quantity,
           unitPrice: item.unitCost,
           totalPrice: item.totalCost,
-          isNewProduct: true
+          isNewProduct: true,
+          generatedImageBase64: item.generatedImageBase64 // Pasar base64 para la API
         })
       }
     }
@@ -1015,7 +1019,8 @@ export default function CreatePurchasePage() {
           barcode: l.product.barcode || null,
           unitCost: l.unitPrice,
           sellingPrice: l.unitPrice * 1.3,
-          category: 'General'
+          category: 'General',
+          imageBase64: l.generatedImageBase64 || l.product.generatedImageBase64 || null // Imagen generada por IA
         }))
 
       console.log('[Submit Purchase] New products to create:', newProducts)

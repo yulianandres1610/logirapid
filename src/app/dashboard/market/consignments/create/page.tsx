@@ -182,6 +182,7 @@ interface Product {
   hasVariants?: boolean
   variants?: ProductVariant[]
   isNewProduct?: boolean // Producto nuevo detectado por OCR que aún no existe en inventario
+  generatedImageBase64?: string // Imagen generada/limpiada con IA
 }
 
 interface OrderLine {
@@ -195,6 +196,7 @@ interface OrderLine {
   unitPrice: number
   totalCost: number
   isNewProduct?: boolean // Línea con producto nuevo que se creará
+  generatedImageBase64?: string // Imagen generada/limpiada con IA
 }
 
 interface CreatedOrder {
@@ -743,13 +745,14 @@ export default function CreateConsignmentOrderPage() {
           name: item.name,
           sku: item.sku || '',
           barcode: item.barcode,
-          imageUrl: null,
+          imageUrl: item.generatedImageUrl || null, // Usar imagen generada si existe
           costPrice: item.unitCost,
           sellingPrice: item.unitCost * 1.3, // Margen sugerido del 30%
           currency: 'USD',
           quantityOnHand: 0,
           hasVariants: false,
-          isNewProduct: true // Marcador para saber que es nuevo
+          isNewProduct: true, // Marcador para saber que es nuevo
+          generatedImageBase64: item.generatedImageBase64 // Guardar base64 para S3
         }
 
         newLines.push({
@@ -762,7 +765,8 @@ export default function CreateConsignmentOrderPage() {
           unitCost: item.unitCost,
           unitPrice: tempProduct.sellingPrice,
           totalCost: item.totalCost,
-          isNewProduct: true
+          isNewProduct: true,
+          generatedImageBase64: item.generatedImageBase64 // Pasar base64 para la API
         })
       }
     }
@@ -993,7 +997,8 @@ export default function CreateConsignmentOrderPage() {
           barcode: l.product.barcode || null,
           unitCost: l.unitCost,
           sellingPrice: l.unitPrice || l.unitCost * 1.3,
-          category: 'General'
+          category: 'General',
+          imageBase64: l.generatedImageBase64 || l.product.generatedImageBase64 || null // Imagen generada por IA
         }))
 
       console.log('[Submit Order] New products to create:', newProducts)
