@@ -17,6 +17,45 @@ export default function LoginPage() {
   useEffect(() => {
     if (typeof window === 'undefined') return
 
+    // Helper function to decode JWT and check expiration
+    const isTokenValid = (token: string): boolean => {
+      try {
+        // Decode JWT payload (base64url)
+        const parts = token.split('.')
+        if (parts.length !== 3) return false
+
+        const payload = JSON.parse(atob(parts[1].replace(/-/g, '+').replace(/_/g, '/')))
+
+        // Check if token has expired (exp is in seconds)
+        if (payload.exp) {
+          const now = Math.floor(Date.now() / 1000)
+          if (payload.exp < now) {
+            console.log('[LOGIN] Token expired at:', new Date(payload.exp * 1000).toISOString())
+            return false
+          }
+        }
+
+        return true
+      } catch (e) {
+        console.error('[LOGIN] Error decoding token:', e)
+        return false
+      }
+    }
+
+    // Helper function to clear all auth data
+    const clearAuthData = () => {
+      console.log('[LOGIN] Clearing expired/invalid auth data')
+      // Clear cookies
+      document.cookie = 'auth-token=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;'
+      document.cookie = 'user-role=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;'
+      document.cookie = 'user-company-id=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;'
+      document.cookie = 'user-company-name=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;'
+      document.cookie = 'user-company-type=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;'
+      // Clear localStorage
+      localStorage.removeItem('auth-token')
+      localStorage.removeItem('user')
+    }
+
     const checkAuthentication = () => {
       // Check for auth token in cookies
       const authToken = document.cookie
@@ -28,8 +67,17 @@ export default function LoginPage() {
       const localToken = localStorage.getItem('auth-token')
       const userStr = localStorage.getItem('user')
 
+      // Validate token before redirecting
+      const tokenToCheck = authToken || localToken
+      if (tokenToCheck && !isTokenValid(tokenToCheck)) {
+        // Token exists but is expired - clear and show login
+        clearAuthData()
+        setIsCheckingAuth(false)
+        return
+      }
+
       if (authToken || (localToken && userStr)) {
-        console.log('[LOGIN] User already authenticated, redirecting to dashboard')
+        console.log('[LOGIN] User already authenticated with valid token, redirecting to dashboard')
         setShowLoadingOverlay(true)
         setIsRedirecting(true)
 
