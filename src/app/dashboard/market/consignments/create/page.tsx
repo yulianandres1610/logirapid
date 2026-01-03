@@ -31,7 +31,9 @@ import {
   AlertTriangle,
   Scan,
   Brain,
-  Zap
+  Zap,
+  Wand2,
+  ImageIcon
 } from 'lucide-react'
 import { useRouter, useSearchParams, usePathname } from 'next/navigation'
 import Link from 'next/link'
@@ -141,6 +143,10 @@ interface MatchedItem extends ScannedItem {
   // Acción del usuario
   action: 'use_existing' | 'create_new' | 'link_to' | 'ignore'
   linkedProductId?: number
+  // Imagen y descripción generadas con IA
+  generatedImageUrl?: string
+  generatedDescription?: string
+  isGeneratingImage?: boolean
 }
 
 interface Supplier {
@@ -503,6 +509,56 @@ export default function CreateConsignmentOrderPage() {
       return item
     }))
   }, [])
+
+  // Generate image and description with AI for a product
+  const generateImageWithAI = useCallback(async (itemId: string) => {
+    const item = matchedProducts.find(p => p.id === itemId)
+    if (!item) return
+
+    // Mark as generating
+    setMatchedProducts(prev => prev.map(p =>
+      p.id === itemId ? { ...p, isGeneratingImage: true } : p
+    ))
+
+    try {
+      console.log('[Consignment] Generating AI image for:', item.name)
+
+      const response = await fetch('/api/ai/process-image', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'generate',
+          productName: item.name,
+          productDescription: item.description || `Producto: ${item.name}`,
+          saveToStorage: false // No guardamos aún, solo preview
+        })
+      })
+
+      const data = await response.json()
+
+      if (data.success && data.data) {
+        console.log('[Consignment] AI image generated successfully')
+        setMatchedProducts(prev => prev.map(p =>
+          p.id === itemId ? {
+            ...p,
+            generatedImageUrl: data.data.imageUrl || data.data.imageBase64,
+            generatedDescription: data.data.imageDescription,
+            isGeneratingImage: false
+          } : p
+        ))
+      } else {
+        console.error('[Consignment] AI image generation failed:', data.error)
+        setMatchedProducts(prev => prev.map(p =>
+          p.id === itemId ? { ...p, isGeneratingImage: false } : p
+        ))
+      }
+    } catch (error) {
+      console.error('[Consignment] Error generating AI image:', error)
+      setMatchedProducts(prev => prev.map(p =>
+        p.id === itemId ? { ...p, isGeneratingImage: false } : p
+      ))
+    }
+  }, [matchedProducts])
 
   // Search products for linking
   useEffect(() => {
@@ -1519,17 +1575,62 @@ export default function CreateConsignmentOrderPage() {
                         <div className="space-y-3">
                           {matchedProducts.filter(p => p.matchType === 'none').map((item) => (
                             <div key={item.id} className={cn('p-4 rounded-xl border', item.action === 'ignore' ? 'opacity-50' : '', theme === 'dark' ? 'bg-amber-900/20 border-amber-800/50' : 'bg-amber-50 border-amber-200')}>
-                              <div className="flex items-center justify-between">
-                                <div className="flex-1">
-                                  <p className={cn('font-medium', theme === 'dark' ? 'text-white' : 'text-gray-900')}>{item.name}</p>
-                                  <span className={cn('text-sm', theme === 'dark' ? 'text-gray-500' : 'text-gray-500')}>{item.quantity} {item.unitOfMeasure || 'unidad'} × ${item.unitCost.toFixed(2)}</span>
+                              <div className="flex items-start gap-3">
+                                {/* Imagen del producto (generada o placeholder) */}
+                                <div className="relative flex-shrink-0">
+                                  {item.generatedImageUrl ? (
+                                    <img
+                                      src={item.generatedImageUrl}
+                                      alt={item.name}
+                                      className="w-16 h-16 rounded-lg object-cover border border-gray-200 dark:border-gray-700"
+                                    />
+                                  ) : (
+                                    <div className={cn(
+                                      'w-16 h-16 rounded-lg flex items-center justify-center',
+                                      theme === 'dark' ? 'bg-gray-800' : 'bg-gray-200'
+                                    )}>
+                                      <ImageIcon className="w-6 h-6 text-gray-400" />
+                                    </div>
+                                  )}
+                                  {/* Boton para generar imagen con IA */}
+                                  <button
+                                    onClick={() => generateImageWithAI(item.id)}
+                                    disabled={item.isGeneratingImage || item.action === 'ignore'}
+                                    className={cn(
+                                      'absolute -bottom-1 -right-1 p-1.5 rounded-full shadow-lg transition-all',
+                                      item.isGeneratingImage
+                                        ? 'bg-purple-500 cursor-wait'
+                                        : item.generatedImageUrl
+                                          ? 'bg-green-500 hover:bg-green-600'
+                                          : 'bg-purple-500 hover:bg-purple-600',
+                                      item.action === 'ignore' && 'opacity-50 cursor-not-allowed'
+                                    )}
+                                    title={item.generatedImageUrl ? 'Regenerar imagen con IA' : 'Generar imagen con IA'}
+                                  >
+                                    {item.isGeneratingImage ? (
+                                      <Loader2 className="w-3 h-3 text-white animate-spin" />
+                                    ) : (
+                                      <Wand2 className="w-3 h-3 text-white" />
+                                    )}
+                                  </button>
                                 </div>
-                                <div className="flex items-center gap-2">
+                                {/* Info del producto */}
+                                <div className="flex-1 min-w-0">
+                                  <p className={cn('font-medium truncate', theme === 'dark' ? 'text-white' : 'text-gray-900')}>{item.name}</p>
+                                  <span className={cn('text-sm', theme === 'dark' ? 'text-gray-500' : 'text-gray-500')}>{item.quantity} {item.unitOfMeasure || 'unidad'} × ${item.unitCost.toFixed(2)}</span>
+                                  {item.generatedDescription && (
+                                    <p className={cn('text-xs mt-1 truncate', theme === 'dark' ? 'text-purple-400' : 'text-purple-600')}>
+                                      {item.generatedDescription}
+                                    </p>
+                                  )}
+                                </div>
+                                {/* Acciones */}
+                                <div className="flex items-center gap-2 flex-shrink-0">
                                   <span className={cn('font-bold', theme === 'dark' ? 'text-white' : 'text-gray-900')}>${item.totalCost.toFixed(2)}</span>
-                                  <button onClick={() => { setLinkingItemId(item.id); setLinkSearch(''); setShowLinkModal(true) }} className="p-2 rounded-lg text-blue-500 hover:bg-blue-500/10" title="Vincular">
+                                  <button onClick={() => { setLinkingItemId(item.id); setLinkSearch(''); setShowLinkModal(true) }} className="p-2 rounded-lg text-blue-500 hover:bg-blue-500/10" title="Vincular a existente">
                                     <Link2 className="w-4 h-4" />
                                   </button>
-                                  <button onClick={() => handleProductAction(item.id, item.action === 'ignore' ? 'create_new' : 'ignore')} className={cn('p-2 rounded-lg', item.action === 'ignore' ? 'text-green-500' : 'text-gray-400 hover:text-red-500')}>
+                                  <button onClick={() => handleProductAction(item.id, item.action === 'ignore' ? 'create_new' : 'ignore')} className={cn('p-2 rounded-lg', item.action === 'ignore' ? 'text-green-500' : 'text-gray-400 hover:text-red-500')} title={item.action === 'ignore' ? 'Incluir' : 'Excluir'}>
                                     {item.action === 'ignore' ? <Plus className="w-4 h-4" /> : <XCircle className="w-4 h-4" />}
                                   </button>
                                 </div>

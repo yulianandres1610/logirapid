@@ -32,7 +32,9 @@ import {
   Brain,
   Zap,
   Warehouse,
-  Users
+  Users,
+  Wand2,
+  ImageIcon
 } from 'lucide-react'
 import { useRouter, useSearchParams, usePathname } from 'next/navigation'
 import Link from 'next/link'
@@ -140,6 +142,10 @@ interface MatchedItem extends ScannedItem {
   // Acción del usuario
   action: 'use_existing' | 'create_new' | 'link_to' | 'ignore'
   linkedProductId?: number
+  // Imagen y descripción generadas con IA
+  generatedImageUrl?: string
+  generatedDescription?: string
+  isGeneratingImage?: boolean
 }
 
 const CURRENCY_SYMBOLS: Record<string, string> = {
@@ -500,6 +506,56 @@ export default function CreatePurchasePage() {
       return item
     }))
   }, [])
+
+  // Generate image and description with AI for a product
+  const generateImageWithAI = useCallback(async (itemId: string) => {
+    const item = matchedProducts.find(p => p.id === itemId)
+    if (!item) return
+
+    // Mark as generating
+    setMatchedProducts(prev => prev.map(p =>
+      p.id === itemId ? { ...p, isGeneratingImage: true } : p
+    ))
+
+    try {
+      console.log('[Purchase] Generating AI image for:', item.name)
+
+      const response = await fetch('/api/ai/process-image', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'generate',
+          productName: item.name,
+          productDescription: item.description || `Producto: ${item.name}`,
+          saveToStorage: false // No guardamos aún, solo preview
+        })
+      })
+
+      const data = await response.json()
+
+      if (data.success && data.data) {
+        console.log('[Purchase] AI image generated successfully')
+        setMatchedProducts(prev => prev.map(p =>
+          p.id === itemId ? {
+            ...p,
+            generatedImageUrl: data.data.imageUrl || data.data.imageBase64,
+            generatedDescription: data.data.imageDescription,
+            isGeneratingImage: false
+          } : p
+        ))
+      } else {
+        console.error('[Purchase] AI image generation failed:', data.error)
+        setMatchedProducts(prev => prev.map(p =>
+          p.id === itemId ? { ...p, isGeneratingImage: false } : p
+        ))
+      }
+    } catch (error) {
+      console.error('[Purchase] Error generating AI image:', error)
+      setMatchedProducts(prev => prev.map(p =>
+        p.id === itemId ? { ...p, isGeneratingImage: false } : p
+      ))
+    }
+  }, [matchedProducts])
 
   // Search products for linking
   useEffect(() => {
@@ -1808,45 +1864,80 @@ export default function CreatePurchasePage() {
                                       : 'bg-amber-50 border-amber-200'
                               )}
                             >
-                              <div className="flex items-start justify-between">
-                                <div className="flex items-start gap-3 flex-1">
-                                  <div className={cn(
-                                    "w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0",
-                                    item.action === 'link_to'
-                                      ? theme === 'dark' ? 'bg-blue-900/50' : 'bg-blue-100'
-                                      : theme === 'dark' ? 'bg-amber-900/50' : 'bg-amber-100'
-                                  )}>
-                                    <Package className={cn(
-                                      "w-5 h-5",
-                                      item.action === 'link_to' ? 'text-blue-500' : 'text-amber-500'
-                                    )} />
-                                  </div>
-                                  <div className="flex-1 min-w-0">
-                                    <p className={cn(
-                                      'font-medium',
-                                      theme === 'dark' ? 'text-white' : 'text-gray-900'
+                              <div className="flex items-start gap-3">
+                                {/* Imagen del producto (generada o placeholder) */}
+                                <div className="relative flex-shrink-0">
+                                  {item.generatedImageUrl ? (
+                                    <img
+                                      src={item.generatedImageUrl}
+                                      alt={item.name}
+                                      className="w-14 h-14 rounded-lg object-cover border border-gray-200 dark:border-gray-700"
+                                    />
+                                  ) : (
+                                    <div className={cn(
+                                      'w-14 h-14 rounded-lg flex items-center justify-center',
+                                      item.action === 'link_to'
+                                        ? theme === 'dark' ? 'bg-blue-900/50' : 'bg-blue-100'
+                                        : theme === 'dark' ? 'bg-amber-900/50' : 'bg-amber-100'
                                     )}>
-                                      {item.name}
-                                    </p>
-                                    {item.action === 'link_to' && item.linkedProductId && (
-                                      <p className={cn(
-                                        'text-sm mt-0.5',
-                                        theme === 'dark' ? 'text-blue-400' : 'text-blue-600'
-                                      )}>
-                                        Vinculado a producto existente
-                                      </p>
-                                    )}
-                                    <div className="flex items-center gap-4 mt-1">
-                                      <span className={cn(
-                                        'text-sm',
-                                        theme === 'dark' ? 'text-gray-500' : 'text-gray-500'
-                                      )}>
-                                        {item.quantity} {item.unitOfMeasure || 'unidad'} × ${item.unitCost.toFixed(2)}
-                                      </span>
+                                      <ImageIcon className={cn(
+                                        "w-6 h-6",
+                                        item.action === 'link_to' ? 'text-blue-400' : 'text-amber-400'
+                                      )} />
                                     </div>
-                                  </div>
+                                  )}
+                                  {/* Boton para generar imagen con IA */}
+                                  <button
+                                    onClick={() => generateImageWithAI(item.id)}
+                                    disabled={item.isGeneratingImage || item.action === 'ignore'}
+                                    className={cn(
+                                      'absolute -bottom-1 -right-1 p-1.5 rounded-full shadow-lg transition-all',
+                                      item.isGeneratingImage
+                                        ? 'bg-purple-500 cursor-wait'
+                                        : item.generatedImageUrl
+                                          ? 'bg-green-500 hover:bg-green-600'
+                                          : 'bg-purple-500 hover:bg-purple-600',
+                                      item.action === 'ignore' && 'opacity-50 cursor-not-allowed'
+                                    )}
+                                    title={item.generatedImageUrl ? 'Regenerar imagen con IA' : 'Generar imagen con IA'}
+                                  >
+                                    {item.isGeneratingImage ? (
+                                      <Loader2 className="w-3 h-3 text-white animate-spin" />
+                                    ) : (
+                                      <Wand2 className="w-3 h-3 text-white" />
+                                    )}
+                                  </button>
                                 </div>
-                                <div className="flex items-center gap-2">
+                                {/* Info del producto */}
+                                <div className="flex-1 min-w-0">
+                                  <p className={cn(
+                                    'font-medium truncate',
+                                    theme === 'dark' ? 'text-white' : 'text-gray-900'
+                                  )}>
+                                    {item.name}
+                                  </p>
+                                  {item.action === 'link_to' && item.linkedProductId && (
+                                    <p className={cn(
+                                      'text-sm mt-0.5',
+                                      theme === 'dark' ? 'text-blue-400' : 'text-blue-600'
+                                    )}>
+                                      Vinculado a producto existente
+                                    </p>
+                                  )}
+                                  <span className={cn(
+                                    'text-sm',
+                                    theme === 'dark' ? 'text-gray-500' : 'text-gray-500'
+                                  )}>
+                                    {item.quantity} {item.unitOfMeasure || 'unidad'} × ${item.unitCost.toFixed(2)}
+                                  </span>
+                                  {item.generatedDescription && (
+                                    <p className={cn('text-xs mt-1 truncate', theme === 'dark' ? 'text-purple-400' : 'text-purple-600')}>
+                                      {item.generatedDescription}
+                                    </p>
+                                  )}
+                                </div>
+                                {/* Acciones */}
+                                <div className="flex items-center gap-2 flex-shrink-0">
                                   <span className={cn(
                                     'font-bold',
                                     theme === 'dark' ? 'text-white' : 'text-gray-900'
@@ -1881,6 +1972,7 @@ export default function CreatePurchasePage() {
                                         ? 'text-green-500 hover:bg-green-500/10'
                                         : 'text-gray-400 hover:text-red-500 hover:bg-red-500/10'
                                     )}
+                                    title={item.action === 'ignore' ? 'Incluir' : 'Excluir'}
                                   >
                                     {item.action === 'ignore' ? (
                                       <Plus className="w-4 h-4" />
