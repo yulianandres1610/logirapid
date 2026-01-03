@@ -28,7 +28,10 @@ import {
   CheckCircle2,
   XCircle,
   RefreshCw,
-  AlertTriangle
+  AlertTriangle,
+  Scan,
+  Brain,
+  Zap
 } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
@@ -205,6 +208,26 @@ export default function CreateConsignmentOrderPage() {
   const [aiContext, setAiContext] = useState('')
   const [isScanning, setIsScanning] = useState(false)
   const [scanError, setScanError] = useState<string | null>(null)
+  const [ocrStep, setOcrStep] = useState(0)
+
+  // OCR step animation - pasos de escaneo con iconos
+  const ocrSteps = [
+    { icon: Scan, text: 'Escaneando documento...' },
+    { icon: Brain, text: 'Analizando contenido con IA...' },
+    { icon: FileText, text: 'Extrayendo productos...' },
+    { icon: Zap, text: 'Identificando coincidencias...' },
+  ]
+
+  // Ciclar los pasos de animación durante el escaneo
+  useEffect(() => {
+    if (isScanning) {
+      setOcrStep(0)
+      const interval = setInterval(() => {
+        setOcrStep(prev => (prev + 1) % ocrSteps.length)
+      }, 1500)
+      return () => clearInterval(interval)
+    }
+  }, [isScanning])
 
   // Step: Review Scan (IA)
   const [scannedData, setScannedData] = useState<ScannedInvoice | null>(null)
@@ -1118,24 +1141,56 @@ export default function CreateConsignmentOrderPage() {
                       Escanear Factura de Consignación
                     </h2>
 
+                    {/* File Upload Area */}
                     <div className={cn(
-                      "border-2 border-dashed rounded-2xl p-8 text-center transition-all",
+                      "border-2 border-dashed rounded-2xl p-8 text-center transition-all relative overflow-hidden",
                       invoiceFileBase64
                         ? theme === 'dark' ? 'border-green-500/50 bg-green-900/10' : 'border-green-300 bg-green-50'
-                        : theme === 'dark' ? 'border-gray-600 hover:border-gray-500' : 'border-gray-300 hover:border-gray-400'
+                        : theme === 'dark' ? 'border-gray-600 hover:border-gray-500' : 'border-gray-300 hover:border-gray-400',
+                      isScanning && 'border-cyan-500/50'
                     )}>
-                      <input type="file" accept="image/jpeg,image/png,image/webp,application/pdf" onChange={handleFileUpload} className="hidden" id="consignment-invoice-upload" />
-                      <label htmlFor="consignment-invoice-upload" className="cursor-pointer block">
+                      <input type="file" accept="image/jpeg,image/png,image/webp,application/pdf" onChange={handleFileUpload} className="hidden" id="consignment-invoice-upload" disabled={isScanning} />
+                      <label htmlFor="consignment-invoice-upload" className={cn("cursor-pointer block", isScanning && "pointer-events-none")}>
                         {invoiceFileBase64 ? (
-                          <div className="space-y-4">
+                          <div className="space-y-4 relative">
                             {invoiceFileBase64.startsWith('data:image') ? (
-                              <img src={invoiceFileBase64} alt="Factura" className="max-h-64 mx-auto rounded-xl shadow-lg" />
+                              <div className="relative inline-block mx-auto">
+                                <img src={invoiceFileBase64} alt="Factura" className={cn("max-h-64 mx-auto rounded-xl shadow-lg transition-all duration-500", isScanning && "brightness-75")} />
+                                {/* Scanning Line Effect */}
+                                {isScanning && (
+                                  <motion.div
+                                    className="absolute left-0 right-0 h-1 bg-gradient-to-r from-transparent via-cyan-400 to-transparent shadow-[0_0_15px_rgba(34,211,238,0.8)]"
+                                    initial={{ top: '0%' }}
+                                    animate={{ top: ['0%', '100%', '0%'] }}
+                                    transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut' }}
+                                  />
+                                )}
+                              </div>
                             ) : (
-                              <div className={cn("w-24 h-32 mx-auto rounded-xl flex items-center justify-center", theme === 'dark' ? 'bg-red-900/30' : 'bg-red-100')}>
-                                <FileText className="w-12 h-12 text-red-500" />
+                              <div className="relative inline-block mx-auto">
+                                <div className={cn(
+                                  "w-24 h-32 mx-auto rounded-xl flex items-center justify-center overflow-hidden transition-all duration-500",
+                                  isScanning ? "bg-gradient-to-br from-red-100 to-cyan-100 dark:from-red-900/30 dark:to-cyan-900/30" : theme === 'dark' ? 'bg-red-900/30' : 'bg-red-100'
+                                )}>
+                                  <FileText className={cn("w-12 h-12 transition-colors duration-500", isScanning ? "text-cyan-600" : "text-red-500")} />
+                                  {/* PDF Scanning Effect */}
+                                  {isScanning && (
+                                    <motion.div
+                                      className="absolute left-0 right-0 h-1 bg-gradient-to-r from-transparent via-cyan-400 to-transparent shadow-[0_0_15px_rgba(34,211,238,0.8)]"
+                                      initial={{ top: '0%' }}
+                                      animate={{ top: ['0%', '100%', '0%'] }}
+                                      transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut' }}
+                                    />
+                                  )}
+                                </div>
                               </div>
                             )}
-                            <p className={cn("text-sm font-medium", theme === 'dark' ? 'text-green-400' : 'text-green-600')}>{invoiceFileName}</p>
+                            {!isScanning && (
+                              <>
+                                <p className={cn("text-sm font-medium", theme === 'dark' ? 'text-green-400' : 'text-green-600')}>{invoiceFileName}</p>
+                                <p className={cn("text-xs", theme === 'dark' ? 'text-gray-500' : 'text-gray-400')}>Haz clic para cambiar el archivo</p>
+                              </>
+                            )}
                           </div>
                         ) : (
                           <>
@@ -1145,38 +1200,110 @@ export default function CreateConsignmentOrderPage() {
                           </>
                         )}
                       </label>
+
+                      {/* AI Processing Overlay */}
+                      <AnimatePresence>
+                        {isScanning && (
+                          <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.9 }} className="mt-6">
+                            {/* Glassmorphism Card */}
+                            <div className={cn(
+                              "relative p-6 rounded-2xl backdrop-blur-xl overflow-hidden",
+                              theme === 'dark' ? "bg-gray-900/80 border border-gray-700/50" : "bg-white/80 border border-gray-200/50"
+                            )}>
+                              {/* Animated border glow */}
+                              <motion.div
+                                className="absolute inset-0 rounded-2xl"
+                                style={{ background: 'linear-gradient(90deg, transparent, rgba(34, 211, 238, 0.3), transparent)', backgroundSize: '200% 100%' }}
+                                animate={{ backgroundPosition: ['200% 0', '-200% 0'] }}
+                                transition={{ duration: 2, repeat: Infinity, ease: 'linear' }}
+                              />
+
+                              {/* Content */}
+                              <div className="relative z-10 flex flex-col items-center">
+                                {/* Animated Icon Container */}
+                                <motion.div
+                                  className={cn(
+                                    "w-16 h-16 rounded-2xl flex items-center justify-center mb-4",
+                                    theme === 'dark' ? "bg-gradient-to-br from-cyan-500/20 to-blue-500/20 border border-cyan-500/30" : "bg-gradient-to-br from-cyan-50 to-blue-50 border border-cyan-200"
+                                  )}
+                                  animate={{ boxShadow: ['0 0 0 0 rgba(34, 211, 238, 0)', '0 0 0 10px rgba(34, 211, 238, 0.1)', '0 0 0 0 rgba(34, 211, 238, 0)'] }}
+                                  transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut' }}
+                                >
+                                  <AnimatePresence mode="wait">
+                                    <motion.div key={ocrStep} initial={{ scale: 0, rotate: -180 }} animate={{ scale: 1, rotate: 0 }} exit={{ scale: 0, rotate: 180 }} transition={{ duration: 0.3 }}>
+                                      {React.createElement(ocrSteps[ocrStep].icon, { className: "w-8 h-8 text-cyan-500" })}
+                                    </motion.div>
+                                  </AnimatePresence>
+                                </motion.div>
+
+                                {/* Step Text */}
+                                <AnimatePresence mode="wait">
+                                  <motion.p key={ocrStep} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}
+                                    className={cn("font-semibold text-lg", theme === 'dark' ? 'text-cyan-300' : 'text-cyan-600')}>
+                                    {ocrSteps[ocrStep].text}
+                                  </motion.p>
+                                </AnimatePresence>
+                                <p className={cn("text-sm mt-1", theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}>Esto puede tomar unos segundos...</p>
+
+                                {/* Progress Bar */}
+                                <div className={cn("w-full h-1.5 rounded-full mt-4 overflow-hidden", theme === 'dark' ? 'bg-gray-700' : 'bg-gray-200')}>
+                                  <motion.div className="h-full bg-gradient-to-r from-cyan-500 to-blue-500" initial={{ width: '0%' }} animate={{ width: '100%' }} transition={{ duration: 6, ease: 'linear' }} />
+                                </div>
+                              </div>
+
+                              {/* Particle effects */}
+                              <div className="absolute inset-0 overflow-hidden pointer-events-none">
+                                {[...Array(6)].map((_, i) => (
+                                  <motion.div key={i} className="absolute w-1 h-1 rounded-full bg-cyan-400"
+                                    initial={{ x: '50%', y: '50%', opacity: 0 }}
+                                    animate={{ x: `${20 + Math.random() * 60}%`, y: `${20 + Math.random() * 60}%`, opacity: [0, 1, 0] }}
+                                    transition={{ duration: 2, repeat: Infinity, delay: i * 0.3, ease: 'easeOut' }}
+                                  />
+                                ))}
+                              </div>
+                            </div>
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
                     </div>
 
-                    <div>
-                      <label className={cn("block text-sm font-medium mb-2", theme === 'dark' ? 'text-gray-300' : 'text-gray-700')}>Instrucciones para la IA (opcional)</label>
-                      <textarea
-                        value={aiContext}
-                        onChange={(e) => setAiContext(e.target.value)}
-                        placeholder="Ej: El yogurt que viene en diferentes sabores son variantes del mismo producto..."
-                        rows={3}
-                        className={cn("w-full px-4 py-3 rounded-xl border resize-none", theme === 'dark' ? 'bg-gray-900/50 border-gray-600 text-white placeholder:text-gray-500' : 'bg-gray-50 border-gray-200 text-gray-900 placeholder:text-gray-400')}
-                      />
-                    </div>
+                    {/* Context Input - hide when scanning */}
+                    {!isScanning && (
+                      <div>
+                        <label className={cn("block text-sm font-medium mb-2", theme === 'dark' ? 'text-gray-300' : 'text-gray-700')}>Instrucciones para la IA (opcional)</label>
+                        <textarea
+                          value={aiContext}
+                          onChange={(e) => setAiContext(e.target.value)}
+                          placeholder="Ej: El yogurt que viene en diferentes sabores son variantes del mismo producto..."
+                          rows={3}
+                          className={cn("w-full px-4 py-3 rounded-xl border resize-none", theme === 'dark' ? 'bg-gray-900/50 border-gray-600 text-white placeholder:text-gray-500' : 'bg-gray-50 border-gray-200 text-gray-900 placeholder:text-gray-400')}
+                        />
+                      </div>
+                    )}
 
-                    {scanError && (
+                    {/* Error Message */}
+                    {scanError && !isScanning && (
                       <div className="p-4 rounded-xl flex items-center gap-3 bg-red-500/10 border border-red-500/30">
                         <AlertTriangle className="w-5 h-5 text-red-500 flex-shrink-0" />
                         <p className="text-red-500 text-sm">{scanError}</p>
                       </div>
                     )}
 
-                    <motion.button
-                      whileHover={{ scale: invoiceFileBase64 && !isScanning ? 1.02 : 1 }}
-                      whileTap={{ scale: invoiceFileBase64 && !isScanning ? 0.98 : 1 }}
-                      onClick={processInvoiceWithAI}
-                      disabled={!invoiceFileBase64 || isScanning}
-                      className={cn(
-                        "w-full py-4 rounded-xl font-medium flex items-center justify-center gap-3 transition-all disabled:opacity-50 disabled:cursor-not-allowed",
-                        theme === 'dark' ? 'bg-gradient-to-r from-blue-600 to-blue-700 text-white shadow-lg shadow-blue-500/30' : 'bg-gradient-to-r from-blue-500 to-blue-600 text-white shadow-lg shadow-blue-400/30'
-                      )}
-                    >
-                      {isScanning ? <><Loader2 className="w-5 h-5 animate-spin" />Analizando factura con IA...</> : <><Sparkles className="w-5 h-5" />Procesar con IA</>}
-                    </motion.button>
+                    {/* Process Button - hide when scanning */}
+                    {!isScanning && (
+                      <motion.button
+                        whileHover={{ scale: invoiceFileBase64 ? 1.02 : 1 }}
+                        whileTap={{ scale: invoiceFileBase64 ? 0.98 : 1 }}
+                        onClick={processInvoiceWithAI}
+                        disabled={!invoiceFileBase64}
+                        className={cn(
+                          "w-full py-4 rounded-xl font-medium flex items-center justify-center gap-3 transition-all disabled:opacity-50 disabled:cursor-not-allowed",
+                          theme === 'dark' ? 'bg-gradient-to-r from-blue-600 to-blue-700 text-white shadow-lg shadow-blue-500/30' : 'bg-gradient-to-r from-blue-500 to-blue-600 text-white shadow-lg shadow-blue-400/30'
+                        )}
+                      >
+                        <Sparkles className="w-5 h-5" />Procesar con IA
+                      </motion.button>
+                    )}
                   </motion.div>
                 )}
 
