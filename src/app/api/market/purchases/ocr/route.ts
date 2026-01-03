@@ -85,7 +85,7 @@ export async function POST(request: NextRequest) {
     }
 
     const isPdf = mimeType === 'application/pdf'
-    console.log('[Purchase OCR] Processing file:', { mimeType, isPdf, model: OCR_MODEL, hasContext: !!userContext })
+    console.log('[Purchase OCR v3] Processing file:', { mimeType, isPdf, model: OCR_MODEL, hasContext: !!userContext, base64Length: base64Data.length })
 
     // Construir el prompt con contexto del usuario si existe
     const contextSection = userContext

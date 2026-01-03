@@ -381,9 +381,17 @@ export default function CreatePurchasePage() {
       if (data.success) {
         setScannedData(data.data)
         console.log('[Purchase AI] OCR result:', data.data)
+        console.log('[Purchase AI] Items received:', data.data.items)
+        console.log('[Purchase AI] Items count:', data.data.items?.length || 0)
+        console.log('[Purchase AI] Item count field:', data.data.itemCount)
 
         // Now match the products
-        await matchScannedProducts(data.data.items)
+        if (data.data.items && data.data.items.length > 0) {
+          await matchScannedProducts(data.data.items)
+        } else {
+          console.warn('[Purchase AI] No items received from OCR!')
+          setMatchedProducts([])
+        }
 
         // Move to review-scan step
         setCurrentStep('review-scan')
