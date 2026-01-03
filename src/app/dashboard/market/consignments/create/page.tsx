@@ -634,15 +634,10 @@ export default function CreateConsignmentOrderPage() {
       setConsignmentDate(scannedData.invoiceDate)
     }
 
-    // Si ya tenemos proveedor y productos, saltar al paso de productos
-    if (scannedData?.vendorName && suppliers.find(s =>
-      s.name.toLowerCase().includes(scannedData.vendorName!.toLowerCase()) ||
-      scannedData.vendorName!.toLowerCase().includes(s.name.toLowerCase())
-    )) {
-      setCurrentStep('products')
-    } else {
-      setCurrentStep('supplier')
-    }
+    // Siempre ir al paso de proveedor/almacén para que el usuario pueda:
+    // 1. Confirmar o cambiar el proveedor pre-seleccionado
+    // 2. Seleccionar el almacén destino (obligatorio)
+    setCurrentStep('supplier')
   }, [matchedProducts, scannedData, suppliers])
 
   // Reset AI scan data
