@@ -21,7 +21,15 @@ import {
   Clock,
   FileText,
   Hash,
-  FileUp
+  FileUp,
+  Upload,
+  Sparkles,
+  Edit3,
+  Link2,
+  Eye,
+  CheckCircle2,
+  XCircle,
+  RefreshCw
 } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
@@ -41,7 +49,7 @@ interface ProductVariant {
   imageUrl: string | null
 }
 
-type Step = 'supplier' | 'products' | 'lots' | 'invoices' | 'review'
+type Step = 'method' | 'scan' | 'review-scan' | 'supplier' | 'products' | 'lots' | 'invoices' | 'review'
 
 interface WizardStep {
   id: Step
@@ -50,13 +58,87 @@ interface WizardStep {
   icon: React.ComponentType<{ className?: string }>
 }
 
-const STEPS: WizardStep[] = [
+// Steps base (sin IA) - se muestran los pasos 'method' y luego los del flujo manual
+const STEPS_MANUAL: WizardStep[] = [
+  { id: 'method', title: 'Método', description: 'Seleccionar', icon: FileUp },
   { id: 'supplier', title: 'Proveedor', description: 'Buscar o crear', icon: Truck },
   { id: 'products', title: 'Productos', description: 'Agregar líneas', icon: Package },
   { id: 'lots', title: 'Lotes', description: 'Vencimientos', icon: Calendar },
   { id: 'invoices', title: 'Facturas', description: 'Adjuntar', icon: FileUp },
   { id: 'review', title: 'Revisar', description: 'Confirmar compra', icon: Check }
 ]
+
+// Steps con IA - incluye scan y review-scan
+const STEPS_AI: WizardStep[] = [
+  { id: 'method', title: 'Método', description: 'Seleccionar', icon: FileUp },
+  { id: 'scan', title: 'Escanear', description: 'Subir factura', icon: Sparkles },
+  { id: 'review-scan', title: 'Revisar', description: 'Productos IA', icon: Eye },
+  { id: 'supplier', title: 'Proveedor', description: 'Confirmar', icon: Truck },
+  { id: 'products', title: 'Productos', description: 'Verificar', icon: Package },
+  { id: 'lots', title: 'Lotes', description: 'Vencimientos', icon: Calendar },
+  { id: 'invoices', title: 'Facturas', description: 'Adjuntar', icon: FileUp },
+  { id: 'review', title: 'Revisar', description: 'Confirmar compra', icon: Check }
+]
+
+// Interface para productos escaneados por IA
+interface ScannedItem {
+  id: string
+  name: string
+  quantity: number
+  unitCost: number
+  totalCost: number
+  sku: string | null
+  barcode: string | null
+  description: string | null
+  isVariantOf: string | null
+}
+
+// Interface para datos escaneados de la factura
+interface ScannedInvoice {
+  vendorName: string | null
+  invoiceNumber: string | null
+  invoiceDate: string | null
+  items: ScannedItem[]
+  subtotal: number
+  tax: number
+  total: number
+  confidence: number
+}
+
+// Interface para productos con match
+interface MatchedItem extends ScannedItem {
+  matchType: 'barcode' | 'sku' | 'exact_name' | 'fuzzy_name' | 'variant' | 'none'
+  matchedProduct: {
+    id: number
+    name: string
+    sku: string | null
+    barcode: string | null
+    costPrice: number
+    sellingPrice: number
+    hasVariants: boolean
+    imageUrl: string | null
+    categoryId: number | null
+    categoryName: string | null
+  } | null
+  matchedVariant: {
+    id: number
+    name: string
+    sku: string
+    barcode: string | null
+    costPrice: number
+    price: number
+  } | null
+  suggestedMatches: Array<{
+    id: number
+    name: string
+    sku: string | null
+    similarity: number
+  }>
+  confidence: number
+  // Acción del usuario
+  action: 'use_existing' | 'create_new' | 'link_to' | 'ignore'
+  linkedProductId?: number
+}
 
 const CURRENCY_SYMBOLS: Record<string, string> = {
   USD: '$',
@@ -108,12 +190,35 @@ interface PurchaseLine {
 export default function CreatePurchasePage() {
   const { theme } = useTheme()
   const router = useRouter()
-  const [currentStep, setCurrentStep] = useState<Step>('supplier')
+  const [currentStep, setCurrentStep] = useState<Step>('method')
   const [loading, setLoading] = useState(false)
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [showCancelModal, setShowCancelModal] = useState(false)
 
-  // Step 1: Supplier
+  // Método de entrada (IA o manual)
+  const [entryMethod, setEntryMethod] = useState<'ai' | 'manual' | null>(null)
+
+  // Step: Scan (IA)
+  const [invoiceFileBase64, setInvoiceFileBase64] = useState<string | null>(null)
+  const [invoiceFileName, setInvoiceFileName] = useState<string>('')
+  const [aiContext, setAiContext] = useState('')
+  const [isScanning, setIsScanning] = useState(false)
+  const [scanError, setScanError] = useState<string | null>(null)
+
+  // Step: Review Scan (IA)
+  const [scannedData, setScannedData] = useState<ScannedInvoice | null>(null)
+  const [matchedProducts, setMatchedProducts] = useState<MatchedItem[]>([])
+  const [isMatching, setIsMatching] = useState(false)
+  const [showLinkModal, setShowLinkModal] = useState(false)
+  const [linkingItemId, setLinkingItemId] = useState<string | null>(null)
+  const [linkSearch, setLinkSearch] = useState('')
+  const [linkResults, setLinkResults] = useState<Product[]>([])
+  const [searchingLink, setSearchingLink] = useState(false)
+
+  // Steps dinámicos basados en método
+  const STEPS = entryMethod === 'ai' ? STEPS_AI : STEPS_MANUAL
+
+  // Step: Supplier
   const [supplierSearch, setSupplierSearch] = useState('')
   const [supplierResults, setSupplierResults] = useState<Supplier[]>([])
   const [searchingSupplier, setSearchingSupplier] = useState(false)
@@ -202,6 +307,290 @@ export default function CreatePurchasePage() {
     }, 300)
     return () => clearTimeout(timer)
   }, [productSearch, searchProducts])
+
+  // Handle file upload for AI scan
+  const handleFileUpload = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    // Validate file type
+    const validTypes = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf']
+    if (!validTypes.includes(file.type)) {
+      setScanError('Formato no soportado. Usa JPG, PNG, WebP o PDF.')
+      return
+    }
+
+    // Validate file size (max 10MB)
+    if (file.size > 10 * 1024 * 1024) {
+      setScanError('El archivo es demasiado grande. Máximo 10MB.')
+      return
+    }
+
+    setScanError(null)
+    setInvoiceFileName(file.name)
+
+    const reader = new FileReader()
+    reader.onload = () => {
+      setInvoiceFileBase64(reader.result as string)
+    }
+    reader.readAsDataURL(file)
+  }, [])
+
+  // Process invoice with AI (OCR)
+  const processInvoiceWithAI = useCallback(async () => {
+    if (!invoiceFileBase64) return
+
+    setIsScanning(true)
+    setScanError(null)
+
+    try {
+      const response = await fetch('/api/market/purchases/ocr', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          fileBase64: invoiceFileBase64,
+          userContext: aiContext || undefined
+        })
+      })
+
+      const data = await response.json()
+
+      if (data.success) {
+        setScannedData(data.data)
+        console.log('[Purchase AI] OCR result:', data.data)
+
+        // Now match the products
+        await matchScannedProducts(data.data.items)
+
+        // Move to review-scan step
+        setCurrentStep('review-scan')
+      } else {
+        setScanError(data.error || 'Error al procesar la factura')
+      }
+    } catch (error) {
+      console.error('Error processing invoice:', error)
+      setScanError('Error de conexión al procesar la factura')
+    } finally {
+      setIsScanning(false)
+    }
+  }, [invoiceFileBase64, aiContext])
+
+  // Match scanned products against database
+  const matchScannedProducts = useCallback(async (items: ScannedItem[]) => {
+    setIsMatching(true)
+
+    try {
+      const response = await fetch('/api/market/products/match', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ items })
+      })
+
+      const data = await response.json()
+
+      if (data.success) {
+        // Transform matched items with default actions
+        const matched: MatchedItem[] = data.data.matchedItems.map((item: {
+          inputItem: ScannedItem
+          matchType: MatchedItem['matchType']
+          matchedProduct: MatchedItem['matchedProduct']
+          matchedVariant: MatchedItem['matchedVariant']
+          suggestedMatches: MatchedItem['suggestedMatches']
+          confidence: number
+        }) => ({
+          ...item.inputItem,
+          matchType: item.matchType,
+          matchedProduct: item.matchedProduct,
+          matchedVariant: item.matchedVariant,
+          suggestedMatches: item.suggestedMatches || [],
+          confidence: item.confidence,
+          // Default action based on match type
+          action: item.matchType !== 'none' ? 'use_existing' : 'create_new'
+        }))
+
+        setMatchedProducts(matched)
+        console.log('[Purchase AI] Match results:', matched)
+      }
+    } catch (error) {
+      console.error('Error matching products:', error)
+    } finally {
+      setIsMatching(false)
+    }
+  }, [])
+
+  // Handle product action change
+  const handleProductAction = useCallback((itemId: string, action: MatchedItem['action'], linkedProductId?: number) => {
+    setMatchedProducts(prev => prev.map(item => {
+      if (item.id === itemId) {
+        return { ...item, action, linkedProductId }
+      }
+      return item
+    }))
+  }, [])
+
+  // Search products for linking
+  useEffect(() => {
+    const timer = setTimeout(async () => {
+      if (linkSearch.length >= 2) {
+        setSearchingLink(true)
+        try {
+          const response = await fetch(`/api/market/products?search=${encodeURIComponent(linkSearch)}&limit=10`)
+          const data = await response.json()
+          if (data.success) {
+            setLinkResults(data.data.products || [])
+          }
+        } catch (error) {
+          console.error('Error searching products for link:', error)
+        } finally {
+          setSearchingLink(false)
+        }
+      } else {
+        setLinkResults([])
+      }
+    }, 300)
+    return () => clearTimeout(timer)
+  }, [linkSearch])
+
+  // Confirm scanned products and move to supplier step
+  const confirmScannedProducts = useCallback(async () => {
+    // Filter products that are not ignored
+    const activeProducts = matchedProducts.filter(p => p.action !== 'ignore')
+
+    if (activeProducts.length === 0) {
+      setScanError('Debes incluir al menos un producto')
+      return
+    }
+
+    // Create purchase lines from matched products
+    const newLines: PurchaseLine[] = []
+
+    for (const item of activeProducts) {
+      if (item.action === 'use_existing' && item.matchedProduct) {
+        // Use existing product
+        const product: Product = {
+          id: item.matchedProduct.id,
+          name: item.matchedProduct.name,
+          sku: item.matchedProduct.sku || '',
+          barcode: item.matchedProduct.barcode,
+          imageUrl: item.matchedProduct.imageUrl,
+          costPrice: item.matchedProduct.costPrice,
+          sellingPrice: item.matchedProduct.sellingPrice,
+          currency: 'USD',
+          quantityOnHand: 0,
+          hasVariants: item.matchedProduct.hasVariants
+        }
+
+        if (item.matchedVariant) {
+          // Use matched variant
+          newLines.push({
+            productId: item.matchedProduct.id,
+            variantId: item.matchedVariant.id,
+            variantName: item.matchedVariant.name,
+            variantSku: item.matchedVariant.sku,
+            product,
+            quantity: item.quantity,
+            unitPrice: item.unitCost,
+            totalPrice: item.totalCost,
+            lotNumber: '',
+            expirationDate: '',
+            manufacturingDate: ''
+          })
+        } else {
+          // Use main product
+          newLines.push({
+            productId: item.matchedProduct.id,
+            variantId: null,
+            variantName: null,
+            variantSku: null,
+            product,
+            quantity: item.quantity,
+            unitPrice: item.unitCost,
+            totalPrice: item.totalCost,
+            lotNumber: '',
+            expirationDate: '',
+            manufacturingDate: ''
+          })
+        }
+      } else if (item.action === 'link_to' && item.linkedProductId) {
+        // Fetch the linked product
+        try {
+          const response = await fetch(`/api/market/products/${item.linkedProductId}`)
+          const data = await response.json()
+          if (data.success && data.data) {
+            const linkedProduct = data.data
+            newLines.push({
+              productId: linkedProduct.id,
+              variantId: null,
+              variantName: null,
+              variantSku: null,
+              product: {
+                id: linkedProduct.id,
+                name: linkedProduct.name,
+                sku: linkedProduct.sku || '',
+                barcode: linkedProduct.barcode,
+                imageUrl: linkedProduct.imageUrl,
+                costPrice: linkedProduct.costPrice,
+                sellingPrice: linkedProduct.sellingPrice,
+                currency: linkedProduct.currency || 'USD',
+                quantityOnHand: linkedProduct.quantityOnHand || 0,
+                hasVariants: linkedProduct.hasVariants
+              },
+              quantity: item.quantity,
+              unitPrice: item.unitCost,
+              totalPrice: item.totalCost,
+              lotNumber: '',
+              expirationDate: '',
+              manufacturingDate: ''
+            })
+          }
+        } catch (error) {
+          console.error('Error fetching linked product:', error)
+        }
+      }
+      // For 'create_new', we'll handle in a future TODO (QuickProductCreate modal)
+      // For now, skip them - they won't be added to purchase lines
+    }
+
+    // Set purchase lines
+    setPurchaseLines(newLines)
+
+    // Pre-fill supplier if detected
+    if (scannedData?.vendorName) {
+      // Search for supplier by name
+      try {
+        const response = await fetch(`/api/market/suppliers/search?q=${encodeURIComponent(scannedData.vendorName)}&limit=5`)
+        const data = await response.json()
+        if (data.success && data.data.length > 0) {
+          // Found a matching supplier
+          setSelectedSupplier(data.data[0])
+        } else {
+          // Pre-fill search with detected name
+          setSupplierSearch(scannedData.vendorName)
+        }
+      } catch (error) {
+        console.error('Error searching supplier:', error)
+        setSupplierSearch(scannedData.vendorName || '')
+      }
+    }
+
+    // Pre-fill purchase date if detected
+    if (scannedData?.invoiceDate) {
+      setPurchaseDate(scannedData.invoiceDate)
+    }
+
+    // Move to supplier step
+    setCurrentStep('supplier')
+  }, [matchedProducts, scannedData])
+
+  // Reset AI scan data
+  const resetAIScan = useCallback(() => {
+    setInvoiceFileBase64(null)
+    setInvoiceFileName('')
+    setAiContext('')
+    setScannedData(null)
+    setMatchedProducts([])
+    setScanError(null)
+  }, [])
 
   // Create new supplier
   const handleCreateSupplier = async () => {
@@ -619,7 +1008,705 @@ export default function CreatePurchasePage() {
               transition={{ duration: 0.5 }}
             >
               <AnimatePresence mode="wait">
-                {/* Step 1: Supplier */}
+                {/* Step: Method Selection */}
+                {currentStep === 'method' && (
+                  <motion.div
+                    key="method"
+                    initial={{ opacity: 0, x: 20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    exit={{ opacity: 0, x: -20 }}
+                    transition={{ duration: 0.3 }}
+                    className="space-y-6"
+                  >
+                    <h2 className={cn(
+                      "text-xl font-bold flex items-center gap-3",
+                      theme === 'dark' ? 'text-white' : 'text-gray-900'
+                    )}>
+                      <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-purple-500 to-purple-600 flex items-center justify-center">
+                        <FileUp className="w-5 h-5 text-white" />
+                      </div>
+                      ¿Cómo deseas registrar esta compra?
+                    </h2>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      {/* AI Option */}
+                      <motion.button
+                        whileHover={{ scale: 1.02 }}
+                        whileTap={{ scale: 0.98 }}
+                        onClick={() => {
+                          setEntryMethod('ai')
+                          setCurrentStep('scan')
+                        }}
+                        className={cn(
+                          "p-6 rounded-2xl border-2 text-left transition-all",
+                          entryMethod === 'ai'
+                            ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
+                            : theme === 'dark'
+                              ? 'border-gray-700 hover:border-gray-600 bg-gray-900/50'
+                              : 'border-gray-200 hover:border-gray-300 bg-gray-50'
+                        )}
+                      >
+                        <div className="flex items-center gap-4 mb-4">
+                          <div className={cn(
+                            "w-14 h-14 rounded-xl flex items-center justify-center",
+                            theme === 'dark' ? 'bg-blue-900/50' : 'bg-blue-100'
+                          )}>
+                            <Sparkles className="w-7 h-7 text-blue-500" />
+                          </div>
+                          <div>
+                            <h3 className={cn(
+                              "text-lg font-bold",
+                              theme === 'dark' ? 'text-white' : 'text-gray-900'
+                            )}>
+                              Mediante Factura con IA
+                            </h3>
+                            <span className="text-xs px-2 py-0.5 rounded-full bg-blue-500 text-white font-medium">
+                              Recomendado
+                            </span>
+                          </div>
+                        </div>
+                        <p className={cn(
+                          "text-sm",
+                          theme === 'dark' ? 'text-gray-400' : 'text-gray-600'
+                        )}>
+                          Sube una foto o PDF de la factura del proveedor y la IA detectará automáticamente los productos, cantidades y precios.
+                        </p>
+                        <div className={cn(
+                          "mt-4 flex items-center gap-2 text-sm",
+                          theme === 'dark' ? 'text-blue-400' : 'text-blue-600'
+                        )}>
+                          <CheckCircle2 className="w-4 h-4" />
+                          <span>Detecta productos existentes</span>
+                        </div>
+                        <div className={cn(
+                          "mt-1 flex items-center gap-2 text-sm",
+                          theme === 'dark' ? 'text-blue-400' : 'text-blue-600'
+                        )}>
+                          <CheckCircle2 className="w-4 h-4" />
+                          <span>Extrae datos del proveedor</span>
+                        </div>
+                      </motion.button>
+
+                      {/* Manual Option */}
+                      <motion.button
+                        whileHover={{ scale: 1.02 }}
+                        whileTap={{ scale: 0.98 }}
+                        onClick={() => {
+                          setEntryMethod('manual')
+                          setCurrentStep('supplier')
+                        }}
+                        className={cn(
+                          "p-6 rounded-2xl border-2 text-left transition-all",
+                          entryMethod === 'manual'
+                            ? 'border-green-500 bg-green-50 dark:bg-green-900/20'
+                            : theme === 'dark'
+                              ? 'border-gray-700 hover:border-gray-600 bg-gray-900/50'
+                              : 'border-gray-200 hover:border-gray-300 bg-gray-50'
+                        )}
+                      >
+                        <div className="flex items-center gap-4 mb-4">
+                          <div className={cn(
+                            "w-14 h-14 rounded-xl flex items-center justify-center",
+                            theme === 'dark' ? 'bg-green-900/50' : 'bg-green-100'
+                          )}>
+                            <Edit3 className="w-7 h-7 text-green-500" />
+                          </div>
+                          <div>
+                            <h3 className={cn(
+                              "text-lg font-bold",
+                              theme === 'dark' ? 'text-white' : 'text-gray-900'
+                            )}>
+                              Entrada Manual
+                            </h3>
+                          </div>
+                        </div>
+                        <p className={cn(
+                          "text-sm",
+                          theme === 'dark' ? 'text-gray-400' : 'text-gray-600'
+                        )}>
+                          Agrega los productos uno por uno buscando en tu inventario. Ideal cuando no tienes la factura digitalizada.
+                        </p>
+                        <div className={cn(
+                          "mt-4 flex items-center gap-2 text-sm",
+                          theme === 'dark' ? 'text-green-400' : 'text-green-600'
+                        )}>
+                          <CheckCircle2 className="w-4 h-4" />
+                          <span>Control total sobre cada línea</span>
+                        </div>
+                        <div className={cn(
+                          "mt-1 flex items-center gap-2 text-sm",
+                          theme === 'dark' ? 'text-green-400' : 'text-green-600'
+                        )}>
+                          <CheckCircle2 className="w-4 h-4" />
+                          <span>Sin necesidad de factura física</span>
+                        </div>
+                      </motion.button>
+                    </div>
+                  </motion.div>
+                )}
+
+                {/* Step: Scan Invoice with AI */}
+                {currentStep === 'scan' && (
+                  <motion.div
+                    key="scan"
+                    initial={{ opacity: 0, x: 20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    exit={{ opacity: 0, x: -20 }}
+                    transition={{ duration: 0.3 }}
+                    className="space-y-6"
+                  >
+                    <h2 className={cn(
+                      "text-xl font-bold flex items-center gap-3",
+                      theme === 'dark' ? 'text-white' : 'text-gray-900'
+                    )}>
+                      <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center">
+                        <Sparkles className="w-5 h-5 text-white" />
+                      </div>
+                      Escanear Factura del Proveedor
+                    </h2>
+
+                    {/* File Upload Area */}
+                    <div className={cn(
+                      "border-2 border-dashed rounded-2xl p-8 text-center transition-all",
+                      invoiceFileBase64
+                        ? theme === 'dark'
+                          ? 'border-green-500/50 bg-green-900/10'
+                          : 'border-green-300 bg-green-50'
+                        : theme === 'dark'
+                          ? 'border-gray-600 hover:border-gray-500'
+                          : 'border-gray-300 hover:border-gray-400'
+                    )}>
+                      <input
+                        type="file"
+                        accept="image/jpeg,image/png,image/webp,application/pdf"
+                        onChange={handleFileUpload}
+                        className="hidden"
+                        id="invoice-upload"
+                      />
+                      <label htmlFor="invoice-upload" className="cursor-pointer block">
+                        {invoiceFileBase64 ? (
+                          <div className="space-y-4">
+                            {invoiceFileBase64.startsWith('data:image') ? (
+                              <img
+                                src={invoiceFileBase64}
+                                alt="Factura"
+                                className="max-h-64 mx-auto rounded-xl shadow-lg"
+                              />
+                            ) : (
+                              <div className={cn(
+                                "w-24 h-32 mx-auto rounded-xl flex items-center justify-center",
+                                theme === 'dark' ? 'bg-red-900/30' : 'bg-red-100'
+                              )}>
+                                <FileText className="w-12 h-12 text-red-500" />
+                              </div>
+                            )}
+                            <p className={cn(
+                              "text-sm font-medium",
+                              theme === 'dark' ? 'text-green-400' : 'text-green-600'
+                            )}>
+                              {invoiceFileName}
+                            </p>
+                            <p className={cn(
+                              "text-xs",
+                              theme === 'dark' ? 'text-gray-500' : 'text-gray-400'
+                            )}>
+                              Haz clic para cambiar el archivo
+                            </p>
+                          </div>
+                        ) : (
+                          <>
+                            <Upload className={cn(
+                              "w-16 h-16 mx-auto mb-4",
+                              theme === 'dark' ? 'text-gray-600' : 'text-gray-400'
+                            )} />
+                            <p className={cn(
+                              "text-lg font-medium mb-2",
+                              theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
+                            )}>
+                              Arrastra o haz clic para subir
+                            </p>
+                            <p className={cn(
+                              "text-sm",
+                              theme === 'dark' ? 'text-gray-500' : 'text-gray-500'
+                            )}>
+                              JPG, PNG, WebP o PDF (máx. 10MB)
+                            </p>
+                          </>
+                        )}
+                      </label>
+                    </div>
+
+                    {/* Context Input */}
+                    <div>
+                      <label className={cn(
+                        "block text-sm font-medium mb-2",
+                        theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
+                      )}>
+                        Instrucciones para la IA (opcional)
+                      </label>
+                      <textarea
+                        value={aiContext}
+                        onChange={(e) => setAiContext(e.target.value)}
+                        placeholder="Ej: El yogurt que viene en diferentes sabores son variantes del mismo producto, los precios ya incluyen IVA..."
+                        rows={3}
+                        className={cn(
+                          "w-full px-4 py-3 rounded-xl border resize-none",
+                          theme === 'dark'
+                            ? 'bg-gray-900/50 border-gray-600 text-white placeholder:text-gray-500'
+                            : 'bg-gray-50 border-gray-200 text-gray-900 placeholder:text-gray-400'
+                        )}
+                      />
+                      <p className={cn(
+                        "text-xs mt-1",
+                        theme === 'dark' ? 'text-gray-500' : 'text-gray-400'
+                      )}>
+                        Usa este campo para dar contexto adicional que ayude a interpretar mejor la factura
+                      </p>
+                    </div>
+
+                    {/* Error Message */}
+                    {scanError && (
+                      <div className={cn(
+                        'p-4 rounded-xl flex items-center gap-3',
+                        'bg-red-500/10 border border-red-500/30'
+                      )}>
+                        <AlertTriangle className="w-5 h-5 text-red-500 flex-shrink-0" />
+                        <p className="text-red-500 text-sm">{scanError}</p>
+                      </div>
+                    )}
+
+                    {/* Process Button */}
+                    <motion.button
+                      whileHover={{ scale: invoiceFileBase64 && !isScanning ? 1.02 : 1 }}
+                      whileTap={{ scale: invoiceFileBase64 && !isScanning ? 0.98 : 1 }}
+                      onClick={processInvoiceWithAI}
+                      disabled={!invoiceFileBase64 || isScanning}
+                      className={cn(
+                        "w-full py-4 rounded-xl font-medium flex items-center justify-center gap-3 transition-all",
+                        "disabled:opacity-50 disabled:cursor-not-allowed",
+                        theme === 'dark'
+                          ? 'bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white shadow-lg shadow-blue-500/30'
+                          : 'bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white shadow-lg shadow-blue-400/30'
+                      )}
+                    >
+                      {isScanning ? (
+                        <>
+                          <Loader2 className="w-5 h-5 animate-spin" />
+                          Analizando factura con IA...
+                        </>
+                      ) : (
+                        <>
+                          <Sparkles className="w-5 h-5" />
+                          Procesar con IA
+                        </>
+                      )}
+                    </motion.button>
+                  </motion.div>
+                )}
+
+                {/* Step: Review Scan Results */}
+                {currentStep === 'review-scan' && (
+                  <motion.div
+                    key="review-scan"
+                    initial={{ opacity: 0, x: 20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    exit={{ opacity: 0, x: -20 }}
+                    transition={{ duration: 0.3 }}
+                    className="space-y-6"
+                  >
+                    <div className="flex items-center justify-between">
+                      <h2 className={cn(
+                        "text-xl font-bold flex items-center gap-3",
+                        theme === 'dark' ? 'text-white' : 'text-gray-900'
+                      )}>
+                        <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-purple-500 to-purple-600 flex items-center justify-center">
+                          <Eye className="w-5 h-5 text-white" />
+                        </div>
+                        Revisar Productos Detectados
+                      </h2>
+                      <motion.button
+                        whileHover={{ scale: 1.05 }}
+                        whileTap={{ scale: 0.95 }}
+                        onClick={() => {
+                          resetAIScan()
+                          setCurrentStep('scan')
+                        }}
+                        className={cn(
+                          "flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium",
+                          theme === 'dark'
+                            ? 'bg-gray-700 hover:bg-gray-600 text-gray-200'
+                            : 'bg-gray-100 hover:bg-gray-200 text-gray-700'
+                        )}
+                      >
+                        <RefreshCw className="w-4 h-4" />
+                        Escanear otra
+                      </motion.button>
+                    </div>
+
+                    {/* Detected Vendor */}
+                    {scannedData?.vendorName && (
+                      <div className={cn(
+                        'p-4 rounded-xl',
+                        theme === 'dark' ? 'bg-gray-900/50' : 'bg-gray-50'
+                      )}>
+                        <label className={cn(
+                          'text-xs font-medium mb-1 block',
+                          theme === 'dark' ? 'text-gray-500' : 'text-gray-400'
+                        )}>
+                          Proveedor detectado
+                        </label>
+                        <p className={cn(
+                          'text-lg font-bold',
+                          theme === 'dark' ? 'text-white' : 'text-gray-900'
+                        )}>
+                          {scannedData.vendorName}
+                        </p>
+                        {scannedData.invoiceNumber && (
+                          <p className={cn(
+                            'text-sm mt-1',
+                            theme === 'dark' ? 'text-gray-400' : 'text-gray-600'
+                          )}>
+                            Factura: {scannedData.invoiceNumber}
+                          </p>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Matched Products - Existing */}
+                    {matchedProducts.filter(p => p.matchType !== 'none').length > 0 && (
+                      <div>
+                        <h3 className={cn(
+                          "font-bold flex items-center gap-2 mb-3",
+                          theme === 'dark' ? 'text-green-400' : 'text-green-600'
+                        )}>
+                          <CheckCircle2 className="w-5 h-5" />
+                          Productos Identificados ({matchedProducts.filter(p => p.matchType !== 'none').length})
+                        </h3>
+                        <div className="space-y-3">
+                          {matchedProducts.filter(p => p.matchType !== 'none').map((item) => (
+                            <div
+                              key={item.id}
+                              className={cn(
+                                'p-4 rounded-xl border',
+                                item.action === 'ignore'
+                                  ? theme === 'dark'
+                                    ? 'bg-gray-800/50 border-gray-700 opacity-50'
+                                    : 'bg-gray-100 border-gray-200 opacity-50'
+                                  : theme === 'dark'
+                                    ? 'bg-green-900/20 border-green-800/50'
+                                    : 'bg-green-50 border-green-200'
+                              )}
+                            >
+                              <div className="flex items-start justify-between">
+                                <div className="flex items-start gap-3 flex-1">
+                                  <div className={cn(
+                                    "w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0",
+                                    theme === 'dark' ? 'bg-green-900/50' : 'bg-green-100'
+                                  )}>
+                                    <Package className="w-5 h-5 text-green-500" />
+                                  </div>
+                                  <div className="flex-1 min-w-0">
+                                    <p className={cn(
+                                      'font-medium',
+                                      theme === 'dark' ? 'text-white' : 'text-gray-900'
+                                    )}>
+                                      {item.name}
+                                    </p>
+                                    <p className={cn(
+                                      'text-sm mt-0.5',
+                                      theme === 'dark' ? 'text-gray-400' : 'text-gray-600'
+                                    )}>
+                                      Vinculado a: <span className="font-medium">{item.matchedProduct?.name}</span>
+                                      {item.matchedVariant && ` - ${item.matchedVariant.name}`}
+                                    </p>
+                                    <div className="flex items-center gap-4 mt-1">
+                                      <span className={cn(
+                                        'text-sm',
+                                        theme === 'dark' ? 'text-gray-500' : 'text-gray-500'
+                                      )}>
+                                        x{item.quantity} @ ${item.unitCost.toFixed(2)}
+                                      </span>
+                                      <span className={cn(
+                                        'text-xs px-2 py-0.5 rounded-full',
+                                        item.matchType === 'barcode' || item.matchType === 'sku'
+                                          ? 'bg-green-500/20 text-green-500'
+                                          : item.matchType === 'exact_name'
+                                            ? 'bg-blue-500/20 text-blue-500'
+                                            : 'bg-amber-500/20 text-amber-500'
+                                      )}>
+                                        {item.matchType === 'barcode' ? 'Por código de barras' :
+                                         item.matchType === 'sku' ? 'Por SKU' :
+                                         item.matchType === 'exact_name' ? 'Nombre exacto' :
+                                         item.matchType === 'variant' ? 'Variante' :
+                                         'Nombre similar'}
+                                      </span>
+                                    </div>
+                                  </div>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                  <span className={cn(
+                                    'font-bold',
+                                    theme === 'dark' ? 'text-white' : 'text-gray-900'
+                                  )}>
+                                    ${item.totalCost.toFixed(2)}
+                                  </span>
+                                  <button
+                                    onClick={() => handleProductAction(
+                                      item.id,
+                                      item.action === 'ignore' ? 'use_existing' : 'ignore'
+                                    )}
+                                    className={cn(
+                                      'p-2 rounded-lg transition-colors',
+                                      item.action === 'ignore'
+                                        ? 'text-green-500 hover:bg-green-500/10'
+                                        : 'text-gray-400 hover:text-red-500 hover:bg-red-500/10'
+                                    )}
+                                  >
+                                    {item.action === 'ignore' ? (
+                                      <Plus className="w-4 h-4" />
+                                    ) : (
+                                      <XCircle className="w-4 h-4" />
+                                    )}
+                                  </button>
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Unmatched Products - New */}
+                    {matchedProducts.filter(p => p.matchType === 'none').length > 0 && (
+                      <div>
+                        <h3 className={cn(
+                          "font-bold flex items-center gap-2 mb-3",
+                          theme === 'dark' ? 'text-amber-400' : 'text-amber-600'
+                        )}>
+                          <AlertTriangle className="w-5 h-5" />
+                          Productos Nuevos ({matchedProducts.filter(p => p.matchType === 'none').length})
+                        </h3>
+                        <p className={cn(
+                          "text-sm mb-3",
+                          theme === 'dark' ? 'text-gray-400' : 'text-gray-600'
+                        )}>
+                          Estos productos no fueron encontrados en tu inventario. Puedes ignorarlos, vincularlos a productos existentes, o crearlos después.
+                        </p>
+                        <div className="space-y-3">
+                          {matchedProducts.filter(p => p.matchType === 'none').map((item) => (
+                            <div
+                              key={item.id}
+                              className={cn(
+                                'p-4 rounded-xl border',
+                                item.action === 'ignore'
+                                  ? theme === 'dark'
+                                    ? 'bg-gray-800/50 border-gray-700 opacity-50'
+                                    : 'bg-gray-100 border-gray-200 opacity-50'
+                                  : item.action === 'link_to'
+                                    ? theme === 'dark'
+                                      ? 'bg-blue-900/20 border-blue-800/50'
+                                      : 'bg-blue-50 border-blue-200'
+                                    : theme === 'dark'
+                                      ? 'bg-amber-900/20 border-amber-800/50'
+                                      : 'bg-amber-50 border-amber-200'
+                              )}
+                            >
+                              <div className="flex items-start justify-between">
+                                <div className="flex items-start gap-3 flex-1">
+                                  <div className={cn(
+                                    "w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0",
+                                    item.action === 'link_to'
+                                      ? theme === 'dark' ? 'bg-blue-900/50' : 'bg-blue-100'
+                                      : theme === 'dark' ? 'bg-amber-900/50' : 'bg-amber-100'
+                                  )}>
+                                    <Package className={cn(
+                                      "w-5 h-5",
+                                      item.action === 'link_to' ? 'text-blue-500' : 'text-amber-500'
+                                    )} />
+                                  </div>
+                                  <div className="flex-1 min-w-0">
+                                    <p className={cn(
+                                      'font-medium',
+                                      theme === 'dark' ? 'text-white' : 'text-gray-900'
+                                    )}>
+                                      {item.name}
+                                    </p>
+                                    {item.action === 'link_to' && item.linkedProductId && (
+                                      <p className={cn(
+                                        'text-sm mt-0.5',
+                                        theme === 'dark' ? 'text-blue-400' : 'text-blue-600'
+                                      )}>
+                                        Vinculado a producto existente
+                                      </p>
+                                    )}
+                                    <div className="flex items-center gap-4 mt-1">
+                                      <span className={cn(
+                                        'text-sm',
+                                        theme === 'dark' ? 'text-gray-500' : 'text-gray-500'
+                                      )}>
+                                        x{item.quantity} @ ${item.unitCost.toFixed(2)}
+                                      </span>
+                                    </div>
+                                  </div>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                  <span className={cn(
+                                    'font-bold',
+                                    theme === 'dark' ? 'text-white' : 'text-gray-900'
+                                  )}>
+                                    ${item.totalCost.toFixed(2)}
+                                  </span>
+                                  {/* Link button */}
+                                  <button
+                                    onClick={() => {
+                                      setLinkingItemId(item.id)
+                                      setLinkSearch('')
+                                      setLinkResults([])
+                                      setShowLinkModal(true)
+                                    }}
+                                    className={cn(
+                                      'p-2 rounded-lg transition-colors',
+                                      'text-blue-500 hover:bg-blue-500/10'
+                                    )}
+                                    title="Vincular a producto existente"
+                                  >
+                                    <Link2 className="w-4 h-4" />
+                                  </button>
+                                  {/* Ignore/Include button */}
+                                  <button
+                                    onClick={() => handleProductAction(
+                                      item.id,
+                                      item.action === 'ignore' ? 'create_new' : 'ignore'
+                                    )}
+                                    className={cn(
+                                      'p-2 rounded-lg transition-colors',
+                                      item.action === 'ignore'
+                                        ? 'text-green-500 hover:bg-green-500/10'
+                                        : 'text-gray-400 hover:text-red-500 hover:bg-red-500/10'
+                                    )}
+                                  >
+                                    {item.action === 'ignore' ? (
+                                      <Plus className="w-4 h-4" />
+                                    ) : (
+                                      <XCircle className="w-4 h-4" />
+                                    )}
+                                  </button>
+                                </div>
+                              </div>
+                              {/* Suggested matches */}
+                              {item.action !== 'ignore' && item.action !== 'link_to' && item.suggestedMatches.length > 0 && (
+                                <div className={cn(
+                                  'mt-3 pt-3 border-t',
+                                  theme === 'dark' ? 'border-gray-700' : 'border-gray-200'
+                                )}>
+                                  <p className={cn(
+                                    'text-xs mb-2',
+                                    theme === 'dark' ? 'text-gray-500' : 'text-gray-400'
+                                  )}>
+                                    Sugerencias:
+                                  </p>
+                                  <div className="flex flex-wrap gap-2">
+                                    {item.suggestedMatches.map((s) => (
+                                      <button
+                                        key={s.id}
+                                        onClick={() => handleProductAction(item.id, 'link_to', s.id)}
+                                        className={cn(
+                                          'px-3 py-1 rounded-full text-xs font-medium transition-colors',
+                                          theme === 'dark'
+                                            ? 'bg-gray-700 hover:bg-gray-600 text-gray-300'
+                                            : 'bg-gray-200 hover:bg-gray-300 text-gray-700'
+                                        )}
+                                      >
+                                        {s.name} ({Math.round(s.similarity * 100)}%)
+                                      </button>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Summary */}
+                    <div className={cn(
+                      'p-4 rounded-xl',
+                      theme === 'dark' ? 'bg-blue-900/20' : 'bg-blue-50'
+                    )}>
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className={cn(
+                            'text-sm',
+                            theme === 'dark' ? 'text-gray-400' : 'text-gray-600'
+                          )}>
+                            Total detectado ({matchedProducts.filter(p => p.action !== 'ignore').length} productos)
+                          </p>
+                          <p className={cn(
+                            'text-2xl font-bold mt-1',
+                            theme === 'dark' ? 'text-white' : 'text-gray-900'
+                          )}>
+                            ${matchedProducts
+                              .filter(p => p.action !== 'ignore')
+                              .reduce((sum, p) => sum + p.totalCost, 0)
+                              .toFixed(2)}
+                          </p>
+                        </div>
+                        {scannedData && (
+                          <div className="text-right">
+                            <p className={cn(
+                              'text-xs',
+                              theme === 'dark' ? 'text-gray-500' : 'text-gray-400'
+                            )}>
+                              Confianza IA
+                            </p>
+                            <p className={cn(
+                              'text-lg font-bold',
+                              scannedData.confidence >= 0.8
+                                ? 'text-green-500'
+                                : scannedData.confidence >= 0.6
+                                  ? 'text-amber-500'
+                                  : 'text-red-500'
+                            )}>
+                              {Math.round(scannedData.confidence * 100)}%
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Error */}
+                    {scanError && (
+                      <div className={cn(
+                        'p-4 rounded-xl flex items-center gap-3',
+                        'bg-red-500/10 border border-red-500/30'
+                      )}>
+                        <AlertTriangle className="w-5 h-5 text-red-500 flex-shrink-0" />
+                        <p className="text-red-500 text-sm">{scanError}</p>
+                      </div>
+                    )}
+
+                    {/* Confirm Button */}
+                    <motion.button
+                      whileHover={{ scale: 1.02 }}
+                      whileTap={{ scale: 0.98 }}
+                      onClick={confirmScannedProducts}
+                      disabled={matchedProducts.filter(p => p.action !== 'ignore' && p.action !== 'create_new').length === 0}
+                      className={cn(
+                        "w-full py-4 rounded-xl font-medium flex items-center justify-center gap-3 transition-all",
+                        "disabled:opacity-50 disabled:cursor-not-allowed",
+                        theme === 'dark'
+                          ? 'bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white shadow-lg shadow-green-500/30'
+                          : 'bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600 text-white shadow-lg shadow-green-400/30'
+                      )}
+                    >
+                      <Check className="w-5 h-5" />
+                      Continuar con estos productos
+                    </motion.button>
+                  </motion.div>
+                )}
+
+                {/* Step: Supplier */}
                 {currentStep === 'supplier' && (
                   <motion.div
                     key="supplier"
@@ -1211,64 +2298,73 @@ export default function CreatePurchasePage() {
               </AnimatePresence>
             </motion.div>
 
-            {/* Navigation Buttons */}
-            <div className="flex justify-between items-center gap-4">
-              <motion.button
-                whileHover={{ scale: 1.02 }}
-                whileTap={{ scale: 0.98 }}
-                onClick={goToPrevStep}
-                disabled={currentStepIndex === 0}
-                className={cn(
-                  "flex items-center gap-2 px-6 py-3 rounded-xl font-medium transition-all",
-                  "disabled:opacity-50 disabled:cursor-not-allowed",
-                  theme === 'dark'
-                    ? 'bg-gray-700 hover:bg-gray-600 text-white shadow-lg'
-                    : 'bg-gray-200 hover:bg-gray-300 text-gray-900 shadow-md'
-                )}
-              >
-                <ArrowLeft className="w-5 h-5" />
-                Anterior
-              </motion.button>
-
-              {currentStep === 'review' ? (
+            {/* Navigation Buttons - Hide for method, scan, review-scan steps (they have their own buttons) */}
+            {!['method', 'scan', 'review-scan'].includes(currentStep) && (
+              <div className="flex justify-between items-center gap-4">
                 <motion.button
                   whileHover={{ scale: 1.02 }}
                   whileTap={{ scale: 0.98 }}
-                  onClick={handleSubmit}
-                  disabled={loading}
+                  onClick={() => {
+                    // Custom back navigation for AI flow
+                    if (entryMethod === 'ai' && currentStep === 'supplier') {
+                      setCurrentStep('review-scan')
+                    } else {
+                      goToPrevStep()
+                    }
+                  }}
+                  disabled={currentStep === 'supplier' && entryMethod === 'manual'}
                   className={cn(
                     "flex items-center gap-2 px-6 py-3 rounded-xl font-medium transition-all",
                     "disabled:opacity-50 disabled:cursor-not-allowed",
                     theme === 'dark'
-                      ? 'bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 shadow-lg shadow-green-500/30'
-                      : 'bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600 shadow-lg shadow-green-400/30',
-                    'text-white'
+                      ? 'bg-gray-700 hover:bg-gray-600 text-white shadow-lg'
+                      : 'bg-gray-200 hover:bg-gray-300 text-gray-900 shadow-md'
                   )}
                 >
-                  {loading ? (
-                    <><Loader2 className="w-5 h-5 animate-spin" />Creando...</>
-                  ) : (
-                    <><Check className="w-5 h-5" />Crear Compra</>
-                  )}
+                  <ArrowLeft className="w-5 h-5" />
+                  Anterior
                 </motion.button>
-              ) : (
-                <motion.button
-                  whileHover={{ scale: 1.02 }}
-                  whileTap={{ scale: 0.98 }}
-                  onClick={goToNextStep}
-                  className={cn(
-                    "flex items-center gap-2 px-6 py-3 rounded-xl font-medium transition-all",
-                    theme === 'dark'
-                      ? 'bg-blue-600 hover:bg-blue-700 shadow-lg shadow-blue-500/30'
-                      : 'bg-blue-500 hover:bg-blue-600 shadow-lg shadow-blue-400/30',
-                    'text-white'
-                  )}
-                >
-                  Siguiente
-                  <ArrowRight className="w-5 h-5" />
-                </motion.button>
-              )}
-            </div>
+
+                {currentStep === 'review' ? (
+                  <motion.button
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
+                    onClick={handleSubmit}
+                    disabled={loading}
+                    className={cn(
+                      "flex items-center gap-2 px-6 py-3 rounded-xl font-medium transition-all",
+                      "disabled:opacity-50 disabled:cursor-not-allowed",
+                      theme === 'dark'
+                        ? 'bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 shadow-lg shadow-green-500/30'
+                        : 'bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600 shadow-lg shadow-green-400/30',
+                      'text-white'
+                    )}
+                  >
+                    {loading ? (
+                      <><Loader2 className="w-5 h-5 animate-spin" />Creando...</>
+                    ) : (
+                      <><Check className="w-5 h-5" />Crear Compra</>
+                    )}
+                  </motion.button>
+                ) : (
+                  <motion.button
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
+                    onClick={goToNextStep}
+                    className={cn(
+                      "flex items-center gap-2 px-6 py-3 rounded-xl font-medium transition-all",
+                      theme === 'dark'
+                        ? 'bg-blue-600 hover:bg-blue-700 shadow-lg shadow-blue-500/30'
+                        : 'bg-blue-500 hover:bg-blue-600 shadow-lg shadow-blue-400/30',
+                      'text-white'
+                    )}
+                  >
+                    Siguiente
+                    <ArrowRight className="w-5 h-5" />
+                  </motion.button>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Product Search Modal */}
@@ -1545,6 +2641,157 @@ export default function CreatePurchasePage() {
                   </div>
                 </motion.div>
               </>
+            )}
+          </AnimatePresence>
+
+          {/* Link Product Modal */}
+          <AnimatePresence>
+            {showLinkModal && (
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50"
+                onClick={() => {
+                  setShowLinkModal(false)
+                  setLinkingItemId(null)
+                }}
+              >
+                <motion.div
+                  initial={{ scale: 0.95, opacity: 0 }}
+                  animate={{ scale: 1, opacity: 1 }}
+                  exit={{ scale: 0.95, opacity: 0 }}
+                  onClick={(e) => e.stopPropagation()}
+                  className={cn(
+                    'w-full max-w-lg rounded-2xl shadow-xl overflow-hidden',
+                    theme === 'dark' ? 'bg-gray-800' : 'bg-white'
+                  )}
+                >
+                  <div className={cn(
+                    'p-4 border-b flex items-center justify-between',
+                    theme === 'dark' ? 'border-gray-700' : 'border-gray-200'
+                  )}>
+                    <h3 className={cn(
+                      'text-lg font-bold flex items-center gap-2',
+                      theme === 'dark' ? 'text-white' : 'text-gray-900'
+                    )}>
+                      <Link2 className="w-5 h-5 text-blue-500" />
+                      Vincular a Producto Existente
+                    </h3>
+                    <button
+                      onClick={() => {
+                        setShowLinkModal(false)
+                        setLinkingItemId(null)
+                      }}
+                      className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700"
+                    >
+                      <X className="w-5 h-5" />
+                    </button>
+                  </div>
+
+                  <div className="p-4">
+                    <div className={cn(
+                      'flex items-center gap-3 p-3 rounded-lg border',
+                      theme === 'dark' ? 'bg-gray-900 border-gray-600' : 'bg-gray-50 border-gray-200'
+                    )}>
+                      <Search className="w-5 h-5 text-gray-400" />
+                      <input
+                        type="text"
+                        placeholder="Buscar producto..."
+                        value={linkSearch}
+                        onChange={(e) => setLinkSearch(e.target.value)}
+                        autoFocus
+                        className={cn(
+                          'flex-1 bg-transparent outline-none',
+                          theme === 'dark' ? 'text-white' : 'text-gray-900'
+                        )}
+                      />
+                      {searchingLink && <Loader2 className="w-5 h-5 animate-spin text-blue-500" />}
+                    </div>
+                  </div>
+
+                  <div className="max-h-72 overflow-y-auto">
+                    {linkResults.length > 0 ? (
+                      <div className="divide-y divide-gray-200 dark:divide-gray-700">
+                        {linkResults.map((product) => (
+                          <motion.button
+                            key={product.id}
+                            whileHover={{ backgroundColor: theme === 'dark' ? 'rgba(55, 65, 81, 0.5)' : 'rgba(249, 250, 251, 1)' }}
+                            onClick={() => {
+                              if (linkingItemId) {
+                                handleProductAction(linkingItemId, 'link_to', product.id)
+                              }
+                              setShowLinkModal(false)
+                              setLinkingItemId(null)
+                              setLinkSearch('')
+                            }}
+                            className="w-full p-4 flex items-center gap-4 text-left"
+                          >
+                            {product.imageUrl ? (
+                              <img src={product.imageUrl} alt={product.name} className="w-12 h-12 rounded-lg object-cover" />
+                            ) : (
+                              <div className={cn(
+                                'w-12 h-12 rounded-lg flex items-center justify-center',
+                                theme === 'dark' ? 'bg-gray-700' : 'bg-gray-200'
+                              )}>
+                                <Package className="w-6 h-6 text-gray-400" />
+                              </div>
+                            )}
+                            <div className="flex-1">
+                              <p className={cn(
+                                'font-medium',
+                                theme === 'dark' ? 'text-white' : 'text-gray-900'
+                              )}>
+                                {product.name}
+                              </p>
+                              <p className={cn(
+                                'text-sm',
+                                theme === 'dark' ? 'text-gray-400' : 'text-gray-500'
+                              )}>
+                                SKU: {product.sku}
+                              </p>
+                            </div>
+                            <div className="text-right">
+                              <p className={cn(
+                                'font-bold',
+                                theme === 'dark' ? 'text-white' : 'text-gray-900'
+                              )}>
+                                ${product.costPrice.toFixed(2)}
+                              </p>
+                            </div>
+                          </motion.button>
+                        ))}
+                      </div>
+                    ) : linkSearch.length >= 2 && !searchingLink ? (
+                      <div className="p-8 text-center">
+                        <Package className={cn(
+                          'w-12 h-12 mx-auto mb-3',
+                          theme === 'dark' ? 'text-gray-600' : 'text-gray-400'
+                        )} />
+                        <p className={cn(
+                          'text-sm',
+                          theme === 'dark' ? 'text-gray-400' : 'text-gray-500'
+                        )}>
+                          No se encontraron productos
+                        </p>
+                      </div>
+                    ) : (
+                      <div className="p-8 text-center">
+                        <Search className={cn(
+                          'w-12 h-12 mx-auto mb-3',
+                          theme === 'dark' ? 'text-gray-600' : 'text-gray-400'
+                        )} />
+                        <p className={cn(
+                          'text-sm',
+                          theme === 'dark' ? 'text-gray-400' : 'text-gray-500'
+                        )}>
+                          Escribe para buscar productos
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                </motion.div>
+              </motion.div>
             )}
           </AnimatePresence>
 
