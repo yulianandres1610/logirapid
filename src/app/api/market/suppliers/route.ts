@@ -8,136 +8,101 @@ interface JWTPayload {
   email: string
   role: string
   companyId: number
-  companyName: string
+}
+
+async function getPayload(): Promise<JWTPayload | null> {
+  const cookieStore = await cookies()
+  const token = cookieStore.get('auth-token')?.value
+  if (!token) return null
+
+  try {
+    const secret = process.env.JWT_SECRET || 'fallback-secret'
+    return jwt.verify(token, secret) as JWTPayload
+  } catch {
+    return null
+  }
 }
 
 /**
  * GET /api/market/suppliers
- * List all suppliers for a market company
+ * Lista proveedores del marketplace (tabla market_suppliers)
  */
 export async function GET(request: NextRequest) {
   try {
-    // Verify auth
-    const cookieStore = await cookies()
-    const authToken = cookieStore.get('auth-token')?.value
-
-    if (!authToken) {
-      return NextResponse.json({
-        success: false,
-        error: 'No autorizado'
-      }, { status: 401 })
+    const payload = await getPayload()
+    if (!payload) {
+      return NextResponse.json({ success: false, error: 'No autorizado' }, { status: 401 })
     }
-
-    let payload: JWTPayload
-    try {
-      const secret = process.env.JWT_SECRET || 'fallback-secret-change-in-production'
-      payload = jwt.verify(authToken, secret) as JWTPayload
-    } catch {
-      return NextResponse.json({
-        success: false,
-        error: 'Token inválido'
-      }, { status: 401 })
-    }
-
-    const companyId = payload.companyId
-    console.log('[Market Suppliers] Fetching suppliers for company:', companyId)
 
     const { searchParams } = new URL(request.url)
     const search = searchParams.get('search') || ''
-    const active = searchParams.get('active')
     const page = parseInt(searchParams.get('page') || '1')
     const limit = parseInt(searchParams.get('limit') || '20')
     const offset = (page - 1) * limit
 
-    let query = `
-      SELECT
-        s.*,
-        (SELECT COUNT(*) FROM market_purchases WHERE supplier_id = s.id) as purchase_count,
-        (SELECT SUM(total_amount) FROM market_purchases WHERE supplier_id = s.id AND status != 'cancelled') as total_spent,
-        (SELECT MAX(purchase_date) FROM market_purchases WHERE supplier_id = s.id) as last_purchase_date
-      FROM market_suppliers s
-      WHERE s.company_id = $1
-    `
-
-    const queryParams: (string | number | boolean)[] = [companyId]
+    // Build WHERE clause
+    let whereClause = 'WHERE company_id = $1 AND is_active = true'
+    const params: (string | number)[] = [payload.companyId]
     let paramIndex = 2
 
-    // Search filter
     if (search) {
-      query += ` AND (
-        LOWER(s.name) LIKE $${paramIndex}
-        OR LOWER(s.supplier_code) LIKE $${paramIndex}
-        OR LOWER(s.phone) LIKE $${paramIndex}
-        OR LOWER(s.email) LIKE $${paramIndex}
-      )`
-      queryParams.push(`%${search.toLowerCase()}%`)
-      paramIndex++
-    }
-
-    // Active filter
-    if (active !== null && active !== undefined) {
-      query += ` AND s.is_active = $${paramIndex}`
-      queryParams.push(active === 'true')
+      whereClause += ' AND (name ILIKE $' + paramIndex + ' OR supplier_code ILIKE $' + paramIndex + ' OR email ILIKE $' + paramIndex + ' OR phone ILIKE $' + paramIndex + ')'
+      params.push('%' + search + '%')
       paramIndex++
     }
 
     // Count total
-    const countQuery = query.replace(/SELECT[\s\S]+FROM/, 'SELECT COUNT(*) as total FROM')
-    const countResult = await db.query(countQuery, queryParams)
-    const total = parseInt(countResult.rows[0]?.total) || 0
+    const countResult = await db.query(
+      'SELECT COUNT(*) as total FROM market_suppliers ' + whereClause,
+      params
+    )
+    const total = parseInt(countResult.rows[0]?.total || '0')
 
-    // Add pagination and order
-    query += ` ORDER BY s.name ASC LIMIT $${paramIndex} OFFSET $${paramIndex + 1}`
-    queryParams.push(limit, offset)
+    // Get suppliers
+    const query = 'SELECT id, supplier_code, name, legal_name, tax_id, contact_name, email, phone, address, city, state, country, postal_code, payment_terms, credit_limit, notes, rating, is_active, created_at, updated_at FROM market_suppliers ' + whereClause + ' ORDER BY name ASC LIMIT $' + paramIndex + ' OFFSET $' + (paramIndex + 1)
+    params.push(limit, offset)
 
-    const result = await db.query(query, queryParams)
-    console.log('[Market Suppliers] Found', result.rows.length, 'suppliers')
+    const result = await db.query(query, params)
 
-    // Get stats
-    const statsResult = await db.query(`
-      SELECT
-        COUNT(*) as total,
-        COUNT(*) FILTER (WHERE is_active = true) as active,
-        COUNT(*) FILTER (WHERE is_active = false) as inactive
-      FROM market_suppliers
-      WHERE company_id = $1
-    `, [companyId])
+    const suppliers = result.rows.map(s => ({
+      id: s.id,
+      supplierCode: s.supplier_code,
+      name: s.name,
+      legalName: s.legal_name,
+      taxId: s.tax_id,
+      contactName: s.contact_name,
+      email: s.email,
+      phone: s.phone,
+      address: s.address,
+      city: s.city,
+      state: s.state,
+      country: s.country,
+      postalCode: s.postal_code,
+      paymentTerms: s.payment_terms,
+      creditLimit: parseFloat(s.credit_limit) || 0,
+      notes: s.notes,
+      rating: s.rating || 3,
+      isActive: s.is_active,
+      createdAt: s.created_at,
+      updatedAt: s.updated_at
+    }))
+
+    // Stats
+    const statsResult = await db.query(
+      'SELECT COUNT(*) as total_suppliers, COUNT(*) FILTER (WHERE rating >= 4) as high_rated, AVG(rating) as avg_rating FROM market_suppliers WHERE company_id = $1 AND is_active = true',
+      [payload.companyId]
+    )
+
+    const stats = statsResult.rows[0]
 
     return NextResponse.json({
       success: true,
       data: {
-        suppliers: result.rows.map(row => ({
-          id: row.id,
-          supplierCode: row.supplier_code,
-          name: row.name,
-          legalName: row.legal_name,
-          taxId: row.tax_id,
-          contactPerson: row.contact_person,
-          email: row.email,
-          phone: row.phone,
-          mobile: row.mobile,
-          address: row.address,
-          city: row.city,
-          state: row.state,
-          country: row.country,
-          postalCode: row.postal_code,
-          paymentTerms: row.payment_terms,
-          creditLimit: row.credit_limit ? parseFloat(row.credit_limit) : null,
-          currency: row.currency,
-          categories: row.categories || [],
-          isActive: row.is_active,
-          rating: row.rating,
-          notes: row.notes,
-          purchaseCount: parseInt(row.purchase_count) || 0,
-          totalSpent: parseFloat(row.total_spent) || 0,
-          lastPurchaseDate: row.last_purchase_date,
-          createdAt: row.created_at,
-          updatedAt: row.updated_at
-        })),
+        suppliers,
         stats: {
-          total: parseInt(statsResult.rows[0]?.total) || 0,
-          active: parseInt(statsResult.rows[0]?.active) || 0,
-          inactive: parseInt(statsResult.rows[0]?.inactive) || 0
+          totalSuppliers: parseInt(stats.total_suppliers) || 0,
+          highRated: parseInt(stats.high_rated) || 0,
+          avgRating: parseFloat(stats.avg_rating) || 0
         },
         pagination: {
           page,
@@ -149,7 +114,7 @@ export async function GET(request: NextRequest) {
     })
 
   } catch (error) {
-    console.error('[Market Suppliers API] Error:', error)
+    console.error('[Market Suppliers GET] Error:', error)
     return NextResponse.json({
       success: false,
       error: error instanceof Error ? error.message : 'Error al obtener proveedores'
@@ -159,57 +124,18 @@ export async function GET(request: NextRequest) {
 
 /**
  * POST /api/market/suppliers
- * Create a new supplier
+ * Crear nuevo proveedor de marketplace
  */
 export async function POST(request: NextRequest) {
   try {
-    // Verify auth
-    const cookieStore = await cookies()
-    const authToken = cookieStore.get('auth-token')?.value
-
-    if (!authToken) {
-      return NextResponse.json({
-        success: false,
-        error: 'No autorizado'
-      }, { status: 401 })
+    const payload = await getPayload()
+    if (!payload) {
+      return NextResponse.json({ success: false, error: 'No autorizado' }, { status: 401 })
     }
-
-    let payload: JWTPayload
-    try {
-      const secret = process.env.JWT_SECRET || 'fallback-secret-change-in-production'
-      payload = jwt.verify(authToken, secret) as JWTPayload
-    } catch {
-      return NextResponse.json({
-        success: false,
-        error: 'Token inválido'
-      }, { status: 401 })
-    }
-
-    const companyId = payload.companyId
-    const userId = payload.userId
 
     const body = await request.json()
-    const {
-      name,
-      legalName,
-      taxId,
-      contactPerson,
-      email,
-      phone,
-      mobile,
-      address,
-      city,
-      state,
-      country = 'Cuba',
-      postalCode,
-      paymentTerms,
-      creditLimit,
-      currency = 'USD',
-      categories = [],
-      notes
-    } = body
+    const { name, legalName, taxId, contactName, email, phone, address, city, state, country, postalCode, paymentTerms, creditLimit, notes } = body
 
-    // Validate required fields
     if (!name) {
       return NextResponse.json({
         success: false,
@@ -219,55 +145,54 @@ export async function POST(request: NextRequest) {
 
     // Generate supplier code
     const year = new Date().getFullYear()
-    const countResult = await db.query(`
-      SELECT COUNT(*) as count
-      FROM market_suppliers
-      WHERE company_id = $1 AND supplier_code LIKE $2
-    `, [companyId, `SUP-${year}-%`])
+    const countResult = await db.query(
+      'SELECT COUNT(*) as count FROM market_suppliers WHERE company_id = $1 AND supplier_code LIKE $2',
+      [payload.companyId, 'SUP-' + year + '-%']
+    )
 
     const count = parseInt(countResult.rows[0]?.count) || 0
-    const supplierCode = `SUP-${year}-${(count + 1).toString().padStart(4, '0')}`
+    const supplierCode = 'SUP-' + year + '-' + (count + 1).toString().padStart(4, '0')
 
-    const result = await db.query(`
-      INSERT INTO market_suppliers (
-        company_id, supplier_code, name, legal_name, tax_id,
-        contact_person, email, phone, mobile,
-        address, city, state, country, postal_code,
-        payment_terms, credit_limit, currency,
-        categories, notes, is_active, rating,
-        created_by, created_at, updated_at
-      ) VALUES (
-        $1, $2, $3, $4, $5,
-        $6, $7, $8, $9,
-        $10, $11, $12, $13, $14,
-        $15, $16, $17,
-        $18, $19, true, 3,
-        $20, NOW(), NOW()
-      ) RETURNING id
-    `, [
-      companyId, supplierCode, name, legalName || null, taxId || null,
-      contactPerson || null, email || null, phone || null, mobile || null,
-      address || null, city || null, state || null, country, postalCode || null,
-      paymentTerms || null, creditLimit || null, currency,
-      categories.length > 0 ? categories : null, notes || null,
-      userId
-    ])
+    // Insert supplier
+    const result = await db.query(
+      'INSERT INTO market_suppliers (company_id, supplier_code, name, legal_name, tax_id, contact_name, email, phone, address, city, state, country, postal_code, payment_terms, credit_limit, notes, rating, is_active, created_by, created_at, updated_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, 3, true, $17, NOW(), NOW()) RETURNING *',
+      [
+        payload.companyId,
+        supplierCode,
+        name,
+        legalName || null,
+        taxId || null,
+        contactName || null,
+        email || null,
+        phone || null,
+        address || null,
+        city || null,
+        state || null,
+        country || null,
+        postalCode || null,
+        paymentTerms || null,
+        creditLimit || 0,
+        notes || null,
+        payload.userId
+      ]
+    )
 
-    const supplierId = result.rows[0].id
-
-    console.log('[Market Suppliers] Created supplier:', supplierId, 'code:', supplierCode)
+    const supplier = result.rows[0]
 
     return NextResponse.json({
       success: true,
+      message: 'Proveedor creado exitosamente',
       data: {
-        id: supplierId,
-        supplierCode
-      },
-      message: 'Proveedor creado exitosamente'
+        id: supplier.id,
+        supplierCode: supplier.supplier_code,
+        name: supplier.name,
+        email: supplier.email,
+        phone: supplier.phone
+      }
     })
 
   } catch (error) {
-    console.error('[Market Suppliers API] Error creating supplier:', error)
+    console.error('[Market Suppliers POST] Error:', error)
     return NextResponse.json({
       success: false,
       error: error instanceof Error ? error.message : 'Error al crear proveedor'
