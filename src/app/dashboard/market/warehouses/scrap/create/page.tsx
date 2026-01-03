@@ -19,8 +19,6 @@ import {
 } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { DashboardLayout } from '@/components/layout/dashboard-layout'
-import { ProtectedRoute } from '@/components/protected-route'
 import { PasswordConfirmModal } from '@/components/auth/PasswordConfirmModal'
 import { useTheme } from '@/contexts/theme-context'
 import { cn } from '@/lib/utils'
@@ -285,10 +283,9 @@ export default function CreateScrapPage() {
   }
 
   return (
-    <ProtectedRoute>
-      <DashboardLayout>
-        {/* Password Confirmation Modal */}
-        <PasswordConfirmModal
+    <>
+      {/* Password Confirmation Modal */}
+      <PasswordConfirmModal
           isOpen={showPasswordModal && !isAuthorized}
           onClose={handlePasswordClose}
           onConfirm={handlePasswordConfirm}
@@ -1134,8 +1131,7 @@ export default function CreateScrapPage() {
             )}
           </AnimatePresence>
         </div>
-        )}
-      </DashboardLayout>
-    </ProtectedRoute>
+      )}
+    </>
   )
 }

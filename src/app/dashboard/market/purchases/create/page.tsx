@@ -25,8 +25,6 @@ import {
 } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { DashboardLayout } from '@/components/layout/dashboard-layout'
-import { ProtectedRoute } from '@/components/protected-route'
 import { useTheme } from '@/contexts/theme-context'
 import { cn } from '@/lib/utils'
 import { VariantSelectorModal, Variant } from '@/components/market/VariantSelectorModal'
@@ -445,9 +443,7 @@ export default function CreatePurchasePage() {
   }
 
   return (
-    <ProtectedRoute requiredRole={['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'USER']}>
-      <DashboardLayout>
-        <div className={cn(
+    <div className={cn(
           "min-h-screen pt-12 sm:pt-16 lg:pt-20 pb-20 px-4 sm:px-6 lg:px-8",
           theme === 'dark' ? 'bg-[#1a2332]' : 'bg-gray-50'
         )}>
@@ -1579,8 +1575,6 @@ export default function CreatePurchasePage() {
             showOutOfStock={true}
             currency={currency}
           />
-        </div>
-      </DashboardLayout>
-    </ProtectedRoute>
+    </div>
   )
 }

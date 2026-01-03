@@ -25,8 +25,6 @@ import {
   AlertTriangle
 } from 'lucide-react'
 import { useRouter } from 'next/navigation'
-import { DashboardLayout } from '@/components/layout/dashboard-layout'
-import { ProtectedRoute } from '@/components/protected-route'
 import { useTheme } from '@/contexts/theme-context'
 import { cn } from '@/lib/utils'
 
@@ -757,13 +755,11 @@ export default function CreateProductPage() {
   const selectedUnit = UNITS_OF_MEASURE.find(u => u.id === formData.unitOfMeasure)
 
   return (
-    <ProtectedRoute>
-      <DashboardLayout>
-        <div className={cn(
-          "min-h-screen pt-12 sm:pt-16 lg:pt-20 pb-20 px-4 sm:px-6 lg:px-8",
-          theme === 'dark' ? 'bg-gray-900' : 'bg-gray-50'
-        )}>
-          <div className="max-w-4xl xl:max-w-5xl mx-auto space-y-6 sm:space-y-8 relative">
+    <div className={cn(
+      "min-h-screen pt-12 sm:pt-16 lg:pt-20 pb-20 px-4 sm:px-6 lg:px-8",
+      theme === 'dark' ? 'bg-gray-900' : 'bg-gray-50'
+    )}>
+      <div className="max-w-4xl xl:max-w-5xl mx-auto space-y-6 sm:space-y-8 relative">
 
             {/* Close Button */}
             <motion.button
@@ -2600,7 +2596,5 @@ export default function CreateProductPage() {
             )}
           </AnimatePresence>
         </div>
-      </DashboardLayout>
-    </ProtectedRoute>
   )
 }
