@@ -194,8 +194,10 @@ export default function CreatePurchasePage() {
   const searchParams = useSearchParams()
   const pathname = usePathname()
 
-  // Read initial step from URL
-  const initialStep = (searchParams.get('step') as Step) || 'method'
+  // Read initial step from URL (validate it's a valid step)
+  const validSteps: Step[] = ['method', 'scan', 'review-scan', 'supplier', 'products', 'invoices', 'review']
+  const urlStep = searchParams.get('step') as Step
+  const initialStep = urlStep && validSteps.includes(urlStep) ? urlStep : 'method'
   const [currentStep, setCurrentStep] = useState<Step>(initialStep)
   const [loading, setLoading] = useState(false)
   const [errors, setErrors] = useState<Record<string, string>>({})
