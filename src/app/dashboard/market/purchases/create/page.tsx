@@ -174,6 +174,7 @@ interface Product {
   quantityOnHand: number
   hasVariants?: boolean
   variants?: ProductVariant[]
+  isNewProduct?: boolean
 }
 
 interface PurchaseLine {
@@ -188,6 +189,7 @@ interface PurchaseLine {
   lotNumber: string
   expirationDate: string
   manufacturingDate: string
+  isNewProduct?: boolean
 }
 
 export default function CreatePurchasePage() {
@@ -577,10 +579,40 @@ export default function CreatePurchasePage() {
         } catch (error) {
           console.error('Error fetching linked product:', error)
         }
+      } else if (item.action === 'create_new') {
+        // Producto nuevo - crear producto temporal para agregar a la orden
+        const tempProduct: Product = {
+          id: -Date.now() - newLines.length,
+          name: item.name,
+          sku: item.sku || '',
+          barcode: item.barcode,
+          imageUrl: null,
+          costPrice: item.unitCost,
+          sellingPrice: item.unitCost * 1.3,
+          currency: 'USD',
+          quantityOnHand: 0,
+          hasVariants: false,
+          isNewProduct: true
+        }
+
+        newLines.push({
+          productId: tempProduct.id,
+          variantId: null,
+          variantName: null,
+          variantSku: null,
+          product: tempProduct,
+          quantity: item.quantity,
+          unitPrice: item.unitCost,
+          totalPrice: item.totalCost,
+          lotNumber: '',
+          expirationDate: '',
+          manufacturingDate: '',
+          isNewProduct: true
+        })
       }
-      // For 'create_new', we'll handle in a future TODO (QuickProductCreate modal)
-      // For now, skip them - they won't be added to purchase lines
     }
+
+    console.log('[Purchase] Order lines created:', newLines.length)
 
     // Set purchase lines
     setPurchaseLines(newLines)
@@ -1901,7 +1933,7 @@ export default function CreatePurchasePage() {
                       whileHover={{ scale: 1.02 }}
                       whileTap={{ scale: 0.98 }}
                       onClick={confirmScannedProducts}
-                      disabled={matchedProducts.filter(p => p.action !== 'ignore' && p.action !== 'create_new').length === 0}
+                      disabled={matchedProducts.filter(p => p.action !== 'ignore').length === 0}
                       className={cn(
                         "w-full py-4 rounded-xl font-medium flex items-center justify-center gap-3 transition-all",
                         "disabled:opacity-50 disabled:cursor-not-allowed",

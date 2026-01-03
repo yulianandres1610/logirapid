@@ -169,6 +169,7 @@ interface Product {
   quantityOnHand: number
   hasVariants?: boolean
   variants?: ProductVariant[]
+  isNewProduct?: boolean // Producto nuevo detectado por OCR que aún no existe en inventario
 }
 
 interface OrderLine {
@@ -181,6 +182,7 @@ interface OrderLine {
   unitCost: number
   unitPrice: number
   totalCost: number
+  isNewProduct?: boolean // Línea con producto nuevo que se creará
 }
 
 interface CreatedOrder {
@@ -500,10 +502,13 @@ export default function CreateConsignmentOrderPage() {
       return
     }
 
+    console.log('[Consignment] Confirming products:', activeProducts.length)
+
     const newLines: OrderLine[] = []
 
     for (const item of activeProducts) {
       if (item.action === 'use_existing' && item.matchedProduct) {
+        // Producto existente encontrado en el inventario
         const product: Product = {
           id: item.matchedProduct.id,
           name: item.matchedProduct.name,
@@ -543,6 +548,7 @@ export default function CreateConsignmentOrderPage() {
           })
         }
       } else if (item.action === 'link_to' && item.linkedProductId) {
+        // Producto vinculado manualmente
         try {
           const response = await fetch(`/api/market/products/${item.linkedProductId}`)
           const data = await response.json()
@@ -574,9 +580,39 @@ export default function CreateConsignmentOrderPage() {
         } catch (error) {
           console.error('Error fetching linked product:', error)
         }
+      } else if (item.action === 'create_new') {
+        // Producto nuevo - crear producto temporal para agregar a la orden
+        // El usuario podrá crearlo en el inventario después o durante el proceso
+        const tempProduct: Product = {
+          id: -Date.now() - newLines.length, // ID temporal negativo
+          name: item.name,
+          sku: item.sku || '',
+          barcode: item.barcode,
+          imageUrl: null,
+          costPrice: item.unitCost,
+          sellingPrice: item.unitCost * 1.3, // Margen sugerido del 30%
+          currency: 'USD',
+          quantityOnHand: 0,
+          hasVariants: false,
+          isNewProduct: true // Marcador para saber que es nuevo
+        }
+
+        newLines.push({
+          productId: tempProduct.id,
+          variantId: null,
+          variantName: null,
+          variantSku: null,
+          product: tempProduct,
+          quantity: item.quantity,
+          unitCost: item.unitCost,
+          unitPrice: tempProduct.sellingPrice,
+          totalCost: item.totalCost,
+          isNewProduct: true
+        })
       }
     }
 
+    console.log('[Consignment] Order lines created:', newLines.length)
     setOrderLines(newLines)
 
     // Pre-fill supplier if detected
@@ -586,7 +622,10 @@ export default function CreateConsignmentOrderPage() {
         scannedData.vendorName!.toLowerCase().includes(s.name.toLowerCase())
       )
       if (matchingSupplier) {
+        console.log('[Consignment] Auto-matched supplier:', matchingSupplier.name)
         setSelectedSupplier(matchingSupplier)
+      } else {
+        console.log('[Consignment] No matching supplier found for:', scannedData.vendorName)
       }
     }
 
@@ -594,7 +633,15 @@ export default function CreateConsignmentOrderPage() {
       setConsignmentDate(scannedData.invoiceDate)
     }
 
-    setCurrentStep('supplier')
+    // Si ya tenemos proveedor y productos, saltar al paso de productos
+    if (scannedData?.vendorName && suppliers.find(s =>
+      s.name.toLowerCase().includes(scannedData.vendorName!.toLowerCase()) ||
+      scannedData.vendorName!.toLowerCase().includes(s.name.toLowerCase())
+    )) {
+      setCurrentStep('products')
+    } else {
+      setCurrentStep('supplier')
+    }
   }, [matchedProducts, scannedData, suppliers])
 
   // Reset AI scan data
@@ -1439,7 +1486,7 @@ export default function CreateConsignmentOrderPage() {
                       whileHover={{ scale: 1.02 }}
                       whileTap={{ scale: 0.98 }}
                       onClick={confirmScannedProducts}
-                      disabled={matchedProducts.filter(p => p.action !== 'ignore' && p.action !== 'create_new').length === 0}
+                      disabled={matchedProducts.filter(p => p.action !== 'ignore').length === 0}
                       className={cn(
                         "w-full py-4 rounded-xl font-medium flex items-center justify-center gap-3 transition-all disabled:opacity-50 disabled:cursor-not-allowed",
                         theme === 'dark' ? 'bg-gradient-to-r from-green-600 to-emerald-600 text-white shadow-lg shadow-green-500/30' : 'bg-gradient-to-r from-green-500 to-emerald-500 text-white shadow-lg shadow-green-400/30'
