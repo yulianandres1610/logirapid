@@ -18,9 +18,7 @@ import {
   Building2,
   Phone,
   MapPin,
-  Clock,
   FileText,
-  Hash,
   FileUp,
   Upload,
   Sparkles,
@@ -54,7 +52,7 @@ interface ProductVariant {
   imageUrl: string | null
 }
 
-type Step = 'method' | 'scan' | 'review-scan' | 'supplier' | 'products' | 'lots' | 'invoices' | 'review'
+type Step = 'method' | 'scan' | 'review-scan' | 'supplier' | 'products' | 'invoices' | 'review'
 
 interface WizardStep {
   id: Step
@@ -68,7 +66,6 @@ const STEPS_MANUAL: WizardStep[] = [
   { id: 'method', title: 'Método', description: 'Seleccionar', icon: FileUp },
   { id: 'supplier', title: 'Proveedor', description: 'Buscar o crear', icon: Truck },
   { id: 'products', title: 'Productos', description: 'Agregar líneas', icon: Package },
-  { id: 'lots', title: 'Lotes', description: 'Vencimientos', icon: Calendar },
   { id: 'invoices', title: 'Facturas', description: 'Adjuntar', icon: FileUp },
   { id: 'review', title: 'Revisar', description: 'Confirmar compra', icon: Check }
 ]
@@ -80,7 +77,6 @@ const STEPS_AI: WizardStep[] = [
   { id: 'review-scan', title: 'Revisar', description: 'Productos IA', icon: Eye },
   { id: 'supplier', title: 'Proveedor', description: 'Confirmar', icon: Truck },
   { id: 'products', title: 'Productos', description: 'Verificar', icon: Package },
-  { id: 'lots', title: 'Lotes', description: 'Vencimientos', icon: Calendar },
   { id: 'invoices', title: 'Facturas', description: 'Adjuntar', icon: FileUp },
   { id: 'review', title: 'Revisar', description: 'Confirmar compra', icon: Check }
 ]
@@ -189,9 +185,6 @@ interface PurchaseLine {
   quantity: number
   unitPrice: number
   totalPrice: number
-  lotNumber: string
-  expirationDate: string
-  manufacturingDate: string
   isNewProduct?: boolean
 }
 
@@ -568,10 +561,7 @@ export default function CreatePurchasePage() {
             product,
             quantity: item.quantity,
             unitPrice: item.unitCost,
-            totalPrice: item.totalCost,
-            lotNumber: '',
-            expirationDate: '',
-            manufacturingDate: ''
+            totalPrice: item.totalCost
           })
         } else {
           // Use main product
@@ -583,10 +573,7 @@ export default function CreatePurchasePage() {
             product,
             quantity: item.quantity,
             unitPrice: item.unitCost,
-            totalPrice: item.totalCost,
-            lotNumber: '',
-            expirationDate: '',
-            manufacturingDate: ''
+            totalPrice: item.totalCost
           })
         }
       } else if (item.action === 'link_to' && item.linkedProductId) {
@@ -615,10 +602,7 @@ export default function CreatePurchasePage() {
               },
               quantity: item.quantity,
               unitPrice: item.unitCost,
-              totalPrice: item.totalCost,
-              lotNumber: '',
-              expirationDate: '',
-              manufacturingDate: ''
+              totalPrice: item.totalCost
             })
           }
         } catch (error) {
@@ -649,9 +633,6 @@ export default function CreatePurchasePage() {
           quantity: item.quantity,
           unitPrice: item.unitCost,
           totalPrice: item.totalCost,
-          lotNumber: '',
-          expirationDate: '',
-          manufacturingDate: '',
           isNewProduct: true
         })
       }
@@ -788,10 +769,7 @@ export default function CreatePurchasePage() {
         product,
         quantity: 1,
         unitPrice: unitPrice,
-        totalPrice: unitPrice,
-        lotNumber: '',
-        expirationDate: '',
-        manufacturingDate: ''
+        totalPrice: unitPrice
       }])
     }
     setProductSearch('')
@@ -845,13 +823,6 @@ export default function CreatePurchasePage() {
       l.productId === productId && l.variantId === variantId
         ? { ...l, unitPrice, totalPrice: l.quantity * unitPrice }
         : l
-    ))
-  }
-
-  // Update lot info
-  const updateLotInfo = (productId: number, variantId: number | null, field: 'lotNumber' | 'expirationDate' | 'manufacturingDate', value: string) => {
-    setPurchaseLines(prev => prev.map(l =>
-      l.productId === productId && l.variantId === variantId ? { ...l, [field]: value } : l
     ))
   }
 
@@ -935,9 +906,6 @@ export default function CreatePurchasePage() {
             variantId: l.variantId,
             quantity: l.quantity,
             unitPrice: l.unitPrice,
-            lotNumber: l.lotNumber || null,
-            expirationDate: l.expirationDate || null,
-            manufacturingDate: l.manufacturingDate || null,
             isNewProduct: l.isNewProduct || false
           })),
           newProducts: newProducts.length > 0 ? newProducts : undefined
@@ -977,14 +945,6 @@ export default function CreatePurchasePage() {
     } finally {
       setLoading(false)
     }
-  }
-
-  // Days until expiration helper
-  const getDaysUntilExpiration = (date: string) => {
-    if (!date) return null
-    const exp = new Date(date)
-    const today = new Date()
-    return Math.ceil((exp.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
   }
 
   return (
@@ -2451,116 +2411,7 @@ export default function CreatePurchasePage() {
                   </motion.div>
                 )}
 
-                {/* Step 3: Lots */}
-                {currentStep === 'lots' && (
-                  <motion.div
-                    key="lots"
-                    initial={{ opacity: 0, x: 20 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    exit={{ opacity: 0, x: -20 }}
-                    transition={{ duration: 0.3 }}
-                    className="space-y-6"
-                  >
-                    <h2 className={cn(
-                      "text-xl font-bold flex items-center gap-3",
-                      theme === 'dark' ? 'text-white' : 'text-gray-900'
-                    )}>
-                      <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-500 to-amber-600 flex items-center justify-center">
-                        <Calendar className="w-5 h-5 text-white" />
-                      </div>
-                      Lotes y Vencimientos
-                    </h2>
-
-                    <div className={cn(
-                      'p-4 rounded-xl flex items-start gap-3',
-                      theme === 'dark' ? 'bg-amber-900/20 border border-amber-500/30' : 'bg-amber-50 border border-amber-200'
-                    )}>
-                      <Clock className="w-5 h-5 text-amber-500 flex-shrink-0 mt-0.5" />
-                      <div>
-                        <p className={cn('text-sm font-medium', theme === 'dark' ? 'text-amber-300' : 'text-amber-800')}>Este paso es opcional</p>
-                        <p className={cn('text-sm', theme === 'dark' ? 'text-amber-400' : 'text-amber-700')}>Puedes agregar esta información cuando recibas la mercancía en el almacén.</p>
-                      </div>
-                    </div>
-
-                    <div className="space-y-4">
-                      {purchaseLines.map((line, index) => {
-                        const daysUntil = getDaysUntilExpiration(line.expirationDate)
-                        return (
-                          <motion.div
-                            key={line.productId}
-                            initial={{ opacity: 0, y: 10 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            transition={{ delay: index * 0.05 }}
-                            className={cn('p-5 rounded-xl border', theme === 'dark' ? 'bg-gray-900/50 border-gray-700' : 'bg-gray-50 border-gray-200')}
-                          >
-                            <div className="flex items-center gap-3 mb-4">
-                              {line.product.imageUrl ? (
-                                <img src={line.product.imageUrl} alt={line.product.name} className="w-10 h-10 rounded-lg object-cover" />
-                              ) : (
-                                <div className={cn('w-10 h-10 rounded-lg flex items-center justify-center', theme === 'dark' ? 'bg-gray-700' : 'bg-gray-200')}>
-                                  <Package className="w-5 h-5 text-gray-400" />
-                                </div>
-                              )}
-                              <div>
-                                <p className={cn('font-medium', theme === 'dark' ? 'text-white' : 'text-gray-900')}>
-                                  {line.variantName ? `${line.product.name} - ${line.variantName}` : line.product.name}
-                                </p>
-                                <p className={cn('text-sm', theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}>{line.quantity} unidades</p>
-                              </div>
-                            </div>
-                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                              <div>
-                                <label className={cn('block text-sm font-medium mb-1', theme === 'dark' ? 'text-gray-400' : 'text-gray-600')}>
-                                  <Hash className="w-4 h-4 inline mr-1" />Número de Lote
-                                </label>
-                                <input
-                                  type="text"
-                                  placeholder="LOT-2024-XXXX"
-                                  value={line.lotNumber}
-                                  onChange={(e) => updateLotInfo(line.productId, line.variantId, 'lotNumber', e.target.value)}
-                                  className={cn('w-full px-4 py-2 rounded-lg border', theme === 'dark' ? 'bg-gray-800 border-gray-600 text-white placeholder:text-gray-500' : 'bg-white border-gray-300 text-gray-900 placeholder:text-gray-400')}
-                                />
-                              </div>
-                              <div>
-                                <label className={cn('block text-sm font-medium mb-1', theme === 'dark' ? 'text-gray-400' : 'text-gray-600')}>
-                                  <Calendar className="w-4 h-4 inline mr-1" />Fecha de Vencimiento
-                                </label>
-                                <input
-                                  type="date"
-                                  value={line.expirationDate}
-                                  onChange={(e) => updateLotInfo(line.productId, line.variantId, 'expirationDate', e.target.value)}
-                                  className={cn('w-full px-4 py-2 rounded-lg border', theme === 'dark' ? 'bg-gray-800 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900')}
-                                />
-                                {daysUntil !== null && (
-                                  <p className={cn('text-xs mt-1 flex items-center gap-1', daysUntil < 0 ? 'text-red-500' : daysUntil < 30 ? 'text-amber-500' : 'text-green-500')}>
-                                    {daysUntil < 0 ? (
-                                      <><AlertTriangle className="w-3 h-3" />Vencido hace {Math.abs(daysUntil)} días</>
-                                    ) : (
-                                      <><Check className="w-3 h-3" />Vence en {daysUntil} días</>
-                                    )}
-                                  </p>
-                                )}
-                              </div>
-                              <div>
-                                <label className={cn('block text-sm font-medium mb-1', theme === 'dark' ? 'text-gray-400' : 'text-gray-600')}>
-                                  <Calendar className="w-4 h-4 inline mr-1" />Fecha de Fabricación
-                                </label>
-                                <input
-                                  type="date"
-                                  value={line.manufacturingDate}
-                                  onChange={(e) => updateLotInfo(line.productId, line.variantId, 'manufacturingDate', e.target.value)}
-                                  className={cn('w-full px-4 py-2 rounded-lg border', theme === 'dark' ? 'bg-gray-800 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900')}
-                                />
-                              </div>
-                            </div>
-                          </motion.div>
-                        )
-                      })}
-                    </div>
-                  </motion.div>
-                )}
-
-                {/* Step 4: Invoices */}
+                {/* Step 3: Invoices */}
                 {currentStep === 'invoices' && (
                   <motion.div
                     key="invoices"
@@ -2729,7 +2580,6 @@ export default function CreatePurchasePage() {
                                 </p>
                                 <p className={cn('text-sm', theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}>
                                   x{line.quantity} @ {CURRENCY_SYMBOLS[currency]}{line.unitPrice.toFixed(2)}
-                                  {line.lotNumber && ` • Lote: ${line.lotNumber}`}
                                 </p>
                               </div>
                             </div>
