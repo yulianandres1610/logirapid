@@ -11,6 +11,52 @@ interface JWTPayload {
   companyName: string
 }
 
+// Migration flag
+let migrationRun = false
+
+/**
+ * Ensure quantity columns support decimals
+ */
+async function ensureDecimalQuantities() {
+  if (migrationRun) return
+  migrationRun = true
+
+  try {
+    // Change quantity columns to DECIMAL to support fractional quantities
+    await db.query(`
+      ALTER TABLE market_purchase_lines
+      ALTER COLUMN quantity TYPE DECIMAL(12,3) USING quantity::DECIMAL(12,3)
+    `)
+    console.log('[Migration] Changed market_purchase_lines.quantity to DECIMAL')
+  } catch (error) {
+    // Column might already be DECIMAL or error is expected
+    const msg = error instanceof Error ? error.message : ''
+    if (!msg.includes('already exists') && !msg.includes('does not exist')) {
+      console.log('[Migration] quantity column migration:', msg)
+    }
+  }
+
+  try {
+    await db.query(`
+      ALTER TABLE market_purchase_lines
+      ALTER COLUMN quantity_received TYPE DECIMAL(12,3) USING quantity_received::DECIMAL(12,3)
+    `)
+    console.log('[Migration] Changed market_purchase_lines.quantity_received to DECIMAL')
+  } catch (error) {
+    // Ignore errors
+  }
+
+  try {
+    await db.query(`
+      ALTER TABLE market_products
+      ALTER COLUMN quantity_expected TYPE DECIMAL(12,3) USING quantity_expected::DECIMAL(12,3)
+    `)
+    console.log('[Migration] Changed market_products.quantity_expected to DECIMAL')
+  } catch (error) {
+    // Ignore errors
+  }
+}
+
 interface NewProduct {
   tempId: number // ID temporal negativo para mapear con las líneas
   name: string
@@ -234,6 +280,9 @@ export async function GET(request: NextRequest) {
  */
 export async function POST(request: NextRequest) {
   try {
+    // Ensure decimal quantities are supported
+    await ensureDecimalQuantities()
+
     const cookieStore = await cookies()
     const authToken = cookieStore.get('auth-token')?.value
 
@@ -522,21 +571,15 @@ export async function POST(request: NextRequest) {
             unit_price,
             total_price,
             quantity_received,
-            lot_number,
-            expiration_date,
-            manufacturing_date,
             created_at
-          ) VALUES ($1, $2, $3, $4, $5, $6, 0, $7, $8, $9, NOW())
+          ) VALUES ($1, $2, $3, $4, $5, $6, 0, NOW())
         `, [
           purchaseId,
           productId,
           line.variantId || null,
           line.quantity,
           line.unitPrice,
-          lineTotal,
-          line.lotNumber || null,
-          line.expirationDate || null,
-          line.manufacturingDate || null
+          lineTotal
         ])
 
         // Update product expected quantity (use mapped productId)
