@@ -391,7 +391,16 @@ export default function CreateConsignmentOrderPage() {
 
       if (data.success) {
         setScannedData(data.data)
-        await matchScannedProducts(data.data.items)
+        console.log('[Consignment AI] OCR result:', data.data)
+        console.log('[Consignment AI] Items received:', data.data.items)
+        console.log('[Consignment AI] Items count:', data.data.items?.length || 0)
+
+        if (data.data.items && data.data.items.length > 0) {
+          await matchScannedProducts(data.data.items)
+        } else {
+          console.warn('[Consignment AI] No items received from OCR!')
+          setMatchedProducts([])
+        }
         setCurrentStep('review-scan')
       } else {
         setScanError(data.error || 'Error al procesar la factura')
@@ -406,6 +415,7 @@ export default function CreateConsignmentOrderPage() {
 
   // Match scanned products against database
   const matchScannedProducts = useCallback(async (items: ScannedItem[]) => {
+    console.log('[Consignment AI] Matching products, items to match:', items.length)
     setIsMatching(true)
 
     try {
@@ -416,6 +426,7 @@ export default function CreateConsignmentOrderPage() {
       })
 
       const data = await response.json()
+      console.log('[Consignment AI] Match API response:', data)
 
       if (data.success) {
         const matched: MatchedItem[] = data.data.matchedItems.map((item: {
@@ -435,7 +446,10 @@ export default function CreateConsignmentOrderPage() {
           action: item.matchType !== 'none' ? 'use_existing' : 'create_new'
         }))
 
+        console.log('[Consignment AI] Matched products:', matched.length, matched)
         setMatchedProducts(matched)
+      } else {
+        console.error('[Consignment AI] Match API failed:', data.error)
       }
     } catch (error) {
       console.error('Error matching products:', error)

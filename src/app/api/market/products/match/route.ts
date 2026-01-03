@@ -150,34 +150,45 @@ export async function POST(request: NextRequest) {
         p.cost_price as "costPrice",
         p.selling_price as "sellingPrice",
         p.image_url as "imageUrl",
-        p.category_id as "categoryId",
-        c.name as "categoryName",
-        CASE WHEN COUNT(v.id) > 0 THEN true ELSE false END as "hasVariants"
+        NULL as "categoryId",
+        p.category as "categoryName",
+        false as "hasVariants"
       FROM market_products p
-      LEFT JOIN market_product_categories c ON p.category_id = c.id
-      LEFT JOIN market_product_variants v ON p.id = v.product_id
       WHERE p.company_id = $1 AND p.is_active = true
-      GROUP BY p.id, p.name, p.sku, p.barcode, p.cost_price, p.selling_price,
-               p.image_url, p.category_id, c.name
     `, [companyId])
 
-    // Obtener todas las variantes
-    const variantsResult = await db.query(`
-      SELECT
-        v.id,
-        v.product_id as "productId",
-        v.name,
-        v.sku,
-        v.barcode,
-        v.cost_price as "costPrice",
-        v.price
-      FROM market_product_variants v
-      JOIN market_products p ON v.product_id = p.id
-      WHERE p.company_id = $1 AND p.is_active = true
-    `, [companyId])
+    // Obtener todas las variantes (si la tabla existe)
+    let variants: Array<{
+      id: number
+      productId: number
+      name: string
+      sku: string
+      barcode: string | null
+      costPrice: number
+      price: number
+    }> = []
+
+    try {
+      const variantsResult = await db.query(`
+        SELECT
+          v.id,
+          v.product_id as "productId",
+          v.name,
+          v.sku,
+          v.barcode,
+          v.cost_price as "costPrice",
+          v.price
+        FROM market_product_variants v
+        JOIN market_products p ON v.product_id = p.id
+        WHERE p.company_id = $1 AND p.is_active = true
+      `, [companyId])
+      variants = variantsResult.rows
+    } catch (variantError) {
+      // La tabla de variantes puede no existir, continuar sin variantes
+      console.log('[Product Match] Variants table not found, skipping variants')
+    }
 
     const products: MatchedProduct[] = productsResult.rows
-    const variants = variantsResult.rows
 
     // Crear índices para búsqueda rápida
     const barcodeIndex = new Map<string, { type: 'product' | 'variant', data: unknown }>()
