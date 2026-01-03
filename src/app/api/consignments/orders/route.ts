@@ -399,9 +399,14 @@ export async function POST(request: NextRequest) {
     let totalCost = 0
 
     for (const line of lines) {
-      totalUnits += line.quantity
-      totalCost += line.quantity * line.unitCost
+      // Quantity puede venir con decimales del OCR (ej: 1631.8 libras)
+      // Sumamos como está para el total de unidades
+      totalUnits += parseFloat(String(line.quantity)) || 0
+      totalCost += (parseFloat(String(line.quantity)) || 0) * (parseFloat(String(line.unitCost)) || 0)
     }
+
+    // Redondear totalUnits si la columna es integer
+    totalUnits = Math.round(totalUnits)
 
     // Crear orden
     const orderResult = await db.query(`
@@ -448,6 +453,11 @@ export async function POST(request: NextRequest) {
         isNewProduct: line.isNewProduct
       })
 
+      // Parsear y redondear cantidad si la columna es integer
+      const quantity = Math.round(parseFloat(String(line.quantity)) || 0)
+      const unitCost = parseFloat(String(line.unitCost)) || 0
+      const unitPrice = line.unitPrice ? parseFloat(String(line.unitPrice)) : null
+
       await db.query(`
         INSERT INTO consignment_order_lines (
           order_id, product_id, variant_id, quantity_ordered, unit_cost, unit_price
@@ -456,9 +466,9 @@ export async function POST(request: NextRequest) {
         orderId,
         productId,
         line.variantId || null,
-        line.quantity,
-        line.unitCost,
-        line.unitPrice || null
+        quantity,
+        unitCost,
+        unitPrice
       ])
     }
 
