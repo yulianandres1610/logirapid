@@ -457,7 +457,7 @@ export async function POST(request: NextRequest) {
 
             const variantResult = await db.query(`
               INSERT INTO market_product_variants (
-                product_id, name, sku, barcode, cost_price, price,
+                product_id, variant_name, sku, barcode, cost_price, selling_price,
                 quantity_on_hand, is_active, created_at
               ) VALUES ($1, $2, $3, $4, $5, $6, 0, true, NOW())
               RETURNING id

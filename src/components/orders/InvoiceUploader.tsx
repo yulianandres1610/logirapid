@@ -17,15 +17,17 @@ import { cn } from '@/lib/utils'
 
 export interface InvoiceFile {
   id: string
-  file: File
+  file?: File // Optional for scanned invoices
   name: string
   size: number
   type: string
-  preview?: string
+  preview?: string // Base64 preview for images
+  url?: string // URL or base64 for scanned invoices
   uploaded?: boolean
   uploading?: boolean
   storagePath?: string
   error?: string
+  uploadedAt?: string // For scanned invoices
 }
 
 interface InvoiceUploaderProps {

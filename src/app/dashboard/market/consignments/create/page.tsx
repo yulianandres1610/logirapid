@@ -987,11 +987,29 @@ export default function CreateConsignmentOrderPage() {
       setConsignmentDate(scannedData.invoiceDate)
     }
 
+    // Add scanned invoice to invoice files automatically
+    if (invoiceFileBase64 && invoiceFileName) {
+      const isPdf = invoiceFileBase64.startsWith('data:application/pdf')
+      const newInvoiceFile: InvoiceFile = {
+        id: `scanned-${Date.now()}`,
+        name: invoiceFileName,
+        preview: invoiceFileBase64,
+        type: isPdf ? 'application/pdf' : 'image/jpeg',
+        size: Math.round(invoiceFileBase64.length * 0.75),
+        uploaded: true,
+        uploadedAt: new Date().toISOString()
+      }
+      setInvoiceFiles(prev => {
+        if (prev.some(f => f.name === invoiceFileName)) return prev
+        return [...prev, newInvoiceFile]
+      })
+    }
+
     // Siempre ir al paso de proveedor/almacén para que el usuario pueda:
     // 1. Confirmar o cambiar el proveedor pre-seleccionado
     // 2. Seleccionar el almacén destino (obligatorio)
     setCurrentStep('supplier')
-  }, [matchedProducts, scannedData, suppliers])
+  }, [matchedProducts, scannedData, suppliers, invoiceFileBase64, invoiceFileName])
 
   // Reset AI scan data
   const resetAIScan = useCallback(() => {

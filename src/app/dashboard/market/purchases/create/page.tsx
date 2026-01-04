@@ -1019,9 +1019,28 @@ export default function CreatePurchasePage() {
       setPurchaseDate(scannedData.invoiceDate)
     }
 
+    // Add scanned invoice to invoice files automatically
+    if (invoiceFileBase64 && invoiceFileName) {
+      const isPdf = invoiceFileBase64.startsWith('data:application/pdf')
+      const newInvoiceFile: InvoiceFile = {
+        id: `scanned-${Date.now()}`,
+        name: invoiceFileName,
+        preview: invoiceFileBase64,
+        type: isPdf ? 'application/pdf' : 'image/jpeg',
+        size: Math.round(invoiceFileBase64.length * 0.75),
+        uploaded: true,
+        uploadedAt: new Date().toISOString()
+      }
+      setInvoiceFiles(prev => {
+        // Avoid duplicates
+        if (prev.some(f => f.name === invoiceFileName)) return prev
+        return [...prev, newInvoiceFile]
+      })
+    }
+
     // Move to supplier step
     setCurrentStep('supplier')
-  }, [matchedProducts, scannedData, suppliers])
+  }, [matchedProducts, scannedData, suppliers, invoiceFileBase64, invoiceFileName])
 
   // Reset AI scan data
   const resetAIScan = useCallback(() => {
