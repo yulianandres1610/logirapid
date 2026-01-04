@@ -1865,12 +1865,12 @@ export default function CreateConsignmentOrderPage() {
 
                     {matchedProducts.filter(p => p.matchType === 'none').length > 0 && (
                       <div>
-                        <h3 className={cn("font-bold flex items-center gap-2 mb-3", theme === 'dark' ? 'text-amber-400' : 'text-amber-600')}>
-                          <AlertTriangle className="w-5 h-5" />Productos Nuevos ({matchedProducts.filter(p => p.matchType === 'none').length})
+                        <h3 className={cn("font-bold flex items-center gap-2 mb-3", theme === 'dark' ? 'text-blue-400' : 'text-blue-600')}>
+                          <Package className="w-5 h-5" />Productos Nuevos ({matchedProducts.filter(p => p.matchType === 'none').length})
                         </h3>
                         <div className="space-y-3">
                           {matchedProducts.filter(p => p.matchType === 'none').map((item) => (
-                            <div key={item.id} className={cn('p-4 rounded-xl border', item.action === 'ignore' ? 'opacity-50' : '', theme === 'dark' ? 'bg-amber-900/20 border-amber-800/50' : 'bg-amber-50 border-amber-200')}>
+                            <div key={item.id} className={cn('p-4 rounded-xl border', item.action === 'ignore' ? 'opacity-50' : '', theme === 'dark' ? 'bg-blue-900/20 border-blue-800/50' : 'bg-blue-50 border-blue-200')}>
                               <div className="flex items-start gap-3">
                                 {/* Imagen del producto (generada o placeholder) */}
                                 <div className="relative flex-shrink-0">
@@ -1957,8 +1957,8 @@ export default function CreateConsignmentOrderPage() {
                                     className={cn(
                                       'w-full px-2 py-1 rounded-lg font-medium text-sm border transition-colors',
                                       theme === 'dark'
-                                        ? 'bg-gray-800 border-gray-700 text-white focus:border-amber-500 disabled:opacity-50'
-                                        : 'bg-white border-gray-300 text-gray-900 focus:border-amber-500 disabled:opacity-50'
+                                        ? 'bg-gray-800 border-gray-700 text-white focus:border-blue-500 disabled:opacity-50'
+                                        : 'bg-white border-gray-300 text-gray-900 focus:border-blue-500 disabled:opacity-50'
                                     )}
                                     placeholder="Nombre del producto"
                                   />

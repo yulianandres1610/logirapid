@@ -2138,9 +2138,9 @@ export default function CreatePurchasePage() {
                       <div>
                         <h3 className={cn(
                           "font-bold flex items-center gap-2 mb-3",
-                          theme === 'dark' ? 'text-amber-400' : 'text-amber-600'
+                          theme === 'dark' ? 'text-blue-400' : 'text-blue-600'
                         )}>
-                          <AlertTriangle className="w-5 h-5" />
+                          <Package className="w-5 h-5" />
                           Productos Nuevos ({matchedProducts.filter(p => p.matchType === 'none').length})
                         </h3>
                         <p className={cn(
@@ -2164,8 +2164,8 @@ export default function CreatePurchasePage() {
                                       ? 'bg-blue-900/20 border-blue-800/50'
                                       : 'bg-blue-50 border-blue-200'
                                     : theme === 'dark'
-                                      ? 'bg-amber-900/20 border-amber-800/50'
-                                      : 'bg-amber-50 border-amber-200'
+                                      ? 'bg-blue-900/20 border-blue-800/50'
+                                      : 'bg-blue-50 border-blue-200'
                               )}
                             >
                               <div className="flex items-start gap-3">
@@ -2182,11 +2182,11 @@ export default function CreatePurchasePage() {
                                       'w-14 h-14 rounded-lg flex items-center justify-center',
                                       item.action === 'link_to'
                                         ? theme === 'dark' ? 'bg-blue-900/50' : 'bg-blue-100'
-                                        : theme === 'dark' ? 'bg-amber-900/50' : 'bg-amber-100'
+                                        : theme === 'dark' ? 'bg-blue-900/50' : 'bg-blue-100'
                                     )}>
                                       <ImageIcon className={cn(
                                         "w-6 h-6",
-                                        item.action === 'link_to' ? 'text-blue-400' : 'text-amber-400'
+                                        item.action === 'link_to' ? 'text-blue-400' : 'text-blue-400'
                                       )} />
                                     </div>
                                   )}
@@ -2259,8 +2259,8 @@ export default function CreatePurchasePage() {
                                     className={cn(
                                       'w-full px-2 py-1 rounded-lg font-medium text-sm border transition-colors',
                                       theme === 'dark'
-                                        ? 'bg-gray-800 border-gray-700 text-white focus:border-amber-500 disabled:opacity-50'
-                                        : 'bg-white border-gray-300 text-gray-900 focus:border-amber-500 disabled:opacity-50'
+                                        ? 'bg-gray-800 border-gray-700 text-white focus:border-blue-500 disabled:opacity-50'
+                                        : 'bg-white border-gray-300 text-gray-900 focus:border-blue-500 disabled:opacity-50'
                                     )}
                                     placeholder="Nombre del producto"
                                   />
