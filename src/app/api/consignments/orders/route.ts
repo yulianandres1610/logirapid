@@ -455,6 +455,7 @@ export async function POST(request: NextRequest) {
             const variantBarcode = generateBarcode(variant.barcode || null)
             const variantSellingPrice = variant.sellingPrice || variant.unitCost * 1.3
 
+            // Insert variant with correct column names (variant_name, selling_price)
             const variantResult = await db.query(`
               INSERT INTO market_product_variants (
                 product_id, variant_name, sku, barcode, cost_price, selling_price,
