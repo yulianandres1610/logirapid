@@ -58,8 +58,8 @@ export async function GET(request: NextRequest) {
     )
     const total = parseInt(countResult.rows[0]?.total || '0')
 
-    // Get suppliers
-    const query = 'SELECT id, supplier_code, name, legal_name, tax_id, contact_name, email, phone, address, city, state, country, postal_code, payment_terms, credit_limit, notes, rating, is_active, created_at, updated_at FROM market_suppliers ' + whereClause + ' ORDER BY name ASC LIMIT $' + paramIndex + ' OFFSET $' + (paramIndex + 1)
+    // Get suppliers - using only columns that exist in the table
+    const query = 'SELECT id, supplier_code, name, legal_name, tax_id, contact_person, email, phone, address, city, state, country, postal_code, payment_terms, credit_limit, is_active, created_at, updated_at FROM market_suppliers ' + whereClause + ' ORDER BY name ASC LIMIT $' + paramIndex + ' OFFSET $' + (paramIndex + 1)
     params.push(limit, offset)
 
     const result = await db.query(query, params)
@@ -70,7 +70,7 @@ export async function GET(request: NextRequest) {
       name: s.name,
       legalName: s.legal_name,
       taxId: s.tax_id,
-      contactName: s.contact_name,
+      contactName: s.contact_person,
       email: s.email,
       phone: s.phone,
       address: s.address,
@@ -80,29 +80,21 @@ export async function GET(request: NextRequest) {
       postalCode: s.postal_code,
       paymentTerms: s.payment_terms,
       creditLimit: parseFloat(s.credit_limit) || 0,
-      notes: s.notes,
-      rating: s.rating || 3,
+      notes: null,
+      rating: 3,
       isActive: s.is_active,
       createdAt: s.created_at,
       updatedAt: s.updated_at
     }))
-
-    // Stats
-    const statsResult = await db.query(
-      'SELECT COUNT(*) as total_suppliers, COUNT(*) FILTER (WHERE rating >= 4) as high_rated, AVG(rating) as avg_rating FROM market_suppliers WHERE company_id = $1 AND is_active = true',
-      [payload.companyId]
-    )
-
-    const stats = statsResult.rows[0]
 
     return NextResponse.json({
       success: true,
       data: {
         suppliers,
         stats: {
-          totalSuppliers: parseInt(stats.total_suppliers) || 0,
-          highRated: parseInt(stats.high_rated) || 0,
-          avgRating: parseFloat(stats.avg_rating) || 0
+          totalSuppliers: total,
+          highRated: 0,
+          avgRating: 0
         },
         pagination: {
           page,
