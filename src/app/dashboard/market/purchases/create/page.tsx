@@ -397,12 +397,6 @@ export default function CreatePurchasePage() {
       return
     }
 
-    // Validate file size (max 10MB)
-    if (file.size > 10 * 1024 * 1024) {
-      setScanError('El archivo es demasiado grande. Máximo 10MB.')
-      return
-    }
-
     setScanError(null)
     setInvoiceFileName(file.name)
 
@@ -420,15 +414,35 @@ export default function CreatePurchasePage() {
     setIsScanning(true)
     setScanError(null)
 
+    // Create AbortController with 2 minute timeout for large images
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), 120000)
+
     try {
+      console.log('[Purchase AI] Starting OCR request...', {
+        hasContext: !!aiContext,
+        contextLength: aiContext?.length || 0,
+        base64Length: invoiceFileBase64.length
+      })
+
       const response = await fetch('/api/market/purchases/ocr', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           fileBase64: invoiceFileBase64,
           userContext: aiContext || undefined
-        })
+        }),
+        signal: controller.signal
       })
+
+      clearTimeout(timeoutId)
+
+      if (!response.ok) {
+        const errorText = await response.text()
+        console.error('[Purchase AI] HTTP error:', response.status, errorText)
+        setScanError(`Error del servidor (${response.status}). Intenta de nuevo.`)
+        return
+      }
 
       const data = await response.json()
 
@@ -453,8 +467,18 @@ export default function CreatePurchasePage() {
         setScanError(data.error || 'Error al procesar la factura')
       }
     } catch (error) {
+      clearTimeout(timeoutId)
       console.error('Error processing invoice:', error)
-      setScanError('Error de conexión al procesar la factura')
+
+      if (error instanceof Error) {
+        if (error.name === 'AbortError') {
+          setScanError('La solicitud tardó demasiado. Intenta con una imagen más pequeña.')
+        } else {
+          setScanError(`Error: ${error.message}`)
+        }
+      } else {
+        setScanError('Error de conexión al procesar la factura. Verifica tu conexión a internet.')
+      }
     } finally {
       setIsScanning(false)
     }

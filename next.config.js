@@ -148,6 +148,19 @@ const nextConfig = {
     domains: ['localhost'],
     unoptimized: true,
   },
+  // Aumentar límite de body para OCR de facturas grandes
+  experimental: {
+    serverActions: {
+      bodySizeLimit: '50mb',
+    },
+  },
+  // Configuración para API routes
+  api: {
+    bodyParser: {
+      sizeLimit: '50mb',
+    },
+    responseLimit: false,
+  },
 }
 
 module.exports = withPWA(nextConfig)

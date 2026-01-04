@@ -3,6 +3,10 @@ import { cookies } from 'next/headers'
 import jwt from 'jsonwebtoken'
 import { GoogleGenerativeAI } from '@google/generative-ai'
 
+// Configuración para permitir archivos grandes y mayor tiempo de procesamiento
+export const maxDuration = 120 // 2 minutos
+export const dynamic = 'force-dynamic'
+
 // API Key para Gemini
 const GOOGLE_AI_API_KEY = process.env.GOOGLE_AI_API_KEY
 
