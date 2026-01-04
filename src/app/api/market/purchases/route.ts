@@ -75,6 +75,7 @@ interface NewProductVariant {
   barcode?: string | null
   unitCost: number
   sellingPrice?: number
+  imageUrl?: string | null
   tempId: number // Para mapear con las líneas
 }
 
@@ -455,11 +456,14 @@ export async function POST(request: NextRequest) {
             const variantSellingPrice = variant.sellingPrice || variant.unitCost * 1.3
 
             // Insert variant with correct column names (variant_name, selling_price)
+            // Use variant's own image or inherit from parent product
+            const variantImageUrl = variant.imageUrl || productImageUrl || null
+
             const variantResult = await db.query(`
               INSERT INTO market_product_variants (
                 product_id, variant_name, sku, barcode, cost_price, selling_price,
-                quantity_on_hand, is_active, created_at
-              ) VALUES ($1, $2, $3, $4, $5, $6, 0, true, NOW())
+                quantity_on_hand, image_url, is_active, created_at
+              ) VALUES ($1, $2, $3, $4, $5, $6, 0, $7, true, NOW())
               RETURNING id
             `, [
               realId,
@@ -467,7 +471,8 @@ export async function POST(request: NextRequest) {
               variantSku,
               variantBarcode,
               variant.unitCost,
-              variantSellingPrice
+              variantSellingPrice,
+              variantImageUrl
             ])
 
             const variantId = variantResult.rows[0].id
