@@ -58,6 +58,15 @@ async function ensureDecimalQuantities() {
   }
 }
 
+interface NewProductVariant {
+  name: string
+  sku?: string | null
+  barcode?: string | null
+  unitCost: number
+  sellingPrice?: number
+  tempId: number // Para mapear con las líneas
+}
+
 interface NewProduct {
   tempId: number // ID temporal negativo para mapear con las líneas
   name: string
@@ -68,6 +77,9 @@ interface NewProduct {
   unitOfMeasure?: string
   category?: string
   imageBase64?: string | null // Imagen generada/limpiada con IA en base64
+  // Soporte para variantes
+  hasVariants?: boolean
+  variants?: NewProductVariant[]
 }
 
 /**
@@ -330,7 +342,9 @@ export async function POST(request: NextRequest) {
 
     // Crear mapa para productos nuevos (tempId -> realId)
     const productIdMap = new Map<number, number>()
-    const createdProducts: Array<{ tempId: number; id: number; name: string; sku: string; barcode: string }> = []
+    const createdProducts: Array<{ tempId: number; id: number; name: string; sku: string; barcode: string; variantId?: number }> = []
+    // Mapa para variantes: tempId de variante -> { productId, variantId }
+    const variantIdMap = new Map<number, { productId: number; variantId: number }>()
 
     // Crear productos nuevos si existen
     if (newProducts && newProducts.length > 0) {
@@ -342,20 +356,23 @@ export async function POST(request: NextRequest) {
         await new Promise(resolve => setTimeout(resolve, 10))
         const barcode = generateBarcode(newProduct.barcode || null)
         const sellingPrice = newProduct.sellingPrice || newProduct.unitCost * 1.3 // 30% margen por defecto
+        const hasVariants = newProduct.hasVariants === true && newProduct.variants && newProduct.variants.length > 0
 
         console.log('[Market Purchases] Creating product:', {
           name: newProduct.name,
           sku,
           barcode,
           costPrice: newProduct.unitCost,
-          sellingPrice
+          sellingPrice,
+          hasVariants,
+          variantsCount: newProduct.variants?.length || 0
         })
 
         const result = await db.query(`
           INSERT INTO market_products (
             company_id, name, sku, barcode, cost_price, selling_price,
-            currency, quantity_on_hand, is_active, category, created_at
-          ) VALUES ($1, $2, $3, $4, $5, $6, 'USD', 0, true, $7, NOW())
+            currency, quantity_on_hand, is_active, category, has_variants, created_at
+          ) VALUES ($1, $2, $3, $4, $5, $6, 'USD', 0, true, $7, $8, NOW())
           RETURNING id
         `, [
           companyId,
@@ -364,7 +381,8 @@ export async function POST(request: NextRequest) {
           barcode,
           newProduct.unitCost,
           sellingPrice,
-          newProduct.category || 'General'
+          newProduct.category || 'General',
+          hasVariants
         ])
 
         const realId = result.rows[0].id
@@ -414,6 +432,55 @@ export async function POST(request: NextRequest) {
           sku,
           barcode
         })
+
+        // Crear variantes si existen
+        if (hasVariants && newProduct.variants) {
+          console.log('[Market Purchases] Creating', newProduct.variants.length, 'variants for product:', newProduct.name)
+
+          for (const variant of newProduct.variants) {
+            await new Promise(resolve => setTimeout(resolve, 10))
+            const variantSku = generateSku(`${newProduct.name} ${variant.name}`, variant.sku || null)
+            const variantBarcode = generateBarcode(variant.barcode || null)
+            const variantSellingPrice = variant.sellingPrice || variant.unitCost * 1.3
+
+            const variantResult = await db.query(`
+              INSERT INTO market_product_variants (
+                product_id, name, sku, barcode, cost_price, price,
+                quantity_on_hand, is_active, created_at
+              ) VALUES ($1, $2, $3, $4, $5, $6, 0, true, NOW())
+              RETURNING id
+            `, [
+              realId,
+              variant.name,
+              variantSku,
+              variantBarcode,
+              variant.unitCost,
+              variantSellingPrice
+            ])
+
+            const variantId = variantResult.rows[0].id
+
+            // Mapear el tempId de la variante
+            variantIdMap.set(variant.tempId, { productId: realId, variantId })
+            productIdMap.set(variant.tempId, realId) // También mapear al producto
+
+            createdProducts.push({
+              tempId: variant.tempId,
+              id: realId,
+              name: variant.name,
+              sku: variantSku,
+              barcode: variantBarcode,
+              variantId
+            })
+
+            console.log('[Market Purchases] Variant created:', {
+              tempId: variant.tempId,
+              productId: realId,
+              variantId,
+              name: variant.name
+            })
+          }
+        }
 
         console.log('[Market Purchases] Product created:', { tempId: newProduct.tempId, realId, imageUrl: productImageUrl })
       }
@@ -586,18 +653,29 @@ export async function POST(request: NextRequest) {
       for (const line of lines) {
         // Si es un producto nuevo (ID negativo), usar el ID real creado
         let productId = line.productId
+        let variantId = line.variantId || null
+
         if (line.isNewProduct && line.productId < 0) {
-          const realId = productIdMap.get(line.productId)
-          if (!realId) {
-            console.error('[Market Purchases] Product ID not found in map:', line.productId)
-            continue
+          // Primero verificar si es una variante
+          const variantInfo = variantIdMap.get(line.productId)
+          if (variantInfo) {
+            productId = variantInfo.productId
+            variantId = variantInfo.variantId
+          } else {
+            // Si no es variante, buscar el producto
+            const realId = productIdMap.get(line.productId)
+            if (!realId) {
+              console.error('[Market Purchases] Product ID not found in map:', line.productId)
+              continue
+            }
+            productId = realId
           }
-          productId = realId
         }
 
         console.log('[Market Purchases] Saving line:', {
           originalProductId: line.productId,
           mappedProductId: productId,
+          variantId,
           isNewProduct: line.isNewProduct
         })
 
@@ -616,7 +694,7 @@ export async function POST(request: NextRequest) {
         `, [
           purchaseId,
           productId,
-          line.variantId || null,
+          variantId,
           line.quantity,
           line.unitPrice,
           lineTotal

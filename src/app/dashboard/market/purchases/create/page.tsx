@@ -185,6 +185,7 @@ interface Product {
   variants?: ProductVariant[]
   isNewProduct?: boolean
   generatedImageBase64?: string // Para productos nuevos creados con OCR + IA
+  isVariantOf?: string | null // Nombre del producto base si es variante (detectado por IA)
 }
 
 interface PurchaseLine {
@@ -198,6 +199,7 @@ interface PurchaseLine {
   totalPrice: number
   isNewProduct?: boolean
   generatedImageBase64?: string // Para productos nuevos creados con OCR + IA
+  isVariantOf?: string | null // Nombre del producto base si es variante
 }
 
 export default function CreatePurchasePage() {
@@ -912,7 +914,8 @@ export default function CreatePurchasePage() {
           quantityOnHand: 0,
           hasVariants: false,
           isNewProduct: true,
-          generatedImageBase64: item.generatedImageBase64 // Guardar base64 para S3
+          generatedImageBase64: item.generatedImageBase64, // Guardar base64 para S3
+          isVariantOf: item.isVariantOf || null // Guardar si es variante
         }
 
         newLines.push({
@@ -925,7 +928,8 @@ export default function CreatePurchasePage() {
           unitPrice: item.unitCost,
           totalPrice: item.totalCost,
           isNewProduct: true,
-          generatedImageBase64: item.generatedImageBase64 // Pasar base64 para la API
+          generatedImageBase64: item.generatedImageBase64, // Pasar base64 para la API
+          isVariantOf: item.isVariantOf || null
         })
       }
     }
@@ -1166,18 +1170,83 @@ export default function CreatePurchasePage() {
     setLoading(true)
     try {
       // Preparar los productos nuevos que necesitan ser creados
-      const newProducts = purchaseLines
-        .filter(l => l.isNewProduct && l.productId < 0)
-        .map(l => ({
-          tempId: l.productId, // ID temporal negativo
-          name: l.product.name,
-          sku: l.product.sku || null,
-          barcode: l.product.barcode || null,
-          unitCost: l.unitPrice,
-          sellingPrice: l.product.sellingPrice || l.unitPrice * 1.15, // Usar precio editado o 15% margen
+      // Agrupar variantes bajo su producto base
+      const newProductLines = purchaseLines.filter(l => l.isNewProduct && l.productId < 0)
+
+      // Separar productos base de variantes
+      const standaloneProducts = newProductLines.filter(l => !l.isVariantOf)
+      const variantLines = newProductLines.filter(l => l.isVariantOf)
+
+      // Agrupar variantes por nombre de producto base
+      const variantGroups = new Map<string, typeof variantLines>()
+      for (const line of variantLines) {
+        const baseName = line.isVariantOf!
+        if (!variantGroups.has(baseName)) {
+          variantGroups.set(baseName, [])
+        }
+        variantGroups.get(baseName)!.push(line)
+      }
+
+      // Crear productos standalone (sin variantes)
+      const newProducts: Array<{
+        tempId: number
+        name: string
+        sku: string | null
+        barcode: string | null
+        unitCost: number
+        sellingPrice: number
+        category: string
+        imageBase64: string | null
+        hasVariants?: boolean
+        variants?: Array<{
+          tempId: number
+          name: string
+          sku: string | null
+          barcode: string | null
+          unitCost: number
+          sellingPrice: number
+        }>
+      }> = standaloneProducts.map(l => ({
+        tempId: l.productId,
+        name: l.product.name,
+        sku: l.product.sku || null,
+        barcode: l.product.barcode || null,
+        unitCost: l.unitPrice,
+        sellingPrice: l.product.sellingPrice || l.unitPrice * 1.15,
+        category: 'General',
+        imageBase64: l.generatedImageBase64 || l.product.generatedImageBase64 || null
+      }))
+
+      // Crear productos base con variantes
+      for (const [baseName, variants] of variantGroups) {
+        // Calcular precio promedio para el producto base
+        const avgCost = variants.reduce((sum, v) => sum + v.unitPrice, 0) / variants.length
+        const avgSellingPrice = variants.reduce((sum, v) => sum + (v.product.sellingPrice || v.unitPrice * 1.15), 0) / variants.length
+
+        // Crear producto base con variantes
+        const baseProduct = {
+          tempId: -Date.now() - Math.random() * 1000, // ID único para el producto base
+          name: baseName,
+          sku: null,
+          barcode: null,
+          unitCost: avgCost,
+          sellingPrice: avgSellingPrice,
           category: 'General',
-          imageBase64: l.generatedImageBase64 || l.product.generatedImageBase64 || null // Imagen generada por IA
-        }))
+          imageBase64: variants[0]?.generatedImageBase64 || variants[0]?.product.generatedImageBase64 || null,
+          hasVariants: true,
+          variants: variants.map(v => ({
+            tempId: v.productId,
+            name: v.product.name, // El nombre de la variante (ej: "Yogurt Fresa")
+            sku: v.product.sku || null,
+            barcode: v.product.barcode || null,
+            unitCost: v.unitPrice,
+            sellingPrice: v.product.sellingPrice || v.unitPrice * 1.15
+          }))
+        }
+
+        newProducts.push(baseProduct)
+        console.log('[Submit Purchase] Created product with variants:', baseName, 'variants:', variants.length)
+      }
 
       console.log('[Submit Purchase] New products to create:', newProducts)
 
