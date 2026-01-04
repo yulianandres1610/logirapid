@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useEffect, useCallback } from 'react'
+import React, { useState, useEffect, useCallback, useMemo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   Users,
@@ -1388,10 +1388,38 @@ export default function CreateConsignmentOrderPage() {
     setShowPrintModal(true)
   }
 
-  const filteredSuppliers = suppliers.filter(s =>
-    s.name.toLowerCase().includes(supplierSearch.toLowerCase()) ||
-    (s.supplierCode && s.supplierCode.toLowerCase().includes(supplierSearch.toLowerCase()))
-  )
+  // Filter suppliers locally with flexible matching
+  const filteredSuppliers = useMemo(() => {
+    if (!supplierSearch.trim()) return suppliers
+
+    const normalize = (str: string) => str
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^a-z0-9\s]/g, '')
+      .trim()
+
+    const normalizedSearch = normalize(supplierSearch)
+    const searchWords = normalizedSearch.split(/\s+/).filter(w => w.length > 1)
+
+    return suppliers.filter(s => {
+      const normalizedName = normalize(s.name)
+      const normalizedCode = s.supplierCode ? normalize(s.supplierCode) : ''
+
+      // Strategy 1: Direct inclusion
+      if (normalizedName.includes(normalizedSearch) || normalizedSearch.includes(normalizedName)) return true
+      if (normalizedCode.includes(normalizedSearch)) return true
+
+      // Strategy 2: Word matching - if any search word is found in supplier name
+      const supplierWords = normalizedName.split(/\s+/)
+      const matchedWords = searchWords.filter(sw =>
+        supplierWords.some(supW => supW.includes(sw) || sw.includes(supW))
+      )
+      if (searchWords.length > 0 && matchedWords.length > 0) return true
+
+      return false
+    })
+  }, [suppliers, supplierSearch])
 
   return (
     

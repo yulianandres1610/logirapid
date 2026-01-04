@@ -56,6 +56,17 @@ async function ensureDecimalQuantities() {
   } catch (error) {
     // Ignore errors
   }
+
+  // Add has_variants column if it doesn't exist
+  try {
+    await db.query(`
+      ALTER TABLE market_products
+      ADD COLUMN IF NOT EXISTS has_variants BOOLEAN DEFAULT false
+    `)
+    console.log('[Migration] Added has_variants column to market_products')
+  } catch (error) {
+    // Ignore errors - column might already exist
+  }
 }
 
 interface NewProductVariant {
