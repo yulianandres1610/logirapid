@@ -282,8 +282,8 @@ export async function POST(request: NextRequest) {
       const userResult = await db.query(`
         INSERT INTO users (
           email, password, firstname, lastname, phone,
-          role, companyid, createdat, updatedat
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, NOW(), NOW())
+          role, createdat, updatedat
+        ) VALUES ($1, $2, $3, $4, $5, $6, NOW(), NOW())
         RETURNING id
       `, [
         email.toLowerCase(),
@@ -291,11 +291,17 @@ export async function POST(request: NextRequest) {
         firstName || null,
         lastName || null,
         phone || null,
-        role,
-        companyId
+        role
       ])
 
       const userId = userResult.rows[0].id
+
+      // Associate user with company
+      await db.query(`
+        INSERT INTO user_companies (user_id, company_id, role, is_primary, created_at)
+        VALUES ($1, $2, $3, true, NOW())
+        ON CONFLICT (user_id, company_id) DO NOTHING
+      `, [userId, companyId, role])
 
       // Create employee
       const employeeResult = await db.query(`
