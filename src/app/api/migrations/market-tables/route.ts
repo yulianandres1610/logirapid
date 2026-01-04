@@ -320,6 +320,19 @@ export async function POST() {
       }
     }
 
+    // 6.1 Add has_variants column to market_products
+    try {
+      await db.query(`
+        ALTER TABLE market_products
+        ADD COLUMN IF NOT EXISTS has_variants BOOLEAN DEFAULT false
+      `)
+      console.log('[Migration] Added has_variants column to market_products')
+    } catch (e: any) {
+      if (!e.message.includes('already exists')) {
+        console.log(`[Migration] Note: has_variants - ${e.message}`)
+      }
+    }
+
     // 7. Create market_variant_types table (tipos personalizables por empresa)
     await db.query(`
       CREATE TABLE IF NOT EXISTS market_variant_types (

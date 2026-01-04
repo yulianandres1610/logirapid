@@ -131,19 +131,36 @@ PARA CADA ITEM EN LA FACTURA EXTRAE:
 - totalCost: Total de esa línea (quantity × unitCost)
 - sku: Código del producto si existe, sino null
 - barcode: Código de barras si existe, sino null
+- isVariantOf: Nombre del producto BASE si este item es una variante (ver instrucciones abajo)
 
-EJEMPLO DE RESPUESTA ESPERADA:
+DETECCIÓN DE VARIANTES (MUY IMPORTANTE):
+Analiza los productos y detecta si hay variantes del mismo producto base.
+Ejemplos de variantes:
+- "Jugo Toto Mango", "Jugo Toto Fresa", "Jugo Toto Naranja" → isVariantOf: "Jugo Toto"
+- "Yogurt Fresa 1L", "Yogurt Chocolate 1L", "Yogurt Natural 1L" → isVariantOf: "Yogurt 1L"
+- "Refresco Cola 2L", "Refresco Limón 2L", "Refresco Naranja 2L" → isVariantOf: "Refresco 2L"
+- "Cerveza Lager", "Cerveza Negra", "Cerveza Light" → isVariantOf: "Cerveza"
+
+Criterios para detectar variantes:
+1. Productos con nombre similar pero diferente sabor, color, tamaño o presentación
+2. Productos que claramente son variaciones de un producto base común
+3. Si el contexto del usuario menciona que ciertos productos son variantes, respeta esa indicación
+
+Si el producto NO es una variante, usa isVariantOf: null
+
+EJEMPLO DE RESPUESTA CON VARIANTES:
 {
   "vendorName": "Distribuidora ABC",
   "invoiceNumber": "FAC-2025-001",
   "invoiceDate": "2025-01-03",
   "items": [
-    { "name": "Coca Cola 2L", "quantity": 10, "unitOfMeasure": "unidad", "unitCost": 1.50, "totalCost": 15.00, "sku": "COC-2L", "barcode": null },
-    { "name": "Arroz Premium", "quantity": 50, "unitOfMeasure": "lb", "unitCost": 0.80, "totalCost": 40.00, "sku": null, "barcode": null }
+    { "name": "Jugo Toto Mango", "quantity": 10, "unitOfMeasure": "unidad", "unitCost": 2.00, "totalCost": 20.00, "sku": null, "barcode": null, "isVariantOf": "Jugo Toto" },
+    { "name": "Jugo Toto Fresa", "quantity": 15, "unitOfMeasure": "unidad", "unitCost": 2.00, "totalCost": 30.00, "sku": null, "barcode": null, "isVariantOf": "Jugo Toto" },
+    { "name": "Arroz Premium", "quantity": 50, "unitOfMeasure": "lb", "unitCost": 0.80, "totalCost": 40.00, "sku": null, "barcode": null, "isVariantOf": null }
   ],
-  "subtotal": 55.00,
-  "tax": 4.40,
-  "total": 59.40,
+  "subtotal": 90.00,
+  "tax": 7.20,
+  "total": 97.20,
   "confidence": 0.95
 }
 
@@ -152,6 +169,7 @@ REGLAS CRÍTICAS:
 - Si ves una lista de productos, cada línea es un item separado
 - Los números deben ser sin símbolos de moneda (1.50 no $1.50)
 - Si no puedes leer un campo, usa null para texto y 0 para números
+- SIEMPRE analiza si hay productos que son variantes y asigna isVariantOf correctamente
 - El campo confidence indica tu certeza (0.0 a 1.0)
 
 RESPONDE ÚNICAMENTE CON EL JSON. Sin explicaciones, sin markdown, sin \`\`\`.`
@@ -214,6 +232,8 @@ RESPONDE ÚNICAMENTE CON EL JSON. Sin explicaciones, sin markdown, sin \`\`\`.`
             codigo?: string | null
             barcode?: string | null
             codigoBarras?: string | null
+            isVariantOf?: string | null
+            esVarianteDe?: string | null
           }, index: number) => {
             // Handle multiple possible field names
             const name = item.name || item.nombre || item.description || item.descripcion || 'Producto sin nombre'
@@ -229,6 +249,8 @@ RESPONDE ÚNICAMENTE CON EL JSON. Sin explicaciones, sin markdown, sin \`\`\`.`
                              typeof item.total === 'number' ? item.total : quantity * unitCost
             const sku = item.sku || item.codigo || null
             const barcode = item.barcode || item.codigoBarras || null
+            // Extract isVariantOf from AI response
+            const isVariantOf = item.isVariantOf || item.esVarianteDe || null
 
             return {
               id: `item-${index}`,
@@ -240,7 +262,7 @@ RESPONDE ÚNICAMENTE CON EL JSON. Sin explicaciones, sin markdown, sin \`\`\`.`
               sku,
               barcode,
               description: null,
-              isVariantOf: null
+              isVariantOf
             }
           })
         : []
