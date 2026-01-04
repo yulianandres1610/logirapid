@@ -282,8 +282,8 @@ export async function POST(request: NextRequest) {
       const userResult = await db.query(`
         INSERT INTO users (
           email, password, firstname, lastname, phone,
-          role, createdat, updatedat
-        ) VALUES ($1, $2, $3, $4, $5, $6, NOW(), NOW())
+          role, createdat
+        ) VALUES ($1, $2, $3, $4, $5, $6, NOW())
         RETURNING id
       `, [
         email.toLowerCase(),

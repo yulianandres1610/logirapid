@@ -265,8 +265,7 @@ export async function PUT(
             firstname = COALESCE($1, firstname),
             lastname = COALESCE($2, lastname),
             phone = COALESCE($3, phone),
-            role = COALESCE($4, role),
-            updatedat = NOW()
+            role = COALESCE($4, role)
           WHERE id = $5
         `, [firstName, lastName, phone, role, userId])
       }

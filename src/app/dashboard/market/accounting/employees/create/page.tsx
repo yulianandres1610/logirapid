@@ -570,7 +570,7 @@ export default function CreateEmployeePage() {
                     <div>
                       <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                         <DollarSign className="w-4 h-4 inline mr-2" />
-                        Tarifa *
+                        Salario *
                       </label>
                       <input
                         type="number"
@@ -835,7 +835,7 @@ export default function CreateEmployeePage() {
                           <dd className="font-medium text-gray-900 dark:text-white">{getPayTypeLabel(formData.payType)}</dd>
                         </div>
                         <div>
-                          <dt className="text-gray-500">Tarifa</dt>
+                          <dt className="text-gray-500">Salario</dt>
                           <dd className="font-medium text-gray-900 dark:text-white">
                             {formData.currency} {parseFloat(formData.payRate).toLocaleString()}
                           </dd>

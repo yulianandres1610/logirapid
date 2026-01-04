@@ -514,16 +514,33 @@ export async function POST(request: NextRequest) {
     if (supplierId && supplierId < 0 && supplierName) {
       console.log('[Market Purchases] Creating new supplier:', supplierName)
 
-      // Generate supplier code
+      // Generate supplier code: 3 initials from name + year (e.g., SRL2026)
       const year = new Date().getFullYear()
-      const countResult = await db.query(`
-        SELECT COUNT(*) as count
-        FROM market_suppliers
-        WHERE company_id = $1 AND supplier_code LIKE $2
-      `, [companyId, `SUP-${year}-%`])
+      // Get first 3 letters from name (uppercase, remove special chars)
+      const initials = supplierName
+        .toUpperCase()
+        .replace(/[^A-Z]/g, '')
+        .substring(0, 3)
+        .padEnd(3, 'X') // Pad with X if less than 3 letters
 
-      const count = parseInt(countResult.rows[0]?.count) || 0
-      const supplierCode = `SUP-${year}-${(count + 1).toString().padStart(4, '0')}`
+      const baseCode = initials + year
+
+      // Check if code already exists and add number if needed
+      const existingResult = await db.query(
+        'SELECT supplier_code FROM market_suppliers WHERE company_id = $1 AND supplier_code LIKE $2 ORDER BY supplier_code DESC LIMIT 1',
+        [companyId, baseCode + '%']
+      )
+
+      let supplierCode = baseCode
+      if (existingResult.rows.length > 0) {
+        const lastCode = existingResult.rows[0].supplier_code
+        // Extract number suffix if exists (e.g., SRL2026-2 -> 2)
+        const match = lastCode.match(new RegExp('^' + baseCode + '(?:-(\\\\d+))?$'))
+        if (match) {
+          const nextNum = match[1] ? parseInt(match[1]) + 1 : 2
+          supplierCode = baseCode + '-' + nextNum
+        }
+      }
 
       const result = await db.query(`
         INSERT INTO market_suppliers (
