@@ -502,6 +502,7 @@ export function Sidebar({ isCollapsed, onToggle }: SidebarProps) {
         { icon: ClipboardList, label: "Conteos Inventario", href: "/dashboard/market/pos/inventory-counts" },
       ]
     },
+    { icon: Users, label: "Empleados", href: "/dashboard/market/accounting/employees" },
     {
       icon: Calculator,
       label: "Contabilidad",
@@ -511,7 +512,6 @@ export function Sidebar({ isCollapsed, onToggle }: SidebarProps) {
         { icon: BarChart3, label: "Dashboard", href: "/dashboard/market/accounting" },
         { icon: Receipt, label: "Gastos", href: "/dashboard/market/accounting/expenses" },
         { icon: Wallet, label: "Nomina", href: "/dashboard/market/accounting/payroll" },
-        { icon: Users, label: "Empleados", href: "/dashboard/market/accounting/employees" },
         { icon: FileCheck, label: "Solicitudes", href: "/dashboard/market/accounting/requests" },
       ]
     },

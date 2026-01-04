@@ -64,7 +64,7 @@ export async function GET(request: NextRequest) {
         u.email,
         u.firstname,
         u.lastname,
-        u.phonenumber,
+        u.phone,
         u.role,
         CASE WHEN e.pos_pin IS NOT NULL THEN true ELSE false END as has_pin,
         (
@@ -141,7 +141,7 @@ export async function GET(request: NextRequest) {
           firstName: row.firstname,
           lastName: row.lastname,
           fullName: `${row.firstname || ''} ${row.lastname || ''}`.trim() || row.email,
-          phone: row.phonenumber,
+          phone: row.phone,
           role: row.role,
           hireDate: row.hire_date,
           terminationDate: row.termination_date,
@@ -281,7 +281,7 @@ export async function POST(request: NextRequest) {
       // Create user
       const userResult = await db.query(`
         INSERT INTO users (
-          email, password, firstname, lastname, phonenumber,
+          email, password, firstname, lastname, phone,
           role, companyid, createdat, updatedat
         ) VALUES ($1, $2, $3, $4, $5, $6, $7, NOW(), NOW())
         RETURNING id

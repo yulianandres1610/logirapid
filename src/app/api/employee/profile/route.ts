@@ -61,7 +61,7 @@ export async function GET(request: NextRequest) {
         u.email,
         u.firstname,
         u.lastname,
-        u.phonenumber,
+        u.phone,
         u.role,
         c.name as company_name
       FROM market_employees e
@@ -140,7 +140,7 @@ export async function GET(request: NextRequest) {
           firstName: employee.firstname,
           lastName: employee.lastname,
           fullName: `${employee.firstname || ''} ${employee.lastname || ''}`.trim() || employee.email,
-          phone: employee.phonenumber,
+          phone: employee.phone,
           role: employee.role,
           hireDate: employee.hire_date,
           status: employee.status,

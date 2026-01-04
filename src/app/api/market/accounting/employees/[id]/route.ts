@@ -65,7 +65,7 @@ export async function GET(
         u.email,
         u.firstname,
         u.lastname,
-        u.phonenumber,
+        u.phone,
         u.role,
         CASE WHEN e.pos_pin IS NOT NULL THEN true ELSE false END as has_pin
       FROM market_employees e
@@ -134,7 +134,7 @@ export async function GET(
         firstName: employee.firstname,
         lastName: employee.lastname,
         fullName: `${employee.firstname || ''} ${employee.lastname || ''}`.trim() || employee.email,
-        phone: employee.phonenumber,
+        phone: employee.phone,
         role: employee.role,
         hireDate: employee.hire_date,
         terminationDate: employee.termination_date,
@@ -264,7 +264,7 @@ export async function PUT(
           UPDATE users SET
             firstname = COALESCE($1, firstname),
             lastname = COALESCE($2, lastname),
-            phonenumber = COALESCE($3, phonenumber),
+            phone = COALESCE($3, phone),
             role = COALESCE($4, role),
             updatedat = NOW()
           WHERE id = $5
