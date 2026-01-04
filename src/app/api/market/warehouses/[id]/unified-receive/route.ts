@@ -494,19 +494,8 @@ export async function POST(
         WHERE id = $4
       `, [newStatus, warehouseId, payload.userId, orderId, newStatus])
 
-      // Create inventory movement record
-      await db.query(`
-        INSERT INTO market_inventory_movements (
-          company_id, warehouse_id, movement_type, reference_type, reference_id,
-          notes, created_by, created_at
-        ) VALUES ($1, $2, 'purchase_in', 'purchase', $3, $4, $5, NOW())
-      `, [
-        payload.companyId,
-        warehouseId,
-        orderId,
-        `Recepcion de compra ${orderNumber}: ${totalUnitsReceived} unidades`,
-        payload.userId
-      ])
+      // Note: Individual product inventory movements are created per line item above
+      // This is just a log note - the actual stock movements happen in the line processing
     }
 
     // Return success with data for printing

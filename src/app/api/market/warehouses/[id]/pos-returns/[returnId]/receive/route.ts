@@ -159,17 +159,16 @@ export async function POST(
       // Create inventory movement (negative - scrap)
       await client.query(`
         INSERT INTO market_inventory_movements (
-          company_id, warehouse_id, product_id,
+          company_id, product_id,
           movement_type, quantity, reference_type, reference_id,
           notes, created_by, created_at
-        ) VALUES ($1, $2, $3, 'scrap', $4, 'pos_return', $5, $6, $7, NOW())
+        ) VALUES ($1, $2, 'scrap', $3, 'pos_return', $4, $5, $6, NOW())
       `, [
         payload.companyId,
-        warehouseId,
         productId,
         -quantityReceived,
         returnIdNum,
-        `Scrap de devolución POS ${posReturn.return_number} - ${condition}`,
+        `Scrap de devolución POS ${posReturn.return_number} - ${condition} - Almacén ID: ${warehouseId}`,
         payload.userId
       ])
 
