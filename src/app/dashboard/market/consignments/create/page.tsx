@@ -699,13 +699,14 @@ export default function CreateConsignmentOrderPage() {
 
       if (data.success && data.data) {
         console.log('[Consignment] AI image generated successfully')
-        // Guardar tanto la URL de preview como el base64 raw para S3
-        const imageBase64 = data.data.imageBase64 || data.data.imageUrl
+        // Guardar URL para preview (con data: prefix) y base64 limpio para S3
+        const imageUrl = data.data.imageBase64 || data.data.imageUrl
+        const cleanBase64 = imageUrl?.replace(/^data:image\/\w+;base64,/, '') || null
         setMatchedProducts(prev => prev.map(p =>
           p.id === itemId ? {
             ...p,
-            generatedImageUrl: imageBase64,
-            generatedImageBase64: imageBase64, // Guardar base64 para crear producto después
+            generatedImageUrl: imageUrl, // Para preview en UI
+            generatedImageBase64: cleanBase64, // Limpio para guardar en S3
             generatedDescription: data.data.imageDescription,
             isGeneratingImage: false
           } : p
@@ -761,12 +762,13 @@ export default function CreateConsignmentOrderPage() {
 
       if (data.success && data.data) {
         console.log('[Consignment] Image cleaned successfully')
-        const cleanedBase64 = data.data.imageBase64 || data.data.imageUrl
+        const imageUrl = data.data.imageBase64 || data.data.imageUrl
+        const cleanBase64 = imageUrl?.replace(/^data:image\/\w+;base64,/, '') || null
         setMatchedProducts(prev => prev.map(p =>
           p.id === itemId ? {
             ...p,
-            generatedImageUrl: cleanedBase64,
-            generatedImageBase64: cleanedBase64,
+            generatedImageUrl: imageUrl, // Para preview en UI
+            generatedImageBase64: cleanBase64, // Limpio para guardar en S3
             isCleaningImage: false
           } : p
         ))
@@ -782,6 +784,60 @@ export default function CreateConsignmentOrderPage() {
         p.id === itemId ? { ...p, isCleaningImage: false } : p
       ))
     }
+  }, [matchedProducts])
+
+  // Generate images for all new products
+  const [isGeneratingAllImages, setIsGeneratingAllImages] = useState(false)
+  const generateAllImages = useCallback(async () => {
+    const newProducts = matchedProducts.filter(p => p.action === 'create_new' && !p.generatedImageBase64)
+    if (newProducts.length === 0) return
+
+    setIsGeneratingAllImages(true)
+    console.log('[Consignment] Generating images for', newProducts.length, 'products')
+
+    for (const item of newProducts) {
+      try {
+        setMatchedProducts(prev => prev.map(p =>
+          p.id === item.id ? { ...p, isGeneratingImage: true } : p
+        ))
+
+        const response = await fetch('/api/ai/process-image', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'generate',
+            productName: item.name,
+            productDescription: `Producto: ${item.name}`,
+            saveToStorage: false
+          })
+        })
+
+        const data = await response.json()
+
+        if (data.success && data.data) {
+          const imageBase64 = data.data.imageBase64?.replace(/^data:image\/\w+;base64,/, '') || null
+          setMatchedProducts(prev => prev.map(p =>
+            p.id === item.id ? {
+              ...p,
+              generatedImageUrl: data.data.imageBase64 || data.data.imageUrl,
+              generatedImageBase64: imageBase64,
+              isGeneratingImage: false
+            } : p
+          ))
+        } else {
+          setMatchedProducts(prev => prev.map(p =>
+            p.id === item.id ? { ...p, isGeneratingImage: false } : p
+          ))
+        }
+      } catch (error) {
+        console.error('[Consignment] Error generating image for:', item.name, error)
+        setMatchedProducts(prev => prev.map(p =>
+          p.id === item.id ? { ...p, isGeneratingImage: false } : p
+        ))
+      }
+    }
+
+    setIsGeneratingAllImages(false)
   }, [matchedProducts])
 
   // Search products for linking
@@ -1911,9 +1967,35 @@ export default function CreateConsignmentOrderPage() {
 
                     {matchedProducts.filter(p => p.matchType === 'none').length > 0 && (
                       <div>
-                        <h3 className={cn("font-bold flex items-center gap-2 mb-3", theme === 'dark' ? 'text-blue-400' : 'text-blue-600')}>
-                          <Package className="w-5 h-5" />Productos Nuevos ({matchedProducts.filter(p => p.matchType === 'none').length})
-                        </h3>
+                        <div className="flex items-center justify-between mb-3">
+                          <h3 className={cn("font-bold flex items-center gap-2", theme === 'dark' ? 'text-blue-400' : 'text-blue-600')}>
+                            <Package className="w-5 h-5" />Productos Nuevos ({matchedProducts.filter(p => p.matchType === 'none').length})
+                          </h3>
+                          {matchedProducts.filter(p => p.action === 'create_new' && !p.generatedImageBase64).length > 0 && (
+                            <button
+                              onClick={generateAllImages}
+                              disabled={isGeneratingAllImages}
+                              className={cn(
+                                'px-3 py-1.5 rounded-lg text-sm font-medium flex items-center gap-2 transition-colors',
+                                theme === 'dark'
+                                  ? 'bg-purple-600 hover:bg-purple-700 text-white disabled:bg-purple-800'
+                                  : 'bg-purple-500 hover:bg-purple-600 text-white disabled:bg-purple-300'
+                              )}
+                            >
+                              {isGeneratingAllImages ? (
+                                <>
+                                  <Loader2 className="w-4 h-4 animate-spin" />
+                                  Generando...
+                                </>
+                              ) : (
+                                <>
+                                  <Wand2 className="w-4 h-4" />
+                                  Generar todas las imagenes
+                                </>
+                              )}
+                            </button>
+                          )}
+                        </div>
                         <div className="space-y-3">
                           {matchedProducts.filter(p => p.matchType === 'none').map((item) => (
                             <div key={item.id} className={cn('p-4 rounded-xl border', item.action === 'ignore' ? 'opacity-50' : '', theme === 'dark' ? 'bg-blue-900/20 border-blue-800/50' : 'bg-blue-50 border-blue-200')}>

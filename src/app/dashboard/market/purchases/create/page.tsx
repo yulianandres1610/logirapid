@@ -839,6 +839,60 @@ export default function CreatePurchasePage() {
     return () => clearTimeout(timer)
   }, [linkSearch])
 
+  // Generate images for all new products
+  const [isGeneratingAllImages, setIsGeneratingAllImages] = useState(false)
+  const generateAllImages = useCallback(async () => {
+    const newProducts = matchedProducts.filter(p => p.action === 'create_new' && !p.generatedImageBase64)
+    if (newProducts.length === 0) return
+
+    setIsGeneratingAllImages(true)
+    console.log('[Purchase] Generating images for', newProducts.length, 'products')
+
+    for (const item of newProducts) {
+      try {
+        setMatchedProducts(prev => prev.map(p =>
+          p.id === item.id ? { ...p, isGeneratingImage: true } : p
+        ))
+
+        const response = await fetch('/api/ai/process-image', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'generate',
+            productName: item.name,
+            productDescription: `Producto: ${item.name}`,
+            saveToStorage: false
+          })
+        })
+
+        const data = await response.json()
+
+        if (data.success && data.data) {
+          const imageBase64 = data.data.imageBase64?.replace(/^data:image\/\w+;base64,/, '') || null
+          setMatchedProducts(prev => prev.map(p =>
+            p.id === item.id ? {
+              ...p,
+              generatedImageUrl: data.data.imageBase64 || data.data.imageUrl,
+              generatedImageBase64: imageBase64,
+              isGeneratingImage: false
+            } : p
+          ))
+        } else {
+          setMatchedProducts(prev => prev.map(p =>
+            p.id === item.id ? { ...p, isGeneratingImage: false } : p
+          ))
+        }
+      } catch (error) {
+        console.error('[Purchase] Error generating image for:', item.name, error)
+        setMatchedProducts(prev => prev.map(p =>
+          p.id === item.id ? { ...p, isGeneratingImage: false } : p
+        ))
+      }
+    }
+
+    setIsGeneratingAllImages(false)
+  }, [matchedProducts])
+
   // Confirm scanned products and move to supplier step
   const confirmScannedProducts = useCallback(async () => {
     // Filter products that are not ignored
@@ -2189,12 +2243,38 @@ export default function CreatePurchasePage() {
                           <Package className="w-5 h-5" />
                           Productos Nuevos ({matchedProducts.filter(p => p.matchType === 'none').length})
                         </h3>
-                        <p className={cn(
-                          "text-sm mb-3",
-                          theme === 'dark' ? 'text-gray-400' : 'text-gray-600'
-                        )}>
-                          Estos productos no fueron encontrados en tu inventario. Puedes ignorarlos, vincularlos a productos existentes, o crearlos después.
-                        </p>
+                        <div className="flex items-center justify-between mb-3">
+                          <p className={cn(
+                            "text-sm",
+                            theme === 'dark' ? 'text-gray-400' : 'text-gray-600'
+                          )}>
+                            Estos productos serán creados con la compra.
+                          </p>
+                          {matchedProducts.filter(p => p.action === 'create_new' && !p.generatedImageBase64).length > 0 && (
+                            <button
+                              onClick={generateAllImages}
+                              disabled={isGeneratingAllImages}
+                              className={cn(
+                                'px-3 py-1.5 rounded-lg text-sm font-medium flex items-center gap-2 transition-colors',
+                                theme === 'dark'
+                                  ? 'bg-purple-600 hover:bg-purple-700 text-white disabled:bg-purple-800'
+                                  : 'bg-purple-500 hover:bg-purple-600 text-white disabled:bg-purple-300'
+                              )}
+                            >
+                              {isGeneratingAllImages ? (
+                                <>
+                                  <Loader2 className="w-4 h-4 animate-spin" />
+                                  Generando...
+                                </>
+                              ) : (
+                                <>
+                                  <Wand2 className="w-4 h-4" />
+                                  Generar todas las imágenes
+                                </>
+                              )}
+                            </button>
+                          )}
+                        </div>
                         <div className="space-y-3">
                           {matchedProducts.filter(p => p.matchType === 'none').map((item) => (
                             <div
