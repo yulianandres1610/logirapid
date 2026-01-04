@@ -385,8 +385,8 @@ export default function CreatePurchasePage() {
     return () => clearTimeout(timer)
   }, [productSearch, searchProducts])
 
-  // Compress image to reduce file size
-  const compressImage = useCallback((file: File, maxWidth: number = 2000, quality: number = 0.8): Promise<string> => {
+  // Compress image to reduce file size (Vercel has 4.5MB limit for serverless functions)
+  const compressImage = useCallback((file: File): Promise<string> => {
     return new Promise((resolve, reject) => {
       const reader = new FileReader()
       reader.onload = (e) => {
@@ -396,10 +396,18 @@ export default function CreatePurchasePage() {
           let width = img.width
           let height = img.height
 
-          // Scale down if larger than maxWidth
+          // Target: max 1200px width for OCR (still very readable)
+          const maxWidth = 1200
           if (width > maxWidth) {
             height = (height * maxWidth) / width
             width = maxWidth
+          }
+
+          // Also limit height to 1600px
+          const maxHeight = 1600
+          if (height > maxHeight) {
+            width = (width * maxHeight) / height
+            height = maxHeight
           }
 
           canvas.width = width
@@ -411,13 +419,34 @@ export default function CreatePurchasePage() {
           }
           ctx.drawImage(img, 0, 0, width, height)
 
-          // Convert to JPEG for better compression
-          const compressedBase64 = canvas.toDataURL('image/jpeg', quality)
+          // Start with 65% quality, reduce if still too large
+          let quality = 0.65
+          let compressedBase64 = canvas.toDataURL('image/jpeg', quality)
+
+          // Target: under 3MB to stay well within Vercel's 4.5MB limit
+          while (compressedBase64.length > 3 * 1024 * 1024 && quality > 0.3) {
+            quality -= 0.1
+            compressedBase64 = canvas.toDataURL('image/jpeg', quality)
+          }
+
+          // If still too large, reduce dimensions further
+          if (compressedBase64.length > 3 * 1024 * 1024) {
+            const scale = 0.6
+            canvas.width = Math.round(width * scale)
+            canvas.height = Math.round(height * scale)
+            const ctx2 = canvas.getContext('2d')
+            if (ctx2) {
+              ctx2.drawImage(img, 0, 0, canvas.width, canvas.height)
+              compressedBase64 = canvas.toDataURL('image/jpeg', 0.5)
+            }
+          }
+
           console.log('[Purchase AI] Image compressed:', {
-            originalSize: file.size,
-            compressedLength: compressedBase64.length,
+            originalSize: `${(file.size / 1024 / 1024).toFixed(2)}MB`,
+            compressedSize: `${(compressedBase64.length / 1024 / 1024).toFixed(2)}MB`,
             originalDimensions: `${img.width}x${img.height}`,
-            newDimensions: `${width}x${height}`
+            newDimensions: `${Math.round(canvas.width)}x${Math.round(canvas.height)}`,
+            quality: quality.toFixed(2)
           })
           resolve(compressedBase64)
         }
