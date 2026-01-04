@@ -209,10 +209,10 @@ interface ExchangeRates {
   MLC: number
 }
 
-// Default exchange rates
+// Default exchange rates (actualizadas desde API externa)
 const DEFAULT_RATES: ExchangeRates = {
-  CUP: 250,
-  MLC: 0.91
+  CUP: 440,
+  MLC: 1.11
 }
 
 // Simple SVG icons inline
@@ -388,18 +388,19 @@ function PaymentContent() {
       // Use defaults
     }
 
-    // If online, fetch fresh rates
+    // If online, fetch fresh rates from external API
     if (navigator.onLine) {
-      fetch('/api/agency-rates')
+      fetch('/api/market/pos/exchange-rates')
         .then(res => res.json())
         .then(data => {
           if (data.success && data.rates) {
             const newRates = {
-              CUP: data.rates.usd || DEFAULT_RATES.CUP,
-              MLC: data.rates.mlc || DEFAULT_RATES.MLC
+              CUP: data.rates.CUP || DEFAULT_RATES.CUP,
+              MLC: data.rates.MLC || DEFAULT_RATES.MLC
             }
             setRates(newRates)
             localStorage.setItem('pos_exchange_rates', JSON.stringify(newRates))
+            console.log('[Payment] Rates updated:', newRates, 'Source:', data.source || 'unknown')
           }
         })
         .catch(e => console.error('[Payment] Error fetching rates:', e))
