@@ -68,6 +68,19 @@ export async function GET(
 
     const terminal = result.rows[0]
 
+    // Parse accepted_currencies if it's a string
+    let acceptedCurrencies = terminal.accepted_currencies
+    if (typeof acceptedCurrencies === 'string') {
+      try {
+        acceptedCurrencies = JSON.parse(acceptedCurrencies)
+      } catch {
+        acceptedCurrencies = ['USD', 'CUP', 'MLC']
+      }
+    }
+    if (!Array.isArray(acceptedCurrencies)) {
+      acceptedCurrencies = ['USD', 'CUP', 'MLC']
+    }
+
     // Get assigned users
     const usersResult = await db.query(`
       SELECT
@@ -124,7 +137,7 @@ export async function GET(
         maxDiscountPercent: parseFloat(terminal.max_discount_percent) || 100,
         requireCustomer: terminal.require_customer,
         defaultCurrency: terminal.default_currency,
-        acceptedCurrencies: terminal.accepted_currencies || ['USD', 'CUP', 'MLC'],
+        acceptedCurrencies: acceptedCurrencies,
         isActive: terminal.is_active,
         createdAt: terminal.created_at,
         updatedAt: terminal.updated_at,
