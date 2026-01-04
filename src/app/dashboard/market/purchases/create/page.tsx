@@ -142,6 +142,8 @@ interface MatchedItem extends ScannedItem {
   // Acción del usuario
   action: 'use_existing' | 'create_new' | 'link_to' | 'ignore'
   linkedProductId?: number
+  // Precio de venta sugerido para productos nuevos (editable)
+  suggestedSellingPrice?: number
   // Imagen y descripción generadas con IA
   generatedImageUrl?: string
   generatedImageBase64?: string // Raw base64 para guardar en S3 al crear producto
@@ -488,7 +490,11 @@ export default function CreatePurchasePage() {
           suggestedMatches: item.suggestedMatches || [],
           confidence: item.confidence,
           // Default action based on match type
-          action: item.matchType !== 'none' ? 'use_existing' : 'create_new'
+          action: item.matchType !== 'none' ? 'use_existing' : 'create_new',
+          // Precio de venta sugerido: 15% arriba del costo para productos nuevos
+          suggestedSellingPrice: item.matchType === 'none'
+            ? Math.round(item.inputItem.unitCost * 1.15 * 100) / 100
+            : undefined
         }))
 
         setMatchedProducts(matched)
@@ -506,6 +512,40 @@ export default function CreatePurchasePage() {
     setMatchedProducts(prev => prev.map(item => {
       if (item.id === itemId) {
         return { ...item, action, linkedProductId }
+      }
+      return item
+    }))
+  }, [])
+
+  // Update matched product fields (name, unitCost, suggestedSellingPrice)
+  const handleUpdateMatchedProduct = useCallback((
+    itemId: string,
+    field: 'name' | 'unitCost' | 'suggestedSellingPrice' | 'quantity',
+    value: string | number
+  ) => {
+    setMatchedProducts(prev => prev.map(item => {
+      if (item.id === itemId) {
+        if (field === 'name') {
+          return { ...item, name: value as string }
+        } else if (field === 'unitCost') {
+          const newCost = typeof value === 'string' ? parseFloat(value) || 0 : value
+          const newTotal = newCost * item.quantity
+          // Recalcular precio de venta sugerido (15% arriba del nuevo costo)
+          const newSellingPrice = Math.round(newCost * 1.15 * 100) / 100
+          return {
+            ...item,
+            unitCost: newCost,
+            totalCost: newTotal,
+            suggestedSellingPrice: newSellingPrice
+          }
+        } else if (field === 'suggestedSellingPrice') {
+          const newPrice = typeof value === 'string' ? parseFloat(value) || 0 : value
+          return { ...item, suggestedSellingPrice: newPrice }
+        } else if (field === 'quantity') {
+          const newQty = typeof value === 'string' ? parseFloat(value) || 0 : value
+          const newTotal = item.unitCost * newQty
+          return { ...item, quantity: newQty, totalCost: newTotal }
+        }
       }
       return item
     }))
@@ -744,6 +784,8 @@ export default function CreatePurchasePage() {
         }
       } else if (item.action === 'create_new') {
         // Producto nuevo - crear producto temporal para agregar a la orden
+        // Usar precio de venta editado o calcular 15% arriba del costo
+        const sellingPrice = item.suggestedSellingPrice || Math.round(item.unitCost * 1.15 * 100) / 100
         const tempProduct: Product = {
           id: -Date.now() - newLines.length,
           name: item.name,
@@ -751,7 +793,7 @@ export default function CreatePurchasePage() {
           barcode: item.barcode,
           imageUrl: item.generatedImageUrl || null, // Usar imagen generada si existe
           costPrice: item.unitCost,
-          sellingPrice: item.unitCost * 1.3,
+          sellingPrice: sellingPrice,
           currency: 'USD',
           quantityOnHand: 0,
           hasVariants: false,
@@ -1018,7 +1060,7 @@ export default function CreatePurchasePage() {
           sku: l.product.sku || null,
           barcode: l.product.barcode || null,
           unitCost: l.unitPrice,
-          sellingPrice: l.unitPrice * 1.3,
+          sellingPrice: l.product.sellingPrice || l.unitPrice * 1.15, // Usar precio editado o 15% margen
           category: 'General',
           imageBase64: l.generatedImageBase64 || l.product.generatedImageBase64 || null // Imagen generada por IA
         }))
@@ -2023,42 +2065,109 @@ export default function CreatePurchasePage() {
                                     </button>
                                   </div>
                                 </div>
-                                {/* Info del producto */}
-                                <div className="flex-1 min-w-0">
-                                  <p className={cn(
-                                    'font-medium truncate',
-                                    theme === 'dark' ? 'text-white' : 'text-gray-900'
-                                  )}>
-                                    {item.name}
-                                  </p>
+                                {/* Info del producto - Editable para productos nuevos */}
+                                <div className="flex-1 min-w-0 space-y-2">
+                                  {/* Nombre editable */}
+                                  <input
+                                    type="text"
+                                    value={item.name}
+                                    onChange={(e) => handleUpdateMatchedProduct(item.id, 'name', e.target.value)}
+                                    disabled={item.action === 'ignore' || item.action === 'link_to'}
+                                    className={cn(
+                                      'w-full px-2 py-1 rounded-lg font-medium text-sm border transition-colors',
+                                      theme === 'dark'
+                                        ? 'bg-gray-800 border-gray-700 text-white focus:border-amber-500 disabled:opacity-50'
+                                        : 'bg-white border-gray-300 text-gray-900 focus:border-amber-500 disabled:opacity-50'
+                                    )}
+                                    placeholder="Nombre del producto"
+                                  />
                                   {item.action === 'link_to' && item.linkedProductId && (
                                     <p className={cn(
-                                      'text-sm mt-0.5',
+                                      'text-sm',
                                       theme === 'dark' ? 'text-blue-400' : 'text-blue-600'
                                     )}>
                                       Vinculado a producto existente
                                     </p>
                                   )}
-                                  <span className={cn(
-                                    'text-sm',
-                                    theme === 'dark' ? 'text-gray-500' : 'text-gray-500'
-                                  )}>
-                                    {item.quantity} {item.unitOfMeasure || 'unidad'} × ${item.unitCost.toFixed(2)}
-                                  </span>
+                                  {/* Cantidad, Costo y Precio de Venta editables */}
+                                  <div className="flex flex-wrap gap-2 items-center">
+                                    <div className="flex items-center gap-1">
+                                      <span className={cn('text-xs', theme === 'dark' ? 'text-gray-500' : 'text-gray-400')}>Cant:</span>
+                                      <input
+                                        type="number"
+                                        value={item.quantity}
+                                        onChange={(e) => handleUpdateMatchedProduct(item.id, 'quantity', e.target.value)}
+                                        disabled={item.action === 'ignore'}
+                                        min="0"
+                                        step="0.01"
+                                        className={cn(
+                                          'w-16 px-2 py-0.5 rounded text-sm border text-center',
+                                          theme === 'dark'
+                                            ? 'bg-gray-800 border-gray-700 text-white'
+                                            : 'bg-white border-gray-300 text-gray-900'
+                                        )}
+                                      />
+                                    </div>
+                                    <div className="flex items-center gap-1">
+                                      <span className={cn('text-xs', theme === 'dark' ? 'text-gray-500' : 'text-gray-400')}>Costo:</span>
+                                      <div className="relative">
+                                        <span className={cn('absolute left-2 top-1/2 -translate-y-1/2 text-sm', theme === 'dark' ? 'text-gray-500' : 'text-gray-400')}>$</span>
+                                        <input
+                                          type="number"
+                                          value={item.unitCost}
+                                          onChange={(e) => handleUpdateMatchedProduct(item.id, 'unitCost', e.target.value)}
+                                          disabled={item.action === 'ignore'}
+                                          min="0"
+                                          step="0.01"
+                                          className={cn(
+                                            'w-20 pl-5 pr-2 py-0.5 rounded text-sm border text-right',
+                                            theme === 'dark'
+                                              ? 'bg-gray-800 border-gray-700 text-white'
+                                              : 'bg-white border-gray-300 text-gray-900'
+                                          )}
+                                        />
+                                      </div>
+                                    </div>
+                                    <div className="flex items-center gap-1">
+                                      <span className={cn('text-xs', theme === 'dark' ? 'text-green-500' : 'text-green-600')}>Venta:</span>
+                                      <div className="relative">
+                                        <span className={cn('absolute left-2 top-1/2 -translate-y-1/2 text-sm', theme === 'dark' ? 'text-gray-500' : 'text-gray-400')}>$</span>
+                                        <input
+                                          type="number"
+                                          value={item.suggestedSellingPrice || Math.round(item.unitCost * 1.15 * 100) / 100}
+                                          onChange={(e) => handleUpdateMatchedProduct(item.id, 'suggestedSellingPrice', e.target.value)}
+                                          disabled={item.action === 'ignore' || item.action === 'link_to'}
+                                          min="0"
+                                          step="0.01"
+                                          className={cn(
+                                            'w-20 pl-5 pr-2 py-0.5 rounded text-sm border text-right',
+                                            theme === 'dark'
+                                              ? 'bg-gray-800 border-green-700 text-green-400'
+                                              : 'bg-green-50 border-green-300 text-green-700'
+                                          )}
+                                        />
+                                      </div>
+                                    </div>
+                                  </div>
                                   {item.generatedDescription && (
-                                    <p className={cn('text-xs mt-1 truncate', theme === 'dark' ? 'text-purple-400' : 'text-purple-600')}>
+                                    <p className={cn('text-xs truncate', theme === 'dark' ? 'text-purple-400' : 'text-purple-600')}>
                                       {item.generatedDescription}
                                     </p>
                                   )}
                                 </div>
                                 {/* Acciones */}
                                 <div className="flex items-center gap-2 flex-shrink-0">
-                                  <span className={cn(
-                                    'font-bold',
-                                    theme === 'dark' ? 'text-white' : 'text-gray-900'
-                                  )}>
-                                    ${item.totalCost.toFixed(2)}
-                                  </span>
+                                  <div className="text-right">
+                                    <span className={cn(
+                                      'font-bold block',
+                                      theme === 'dark' ? 'text-white' : 'text-gray-900'
+                                    )}>
+                                      ${item.totalCost.toFixed(2)}
+                                    </span>
+                                    <span className={cn('text-xs', theme === 'dark' ? 'text-gray-500' : 'text-gray-400')}>
+                                      total
+                                    </span>
+                                  </div>
                                   {/* Link button */}
                                   <button
                                     onClick={() => {
