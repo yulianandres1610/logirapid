@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useRef, useEffect } from 'react'
+import React, { useState, useRef, useEffect, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   Receipt,
@@ -167,14 +167,82 @@ export default function CreateExpensePage() {
     setCategoriesLoaded(true)
   }
 
+  // Compress image to reduce file size (Vercel has 4.5MB limit for serverless functions)
+  const compressImage = useCallback((file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader()
+      reader.onload = (e) => {
+        const img = new Image()
+        img.onload = () => {
+          const canvas = document.createElement('canvas')
+          let width = img.width
+          let height = img.height
+
+          // Target: max 1200px width for OCR (still very readable)
+          const maxWidth = 1200
+          if (width > maxWidth) {
+            height = (height * maxWidth) / width
+            width = maxWidth
+          }
+
+          // Also limit height to 1600px
+          const maxHeight = 1600
+          if (height > maxHeight) {
+            width = (width * maxHeight) / height
+            height = maxHeight
+          }
+
+          canvas.width = width
+          canvas.height = height
+          const ctx = canvas.getContext('2d')
+          if (!ctx) {
+            reject(new Error('Could not get canvas context'))
+            return
+          }
+          ctx.drawImage(img, 0, 0, width, height)
+
+          // Start with 65% quality, reduce if still too large
+          let quality = 0.65
+          let compressedBase64 = canvas.toDataURL('image/jpeg', quality)
+
+          // Target: under 3MB to stay well within Vercel's 4.5MB limit
+          while (compressedBase64.length > 3 * 1024 * 1024 && quality > 0.3) {
+            quality -= 0.1
+            compressedBase64 = canvas.toDataURL('image/jpeg', quality)
+          }
+
+          // If still too large, reduce dimensions further
+          if (compressedBase64.length > 3 * 1024 * 1024) {
+            const scale = 0.6
+            canvas.width = Math.round(width * scale)
+            canvas.height = Math.round(height * scale)
+            const ctx2 = canvas.getContext('2d')
+            if (ctx2) {
+              ctx2.drawImage(img, 0, 0, canvas.width, canvas.height)
+              compressedBase64 = canvas.toDataURL('image/jpeg', 0.5)
+            }
+          }
+
+          console.log('[Expenses OCR] Image compressed:', {
+            originalSize: `${(file.size / 1024 / 1024).toFixed(2)}MB`,
+            compressedSize: `${(compressedBase64.length / 1024 / 1024).toFixed(2)}MB`,
+            originalDimensions: `${img.width}x${img.height}`,
+            newDimensions: `${Math.round(canvas.width)}x${Math.round(canvas.height)}`,
+            quality: quality.toFixed(2)
+          })
+          resolve(compressedBase64)
+        }
+        img.onerror = () => reject(new Error('Failed to load image'))
+        img.src = e.target?.result as string
+      }
+      reader.onerror = () => reject(new Error('Failed to read file'))
+      reader.readAsDataURL(file)
+    })
+  }, [])
+
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
-
-    if (file.size > 10 * 1024 * 1024) {
-      setErrors({ ...errors, file: 'El archivo es muy grande (max. 10MB)' })
-      return
-    }
 
     const validTypes = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf']
     if (!validTypes.includes(file.type)) {
@@ -204,23 +272,35 @@ export default function CreateExpensePage() {
     setErrors(prev => ({ ...prev, ocr: '' }))
 
     try {
-      // Convert file to base64
-      const base64 = await new Promise<string>((resolve, reject) => {
-        const reader = new FileReader()
-        reader.onload = () => resolve(reader.result as string)
-        reader.onerror = () => reject(new Error('Error al leer el archivo'))
-        reader.readAsDataURL(file)
-      })
-
       const isPdf = file.type === 'application/pdf'
-      console.log('[OCR] Sending file to API...', { type: file.type, isPdf, size: file.size })
+      let base64: string
+
+      // Compress images before sending (Vercel has 4.5MB limit)
+      if (file.type.startsWith('image/')) {
+        base64 = await compressImage(file)
+      } else {
+        // For PDFs, read directly
+        base64 = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader()
+          reader.onload = () => resolve(reader.result as string)
+          reader.onerror = () => reject(new Error('Error al leer el archivo'))
+          reader.readAsDataURL(file)
+        })
+      }
+
+      console.log('[OCR] Sending file to API...', {
+        type: file.type,
+        isPdf,
+        originalSize: file.size,
+        compressedSize: base64.length
+      })
 
       const response = await fetch('/api/market/accounting/expenses/ocr', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           fileBase64: base64,
-          mimeType: file.type
+          mimeType: isPdf ? 'application/pdf' : 'image/jpeg'
         })
       })
 
