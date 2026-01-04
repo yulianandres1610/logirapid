@@ -118,8 +118,8 @@ interface TerminalUser {
 
 interface CompanyUser {
   id: number
-  firstname: string
-  lastname: string
+  firstName: string
+  lastName: string
   email: string
   role: string
 }
@@ -214,11 +214,12 @@ function POSSettingsPageContent() {
           setWarehouses(Array.isArray(wh) ? wh : [])
         }
 
-        // Fetch company users
+        // Fetch company users (API returns { data: { users: [...] } })
         const usersRes = await fetch('/api/users')
         const usersData = await usersRes.json()
         if (usersData.success) {
-          const users = usersData.data
+          // Handle both formats: { data: [...] } or { data: { users: [...] } }
+          const users = usersData.data?.users || usersData.data
           setCompanyUsers(Array.isArray(users) ? users : [])
         }
 
@@ -289,7 +290,7 @@ function POSSettingsPageContent() {
 
     setAssignedUsers([...assignedUsers, {
       userId: user.id,
-      name: [user.firstname, user.lastname].filter(Boolean).join(' ') || user.email,
+      name: [user.firstName, user.lastName].filter(Boolean).join(' ') || user.email,
       email: user.email,
       role: user.role,
       permissions: {
@@ -700,7 +701,7 @@ function POSSettingsPageContent() {
                         .filter(u => !assignedUsers.some(au => au.userId === u.id))
                         .map(u => (
                           <option key={u.id} value={u.id}>
-                            {[u.firstname, u.lastname].filter(Boolean).join(' ') || u.email} ({u.role})
+                            {[u.firstName, u.lastName].filter(Boolean).join(' ') || u.email} ({u.role})
                           </option>
                         ))}
                     </select>
