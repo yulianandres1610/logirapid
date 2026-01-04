@@ -88,7 +88,7 @@ export async function GET(request: NextRequest) {
           true as track_inventory,
           COALESCE(ws.quantity_on_hand, p.quantity_on_hand, 0) as stock
         FROM market_products p
-        LEFT JOIN market_warehouse_stock ws ON p.id = ws.product_id AND ws.warehouse_id = $2
+        LEFT JOIN market_warehouse_stock ws ON p.id = ws.product_id AND ws.warehouse_id = $2 AND ws.variant_id IS NULL
         WHERE p.company_id = $1 AND p.is_active = true
         ORDER BY p.name ASC
       `
