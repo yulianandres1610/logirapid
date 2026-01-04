@@ -298,10 +298,10 @@ export async function POST(request: NextRequest) {
 
       // Associate user with company
       await db.query(`
-        INSERT INTO user_companies (user_id, company_id, role, is_primary, created_at)
-        VALUES ($1, $2, $3, true, NOW())
-        ON CONFLICT (user_id, company_id) DO NOTHING
-      `, [userId, companyId, role])
+        INSERT INTO user_companies (userid, companyid)
+        VALUES ($1, $2)
+        ON CONFLICT (userid, companyid) DO NOTHING
+      `, [userId, companyId])
 
       // Create employee
       const employeeResult = await db.query(`
