@@ -192,29 +192,34 @@ function POSSettingsPageContent() {
 
         const t = terminalData.data
         setTerminal(t)
-        setName(t.name)
+        setName(t.name || '')
         setWarehouseId(t.warehouseId)
-        setAllowPriceEdit(t.allowPriceEdit)
-        setAllowDiscount(t.allowDiscount)
-        setMaxDiscountPercent(t.maxDiscountPercent)
-        setRequireCustomer(t.requireCustomer)
-        setDefaultCurrency(t.defaultCurrency)
-        setAcceptedCurrencies(t.acceptedCurrencies || ['USD', 'CUP', 'MLC'])
-        setIsActive(t.isActive)
-        setAssignedUsers(t.users || [])
+        setAllowPriceEdit(t.allowPriceEdit ?? false)
+        setAllowDiscount(t.allowDiscount ?? true)
+        setMaxDiscountPercent(t.maxDiscountPercent ?? 100)
+        setRequireCustomer(t.requireCustomer ?? false)
+        setDefaultCurrency(t.defaultCurrency || 'USD')
+        // Ensure acceptedCurrencies is always an array
+        const currencies = t.acceptedCurrencies
+        setAcceptedCurrencies(Array.isArray(currencies) ? currencies : ['USD', 'CUP', 'MLC'])
+        setIsActive(t.isActive ?? true)
+        // Ensure users is always an array
+        setAssignedUsers(Array.isArray(t.users) ? t.users : [])
 
         // Fetch warehouses
         const warehousesRes = await fetch('/api/market/warehouses')
         const warehousesData = await warehousesRes.json()
         if (warehousesData.success) {
-          setWarehouses(warehousesData.data || [])
+          const wh = warehousesData.data
+          setWarehouses(Array.isArray(wh) ? wh : [])
         }
 
         // Fetch company users
         const usersRes = await fetch('/api/users')
         const usersData = await usersRes.json()
         if (usersData.success) {
-          setCompanyUsers(usersData.data || [])
+          const users = usersData.data
+          setCompanyUsers(Array.isArray(users) ? users : [])
         }
 
       } catch (err) {
