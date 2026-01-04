@@ -27,6 +27,8 @@ interface JWTPayload {
  * Supports: JPG, PNG, WebP, PDF
  */
 export async function POST(request: NextRequest) {
+  console.log('[Consignment OCR] Request received')
+
   try {
     const cookieStore = await cookies()
     const authToken = cookieStore.get('auth-token')?.value
@@ -49,7 +51,20 @@ export async function POST(request: NextRequest) {
       }, { status: 401 })
     }
 
-    const body = await request.json()
+    console.log('[Consignment OCR] Auth OK, parsing body...')
+
+    let body
+    try {
+      body = await request.json()
+      console.log('[Consignment OCR] Body parsed, fileBase64 length:', body.fileBase64?.length || 0)
+    } catch (parseError) {
+      console.error('[Consignment OCR] Failed to parse body:', parseError)
+      return NextResponse.json({
+        success: false,
+        error: 'Error al procesar el archivo. El archivo puede ser demasiado grande o estar corrupto.'
+      }, { status: 400 })
+    }
+
     const { fileBase64, mimeType: providedMimeType, userContext } = body
 
     // Soporte para el parámetro anterior (imageBase64) para compatibilidad

@@ -385,8 +385,52 @@ export default function CreatePurchasePage() {
     return () => clearTimeout(timer)
   }, [productSearch, searchProducts])
 
+  // Compress image to reduce file size
+  const compressImage = useCallback((file: File, maxWidth: number = 2000, quality: number = 0.8): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader()
+      reader.onload = (e) => {
+        const img = new Image()
+        img.onload = () => {
+          const canvas = document.createElement('canvas')
+          let width = img.width
+          let height = img.height
+
+          // Scale down if larger than maxWidth
+          if (width > maxWidth) {
+            height = (height * maxWidth) / width
+            width = maxWidth
+          }
+
+          canvas.width = width
+          canvas.height = height
+          const ctx = canvas.getContext('2d')
+          if (!ctx) {
+            reject(new Error('Could not get canvas context'))
+            return
+          }
+          ctx.drawImage(img, 0, 0, width, height)
+
+          // Convert to JPEG for better compression
+          const compressedBase64 = canvas.toDataURL('image/jpeg', quality)
+          console.log('[Purchase AI] Image compressed:', {
+            originalSize: file.size,
+            compressedLength: compressedBase64.length,
+            originalDimensions: `${img.width}x${img.height}`,
+            newDimensions: `${width}x${height}`
+          })
+          resolve(compressedBase64)
+        }
+        img.onerror = () => reject(new Error('Failed to load image'))
+        img.src = e.target?.result as string
+      }
+      reader.onerror = () => reject(new Error('Failed to read file'))
+      reader.readAsDataURL(file)
+    })
+  }, [])
+
   // Handle file upload for AI scan
-  const handleFileUpload = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
 
@@ -400,12 +444,29 @@ export default function CreatePurchasePage() {
     setScanError(null)
     setInvoiceFileName(file.name)
 
-    const reader = new FileReader()
-    reader.onload = () => {
-      setInvoiceFileBase64(reader.result as string)
+    // For images, compress before storing
+    if (file.type.startsWith('image/')) {
+      try {
+        const compressedBase64 = await compressImage(file)
+        setInvoiceFileBase64(compressedBase64)
+      } catch (error) {
+        console.error('Error compressing image:', error)
+        // Fallback to original file
+        const reader = new FileReader()
+        reader.onload = () => {
+          setInvoiceFileBase64(reader.result as string)
+        }
+        reader.readAsDataURL(file)
+      }
+    } else {
+      // For PDFs, read directly
+      const reader = new FileReader()
+      reader.onload = () => {
+        setInvoiceFileBase64(reader.result as string)
+      }
+      reader.readAsDataURL(file)
     }
-    reader.readAsDataURL(file)
-  }, [])
+  }, [compressImage])
 
   // Process invoice with AI (OCR)
   const processInvoiceWithAI = useCallback(async () => {
