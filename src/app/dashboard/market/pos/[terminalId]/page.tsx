@@ -38,7 +38,10 @@ import {
   ChevronDown,
   Lock,
   Eye,
-  EyeOff
+  EyeOff,
+  Info,
+  Warehouse,
+  MapPin
 } from 'lucide-react'
 import { useRouter, useParams, useSearchParams } from 'next/navigation'
 import { useTheme } from '@/contexts/theme-context'
@@ -127,6 +130,14 @@ interface Terminal {
 
 type NumpadMode = 'quantity' | 'price' | 'discount'
 
+interface WarehouseStock {
+  warehouseId: number
+  warehouseName: string
+  warehouseCode: string
+  stock: number
+  isCurrentWarehouse: boolean
+}
+
 export default function POSTerminalPage() {
   const { theme } = useTheme()
   const { user } = useAuth()
@@ -181,6 +192,12 @@ export default function POSTerminalPage() {
   // Variant selection modal state
   const [showVariantModal, setShowVariantModal] = useState(false)
   const [selectedProductForVariant, setSelectedProductForVariant] = useState<Product | null>(null)
+
+  // Product details modal state
+  const [showProductDetailsModal, setShowProductDetailsModal] = useState(false)
+  const [selectedProductForDetails, setSelectedProductForDetails] = useState<Product | null>(null)
+  const [warehouseStocks, setWarehouseStocks] = useState<WarehouseStock[]>([])
+  const [loadingStocks, setLoadingStocks] = useState(false)
 
   // Initialize client-side state and fetch data
   useEffect(() => {
@@ -781,6 +798,40 @@ export default function POSTerminalPage() {
     setShowVariantModal(false)
     setSelectedProductForVariant(null)
   }, [selectedProductForVariant, addToCart])
+
+  // Show product details modal
+  const showProductDetails = useCallback(async (product: Product, e: React.MouseEvent) => {
+    e.stopPropagation() // Prevent adding to cart
+    setSelectedProductForDetails(product)
+    setShowProductDetailsModal(true)
+    setLoadingStocks(true)
+    setWarehouseStocks([])
+
+    try {
+      const res = await fetch(`/api/market/products/${product.id}/stock?currentWarehouseId=${terminal?.warehouseId || ''}`)
+      const data = await res.json()
+
+      if (data.success && data.data.warehouses) {
+        setWarehouseStocks(data.data.warehouses.map((w: {
+          warehouseId: number
+          warehouseName: string
+          warehouseCode: string
+          quantityOnHand: number
+          isCurrentWarehouse: boolean
+        }) => ({
+          warehouseId: w.warehouseId,
+          warehouseName: w.warehouseName,
+          warehouseCode: w.warehouseCode,
+          stock: w.quantityOnHand,
+          isCurrentWarehouse: w.isCurrentWarehouse
+        })))
+      }
+    } catch (error) {
+      console.error('[POS] Error fetching warehouse stocks:', error)
+    } finally {
+      setLoadingStocks(false)
+    }
+  }, [terminal?.warehouseId])
 
   // Update cart item
   const updateCartItem = useCallback((index: number, updates: Partial<CartItem>) => {
@@ -1434,7 +1485,7 @@ export default function POSTerminalPage() {
                     onClick={() => handleProductClick(product)}
                     disabled={product.trackInventory && product.stock <= 0}
                     className={cn(
-                      'relative p-1.5 sm:p-2 lg:p-3 rounded-lg lg:rounded-xl text-left transition-all border',
+                      'relative p-1.5 sm:p-2 lg:p-3 rounded-lg lg:rounded-xl text-left transition-all border group',
                       product.trackInventory && product.stock <= 0
                         ? 'opacity-50 cursor-not-allowed'
                         : '',
@@ -1478,6 +1529,21 @@ export default function POSTerminalPage() {
                         Stock: {product.stock}
                       </p>
                     )}
+
+                    {/* Info button */}
+                    <button
+                      onClick={(e) => showProductDetails(product, e)}
+                      className={cn(
+                        'absolute top-1 left-1 lg:top-2 lg:left-2 w-5 h-5 lg:w-6 lg:h-6 rounded-full flex items-center justify-center transition-all',
+                        'opacity-0 group-hover:opacity-100',
+                        theme === 'dark'
+                          ? 'bg-gray-700 hover:bg-blue-600 text-gray-300 hover:text-white'
+                          : 'bg-white/90 hover:bg-blue-500 text-gray-600 hover:text-white',
+                        'shadow-sm'
+                      )}
+                    >
+                      <Info className="w-3 h-3 lg:w-3.5 lg:h-3.5" />
+                    </button>
 
                     {/* Variants badge */}
                     {product.hasVariants && (
@@ -1926,6 +1992,204 @@ export default function POSTerminalPage() {
         mode="sale"
         currency={paymentCurrency}
       />
+
+      {/* Product Details Modal */}
+      <AnimatePresence>
+        {showProductDetailsModal && selectedProductForDetails && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4"
+            onClick={() => setShowProductDetailsModal(false)}
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              onClick={(e) => e.stopPropagation()}
+              className={cn(
+                'w-full max-w-lg max-h-[85vh] rounded-2xl shadow-2xl overflow-hidden flex flex-col',
+                theme === 'dark' ? 'bg-gray-800' : 'bg-white'
+              )}
+            >
+              {/* Header */}
+              <div className={cn(
+                'px-6 py-4 border-b flex items-center gap-4 flex-shrink-0',
+                theme === 'dark' ? 'border-gray-700 bg-gray-800' : 'border-gray-200 bg-gray-50'
+              )}>
+                <div className={cn(
+                  'w-16 h-16 rounded-xl overflow-hidden flex-shrink-0 flex items-center justify-center',
+                  theme === 'dark' ? 'bg-gray-700' : 'bg-gray-200'
+                )}>
+                  {selectedProductForDetails.imageUrl ? (
+                    <img
+                      src={selectedProductForDetails.imageUrl}
+                      alt={selectedProductForDetails.name}
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    <Package className="w-8 h-8 text-gray-400" />
+                  )}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <h3 className="font-bold text-lg text-gray-900 dark:text-white truncate">
+                    {selectedProductForDetails.name}
+                  </h3>
+                  <p className="text-sm text-gray-500 font-mono">
+                    SKU: {selectedProductForDetails.sku || 'N/A'}
+                  </p>
+                  <p className="text-xl font-bold text-blue-500 mt-1">
+                    ${selectedProductForDetails.price.toFixed(2)}
+                  </p>
+                </div>
+                <button
+                  onClick={() => setShowProductDetailsModal(false)}
+                  className="p-2 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors flex-shrink-0"
+                >
+                  <X className="w-5 h-5 text-gray-500" />
+                </button>
+              </div>
+
+              {/* Content */}
+              <div className="flex-1 overflow-y-auto p-6 space-y-6">
+                {/* Description */}
+                {selectedProductForDetails.description && (
+                  <div>
+                    <h4 className="font-semibold text-gray-900 dark:text-white mb-2 flex items-center gap-2">
+                      <Tag className="w-4 h-4" />
+                      Descripcion
+                    </h4>
+                    <p className={cn(
+                      'text-sm leading-relaxed',
+                      theme === 'dark' ? 'text-gray-300' : 'text-gray-600'
+                    )}>
+                      {selectedProductForDetails.description}
+                    </p>
+                  </div>
+                )}
+
+                {/* Stock by Warehouse */}
+                <div>
+                  <h4 className="font-semibold text-gray-900 dark:text-white mb-3 flex items-center gap-2">
+                    <Warehouse className="w-4 h-4" />
+                    Stock por Almacen
+                  </h4>
+
+                  {loadingStocks ? (
+                    <div className="flex items-center justify-center py-8">
+                      <Loader2 className="w-6 h-6 animate-spin text-blue-500" />
+                      <span className="ml-2 text-gray-500">Cargando stock...</span>
+                    </div>
+                  ) : warehouseStocks.length === 0 ? (
+                    <p className="text-sm text-gray-500 text-center py-4">
+                      No hay datos de stock disponibles
+                    </p>
+                  ) : (
+                    <div className="space-y-2">
+                      {warehouseStocks.map((warehouse) => (
+                        <div
+                          key={warehouse.warehouseId}
+                          className={cn(
+                            'flex items-center justify-between p-3 rounded-xl border-2 transition-all',
+                            warehouse.isCurrentWarehouse
+                              ? theme === 'dark'
+                                ? 'border-blue-500 bg-blue-900/20'
+                                : 'border-blue-500 bg-blue-50'
+                              : theme === 'dark'
+                                ? 'border-gray-700 bg-gray-700/50'
+                                : 'border-gray-200 bg-gray-50'
+                          )}
+                        >
+                          <div className="flex items-center gap-3">
+                            {warehouse.isCurrentWarehouse && (
+                              <div className="w-8 h-8 rounded-full bg-blue-500 flex items-center justify-center flex-shrink-0">
+                                <MapPin className="w-4 h-4 text-white" />
+                              </div>
+                            )}
+                            <div>
+                              <p className={cn(
+                                'font-medium',
+                                warehouse.isCurrentWarehouse
+                                  ? 'text-blue-600 dark:text-blue-400'
+                                  : 'text-gray-900 dark:text-white'
+                              )}>
+                                {warehouse.warehouseName}
+                                {warehouse.isCurrentWarehouse && (
+                                  <span className="ml-2 text-xs font-normal text-blue-500">
+                                    (Actual)
+                                  </span>
+                                )}
+                              </p>
+                              <p className="text-xs text-gray-500 font-mono">
+                                {warehouse.warehouseCode}
+                              </p>
+                            </div>
+                          </div>
+                          <div className={cn(
+                            'text-right',
+                            warehouse.stock <= 0
+                              ? 'text-red-500'
+                              : warehouse.stock <= 5
+                                ? 'text-amber-500'
+                                : 'text-green-500'
+                          )}>
+                            <p className="text-xl font-bold">{warehouse.stock}</p>
+                            <p className="text-xs">unidades</p>
+                          </div>
+                        </div>
+                      ))}
+
+                      {/* Total */}
+                      <div className={cn(
+                        'flex items-center justify-between p-3 rounded-xl mt-3',
+                        theme === 'dark' ? 'bg-gray-900' : 'bg-gray-100'
+                      )}>
+                        <p className="font-semibold text-gray-900 dark:text-white">
+                          Stock Total
+                        </p>
+                        <p className="text-xl font-bold text-blue-500">
+                          {warehouseStocks.reduce((sum, w) => sum + w.stock, 0)}
+                        </p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Barcode */}
+                {selectedProductForDetails.barcode && (
+                  <div className={cn(
+                    'p-4 rounded-xl text-center',
+                    theme === 'dark' ? 'bg-gray-900' : 'bg-gray-100'
+                  )}>
+                    <p className="text-xs text-gray-500 mb-1">Codigo de Barras</p>
+                    <p className="font-mono text-lg font-bold text-gray-900 dark:text-white">
+                      {selectedProductForDetails.barcode}
+                    </p>
+                  </div>
+                )}
+              </div>
+
+              {/* Footer */}
+              <div className={cn(
+                'px-6 py-4 border-t flex-shrink-0',
+                theme === 'dark' ? 'border-gray-700' : 'border-gray-200'
+              )}>
+                <button
+                  onClick={() => {
+                    setShowProductDetailsModal(false)
+                    handleProductClick(selectedProductForDetails)
+                  }}
+                  className="w-full py-3 bg-blue-500 hover:bg-blue-600 text-white font-semibold rounded-xl transition-colors flex items-center justify-center gap-2"
+                >
+                  <ShoppingCart className="w-5 h-5" />
+                  Agregar al Carrito
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </motion.div>
   )
 }

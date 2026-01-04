@@ -21,6 +21,11 @@ export async function GET(
       return NextResponse.json({ success: false, error: 'ID inválido' }, { status: 400 })
     }
 
+    // Get currentWarehouseId from query params
+    const url = new URL(request.url)
+    const currentWarehouseId = url.searchParams.get('currentWarehouseId')
+    const currentWarehouseIdNum = currentWarehouseId ? parseInt(currentWarehouseId) : null
+
     // Get stock by warehouse
     const stockResult = await db.query(`
       SELECT
@@ -69,7 +74,8 @@ export async function GET(
         quantityReserved: stockData ? parseInt(stockData.quantity_reserved) : 0,
         quantityAvailable: stockData ? parseInt(stockData.quantity_available) : 0,
         locationCode: stockData?.location_code || null,
-        lastMovementAt: stockData?.last_movement_at || null
+        lastMovementAt: stockData?.last_movement_at || null,
+        isCurrentWarehouse: currentWarehouseIdNum ? warehouse.id === currentWarehouseIdNum : false
       }
     })
 
@@ -107,6 +113,7 @@ export async function GET(
         quantityOnHand: number
         quantityReserved: number
         quantityAvailable: number
+        isCurrentWarehouse: boolean
       }>
     }>()
 
@@ -135,7 +142,8 @@ export async function GET(
           warehouseName: row.warehouse_name,
           quantityOnHand: qty,
           quantityReserved: reserved,
-          quantityAvailable: qty - reserved
+          quantityAvailable: qty - reserved,
+          isCurrentWarehouse: currentWarehouseIdNum ? row.warehouse_id === currentWarehouseIdNum : false
         })
       }
     }
