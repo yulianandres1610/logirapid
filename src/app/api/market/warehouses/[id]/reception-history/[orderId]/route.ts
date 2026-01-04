@@ -171,7 +171,7 @@ export async function GET(
           p.received_date,
           p.created_at,
           p.supplier_id,
-          COALESCE(ms.code, 'PROV') as supplier_code,
+          COALESCE(ms.supplier_code, 'PROV') as supplier_code,
           COALESCE(p.supplier_name, ms.name, 'Proveedor') as supplier_name,
           w.name as warehouse_name,
           w.code as warehouse_code,

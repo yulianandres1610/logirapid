@@ -309,7 +309,7 @@ export async function POST(
     } else if (orderType === 'purchase') {
       // Process purchase reception
       const purchaseResult = await db.query(`
-        SELECT p.*, ms.code as supplier_code
+        SELECT p.*, ms.supplier_code
         FROM market_purchases p
         LEFT JOIN market_suppliers ms ON ms.id = p.supplier_id
         WHERE p.id = $1 AND p.company_id = $2

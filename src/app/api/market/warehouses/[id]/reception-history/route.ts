@@ -77,7 +77,7 @@ export async function GET(
         'purchase' as order_type,
         p.status,
         p.received_date as received_at,
-        COALESCE(ms.code, 'PROV') as supplier_code,
+        COALESCE(ms.supplier_code, 'PROV') as supplier_code,
         COALESCE(p.supplier_name, ms.name, 'Proveedor') as supplier_name,
         u.name as received_by_name,
         COALESCE(SUM(pl.quantity_received), 0) as total_units,
@@ -90,7 +90,7 @@ export async function GET(
         AND p.warehouse_id = $2
         AND p.status IN ('recibido', 'pendiente')
         AND p.received_date IS NOT NULL
-      GROUP BY p.id, p.purchase_number, p.status, p.received_date, ms.code, p.supplier_name, ms.name, u.name
+      GROUP BY p.id, p.purchase_number, p.status, p.received_date, ms.supplier_code, p.supplier_name, ms.name, u.name
       ORDER BY p.received_date DESC
       LIMIT $3
     `, [payload.companyId, warehouseId, limit])).rows

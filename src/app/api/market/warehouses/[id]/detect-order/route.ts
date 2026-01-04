@@ -183,7 +183,7 @@ export async function GET(
         SELECT
           p.id, p.purchase_number, p.status, p.warehouse_id,
           p.supplier_id, p.supplier_name,
-          ms.code as supplier_code
+          ms.supplier_code
         FROM market_purchases p
         LEFT JOIN market_suppliers ms ON ms.id = p.supplier_id
         WHERE (p.purchase_number = $1 OR p.purchase_number ILIKE $2)
