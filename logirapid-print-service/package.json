@@ -1,6 +1,6 @@
 {
   "name": "logirapid-print-service",
-  "version": "1.14.0",
+  "version": "1.18.0",
   "description": "LogiRapid Silent Print Service - Local print service for thermal printers and labels",
   "main": "out/main/index.js",
   "author": {
@@ -62,8 +62,18 @@
       "resources/**/*"
     ],
     "win": {
-      "target": ["nsis"],
-      "icon": "resources/icon.png"
+      "target": [
+        {
+          "target": "nsis",
+          "arch": ["x64"]
+        }
+      ],
+      "icon": "resources/icon.png",
+      "artifactName": "${productName}-${version}-Setup.${ext}",
+      "publisherName": "LogiRapid LLC",
+      "legalTrademarks": "LogiRapid is a trademark of LogiRapid LLC",
+      "requestedExecutionLevel": "asInvoker",
+      "signAndEditExecutable": false
     },
     "mac": {
       "target": ["dmg", "zip"],
@@ -81,7 +91,19 @@
     },
     "nsis": {
       "oneClick": false,
-      "allowToChangeInstallationDirectory": true
+      "allowToChangeInstallationDirectory": true,
+      "perMachine": false,
+      "allowElevation": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "LogiRapid Print Service",
+      "uninstallDisplayName": "LogiRapid Print Service",
+      "deleteAppDataOnUninstall": false,
+      "license": "resources/license.txt"
+    },
+    "extraMetadata": {
+      "name": "logirapid-print-service",
+      "author": "LogiRapid LLC"
     },
     "publish": {
       "provider": "github",

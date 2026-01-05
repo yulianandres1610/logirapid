@@ -579,30 +579,97 @@ class JobProcessor {
   private async printEscPos(printer: DetectedPrinter, data: Buffer): Promise<void> {
     // For USB thermal printers, we can write directly to the device
     // This is platform-specific
+    const tempFile = join(tmpdir(), `print-${uuidv4()}.bin`)
+    await writeFile(tempFile, data)
 
-    if (process.platform === 'win32') {
-      // On Windows, use the printer share name
-      const tempFile = join(tmpdir(), `print-${uuidv4()}.bin`)
-      await writeFile(tempFile, data)
+    console.log(`[Job Processor] ESC/POS temp file: ${tempFile} (${data.length} bytes)`)
 
-      try {
-        await execAsync(`copy /b "${tempFile}" "${printer.systemName}"`, {
-          encoding: 'utf8',
-          shell: 'cmd.exe'
-        })
-      } finally {
-        await unlink(tempFile).catch(() => {})
-      }
-    } else {
-      // On macOS/Linux, use lp command with raw option
-      const tempFile = join(tmpdir(), `print-${uuidv4()}.bin`)
-      await writeFile(tempFile, data)
+    try {
+      if (process.platform === 'win32') {
+        // Windows: Use PowerShell to send raw data to printer
+        // First try using .NET System.Drawing.Printing
+        const escapedPrinter = printer.systemName.replace(/'/g, "''")
+        const escapedFile = tempFile.replace(/'/g, "''").replace(/\\/g, '\\\\')
 
-      try {
+        console.log(`[Job Processor] Windows ESC/POS: Sending to "${printer.systemName}"`)
+
+        // Method 1: Use RawPrinterHelper via PowerShell (most reliable for thermal printers)
+        const psScript = `
+          Add-Type -TypeDefinition @'
+          using System;
+          using System.IO;
+          using System.Runtime.InteropServices;
+          public class RawPrinterHelper {
+            [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Ansi)]
+            public class DOCINFOA {
+              [MarshalAs(UnmanagedType.LPStr)] public string pDocName;
+              [MarshalAs(UnmanagedType.LPStr)] public string pOutputFile;
+              [MarshalAs(UnmanagedType.LPStr)] public string pDataType;
+            }
+            [DllImport("winspool.Drv", EntryPoint = "OpenPrinterA", SetLastError = true, CharSet = CharSet.Ansi, ExactSpelling = true, CallingConvention = CallingConvention.StdCall)]
+            public static extern bool OpenPrinter([MarshalAs(UnmanagedType.LPStr)] string szPrinter, out IntPtr hPrinter, IntPtr pd);
+            [DllImport("winspool.Drv", EntryPoint = "ClosePrinter", SetLastError = true, ExactSpelling = true, CallingConvention = CallingConvention.StdCall)]
+            public static extern bool ClosePrinter(IntPtr hPrinter);
+            [DllImport("winspool.Drv", EntryPoint = "StartDocPrinterA", SetLastError = true, CharSet = CharSet.Ansi, ExactSpelling = true, CallingConvention = CallingConvention.StdCall)]
+            public static extern bool StartDocPrinter(IntPtr hPrinter, Int32 level, [In, MarshalAs(UnmanagedType.LPStruct)] DOCINFOA di);
+            [DllImport("winspool.Drv", EntryPoint = "EndDocPrinter", SetLastError = true, ExactSpelling = true, CallingConvention = CallingConvention.StdCall)]
+            public static extern bool EndDocPrinter(IntPtr hPrinter);
+            [DllImport("winspool.Drv", EntryPoint = "StartPagePrinter", SetLastError = true, ExactSpelling = true, CallingConvention = CallingConvention.StdCall)]
+            public static extern bool StartPagePrinter(IntPtr hPrinter);
+            [DllImport("winspool.Drv", EntryPoint = "EndPagePrinter", SetLastError = true, ExactSpelling = true, CallingConvention = CallingConvention.StdCall)]
+            public static extern bool EndPagePrinter(IntPtr hPrinter);
+            [DllImport("winspool.Drv", EntryPoint = "WritePrinter", SetLastError = true, ExactSpelling = true, CallingConvention = CallingConvention.StdCall)]
+            public static extern bool WritePrinter(IntPtr hPrinter, IntPtr pBytes, Int32 dwCount, out Int32 dwWritten);
+
+            public static bool SendBytesToPrinter(string printerName, byte[] bytes) {
+              IntPtr hPrinter = IntPtr.Zero;
+              DOCINFOA di = new DOCINFOA();
+              di.pDocName = "ESC/POS Receipt";
+              di.pDataType = "RAW";
+
+              if (!OpenPrinter(printerName.Normalize(), out hPrinter, IntPtr.Zero)) return false;
+              if (!StartDocPrinter(hPrinter, 1, di)) { ClosePrinter(hPrinter); return false; }
+              if (!StartPagePrinter(hPrinter)) { EndDocPrinter(hPrinter); ClosePrinter(hPrinter); return false; }
+
+              IntPtr pBytes = Marshal.AllocCoTaskMem(bytes.Length);
+              Marshal.Copy(bytes, 0, pBytes, bytes.Length);
+              int written = 0;
+              bool success = WritePrinter(hPrinter, pBytes, bytes.Length, out written);
+              Marshal.FreeCoTaskMem(pBytes);
+
+              EndPagePrinter(hPrinter);
+              EndDocPrinter(hPrinter);
+              ClosePrinter(hPrinter);
+              return success;
+            }
+          }
+'@
+          \$bytes = [System.IO.File]::ReadAllBytes('${escapedFile}')
+          \$result = [RawPrinterHelper]::SendBytesToPrinter('${escapedPrinter}', \$bytes)
+          if (\$result) { Write-Host 'SUCCESS' } else { Write-Host 'FAILED'; exit 1 }
+        `
+
+        const { stdout, stderr } = await execAsync(
+          `powershell -ExecutionPolicy Bypass -Command "${psScript.replace(/\n/g, ' ')}"`,
+          { encoding: 'utf8', timeout: 30000 }
+        )
+
+        console.log(`[Job Processor] PowerShell raw print output: ${stdout || stderr}`)
+
+        if (!stdout.includes('SUCCESS')) {
+          throw new Error(`Raw print failed: ${stderr || stdout}`)
+        }
+      } else {
+        // On macOS/Linux, use lp command with raw option
         await execAsync(`lp -d "${printer.systemName}" -o raw "${tempFile}"`)
-      } finally {
-        await unlink(tempFile).catch(() => {})
       }
+
+      console.log(`[Job Processor] ESC/POS data sent successfully`)
+    } finally {
+      // Clean up temp file after a short delay
+      setTimeout(() => {
+        unlink(tempFile).catch(() => {})
+      }, 5000)
     }
   }
 
