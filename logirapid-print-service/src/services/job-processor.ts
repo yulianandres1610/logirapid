@@ -28,6 +28,7 @@ import { generateWarehouseOperation, WarehouseOperationData } from '../documents
 import { generateWarehouseOperationPdf } from '../documents/warehouse-operation-pdf'
 import { generateConsignmentReceipt, ConsignmentReceiptData } from '../documents/consignment-receipt'
 import { generateUnifiedReception, UnifiedReceptionData } from '../documents/unified-reception'
+import { generateTransferReceipt, TransferReceiptData } from '../documents/transfer-receipt'
 
 const execAsync = promisify(exec)
 
@@ -258,6 +259,7 @@ class JobProcessor {
       case 'warehouse_operation':
       case 'consignment_receipt':
       case 'unified_reception':
+      case 'transfer_receipt':
         // Reception receipts should print on STANDARD printer (not Zebra label printer)
         // These documents have too much information for label printers
         return printerService.getStandardPrinters()[0] || printerService.getDefaultPrinter()
@@ -372,6 +374,10 @@ class JobProcessor {
         // Always PDF for unified reception receipts (has barcodes)
         return generateUnifiedReception(data as unknown as UnifiedReceptionData)
 
+      case 'transfer_receipt':
+        // Always PDF for transfer receipts (has barcodes)
+        return generateTransferReceipt(data as unknown as TransferReceiptData)
+
       default:
         console.error(`[Job Processor] Unknown document type: ${job.documentType}`)
         return null
@@ -412,7 +418,7 @@ class JobProcessor {
     const isReceiptOrReport = ['purchase_invoice', 'invoice', 'sales_report',
                                'inventory_count_report', 'cash_register_report',
                                'warehouse_operation'].includes(job.documentType)
-    const isPdfOnly = ['consignment_receipt', 'unified_reception'].includes(job.documentType)
+    const isPdfOnly = ['consignment_receipt', 'unified_reception', 'transfer_receipt'].includes(job.documentType)
     const isLabelDocument = ['product_label', 'shipping_label'].includes(job.documentType)
 
     console.log(`[Job Processor] Print method selection:`)

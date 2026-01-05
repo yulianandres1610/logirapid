@@ -66,20 +66,19 @@ export async function GET(
           cli.quantity_available,
           NULL as notes,
           (cli.quantity_available > 0) as is_active,
-          cli.created_at,
+          cli.received_at as created_at,
           co.order_number as purchase_number,
           co.consignment_date as purchase_date,
           cs.name as supplier_name,
           mw.name as warehouse_name,
           cli.unit_cost
         FROM consignment_lot_inventory cli
-        LEFT JOIN consignment_orders co ON co.id = (
-          SELECT col.order_id FROM consignment_order_lines col WHERE col.id = cli.order_line_id LIMIT 1
-        )
+        LEFT JOIN consignment_order_lines col ON col.id = cli.order_line_id
+        LEFT JOIN consignment_orders co ON co.id = col.order_id
         LEFT JOIN consignment_suppliers cs ON cs.id = cli.supplier_id
         LEFT JOIN market_warehouses mw ON mw.id = cli.warehouse_id
         WHERE cli.product_id = $1 AND cli.company_id = $2
-        ORDER BY cli.created_at DESC
+        ORDER BY cli.received_at DESC
       `, [productId, parseInt(companyId)])
 
       for (const lot of consignmentLots.rows) {

@@ -8,6 +8,45 @@ import { useRouter, useParams } from 'next/navigation'
 // No external imports that could fail offline
 // ============================================
 
+// Theme type for dynamic styling
+type Theme = 'dark' | 'light'
+
+// Get theme from localStorage (safe for offline)
+const getThemeFromStorage = (): Theme => {
+  if (typeof window === 'undefined') return 'dark'
+  try {
+    return (localStorage.getItem('theme') as Theme) || 'dark'
+  } catch {
+    return 'dark'
+  }
+}
+
+// Theme-aware styles
+const themeStyles = {
+  dark: {
+    bg: 'bg-gray-900',
+    bgAlt: 'bg-gray-800',
+    bgCard: 'bg-gray-800',
+    text: 'text-white',
+    textMuted: 'text-gray-400',
+    border: 'border-gray-700',
+    input: 'bg-gray-700 border-gray-600',
+    button: 'bg-gray-700 hover:bg-gray-600',
+  },
+  light: {
+    bg: 'bg-gray-100',
+    bgAlt: 'bg-white',
+    bgCard: 'bg-white',
+    text: 'text-gray-900',
+    textMuted: 'text-gray-600',
+    border: 'border-gray-300',
+    input: 'bg-white border-gray-300',
+    button: 'bg-gray-200 hover:bg-gray-300',
+  }
+}
+
+const getThemeClasses = (theme: Theme) => themeStyles[theme]
+
 // Error Boundary for catching any unhandled errors
 interface ErrorBoundaryState {
   hasError: boolean
@@ -35,14 +74,18 @@ class PaymentErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
 
   render() {
     if (this.state.hasError) {
+      const currentTheme = getThemeFromStorage()
+      const bgClass = currentTheme === 'dark' ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-900'
+      const cardClass = currentTheme === 'dark' ? 'text-gray-400' : 'text-gray-600'
+      const btnClass = currentTheme === 'dark' ? 'bg-gray-700 hover:bg-gray-600' : 'bg-gray-200 hover:bg-gray-300'
       return (
-        <div className="min-h-screen flex items-center justify-center bg-gray-900 text-white">
+        <div className={`min-h-screen flex items-center justify-center ${bgClass}`}>
           <div className="text-center max-w-md p-6">
             <svg className="w-16 h-16 mx-auto mb-4 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
             <h2 className="text-xl font-bold mb-2">Error en la pagina</h2>
-            <p className="text-gray-400 mb-4">
+            <p className={`${cardClass} mb-4`}>
               {this.state.error?.message || 'Ha ocurrido un error inesperado'}
             </p>
             <div className="flex flex-col gap-2">
@@ -59,7 +102,7 @@ class PaymentErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
                 onClick={() => {
                   window.location.href = `/dashboard/market/pos/${this.props.terminalId}`
                 }}
-                className="px-4 py-2 bg-gray-700 text-white rounded-lg hover:bg-gray-600"
+                className={`px-4 py-2 ${btnClass} rounded-lg`}
               >
                 Volver al POS
               </button>
@@ -317,6 +360,7 @@ function PaymentContent() {
   // State
   const [isClient, setIsClient] = useState(false)
   const [isOnline, setIsOnline] = useState(true)
+  const [theme, setTheme] = useState<Theme>('dark')
   const [sessionId, setSessionId] = useState<string | null>(null)
   const [warehouseId, setWarehouseId] = useState<string | null>(null)
   const [cart, setCart] = useState<CartItem[]>([])
@@ -333,16 +377,26 @@ function PaymentContent() {
   useEffect(() => {
     setIsClient(true)
     setIsOnline(typeof navigator !== 'undefined' ? navigator.onLine : true)
+    setTheme(getThemeFromStorage())
 
     const handleOnline = () => setIsOnline(true)
     const handleOffline = () => setIsOnline(false)
 
+    // Listen for theme changes from other tabs/windows
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === 'theme' && e.newValue) {
+        setTheme(e.newValue as Theme)
+      }
+    }
+
     window.addEventListener('online', handleOnline)
     window.addEventListener('offline', handleOffline)
+    window.addEventListener('storage', handleStorageChange)
 
     return () => {
       window.removeEventListener('online', handleOnline)
       window.removeEventListener('offline', handleOffline)
+      window.removeEventListener('storage', handleStorageChange)
     }
   }, [])
 
@@ -420,17 +474,18 @@ function PaymentContent() {
     return payments.reduce((sum, p) => sum + p.amountInUSD, 0)
   }, [payments])
 
-  const remainingUSD = totals.total - totalPaidUSD
-  const isFullyPaid = remainingUSD <= 0.01
+  // Redondear el saldo pendiente a enteros
+  const remainingUSD = Math.round(totals.total - totalPaidUSD)
+  const isFullyPaid = remainingUSD <= 0
 
-  // Calculate change
+  // Calculate change - siempre redondeado a enteros
   const changeAmount = useMemo(() => {
     if (remainingUSD < 0) {
       const changeUSD = Math.abs(remainingUSD)
       if (changeCurrency === 'CUP') {
-        return changeUSD * rates.CUP
+        return Math.round(changeUSD * rates.CUP)
       }
-      return changeUSD
+      return Math.round(changeUSD)
     }
     return 0
   }, [remainingUSD, changeCurrency, rates])
@@ -468,16 +523,17 @@ function PaymentContent() {
     setPayments(payments.filter(p => p.id !== id))
   }
 
-  // Set exact amount
+  // Set exact amount - redondeado a enteros
   const setExactAmount = () => {
     if (remainingUSD > 0) {
       let exactAmount = remainingUSD
       if (selectedCurrency === 'CUP') {
-        exactAmount = remainingUSD * rates.CUP
+        exactAmount = Math.round(remainingUSD * rates.CUP)
       } else if (selectedCurrency === 'MLC') {
-        exactAmount = remainingUSD * rates.MLC
+        exactAmount = Math.round(remainingUSD * rates.MLC)
       }
-      setAmount(exactAmount.toFixed(2))
+      // Mostrar como entero (sin decimales)
+      setAmount(String(Math.round(exactAmount)))
     }
   }
 
@@ -609,14 +665,19 @@ function PaymentContent() {
     }
   }
 
-  // Format currency
+  // Format currency - TODAS las monedas se redondean a enteros
   const formatCurrency = (amount: number, currency: 'USD' | 'CUP' | 'MLC' = 'USD') => {
     const symbol = CURRENCIES.find(c => c.id === currency)?.symbol || '$'
+    const rounded = Math.round(amount)
     if (currency === 'CUP') {
-      return `${symbol}${amount.toLocaleString('es-ES', { maximumFractionDigits: 0 })}`
+      return `${symbol}${rounded.toLocaleString('es-ES')}`
     }
-    return `${symbol}${amount.toFixed(2)}`
+    // USD y MLC también se redondean a enteros
+    return `${symbol}${rounded.toLocaleString('es-ES')}`
   }
+
+  // Función de redondeo a entero
+  const roundToWhole = (amount: number): number => Math.round(amount)
 
   // Numpad handler
   const handleNumpad = (key: string) => {
@@ -646,17 +707,21 @@ function PaymentContent() {
 
   // Show loading
   if (!isClient) {
+    const loadingBg = getThemeFromStorage() === 'dark' ? 'bg-gray-900' : 'bg-gray-100'
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-900">
+      <div className={`min-h-screen flex items-center justify-center ${loadingBg}`}>
         <BigLoaderIcon />
       </div>
     )
   }
 
+  // Theme classes
+  const tc = getThemeClasses(theme)
+
   // Error with no cart
   if (error && cart.length === 0) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-900">
+      <div className={`min-h-screen flex items-center justify-center ${tc.bg} ${tc.text}`}>
         <div className="text-center">
           <AlertIcon />
           <p className="text-red-500 mb-4 mt-4">{error}</p>
@@ -672,9 +737,9 @@ function PaymentContent() {
   }
 
   return (
-    <div className="min-h-screen flex flex-col bg-gray-900 text-white">
+    <div className={`min-h-screen flex flex-col ${tc.bg} ${tc.text}`}>
       {/* Header */}
-      <header className="flex items-center justify-between px-4 py-3 border-b bg-gray-800 border-gray-700">
+      <header className={`flex items-center justify-between px-4 py-3 border-b ${tc.bgAlt} ${tc.border}`}>
         <button
           onClick={goBackToPOS}
           className="flex items-center gap-2 text-gray-400 hover:text-gray-200"
@@ -1012,10 +1077,12 @@ function PaymentContent() {
   )
 }
 
-// Loading fallback
+// Loading fallback - uses dark:bg-gray-900 for theme support
 function LoadingFallback() {
+  const theme = getThemeFromStorage()
+  const bgClass = theme === 'dark' ? 'bg-gray-900' : 'bg-gray-100'
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-900">
+    <div className={`min-h-screen flex items-center justify-center ${bgClass}`}>
       <BigLoaderIcon />
     </div>
   )

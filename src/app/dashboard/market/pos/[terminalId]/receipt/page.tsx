@@ -205,6 +205,7 @@ interface Order {
   createdByName: string
   lines: OrderLine[]
   payments: Payment[]
+  exchangeRate?: number // Tasa USD -> CUP al momento de la venta
 }
 
 // Simple SVG icons inline (no lucide-react needed)
@@ -265,11 +266,31 @@ function ReceiptContent() {
   const [selectedPrinter, setSelectedPrinter] = useState<{ serviceId: number; printerId: number } | null>(null)
   const [printingWithService, setPrintingWithService] = useState(false)
   const [copies, setCopies] = useState(1)
+  const [exchangeRate, setExchangeRate] = useState<number>(440) // Tasa USD -> CUP por defecto
 
   // Initialize on client
   useEffect(() => {
     setIsClient(true)
   }, [])
+
+  // Fetch exchange rate
+  useEffect(() => {
+    if (!isClient) return
+
+    const fetchExchangeRate = async () => {
+      try {
+        const res = await fetch('/api/market/pos/exchange-rates')
+        const data = await res.json()
+        if (data.success && data.rates?.CUP) {
+          setExchangeRate(data.rates.CUP)
+        }
+      } catch (err) {
+        console.log('[Receipt] Using default exchange rate:', err)
+      }
+    }
+
+    fetchExchangeRate()
+  }, [isClient])
 
   // Fetch order details (online or offline)
   useEffect(() => {
@@ -394,8 +415,22 @@ function ReceiptContent() {
   }, [isClient, orderId, offlineId, isOfflineOrder, orderNumber])
 
   // Format currency
-  const formatCurrency = (amount: number) => {
+  const formatCurrency = (amount: number, currency: string = 'USD') => {
+    if (currency === 'CUP') {
+      return `${Math.round(amount).toLocaleString('es-ES')} CUP`
+    }
     return `$${amount.toFixed(2)}`
+  }
+
+  // Convert USD to CUP
+  const toCUP = (amountUSD: number): number => {
+    return Math.round(amountUSD * exchangeRate)
+  }
+
+  // Format dual currency (USD with CUP equivalent)
+  const formatDualCurrency = (amountUSD: number): string => {
+    const cup = toCUP(amountUSD)
+    return `$${amountUSD.toFixed(2)} (${cup.toLocaleString('es-ES')} CUP)`
   }
 
   // Format date
@@ -477,7 +512,10 @@ function ReceiptContent() {
             subtotal: order.subtotal,
             discountAmount: order.discountAmount,
             totalAmount: order.totalAmount,
+            totalAmountCUP: toCUP(order.totalAmount),
+            subtotalCUP: toCUP(order.subtotal),
             currency: order.currency,
+            exchangeRate: exchangeRate,
             payments: order.payments.map(p => ({
               method: p.method,
               amount: p.amount,
@@ -525,6 +563,9 @@ function ReceiptContent() {
   const printReceipt = () => {
     if (!order) return
 
+    const totalCUP = toCUP(order.totalAmount)
+    const subtotalCUP = toCUP(order.subtotal)
+
     const receiptContent = `
 ================================
        RECIBO DE VENTA
@@ -536,17 +577,21 @@ ${order.customerName ? `Cliente: ${order.customerName}` : ''}
 --------------------------------
 ${order.lines.map(line =>
 `${line.productName}
-  ${line.quantity} x ${formatCurrency(line.unitPrice)} = ${formatCurrency(line.total)}`
+  ${line.quantity} x $${line.unitPrice.toFixed(2)} = $${line.total.toFixed(2)}`
 ).join('\n')}
 --------------------------------
-Subtotal:    ${formatCurrency(order.subtotal)}
-${order.discountAmount > 0 ? `Descuento:  -${formatCurrency(order.discountAmount)}` : ''}
+Subtotal:    $${order.subtotal.toFixed(2)}
+             ${subtotalCUP.toLocaleString('es-ES')} CUP
+${order.discountAmount > 0 ? `Descuento:  -$${order.discountAmount.toFixed(2)}` : ''}
 --------------------------------
-TOTAL:       ${formatCurrency(order.totalAmount)}
+TOTAL:       $${order.totalAmount.toFixed(2)}
+             ${totalCUP.toLocaleString('es-ES')} CUP
+--------------------------------
+Tasa: 1 USD = ${exchangeRate} CUP
 --------------------------------
 Pagos:
 ${order.payments.map(p =>
-`  ${getPaymentMethodLabel(p.method)}: ${formatCurrency(p.amount)} ${p.currency}`
+`  ${getPaymentMethodLabel(p.method)}: ${p.currency === 'CUP' ? `${Math.round(p.amount).toLocaleString('es-ES')} CUP` : `$${p.amount.toFixed(2)} ${p.currency}`}`
 ).join('\n')}
 ================================
      Gracias por su compra!
@@ -681,18 +726,28 @@ ${order.payments.map(p =>
               <div className="space-y-1">
                 <div className="flex justify-between">
                   <span>Subtotal:</span>
-                  <span>{formatCurrency(order?.subtotal || 0)}</span>
+                  <span>{formatDualCurrency(order?.subtotal || 0)}</span>
                 </div>
                 {(order?.discountAmount || 0) > 0 && (
                   <div className="flex justify-between text-green-500">
                     <span>Descuento:</span>
-                    <span>-{formatCurrency(order?.discountAmount || 0)}</span>
+                    <span>-{formatDualCurrency(order?.discountAmount || 0)}</span>
                   </div>
                 )}
-                <div className="flex justify-between text-xl font-bold pt-2">
-                  <span>TOTAL:</span>
-                  <span>{formatCurrency(order?.totalAmount || 0)}</span>
+                <div className="flex flex-col pt-2 border-t border-gray-600">
+                  <div className="flex justify-between text-xl font-bold">
+                    <span>TOTAL:</span>
+                    <span>${(order?.totalAmount || 0).toFixed(2)}</span>
+                  </div>
+                  <div className="flex justify-end text-lg text-blue-400">
+                    <span>{toCUP(order?.totalAmount || 0).toLocaleString('es-ES')} CUP</span>
+                  </div>
                 </div>
+              </div>
+
+              {/* Exchange Rate Info */}
+              <div className="text-center text-xs text-gray-500 mt-2">
+                Tasa: 1 USD = {exchangeRate.toLocaleString('es-ES')} CUP
               </div>
 
               <div className="border-t border-gray-700 pt-4 mt-4">
@@ -700,7 +755,11 @@ ${order.payments.map(p =>
                 {order?.payments.map((payment, idx) => (
                   <div key={idx} className="flex justify-between">
                     <span>{getPaymentMethodLabel(payment.method)}:</span>
-                    <span>{formatCurrency(payment.amount)} {payment.currency}</span>
+                    <span>
+                      {payment.currency === 'CUP'
+                        ? `${Math.round(payment.amount).toLocaleString('es-ES')} CUP`
+                        : `$${payment.amount.toFixed(2)} ${payment.currency}`}
+                    </span>
                   </div>
                 ))}
               </div>

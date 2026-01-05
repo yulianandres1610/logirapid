@@ -343,14 +343,23 @@ export async function POST(request: NextRequest) {
       })
 
       // Insertar nuevas líneas
+      // NUEVA FÓRMULA: difference = (Stock inicial - Vendido) - Contado
+      // Stock inicial ≈ Stock actual + Vendido hoy (si no hay otras operaciones)
+      // Entonces: difference = Stock actual - Contado
+      // Positivo = FALTANTE (hay menos de lo esperado)
+      // Negativo = SOBRANTE (hay más de lo esperado)
       for (const line of lines) {
         const soldToday = salesMap[line.productId] || 0
         const stockKey = `${line.productId}:${line.variantId || 'null'}`
         const currentStock = stockMap[stockKey] || 0
-        const expectedQuantity = currentStock // Stock actual del sistema
+        // Stock esperado = Stock inicial del día - Vendido = (currentStock + soldToday) - soldToday = currentStock
+        const expectedQuantity = currentStock
         const countedQuantity = line.countedQuantity || 0
-        const difference = countedQuantity - expectedQuantity
+        // Fórmula: (Stock inicial - Vendido) - Contado = expectedQuantity - countedQuantity
+        // Positivo = FALTANTE, Negativo = SOBRANTE
+        const difference = expectedQuantity - countedQuantity
         const unitPrice = line.unitPrice || 0
+        // El valor de la diferencia: positivo = pérdida (faltante), negativo = ganancia (sobrante)
         const differenceValue = difference * unitPrice
 
         // Nombre del producto incluyendo variante si aplica
@@ -419,8 +428,8 @@ export async function POST(request: NextRequest) {
       let adjustmentOperationId = null
       const hasDifferences = diffLines.rows.length > 0
 
-      // Calcular valor total de faltantes (solo diferencias negativas)
-      const shortageLines = diffLines.rows.filter(line => parseFloat(line.difference) < 0)
+      // Calcular valor total de faltantes (ahora diferencias POSITIVAS = faltante)
+      const shortageLines = diffLines.rows.filter(line => parseFloat(line.difference) > 0)
       const totalShortageValue = shortageLines.reduce((sum, line) => {
         return sum + Math.abs(parseFloat(line.difference_value) || 0)
       }, 0)

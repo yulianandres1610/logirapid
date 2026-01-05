@@ -23,6 +23,55 @@ import {
 } from 'lucide-react'
 import { useBarcodeScan } from '@/hooks/useBarcodeScan'
 
+// Theme type for dynamic styling
+type Theme = 'dark' | 'light'
+
+// Get theme from localStorage (safe for offline)
+const getThemeFromStorage = (): Theme => {
+  if (typeof window === 'undefined') return 'dark'
+  try {
+    return (localStorage.getItem('theme') as Theme) || 'dark'
+  } catch {
+    return 'dark'
+  }
+}
+
+// Theme-aware styles
+const themeStyles = {
+  dark: {
+    bg: 'bg-gray-900',
+    bgAlt: 'bg-gray-800',
+    bgCard: 'bg-gray-800',
+    text: 'text-white',
+    textMuted: 'text-gray-400',
+    border: 'border-gray-700',
+    input: 'bg-gray-700 border-gray-600',
+    inputAlt: 'bg-gray-900 border-gray-700',
+    button: 'bg-gray-700 hover:bg-gray-600',
+  },
+  light: {
+    bg: 'bg-gray-100',
+    bgAlt: 'bg-white',
+    bgCard: 'bg-white',
+    text: 'text-gray-900',
+    textMuted: 'text-gray-600',
+    border: 'border-gray-300',
+    input: 'bg-white border-gray-300',
+    inputAlt: 'bg-gray-50 border-gray-300',
+    button: 'bg-gray-200 hover:bg-gray-300',
+  }
+}
+
+const getThemeClasses = (theme: Theme) => themeStyles[theme]
+
+interface ProductVariant {
+  id: number
+  name: string
+  sku: string
+  barcode: string | null
+  stock: number
+}
+
 interface Product {
   id: number
   name: string
@@ -31,10 +80,13 @@ interface Product {
   sellingPrice: number
   stock: number
   imageUrl: string | null
+  variants?: ProductVariant[]
 }
 
 interface CountedProduct {
   productId: number
+  variantId: number | null
+  variantName: string | null
   productName: string
   productSku: string
   productBarcode: string
@@ -67,6 +119,7 @@ export default function InventoryCountPage() {
 
   // State
   const [isOnline, setIsOnline] = useState(true)
+  const [theme, setTheme] = useState<Theme>('dark')
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -79,6 +132,7 @@ export default function InventoryCountPage() {
   const [search, setSearch] = useState('')
   const [numpadValue, setNumpadValue] = useState('')
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null)
+  const [selectedVariant, setSelectedVariant] = useState<ProductVariant | null>(null)
   const [editingIndex, setEditingIndex] = useState<number | null>(null)
 
   // Mobile: toggle between list view and input view
@@ -91,16 +145,28 @@ export default function InventoryCountPage() {
   const autoSaveTimeoutRef = useRef<NodeJS.Timeout | null>(null)
   const lastSavedRef = useRef<string>('')
 
-  // Online status
+  // Online status and theme
   useEffect(() => {
     setIsOnline(navigator.onLine)
+    setTheme(getThemeFromStorage())
+
     const handleOnline = () => setIsOnline(true)
     const handleOffline = () => setIsOnline(false)
+
+    // Listen for theme changes from other tabs/windows
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === 'theme' && e.newValue) {
+        setTheme(e.newValue as Theme)
+      }
+    }
+
     window.addEventListener('online', handleOnline)
     window.addEventListener('offline', handleOffline)
+    window.addEventListener('storage', handleStorageChange)
     return () => {
       window.removeEventListener('online', handleOnline)
       window.removeEventListener('offline', handleOffline)
+      window.removeEventListener('storage', handleStorageChange)
     }
   }, [])
 
@@ -339,8 +405,13 @@ export default function InventoryCountPage() {
       if (selectedProduct && numpadValue) {
         const quantity = parseFloat(numpadValue)
         if (!isNaN(quantity) && quantity >= 0) {
-          // Add or update counted product
-          const existingIndex = countedProducts.findIndex(p => p.productId === selectedProduct.id)
+          // Determinar variantId para búsqueda
+          const variantId = selectedVariant?.id || null
+
+          // Add or update counted product - check both productId AND variantId
+          const existingIndex = countedProducts.findIndex(p =>
+            p.productId === selectedProduct.id && p.variantId === variantId
+          )
 
           if (existingIndex >= 0) {
             // Update existing
@@ -351,20 +422,30 @@ export default function InventoryCountPage() {
             }
             setCountedProducts(updated)
           } else {
-            // Add new
+            // Add new - include variant info
+            const productName = selectedVariant
+              ? `${selectedProduct.name} - ${selectedVariant.name}`
+              : selectedProduct.name
+            const productSku = selectedVariant?.sku || selectedProduct.sku
+            const productBarcode = selectedVariant?.barcode || selectedProduct.barcode
+            const expectedStock = selectedVariant?.stock ?? selectedProduct.stock
+
             setCountedProducts(prev => [{
               productId: selectedProduct.id,
-              productName: selectedProduct.name,
-              productSku: selectedProduct.sku,
-              productBarcode: selectedProduct.barcode,
+              variantId: variantId,
+              variantName: selectedVariant?.name || null,
+              productName: productName,
+              productSku: productSku,
+              productBarcode: productBarcode,
               productImage: selectedProduct.imageUrl,
               unitPrice: selectedProduct.sellingPrice,
               countedQuantity: quantity,
-              expectedQuantity: selectedProduct.stock
+              expectedQuantity: expectedStock
             }, ...prev])
           }
 
           setSelectedProduct(null)
+          setSelectedVariant(null)
           setNumpadValue('')
           setEditingIndex(null)
           // Return focus to search (mobile or desktop)
@@ -383,7 +464,7 @@ export default function InventoryCountPage() {
     } else if (key !== '.') {
       setNumpadValue(prev => prev.length < 10 ? prev + key : prev)
     }
-  }, [selectedProduct, numpadValue, countedProducts])
+  }, [selectedProduct, selectedVariant, numpadValue, countedProducts])
 
   // Handle keyboard input
   useEffect(() => {
@@ -399,6 +480,7 @@ export default function InventoryCountPage() {
           handleNumpad('DEL')
         } else if (e.key === 'Escape') {
           setSelectedProduct(null)
+          setSelectedVariant(null)
           setNumpadValue('')
           setEditingIndex(null)
           // Focus search after ESC
@@ -541,13 +623,18 @@ export default function InventoryCountPage() {
     router.push(`/dashboard/market/pos/${terminalId}`)
   }, [router, terminalId])
 
+  // Theme classes
+  const tc = getThemeClasses(theme)
+
   // Loading state
   if (loading) {
+    const loadingBg = getThemeFromStorage() === 'dark' ? 'bg-gray-900' : 'bg-gray-100'
+    const loadingText = getThemeFromStorage() === 'dark' ? 'text-gray-400' : 'text-gray-600'
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-900">
+      <div className={`min-h-screen flex items-center justify-center ${loadingBg}`}>
         <div className="text-center">
           <Loader2 className="w-12 h-12 animate-spin text-blue-500 mx-auto mb-4" />
-          <p className="text-gray-400">Cargando datos...</p>
+          <p className={loadingText}>Cargando datos...</p>
         </div>
       </div>
     )
@@ -556,7 +643,7 @@ export default function InventoryCountPage() {
   // Error state
   if (error && !terminal) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-900 text-white p-4">
+      <div className={`min-h-screen flex items-center justify-center ${tc.bg} ${tc.text} p-4`}>
         <div className="text-center max-w-md">
           <AlertCircle className="w-16 h-16 mx-auto mb-4 text-red-500" />
           <p className="text-red-400 mb-4">{error}</p>
@@ -572,9 +659,9 @@ export default function InventoryCountPage() {
   }
 
   return (
-    <div className="min-h-screen flex flex-col bg-gray-900 text-white">
+    <div className={`min-h-screen flex flex-col ${tc.bg} ${tc.text}`}>
       {/* Header */}
-      <header className="bg-gray-800 border-b border-gray-700">
+      <header className={`${tc.bgAlt} border-b ${tc.border}`}>
         <div className="flex items-center justify-between px-4 sm:px-6 py-3 lg:py-4">
           <div className="flex items-center gap-3 lg:gap-4">
             <motion.button
@@ -601,7 +688,7 @@ export default function InventoryCountPage() {
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder="Buscar..."
-                className="w-full pl-8 pr-3 py-1.5 bg-gray-900 border border-gray-700 rounded-lg text-xs focus:outline-none focus:border-blue-500 placeholder-gray-500"
+                className={`w-full pl-8 pr-3 py-1.5 ${tc.inputAlt} rounded-lg text-xs focus:outline-none focus:border-blue-500 placeholder-gray-500`}
                 disabled={!!selectedProduct}
               />
             </div>
@@ -686,7 +773,7 @@ export default function InventoryCountPage() {
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder="Buscar o escanear..."
-                className="w-full pl-9 pr-8 py-2 bg-gray-900 border border-gray-700 rounded-lg text-sm focus:outline-none focus:border-blue-500 placeholder-gray-500"
+                className={`w-full pl-9 pr-8 py-2 ${tc.inputAlt} rounded-lg text-sm focus:outline-none focus:border-blue-500 placeholder-gray-500`}
                 disabled={!!selectedProduct}
               />
               {search && (
