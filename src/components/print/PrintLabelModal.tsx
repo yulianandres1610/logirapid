@@ -97,17 +97,26 @@ export function PrintLabelModal({ isOpen, onClose, productData, onPrintSuccess }
         )
         setServices(activeServices)
 
-        // Auto-select first service and default printer
+        // Auto-select first service and default label printer
         if (activeServices.length > 0) {
           const firstService = activeServices[0]
           setSelectedService(firstService)
 
-          // Find default or first online printer
-          const defaultPrinter = firstService.printers.find((p: PrinterInfo) => p.isDefault && p.isOnline)
-            || firstService.printers.find((p: PrinterInfo) => p.isOnline)
-            || firstService.printers[0]
+          // Filter to only label printers
+          const labelPrinters = firstService.printers.filter((p: PrinterInfo) =>
+            p.printerType === 'label_barcode' ||
+            p.printerType === 'label_4x6' ||
+            p.printerName.toLowerCase().includes('label') ||
+            p.printerName.toLowerCase().includes('barcode') ||
+            p.printerName.toLowerCase().includes('etiqueta')
+          )
 
-          setSelectedPrinter(defaultPrinter)
+          // Find default or first online label printer
+          const defaultPrinter = labelPrinters.find((p: PrinterInfo) => p.isDefault && p.isOnline)
+            || labelPrinters.find((p: PrinterInfo) => p.isOnline)
+            || labelPrinters[0]
+
+          setSelectedPrinter(defaultPrinter || null)
         }
       } else {
         setError('No se encontraron servicios de impresión activos')
@@ -311,10 +320,18 @@ export function PrintLabelModal({ isOpen, onClose, productData, onPrintSuccess }
                         const service = services.find(s => s.id === parseInt(e.target.value))
                         setSelectedService(service || null)
                         if (service) {
-                          const defaultPrinter = service.printers.find(p => p.isDefault && p.isOnline)
-                            || service.printers.find(p => p.isOnline)
-                            || service.printers[0]
-                          setSelectedPrinter(defaultPrinter)
+                          // Filter to only label printers
+                          const labelPrinters = service.printers.filter(p =>
+                            p.printerType === 'label_barcode' ||
+                            p.printerType === 'label_4x6' ||
+                            p.printerName.toLowerCase().includes('label') ||
+                            p.printerName.toLowerCase().includes('barcode') ||
+                            p.printerName.toLowerCase().includes('etiqueta')
+                          )
+                          const defaultPrinter = labelPrinters.find(p => p.isDefault && p.isOnline)
+                            || labelPrinters.find(p => p.isOnline)
+                            || labelPrinters[0]
+                          setSelectedPrinter(defaultPrinter || null)
                         }
                       }}
                       className={cn(
@@ -333,13 +350,21 @@ export function PrintLabelModal({ isOpen, onClose, productData, onPrintSuccess }
                   </div>
                 )}
 
-                {/* Printer Selector */}
+                {/* Printer Selector - Only show label printers for product labels */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                    Impresora
+                    Impresora de Etiquetas
                   </label>
                   <div className="space-y-2">
-                    {selectedService?.printers.map(printer => (
+                    {selectedService?.printers
+                      .filter(printer =>
+                        printer.printerType === 'label_barcode' ||
+                        printer.printerType === 'label_4x6' ||
+                        printer.printerName.toLowerCase().includes('label') ||
+                        printer.printerName.toLowerCase().includes('barcode') ||
+                        printer.printerName.toLowerCase().includes('etiqueta')
+                      )
+                      .map(printer => (
                       <button
                         key={printer.id}
                         onClick={() => setSelectedPrinter(printer)}
