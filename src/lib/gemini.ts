@@ -87,15 +87,21 @@ export async function cleanProductImage(imageBase64: string): Promise<{
     const cleanBase64 = imageBase64.replace(/^data:image\/\w+;base64,/, '')
 
     // Usar Gemini para editar la imagen y remover el fondo
-    const prompt = `Edit this product image:
-1. Remove the background completely
-2. Replace the background with pure white (#FFFFFF)
-3. Keep only the main product, removing all other elements
-4. Center the product in the frame
-5. Maintain the product's original colors and details
-6. Output the edited image with the clean white background
+    // Prompt optimizado para generar imagenes del mismo tamano que las generadas (1024x1024)
+    const prompt = `Edit this product image for e-commerce:
 
-This is for e-commerce product photography - the result should look professional with a clean white background.`
+CRITICAL REQUIREMENTS:
+1. Output MUST be exactly 1024x1024 pixels (square format)
+2. Remove the background completely and replace with pure white (#FFFFFF)
+3. Keep ONLY the main product - remove all other elements, text, watermarks
+4. Scale and position the product so it occupies approximately 80% of the frame
+5. Center the product both horizontally and vertically
+6. Add equal white padding on all sides (approximately 10% margin)
+7. Maintain the product's original colors, details, and proportions
+8. Apply professional studio lighting appearance
+9. Ensure sharp edges where product meets background
+
+The final image should match professional e-commerce product photography standards - clean, consistent, and ready for display on product pages.`
 
     const response = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/${IMAGE_GENERATION_MODEL}:generateContent?key=${GOOGLE_AI_API_KEY}`,
