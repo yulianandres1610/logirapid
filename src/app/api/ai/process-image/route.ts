@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
 import jwt from 'jsonwebtoken'
 import { db } from '@/lib/database'
-import { uploadProductImageByBarcode } from '@/lib/product-images'
+import { uploadProductImageWithIndex, getNextImageIndex } from '@/lib/product-images'
 import {
   cleanProductImage,
   generateProductImage,
@@ -137,9 +137,13 @@ export async function POST(request: NextRequest) {
           contentType = 'image/webp'
         }
 
-        console.log(`[AI Process Image] Saving image with content type: ${contentType}`)
+        // Obtener el siguiente índice disponible
+        const imageIndex = await getNextImageIndex(barcode)
+        const isPrimary = imageIndex === 1
 
-        const { url, path } = await uploadProductImageByBarcode(
+        console.log(`[AI Process Image] Saving image with content type: ${contentType}, index: ${imageIndex}`)
+
+        const { url, path, index } = await uploadProductImageWithIndex(
           barcode,
           imageBuffer,
           contentType
@@ -147,39 +151,23 @@ export async function POST(request: NextRequest) {
 
         // Guardar en base de datos
         await db.query(`
-          CREATE TABLE IF NOT EXISTS product_images (
-            id SERIAL PRIMARY KEY,
-            barcode VARCHAR(50) UNIQUE NOT NULL,
-            storage_path VARCHAR(255) NOT NULL,
-            image_url TEXT NOT NULL,
-            processed_with_ai BOOLEAN DEFAULT false,
-            ai_model VARCHAR(50),
-            content_type VARCHAR(50) DEFAULT 'image/jpeg',
-            file_size INTEGER,
-            usage_count INTEGER DEFAULT 1,
-            created_by INTEGER,
-            company_id INTEGER,
-            created_at TIMESTAMP DEFAULT NOW(),
-            updated_at TIMESTAMP DEFAULT NOW()
-          )
-        `)
-
-        await db.query(`
           INSERT INTO product_images (
-            barcode, storage_path, image_url, processed_with_ai,
-            ai_model, content_type, file_size, created_by, company_id
-          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-          ON CONFLICT (barcode) DO UPDATE SET
+            barcode, image_index, storage_path, image_url, is_primary,
+            processed_with_ai, ai_model, content_type, file_size, created_by, company_id
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+          ON CONFLICT (barcode, image_index) DO UPDATE SET
             storage_path = EXCLUDED.storage_path,
             image_url = EXCLUDED.image_url,
+            is_primary = EXCLUDED.is_primary,
             processed_with_ai = true,
             ai_model = EXCLUDED.ai_model,
-            usage_count = product_images.usage_count + 1,
             updated_at = NOW()
         `, [
           barcode,
+          index,
           path,
           url,
+          isPrimary,
           true,
           'gemini-3-pro-image-preview',
           contentType,
@@ -188,8 +176,8 @@ export async function POST(request: NextRequest) {
           payload.companyId
         ])
 
-        savedImage = { url, path }
-        console.log(`[AI Process Image] Saved to storage: ${url}`)
+        savedImage = { url, path, index, isPrimary }
+        console.log(`[AI Process Image] Saved to storage: ${url}, index: ${index}`)
       } catch (saveError) {
         console.error('[AI Process Image] Error saving image:', saveError)
         // Continuar sin guardar

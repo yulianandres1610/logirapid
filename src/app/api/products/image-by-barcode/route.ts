@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
 import jwt from 'jsonwebtoken'
 import { db } from '@/lib/database'
-import { getProductImageByBarcode } from '@/lib/product-images'
+import { getAllProductImagesByBarcode, getProductImageByBarcode, ProductImage } from '@/lib/product-images'
 
 interface JWTPayload {
   userId: number
@@ -26,7 +26,8 @@ async function getPayload(): Promise<JWTPayload | null> {
 
 /**
  * GET /api/products/image-by-barcode?barcode=7501234567890
- * Busca si existe una imagen para un codigo de barras
+ * Busca todas las imágenes para un codigo de barras
+ * Retorna array de imágenes con la principal marcada
  */
 export async function GET(request: NextRequest) {
   try {
@@ -45,42 +46,88 @@ export async function GET(request: NextRequest) {
       }, { status: 400 })
     }
 
-    // Buscar en la tabla product_images primero
+    // Buscar en la tabla product_images primero (todas las imágenes)
     const dbResult = await db.query(`
       SELECT
-        id, barcode, image_url, usage_count, created_at
+        id, barcode, image_index, image_url, is_primary,
+        processed_with_ai, ai_model, content_type, file_size,
+        usage_count, created_at
       FROM product_images
       WHERE barcode = $1
+      ORDER BY image_index ASC
     `, [barcode])
 
     if (dbResult.rows.length > 0) {
-      const image = dbResult.rows[0]
+      const images: ProductImage[] = dbResult.rows.map(row => ({
+        id: row.id,
+        barcode: row.barcode,
+        imageIndex: row.image_index || 1,
+        storagePath: '',
+        imageUrl: row.image_url,
+        isPrimary: row.is_primary ?? (row.image_index === 1),
+        processedWithAi: row.processed_with_ai,
+        aiModel: row.ai_model,
+        contentType: row.content_type,
+        fileSize: row.file_size,
+        createdAt: row.created_at
+      }))
+
+      // Encontrar imagen principal
+      const primaryImage = images.find(img => img.isPrimary)?.imageUrl || images[0]?.imageUrl || null
 
       return NextResponse.json({
         success: true,
         found: true,
+        count: images.length,
         data: {
-          imageUrl: image.image_url,
-          barcode: image.barcode,
-          usedBy: image.usage_count || 1,
-          createdAt: image.created_at,
+          images,
+          primaryImage,
+          barcode: barcode,
           source: 'database'
         }
       })
     }
 
     // Si no esta en la base de datos, buscar directamente en storage
-    const storageUrl = await getProductImageByBarcode(barcode)
+    const storageImages = await getAllProductImagesByBarcode(barcode)
 
-    if (storageUrl) {
+    if (storageImages.length > 0) {
+      const primaryImage = storageImages.find(img => img.isPrimary)?.imageUrl || storageImages[0]?.imageUrl || null
+
       return NextResponse.json({
         success: true,
         found: true,
+        count: storageImages.length,
         data: {
-          imageUrl: storageUrl,
+          images: storageImages,
+          primaryImage,
           barcode: barcode,
-          usedBy: 1,
           source: 'storage'
+        }
+      })
+    }
+
+    // Fallback: buscar imagen individual (formato antiguo)
+    const legacyUrl = await getProductImageByBarcode(barcode)
+
+    if (legacyUrl) {
+      const image: ProductImage = {
+        barcode,
+        imageIndex: 1,
+        storagePath: '',
+        imageUrl: legacyUrl,
+        isPrimary: true
+      }
+
+      return NextResponse.json({
+        success: true,
+        found: true,
+        count: 1,
+        data: {
+          images: [image],
+          primaryImage: legacyUrl,
+          barcode: barcode,
+          source: 'storage-legacy'
         }
       })
     }
@@ -89,7 +136,12 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({
       success: true,
       found: false,
-      barcode: barcode
+      count: 0,
+      data: {
+        images: [],
+        primaryImage: null,
+        barcode: barcode
+      }
     })
 
   } catch (error) {

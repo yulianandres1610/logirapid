@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
 import jwt from 'jsonwebtoken'
 import { db } from '@/lib/database'
-import { uploadProductImageByBarcode } from '@/lib/product-images'
+import { uploadProductImageWithIndex, getNextImageIndex } from '@/lib/product-images'
 import { cleanProductImage, enhanceProductImage } from '@/lib/gemini'
 
 // Force dynamic rendering
@@ -35,11 +35,13 @@ const ALLOWED_TYPES = ['image/png', 'image/jpeg', 'image/jpg', 'image/webp', 'im
 /**
  * POST /api/upload/product-image
  * Sube una imagen de producto usando el barcode como identificador
+ * Soporta múltiples imágenes por producto (no sobrescribe, agrega a la galería)
  *
  * FormData:
  * - file: File (imagen)
  * - barcode: string
  * - processWithAI: boolean (opcional, default false)
+ * - replaceIndex: number (opcional, para reemplazar imagen específica)
  */
 export async function POST(request: NextRequest) {
   try {
@@ -54,6 +56,8 @@ export async function POST(request: NextRequest) {
     const file = formData.get('file') as File
     const barcode = formData.get('barcode') as string
     const processWithAI = formData.get('processWithAI') === 'true'
+    const replaceIndexStr = formData.get('replaceIndex') as string | null
+    const replaceIndex = replaceIndexStr ? parseInt(replaceIndexStr, 10) : undefined
 
     // Validaciones
     if (!file) {
@@ -86,11 +90,17 @@ export async function POST(request: NextRequest) {
       }, { status: 400 })
     }
 
+    // Obtener el siguiente índice disponible (o usar el especificado para reemplazo)
+    const imageIndex = replaceIndex ?? await getNextImageIndex(barcode)
+    const isPrimary = imageIndex === 1
+
     console.log('[Product Image Upload] File received:', {
       name: file.name,
       type: file.type,
       size: file.size,
       barcode,
+      imageIndex,
+      isPrimary,
       processWithAI
     })
 
@@ -134,53 +144,37 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Subir a Supabase Storage
-    const { url, path } = await uploadProductImageByBarcode(
+    // Subir a Supabase Storage con índice
+    const { url, path, index } = await uploadProductImageWithIndex(
       barcode,
       imageBuffer,
-      file.type
+      file.type,
+      replaceIndex // Usar índice específico si se proporciona
     )
 
-    console.log('[Product Image Upload] Uploaded to storage:', { url, path })
+    console.log('[Product Image Upload] Uploaded to storage:', { url, path, index })
 
-    // Crear tabla si no existe
-    await db.query(`
-      CREATE TABLE IF NOT EXISTS product_images (
-        id SERIAL PRIMARY KEY,
-        barcode VARCHAR(50) UNIQUE NOT NULL,
-        storage_path VARCHAR(255) NOT NULL,
-        image_url TEXT NOT NULL,
-        processed_with_ai BOOLEAN DEFAULT false,
-        ai_model VARCHAR(50),
-        content_type VARCHAR(50) DEFAULT 'image/jpeg',
-        file_size INTEGER,
-        usage_count INTEGER DEFAULT 1,
-        created_by INTEGER,
-        company_id INTEGER,
-        created_at TIMESTAMP DEFAULT NOW(),
-        updated_at TIMESTAMP DEFAULT NOW()
-      )
-    `)
-
-    // Guardar o actualizar en base de datos
+    // Guardar en base de datos (INSERT, no upsert para soportar múltiples imágenes)
     await db.query(`
       INSERT INTO product_images (
-        barcode, storage_path, image_url, processed_with_ai,
-        ai_model, content_type, file_size, created_by, company_id
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-      ON CONFLICT (barcode) DO UPDATE SET
+        barcode, image_index, storage_path, image_url, is_primary,
+        processed_with_ai, ai_model, content_type, file_size, created_by, company_id
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+      ON CONFLICT (barcode, image_index) DO UPDATE SET
         storage_path = EXCLUDED.storage_path,
         image_url = EXCLUDED.image_url,
+        is_primary = EXCLUDED.is_primary,
         processed_with_ai = EXCLUDED.processed_with_ai,
         ai_model = EXCLUDED.ai_model,
         content_type = EXCLUDED.content_type,
         file_size = EXCLUDED.file_size,
-        usage_count = product_images.usage_count + 1,
         updated_at = NOW()
     `, [
       barcode,
+      index,
       path,
       url,
+      isPrimary,
       wasProcessed,
       wasProcessed ? 'gemini-2.0-flash-exp' : null,
       file.type,
@@ -189,7 +183,7 @@ export async function POST(request: NextRequest) {
       payload.companyId
     ])
 
-    console.log('[Product Image Upload] Saved to database')
+    console.log('[Product Image Upload] Saved to database, index:', index)
 
     return NextResponse.json({
       success: true,
@@ -197,10 +191,12 @@ export async function POST(request: NextRequest) {
         imageUrl: url,
         storagePath: path,
         barcode,
+        imageIndex: index,
+        isPrimary,
         wasProcessed,
         aiProcessing: aiProcessingResult
       },
-      message: 'Imagen subida exitosamente'
+      message: isPrimary ? 'Imagen principal subida exitosamente' : `Imagen ${index} agregada a la galería`
     })
 
   } catch (error: any) {

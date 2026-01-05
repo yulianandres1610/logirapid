@@ -120,12 +120,14 @@ export default function CreateProductPage() {
   } | null>(null)
   const [showAiSuggestion, setShowAiSuggestion] = useState(false)
 
-  // Barcode image lookup states
-  const [existingImage, setExistingImage] = useState<{
+  // Barcode image lookup states - soporta múltiples imágenes por barcode
+  interface ExistingImageItem {
     url: string
-    usedBy: number
-    source: string
-  } | null>(null)
+    imageIndex: number
+    isPrimary: boolean
+  }
+  const [existingImages, setExistingImages] = useState<ExistingImageItem[]>([])
+  const [selectedExistingImage, setSelectedExistingImage] = useState<ExistingImageItem | null>(null)
   const [checkingImage, setCheckingImage] = useState(false)
   const [useExistingImage, setUseExistingImage] = useState(false)
 
@@ -265,7 +267,7 @@ export default function CreateProductPage() {
     return newBarcode
   }
 
-  // Check for existing image by barcode
+  // Check for existing images by barcode (soporta múltiples)
   useEffect(() => {
     const checkImageByBarcode = async () => {
       if (formData.barcode && formData.barcode.length >= 8) {
@@ -273,22 +275,29 @@ export default function CreateProductPage() {
         try {
           const res = await fetch(`/api/products/image-by-barcode?barcode=${formData.barcode}`)
           const data = await res.json()
-          if (data.success && data.found) {
-            setExistingImage({
-              url: data.data.imageUrl,
-              usedBy: data.data.usedBy || 1,
-              source: data.data.source || 'database'
-            })
+          if (data.success && data.found && data.data.images && data.data.images.length > 0) {
+            const images: ExistingImageItem[] = data.data.images.map((img: any) => ({
+              url: img.imageUrl,
+              imageIndex: img.imageIndex || 1,
+              isPrimary: img.isPrimary || false
+            }))
+            setExistingImages(images)
+            // Pre-seleccionar la imagen principal
+            const primary = images.find(img => img.isPrimary) || images[0]
+            setSelectedExistingImage(primary)
           } else {
-            setExistingImage(null)
+            setExistingImages([])
+            setSelectedExistingImage(null)
           }
         } catch (error) {
           console.error('Error checking barcode image:', error)
-          setExistingImage(null)
+          setExistingImages([])
+          setSelectedExistingImage(null)
         }
         setCheckingImage(false)
       } else {
-        setExistingImage(null)
+        setExistingImages([])
+        setSelectedExistingImage(null)
       }
     }
 
@@ -296,10 +305,10 @@ export default function CreateProductPage() {
     return () => clearTimeout(timer)
   }, [formData.barcode])
 
-  // Use existing image when user confirms
+  // Use selected existing image when user confirms
   const useFoundImage = () => {
-    if (existingImage) {
-      setFormData(prev => ({ ...prev, imageUrl: existingImage.url }))
+    if (selectedExistingImage) {
+      setFormData(prev => ({ ...prev, imageUrl: selectedExistingImage.url }))
       setUseExistingImage(true)
     }
   }
@@ -1393,8 +1402,8 @@ export default function CreateProductPage() {
                       Imagen del Producto
                     </h2>
 
-                    {/* Existing Image Found Section */}
-                    {existingImage && !formData.imageUrl && (
+                    {/* Existing Images Found Section - Galería de imágenes */}
+                    {existingImages.length > 0 && !formData.imageUrl && (
                       <motion.div
                         initial={{ opacity: 0, y: -10 }}
                         animate={{ opacity: 1, y: 0 }}
@@ -1405,51 +1414,92 @@ export default function CreateProductPage() {
                             : 'bg-green-50 border-green-200'
                         )}
                       >
-                        <div className="flex items-start gap-4">
-                          <img
-                            src={existingImage.url}
-                            alt="Imagen existente"
-                            className="w-24 h-24 rounded-lg object-cover shadow"
-                          />
-                          <div className="flex-1">
-                            <h4 className={cn(
-                              "font-semibold flex items-center gap-2",
-                              theme === 'dark' ? 'text-green-400' : 'text-green-700'
-                            )}>
-                              <Check className="w-4 h-4" />
-                              Imagen encontrada
-                            </h4>
-                            <p className={cn(
-                              "text-sm mt-1",
-                              theme === 'dark' ? 'text-gray-400' : 'text-gray-600'
-                            )}>
-                              Este codigo de barras ya tiene una imagen registrada.
-                              {existingImage.usedBy > 1 && ` Usada por ${existingImage.usedBy} productos.`}
-                            </p>
-                            <div className="flex gap-2 mt-3">
-                              <motion.button
-                                whileHover={{ scale: 1.02 }}
-                                whileTap={{ scale: 0.98 }}
-                                onClick={useFoundImage}
-                                className="px-4 py-2 bg-green-500 text-white rounded-lg text-sm font-medium hover:bg-green-600 transition-colors"
-                              >
-                                Usar esta imagen
-                              </motion.button>
-                              <motion.button
-                                whileHover={{ scale: 1.02 }}
-                                whileTap={{ scale: 0.98 }}
-                                onClick={() => setExistingImage(null)}
-                                className={cn(
-                                  "px-4 py-2 rounded-lg text-sm font-medium transition-colors",
-                                  theme === 'dark'
-                                    ? 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-                                    : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-                                )}
-                              >
-                                Subir otra
-                              </motion.button>
-                            </div>
-                          </div>
+                        <h4 className={cn(
+                          "font-semibold flex items-center gap-2 mb-3",
+                          theme === 'dark' ? 'text-green-400' : 'text-green-700'
+                        )}>
+                          <Check className="w-4 h-4" />
+                          {existingImages.length === 1
+                            ? 'Imagen encontrada'
+                            : `${existingImages.length} imágenes encontradas`}
+                        </h4>
+
+                        {/* Galería de imágenes */}
+                        <div className="flex flex-wrap gap-3 mb-4">
+                          {existingImages.map((img) => (
+                            <motion.div
+                              key={img.imageIndex}
+                              whileHover={{ scale: 1.05 }}
+                              whileTap={{ scale: 0.98 }}
+                              onClick={() => setSelectedExistingImage(img)}
+                              className={cn(
+                                "relative w-20 h-20 rounded-lg overflow-hidden cursor-pointer border-2 transition-all",
+                                selectedExistingImage?.imageIndex === img.imageIndex
+                                  ? 'border-green-500 ring-2 ring-green-500/50'
+                                  : theme === 'dark'
+                                    ? 'border-gray-600 hover:border-gray-500'
+                                    : 'border-gray-300 hover:border-gray-400'
+                              )}
+                            >
+                              <img
+                                src={img.url}
+                                alt={`Imagen ${img.imageIndex}`}
+                                className="w-full h-full object-cover"
+                              />
+                              {img.isPrimary && (
+                                <div className="absolute top-0 right-0 bg-green-500 text-white text-[10px] px-1 rounded-bl">
+                                  Principal
+                                </div>
+                              )}
+                              {selectedExistingImage?.imageIndex === img.imageIndex && (
+                                <div className="absolute inset-0 bg-green-500/20 flex items-center justify-center">
+                                  <Check className="w-6 h-6 text-green-500" />
+                                </div>
+                              )}
+                            </motion.div>
+                          ))}
+                        </div>
+
+                        <p className={cn(
+                          "text-sm mb-3",
+                          theme === 'dark' ? 'text-gray-400' : 'text-gray-600'
+                        )}>
+                          {existingImages.length === 1
+                            ? 'Este código de barras ya tiene una imagen registrada.'
+                            : 'Selecciona una imagen de la galería para usar en este producto.'}
+                        </p>
+
+                        <div className="flex gap-2">
+                          <motion.button
+                            whileHover={{ scale: 1.02 }}
+                            whileTap={{ scale: 0.98 }}
+                            onClick={useFoundImage}
+                            disabled={!selectedExistingImage}
+                            className={cn(
+                              "px-4 py-2 bg-green-500 text-white rounded-lg text-sm font-medium transition-colors",
+                              selectedExistingImage
+                                ? 'hover:bg-green-600'
+                                : 'opacity-50 cursor-not-allowed'
+                            )}
+                          >
+                            Usar imagen seleccionada
+                          </motion.button>
+                          <motion.button
+                            whileHover={{ scale: 1.02 }}
+                            whileTap={{ scale: 0.98 }}
+                            onClick={() => {
+                              setExistingImages([])
+                              setSelectedExistingImage(null)
+                            }}
+                            className={cn(
+                              "px-4 py-2 rounded-lg text-sm font-medium transition-colors",
+                              theme === 'dark'
+                                ? 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                                : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                            )}
+                          >
+                            Agregar nueva imagen
+                          </motion.button>
                         </div>
                       </motion.div>
                     )}
@@ -1468,7 +1518,7 @@ export default function CreateProductPage() {
                     )}
 
                     {/* Upload Area */}
-                    {(!existingImage || formData.imageUrl) && (
+                    {(existingImages.length === 0 || formData.imageUrl) && (
                       <motion.div
                         onClick={() => fileInputRef.current?.click()}
                         whileHover={{ scale: 1.01 }}
@@ -1566,7 +1616,7 @@ export default function CreateProductPage() {
                     )}
 
                     {/* AI Options */}
-                    {!formData.imageUrl && !existingImage && (
+                    {!formData.imageUrl && existingImages.length === 0 && (
                       <div className="space-y-3">
                         <div className={cn(
                           "flex items-center gap-2 text-sm",

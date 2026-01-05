@@ -1,6 +1,7 @@
 /**
  * Product Images Utilities
  * Maneja imagenes de productos en Supabase Storage usando codigo de barras
+ * Soporta múltiples imágenes por producto con formato: {barcode}-{index}.ext
  */
 
 import { createClient } from '@supabase/supabase-js'
@@ -10,6 +11,31 @@ const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
 
 const BUCKET = 'company-documents'
 const FOLDER = 'product-images'
+
+export interface ProductImage {
+  id?: number
+  barcode: string
+  imageIndex: number
+  storagePath: string
+  imageUrl: string
+  isPrimary: boolean
+  processedWithAi?: boolean
+  aiModel?: string | null
+  contentType?: string
+  fileSize?: number
+  createdBy?: number
+  companyId?: number
+  createdAt?: string
+}
+
+export interface ProductImagesResponse {
+  found: boolean
+  count: number
+  data: {
+    images: ProductImage[]
+    primaryImage: string | null
+  }
+}
 
 /**
  * Crea cliente Supabase con service role key para bypassing RLS
@@ -24,7 +50,7 @@ function getSupabaseClient() {
 }
 
 /**
- * Genera el path de storage para un barcode
+ * Genera el path de storage para un barcode (compatibilidad hacia atrás)
  */
 export function getStoragePath(barcode: string, extension: string = 'webp'): string {
   // Sanitizar barcode para uso seguro en path
@@ -33,7 +59,128 @@ export function getStoragePath(barcode: string, extension: string = 'webp'): str
 }
 
 /**
+ * Genera el path de storage para un barcode con índice
+ * Formato: product-images/{barcode}-{index}.{extension}
+ */
+export function getStoragePathWithIndex(barcode: string, index: number, extension: string = 'webp'): string {
+  const safeBarcode = barcode.replace(/[^a-zA-Z0-9-_]/g, '')
+  return `${FOLDER}/${safeBarcode}-${index}.${extension}`
+}
+
+/**
+ * Obtiene el siguiente índice disponible para un barcode
+ */
+export async function getNextImageIndex(barcode: string): Promise<number> {
+  const supabase = getSupabaseClient()
+  const safeBarcode = barcode.replace(/[^a-zA-Z0-9-_]/g, '')
+
+  // Buscar archivos existentes con formato {barcode}-{index}
+  const { data } = await supabase.storage
+    .from(BUCKET)
+    .list(FOLDER, {
+      search: safeBarcode
+    })
+
+  if (!data || data.length === 0) {
+    return 1
+  }
+
+  // Encontrar el índice más alto
+  let maxIndex = 0
+  const indexPattern = new RegExp(`^${safeBarcode}-(\\d+)\\.`)
+
+  for (const file of data) {
+    const match = file.name.match(indexPattern)
+    if (match) {
+      const index = parseInt(match[1], 10)
+      if (index > maxIndex) {
+        maxIndex = index
+      }
+    }
+  }
+
+  // También verificar si existe el formato antiguo sin índice
+  const oldFormatExists = data.some(f =>
+    f.name.startsWith(safeBarcode + '.') && !f.name.includes('-')
+  )
+  if (oldFormatExists && maxIndex === 0) {
+    maxIndex = 1 // El archivo antiguo cuenta como índice 1
+  }
+
+  return maxIndex + 1
+}
+
+/**
+ * Obtiene todas las imágenes de un producto por barcode
+ */
+export async function getAllProductImagesByBarcode(barcode: string): Promise<ProductImage[]> {
+  const supabase = getSupabaseClient()
+  const safeBarcode = barcode.replace(/[^a-zA-Z0-9-_]/g, '')
+
+  const { data } = await supabase.storage
+    .from(BUCKET)
+    .list(FOLDER, {
+      search: safeBarcode
+    })
+
+  if (!data || data.length === 0) {
+    return []
+  }
+
+  const images: ProductImage[] = []
+  const indexPattern = new RegExp(`^${safeBarcode}-(\\d+)\\.`)
+
+  for (const file of data) {
+    // Solo archivos que comienzan con el barcode exacto
+    if (!file.name.startsWith(safeBarcode)) continue
+
+    let imageIndex = 1
+    let isPrimary = false
+
+    // Formato nuevo: {barcode}-{index}.ext
+    const match = file.name.match(indexPattern)
+    if (match) {
+      imageIndex = parseInt(match[1], 10)
+      isPrimary = imageIndex === 1
+    } else if (file.name.startsWith(safeBarcode + '.')) {
+      // Formato antiguo: {barcode}.ext (sin índice)
+      imageIndex = 1
+      isPrimary = true
+    } else {
+      // No coincide con ningún formato válido
+      continue
+    }
+
+    const storagePath = `${FOLDER}/${file.name}`
+    const { data: publicUrlData } = supabase.storage
+      .from(BUCKET)
+      .getPublicUrl(storagePath)
+
+    images.push({
+      barcode,
+      imageIndex,
+      storagePath,
+      imageUrl: publicUrlData.publicUrl,
+      isPrimary,
+      fileSize: file.metadata?.size,
+      createdAt: file.created_at
+    })
+  }
+
+  // Ordenar por índice
+  images.sort((a, b) => a.imageIndex - b.imageIndex)
+
+  // Asegurar que al menos una sea primaria
+  if (images.length > 0 && !images.some(img => img.isPrimary)) {
+    images[0].isPrimary = true
+  }
+
+  return images
+}
+
+/**
  * Sube una imagen de producto usando el barcode como nombre
+ * @deprecated Use uploadProductImageWithIndex para nuevas imágenes
  */
 export async function uploadProductImageByBarcode(
   barcode: string,
@@ -58,7 +205,7 @@ export async function uploadProductImageByBarcode(
   }
 
   // Subir imagen
-  const { data, error } = await supabase.storage
+  const { error } = await supabase.storage
     .from(BUCKET)
     .upload(storagePath, imageBuffer, {
       contentType,
@@ -77,6 +224,55 @@ export async function uploadProductImageByBarcode(
   return {
     url: publicUrlData.publicUrl,
     path: storagePath
+  }
+}
+
+/**
+ * Sube una imagen de producto con índice específico
+ * No sobrescribe, agrega a la galería
+ */
+export async function uploadProductImageWithIndex(
+  barcode: string,
+  imageBuffer: Buffer,
+  contentType: string = 'image/webp',
+  index?: number
+): Promise<{ url: string; path: string; index: number; isPrimary: boolean }> {
+  const supabase = getSupabaseClient()
+
+  // Determinar extension basada en content type
+  let extension = 'webp'
+  if (contentType.includes('jpeg') || contentType.includes('jpg')) extension = 'jpg'
+  else if (contentType.includes('png')) extension = 'png'
+  else if (contentType.includes('gif')) extension = 'gif'
+
+  // Obtener siguiente índice si no se especifica
+  const imageIndex = index ?? await getNextImageIndex(barcode)
+  const isPrimary = imageIndex === 1
+
+  const storagePath = getStoragePathWithIndex(barcode, imageIndex, extension)
+
+  // Subir imagen
+  const { error } = await supabase.storage
+    .from(BUCKET)
+    .upload(storagePath, imageBuffer, {
+      contentType,
+      upsert: false // No sobrescribir
+    })
+
+  if (error) {
+    throw new Error(`Error uploading product image: ${error.message}`)
+  }
+
+  // Obtener URL publica
+  const { data: publicUrlData } = supabase.storage
+    .from(BUCKET)
+    .getPublicUrl(storagePath)
+
+  return {
+    url: publicUrlData.publicUrl,
+    path: storagePath,
+    index: imageIndex,
+    isPrimary
   }
 }
 
