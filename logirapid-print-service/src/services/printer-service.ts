@@ -571,11 +571,58 @@ class PrinterService {
       const timestamp = Date.now()
 
       if (process.platform === 'win32') {
-        // Windows: Use PowerShell to print a test page
-        await execAsync(
-          `powershell -Command "Start-Process -FilePath 'notepad' -ArgumentList '/p' -Wait"`,
-          { encoding: 'utf8' }
-        )
+        // Windows: Create temp file and print using PowerShell
+        const os = await import('os')
+        const path = await import('path')
+        const testContent = `
+=====================================
+   PRUEBA DE IMPRESION
+   LogiRapid Print Service v1.16.0
+=====================================
+
+Fecha: ${new Date().toLocaleString('es-ES')}
+Impresora: ${printer.printerName}
+Tipo: ${printer.printerType}
+Conexion: ${printer.connectionType}
+
+Esta es una pagina de prueba.
+Si puede ver este texto, la
+impresora esta funcionando
+correctamente.
+
+=====================================
+`
+        const tempFile = path.join(os.tmpdir(), `logirapid_test_${timestamp}.txt`)
+        await fs.writeFile(tempFile, testContent)
+
+        // Use PowerShell Out-Printer to send to specific printer
+        const escapedPrinterName = printerName.replace(/'/g, "''")
+        const escapedFilePath = tempFile.replace(/'/g, "''")
+
+        console.log(`[Printer Service] Windows: Printing test to "${printerName}"`)
+
+        try {
+          await execAsync(
+            `powershell -Command "Get-Content '${escapedFilePath}' | Out-Printer -Name '${escapedPrinterName}'"`,
+            { encoding: 'utf8', timeout: 30000 }
+          )
+        } catch (printError: any) {
+          // Fallback: try using notepad /pt (print to)
+          console.log(`[Printer Service] Out-Printer failed, trying notepad fallback:`, printError.message)
+          await execAsync(
+            `notepad /pt "${tempFile}" "${printerName}"`,
+            { encoding: 'utf8', timeout: 30000 }
+          )
+        }
+
+        // Clean up temp file after a delay
+        setTimeout(async () => {
+          try {
+            await fs.unlink(tempFile)
+          } catch {
+            // Ignore cleanup errors
+          }
+        }, 10000)
       } else if (printer.isZebra) {
         // Zebra printers: Send ZPL test label
         const date = new Date().toLocaleString('es-ES')

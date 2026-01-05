@@ -33,6 +33,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
   openExternal: (url: string) => ipcRenderer.invoke('open-external', url),
   getAppVersion: () => ipcRenderer.invoke('get-app-version'),
 
+  // Updates
+  checkForUpdates: () => ipcRenderer.invoke('check-for-updates'),
+  installUpdate: () => ipcRenderer.invoke('install-update'),
+
   // Events
   onPrintersUpdated: (callback: () => void) => {
     ipcRenderer.on('printers-updated', callback)
@@ -86,6 +90,13 @@ declare global {
       stopService: () => Promise<{ success: boolean }>
       openExternal: (url: string) => Promise<void>
       getAppVersion: () => Promise<string>
+      checkForUpdates: () => Promise<{
+        updateAvailable: boolean
+        currentVersion?: string
+        latestVersion?: string
+        error?: string
+      }>
+      installUpdate: () => Promise<void>
       onPrintersUpdated: (callback: () => void) => () => void
     }
   }

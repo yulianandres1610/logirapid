@@ -1,0 +1,28 @@
+LogiRapid Print Service - End User License Agreement
+
+Copyright (c) 2024-2025 LogiRapid LLC. All rights reserved.
+
+TERMS AND CONDITIONS
+
+1. LICENSE GRANT
+LogiRapid LLC grants you a non-exclusive, non-transferable license to use the LogiRapid Print Service software ("Software") for your personal or business use.
+
+2. RESTRICTIONS
+You may not:
+- Modify, reverse engineer, or decompile the Software
+- Distribute, sell, or transfer the Software to third parties
+- Remove any copyright notices from the Software
+
+3. DISCLAIMER
+THE SOFTWARE IS PROVIDED "AS IS" WITHOUT WARRANTY OF ANY KIND. LOGIRAPID LLC DISCLAIMS ALL WARRANTIES, EXPRESS OR IMPLIED.
+
+4. LIMITATION OF LIABILITY
+IN NO EVENT SHALL LOGIRAPID LLC BE LIABLE FOR ANY DAMAGES ARISING FROM THE USE OF THIS SOFTWARE.
+
+5. TERMINATION
+This license is effective until terminated. It will terminate automatically if you fail to comply with any term of this agreement.
+
+6. CONTACT
+For questions about this license, contact: soporte@logirapid.com
+
+By installing this software, you agree to these terms.

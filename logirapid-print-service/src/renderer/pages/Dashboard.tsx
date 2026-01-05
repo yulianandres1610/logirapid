@@ -32,6 +32,13 @@ export default function DashboardPage({ onLogout }: DashboardPageProps) {
   const [credentials, setCredentials] = useState<{ serviceCode: string; serverUrl: string } | null>(null)
   const [appVersion, setAppVersion] = useState('')
   const [printingTest, setPrintingTest] = useState<string | null>(null)
+  const [checkingUpdates, setCheckingUpdates] = useState(false)
+  const [updateStatus, setUpdateStatus] = useState<{
+    available: boolean
+    currentVersion?: string
+    latestVersion?: string
+    message?: string
+  } | null>(null)
 
   const fetchStatus = useCallback(async () => {
     try {
@@ -103,6 +110,40 @@ export default function DashboardPage({ onLogout }: DashboardPageProps) {
       await window.electronAPI.clearCredentials()
       onLogout()
     }
+  }
+
+  const handleCheckUpdates = async () => {
+    setCheckingUpdates(true)
+    setUpdateStatus(null)
+    try {
+      const result = await window.electronAPI.checkForUpdates()
+      setUpdateStatus({
+        available: result.updateAvailable,
+        currentVersion: result.currentVersion,
+        latestVersion: result.latestVersion,
+        message: result.error || (result.updateAvailable
+          ? `Nueva versión ${result.latestVersion} disponible`
+          : 'Ya tienes la última versión')
+      })
+
+      if (result.updateAvailable) {
+        if (confirm(`Nueva versión ${result.latestVersion} disponible.\n\n¿Descargar e instalar ahora?`)) {
+          // La descarga ya se inició automáticamente, solo esperamos
+          alert('La actualización se descargará en segundo plano.\nLa aplicación se reiniciará cuando esté lista.')
+        }
+      }
+    } catch (error) {
+      setUpdateStatus({
+        available: false,
+        message: 'Error al buscar actualizaciones'
+      })
+    } finally {
+      setCheckingUpdates(false)
+    }
+  }
+
+  const handleInstallUpdate = async () => {
+    await window.electronAPI.installUpdate()
   }
 
   if (loading) {
@@ -313,6 +354,56 @@ export default function DashboardPage({ onLogout }: DashboardPageProps) {
                 <span className="text-white">v{appVersion}</span>
               </div>
             </div>
+          </div>
+
+          {/* Update Section */}
+          <div className="bg-white/10 rounded-xl p-4">
+            <h3 className="text-white font-medium mb-4">Actualizaciones</h3>
+            <button
+              onClick={handleCheckUpdates}
+              disabled={checkingUpdates}
+              className="w-full py-3 bg-blue-500/20 hover:bg-blue-500/30 disabled:bg-gray-500/20 text-blue-400 disabled:text-gray-400 font-medium rounded-xl transition-colors flex items-center justify-center gap-2"
+            >
+              {checkingUpdates ? (
+                <>
+                  <div className="w-5 h-5 border-2 border-gray-400/30 border-t-blue-400 rounded-full animate-spin" />
+                  Buscando actualizaciones...
+                </>
+              ) : (
+                <>
+                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+                  </svg>
+                  Buscar Actualizaciones
+                </>
+              )}
+            </button>
+
+            {updateStatus && (
+              <div className={`mt-3 p-3 rounded-lg text-sm ${
+                updateStatus.available
+                  ? 'bg-green-500/20 text-green-400'
+                  : 'bg-gray-500/20 text-gray-400'
+              }`}>
+                <div className="flex items-center gap-2">
+                  {updateStatus.available ? (
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                  ) : (
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                    </svg>
+                  )}
+                  {updateStatus.message}
+                </div>
+                {updateStatus.available && (
+                  <p className="text-xs mt-1 opacity-75">
+                    v{updateStatus.currentVersion} → v{updateStatus.latestVersion}
+                  </p>
+                )}
+              </div>
+            )}
           </div>
 
           <button

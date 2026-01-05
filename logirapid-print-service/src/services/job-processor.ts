@@ -577,8 +577,7 @@ class JobProcessor {
   }
 
   private async printEscPos(printer: DetectedPrinter, data: Buffer): Promise<void> {
-    // For USB thermal printers, we can write directly to the device
-    // This is platform-specific
+    // For USB thermal printers, send raw ESC/POS data
     const tempFile = join(tmpdir(), `print-${uuidv4()}.bin`)
     await writeFile(tempFile, data)
 
@@ -586,82 +585,127 @@ class JobProcessor {
 
     try {
       if (process.platform === 'win32') {
-        // Windows: Use PowerShell to send raw data to printer
-        // First try using .NET System.Drawing.Printing
-        const escapedPrinter = printer.systemName.replace(/'/g, "''")
-        const escapedFile = tempFile.replace(/'/g, "''").replace(/\\/g, '\\\\')
+        // Windows: Use PowerShell to send raw data to printer via Windows Spooler
+        const escapedPrinter = printer.systemName.replace(/'/g, "''").replace(/"/g, '`"')
+        const escapedFile = tempFile.replace(/\\/g, '/')
 
         console.log(`[Job Processor] Windows ESC/POS: Sending to "${printer.systemName}"`)
 
-        // Method 1: Use RawPrinterHelper via PowerShell (most reliable for thermal printers)
+        // Create a simple PowerShell script file to avoid command line escaping issues
+        const psScriptFile = join(tmpdir(), `print-script-${uuidv4()}.ps1`)
         const psScript = `
-          Add-Type -TypeDefinition @'
-          using System;
-          using System.IO;
-          using System.Runtime.InteropServices;
-          public class RawPrinterHelper {
-            [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Ansi)]
-            public class DOCINFOA {
-              [MarshalAs(UnmanagedType.LPStr)] public string pDocName;
-              [MarshalAs(UnmanagedType.LPStr)] public string pOutputFile;
-              [MarshalAs(UnmanagedType.LPStr)] public string pDataType;
-            }
-            [DllImport("winspool.Drv", EntryPoint = "OpenPrinterA", SetLastError = true, CharSet = CharSet.Ansi, ExactSpelling = true, CallingConvention = CallingConvention.StdCall)]
-            public static extern bool OpenPrinter([MarshalAs(UnmanagedType.LPStr)] string szPrinter, out IntPtr hPrinter, IntPtr pd);
-            [DllImport("winspool.Drv", EntryPoint = "ClosePrinter", SetLastError = true, ExactSpelling = true, CallingConvention = CallingConvention.StdCall)]
-            public static extern bool ClosePrinter(IntPtr hPrinter);
-            [DllImport("winspool.Drv", EntryPoint = "StartDocPrinterA", SetLastError = true, CharSet = CharSet.Ansi, ExactSpelling = true, CallingConvention = CallingConvention.StdCall)]
-            public static extern bool StartDocPrinter(IntPtr hPrinter, Int32 level, [In, MarshalAs(UnmanagedType.LPStruct)] DOCINFOA di);
-            [DllImport("winspool.Drv", EntryPoint = "EndDocPrinter", SetLastError = true, ExactSpelling = true, CallingConvention = CallingConvention.StdCall)]
-            public static extern bool EndDocPrinter(IntPtr hPrinter);
-            [DllImport("winspool.Drv", EntryPoint = "StartPagePrinter", SetLastError = true, ExactSpelling = true, CallingConvention = CallingConvention.StdCall)]
-            public static extern bool StartPagePrinter(IntPtr hPrinter);
-            [DllImport("winspool.Drv", EntryPoint = "EndPagePrinter", SetLastError = true, ExactSpelling = true, CallingConvention = CallingConvention.StdCall)]
-            public static extern bool EndPagePrinter(IntPtr hPrinter);
-            [DllImport("winspool.Drv", EntryPoint = "WritePrinter", SetLastError = true, ExactSpelling = true, CallingConvention = CallingConvention.StdCall)]
-            public static extern bool WritePrinter(IntPtr hPrinter, IntPtr pBytes, Int32 dwCount, out Int32 dwWritten);
+$printerName = '${escapedPrinter}'
+$filePath = '${escapedFile}'
 
-            public static bool SendBytesToPrinter(string printerName, byte[] bytes) {
-              IntPtr hPrinter = IntPtr.Zero;
-              DOCINFOA di = new DOCINFOA();
-              di.pDocName = "ESC/POS Receipt";
-              di.pDataType = "RAW";
+Add-Type -TypeDefinition @"
+using System;
+using System.IO;
+using System.Runtime.InteropServices;
 
-              if (!OpenPrinter(printerName.Normalize(), out hPrinter, IntPtr.Zero)) return false;
-              if (!StartDocPrinter(hPrinter, 1, di)) { ClosePrinter(hPrinter); return false; }
-              if (!StartPagePrinter(hPrinter)) { EndDocPrinter(hPrinter); ClosePrinter(hPrinter); return false; }
+public class RawPrint {
+    [StructLayout(LayoutKind.Sequential)]
+    public struct DOCINFO {
+        [MarshalAs(UnmanagedType.LPWStr)] public string pDocName;
+        [MarshalAs(UnmanagedType.LPWStr)] public string pOutputFile;
+        [MarshalAs(UnmanagedType.LPWStr)] public string pDataType;
+    }
 
-              IntPtr pBytes = Marshal.AllocCoTaskMem(bytes.Length);
-              Marshal.Copy(bytes, 0, pBytes, bytes.Length);
-              int written = 0;
-              bool success = WritePrinter(hPrinter, pBytes, bytes.Length, out written);
-              Marshal.FreeCoTaskMem(pBytes);
+    [DllImport("winspool.drv", SetLastError = true, CharSet = CharSet.Unicode)]
+    public static extern bool OpenPrinter(string pPrinterName, out IntPtr phPrinter, IntPtr pDefault);
 
-              EndPagePrinter(hPrinter);
-              EndDocPrinter(hPrinter);
-              ClosePrinter(hPrinter);
-              return success;
-            }
+    [DllImport("winspool.drv", SetLastError = true)]
+    public static extern bool ClosePrinter(IntPtr hPrinter);
+
+    [DllImport("winspool.drv", SetLastError = true, CharSet = CharSet.Unicode)]
+    public static extern bool StartDocPrinter(IntPtr hPrinter, int Level, ref DOCINFO pDocInfo);
+
+    [DllImport("winspool.drv", SetLastError = true)]
+    public static extern bool EndDocPrinter(IntPtr hPrinter);
+
+    [DllImport("winspool.drv", SetLastError = true)]
+    public static extern bool StartPagePrinter(IntPtr hPrinter);
+
+    [DllImport("winspool.drv", SetLastError = true)]
+    public static extern bool EndPagePrinter(IntPtr hPrinter);
+
+    [DllImport("winspool.drv", SetLastError = true)]
+    public static extern bool WritePrinter(IntPtr hPrinter, byte[] pBytes, int dwCount, out int dwWritten);
+
+    public static bool SendRawData(string printerName, byte[] data) {
+        IntPtr hPrinter = IntPtr.Zero;
+        DOCINFO di = new DOCINFO();
+        di.pDocName = "ESC/POS Receipt";
+        di.pDataType = "RAW";
+
+        if (!OpenPrinter(printerName, out hPrinter, IntPtr.Zero)) {
+            Console.WriteLine("ERROR: OpenPrinter failed - " + Marshal.GetLastWin32Error());
+            return false;
+        }
+
+        if (!StartDocPrinter(hPrinter, 1, ref di)) {
+            Console.WriteLine("ERROR: StartDocPrinter failed - " + Marshal.GetLastWin32Error());
+            ClosePrinter(hPrinter);
+            return false;
+        }
+
+        if (!StartPagePrinter(hPrinter)) {
+            Console.WriteLine("ERROR: StartPagePrinter failed - " + Marshal.GetLastWin32Error());
+            EndDocPrinter(hPrinter);
+            ClosePrinter(hPrinter);
+            return false;
+        }
+
+        int written = 0;
+        bool success = WritePrinter(hPrinter, data, data.Length, out written);
+
+        if (!success) {
+            Console.WriteLine("ERROR: WritePrinter failed - " + Marshal.GetLastWin32Error());
+        }
+
+        EndPagePrinter(hPrinter);
+        EndDocPrinter(hPrinter);
+        ClosePrinter(hPrinter);
+
+        return success && written == data.Length;
+    }
+}
+"@
+
+try {
+    $bytes = [System.IO.File]::ReadAllBytes($filePath)
+    $result = [RawPrint]::SendRawData($printerName, $bytes)
+    if ($result) {
+        Write-Host "SUCCESS"
+    } else {
+        Write-Host "FAILED"
+        exit 1
+    }
+} catch {
+    Write-Host "ERROR: $($_.Exception.Message)"
+    exit 1
+}
+`
+        await writeFile(psScriptFile, psScript)
+
+        try {
+          const { stdout, stderr } = await execAsync(
+            `powershell -ExecutionPolicy Bypass -File "${psScriptFile}"`,
+            { encoding: 'utf8', timeout: 30000 }
+          )
+
+          console.log(`[Job Processor] PowerShell raw print output: ${stdout || stderr}`)
+
+          if (!stdout.includes('SUCCESS')) {
+            throw new Error(`Raw print failed: ${stderr || stdout}`)
           }
-'@
-          \$bytes = [System.IO.File]::ReadAllBytes('${escapedFile}')
-          \$result = [RawPrinterHelper]::SendBytesToPrinter('${escapedPrinter}', \$bytes)
-          if (\$result) { Write-Host 'SUCCESS' } else { Write-Host 'FAILED'; exit 1 }
-        `
-
-        const { stdout, stderr } = await execAsync(
-          `powershell -ExecutionPolicy Bypass -Command "${psScript.replace(/\n/g, ' ')}"`,
-          { encoding: 'utf8', timeout: 30000 }
-        )
-
-        console.log(`[Job Processor] PowerShell raw print output: ${stdout || stderr}`)
-
-        if (!stdout.includes('SUCCESS')) {
-          throw new Error(`Raw print failed: ${stderr || stdout}`)
+        } finally {
+          // Clean up script file
+          unlink(psScriptFile).catch(() => {})
         }
       } else {
         // On macOS/Linux, use lp command with raw option
-        await execAsync(`lp -d "${printer.systemName}" -o raw "${tempFile}"`)
+        const printerName = printer.systemName.replace(/'/g, "'\\''")
+        await execAsync(`lp -d '${printerName}' -o raw '${tempFile}'`)
       }
 
       console.log(`[Job Processor] ESC/POS data sent successfully`)
@@ -685,15 +729,90 @@ class JobProcessor {
 
     try {
       if (process.platform === 'win32') {
-        // Use SumatraPDF or PowerShell for silent printing
+        // Windows: Use multiple fallback methods for PDF printing
+        const escapedPrinter = printer.systemName.replace(/"/g, '\\"')
+        const escapedFile = tempFile.replace(/\\/g, '\\\\')
+
+        console.log(`[Job Processor] Windows PDF: Attempting to print to "${printer.systemName}"`)
+
+        // Method 1: Try using PDFtoPrinter.exe if available (best for silent printing)
+        // Method 2: Use PowerShell with .NET PrintDocument
+        // Method 3: Use Microsoft Edge headless
+
+        const psScript = `
+          # Try Method 1: Edge headless printing (works on Windows 10+)
+          try {
+            \$edgePath = (Get-ItemProperty 'HKLM:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\App Paths\\msedge.exe' -ErrorAction SilentlyContinue).'(default)'
+            if (\$edgePath -and (Test-Path \$edgePath)) {
+              Start-Process -FilePath \$edgePath -ArgumentList '--headless', '--disable-gpu', '--print-to-pdf-no-header', "--print-to-printer=\`"${escapedPrinter}\`"", "\`"${escapedFile}\`"" -Wait -NoNewWindow
+              Write-Host "SUCCESS:EDGE"
+              exit 0
+            }
+          } catch { }
+
+          # Method 2: Try Adobe Reader silent print
+          try {
+            \$adobePaths = @(
+              "\$env:ProgramFiles\\Adobe\\Acrobat Reader DC\\Reader\\AcroRd32.exe",
+              "\$env:ProgramFiles (x86)\\Adobe\\Acrobat Reader DC\\Reader\\AcroRd32.exe",
+              "\$env:ProgramFiles\\Adobe\\Reader 11.0\\Reader\\AcroRd32.exe"
+            )
+            foreach (\$adobePath in \$adobePaths) {
+              if (Test-Path \$adobePath) {
+                Start-Process -FilePath \$adobePath -ArgumentList "/t", "\`"${escapedFile}\`"", "\`"${escapedPrinter}\`"" -Wait
+                Start-Sleep -Seconds 3
+                Stop-Process -Name "AcroRd32" -Force -ErrorAction SilentlyContinue
+                Write-Host "SUCCESS:ADOBE"
+                exit 0
+              }
+            }
+          } catch { }
+
+          # Method 3: Try Foxit Reader
+          try {
+            \$foxitPath = "\$env:ProgramFiles (x86)\\Foxit Software\\Foxit Reader\\FoxitReader.exe"
+            if (Test-Path \$foxitPath) {
+              Start-Process -FilePath \$foxitPath -ArgumentList "/t", "\`"${escapedFile}\`"", "\`"${escapedPrinter}\`"" -Wait
+              Start-Sleep -Seconds 2
+              Stop-Process -Name "FoxitReader" -Force -ErrorAction SilentlyContinue
+              Write-Host "SUCCESS:FOXIT"
+              exit 0
+            }
+          } catch { }
+
+          # Method 4: Use Windows built-in print verb with shell
+          try {
+            \$shell = New-Object -ComObject Shell.Application
+            \$folder = \$shell.Namespace((Split-Path "${escapedFile}"))
+            \$file = \$folder.ParseName((Split-Path "${escapedFile}" -Leaf))
+            \$file.InvokeVerb("Print")
+            Start-Sleep -Seconds 3
+            Write-Host "SUCCESS:SHELL"
+            exit 0
+          } catch { }
+
+          # Method 5: Last resort - open PDF and show print dialog
+          try {
+            Start-Process "${escapedFile}" -Verb Print
+            Start-Sleep -Seconds 2
+            Write-Host "SUCCESS:VERB"
+            exit 0
+          } catch {
+            Write-Host "FAILED:ALL"
+            exit 1
+          }
+        `
+
         const { stdout, stderr } = await execAsync(
-          `powershell -Command "Start-Process -FilePath '${tempFile}' -Verb PrintTo -ArgumentList '${printer.systemName}' -Wait"`,
-          { encoding: 'utf8' }
+          `powershell -ExecutionPolicy Bypass -Command "${psScript.replace(/\n/g, ' ').replace(/\r/g, '')}"`,
+          { encoding: 'utf8', timeout: 60000 }
         )
-        if (stderr) {
-          console.error(`[Job Processor] Windows print stderr: ${stderr}`)
+
+        console.log(`[Job Processor] Windows PDF print output: ${stdout || stderr}`)
+
+        if (stdout.includes('FAILED:ALL')) {
+          throw new Error('All PDF printing methods failed')
         }
-        console.log(`[Job Processor] Windows print stdout: ${stdout || '(empty)'}`)
       } else if (process.platform === 'darwin') {
         // macOS: use lp command and capture output
         const printerName = printer.systemName.replace(/'/g, "'\\''")
