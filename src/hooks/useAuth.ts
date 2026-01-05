@@ -21,17 +21,63 @@ export function useAuth(): UseAuthReturn {
     error: null,
   })
 
+  // Verify session with server (check if user still exists in DB)
+  const verifySession = useCallback(async () => {
+    try {
+      const response = await fetch('/api/auth/verify-session', {
+        method: 'GET',
+        credentials: 'include'
+      })
+
+      const data = await response.json()
+
+      if (!data.valid) {
+        console.log('[AUTH] Session invalid:', data.error)
+        // Clear all auth data
+        localStorage.removeItem('user')
+        localStorage.removeItem('auth-token')
+        // Clear cookies
+        const cookieDomain = window.location.hostname.includes('logirapid.com')
+          ? '.logirapid.com'
+          : undefined
+        const cookiesToClear = ['auth-token', 'user-id', 'user-name', 'user-email', 'user-role', 'user-company-id', 'user-company-name', 'user-company-type']
+        cookiesToClear.forEach(cookie => {
+          if (cookieDomain) {
+            document.cookie = `${cookie}=; path=/; domain=${cookieDomain}; expires=Thu, 01 Jan 1970 00:00:00 GMT`
+          }
+          document.cookie = `${cookie}=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT`
+        })
+        setState({ user: null, isLoading: false, isTransitioning: false, error: null })
+        // Redirect to login if action is logout
+        if (data.action === 'logout') {
+          window.location.href = '/login'
+        }
+        return false
+      }
+      return true
+    } catch (error) {
+      console.error('[AUTH] Error verifying session:', error)
+      return true // On error, don't logout (could be network issue)
+    }
+  }, [])
+
   // Check for existing auth on mount
   useEffect(() => {
     if (typeof window === 'undefined') return
 
-    try {
-      // Check localStorage first
-      const userStr = localStorage.getItem('user')
-      if (userStr) {
-        const user = JSON.parse(userStr)
-        setState(prev => ({ ...prev, user, isLoading: false }))
-      } else {
+    const initAuth = async () => {
+      try {
+        // Check localStorage first
+        const userStr = localStorage.getItem('user')
+        if (userStr) {
+          const user = JSON.parse(userStr)
+          setState(prev => ({ ...prev, user, isLoading: false }))
+          // Verify session in background
+          verifySession()
+          return
+        }
+
+        // Rest of the original logic...
         // Check cookies and reconstruct user from them
         const authToken = document.cookie
           .split('; ')
@@ -88,16 +134,20 @@ export function useAuth(): UseAuthReturn {
           localStorage.setItem('user', JSON.stringify(user))
           localStorage.setItem('auth-token', authToken)
           setState(prev => ({ ...prev, user, isLoading: false }))
+          // Verify session in background
+          verifySession()
         } else {
           setState(prev => ({ ...prev, isLoading: false }))
         }
+      } catch (error) {
+        console.error('Error loading user from storage:', error)
+        localStorage.removeItem('user')
+        setState(prev => ({ ...prev, isLoading: false }))
       }
-    } catch (error) {
-      console.error('Error loading user from storage:', error)
-      localStorage.removeItem('user')
-      setState(prev => ({ ...prev, isLoading: false }))
     }
-  }, [])
+
+    initAuth()
+  }, [verifySession])
 
   const login = useCallback(async (credentials: LoginCredentials) => {
     setState(prev => ({ ...prev, isLoading: true, error: null }))
