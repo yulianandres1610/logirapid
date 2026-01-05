@@ -251,12 +251,12 @@ export async function uploadProductImageWithIndex(
 
   const storagePath = getStoragePathWithIndex(barcode, imageIndex, extension)
 
-  // Subir imagen
+  // Subir imagen (upsert: true para permitir reemplazar imágenes existentes)
   const { error } = await supabase.storage
     .from(BUCKET)
     .upload(storagePath, imageBuffer, {
       contentType,
-      upsert: false // No sobrescribir
+      upsert: true
     })
 
   if (error) {
