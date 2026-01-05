@@ -119,10 +119,10 @@ export async function POST(
         paramIndex++
       }
 
-      // Check if we should retry
+      // Check if we should retry - update the first parameter instead of adding duplicate
       const newAttempts = job.attempts + 1
       if (newAttempts < 3) { // max_attempts default is 3
-        updateQuery += `, status = 'pending'` // Reset to pending for retry
+        updateParams[0] = 'pending' // Change status to pending for retry
       }
     }
 
