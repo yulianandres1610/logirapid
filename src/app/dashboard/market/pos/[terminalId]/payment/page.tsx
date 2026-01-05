@@ -586,7 +586,7 @@ function PaymentContent() {
         await saveOrderToIndexedDB(offlineOrder)
 
         const offlineOrderNumber = `OFFLINE-${Date.now().toString(36).toUpperCase()}`
-        router.push(`/dashboard/market/pos/${terminalId}/receipt?offlineId=${offlineId}&orderNumber=${offlineOrderNumber}&offline=true`)
+        router.push(`/dashboard/market/pos/${terminalId}/receipt?offlineId=${offlineId}&orderNumber=${offlineOrderNumber}&offline=true&autoPrint=true`)
         return
       }
 
@@ -609,7 +609,7 @@ function PaymentContent() {
       const data = await response.json()
 
       if (data.success) {
-        router.push(`/dashboard/market/pos/${terminalId}/receipt?orderId=${data.data.id}&orderNumber=${data.data.orderNumber}`)
+        router.push(`/dashboard/market/pos/${terminalId}/receipt?orderId=${data.data.id}&orderNumber=${data.data.orderNumber}&autoPrint=true`)
       } else {
         setError(data.error || 'Error al procesar pago')
       }
@@ -652,7 +652,7 @@ function PaymentContent() {
           await saveOrderToIndexedDB(offlineOrder)
 
           const offlineOrderNumber = `OFFLINE-${Date.now().toString(36).toUpperCase()}`
-          router.push(`/dashboard/market/pos/${terminalId}/receipt?offlineId=${offlineId}&orderNumber=${offlineOrderNumber}&offline=true`)
+          router.push(`/dashboard/market/pos/${terminalId}/receipt?offlineId=${offlineId}&orderNumber=${offlineOrderNumber}&offline=true&autoPrint=true`)
           return
         } catch {
           setError('Error de conexión')
@@ -1056,7 +1056,7 @@ function PaymentContent() {
             className={`px-8 py-3 rounded-lg font-semibold flex items-center gap-2 transition-all ${
               isFullyPaid && !processing
                 ? 'bg-green-500 text-white hover:bg-green-600'
-                : 'bg-gray-600 text-gray-400 cursor-not-allowed'
+                : `${tc.button} ${tc.textMuted} cursor-not-allowed opacity-70`
             }`}
           >
             {processing ? (

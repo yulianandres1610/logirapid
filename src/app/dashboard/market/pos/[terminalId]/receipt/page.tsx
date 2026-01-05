@@ -296,9 +296,11 @@ function ReceiptContent() {
   const orderNumber = searchParams.get('orderNumber')
   const offlineId = searchParams.get('offlineId')
   const isOfflineOrder = searchParams.get('offline') === 'true'
+  const autoPrint = searchParams.get('autoPrint') === 'true'
 
   // State
   const [isClient, setIsClient] = useState(false)
+  const [hasAutoprinted, setHasAutoprinted] = useState(false)
   const [theme, setTheme] = useState<Theme>('dark')
   const [order, setOrder] = useState<Order | null>(null)
   const [loading, setLoading] = useState(true)
@@ -614,6 +616,100 @@ function ReceiptContent() {
       setShowPrintModal(true)
     }
   }
+
+  // Auto-print silently when order loads (if autoPrint=true)
+  useEffect(() => {
+    if (!order || hasAutoprinted || !autoPrint || !isClient) return
+
+    const triggerAutoPrint = async () => {
+      setHasAutoprinted(true)
+      console.log('[Receipt] Auto-print triggered')
+
+      try {
+        // Fetch print services
+        const response = await fetch('/api/print/services?includeOffline=false')
+        const data = await response.json()
+
+        if (data.success && data.data?.services) {
+          const activeServices = data.data.services.filter(
+            (s: { status: string; printers?: unknown[] }) => s.status === 'active' && s.printers && s.printers.length > 0
+          )
+
+          // Find first online thermal printer
+          let thermalPrinter = null
+          let serviceId = null
+
+          for (const service of activeServices) {
+            const printer = service.printers.find(
+              (p: { printerType: string; isOnline: boolean }) => p.printerType === 'thermal_80mm' && p.isOnline
+            )
+            if (printer) {
+              thermalPrinter = printer
+              serviceId = service.id
+              break
+            }
+          }
+
+          if (thermalPrinter && serviceId) {
+            console.log('[Receipt] Auto-printing to:', thermalPrinter.printerName)
+
+            // Send print job silently
+            const printResponse = await fetch('/api/print/jobs', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                documentType: 'pos_receipt',
+                documentData: {
+                  orderNumber: order.orderNumber,
+                  customerName: order.customerName,
+                  cashierName: order.createdByName,
+                  createdAt: order.createdAt,
+                  lines: order.lines.map(l => ({
+                    productName: l.productName,
+                    quantity: l.quantity,
+                    unitPrice: l.unitPrice,
+                    total: l.total
+                  })),
+                  subtotal: order.subtotal,
+                  discountAmount: order.discountAmount,
+                  totalAmount: order.totalAmount,
+                  totalAmountCUP: toCUP(order.totalAmount),
+                  subtotalCUP: toCUP(order.subtotal),
+                  currency: order.currency,
+                  exchangeRate: exchangeRate,
+                  payments: order.payments.map(p => ({
+                    method: p.method,
+                    amount: p.amount,
+                    currency: p.currency
+                  }))
+                },
+                copies: 1,
+                printServiceId: serviceId,
+                printerId: thermalPrinter.id,
+                sourceType: 'pos_order',
+                sourceId: order.id || 0
+              })
+            })
+
+            const printData = await printResponse.json()
+            if (printData.success) {
+              console.log('[Receipt] Auto-print job sent successfully')
+            } else {
+              console.error('[Receipt] Auto-print failed:', printData.error)
+            }
+          } else {
+            console.log('[Receipt] No thermal printer available for auto-print')
+          }
+        }
+      } catch (err) {
+        console.error('[Receipt] Auto-print error:', err)
+      }
+    }
+
+    // Small delay to ensure everything is loaded
+    const timer = setTimeout(triggerAutoPrint, 500)
+    return () => clearTimeout(timer)
+  }, [order, hasAutoprinted, autoPrint, isClient, exchangeRate])
 
   // Print receipt (browser fallback)
   const printReceipt = () => {
