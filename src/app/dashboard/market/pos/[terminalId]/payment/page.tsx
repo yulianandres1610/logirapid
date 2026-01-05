@@ -768,7 +768,7 @@ function PaymentContent() {
           {/* Left Column - Order Summary */}
           <div className="space-y-4">
             {/* Order Summary Card */}
-            <div className="rounded-xl p-4 shadow-sm bg-gray-800">
+            <div className={`rounded-xl p-4 shadow-sm ${tc.bgCard}`}>
               <h2 className="text-lg font-semibold mb-4">Resumen de Orden</h2>
               <div className="space-y-2 max-h-48 overflow-auto">
                 {cart.map((item, idx) => (
@@ -780,7 +780,7 @@ function PaymentContent() {
                   </div>
                 ))}
               </div>
-              <div className="mt-4 pt-4 border-t border-gray-700 space-y-2">
+              <div className={`mt-4 pt-4 border-t ${tc.border} space-y-2`}>
                 <div className="flex justify-between">
                   <span>Subtotal:</span>
                   <span>{formatCurrency(totals.subtotal)}</span>
@@ -799,11 +799,11 @@ function PaymentContent() {
             </div>
 
             {/* Payments List */}
-            <div className="rounded-xl p-4 shadow-sm bg-gray-800">
+            <div className={`rounded-xl p-4 shadow-sm ${tc.bgCard}`}>
               <h2 className="text-lg font-semibold mb-4">Pagos Realizados</h2>
 
               {payments.length === 0 ? (
-                <p className="text-gray-500 text-center py-4">No hay pagos agregados</p>
+                <p className={`${tc.textMuted} text-center py-4`}>No hay pagos agregados</p>
               ) : (
                 <div className="space-y-2">
                   {payments.map((payment) => {
@@ -812,13 +812,13 @@ function PaymentContent() {
                     return (
                       <div
                         key={payment.id}
-                        className="flex items-center justify-between p-3 rounded-lg bg-gray-700"
+                        className={`flex items-center justify-between p-3 rounded-lg ${tc.button}`}
                       >
                         <div className="flex items-center gap-3">
                           <MethodIcon />
                           <div>
                             <p className="font-medium">{method?.label}</p>
-                            <p className="text-sm text-gray-400">
+                            <p className={`text-sm ${tc.textMuted}`}>
                               {formatCurrency(payment.amount, payment.currency)}
                               {payment.currency !== 'USD' && (
                                 <span className="ml-1">(≈{formatCurrency(payment.amountInUSD)})</span>
@@ -838,7 +838,7 @@ function PaymentContent() {
                 </div>
               )}
 
-              <div className="mt-4 pt-4 border-t border-gray-700 space-y-2">
+              <div className={`mt-4 pt-4 border-t ${tc.border} space-y-2`}>
                 <div className="flex justify-between">
                   <span>Total pagado:</span>
                   <span className="font-semibold">{formatCurrency(totalPaidUSD)}</span>
@@ -858,7 +858,7 @@ function PaymentContent() {
 
           {/* Right Column - Add Payment */}
           <div className="space-y-4">
-            <div className="rounded-xl p-4 shadow-sm bg-gray-800">
+            <div className={`rounded-xl p-4 shadow-sm ${tc.bgCard}`}>
               <h2 className="text-lg font-semibold mb-4">Agregar Pago</h2>
 
               {/* Offline Warning */}
@@ -867,14 +867,14 @@ function PaymentContent() {
                   <WifiOffIcon />
                   <div className="text-sm">
                     <span className="font-medium text-yellow-500">Modo Offline</span>
-                    <span className="text-gray-400 ml-2">Efectivo, transferencia y crédito disponibles.</span>
+                    <span className={`${tc.textMuted} ml-2`}>Efectivo, transferencia y crédito disponibles.</span>
                   </div>
                 </div>
               )}
 
               {/* Payment Method */}
               <div className="mb-4">
-                <label className="text-sm text-gray-400 mb-2 block">Método de Pago</label>
+                <label className={`text-sm ${tc.textMuted} mb-2 block`}>Método de Pago</label>
                 <div className="grid grid-cols-4 gap-2">
                   {PAYMENT_METHODS.map((method) => {
                     const MethodIcon = method.Icon
@@ -886,10 +886,10 @@ function PaymentContent() {
                         disabled={isDisabled}
                         className={`p-3 rounded-lg flex flex-col items-center gap-1 transition-all ${
                           isDisabled
-                            ? 'bg-gray-700 text-gray-500 cursor-not-allowed opacity-50'
+                            ? `${tc.button} text-gray-500 cursor-not-allowed opacity-50`
                             : selectedMethod === method.id
                               ? 'bg-blue-500 text-white'
-                              : 'bg-gray-700 hover:bg-gray-600'
+                              : tc.button
                         }`}
                       >
                         <MethodIcon />
@@ -903,8 +903,8 @@ function PaymentContent() {
               {/* Currency */}
               <div className="mb-4">
                 <div className="flex items-center justify-between mb-2">
-                  <label className="text-sm text-gray-400">Moneda</label>
-                  <span className="text-xs text-gray-500">
+                  <label className={`text-sm ${tc.textMuted}`}>Moneda</label>
+                  <span className={`text-xs ${tc.textMuted}`}>
                     1 USD = {rates.CUP} CUP | {rates.MLC.toFixed(2)} MLC
                   </span>
                 </div>
@@ -916,7 +916,7 @@ function PaymentContent() {
                       className={`p-3 rounded-lg font-medium transition-all ${
                         selectedCurrency === currency.id
                           ? 'bg-blue-500 text-white'
-                          : 'bg-gray-700 hover:bg-gray-600'
+                          : tc.button
                       }`}
                     >
                       {currency.label}
@@ -927,9 +927,9 @@ function PaymentContent() {
 
               {/* Amount Input */}
               <div className="mb-4">
-                <label className="text-sm text-gray-400 mb-2 block">Monto</label>
-                <div className="relative rounded-lg bg-gray-700">
-                  <span className="absolute left-4 top-1/2 -translate-y-1/2 text-2xl text-gray-400">
+                <label className={`text-sm ${tc.textMuted} mb-2 block`}>Monto</label>
+                <div className={`relative rounded-lg ${tc.input}`}>
+                  <span className={`absolute left-4 top-1/2 -translate-y-1/2 text-2xl ${tc.textMuted}`}>
                     {CURRENCIES.find(c => c.id === selectedCurrency)?.symbol}
                   </span>
                   <input
@@ -937,7 +937,7 @@ function PaymentContent() {
                     value={amount}
                     onChange={(e) => setAmount(e.target.value.replace(/[^0-9.]/g, ''))}
                     placeholder="0.00"
-                    className="w-full pl-10 pr-4 py-4 text-3xl font-bold text-right bg-transparent rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-white"
+                    className={`w-full pl-10 pr-4 py-4 text-3xl font-bold text-right bg-transparent rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${tc.text}`}
                   />
                 </div>
               </div>
@@ -956,7 +956,7 @@ function PaymentContent() {
                   <button
                     key={val}
                     onClick={() => setAmount(val.toString())}
-                    className="p-2 rounded-lg text-sm font-medium bg-gray-700 hover:bg-gray-600"
+                    className={`p-2 rounded-lg text-sm font-medium ${tc.button}`}
                   >
                     ${val}
                   </button>
@@ -965,7 +965,7 @@ function PaymentContent() {
                   <button
                     key={val}
                     onClick={() => setAmount(val.toString())}
-                    className="p-2 rounded-lg text-sm font-medium bg-gray-700 hover:bg-gray-600"
+                    className={`p-2 rounded-lg text-sm font-medium ${tc.button}`}
                   >
                     ${val.toLocaleString()}
                   </button>
@@ -981,7 +981,7 @@ function PaymentContent() {
                     className={`p-4 rounded-lg text-xl font-bold transition-all active:scale-95 ${
                       key === 'C'
                         ? 'bg-red-500 text-white hover:bg-red-600'
-                        : 'bg-gray-700 hover:bg-gray-600'
+                        : tc.button
                     }`}
                   >
                     {key}
@@ -996,7 +996,7 @@ function PaymentContent() {
                 className={`w-full p-4 rounded-lg flex items-center justify-center gap-2 font-semibold transition-all ${
                   amount && parseFloat(amount) > 0
                     ? 'bg-blue-500 text-white hover:bg-blue-600'
-                    : 'bg-gray-600 text-gray-400 cursor-not-allowed'
+                    : `${tc.button} ${tc.textMuted} cursor-not-allowed`
                 }`}
               >
                 <PlusIcon />
@@ -1006,13 +1006,13 @@ function PaymentContent() {
 
             {/* Change Currency */}
             {remainingUSD < 0 && (
-              <div className="rounded-xl p-4 shadow-sm bg-gray-800">
+              <div className={`rounded-xl p-4 shadow-sm ${tc.bgCard}`}>
                 <h3 className="font-semibold mb-3">Devolver cambio en:</h3>
                 <div className="grid grid-cols-2 gap-2">
                   <button
                     onClick={() => setChangeCurrency('USD')}
                     className={`p-3 rounded-lg font-medium ${
-                      changeCurrency === 'USD' ? 'bg-blue-500 text-white' : 'bg-gray-700'
+                      changeCurrency === 'USD' ? 'bg-blue-500 text-white' : tc.button
                     }`}
                   >
                     USD ({formatCurrency(Math.abs(remainingUSD))})
@@ -1020,7 +1020,7 @@ function PaymentContent() {
                   <button
                     onClick={() => setChangeCurrency('CUP')}
                     className={`p-3 rounded-lg font-medium ${
-                      changeCurrency === 'CUP' ? 'bg-blue-500 text-white' : 'bg-gray-700'
+                      changeCurrency === 'CUP' ? 'bg-blue-500 text-white' : tc.button
                     }`}
                   >
                     CUP ({formatCurrency(Math.abs(remainingUSD) * rates.CUP, 'CUP')})
@@ -1041,11 +1041,11 @@ function PaymentContent() {
       </div>
 
       {/* Footer */}
-      <footer className="p-4 border-t bg-gray-800 border-gray-700">
+      <footer className={`p-4 border-t ${tc.bgAlt} ${tc.border}`}>
         <div className="max-w-6xl mx-auto flex items-center justify-between">
           <button
             onClick={goBackToPOS}
-            className="px-6 py-3 rounded-lg font-medium bg-gray-700 hover:bg-gray-600"
+            className={`px-6 py-3 rounded-lg font-medium ${tc.button}`}
           >
             Cancelar Venta
           </button>

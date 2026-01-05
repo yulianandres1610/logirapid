@@ -8,6 +8,43 @@ import { useRouter, useParams, useSearchParams } from 'next/navigation'
 // No external imports that could fail offline
 // ============================================
 
+// Theme type for dynamic styling
+type Theme = 'dark' | 'light'
+
+// Get theme from localStorage (safe for offline)
+const getThemeFromStorage = (): Theme => {
+  if (typeof window === 'undefined') return 'dark'
+  try {
+    return (localStorage.getItem('theme') as Theme) || 'dark'
+  } catch {
+    return 'dark'
+  }
+}
+
+// Theme-aware styles
+const themeStyles = {
+  dark: {
+    bg: 'bg-gray-900',
+    bgAlt: 'bg-gray-800',
+    bgCard: 'bg-gray-800',
+    text: 'text-white',
+    textMuted: 'text-gray-400',
+    border: 'border-gray-700',
+    button: 'bg-gray-700 hover:bg-gray-600',
+  },
+  light: {
+    bg: 'bg-gray-100',
+    bgAlt: 'bg-white',
+    bgCard: 'bg-white',
+    text: 'text-gray-900',
+    textMuted: 'text-gray-600',
+    border: 'border-gray-300',
+    button: 'bg-gray-200 hover:bg-gray-300',
+  }
+}
+
+const getThemeClasses = (theme: Theme) => themeStyles[theme]
+
 // Error Boundary for catching any unhandled errors
 interface ErrorBoundaryState {
   hasError: boolean
@@ -35,14 +72,18 @@ class ReceiptErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
 
   render() {
     if (this.state.hasError) {
+      const currentTheme = getThemeFromStorage()
+      const bgClass = currentTheme === 'dark' ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-900'
+      const cardClass = currentTheme === 'dark' ? 'text-gray-400' : 'text-gray-600'
+      const btnClass = currentTheme === 'dark' ? 'bg-gray-700 hover:bg-gray-600' : 'bg-gray-200 hover:bg-gray-300'
       return (
-        <div className="min-h-screen flex items-center justify-center bg-gray-900 text-white">
+        <div className={`min-h-screen flex items-center justify-center ${bgClass}`}>
           <div className="text-center max-w-md p-6">
             <svg className="w-16 h-16 mx-auto mb-4 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
             <h2 className="text-xl font-bold mb-2">Error en la pagina</h2>
-            <p className="text-gray-400 mb-4">
+            <p className={`${cardClass} mb-4`}>
               {this.state.error?.message || 'Ha ocurrido un error inesperado'}
             </p>
             <div className="flex flex-col gap-2">
@@ -59,7 +100,7 @@ class ReceiptErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
                 onClick={() => {
                   window.location.href = `/dashboard/market/pos/${this.props.terminalId}`
                 }}
-                className="px-4 py-2 bg-gray-700 text-white rounded-lg hover:bg-gray-600"
+                className={`px-4 py-2 ${btnClass} rounded-lg`}
               >
                 Volver al POS
               </button>
@@ -258,6 +299,7 @@ function ReceiptContent() {
 
   // State
   const [isClient, setIsClient] = useState(false)
+  const [theme, setTheme] = useState<Theme>('dark')
   const [order, setOrder] = useState<Order | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -271,7 +313,21 @@ function ReceiptContent() {
   // Initialize on client
   useEffect(() => {
     setIsClient(true)
+    setTheme(getThemeFromStorage())
+
+    // Listen for theme changes from other tabs/windows
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === 'theme' && e.newValue) {
+        setTheme(e.newValue as Theme)
+      }
+    }
+
+    window.addEventListener('storage', handleStorageChange)
+    return () => window.removeEventListener('storage', handleStorageChange)
   }, [])
+
+  // Theme classes
+  const tc = getThemeClasses(theme)
 
   // Fetch exchange rate
   useEffect(() => {
@@ -648,8 +704,9 @@ ${order.payments.map(p =>
 
   // Show loading
   if (!isClient || loading) {
+    const loadingBg = getThemeFromStorage() === 'dark' ? 'bg-gray-900' : 'bg-gray-100'
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-900">
+      <div className={`min-h-screen flex items-center justify-center ${loadingBg}`}>
         <LoaderIcon />
       </div>
     )
@@ -658,7 +715,7 @@ ${order.payments.map(p =>
   // Show error
   if (error) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-900">
+      <div className={`min-h-screen flex items-center justify-center ${tc.bg} ${tc.text}`}>
         <div className="text-center">
           <AlertIcon />
           <p className="text-red-500 mb-4">{error}</p>
@@ -674,12 +731,12 @@ ${order.payments.map(p =>
   }
 
   return (
-    <div className="min-h-screen flex flex-col bg-gray-900 text-white">
+    <div className={`min-h-screen flex flex-col ${tc.bg} ${tc.text}`}>
       {/* Success Header */}
       <div className="py-8 text-center">
         <CheckIcon />
         <h1 className="text-2xl font-bold mb-2">Pago Completado</h1>
-        <p className="text-gray-400">Orden #{order?.orderNumber}</p>
+        <p className={tc.textMuted}>Orden #{order?.orderNumber}</p>
 
         {/* Offline Order Badge */}
         {isOfflineOrder && (
@@ -695,11 +752,11 @@ ${order.payments.map(p =>
       <div className="flex-1 overflow-auto px-4 pb-4">
         <div className="max-w-2xl mx-auto space-y-6">
           {/* Receipt Preview */}
-          <div className="rounded-xl shadow-lg overflow-hidden bg-gray-800">
+          <div className={`rounded-xl shadow-lg overflow-hidden ${tc.bgCard}`}>
             <div className="p-6 font-mono text-sm">
               <div className="text-center mb-4">
                 <p className="font-bold text-lg">RECIBO DE VENTA</p>
-                <p className="text-gray-400">{formatDate(order?.createdAt || '')}</p>
+                <p className={tc.textMuted}>{formatDate(order?.createdAt || '')}</p>
               </div>
 
               <div className="flex justify-between mb-2">
@@ -711,11 +768,11 @@ ${order.payments.map(p =>
                 <span>{order?.createdByName}</span>
               </div>
 
-              <div className="border-t border-b border-gray-700 py-4 my-4 space-y-2">
+              <div className={`border-t border-b ${tc.border} py-4 my-4 space-y-2`}>
                 {order?.lines.map((line, idx) => (
                   <div key={idx}>
                     <p className="font-medium">{line.productName}</p>
-                    <div className="flex justify-between text-gray-400">
+                    <div className={`flex justify-between ${tc.textMuted}`}>
                       <span>{line.quantity} x {formatCurrency(line.unitPrice)}</span>
                       <span>{formatCurrency(line.total)}</span>
                     </div>
@@ -734,7 +791,7 @@ ${order.payments.map(p =>
                     <span>-{formatDualCurrency(order?.discountAmount || 0)}</span>
                   </div>
                 )}
-                <div className="flex flex-col pt-2 border-t border-gray-600">
+                <div className={`flex flex-col pt-2 border-t ${tc.border}`}>
                   <div className="flex justify-between text-xl font-bold">
                     <span>TOTAL:</span>
                     <span>${(order?.totalAmount || 0).toFixed(2)}</span>
@@ -746,12 +803,12 @@ ${order.payments.map(p =>
               </div>
 
               {/* Exchange Rate Info */}
-              <div className="text-center text-xs text-gray-500 mt-2">
+              <div className={`text-center text-xs ${tc.textMuted} mt-2`}>
                 Tasa: 1 USD = {exchangeRate.toLocaleString('es-ES')} CUP
               </div>
 
-              <div className="border-t border-gray-700 pt-4 mt-4">
-                <p className="text-gray-400 mb-2">Pagos:</p>
+              <div className={`border-t ${tc.border} pt-4 mt-4`}>
+                <p className={`${tc.textMuted} mb-2`}>Pagos:</p>
                 {order?.payments.map((payment, idx) => (
                   <div key={idx} className="flex justify-between">
                     <span>{getPaymentMethodLabel(payment.method)}:</span>
@@ -764,7 +821,7 @@ ${order.payments.map(p =>
                 ))}
               </div>
 
-              <p className="text-center text-gray-400 mt-6">
+              <p className={`text-center ${tc.textMuted} mt-6`}>
                 Gracias por su compra!
               </p>
             </div>
@@ -774,7 +831,7 @@ ${order.payments.map(p =>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <button
               onClick={handlePrint}
-              className="p-4 rounded-xl flex items-center justify-center gap-2 font-medium shadow-lg bg-gray-800 hover:bg-gray-700"
+              className={`p-4 rounded-xl flex items-center justify-center gap-2 font-medium shadow-lg ${tc.bgCard} ${tc.button}`}
             >
               <PrinterIcon />
               Imprimir
@@ -794,18 +851,18 @@ ${order.payments.map(p =>
       {/* Print Modal */}
       {showPrintModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={() => setShowPrintModal(false)}>
-          <div className="w-full max-w-md rounded-2xl shadow-2xl overflow-hidden bg-gray-800" onClick={e => e.stopPropagation()}>
-            <div className="px-6 py-4 border-b border-gray-700 flex items-center justify-between">
+          <div className={`w-full max-w-md rounded-2xl shadow-2xl overflow-hidden ${tc.bgCard}`} onClick={e => e.stopPropagation()}>
+            <div className={`px-6 py-4 border-b ${tc.border} flex items-center justify-between`}>
               <div className="flex items-center gap-3">
                 <div className="p-2 rounded-lg bg-blue-900/30">
                   <PrinterIcon />
                 </div>
                 <div>
                   <h3 className="font-semibold">Imprimir Recibo</h3>
-                  <p className="text-xs text-gray-400">#{order?.orderNumber}</p>
+                  <p className={`text-xs ${tc.textMuted}`}>#{order?.orderNumber}</p>
                 </div>
               </div>
-              <button onClick={() => setShowPrintModal(false)} className="p-2 rounded-lg hover:bg-gray-700">
+              <button onClick={() => setShowPrintModal(false)} className={`p-2 rounded-lg ${tc.button}`}>
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                 </svg>
@@ -815,10 +872,10 @@ ${order.payments.map(p =>
             <div className="p-6 space-y-6">
               {printServices.length === 0 ? (
                 <div className="text-center py-4">
-                  <p className="text-gray-400 mb-4">No hay servicio de impresión disponible</p>
+                  <p className={`${tc.textMuted} mb-4`}>No hay servicio de impresión disponible</p>
                   <button
                     onClick={() => { setShowPrintModal(false); printReceipt(); }}
-                    className="px-4 py-2 bg-gray-700 rounded-lg hover:bg-gray-600"
+                    className={`px-4 py-2 rounded-lg ${tc.button}`}
                   >
                     Usar impresión del navegador
                   </button>
@@ -826,7 +883,7 @@ ${order.payments.map(p =>
               ) : (
                 <>
                   <div>
-                    <label className="block text-sm font-medium text-gray-300 mb-2">Impresora</label>
+                    <label className={`block text-sm font-medium ${tc.textMuted} mb-2`}>Impresora</label>
                     <div className="space-y-2 max-h-48 overflow-y-auto">
                       {printServices.map(service => (
                         service.printers.map(printer => (
@@ -836,14 +893,14 @@ ${order.payments.map(p =>
                             className={`w-full p-3 rounded-xl border-2 transition-all text-left flex items-center justify-between ${
                               selectedPrinter?.printerId === printer.id
                                 ? 'border-blue-500 bg-blue-900/20'
-                                : 'border-gray-600 bg-gray-700/50 hover:border-gray-500'
+                                : `${tc.border} ${tc.button}`
                             }`}
                           >
                             <div className="flex items-center gap-3">
                               <PrinterIcon />
                               <div>
                                 <p className="font-medium">{printer.printerName}</p>
-                                <p className="text-xs text-gray-500">
+                                <p className={`text-xs ${tc.textMuted}`}>
                                   {printer.printerType === 'thermal_80mm' ? 'Térmica 80mm' : 'Estándar'}
                                 </p>
                               </div>
@@ -851,7 +908,7 @@ ${order.payments.map(p =>
                             {printer.isOnline ? (
                               <span className="text-xs text-green-400">Online</span>
                             ) : (
-                              <span className="text-xs text-gray-500">Offline</span>
+                              <span className={`text-xs ${tc.textMuted}`}>Offline</span>
                             )}
                           </button>
                         ))
@@ -860,18 +917,18 @@ ${order.payments.map(p =>
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium text-gray-300 mb-2">Copias</label>
+                    <label className={`block text-sm font-medium ${tc.textMuted} mb-2`}>Copias</label>
                     <div className="flex items-center justify-center gap-4">
                       <button
                         onClick={() => setCopies(Math.max(1, copies - 1))}
-                        className="w-10 h-10 rounded-xl bg-gray-700 hover:bg-gray-600 flex items-center justify-center"
+                        className={`w-10 h-10 rounded-xl ${tc.button} flex items-center justify-center`}
                       >
                         -
                       </button>
                       <span className="w-12 text-center text-xl font-bold">{copies}</span>
                       <button
                         onClick={() => setCopies(Math.min(5, copies + 1))}
-                        className="w-10 h-10 rounded-xl bg-gray-700 hover:bg-gray-600 flex items-center justify-center"
+                        className={`w-10 h-10 rounded-xl ${tc.button} flex items-center justify-center`}
                       >
                         +
                       </button>
@@ -882,10 +939,10 @@ ${order.payments.map(p =>
             </div>
 
             {printServices.length > 0 && (
-              <div className="px-6 py-4 border-t border-gray-700 flex gap-3">
+              <div className={`px-6 py-4 border-t ${tc.border} flex gap-3`}>
                 <button
                   onClick={() => { setShowPrintModal(false); printReceipt(); }}
-                  className="flex-1 py-3 rounded-xl font-medium bg-gray-700 hover:bg-gray-600"
+                  className={`flex-1 py-3 rounded-xl font-medium ${tc.button}`}
                 >
                   Navegador
                 </button>
@@ -914,8 +971,10 @@ ${order.payments.map(p =>
 
 // Loading fallback
 function LoadingFallback() {
+  const theme = getThemeFromStorage()
+  const bgClass = theme === 'dark' ? 'bg-gray-900' : 'bg-gray-100'
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-900">
+    <div className={`min-h-screen flex items-center justify-center ${bgClass}`}>
       <LoaderIcon />
     </div>
   )
