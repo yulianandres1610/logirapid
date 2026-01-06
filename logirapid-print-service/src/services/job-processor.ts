@@ -19,6 +19,7 @@ import { generateProductLabelTspl } from '../documents/product-label-tspl'
 import { generateLotLabelZpl, LotLabelData } from '../documents/lot-label-zpl'
 import { generatePurchaseInvoice, PurchaseInvoiceData } from '../documents/purchase-invoice'
 import { generatePurchaseInvoicePdf } from '../documents/purchase-invoice-pdf'
+import { generatePurchaseInvoiceEscpos } from '../documents/purchase-invoice-escpos'
 import { generateSalesReport, SalesReportData } from '../documents/sales-report'
 import { generateSalesReportPdf } from '../documents/sales-report-pdf'
 import { generateInventoryCountReport, InventoryCountReportData } from '../documents/inventory-count-report'
@@ -28,6 +29,7 @@ import { generateCashRegisterReportPdf } from '../documents/cash-register-report
 import { generateWarehouseOperation, WarehouseOperationData } from '../documents/warehouse-operation'
 import { generateWarehouseOperationPdf } from '../documents/warehouse-operation-pdf'
 import { generateConsignmentReceipt, ConsignmentReceiptData } from '../documents/consignment-receipt'
+import { generateConsignmentReceiptEscpos } from '../documents/consignment-receipt-escpos'
 import { generateUnifiedReception, UnifiedReceptionData } from '../documents/unified-reception'
 import { generateTransferReceipt, TransferReceiptData } from '../documents/transfer-receipt'
 
@@ -254,11 +256,11 @@ class JobProcessor {
 
       case 'purchase_invoice':
       case 'invoice':
-        // For invoices, prefer standard printers
-        return printerService.getStandardPrinters()[0] || printerService.getDefaultPrinter()
+      case 'consignment_receipt':
+        // For invoices and consignments, prefer thermal printers (ESC/POS format)
+        return printerService.getThermalPrinters()[0] || printerService.getDefaultPrinter()
 
       case 'warehouse_operation':
-      case 'consignment_receipt':
       case 'unified_reception':
       case 'transfer_receipt':
         // Reception receipts should print on STANDARD printer (not Zebra label printer)
@@ -344,11 +346,15 @@ class JobProcessor {
 
       case 'purchase_invoice':
       case 'invoice':
-        // Use PDF for standard printers, ESC/POS for thermal
-        if (usePdf) {
-          return generatePurchaseInvoicePdf(data as unknown as PurchaseInvoiceData)
+        // Use ESC/POS for thermal printers (80mm ticket format)
+        // Use PDF only for standard printers
+        if (printer.printerType === 'thermal_80mm' || printer.supportsEscpos) {
+          console.log(`[Job Processor] Using ESC/POS format for purchase invoice on thermal printer`)
+          return generatePurchaseInvoiceEscpos(data as unknown as PurchaseInvoiceData)
         }
-        return generatePurchaseInvoice(data as unknown as PurchaseInvoiceData)
+        // Fallback to PDF for standard printers
+        console.log(`[Job Processor] Using PDF format for purchase invoice on standard printer`)
+        return generatePurchaseInvoicePdf(data as unknown as PurchaseInvoiceData)
 
       case 'sales_report':
         // Use PDF for standard printers, ESC/POS for thermal
@@ -379,7 +385,12 @@ class JobProcessor {
         return generateWarehouseOperation(data as unknown as WarehouseOperationData)
 
       case 'consignment_receipt':
-        // Always PDF for consignment receipts (has barcodes)
+        // Use ESC/POS for thermal printers (80mm ticket format)
+        if (printer.printerType === 'thermal_80mm' || printer.supportsEscpos) {
+          console.log(`[Job Processor] Using ESC/POS format for consignment receipt on thermal printer`)
+          return generateConsignmentReceiptEscpos(data as unknown as ConsignmentReceiptData)
+        }
+        // Fallback to PDF for standard printers
         return generateConsignmentReceipt(data as unknown as ConsignmentReceiptData)
 
       case 'unified_reception':

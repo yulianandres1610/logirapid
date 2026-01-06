@@ -76,6 +76,7 @@ interface PrintService {
 interface PurchaseLine {
   productName: string
   productSku: string
+  productBarcode: string | null
   quantity: number
   unitPrice: number
   totalPrice: number
@@ -245,9 +246,10 @@ export default function MarketPurchasesPage() {
       const response = await fetch(`/api/market/purchases/${purchaseId}`)
       const data = await response.json()
       if (data.success && data.data?.lines) {
-        setPurchaseLines(data.data.lines.map((l: PurchaseLine) => ({
+        setPurchaseLines(data.data.lines.map((l: { productName: string; productSku: string; productBarcode: string | null; variantBarcode: string | null; quantity: number; unitPrice: number; totalPrice: number }) => ({
           productName: l.productName,
           productSku: l.productSku,
+          productBarcode: l.variantBarcode || l.productBarcode || null,
           quantity: l.quantity,
           unitPrice: l.unitPrice,
           totalPrice: l.totalPrice
@@ -288,6 +290,7 @@ export default function MarketPurchasesPage() {
             lines: purchaseLines.map(l => ({
               name: l.productName,
               sku: l.productSku,
+              barcode: l.productBarcode,
               quantity: l.quantity,
               unitCost: l.unitPrice,
               total: l.totalPrice

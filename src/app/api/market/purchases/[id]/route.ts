@@ -108,9 +108,11 @@ export async function GET(
         mpl.manufacturing_date,
         mp.name as product_name,
         mp.sku as product_sku,
+        mp.barcode as product_barcode,
         mp.image_url as product_image,
         mpv.variant_name as variant_name,
-        mpv.sku as variant_sku
+        mpv.sku as variant_sku,
+        mpv.barcode as variant_barcode
       FROM market_purchase_lines mpl
       JOIN market_products mp ON mpl.product_id = mp.id
       LEFT JOIN market_product_variants mpv ON mpl.variant_id = mpv.id
@@ -153,8 +155,10 @@ export async function GET(
           variantId: line.variant_id || null,
           variantName: line.variant_name || null,
           variantSku: line.variant_sku || null,
+          variantBarcode: line.variant_barcode || null,
           productName: line.product_name,
           productSku: line.product_sku,
+          productBarcode: line.product_barcode || null,
           productImage: line.product_image,
           quantity: parseInt(line.quantity) || 0,
           unitPrice: parseFloat(line.unit_price) || 0,
