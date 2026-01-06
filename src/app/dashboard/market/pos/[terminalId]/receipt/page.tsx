@@ -231,12 +231,15 @@ interface Payment {
   method: string
   amount: number
   currency: string
+  amountTendered?: number | null  // Para efectivo: cuánto entregó el cliente
+  changeAmount?: number | null    // Para efectivo: cambio devuelto
 }
 
 interface Order {
   id: number
   orderNumber: string
   customerName: string | null
+  terminalName?: string           // Nombre del terminal
   subtotal: number
   discountAmount: number
   totalAmount: number
@@ -457,7 +460,19 @@ function ReceiptContent() {
         const data = await res.json()
 
         if (data.success) {
-          setOrder(data.data)
+          // Asegurarnos de que los datos de pago incluyan amountTendered y changeAmount
+          const orderData = {
+            ...data.data,
+            terminalName: data.data.terminalName,
+            payments: data.data.payments.map((p: { method: string; amount: number; currency: string; amountTendered?: number | null; changeAmount?: number | null }) => ({
+              method: p.method,
+              amount: p.amount,
+              currency: p.currency,
+              amountTendered: p.amountTendered ?? null,
+              changeAmount: p.changeAmount ?? null
+            }))
+          }
+          setOrder(orderData)
         } else {
           setError(data.error || 'Error al cargar orden')
         }
@@ -618,7 +633,9 @@ function ReceiptContent() {
           documentType: 'pos_receipt',
           documentData: {
             receiptNumber: order.orderNumber,
+            orderNumber: order.orderNumber, // Para código de barras
             companyName: 'LogiRapid',
+            terminalName: order.terminalName, // Nombre del terminal
             date: new Date(order.createdAt).toLocaleDateString('es-ES'),
             time: new Date(order.createdAt).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' }),
             cashierName: order.createdByName,
@@ -632,12 +649,20 @@ function ReceiptContent() {
             subtotal: order.subtotal,
             discount: order.discountAmount,
             total: order.totalAmount,
+            // Tasa de cambio
+            exchangeRate: exchangeRate,
+            exchangeCurrency: 'CUP',
+            totalInLocalCurrency: toCUP(order.totalAmount),
+            // Pagos con detalle de efectivo
             payments: order.payments.map(p => ({
               method: p.method === 'cash' ? 'Efectivo' :
                       p.method === 'card' ? 'Tarjeta' :
                       p.method === 'transfer' ? 'Transferencia' :
                       p.method === 'credit' ? 'Crédito' : p.method,
-              amount: p.amount
+              amount: p.amount,
+              currency: p.currency,
+              amountTendered: p.amountTendered ?? undefined,
+              changeAmount: p.changeAmount ?? undefined
             })),
             thankYouMessage: '¡Gracias por su compra!'
           },
@@ -694,7 +719,9 @@ function ReceiptContent() {
           documentType: 'pos_receipt',
           documentData: {
             receiptNumber: order?.orderNumber,
+            orderNumber: order?.orderNumber, // Para código de barras
             companyName: 'LogiRapid',
+            terminalName: order?.terminalName, // Nombre del terminal
             date: new Date(order?.createdAt || new Date()).toLocaleDateString('es-ES'),
             time: new Date(order?.createdAt || new Date()).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' }),
             cashierName: order?.createdByName,
@@ -708,12 +735,20 @@ function ReceiptContent() {
             subtotal: order?.subtotal,
             discount: order?.discountAmount,
             total: order?.totalAmount,
+            // Tasa de cambio
+            exchangeRate: exchangeRate,
+            exchangeCurrency: 'CUP',
+            totalInLocalCurrency: toCUP(order?.totalAmount || 0),
+            // Pagos con detalle de efectivo
             payments: order?.payments.map(p => ({
               method: p.method === 'cash' ? 'Efectivo' :
                       p.method === 'card' ? 'Tarjeta' :
                       p.method === 'transfer' ? 'Transferencia' :
                       p.method === 'credit' ? 'Crédito' : p.method,
-              amount: p.amount
+              amount: p.amount,
+              currency: p.currency,
+              amountTendered: p.amountTendered ?? undefined,
+              changeAmount: p.changeAmount ?? undefined
             })),
             thankYouMessage: '¡Gracias por su compra!'
           },
@@ -825,7 +860,9 @@ function ReceiptContent() {
               documentType: 'pos_receipt',
               documentData: {
                 receiptNumber: order.orderNumber,
+                orderNumber: order.orderNumber, // Para código de barras
                 companyName: 'LogiRapid',
+                terminalName: order.terminalName, // Nombre del terminal
                 date: new Date(order.createdAt).toLocaleDateString('es-ES'),
                 time: new Date(order.createdAt).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' }),
                 cashierName: order.createdByName,
@@ -839,12 +876,20 @@ function ReceiptContent() {
                 subtotal: order.subtotal,
                 discount: order.discountAmount,
                 total: order.totalAmount,
+                // Tasa de cambio
+                exchangeRate: exchangeRate,
+                exchangeCurrency: 'CUP',
+                totalInLocalCurrency: Math.round(order.totalAmount * exchangeRate),
+                // Pagos con detalle de efectivo
                 payments: order.payments.map(p => ({
                   method: p.method === 'cash' ? 'Efectivo' :
                           p.method === 'card' ? 'Tarjeta' :
                           p.method === 'transfer' ? 'Transferencia' :
                           p.method === 'credit' ? 'Crédito' : p.method,
-                  amount: p.amount
+                  amount: p.amount,
+                  currency: p.currency,
+                  amountTendered: p.amountTendered ?? undefined,
+                  changeAmount: p.changeAmount ?? undefined
                 })),
                 thankYouMessage: '¡Gracias por su compra!'
               },

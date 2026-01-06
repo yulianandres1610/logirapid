@@ -12,6 +12,9 @@ interface ReceiptItem {
 interface ReceiptPayment {
   method: string
   amount: number
+  currency?: string          // USD, CUP, etc
+  amountTendered?: number    // Para efectivo: cuánto entregó el cliente
+  changeAmount?: number      // Para efectivo: cambio devuelto
 }
 
 interface ReceiptData {
@@ -41,9 +44,18 @@ interface ReceiptData {
   payments: ReceiptPayment[]
   change?: number
 
+  // Exchange rate
+  exchangeRate?: number      // Tasa USD -> CUP
+  exchangeCurrency?: string  // Moneda local (CUP por defecto)
+  totalInLocalCurrency?: number // Total en moneda local
+
+  // Customer info
+  customerName?: string
+
   // Footer
   footerText?: string
   thankYouMessage?: string
+  orderNumber?: string       // Número de orden para código de barras
   barcode?: string
   qrCode?: string
 }
@@ -95,6 +107,12 @@ export function generatePosReceipt(data: ReceiptData): Buffer {
   const SEPARATOR = '='.repeat(PAPER_WIDTH)
   const THIN_SEPARATOR = '-'.repeat(PAPER_WIDTH)
 
+  // Helper to format local currency
+  const localCurrency = data.exchangeCurrency || 'CUP'
+  const formatLocalCurrency = (amount: number): string => {
+    return `${Math.round(amount).toLocaleString('es-ES')} ${localCurrency}`
+  }
+
   // Initialize printer
   lines.push(Commands.INIT)
 
@@ -103,14 +121,21 @@ export function generatePosReceipt(data: ReceiptData): Buffer {
   // Setting ~6mm margin (48 dots) to center content
   lines.push(`${GS}L\x30\x00`) // Left margin = 48 dots (~6mm)
 
-  // Header - Company info centered and bold
+  // Header - Terminal name or company name centered and bold
   lines.push(Commands.ALIGN_CENTER)
   lines.push(Commands.DOUBLE_SIZE_ON)
   lines.push(Commands.BOLD_ON)
-  lines.push(data.companyName)
+  // Usar nombre del terminal si está disponible, sino el de la empresa
+  lines.push(data.terminalName || data.companyName)
   lines.push(Commands.FEED_LINE)
   lines.push(Commands.NORMAL_SIZE)
   lines.push(Commands.BOLD_OFF)
+
+  // Si hay terminal, mostrar empresa debajo
+  if (data.terminalName && data.companyName) {
+    lines.push(data.companyName)
+    lines.push(Commands.FEED_LINE)
+  }
 
   if (data.companyAddress) {
     lines.push(data.companyAddress)
@@ -133,13 +158,13 @@ export function generatePosReceipt(data: ReceiptData): Buffer {
   lines.push(`Fecha: ${data.date}${data.time ? ' ' + data.time : ''}`)
   lines.push(Commands.FEED_LINE)
 
-  if (data.terminalName) {
-    lines.push(`Terminal: ${data.terminalName}`)
+  if (data.cashierName) {
+    lines.push(`Cajero: ${data.cashierName}`)
     lines.push(Commands.FEED_LINE)
   }
 
-  if (data.cashierName) {
-    lines.push(`Cajero: ${data.cashierName}`)
+  if (data.customerName) {
+    lines.push(`Cliente: ${data.customerName}`)
     lines.push(Commands.FEED_LINE)
   }
 
@@ -205,17 +230,64 @@ export function generatePosReceipt(data: ReceiptData): Buffer {
   lines.push(Commands.BOLD_OFF)
   lines.push(Commands.FEED_LINE)
 
+  // Total in local currency (CUP) if exchange rate provided
+  if (data.exchangeRate && data.exchangeRate > 0) {
+    const totalLocal = data.totalInLocalCurrency ?? Math.round(data.total * data.exchangeRate)
+    lines.push(Commands.ALIGN_RIGHT)
+    lines.push(formatLocalCurrency(totalLocal))
+    lines.push(Commands.FEED_LINE)
+    lines.push(Commands.ALIGN_LEFT)
+  }
+
+  // Exchange rate info
+  if (data.exchangeRate && data.exchangeRate > 0) {
+    lines.push(Commands.ALIGN_CENTER)
+    lines.push(`Tasa: 1 USD = ${data.exchangeRate.toLocaleString('es-ES')} ${localCurrency}`)
+    lines.push(Commands.FEED_LINE)
+    lines.push(Commands.ALIGN_LEFT)
+  }
+
   // Payments
+  lines.push(THIN_SEPARATOR)
+  lines.push(Commands.FEED_LINE)
+  lines.push(Commands.BOLD_ON)
+  lines.push('FORMA DE PAGO')
+  lines.push(Commands.BOLD_OFF)
+  lines.push(Commands.FEED_LINE)
   lines.push(THIN_SEPARATOR)
   lines.push(Commands.FEED_LINE)
 
   for (const payment of data.payments) {
-    lines.push(formatLine(payment.method + ':', formatCurrency(payment.amount), PAPER_WIDTH))
+    const currency = payment.currency || 'USD'
+    const amountStr = currency === 'CUP' || currency === localCurrency
+      ? formatLocalCurrency(payment.amount)
+      : formatCurrency(payment.amount)
+
+    lines.push(formatLine(payment.method + ':', amountStr, PAPER_WIDTH))
     lines.push(Commands.FEED_LINE)
+
+    // Para efectivo, mostrar monto entregado y cambio
+    if (payment.amountTendered !== undefined && payment.amountTendered > 0) {
+      const tenderedStr = currency === 'CUP' || currency === localCurrency
+        ? formatLocalCurrency(payment.amountTendered)
+        : formatCurrency(payment.amountTendered)
+      lines.push(formatLine('  Entregado:', tenderedStr, PAPER_WIDTH))
+      lines.push(Commands.FEED_LINE)
+
+      if (payment.changeAmount !== undefined && payment.changeAmount > 0) {
+        const changeStr = currency === 'CUP' || currency === localCurrency
+          ? formatLocalCurrency(payment.changeAmount)
+          : formatCurrency(payment.changeAmount)
+        lines.push(Commands.BOLD_ON)
+        lines.push(formatLine('  Cambio:', changeStr, PAPER_WIDTH))
+        lines.push(Commands.BOLD_OFF)
+        lines.push(Commands.FEED_LINE)
+      }
+    }
   }
 
-  // Change
-  if (data.change !== undefined && data.change > 0) {
+  // Legacy change field (if not using per-payment change)
+  if (data.change !== undefined && data.change > 0 && !data.payments.some(p => p.changeAmount)) {
     lines.push(Commands.BOLD_ON)
     lines.push(formatLine('Cambio:', formatCurrency(data.change), PAPER_WIDTH))
     lines.push(Commands.BOLD_OFF)
@@ -236,6 +308,39 @@ export function generatePosReceipt(data: ReceiptData): Buffer {
 
   if (data.footerText) {
     lines.push(data.footerText)
+    lines.push(Commands.FEED_LINE)
+  }
+
+  // Barcode with order number for returns
+  const barcodeData = data.orderNumber || data.receiptNumber
+  if (barcodeData) {
+    lines.push(Commands.FEED_LINE)
+    lines.push(Commands.ALIGN_CENTER)
+
+    // ESC/POS Barcode: CODE128
+    // GS k m d1...dk NUL - Print barcode
+    // m = 73 (0x49) for CODE128
+    // GS w n - Set barcode width (n = 2-6, default 3)
+    // GS h n - Set barcode height (n = 1-255 dots)
+    // GS H n - Set HRI (Human Readable Interpretation) position
+    //          n = 0: not printed, 1: above, 2: below, 3: both
+
+    // Set barcode height to 50 dots (~6mm)
+    lines.push(`${GS}h\x32`) // height = 50
+
+    // Set barcode width to 2 (narrow)
+    lines.push(`${GS}w\x02`)
+
+    // Print HRI below barcode
+    lines.push(`${GS}H\x02`)
+
+    // Print CODE128 barcode
+    // Format: GS k m n d1...dn
+    // m = 73 (CODE128), n = length
+    const barcodeContent = barcodeData.replace(/[^A-Za-z0-9\-]/g, '') // Clean for CODE128
+    const barcodeLen = barcodeContent.length
+    lines.push(`${GS}k\x49${String.fromCharCode(barcodeLen)}${barcodeContent}`)
+
     lines.push(Commands.FEED_LINE)
   }
 
