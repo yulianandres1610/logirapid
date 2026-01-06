@@ -83,12 +83,17 @@ export async function GET(request: NextRequest) {
           p.selling_price as sale_price,
           p.cost_price,
           0 as tax_rate,
-          p.image_url,
+          COALESCE(pi.image_url, p.image_url) as image_url,
           p.is_active,
           true as track_inventory,
           COALESCE(ws.quantity_on_hand, p.quantity_on_hand, 0) as stock
         FROM market_products p
         LEFT JOIN market_warehouse_stock ws ON p.id = ws.product_id AND ws.warehouse_id = $2 AND ws.variant_id IS NULL
+        LEFT JOIN LATERAL (
+          SELECT image_url FROM product_images
+          WHERE barcode = p.barcode
+          ORDER BY COALESCE(is_primary, false) DESC, COALESCE(image_index, 1) ASC LIMIT 1
+        ) pi ON true
         WHERE p.company_id = $1 AND p.is_active = true
         ORDER BY p.name ASC
       `
@@ -105,11 +110,16 @@ export async function GET(request: NextRequest) {
           p.selling_price as sale_price,
           p.cost_price,
           0 as tax_rate,
-          p.image_url,
+          COALESCE(pi.image_url, p.image_url) as image_url,
           p.is_active,
           true as track_inventory,
           p.quantity_on_hand as stock
         FROM market_products p
+        LEFT JOIN LATERAL (
+          SELECT image_url FROM product_images
+          WHERE barcode = p.barcode
+          ORDER BY COALESCE(is_primary, false) DESC, COALESCE(image_index, 1) ASC LIMIT 1
+        ) pi ON true
         WHERE p.company_id = $1 AND p.is_active = true
         ORDER BY p.name ASC
       `

@@ -67,6 +67,17 @@ async function ensureDecimalQuantities() {
   } catch (error) {
     // Ignore errors - column might already exist
   }
+
+  // Add variant_id column to purchase_lines if it doesn't exist
+  try {
+    await db.query(`
+      ALTER TABLE market_purchase_lines
+      ADD COLUMN IF NOT EXISTS variant_id INTEGER REFERENCES market_product_variants(id)
+    `)
+    console.log('[Migration] Added variant_id column to market_purchase_lines')
+  } catch (error) {
+    // Ignore errors - column might already exist
+  }
 }
 
 interface NewProductVariant {

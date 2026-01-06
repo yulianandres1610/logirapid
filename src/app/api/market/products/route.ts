@@ -55,7 +55,7 @@ export async function GET(request: NextRequest) {
         p.id,
         p.name,
         p.description,
-        p.image_url,
+        COALESCE(pi.image_url, p.image_url) as image_url,
         p.category,
         p.cost_price,
         p.selling_price,
@@ -83,6 +83,11 @@ export async function GET(request: NextRequest) {
         FROM market_warehouse_stock
         GROUP BY product_id
       ) stock_totals ON p.id = stock_totals.product_id
+      LEFT JOIN LATERAL (
+        SELECT image_url FROM product_images
+        WHERE barcode = p.barcode
+        ORDER BY COALESCE(is_primary, false) DESC, COALESCE(image_index, 1) ASC LIMIT 1
+      ) pi ON true
       WHERE p.company_id = $1
     `
 
