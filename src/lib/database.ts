@@ -12,21 +12,23 @@ function getPool(): Pool {
   }
 
   if (!pool) {
+    // Para serverless (Vercel), usar pool pequeño ya que cada instancia crea su propio pool
+    // Supabase en modo Session tiene límite de conexiones
     pool = new Pool({
       connectionString,
       ssl: {
         rejectUnauthorized: false
       },
-      max: 20, // Increased from 10 to handle more concurrent requests
-      min: 2, // Keep at least 2 connections alive
-      idleTimeoutMillis: 30000, // Increased from 10s to 30s
+      max: 5, // Reducido para serverless - evita MaxClientsInSessionMode
+      min: 0, // No mantener conexiones idle en serverless
+      idleTimeoutMillis: 10000, // Liberar conexiones idle rápidamente
       connectionTimeoutMillis: 10000,
       query_timeout: 30000,
       statement_timeout: 30000,
       keepAlive: true,
       keepAliveInitialDelayMillis: 10000,
-      // Allow graceful reconnection
-      allowExitOnIdle: false,
+      // Permitir que las conexiones se cierren cuando no hay queries
+      allowExitOnIdle: true,
     });
 
     // Event handler para errores del pool
@@ -95,6 +97,8 @@ class DatabaseWrapper {
         error.message?.includes('ECONNREFUSED') ||
         error.message?.includes('ENOTFOUND') ||
         error.message?.includes('Connection terminated') ||
+        error.message?.includes('MaxClientsInSessionMode') || // Supabase max clients
+        error.message?.includes('max clients') ||
         error.code === 'XX000' || // Internal error
         error.code === '57P01' || // Admin shutdown
         error.code === '57P03' || // Cannot connect now
