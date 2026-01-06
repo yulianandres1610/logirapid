@@ -279,7 +279,20 @@ export async function PUT(
     }
     if (acceptedCurrencies !== undefined) {
       updates.push(`accepted_currencies = $${paramIndex++}`)
-      values.push(acceptedCurrencies)
+      // Convertir a formato PostgreSQL array si es necesario
+      let currenciesArray = acceptedCurrencies
+      if (typeof acceptedCurrencies === 'string') {
+        try {
+          currenciesArray = JSON.parse(acceptedCurrencies)
+        } catch {
+          currenciesArray = ['USD', 'CUP', 'MLC']
+        }
+      }
+      // Formato PostgreSQL: {USD,CUP,MLC}
+      const pgArray = Array.isArray(currenciesArray)
+        ? `{${currenciesArray.join(',')}}`
+        : '{USD,CUP,MLC}'
+      values.push(pgArray)
     }
     if (isActive !== undefined) {
       updates.push(`is_active = $${paramIndex++}`)
