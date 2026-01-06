@@ -41,11 +41,16 @@ export type DocumentType =
 // Document types that should ONLY use label printers
 const LABEL_DOCUMENT_TYPES = ['product_label', 'shipping_label', 'lot_label']
 
-// Document types that should ONLY use standard/thermal printers (NOT label printers)
-const STANDARD_DOCUMENT_TYPES = [
-  'pos_receipt', 'inventory_count_report', 'purchase_invoice', 'sales_report',
-  'cash_register_report', 'invoice', 'unified_reception', 'consignment_receipt',
+// Document types that should ONLY use STANDARD printers (NOT thermal, NOT label)
+// These are PDF documents that need standard paper printers
+const STANDARD_ONLY_DOCUMENT_TYPES = [
+  'purchase_invoice', 'invoice', 'unified_reception', 'consignment_receipt',
   'warehouse_operation'
+]
+
+// Document types that can use thermal OR standard printers (NOT label printers)
+const THERMAL_OR_STANDARD_DOCUMENT_TYPES = [
+  'pos_receipt', 'inventory_count_report', 'sales_report', 'cash_register_report'
 ]
 
 interface PrintDocumentModalProps {
@@ -110,17 +115,22 @@ export function PrintDocumentModal({
   // Helper to check if printer supports the document type
   const printerSupportsDocType = (printer: PrinterInfo, docType: string): boolean => {
     const isLabelPrinter = printer.printerType === 'label_4x6' || printer.printerType === 'label_barcode'
-    const isLabelDocument = LABEL_DOCUMENT_TYPES.includes(docType)
-    const isStandardDocument = STANDARD_DOCUMENT_TYPES.includes(docType)
+    const isStandardPrinter = printer.printerType === 'standard'
+    const isThermalPrinter = printer.printerType === 'thermal_80mm'
 
     // Label documents should ONLY go to label printers
-    if (isLabelDocument) {
+    if (LABEL_DOCUMENT_TYPES.includes(docType)) {
       return isLabelPrinter
     }
 
-    // Standard documents should NOT go to label printers
-    if (isStandardDocument) {
-      return !isLabelPrinter
+    // Standard-only documents (PDFs like invoices) should ONLY go to standard printers
+    if (STANDARD_ONLY_DOCUMENT_TYPES.includes(docType)) {
+      return isStandardPrinter
+    }
+
+    // Thermal/standard documents can go to thermal OR standard printers (NOT label)
+    if (THERMAL_OR_STANDARD_DOCUMENT_TYPES.includes(docType)) {
+      return isThermalPrinter || isStandardPrinter
     }
 
     // For other documents, check supportedDocumentTypes if defined
@@ -163,12 +173,17 @@ export function PrintDocumentModal({
             defaultPrinter = firstService.printers.find(
               (p: PrinterInfo) => (p.printerType === 'label_4x6' || p.printerType === 'label_barcode') && p.isOnline
             )
-          } else if (STANDARD_DOCUMENT_TYPES.includes(documentType)) {
-            // For standard documents, prefer standard printers, then thermal
+          } else if (STANDARD_ONLY_DOCUMENT_TYPES.includes(documentType)) {
+            // For standard-only documents (invoices), ONLY standard printers
             defaultPrinter = firstService.printers.find(
               (p: PrinterInfo) => p.printerType === 'standard' && p.isOnline
-            ) || firstService.printers.find(
+            )
+          } else if (THERMAL_OR_STANDARD_DOCUMENT_TYPES.includes(documentType)) {
+            // For receipts/reports, prefer thermal, then standard
+            defaultPrinter = firstService.printers.find(
               (p: PrinterInfo) => p.printerType === 'thermal_80mm' && p.isOnline
+            ) || firstService.printers.find(
+              (p: PrinterInfo) => p.printerType === 'standard' && p.isOnline
             )
           } else {
             // For other documents, prefer thermal printers
@@ -357,11 +372,17 @@ export function PrintDocumentModal({
                             defaultPrinter = service.printers.find(
                               p => (p.printerType === 'label_4x6' || p.printerType === 'label_barcode') && p.isOnline
                             )
-                          } else if (STANDARD_DOCUMENT_TYPES.includes(documentType)) {
+                          } else if (STANDARD_ONLY_DOCUMENT_TYPES.includes(documentType)) {
+                            // Invoices ONLY go to standard printers
                             defaultPrinter = service.printers.find(
                               p => p.printerType === 'standard' && p.isOnline
-                            ) || service.printers.find(
+                            )
+                          } else if (THERMAL_OR_STANDARD_DOCUMENT_TYPES.includes(documentType)) {
+                            // Receipts/reports prefer thermal, then standard
+                            defaultPrinter = service.printers.find(
                               p => p.printerType === 'thermal_80mm' && p.isOnline
+                            ) || service.printers.find(
+                              p => p.printerType === 'standard' && p.isOnline
                             )
                           }
                           defaultPrinter = defaultPrinter
