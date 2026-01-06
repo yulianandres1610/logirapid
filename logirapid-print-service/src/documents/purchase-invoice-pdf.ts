@@ -15,33 +15,42 @@ interface InvoiceItem {
 
 interface PurchaseInvoiceData {
   // Header
-  companyName: string
+  companyName?: string
   companyAddress?: string
 
-  // Supplier info
-  supplierName: string
+  // Supplier info - accept both formats
+  supplierName?: string
   supplierRuc?: string
   supplierAddress?: string
   supplierPhone?: string
+  supplier?: {
+    code?: string
+    name?: string
+  }
 
   // Invoice info
-  invoiceNumber: string
+  invoiceNumber?: string
   purchaseNumber?: string
-  date: string
+  date?: string
+  purchaseDate?: string
   dueDate?: string
   receivedBy?: string
   warehouseName?: string
 
-  // Items
-  items: InvoiceItem[]
+  // Items - accept both 'items' and 'lines'
+  items?: InvoiceItem[]
+  lines?: InvoiceItem[]
 
   // Totals
-  subtotal: number
+  subtotal?: number
   tax?: number
   taxRate?: number
   discount?: number
   shipping?: number
-  total: number
+  total?: number
+  totalCost?: number
+  totalItems?: number
+  totalUnits?: number
 
   // Payment info
   paymentMethod?: string
@@ -54,6 +63,16 @@ interface PurchaseInvoiceData {
 }
 
 export async function generatePurchaseInvoicePdf(data: PurchaseInvoiceData): Promise<Buffer> {
+  // Normalize data - accept multiple field names for flexibility
+  const companyName = data.companyName || 'LogiRapid'
+  const supplierName = data.supplierName || data.supplier?.name || 'Proveedor'
+  const supplierCode = data.supplierRuc || data.supplier?.code || ''
+  const invoiceNumber = data.invoiceNumber || data.purchaseNumber || 'Sin número'
+  const dateStr = data.date || data.purchaseDate || new Date().toLocaleDateString('es-ES')
+  const items = data.items || data.lines || []
+  const total = data.total ?? data.totalCost ?? 0
+  const subtotal = data.subtotal ?? total
+
   // Create a new PDF document
   const pdfDoc = await PDFDocument.create()
 
@@ -104,7 +123,7 @@ export async function generatePurchaseInvoicePdf(data: PurchaseInvoiceData): Pro
 
   // === HEADER ===
   // Company name
-  drawText(data.companyName, 50, y, { font: fontBold, size: 18, color: darkBlue })
+  drawText(companyName, 50, y, { font: fontBold, size: 18, color: darkBlue })
   y -= 20
 
   if (data.companyAddress) {
@@ -116,10 +135,10 @@ export async function generatePurchaseInvoicePdf(data: PurchaseInvoiceData): Pro
   drawText('FACTURA DE COMPRA', 400, 750, { font: fontBold, size: 16, color: darkBlue })
 
   // Invoice number and date
-  drawText(`No: ${data.invoiceNumber}`, 400, 730, { font: fontBold, size: 11 })
-  drawText(`Fecha: ${data.date}`, 400, 715, { size: 10 })
+  drawText(`No: ${invoiceNumber}`, 400, 730, { font: fontBold, size: 11 })
+  drawText(`Fecha: ${dateStr}`, 400, 715, { size: 10 })
 
-  if (data.purchaseNumber) {
+  if (data.purchaseNumber && data.invoiceNumber) {
     drawText(`Orden: ${data.purchaseNumber}`, 400, 700, { size: 10 })
   }
 
@@ -137,11 +156,11 @@ export async function generatePurchaseInvoicePdf(data: PurchaseInvoiceData): Pro
   drawText('PROVEEDOR', 50, y, { font: fontBold, size: 11, color: darkBlue })
   y -= 18
 
-  drawText(data.supplierName, 50, y, { font: fontBold, size: 11 })
+  drawText(supplierName, 50, y, { font: fontBold, size: 11 })
   y -= 15
 
-  if (data.supplierRuc) {
-    drawText(`RUC/NIT: ${data.supplierRuc}`, 50, y, { size: 9 })
+  if (supplierCode) {
+    drawText(`Código: ${supplierCode}`, 50, y, { size: 9 })
     y -= 13
   }
 
@@ -185,8 +204,8 @@ export async function generatePurchaseInvoicePdf(data: PurchaseInvoiceData): Pro
   y = tableTop - 25
 
   // Table rows
-  for (const item of data.items) {
-    const itemTotal = item.total ?? item.quantity * item.unitCost
+  for (const item of items) {
+    const itemTotal = item.total ?? (item.quantity ?? 0) * (item.unitCost ?? 0)
     const itemName = item.name || 'Producto sin nombre'
 
     // Draw row
@@ -215,7 +234,7 @@ export async function generatePurchaseInvoicePdf(data: PurchaseInvoiceData): Pro
 
   // Subtotal
   drawText('Subtotal:', totalsX, y, { size: 10 })
-  drawText(formatCurrency(data.subtotal), totalsValueX, y, { size: 10 })
+  drawText(formatCurrency(subtotal), totalsValueX, y, { size: 10 })
   y -= 18
 
   // Tax
@@ -252,7 +271,7 @@ export async function generatePurchaseInvoicePdf(data: PurchaseInvoiceData): Pro
     color: darkBlue
   })
   drawText('TOTAL:', totalsX, y, { font: fontBold, size: 12, color: rgb(1, 1, 1) })
-  drawText(formatCurrency(data.total), totalsValueX - 10, y, { font: fontBold, size: 14, color: rgb(1, 1, 1) })
+  drawText(formatCurrency(total), totalsValueX - 10, y, { font: fontBold, size: 14, color: rgb(1, 1, 1) })
 
   y -= 50
 
