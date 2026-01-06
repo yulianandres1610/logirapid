@@ -156,16 +156,15 @@ export default function MarketPOSPage() {
     }
   }
 
+  // Consolidar en un solo useEffect para evitar doble carga
   useEffect(() => {
-    fetchTerminals()
-  }, [statusFilter])
-
-  useEffect(() => {
+    // Debounce solo cuando hay búsqueda activa
+    const debounceTime = search ? 300 : 0
     const debounce = setTimeout(() => {
       fetchTerminals()
-    }, 300)
+    }, debounceTime)
     return () => clearTimeout(debounce)
-  }, [search])
+  }, [statusFilter, search])
 
   const handleDeleteTerminal = async () => {
     if (!deleteTerminal) return
