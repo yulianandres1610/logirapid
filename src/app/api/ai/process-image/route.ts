@@ -149,32 +149,65 @@ export async function POST(request: NextRequest) {
           contentType
         )
 
-        // Guardar en base de datos
-        await db.query(`
-          INSERT INTO product_images (
-            barcode, image_index, storage_path, image_url, is_primary,
-            processed_with_ai, ai_model, content_type, file_size, created_by, company_id
-          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
-          ON CONFLICT (barcode, image_index) DO UPDATE SET
-            storage_path = EXCLUDED.storage_path,
-            image_url = EXCLUDED.image_url,
-            is_primary = EXCLUDED.is_primary,
-            processed_with_ai = true,
-            ai_model = EXCLUDED.ai_model,
-            updated_at = NOW()
-        `, [
-          barcode,
-          index,
-          path,
-          url,
-          isPrimary,
-          true,
-          'gemini-2.0-flash-exp',
-          contentType,
-          imageBuffer.length,
-          payload.userId,
-          payload.companyId
-        ])
+        // Asegurar que la tabla tiene las columnas necesarias (migración automática)
+        try {
+          await db.query(`ALTER TABLE product_images ADD COLUMN IF NOT EXISTS image_index INTEGER DEFAULT 1`)
+          await db.query(`ALTER TABLE product_images ADD COLUMN IF NOT EXISTS is_primary BOOLEAN DEFAULT false`)
+        } catch (migrationError) {
+          console.log('[AI Process Image] Migration columns may already exist')
+        }
+
+        // Guardar en base de datos (usar INSERT simple si hay conflicto con el constraint)
+        try {
+          await db.query(`
+            INSERT INTO product_images (
+              barcode, image_index, storage_path, image_url, is_primary,
+              processed_with_ai, ai_model, content_type, file_size, created_by, company_id
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+            ON CONFLICT (barcode, image_index) DO UPDATE SET
+              storage_path = EXCLUDED.storage_path,
+              image_url = EXCLUDED.image_url,
+              is_primary = EXCLUDED.is_primary,
+              processed_with_ai = true,
+              ai_model = EXCLUDED.ai_model,
+              updated_at = NOW()
+          `, [
+            barcode,
+            index,
+            path,
+            url,
+            isPrimary,
+            true,
+            'gemini-2.0-flash-exp',
+            contentType,
+            imageBuffer.length,
+            payload.userId,
+            payload.companyId
+          ])
+        } catch (dbError: any) {
+          // Si falla el ON CONFLICT, intentar INSERT simple
+          if (dbError.message?.includes('constraint') || dbError.message?.includes('conflict')) {
+            console.log('[AI Process Image] Trying simple INSERT without conflict handling')
+            await db.query(`
+              INSERT INTO product_images (
+                barcode, storage_path, image_url, processed_with_ai, ai_model,
+                content_type, file_size, created_by, company_id
+              ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+            `, [
+              barcode,
+              path,
+              url,
+              true,
+              'gemini-2.0-flash-exp',
+              contentType,
+              imageBuffer.length,
+              payload.userId,
+              payload.companyId
+            ])
+          } else {
+            throw dbError
+          }
+        }
 
         savedImage = { url, path, index, isPrimary }
         console.log(`[AI Process Image] Saved to storage: ${url}, index: ${index}`)
