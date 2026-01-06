@@ -773,15 +773,20 @@ function ReceiptContent() {
           )
           console.log('[Receipt] Auto-print active services:', activeServices.length)
 
-          // Find first thermal printer (thermal_80mm, thermal_58mm, or pos)
+          // Find first thermal printer
+          // Tipos válidos: thermal_80mm, thermal_58mm, pos, receipt, thermal
+          const thermalTypes = ['thermal_80mm', 'thermal_58mm', 'pos', 'receipt', 'thermal']
           let thermalPrinter = null
           let serviceId = null
 
           for (const service of activeServices) {
             console.log('[Receipt] Checking service:', service.serviceName, 'printers:', service.printers?.length)
+            for (const p of service.printers) {
+              console.log(`[Receipt]   Printer: ${p.printerName} | Type: "${p.printerType}"`)
+            }
             const printer = service.printers.find(
               (p: { printerType: string; isOnline: boolean }) =>
-                (p.printerType === 'thermal_80mm' || p.printerType === 'thermal_58mm' || p.printerType === 'pos')
+                thermalTypes.includes(p.printerType?.toLowerCase() || '')
             )
             if (printer) {
               thermalPrinter = printer
