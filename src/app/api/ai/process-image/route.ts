@@ -169,7 +169,7 @@ export async function POST(request: NextRequest) {
           url,
           isPrimary,
           true,
-          'gemini-3-pro-image-preview',
+          'gemini-2.0-flash-exp',
           contentType,
           imageBuffer.length,
           payload.userId,
@@ -178,9 +178,18 @@ export async function POST(request: NextRequest) {
 
         savedImage = { url, path, index, isPrimary }
         console.log(`[AI Process Image] Saved to storage: ${url}, index: ${index}`)
-      } catch (saveError) {
+      } catch (saveError: any) {
         console.error('[AI Process Image] Error saving image:', saveError)
-        // Continuar sin guardar
+        // Devolver el error para que el frontend sepa que falló
+        return NextResponse.json({
+          success: false,
+          error: `Error al guardar imagen: ${saveError.message || 'Error desconocido'}`,
+          details: {
+            action,
+            barcode,
+            saveError: saveError.message
+          }
+        }, { status: 500 })
       }
     }
 

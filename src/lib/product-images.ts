@@ -4,13 +4,20 @@
  * Soporta múltiples imágenes por producto con formato: {barcode}-{index}.ext
  */
 
-import { createClient } from '@supabase/supabase-js'
+import { createClient, SupabaseClient } from '@supabase/supabase-js'
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
 
 const BUCKET = 'company-documents'
 const FOLDER = 'product-images'
+
+/**
+ * Verifica si Supabase Storage está configurado
+ */
+export function isStorageConfigured(): boolean {
+  return !!(supabaseUrl && supabaseServiceKey)
+}
 
 export interface ProductImage {
   id?: number
@@ -40,7 +47,10 @@ export interface ProductImagesResponse {
 /**
  * Crea cliente Supabase con service role key para bypassing RLS
  */
-function getSupabaseClient() {
+function getSupabaseClient(): SupabaseClient {
+  if (!supabaseUrl || !supabaseServiceKey) {
+    throw new Error('Supabase Storage no está configurado. Verifica NEXT_PUBLIC_SUPABASE_URL y SUPABASE_SERVICE_ROLE_KEY')
+  }
   return createClient(supabaseUrl, supabaseServiceKey, {
     auth: {
       autoRefreshToken: false,

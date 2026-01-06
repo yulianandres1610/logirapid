@@ -9,7 +9,8 @@ import { GoogleGenerativeAI } from '@google/generative-ai'
 const GOOGLE_AI_API_KEY = process.env.GOOGLE_AI_API_KEY
 const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-2.0-flash-exp'
 // Modelo para generación de imágenes de productos
-const IMAGE_GENERATION_MODEL = 'gemini-3-pro-image-preview'
+// gemini-2.0-flash-exp soporta generación nativa de imágenes con responseModalities: ['IMAGE', 'TEXT']
+const IMAGE_GENERATION_MODEL = 'gemini-2.0-flash-exp'
 
 /**
  * Obtiene el cliente de Gemini AI
