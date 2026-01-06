@@ -838,7 +838,7 @@ export function Header({ onToggleSidebar, sidebarCollapsed }: HeaderProps) {
                           <p className={cn(
                             "text-sm",
                             theme === 'dark' ? "text-gray-400" : "text-gray-600"
-                          )}>{user?.email || 'admin@cubarapid.com'}</p>
+                          )}>{user?.email || 'usuario@logirapid.com'}</p>
                         </div>
                       </div>
                     </div>

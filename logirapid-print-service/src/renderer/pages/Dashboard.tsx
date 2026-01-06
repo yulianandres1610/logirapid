@@ -39,6 +39,13 @@ export default function DashboardPage({ onLogout }: DashboardPageProps) {
     latestVersion?: string
     message?: string
   } | null>(null)
+  const [downloadProgress, setDownloadProgress] = useState<{
+    percent: number
+    bytesPerSecond: number
+    transferred: number
+    total: number
+  } | null>(null)
+  const [downloadStatus, setDownloadStatus] = useState<'idle' | 'downloading' | 'downloaded' | 'error'>('idle')
 
   const fetchStatus = useCallback(async () => {
     try {
@@ -74,6 +81,50 @@ export default function DashboardPage({ onLogout }: DashboardPageProps) {
     })
     return cleanup
   }, [fetchStatus])
+
+  // Listen for update status events
+  useEffect(() => {
+    const cleanup = window.electronAPI.onUpdateStatus((data) => {
+      console.log('[Dashboard] Update status:', data)
+      if (data.status === 'available') {
+        setDownloadStatus('downloading')
+        setUpdateStatus({
+          available: true,
+          latestVersion: data.version,
+          message: `Descargando v${data.version}...`
+        })
+      } else if (data.status === 'downloaded') {
+        setDownloadStatus('downloaded')
+        setDownloadProgress(null)
+        setUpdateStatus({
+          available: true,
+          latestVersion: data.version,
+          message: `v${data.version} lista para instalar`
+        })
+      } else if (data.status === 'error') {
+        setDownloadStatus('error')
+        setDownloadProgress(null)
+        setUpdateStatus({
+          available: false,
+          message: `Error: ${data.error}`
+        })
+      } else if (data.status === 'not-available') {
+        setDownloadStatus('idle')
+        setDownloadProgress(null)
+        setCheckingUpdates(false)
+      }
+    })
+    return cleanup
+  }, [])
+
+  // Listen for download progress events
+  useEffect(() => {
+    const cleanup = window.electronAPI.onUpdateDownloadProgress((data) => {
+      setDownloadProgress(data)
+      setDownloadStatus('downloading')
+    })
+    return cleanup
+  }, [])
 
   const handleToggleService = async () => {
     if (status?.isRunning) {
@@ -359,27 +410,81 @@ export default function DashboardPage({ onLogout }: DashboardPageProps) {
           {/* Update Section */}
           <div className="bg-white/10 rounded-xl p-4">
             <h3 className="text-white font-medium mb-4">Actualizaciones</h3>
-            <button
-              onClick={handleCheckUpdates}
-              disabled={checkingUpdates}
-              className="w-full py-3 bg-blue-500/20 hover:bg-blue-500/30 disabled:bg-gray-500/20 text-blue-400 disabled:text-gray-400 font-medium rounded-xl transition-colors flex items-center justify-center gap-2"
-            >
-              {checkingUpdates ? (
-                <>
-                  <div className="w-5 h-5 border-2 border-gray-400/30 border-t-blue-400 rounded-full animate-spin" />
-                  Buscando actualizaciones...
-                </>
-              ) : (
-                <>
-                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
-                  </svg>
-                  Buscar Actualizaciones
-                </>
-              )}
-            </button>
 
-            {updateStatus && (
+            {/* Download Progress Bar */}
+            {downloadStatus === 'downloading' && downloadProgress && (
+              <div className="mb-4">
+                <div className="flex items-center justify-between text-sm mb-2">
+                  <span className="text-white/80">
+                    Descargando actualización...
+                  </span>
+                  <span className="text-blue-400 font-mono">
+                    {downloadProgress.percent.toFixed(0)}%
+                  </span>
+                </div>
+                <div className="w-full h-3 bg-white/10 rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-gradient-to-r from-blue-500 to-blue-400 rounded-full transition-all duration-300 ease-out"
+                    style={{ width: `${downloadProgress.percent}%` }}
+                  />
+                </div>
+                <div className="flex justify-between text-xs text-white/50 mt-1">
+                  <span>
+                    {(downloadProgress.transferred / 1024 / 1024).toFixed(1)} MB / {(downloadProgress.total / 1024 / 1024).toFixed(1)} MB
+                  </span>
+                  <span>
+                    {(downloadProgress.bytesPerSecond / 1024 / 1024).toFixed(1)} MB/s
+                  </span>
+                </div>
+              </div>
+            )}
+
+            {/* Downloaded - Ready to Install */}
+            {downloadStatus === 'downloaded' && (
+              <div className="mb-4 p-3 bg-green-500/20 rounded-lg">
+                <div className="flex items-center gap-2 text-green-400 mb-2">
+                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  <span className="font-medium">Actualización lista</span>
+                </div>
+                <p className="text-sm text-white/70 mb-3">
+                  La versión {updateStatus?.latestVersion} está lista para instalar.
+                </p>
+                <button
+                  onClick={handleInstallUpdate}
+                  className="w-full py-2 bg-green-500 hover:bg-green-600 text-white font-medium rounded-lg transition-colors"
+                >
+                  Reiniciar e Instalar Ahora
+                </button>
+              </div>
+            )}
+
+            {/* Check for Updates Button - only show when not downloading */}
+            {downloadStatus !== 'downloading' && downloadStatus !== 'downloaded' && (
+              <button
+                onClick={handleCheckUpdates}
+                disabled={checkingUpdates}
+                className="w-full py-3 bg-blue-500/20 hover:bg-blue-500/30 disabled:bg-gray-500/20 text-blue-400 disabled:text-gray-400 font-medium rounded-xl transition-colors flex items-center justify-center gap-2"
+              >
+                {checkingUpdates ? (
+                  <>
+                    <div className="w-5 h-5 border-2 border-gray-400/30 border-t-blue-400 rounded-full animate-spin" />
+                    Buscando actualizaciones...
+                  </>
+                ) : (
+                  <>
+                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+                    </svg>
+                    Buscar Actualizaciones
+                  </>
+                )}
+              </button>
+            )}
+
+            {/* Status message when not downloading */}
+            {updateStatus && downloadStatus !== 'downloading' && downloadStatus !== 'downloaded' && (
               <div className={`mt-3 p-3 rounded-lg text-sm ${
                 updateStatus.available
                   ? 'bg-green-500/20 text-green-400'
@@ -397,7 +502,7 @@ export default function DashboardPage({ onLogout }: DashboardPageProps) {
                   )}
                   {updateStatus.message}
                 </div>
-                {updateStatus.available && (
+                {updateStatus.available && updateStatus.currentVersion && (
                   <p className="text-xs mt-1 opacity-75">
                     v{updateStatus.currentVersion} → v{updateStatus.latestVersion}
                   </p>

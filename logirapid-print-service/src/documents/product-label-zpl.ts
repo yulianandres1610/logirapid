@@ -22,27 +22,27 @@ interface ProductLabelData {
 /**
  * Generate ZPL code for a product label
  * ZPL is Zebra Programming Language - native format for Zebra printers
+ * Default size: 2" wide x 1" tall (standard price label)
  */
 export function generateProductLabelZpl(data: ProductLabelData): Buffer {
-  // Default label size: 2" x 1" (50mm x 25mm) at 203 DPI
+  // Default label size: 2" x 1" (51mm x 25mm) at 203 DPI
   // 203 DPI = 8 dots per mm
   const dpi = 203
   const dotsPerMm = dpi / 25.4
 
-  // Label dimensions in dots
-  const labelWidthMm = data.labelWidth || 50
-  const labelHeightMm = data.labelHeight || 25
-  const labelWidth = Math.round(labelWidthMm * dotsPerMm)
-  const labelHeight = Math.round(labelHeightMm * dotsPerMm)
+  // Label dimensions in dots - Default 2" x 1"
+  const labelWidthMm = data.labelWidth || 51 // 2 inches
+  const labelHeightMm = data.labelHeight || 25 // 1 inch
+  const labelWidth = Math.round(labelWidthMm * dotsPerMm) // ~406 dots
+  const labelHeight = Math.round(labelHeightMm * dotsPerMm) // ~203 dots
 
-  // Calculate positions
-  const margin = 10
-  let y = margin
+  const margin = 8
+  const isCompact = labelHeightMm <= 26 // 1 inch or less
 
-  // Truncate product name if too long
-  const maxNameLength = Math.floor(labelWidthMm / 2.5)
+  // Truncate product name
+  const maxNameLength = isCompact ? 18 : Math.floor(labelWidthMm / 2.5)
   const productName = data.productName.length > maxNameLength
-    ? data.productName.substring(0, maxNameLength - 3) + '...'
+    ? data.productName.substring(0, maxNameLength - 2) + '..'
     : data.productName
 
   // Build ZPL commands
@@ -55,54 +55,78 @@ export function generateProductLabelZpl(data: ProductLabelData): Buffer {
   zpl.push('^PON') // Print orientation normal
   zpl.push('^LH0,0') // Label home position
 
-  // Product name (larger font)
-  zpl.push(`^FO${margin},${y}^ADN,24,12^FD${escapeZpl(productName)}^FS`)
-  y += 30
+  if (isCompact) {
+    // Compact layout for 2x1 inch labels
+    // Row 1: Product name (left) + Price (right)
+    // Row 2: Barcode (centered)
 
-  // SKU
-  if (data.sku) {
-    zpl.push(`^FO${margin},${y}^ADN,18,10^FDSKU: ${escapeZpl(data.sku)}^FS`)
-    y += 22
+    // Product name (top left)
+    zpl.push(`^FO${margin},${margin}^A0N,20,20^FD${escapeZpl(productName)}^FS`)
+
+    // Price (top right)
+    if (data.price !== undefined) {
+      const priceText = `${data.currency || '$'}${data.price.toFixed(2)}`
+      // Position price at right side
+      zpl.push(`^FO${labelWidth - 100},${margin}^A0N,24,24^FD${priceText}^FS`)
+    }
+
+    // Barcode (bottom, centered) - smaller for compact label
+    const barcodeY = 55 // Start barcode below header
+    const barcodeHeight = 35
+
+    const barcodeCmd = getBarcodeCommand(data.barcode, data.barcodeType)
+
+    // Center barcode
+    zpl.push(`^FO${margin + 20},${barcodeY}^BY1.5`) // Narrower bars for compact
+    zpl.push(`${barcodeCmd},${barcodeHeight},Y,N,N^FD${data.barcode}^FS`)
+
+  } else {
+    // Standard layout for larger labels
+    let y = margin
+
+    // Product name (larger font)
+    zpl.push(`^FO${margin},${y}^A0N,24,24^FD${escapeZpl(productName)}^FS`)
+    y += 30
+
+    // SKU
+    if (data.sku) {
+      zpl.push(`^FO${margin},${y}^A0N,18,18^FDSKU: ${escapeZpl(data.sku)}^FS`)
+      y += 22
+    }
+
+    // Price
+    if (data.price !== undefined) {
+      const priceText = `${data.currency || '$'}${data.price.toFixed(2)}`
+      zpl.push(`^FO${margin},${y}^A0N,28,28^FD${priceText}^FS`)
+      y += 32
+    }
+
+    // Category
+    if (data.category) {
+      zpl.push(`^FO${margin},${y}^A0N,16,16^FD${escapeZpl(data.category)}^FS`)
+      y += 20
+    }
+
+    // Expiration date
+    if (data.expirationDate) {
+      zpl.push(`^FO${margin},${y}^A0N,16,16^FDVence: ${data.expirationDate}^FS`)
+      y += 20
+    }
+
+    // Barcode at bottom
+    const barcodeY = labelHeight - 80
+    const barcodeHeight = 50
+    const barcodeCmd = getBarcodeCommand(data.barcode, data.barcodeType)
+
+    zpl.push(`^FO${margin},${barcodeY}^BY2`)
+    zpl.push(`${barcodeCmd},${barcodeHeight},Y,N,N^FD${data.barcode}^FS`)
   }
-
-  // Price (if provided)
-  if (data.price !== undefined) {
-    const priceText = `${data.currency || '$'}${data.price.toFixed(2)}`
-    zpl.push(`^FO${margin},${y}^ADN,28,14^FD${priceText}^FS`)
-    y += 32
-  }
-
-  // Category (if provided)
-  if (data.category) {
-    zpl.push(`^FO${margin},${y}^ADN,14,8^FD${escapeZpl(data.category)}^FS`)
-    y += 18
-  }
-
-  // Expiration date (if provided)
-  if (data.expirationDate) {
-    zpl.push(`^FO${margin},${y}^ADN,14,8^FDVence: ${data.expirationDate}^FS`)
-    y += 18
-  }
-
-  // Barcode - position at bottom of label
-  const barcodeY = labelHeight - 80 // Leave space for barcode + text
-  const barcodeHeight = 50
-
-  // Determine barcode type
-  const barcodeCmd = getBarcodeCommand(data.barcode, data.barcodeType)
-
-  // Center the barcode
-  const barcodeX = margin
-
-  // Draw barcode
-  zpl.push(`^FO${barcodeX},${barcodeY}^BY2`) // Barcode field origin and bar width
-  zpl.push(`${barcodeCmd},${barcodeHeight},Y,N,N^FD${data.barcode}^FS`)
 
   // End label
-  zpl.push('^XZ') // End format
+  zpl.push('^XZ')
 
   const zplContent = zpl.join('\n')
-  console.log('[ZPL Generator] Generated ZPL:', zplContent)
+  console.log('[ZPL Generator] Generated ZPL for', isCompact ? '2x1 inch' : 'large', 'label')
 
   return Buffer.from(zplContent, 'utf8')
 }

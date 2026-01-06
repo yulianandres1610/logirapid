@@ -15,6 +15,7 @@ import { generatePosReceipt, ReceiptData } from '../documents/pos-receipt'
 import { generateShippingLabel, ShippingLabelData } from '../documents/shipping-label'
 import { generateProductLabel, ProductLabelData } from '../documents/product-label'
 import { generateProductLabelZpl, generateShippingLabelZpl } from '../documents/product-label-zpl'
+import { generateProductLabelTspl } from '../documents/product-label-tspl'
 import { generateLotLabelZpl, LotLabelData } from '../documents/lot-label-zpl'
 import { generatePurchaseInvoice, PurchaseInvoiceData } from '../documents/purchase-invoice'
 import { generatePurchaseInvoicePdf } from '../documents/purchase-invoice-pdf'
@@ -273,24 +274,29 @@ class JobProcessor {
     const data = job.documentData as Record<string, unknown>
     const usePdf = !printer.supportsEscpos || printer.printerType === 'standard'
 
-    // For Zebra printers, use ZPL:
-    // - On Windows: always works natively
+    // For label printers, determine format:
+    // - Zebra printers: use ZPL (Zebra Programming Language)
+    // - Other label printers (TSC, 4BARCODE, etc.): use TSPL (TSC Printer Language)
+    // - On Windows: always works natively via raw printing
     // - On macOS: use Python USB script to bypass CUPS driver filters
     // - On Linux: only if we have a RAW queue
     const hasRawQueue = !!printer.rawQueueName
-    const useZpl = printer.isZebra && (
-      process.platform === 'win32' ||
-      process.platform === 'darwin' ||  // macOS: use Python USB script
-      hasRawQueue                        // Linux: only with RAW queue
-    )
+    const isLabelPrinter = printer.printerType === 'label_barcode' || printer.isZebra
+    const canUseRawPrinting = process.platform === 'win32' ||
+      process.platform === 'darwin' ||
+      hasRawQueue
+    const useZpl = printer.isZebra && canUseRawPrinting
+    const useTspl = !printer.isZebra && isLabelPrinter && canUseRawPrinting
 
     console.log(`[Job Processor] Generating ${job.documentType}:`)
     console.log(`[Job Processor]   - Printer: ${printer.printerName}`)
     console.log(`[Job Processor]   - Is Zebra: ${printer.isZebra}`)
+    console.log(`[Job Processor]   - Is Label Printer: ${isLabelPrinter}`)
     console.log(`[Job Processor]   - Platform: ${process.platform}`)
     console.log(`[Job Processor]   - Has RAW queue: ${hasRawQueue} (${printer.rawQueueName || 'none'})`)
-    console.log(`[Job Processor]   - Use ZPL: ${useZpl}`)
-    console.log(`[Job Processor]   - Use PDF: ${!useZpl || usePdf}`)
+    console.log(`[Job Processor]   - Use ZPL (Zebra): ${useZpl}`)
+    console.log(`[Job Processor]   - Use TSPL (TSC/4BARCODE): ${useTspl}`)
+    console.log(`[Job Processor]   - Use PDF: ${!useZpl && !useTspl}`)
 
     switch (job.documentType) {
       case 'pos_receipt':
@@ -307,12 +313,18 @@ class JobProcessor {
         return generateShippingLabel(data as unknown as ShippingLabelData)
 
       case 'product_label':
-        // For Zebra printers, use ZPL (on macOS via Python USB script, on Windows directly)
+        // For Zebra printers, use ZPL
         if (useZpl) {
           console.log(`[Job Processor] Generating product label as ZPL for Zebra printer`)
           return generateProductLabelZpl(data as unknown as ProductLabelData)
         }
-        console.log(`[Job Processor] Generating product label as PDF (CUPS will convert to raster)`)
+        // For other label printers (TSC, 4BARCODE, etc.), use TSPL
+        if (useTspl) {
+          console.log(`[Job Processor] Generating product label as TSPL for ${printer.printerName}`)
+          return generateProductLabelTspl(data as unknown as ProductLabelData)
+        }
+        // Fallback to PDF
+        console.log(`[Job Processor] Generating product label as PDF`)
         return generateProductLabel(data as unknown as ProductLabelData)
 
       case 'lot_label':
@@ -405,13 +417,15 @@ class JobProcessor {
     console.log(`[Job Processor]   - Copies: ${copies}`)
 
     // Determine print method
-    // For Zebra printers:
-    // - On Windows: use raw ZPL directly
+    // For label printers (Zebra, TSC, 4BARCODE, etc.):
+    // - Use raw printing (ZPL for Zebra, TSPL for others)
+    // - On Windows: send directly to printer
     // - On macOS: use Python USB script (bypasses CUPS)
-    // - On Linux: use ZPL via RAW queue if available
-    const isZebraLabel = printer.isZebra &&
-      (process.platform === 'win32' || process.platform === 'darwin' || hasRawQueue) &&
-      ['product_label', 'shipping_label', 'lot_label'].includes(job.documentType)
+    // - On Linux: use RAW queue if available
+    const isLabelPrinter = printer.printerType === 'label_barcode' || printer.isZebra
+    const isLabelJob = ['product_label', 'shipping_label', 'lot_label'].includes(job.documentType)
+    const canUseRaw = process.platform === 'win32' || process.platform === 'darwin' || hasRawQueue
+    const useRawLabelPrint = isLabelPrinter && canUseRaw && isLabelJob
     const useEscPos = printer.supportsEscpos &&
                       printer.printerType !== 'standard' &&
                       ['pos_receipt'].includes(job.documentType)
@@ -419,29 +433,26 @@ class JobProcessor {
                                'inventory_count_report', 'cash_register_report',
                                'warehouse_operation'].includes(job.documentType)
     const isPdfOnly = ['consignment_receipt', 'unified_reception', 'transfer_receipt'].includes(job.documentType)
-    const isLabelDocument = ['product_label', 'shipping_label'].includes(job.documentType)
 
     console.log(`[Job Processor] Print method selection:`)
-    console.log(`[Job Processor]   - isZebraLabel (raw ZPL): ${isZebraLabel}`)
+    console.log(`[Job Processor]   - useRawLabelPrint (ZPL/TSPL): ${useRawLabelPrint}`)
     console.log(`[Job Processor]   - useEscPos: ${useEscPos}`)
     console.log(`[Job Processor]   - isReceiptOrReport: ${isReceiptOrReport}`)
     console.log(`[Job Processor]   - isPdfOnly: ${isPdfOnly}`)
-    console.log(`[Job Processor]   - isLabelDocument: ${isLabelDocument}`)
 
     for (let i = 0; i < copies; i++) {
       console.log(`[Job Processor] Printing copy ${i + 1} of ${copies}...`)
 
-      if (isZebraLabel) {
-        // ZPL printing for Zebra label printers via RAW queue
-        console.log(`[Job Processor] Using ZPL/RAW method for Zebra printer ${printer.printerName}`)
+      if (useRawLabelPrint) {
+        // Raw printing for label printers (ZPL for Zebra, TSPL for others)
+        const format = printer.isZebra ? 'ZPL' : 'TSPL'
+        console.log(`[Job Processor] Using ${format}/RAW method for ${printer.printerName}`)
         console.log(`[Job Processor] RAW queue: ${printer.rawQueueName || '(direct)'}`)
-        await this.printZpl(printer, documentBuffer)
-      } else if (isPdfOnly || isLabelDocument) {
-        // PDF printing for label printers (including Zebra on macOS/Linux via CUPS)
-        console.log(`[Job Processor] Using PDF method for label printer ${printer.printerName}`)
-        // For label printers, specify the media size
-        const labelMediaSize = printer.isZebra ? 'w288h360' : undefined // 4x5 inch label
-        await this.printPdf(printer, documentBuffer, labelMediaSize)
+        await this.printRawLabel(printer, documentBuffer)
+      } else if (isPdfOnly) {
+        // PDF printing for PDF-only documents
+        console.log(`[Job Processor] Using PDF method for ${printer.printerName}`)
+        await this.printPdf(printer, documentBuffer)
       } else if (useEscPos || (isReceiptOrReport && printer.supportsEscpos && printer.printerType !== 'standard')) {
         // Direct ESC/POS printing for thermal printers
         console.log(`[Job Processor] Using ESC/POS method for ${printer.printerName}`)
@@ -464,21 +475,116 @@ class JobProcessor {
     console.log(`[Job Processor] All ${copies} copies sent to printer`)
   }
 
-  private async printZpl(printer: DetectedPrinter, data: Buffer): Promise<void> {
-    // ZPL is sent as raw text to Zebra printers
-    const tempFile = join(tmpdir(), `print-${uuidv4()}.zpl`)
+  private async printRawLabel(printer: DetectedPrinter, data: Buffer): Promise<void> {
+    // Raw label data (ZPL for Zebra, TSPL for others) is sent directly to printer
+    const ext = printer.isZebra ? 'zpl' : 'tspl'
+    const tempFile = join(tmpdir(), `print-${uuidv4()}.${ext}`)
     await writeFile(tempFile, data)
 
-    console.log(`[Job Processor] ZPL file created: ${tempFile} (${data.length} bytes)`)
-    console.log(`[Job Processor] ZPL content preview: ${data.toString('utf8').substring(0, 200)}...`)
+    const format = printer.isZebra ? 'ZPL' : 'TSPL'
+    console.log(`[Job Processor] ${format} file created: ${tempFile} (${data.length} bytes)`)
+    console.log(`[Job Processor] ${format} content preview: ${data.toString('utf8').substring(0, 300)}...`)
 
     try {
       if (process.platform === 'win32') {
-        // Windows: send raw to printer
-        await execAsync(`copy /b "${tempFile}" "${printer.systemName}"`, {
-          encoding: 'utf8',
-          shell: 'cmd.exe'
-        })
+        // Windows: Use PowerShell to send raw ZPL to printer via Windows Spooler
+        const escapedPrinter = printer.systemName.replace(/'/g, "''").replace(/"/g, '`"')
+        const escapedFile = tempFile.replace(/\\/g, '/')
+
+        console.log(`[Job Processor] Windows ZPL: Sending to "${printer.systemName}"`)
+
+        // Create PowerShell script file to avoid command line escaping issues
+        const psScriptFile = join(tmpdir(), `zpl-print-script-${uuidv4()}.ps1`)
+        const psScript = `
+$printerName = '${escapedPrinter}'
+$filePath = '${escapedFile}'
+
+# Read the ZPL file
+$bytes = [System.IO.File]::ReadAllBytes($filePath)
+
+# Use Windows Spooler API directly
+Add-Type -TypeDefinition @"
+using System;
+using System.Runtime.InteropServices;
+
+public class RawPrint {
+    [StructLayout(LayoutKind.Sequential)]
+    public struct DOCINFOA {
+        [MarshalAs(UnmanagedType.LPStr)] public string pDocName;
+        [MarshalAs(UnmanagedType.LPStr)] public string pOutputFile;
+        [MarshalAs(UnmanagedType.LPStr)] public string pDatatype;
+    }
+
+    [DllImport("winspool.drv", EntryPoint = "OpenPrinterA", SetLastError = true)]
+    public static extern bool OpenPrinter(string szPrinter, out IntPtr hPrinter, IntPtr pd);
+
+    [DllImport("winspool.drv", EntryPoint = "ClosePrinter", SetLastError = true)]
+    public static extern bool ClosePrinter(IntPtr hPrinter);
+
+    [DllImport("winspool.drv", EntryPoint = "StartDocPrinterA", SetLastError = true)]
+    public static extern int StartDocPrinter(IntPtr hPrinter, int level, ref DOCINFOA di);
+
+    [DllImport("winspool.drv", EntryPoint = "EndDocPrinter", SetLastError = true)]
+    public static extern bool EndDocPrinter(IntPtr hPrinter);
+
+    [DllImport("winspool.drv", EntryPoint = "StartPagePrinter", SetLastError = true)]
+    public static extern bool StartPagePrinter(IntPtr hPrinter);
+
+    [DllImport("winspool.drv", EntryPoint = "EndPagePrinter", SetLastError = true)]
+    public static extern bool EndPagePrinter(IntPtr hPrinter);
+
+    [DllImport("winspool.drv", EntryPoint = "WritePrinter", SetLastError = true)]
+    public static extern bool WritePrinter(IntPtr hPrinter, byte[] pBytes, int dwCount, out int dwWritten);
+
+    public static bool SendBytesToPrinter(string szPrinterName, byte[] pBytes) {
+        IntPtr hPrinter;
+        int dwWritten = 0;
+        DOCINFOA di = new DOCINFOA();
+        di.pDocName = "ZPL Label";
+        di.pDatatype = "RAW";
+
+        if (!OpenPrinter(szPrinterName, out hPrinter, IntPtr.Zero)) {
+            return false;
+        }
+
+        if (StartDocPrinter(hPrinter, 1, ref di) == 0) {
+            ClosePrinter(hPrinter);
+            return false;
+        }
+
+        StartPagePrinter(hPrinter);
+        bool success = WritePrinter(hPrinter, pBytes, pBytes.Length, out dwWritten);
+        EndPagePrinter(hPrinter);
+        EndDocPrinter(hPrinter);
+        ClosePrinter(hPrinter);
+        return success;
+    }
+}
+"@
+
+$result = [RawPrint]::SendBytesToPrinter($printerName, $bytes)
+if ($result) {
+    Write-Host "ZPL sent successfully"
+    exit 0
+} else {
+    Write-Error "Failed to send ZPL to printer"
+    exit 1
+}
+`
+        await writeFile(psScriptFile, psScript, 'utf8')
+
+        try {
+          const { stdout, stderr } = await execAsync(
+            `powershell -ExecutionPolicy Bypass -File "${psScriptFile}"`,
+            { encoding: 'utf8' }
+          )
+          console.log(`[Job Processor] PowerShell ZPL output: ${stdout || '(empty)'}`)
+          if (stderr && !stderr.includes('ZPL sent successfully')) {
+            console.warn(`[Job Processor] PowerShell ZPL stderr: ${stderr}`)
+          }
+        } finally {
+          setTimeout(() => unlink(psScriptFile).catch(() => {}), 5000)
+        }
       } else if (process.platform === 'darwin') {
         // macOS: Use Python script with libusb for direct USB communication
         // This bypasses CUPS driver filters completely for reliable ZPL printing

@@ -1,6 +1,6 @@
 {
   "name": "logirapid-print-service",
-  "version": "1.19.0",
+  "version": "1.33.0",
   "description": "LogiRapid Silent Print Service - Local print service for thermal printers and labels",
   "main": "out/main/index.js",
   "author": {
@@ -70,10 +70,9 @@
       ],
       "icon": "resources/icon.png",
       "artifactName": "${productName}-${version}-Setup.${ext}",
-      "publisherName": "LogiRapid LLC",
-      "legalTrademarks": "LogiRapid is a trademark of LogiRapid LLC",
       "requestedExecutionLevel": "asInvoker",
-      "signAndEditExecutable": false
+      "signAndEditExecutable": false,
+      "verifyUpdateCodeSignature": false
     },
     "mac": {
       "target": ["dmg", "zip"],

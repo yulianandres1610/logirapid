@@ -521,21 +521,30 @@ function ReceiptContent() {
   // Fetch print services for silent printing
   const fetchPrintServices = async (): Promise<{ services: typeof printServices; thermalPrinters: Array<{ serviceId: number; printer: { id: number; printerName: string; isOnline: boolean; isDefault: boolean; printerType: string } }> }> => {
     try {
-      const response = await fetch('/api/print/services?includeOffline=false')
+      console.log('[Receipt] Fetching print services...')
+      const response = await fetch('/api/print/services')
       const data = await response.json()
-      if (data.success && data.data?.services) {
-        const activeServices = data.data.services.filter(
-          (s: { status: string; printers?: unknown[] }) => s.status === 'active' && s.printers && s.printers.length > 0
-        )
+      console.log('[Receipt] Print services response:', data)
 
-        // Filtrar solo servicios que tienen impresoras térmicas online
+      if (data.success && data.data?.services) {
+        // Aceptar servicios activos o pending (offline es solo indicador de heartbeat)
+        const activeServices = data.data.services.filter(
+          (s: { status: string; printers?: unknown[] }) =>
+            (s.status === 'active' || s.status === 'pending' || s.status === 'offline') &&
+            s.printers && s.printers.length > 0
+        )
+        console.log('[Receipt] Active services:', activeServices.length, activeServices.map((s: { serviceName: string; status: string }) => ({ name: s.serviceName, status: s.status })))
+
+        // Filtrar solo servicios que tienen impresoras térmicas
         const servicesWithThermal = activeServices.map((service: { id: number; serviceName: string; printers: Array<{ id: number; printerName: string; isOnline: boolean; isDefault: boolean; printerType: string }> }) => ({
           ...service,
           printers: service.printers.filter(
             (p: { printerType: string; isOnline: boolean }) =>
-              (p.printerType === 'thermal_80mm' || p.printerType === 'thermal_58mm' || p.printerType === 'pos') && p.isOnline
+              (p.printerType === 'thermal_80mm' || p.printerType === 'thermal_58mm' || p.printerType === 'pos')
           )
         })).filter((s: { printers: unknown[] }) => s.printers.length > 0)
+
+        console.log('[Receipt] Services with thermal printers:', servicesWithThermal.length)
 
         setPrintServices(servicesWithThermal)
 
@@ -543,17 +552,21 @@ function ReceiptContent() {
         const thermalPrinters: Array<{ serviceId: number; printer: { id: number; printerName: string; isOnline: boolean; isDefault: boolean; printerType: string } }> = []
         for (const service of servicesWithThermal) {
           for (const printer of service.printers) {
+            console.log('[Receipt] Found thermal printer:', printer.printerName, 'type:', printer.printerType, 'online:', printer.isOnline)
             thermalPrinters.push({ serviceId: service.id, printer })
           }
         }
 
         // Auto-select first thermal printer
         if (thermalPrinters.length > 0) {
+          console.log('[Receipt] Auto-selecting printer:', thermalPrinters[0].printer.printerName)
           setSelectedPrinter({ serviceId: thermalPrinters[0].serviceId, printerId: thermalPrinters[0].printer.id })
         }
 
+        console.log('[Receipt] Total thermal printers found:', thermalPrinters.length)
         return { services: servicesWithThermal, thermalPrinters }
       }
+      console.log('[Receipt] No services found in response')
       return { services: [], thermalPrinters: [] }
     } catch (err) {
       console.error('[Receipt] Error fetching print services:', err)
@@ -623,14 +636,19 @@ function ReceiptContent() {
 
   // Open print modal or use browser print if offline
   const handlePrint = async () => {
+    console.log('[Receipt] handlePrint called, isOfflineOrder:', isOfflineOrder)
+
     if (isOfflineOrder) {
       // For offline orders, use browser print
+      console.log('[Receipt] Offline order, using browser print')
       printReceipt()
       return
     }
 
     // For online orders, try to use print service
+    console.log('[Receipt] Online order, fetching print services...')
     const { thermalPrinters } = await fetchPrintServices()
+    console.log('[Receipt] Found', thermalPrinters.length, 'thermal printers')
 
     // Si hay exactamente una impresora térmica, imprimir silenciosamente
     if (thermalPrinters.length === 1) {
@@ -639,59 +657,68 @@ function ReceiptContent() {
       // Imprimir directamente
       setPrintingWithService(true)
       try {
+        const printPayload = {
+          documentType: 'pos_receipt',
+          documentData: {
+            orderNumber: order?.orderNumber,
+            customerName: order?.customerName,
+            cashierName: order?.createdByName,
+            createdAt: order?.createdAt,
+            lines: order?.lines.map(l => ({
+              productName: l.productName,
+              quantity: l.quantity,
+              unitPrice: l.unitPrice,
+              total: l.total
+            })),
+            subtotal: order?.subtotal,
+            discountAmount: order?.discountAmount,
+            totalAmount: order?.totalAmount,
+            totalAmountCUP: toCUP(order?.totalAmount || 0),
+            subtotalCUP: toCUP(order?.subtotal || 0),
+            currency: order?.currency,
+            exchangeRate: exchangeRate,
+            payments: order?.payments.map(p => ({
+              method: p.method,
+              amount: p.amount,
+              currency: p.currency
+            }))
+          },
+          copies: 1,
+          printServiceId: thermalPrinters[0].serviceId,
+          printerId: thermalPrinters[0].printer.id,
+          sourceType: 'pos_order',
+          sourceId: order?.id || 0
+        }
+        console.log('[Receipt] Sending print job:', printPayload)
+
         const response = await fetch('/api/print/jobs', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            documentType: 'pos_receipt',
-            documentData: {
-              orderNumber: order?.orderNumber,
-              customerName: order?.customerName,
-              cashierName: order?.createdByName,
-              createdAt: order?.createdAt,
-              lines: order?.lines.map(l => ({
-                productName: l.productName,
-                quantity: l.quantity,
-                unitPrice: l.unitPrice,
-                total: l.total
-              })),
-              subtotal: order?.subtotal,
-              discountAmount: order?.discountAmount,
-              totalAmount: order?.totalAmount,
-              totalAmountCUP: toCUP(order?.totalAmount || 0),
-              subtotalCUP: toCUP(order?.subtotal || 0),
-              currency: order?.currency,
-              exchangeRate: exchangeRate,
-              payments: order?.payments.map(p => ({
-                method: p.method,
-                amount: p.amount,
-                currency: p.currency
-              }))
-            },
-            copies: 1,
-            printServiceId: thermalPrinters[0].serviceId,
-            printerId: thermalPrinters[0].printer.id,
-            sourceType: 'pos_order',
-            sourceId: order?.id || 0
-          })
+          body: JSON.stringify(printPayload)
         })
 
         const data = await response.json()
+        console.log('[Receipt] Print job response:', data)
+
         if (data.success) {
           console.log('[Receipt] Impresión silenciosa exitosa')
+          alert('Recibo enviado a imprimir')
         } else {
           console.error('[Receipt] Error en impresión silenciosa:', data.error)
+          alert('Error al enviar a imprimir: ' + data.error)
           // Fallback to browser print
           printReceipt()
         }
       } catch (err) {
         console.error('[Receipt] Error imprimiendo:', err)
+        alert('Error de conexión al imprimir')
         printReceipt()
       } finally {
         setPrintingWithService(false)
       }
     } else if (thermalPrinters.length > 1) {
       // Más de una impresora, mostrar modal para seleccionar
+      console.log('[Receipt] Múltiples impresoras, mostrando modal')
       setShowPrintModal(true)
     } else {
       // No hay impresoras térmicas, usar navegador
@@ -702,34 +729,43 @@ function ReceiptContent() {
 
   // Auto-print silently when order loads (if autoPrint=true)
   useEffect(() => {
+    console.log('[Receipt] Auto-print check:', { order: !!order, hasAutoprinted, autoPrint, isClient })
     if (!order || hasAutoprinted || !autoPrint || !isClient) return
 
     const triggerAutoPrint = async () => {
       setHasAutoprinted(true)
-      console.log('[Receipt] Auto-print triggered')
+      console.log('[Receipt] Auto-print triggered for order:', order.orderNumber)
 
       try {
         // Fetch print services
-        const response = await fetch('/api/print/services?includeOffline=false')
+        console.log('[Receipt] Fetching print services for auto-print...')
+        const response = await fetch('/api/print/services')
         const data = await response.json()
+        console.log('[Receipt] Auto-print services response:', data)
 
         if (data.success && data.data?.services) {
+          // Aceptar servicios activos, pending u offline
           const activeServices = data.data.services.filter(
-            (s: { status: string; printers?: unknown[] }) => s.status === 'active' && s.printers && s.printers.length > 0
+            (s: { status: string; printers?: unknown[] }) =>
+              (s.status === 'active' || s.status === 'pending' || s.status === 'offline') &&
+              s.printers && s.printers.length > 0
           )
+          console.log('[Receipt] Auto-print active services:', activeServices.length)
 
-          // Find first online thermal printer (thermal_80mm, thermal_58mm, or pos)
+          // Find first thermal printer (thermal_80mm, thermal_58mm, or pos)
           let thermalPrinter = null
           let serviceId = null
 
           for (const service of activeServices) {
+            console.log('[Receipt] Checking service:', service.serviceName, 'printers:', service.printers?.length)
             const printer = service.printers.find(
               (p: { printerType: string; isOnline: boolean }) =>
-                (p.printerType === 'thermal_80mm' || p.printerType === 'thermal_58mm' || p.printerType === 'pos') && p.isOnline
+                (p.printerType === 'thermal_80mm' || p.printerType === 'thermal_58mm' || p.printerType === 'pos')
             )
             if (printer) {
               thermalPrinter = printer
               serviceId = service.id
+              console.log('[Receipt] Found thermal printer:', printer.printerName, 'type:', printer.printerType)
               break
             }
           }
@@ -738,52 +774,59 @@ function ReceiptContent() {
             console.log('[Receipt] Auto-printing to:', thermalPrinter.printerName)
 
             // Send print job silently
+            const printPayload = {
+              documentType: 'pos_receipt',
+              documentData: {
+                orderNumber: order.orderNumber,
+                customerName: order.customerName,
+                cashierName: order.createdByName,
+                createdAt: order.createdAt,
+                lines: order.lines.map(l => ({
+                  productName: l.productName,
+                  quantity: l.quantity,
+                  unitPrice: l.unitPrice,
+                  total: l.total
+                })),
+                subtotal: order.subtotal,
+                discountAmount: order.discountAmount,
+                totalAmount: order.totalAmount,
+                totalAmountCUP: toCUP(order.totalAmount),
+                subtotalCUP: toCUP(order.subtotal),
+                currency: order.currency,
+                exchangeRate: exchangeRate,
+                payments: order.payments.map(p => ({
+                  method: p.method,
+                  amount: p.amount,
+                  currency: p.currency
+                }))
+              },
+              copies: 1,
+              printServiceId: serviceId,
+              printerId: thermalPrinter.id,
+              sourceType: 'pos_order',
+              sourceId: order.id || 0
+            }
+            console.log('[Receipt] Auto-print payload:', printPayload)
+
             const printResponse = await fetch('/api/print/jobs', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                documentType: 'pos_receipt',
-                documentData: {
-                  orderNumber: order.orderNumber,
-                  customerName: order.customerName,
-                  cashierName: order.createdByName,
-                  createdAt: order.createdAt,
-                  lines: order.lines.map(l => ({
-                    productName: l.productName,
-                    quantity: l.quantity,
-                    unitPrice: l.unitPrice,
-                    total: l.total
-                  })),
-                  subtotal: order.subtotal,
-                  discountAmount: order.discountAmount,
-                  totalAmount: order.totalAmount,
-                  totalAmountCUP: toCUP(order.totalAmount),
-                  subtotalCUP: toCUP(order.subtotal),
-                  currency: order.currency,
-                  exchangeRate: exchangeRate,
-                  payments: order.payments.map(p => ({
-                    method: p.method,
-                    amount: p.amount,
-                    currency: p.currency
-                  }))
-                },
-                copies: 1,
-                printServiceId: serviceId,
-                printerId: thermalPrinter.id,
-                sourceType: 'pos_order',
-                sourceId: order.id || 0
-              })
+              body: JSON.stringify(printPayload)
             })
 
             const printData = await printResponse.json()
+            console.log('[Receipt] Auto-print response:', printData)
+
             if (printData.success) {
-              console.log('[Receipt] Auto-print job sent successfully')
+              console.log('[Receipt] Auto-print job sent successfully:', printData.data?.jobNumber)
             } else {
               console.error('[Receipt] Auto-print failed:', printData.error)
             }
           } else {
             console.log('[Receipt] No thermal printer available for auto-print')
           }
+        } else {
+          console.log('[Receipt] No services in response for auto-print')
         }
       } catch (err) {
         console.error('[Receipt] Auto-print error:', err)
@@ -791,6 +834,7 @@ function ReceiptContent() {
     }
 
     // Small delay to ensure everything is loaded
+    console.log('[Receipt] Scheduling auto-print in 500ms...')
     const timer = setTimeout(triggerAutoPrint, 500)
     return () => clearTimeout(timer)
   }, [order, hasAutoprinted, autoPrint, isClient, exchangeRate])

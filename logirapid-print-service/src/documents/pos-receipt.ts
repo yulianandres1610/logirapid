@@ -90,8 +90,18 @@ const Commands = {
 export function generatePosReceipt(data: ReceiptData): Buffer {
   const lines: string[] = []
 
-  // Initialize
+  // Paper width for 80mm thermal printer (EPSON TM-T20III uses 42 chars with Font A)
+  const PAPER_WIDTH = 42
+  const SEPARATOR = '='.repeat(PAPER_WIDTH)
+  const THIN_SEPARATOR = '-'.repeat(PAPER_WIDTH)
+
+  // Initialize printer
   lines.push(Commands.INIT)
+
+  // Set left margin for proper centering on 80mm paper
+  // GS L nL nH - Sets left margin in dots (at 203 DPI, 8 dots = 1mm)
+  // Setting ~6mm margin (48 dots) to center content
+  lines.push(`${GS}L\x30\x00`) // Left margin = 48 dots (~6mm)
 
   // Header - Company info centered and bold
   lines.push(Commands.ALIGN_CENTER)
@@ -113,11 +123,11 @@ export function generatePosReceipt(data: ReceiptData): Buffer {
   }
 
   // Separator
-  lines.push('--------------------------------')
+  lines.push(Commands.ALIGN_LEFT)
+  lines.push(SEPARATOR)
   lines.push(Commands.FEED_LINE)
 
   // Receipt info - left aligned
-  lines.push(Commands.ALIGN_LEFT)
   lines.push(`Recibo: ${data.receiptNumber}`)
   lines.push(Commands.FEED_LINE)
   lines.push(`Fecha: ${data.date}${data.time ? ' ' + data.time : ''}`)
@@ -134,82 +144,80 @@ export function generatePosReceipt(data: ReceiptData): Buffer {
   }
 
   // Separator
-  lines.push('--------------------------------')
+  lines.push(THIN_SEPARATOR)
   lines.push(Commands.FEED_LINE)
 
   // Column headers
   lines.push(Commands.BOLD_ON)
-  lines.push(formatLine('CANT  DESCRIPCION', 'TOTAL', 32))
+  lines.push(formatLine('CANT  DESCRIPCION', 'TOTAL', PAPER_WIDTH))
   lines.push(Commands.BOLD_OFF)
   lines.push(Commands.FEED_LINE)
-  lines.push('--------------------------------')
+  lines.push(THIN_SEPARATOR)
   lines.push(Commands.FEED_LINE)
 
   // Items
   for (const item of data.items) {
     const itemTotal = item.total ?? item.quantity * item.price
     const qtyStr = item.quantity.toString().padStart(2)
-    const itemLine = `${qtyStr} x ${item.name}`
     const totalStr = formatCurrency(itemTotal)
+    const maxNameLen = PAPER_WIDTH - 6 - totalStr.length - 2 // 6 for "XX x ", 2 for spacing
 
-    // If item name is too long, wrap it
-    if (itemLine.length > 24) {
-      lines.push(`${qtyStr} x ${item.name.substring(0, 20)}...`)
-      lines.push(Commands.FEED_LINE)
-      lines.push(Commands.ALIGN_RIGHT)
-      lines.push(totalStr)
-      lines.push(Commands.ALIGN_LEFT)
-    } else {
-      lines.push(formatLine(itemLine, totalStr, 32))
-    }
+    // If item name is too long, truncate it
+    const itemName = item.name.length > maxNameLen
+      ? item.name.substring(0, maxNameLen - 2) + '..'
+      : item.name
+    const itemLine = `${qtyStr} x ${itemName}`
+
+    lines.push(formatLine(itemLine, totalStr, PAPER_WIDTH))
     lines.push(Commands.FEED_LINE)
   }
 
   // Separator
-  lines.push('--------------------------------')
+  lines.push(THIN_SEPARATOR)
   lines.push(Commands.FEED_LINE)
 
   // Subtotal
-  lines.push(formatLine('Subtotal:', formatCurrency(data.subtotal), 32))
+  lines.push(formatLine('Subtotal:', formatCurrency(data.subtotal), PAPER_WIDTH))
   lines.push(Commands.FEED_LINE)
 
   // Tax
   if (data.tax !== undefined && data.tax > 0) {
     const taxLabel = data.taxRate ? `IVA (${data.taxRate}%):` : 'IVA:'
-    lines.push(formatLine(taxLabel, formatCurrency(data.tax), 32))
+    lines.push(formatLine(taxLabel, formatCurrency(data.tax), PAPER_WIDTH))
     lines.push(Commands.FEED_LINE)
   }
 
   // Discount
   if (data.discount !== undefined && data.discount > 0) {
     const discLabel = data.discountLabel || 'Descuento:'
-    lines.push(formatLine(discLabel, `-${formatCurrency(data.discount)}`, 32))
+    lines.push(formatLine(discLabel, `-${formatCurrency(data.discount)}`, PAPER_WIDTH))
     lines.push(Commands.FEED_LINE)
   }
 
   // Total - bold and larger
-  lines.push('--------------------------------')
+  lines.push(SEPARATOR)
   lines.push(Commands.FEED_LINE)
   lines.push(Commands.BOLD_ON)
   lines.push(Commands.DOUBLE_HEIGHT_ON)
-  lines.push(formatLine('TOTAL:', formatCurrency(data.total), 32))
+  // For double height, use half the width
+  lines.push(formatLine('TOTAL:', formatCurrency(data.total), Math.floor(PAPER_WIDTH / 2)))
   lines.push(Commands.NORMAL_SIZE)
   lines.push(Commands.BOLD_OFF)
   lines.push(Commands.FEED_LINE)
 
   // Payments
-  lines.push('--------------------------------')
+  lines.push(THIN_SEPARATOR)
   lines.push(Commands.FEED_LINE)
 
   for (const payment of data.payments) {
-    lines.push(formatLine(payment.method + ':', formatCurrency(payment.amount), 32))
+    lines.push(formatLine(payment.method + ':', formatCurrency(payment.amount), PAPER_WIDTH))
     lines.push(Commands.FEED_LINE)
   }
 
   // Change
   if (data.change !== undefined && data.change > 0) {
     lines.push(Commands.BOLD_ON)
-    lines.push(formatLine('Cambio:', formatCurrency(data.change), 32))
+    lines.push(formatLine('Cambio:', formatCurrency(data.change), PAPER_WIDTH))
     lines.push(Commands.BOLD_OFF)
     lines.push(Commands.FEED_LINE)
   }

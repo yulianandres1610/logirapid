@@ -11,26 +11,44 @@ import os from 'os'
 // Auto-updater configuration
 autoUpdater.autoDownload = true
 autoUpdater.autoInstallOnAppQuit = true
+// Disable code signing verification (app is not signed)
+autoUpdater.forceCodeSigning = false
 
 // Auto-updater event handlers
 autoUpdater.on('checking-for-update', () => {
   console.log('[Auto-Updater] Checking for updates...')
+  mainWindow?.webContents.send('update-status', { status: 'checking' })
 })
 
 autoUpdater.on('update-available', (info) => {
   console.log('[Auto-Updater] Update available:', info.version)
+  mainWindow?.webContents.send('update-status', {
+    status: 'available',
+    version: info.version
+  })
 })
 
 autoUpdater.on('update-not-available', () => {
   console.log('[Auto-Updater] No updates available')
+  mainWindow?.webContents.send('update-status', { status: 'not-available' })
 })
 
 autoUpdater.on('download-progress', (progressObj) => {
   console.log(`[Auto-Updater] Download progress: ${progressObj.percent.toFixed(1)}%`)
+  mainWindow?.webContents.send('update-download-progress', {
+    percent: progressObj.percent,
+    bytesPerSecond: progressObj.bytesPerSecond,
+    transferred: progressObj.transferred,
+    total: progressObj.total
+  })
 })
 
 autoUpdater.on('update-downloaded', (info) => {
   console.log('[Auto-Updater] Update downloaded:', info.version)
+  mainWindow?.webContents.send('update-status', {
+    status: 'downloaded',
+    version: info.version
+  })
 
   // Notify user about the update
   dialog.showMessageBox({
@@ -49,6 +67,10 @@ autoUpdater.on('update-downloaded', (info) => {
 
 autoUpdater.on('error', (err) => {
   console.error('[Auto-Updater] Error:', err)
+  mainWindow?.webContents.send('update-status', {
+    status: 'error',
+    error: err.message
+  })
 })
 
 let mainWindow: BrowserWindow | null = null

@@ -41,6 +41,37 @@ contextBridge.exposeInMainWorld('electronAPI', {
   onPrintersUpdated: (callback: () => void) => {
     ipcRenderer.on('printers-updated', callback)
     return () => ipcRenderer.removeListener('printers-updated', callback)
+  },
+
+  // Update events
+  onUpdateStatus: (callback: (data: {
+    status: 'checking' | 'available' | 'not-available' | 'downloaded' | 'error'
+    version?: string
+    error?: string
+  }) => void) => {
+    const handler = (_event: Electron.IpcRendererEvent, data: {
+      status: 'checking' | 'available' | 'not-available' | 'downloaded' | 'error'
+      version?: string
+      error?: string
+    }) => callback(data)
+    ipcRenderer.on('update-status', handler)
+    return () => ipcRenderer.removeListener('update-status', handler)
+  },
+
+  onUpdateDownloadProgress: (callback: (data: {
+    percent: number
+    bytesPerSecond: number
+    transferred: number
+    total: number
+  }) => void) => {
+    const handler = (_event: Electron.IpcRendererEvent, data: {
+      percent: number
+      bytesPerSecond: number
+      transferred: number
+      total: number
+    }) => callback(data)
+    ipcRenderer.on('update-download-progress', handler)
+    return () => ipcRenderer.removeListener('update-download-progress', handler)
   }
 })
 
@@ -98,6 +129,17 @@ declare global {
       }>
       installUpdate: () => Promise<void>
       onPrintersUpdated: (callback: () => void) => () => void
+      onUpdateStatus: (callback: (data: {
+        status: 'checking' | 'available' | 'not-available' | 'downloaded' | 'error'
+        version?: string
+        error?: string
+      }) => void) => () => void
+      onUpdateDownloadProgress: (callback: (data: {
+        percent: number
+        bytesPerSecond: number
+        transferred: number
+        total: number
+      }) => void) => () => void
     }
   }
 }

@@ -244,10 +244,12 @@ export async function POST(request: NextRequest) {
     }
 
     // Verify service belongs to company if provided
+    // Accept 'active' or services that might be temporarily 'offline' (no recent heartbeat)
     if (resolvedServiceId) {
       const serviceCheck = await db.query(
-        'SELECT id FROM print_services WHERE id = $1 AND company_id = $2 AND status = $3',
-        [resolvedServiceId, payload.companyId, 'active']
+        `SELECT id, status FROM print_services
+         WHERE id = $1 AND company_id = $2 AND status IN ('active', 'pending')`,
+        [resolvedServiceId, payload.companyId]
       )
       if (serviceCheck.rows.length === 0) {
         return NextResponse.json({

@@ -30,16 +30,17 @@ interface ProductLabelData {
 }
 
 // Common label sizes in points (72 points = 1 inch)
+// Default: 2" wide x 1" tall (standard price label)
 const LABEL_SIZES = {
-  small: { width: 144, height: 72 }, // 2x1 inch
+  small: { width: 144, height: 72 }, // 2x1 inch (DEFAULT - standard price label)
   medium: { width: 180, height: 108 }, // 2.5x1.5 inch
   large: { width: 216, height: 144 }, // 3x2 inch
-  barcode: { width: 180, height: 72 } // 2.5x1 inch (standard barcode)
+  barcode: { width: 180, height: 72 } // 2.5x1 inch
 }
 
 export async function generateProductLabel(
   data: ProductLabelData,
-  size: 'small' | 'medium' | 'large' | 'barcode' = 'medium'
+  size: 'small' | 'medium' | 'large' | 'barcode' = 'small' // Default to 2x1 inch
 ): Promise<Buffer> {
   const labelSize = LABEL_SIZES[size]
 
@@ -53,91 +54,177 @@ export async function generateProductLabel(
   const font = await pdfDoc.embedFont(StandardFonts.Helvetica)
   const boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold)
 
-  const margin = 4
-  let y = height - margin
+  const margin = 3
+  const isCompact = height <= 72 // 1 inch or less
 
-  // Product name (top)
-  const productNameSize = Math.min(10, (width - margin * 2) / (data.productName.length * 0.6))
-  page.drawText(truncateText(data.productName, Math.floor((width - margin * 2) / 5)), {
-    x: margin,
-    y: y - productNameSize,
-    size: productNameSize,
-    font: boldFont,
-    maxWidth: width - margin * 2
-  })
-  y -= productNameSize + 4
+  if (isCompact) {
+    // Compact layout for 2x1 inch labels
+    // Layout: [Product Name] [Price] on top row, barcode below
 
-  // SKU
-  if (data.sku) {
-    page.drawText(`SKU: ${data.sku}`, {
+    // Product name (top left, truncated)
+    const maxNameWidth = width * 0.65
+    const nameSize = 8
+    const truncatedName = truncateText(data.productName, 18)
+    page.drawText(truncatedName, {
       x: margin,
-      y: y - 7,
-      size: 7,
-      font,
-      color: rgb(0.3, 0.3, 0.3)
-    })
-    y -= 10
-  }
-
-  // Price (if provided)
-  if (data.price !== undefined) {
-    const priceText = `${data.currency || '$'}${data.price.toFixed(2)}`
-    page.drawText(priceText, {
-      x: margin,
-      y: y - 12,
-      size: 12,
+      y: height - margin - nameSize,
+      size: nameSize,
       font: boldFont
     })
-    y -= 16
-  }
 
-  // Calculate space for barcode
-  const barcodeHeight = Math.min(height * 0.35, 40)
-  const barcodeY = margin + 10
-
-  // Generate barcode
-  try {
-    const barcodeType = data.barcodeType || detectBarcodeType(data.barcode)
-    const isQR = barcodeType === 'qrcode'
-
-    const barcodeBuffer = await bwipjs.toBuffer({
-      bcid: barcodeType,
-      text: data.barcode,
-      scale: 2,
-      height: isQR ? 20 : 10,
-      includetext: !isQR,
-      textxalign: 'center',
-      textsize: 8
-    })
-
-    const barcodeImage = await pdfDoc.embedPng(barcodeBuffer)
-
-    const barcodeAspect = barcodeImage.width / barcodeImage.height
-    let barcodeWidth = width - margin * 2
-    let finalBarcodeHeight = barcodeWidth / barcodeAspect
-
-    if (finalBarcodeHeight > barcodeHeight) {
-      finalBarcodeHeight = barcodeHeight
-      barcodeWidth = finalBarcodeHeight * barcodeAspect
+    // Price (top right, large and bold)
+    if (data.price !== undefined) {
+      // Convert currency code to symbol
+      let currencySymbol = '$'
+      if (data.currency) {
+        const symbolMap: Record<string, string> = {
+          'USD': '$', 'usd': '$', 'EUR': '€', 'eur': '€',
+          'GBP': '£', 'gbp': '£', 'MXN': '$', 'mxn': '$',
+          'COP': '$', 'cop': '$', '$': '$', '€': '€', '£': '£'
+        }
+        currencySymbol = symbolMap[data.currency] || '$'
+      }
+      const priceText = `${currencySymbol}${data.price.toFixed(2)}`
+      const priceSize = 10
+      const priceWidth = boldFont.widthOfTextAtSize(priceText, priceSize)
+      page.drawText(priceText, {
+        x: width - margin - priceWidth,
+        y: height - margin - priceSize,
+        size: priceSize,
+        font: boldFont
+      })
     }
 
-    const barcodeX = (width - barcodeWidth) / 2
+    // Barcode (bottom, centered)
+    const barcodeY = margin + 2
+    const barcodeMaxHeight = height - 22 // Leave space for name/price row
 
-    page.drawImage(barcodeImage, {
-      x: barcodeX,
-      y: barcodeY,
-      width: barcodeWidth,
-      height: finalBarcodeHeight
-    })
-  } catch (error) {
-    console.error('Barcode generation failed:', error)
-    // Fallback: print barcode as text
-    page.drawText(data.barcode, {
+    try {
+      const barcodeType = data.barcodeType || detectBarcodeType(data.barcode)
+      const isQR = barcodeType === 'qrcode'
+
+      const barcodeBuffer = await bwipjs.toBuffer({
+        bcid: barcodeType,
+        text: data.barcode,
+        scale: 2,
+        height: isQR ? 15 : 8,
+        includetext: !isQR,
+        textxalign: 'center',
+        textsize: 6
+      })
+
+      const barcodeImage = await pdfDoc.embedPng(barcodeBuffer)
+      const barcodeAspect = barcodeImage.width / barcodeImage.height
+      let barcodeWidth = width - margin * 2
+      let finalBarcodeHeight = barcodeWidth / barcodeAspect
+
+      if (finalBarcodeHeight > barcodeMaxHeight) {
+        finalBarcodeHeight = barcodeMaxHeight
+        barcodeWidth = finalBarcodeHeight * barcodeAspect
+      }
+
+      const barcodeX = (width - barcodeWidth) / 2
+      page.drawImage(barcodeImage, {
+        x: barcodeX,
+        y: barcodeY,
+        width: barcodeWidth,
+        height: finalBarcodeHeight
+      })
+    } catch (error) {
+      console.error('Barcode generation failed:', error)
+      page.drawText(data.barcode, {
+        x: margin,
+        y: barcodeY + 5,
+        size: 7,
+        font
+      })
+    }
+  } else {
+    // Standard layout for larger labels
+    let y = height - margin
+
+    // Product name (top)
+    const productNameSize = Math.min(10, (width - margin * 2) / (data.productName.length * 0.6))
+    page.drawText(truncateText(data.productName, Math.floor((width - margin * 2) / 5)), {
       x: margin,
-      y: barcodeY + 10,
-      size: 10,
-      font: boldFont
+      y: y - productNameSize,
+      size: productNameSize,
+      font: boldFont,
+      maxWidth: width - margin * 2
     })
+    y -= productNameSize + 4
+
+    // SKU
+    if (data.sku) {
+      page.drawText(`SKU: ${data.sku}`, {
+        x: margin,
+        y: y - 7,
+        size: 7,
+        font,
+        color: rgb(0.3, 0.3, 0.3)
+      })
+      y -= 10
+    }
+
+    // Price (if provided)
+    if (data.price !== undefined) {
+      const priceText = `${data.currency || '$'}${data.price.toFixed(2)}`
+      page.drawText(priceText, {
+        x: margin,
+        y: y - 12,
+        size: 12,
+        font: boldFont
+      })
+      y -= 16
+    }
+
+    // Calculate space for barcode
+    const barcodeHeight = Math.min(height * 0.35, 40)
+    const barcodeY = margin + 10
+
+    // Generate barcode
+    try {
+      const barcodeType = data.barcodeType || detectBarcodeType(data.barcode)
+      const isQR = barcodeType === 'qrcode'
+
+      const barcodeBuffer = await bwipjs.toBuffer({
+        bcid: barcodeType,
+        text: data.barcode,
+        scale: 2,
+        height: isQR ? 20 : 10,
+        includetext: !isQR,
+        textxalign: 'center',
+        textsize: 8
+      })
+
+      const barcodeImage = await pdfDoc.embedPng(barcodeBuffer)
+
+      const barcodeAspect = barcodeImage.width / barcodeImage.height
+      let barcodeWidth = width - margin * 2
+      let finalBarcodeHeight = barcodeWidth / barcodeAspect
+
+      if (finalBarcodeHeight > barcodeHeight) {
+        finalBarcodeHeight = barcodeHeight
+        barcodeWidth = finalBarcodeHeight * barcodeAspect
+      }
+
+      const barcodeX = (width - barcodeWidth) / 2
+
+      page.drawImage(barcodeImage, {
+        x: barcodeX,
+        y: barcodeY,
+        width: barcodeWidth,
+        height: finalBarcodeHeight
+      })
+    } catch (error) {
+      console.error('Barcode generation failed:', error)
+      page.drawText(data.barcode, {
+        x: margin,
+        y: barcodeY + 10,
+        size: 10,
+        font: boldFont
+      })
+    }
   }
 
   const pdfBytes = await pdfDoc.save()

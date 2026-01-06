@@ -372,15 +372,24 @@ class PrinterService {
       name.includes('brother ql') ||
       name.includes('zd') || // Zebra ZD series
       name.includes('etiqueta') ||
+      name.includes('barcode') || // 4BARCODE and similar
+      name.includes('4barcode') ||
+      name.includes('tsc') || // TSC label printers
+      name.includes('godex') || // Godex label printers
+      name.includes('honeywell') || // Honeywell/Datamax
+      name.includes('sato') || // SATO label printers
+      name.includes('citizen cl') || // Citizen CL series
+      name.includes('postek') || // Postek label printers
       displayName.includes('label') ||
-      displayName.includes('zebra')
+      displayName.includes('zebra') ||
+      displayName.includes('barcode')
     ) {
       if (name.includes('4x6') || name.includes('shipping') || name.includes('envio')) {
         printerType = 'label_4x6'
         paperWidthMm = 100 // ~4 inches
       } else {
         printerType = 'label_barcode'
-        paperWidthMm = 50
+        paperWidthMm = 51 // 2 inches (standard price label)
       }
     }
 
