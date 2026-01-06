@@ -62,8 +62,13 @@ export async function GET(request: NextRequest) {
     const user = result.rows[0]
 
     // Verificar que el usuario está activo
-    if (!user.isactive || user.status !== 'active') {
-      console.error('[VERIFY SESSION] Usuario inactivo:', payload.userId, payload.email)
+    // Nota: isactive puede ser NULL, solo bloquear si explícitamente es false
+    // status debe ser 'active' (si existe) o no estar definido
+    const isInactive = user.isactive === false
+    const hasInactiveStatus = user.status && user.status !== 'active'
+
+    if (isInactive || hasInactiveStatus) {
+      console.error('[VERIFY SESSION] Usuario inactivo:', payload.userId, payload.email, { isactive: user.isactive, status: user.status })
       return NextResponse.json({
         valid: false,
         error: 'Usuario desactivado',
