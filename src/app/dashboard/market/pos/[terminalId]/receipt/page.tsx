@@ -610,34 +610,36 @@ function ReceiptContent() {
 
     setPrintingWithService(true)
     try {
+      // IMPORTANTE: El generador espera 'items' con 'name' y 'price'
       const response = await fetch('/api/print/jobs', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           documentType: 'pos_receipt',
           documentData: {
-            orderNumber: order.orderNumber,
-            customerName: order.customerName,
+            receiptNumber: order.orderNumber,
+            companyName: 'LogiRapid',
+            date: new Date(order.createdAt).toLocaleDateString('es-ES'),
+            time: new Date(order.createdAt).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' }),
             cashierName: order.createdByName,
-            createdAt: order.createdAt,
-            lines: order.lines.map(l => ({
-              productName: l.productName,
+            customerName: order.customerName,
+            items: order.lines.map(l => ({
+              name: l.productName,
               quantity: l.quantity,
-              unitPrice: l.unitPrice,
+              price: l.unitPrice,
               total: l.total
             })),
             subtotal: order.subtotal,
-            discountAmount: order.discountAmount,
-            totalAmount: order.totalAmount,
-            totalAmountCUP: toCUP(order.totalAmount),
-            subtotalCUP: toCUP(order.subtotal),
-            currency: order.currency,
-            exchangeRate: exchangeRate,
+            discount: order.discountAmount,
+            total: order.totalAmount,
             payments: order.payments.map(p => ({
-              method: p.method,
-              amount: p.amount,
-              currency: p.currency
-            }))
+              method: p.method === 'cash' ? 'Efectivo' :
+                      p.method === 'card' ? 'Tarjeta' :
+                      p.method === 'transfer' ? 'Transferencia' :
+                      p.method === 'credit' ? 'Crédito' : p.method,
+              amount: p.amount
+            })),
+            thankYouMessage: '¡Gracias por su compra!'
           },
           copies,
           printServiceId: selectedPrinter.serviceId,
@@ -687,31 +689,33 @@ function ReceiptContent() {
       // Imprimir directamente
       setPrintingWithService(true)
       try {
+        // IMPORTANTE: El generador espera 'items' con 'name' y 'price', no 'lines' con 'productName' y 'unitPrice'
         const printPayload = {
           documentType: 'pos_receipt',
           documentData: {
-            orderNumber: order?.orderNumber,
-            customerName: order?.customerName,
+            receiptNumber: order?.orderNumber,
+            companyName: 'LogiRapid',
+            date: new Date(order?.createdAt || new Date()).toLocaleDateString('es-ES'),
+            time: new Date(order?.createdAt || new Date()).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' }),
             cashierName: order?.createdByName,
-            createdAt: order?.createdAt,
-            lines: order?.lines.map(l => ({
-              productName: l.productName,
+            customerName: order?.customerName,
+            items: order?.lines.map(l => ({
+              name: l.productName,
               quantity: l.quantity,
-              unitPrice: l.unitPrice,
+              price: l.unitPrice,
               total: l.total
             })),
             subtotal: order?.subtotal,
-            discountAmount: order?.discountAmount,
-            totalAmount: order?.totalAmount,
-            totalAmountCUP: toCUP(order?.totalAmount || 0),
-            subtotalCUP: toCUP(order?.subtotal || 0),
-            currency: order?.currency,
-            exchangeRate: exchangeRate,
+            discount: order?.discountAmount,
+            total: order?.totalAmount,
             payments: order?.payments.map(p => ({
-              method: p.method,
-              amount: p.amount,
-              currency: p.currency
-            }))
+              method: p.method === 'cash' ? 'Efectivo' :
+                      p.method === 'card' ? 'Tarjeta' :
+                      p.method === 'transfer' ? 'Transferencia' :
+                      p.method === 'credit' ? 'Crédito' : p.method,
+              amount: p.amount
+            })),
+            thankYouMessage: '¡Gracias por su compra!'
           },
           copies: 1,
           printServiceId: thermalPrinters[0].serviceId,
@@ -816,31 +820,33 @@ function ReceiptContent() {
             console.log('[Receipt] Auto-printing to:', thermalPrinter.printerName)
 
             // Send print job silently
+            // IMPORTANTE: El generador espera 'items' con 'name' y 'price', no 'lines' con 'productName' y 'unitPrice'
             const printPayload = {
               documentType: 'pos_receipt',
               documentData: {
-                orderNumber: order.orderNumber,
-                customerName: order.customerName,
+                receiptNumber: order.orderNumber,
+                companyName: 'LogiRapid',
+                date: new Date(order.createdAt).toLocaleDateString('es-ES'),
+                time: new Date(order.createdAt).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' }),
                 cashierName: order.createdByName,
-                createdAt: order.createdAt,
-                lines: order.lines.map(l => ({
-                  productName: l.productName,
+                customerName: order.customerName,
+                items: order.lines.map(l => ({
+                  name: l.productName,
                   quantity: l.quantity,
-                  unitPrice: l.unitPrice,
+                  price: l.unitPrice,
                   total: l.total
                 })),
                 subtotal: order.subtotal,
-                discountAmount: order.discountAmount,
-                totalAmount: order.totalAmount,
-                totalAmountCUP: toCUP(order.totalAmount),
-                subtotalCUP: toCUP(order.subtotal),
-                currency: order.currency,
-                exchangeRate: exchangeRate,
+                discount: order.discountAmount,
+                total: order.totalAmount,
                 payments: order.payments.map(p => ({
-                  method: p.method,
-                  amount: p.amount,
-                  currency: p.currency
-                }))
+                  method: p.method === 'cash' ? 'Efectivo' :
+                          p.method === 'card' ? 'Tarjeta' :
+                          p.method === 'transfer' ? 'Transferencia' :
+                          p.method === 'credit' ? 'Crédito' : p.method,
+                  amount: p.amount
+                })),
+                thankYouMessage: '¡Gracias por su compra!'
               },
               copies: 1,
               printServiceId: serviceId,
