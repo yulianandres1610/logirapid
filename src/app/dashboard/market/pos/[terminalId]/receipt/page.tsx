@@ -1127,13 +1127,34 @@ ${order.payments.map(p =>
               <div className={`border-t ${tc.border} pt-4 mt-4`}>
                 <p className={`${tc.textMuted} mb-2`}>Pagos:</p>
                 {order?.payments.map((payment, idx) => (
-                  <div key={idx} className="flex justify-between">
-                    <span>{getPaymentMethodLabel(payment.method)}:</span>
-                    <span>
-                      {payment.currency === 'CUP'
-                        ? `${Math.round(payment.amount).toLocaleString('es-ES')} CUP`
-                        : `$${payment.amount.toFixed(2)} ${payment.currency}`}
-                    </span>
+                  <div key={idx} className="space-y-1">
+                    {/* Método de pago - solo $ y número */}
+                    <div className="flex justify-between">
+                      <span>{getPaymentMethodLabel(payment.method)}:</span>
+                      <span>${payment.amount.toFixed(2)}</span>
+                    </div>
+                    {/* Entregado - con símbolo de moneda */}
+                    {payment.amountTendered && payment.amountTendered > 0 && (
+                      <div className={`flex justify-between text-sm ${tc.textMuted}`}>
+                        <span className="ml-4">Entregado:</span>
+                        <span>
+                          {payment.currency === 'CUP'
+                            ? `${Math.round(payment.amountTendered).toLocaleString('es-ES')} CUP`
+                            : `$${payment.amountTendered.toFixed(2)} USD`}
+                        </span>
+                      </div>
+                    )}
+                    {/* Cambio - con símbolo de moneda */}
+                    {payment.changeAmount && payment.changeAmount > 0 && (
+                      <div className={`flex justify-between text-sm font-medium text-green-500`}>
+                        <span className="ml-4">Cambio:</span>
+                        <span>
+                          {payment.currency === 'CUP'
+                            ? `${Math.round(payment.changeAmount).toLocaleString('es-ES')} CUP`
+                            : `$${payment.changeAmount.toFixed(2)} USD`}
+                        </span>
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
