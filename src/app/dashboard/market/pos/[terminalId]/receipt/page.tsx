@@ -519,7 +519,7 @@ function ReceiptContent() {
   }
 
   // Fetch print services for silent printing
-  const fetchPrintServices = async () => {
+  const fetchPrintServices = async (): Promise<{ services: typeof printServices; thermalPrinters: Array<{ serviceId: number; printer: { id: number; printerName: string; isOnline: boolean; isDefault: boolean; printerType: string } }> }> => {
     try {
       const response = await fetch('/api/print/services?includeOffline=false')
       const data = await response.json()
@@ -527,21 +527,37 @@ function ReceiptContent() {
         const activeServices = data.data.services.filter(
           (s: { status: string; printers?: unknown[] }) => s.status === 'active' && s.printers && s.printers.length > 0
         )
-        setPrintServices(activeServices)
 
-        // Auto-select first thermal printer
-        for (const service of activeServices) {
-          const thermalPrinter = service.printers.find(
-            (p: { printerType: string; isOnline: boolean }) => p.printerType === 'thermal_80mm' && p.isOnline
+        // Filtrar solo servicios que tienen impresoras térmicas online
+        const servicesWithThermal = activeServices.map((service: { id: number; serviceName: string; printers: Array<{ id: number; printerName: string; isOnline: boolean; isDefault: boolean; printerType: string }> }) => ({
+          ...service,
+          printers: service.printers.filter(
+            (p: { printerType: string; isOnline: boolean }) =>
+              (p.printerType === 'thermal_80mm' || p.printerType === 'thermal_58mm' || p.printerType === 'pos') && p.isOnline
           )
-          if (thermalPrinter) {
-            setSelectedPrinter({ serviceId: service.id, printerId: thermalPrinter.id })
-            break
+        })).filter((s: { printers: unknown[] }) => s.printers.length > 0)
+
+        setPrintServices(servicesWithThermal)
+
+        // Recopilar todas las impresoras térmicas disponibles
+        const thermalPrinters: Array<{ serviceId: number; printer: { id: number; printerName: string; isOnline: boolean; isDefault: boolean; printerType: string } }> = []
+        for (const service of servicesWithThermal) {
+          for (const printer of service.printers) {
+            thermalPrinters.push({ serviceId: service.id, printer })
           }
         }
+
+        // Auto-select first thermal printer
+        if (thermalPrinters.length > 0) {
+          setSelectedPrinter({ serviceId: thermalPrinters[0].serviceId, printerId: thermalPrinters[0].printer.id })
+        }
+
+        return { services: servicesWithThermal, thermalPrinters }
       }
+      return { services: [], thermalPrinters: [] }
     } catch (err) {
       console.error('[Receipt] Error fetching print services:', err)
+      return { services: [], thermalPrinters: [] }
     }
   }
 
@@ -606,14 +622,81 @@ function ReceiptContent() {
   }
 
   // Open print modal or use browser print if offline
-  const handlePrint = () => {
+  const handlePrint = async () => {
     if (isOfflineOrder) {
       // For offline orders, use browser print
       printReceipt()
-    } else {
-      // For online orders, try to use print service
-      fetchPrintServices()
+      return
+    }
+
+    // For online orders, try to use print service
+    const { thermalPrinters } = await fetchPrintServices()
+
+    // Si hay exactamente una impresora térmica, imprimir silenciosamente
+    if (thermalPrinters.length === 1) {
+      console.log('[Receipt] Solo una impresora térmica, imprimiendo silenciosamente')
+      setSelectedPrinter({ serviceId: thermalPrinters[0].serviceId, printerId: thermalPrinters[0].printer.id })
+      // Imprimir directamente
+      setPrintingWithService(true)
+      try {
+        const response = await fetch('/api/print/jobs', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            documentType: 'pos_receipt',
+            documentData: {
+              orderNumber: order?.orderNumber,
+              customerName: order?.customerName,
+              cashierName: order?.createdByName,
+              createdAt: order?.createdAt,
+              lines: order?.lines.map(l => ({
+                productName: l.productName,
+                quantity: l.quantity,
+                unitPrice: l.unitPrice,
+                total: l.total
+              })),
+              subtotal: order?.subtotal,
+              discountAmount: order?.discountAmount,
+              totalAmount: order?.totalAmount,
+              totalAmountCUP: toCUP(order?.totalAmount || 0),
+              subtotalCUP: toCUP(order?.subtotal || 0),
+              currency: order?.currency,
+              exchangeRate: exchangeRate,
+              payments: order?.payments.map(p => ({
+                method: p.method,
+                amount: p.amount,
+                currency: p.currency
+              }))
+            },
+            copies: 1,
+            printServiceId: thermalPrinters[0].serviceId,
+            printerId: thermalPrinters[0].printer.id,
+            sourceType: 'pos_order',
+            sourceId: order?.id || 0
+          })
+        })
+
+        const data = await response.json()
+        if (data.success) {
+          console.log('[Receipt] Impresión silenciosa exitosa')
+        } else {
+          console.error('[Receipt] Error en impresión silenciosa:', data.error)
+          // Fallback to browser print
+          printReceipt()
+        }
+      } catch (err) {
+        console.error('[Receipt] Error imprimiendo:', err)
+        printReceipt()
+      } finally {
+        setPrintingWithService(false)
+      }
+    } else if (thermalPrinters.length > 1) {
+      // Más de una impresora, mostrar modal para seleccionar
       setShowPrintModal(true)
+    } else {
+      // No hay impresoras térmicas, usar navegador
+      console.log('[Receipt] No hay impresoras térmicas, usando navegador')
+      printReceipt()
     }
   }
 
@@ -635,13 +718,14 @@ function ReceiptContent() {
             (s: { status: string; printers?: unknown[] }) => s.status === 'active' && s.printers && s.printers.length > 0
           )
 
-          // Find first online thermal printer
+          // Find first online thermal printer (thermal_80mm, thermal_58mm, or pos)
           let thermalPrinter = null
           let serviceId = null
 
           for (const service of activeServices) {
             const printer = service.printers.find(
-              (p: { printerType: string; isOnline: boolean }) => p.printerType === 'thermal_80mm' && p.isOnline
+              (p: { printerType: string; isOnline: boolean }) =>
+                (p.printerType === 'thermal_80mm' || p.printerType === 'thermal_58mm' || p.printerType === 'pos') && p.isOnline
             )
             if (printer) {
               thermalPrinter = printer
