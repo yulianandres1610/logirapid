@@ -187,12 +187,13 @@ export async function generatePurchaseInvoicePdf(data: PurchaseInvoiceData): Pro
   // Table rows
   for (const item of data.items) {
     const itemTotal = item.total ?? item.quantity * item.unitCost
+    const itemName = item.name || 'Producto sin nombre'
 
     // Draw row
-    drawText(item.quantity.toString(), 55, y, { size: 9 })
-    drawText(item.name.substring(0, 35), 95, y, { size: 9 })
+    drawText((item.quantity ?? 0).toString(), 55, y, { size: 9 })
+    drawText(itemName.substring(0, 35), 95, y, { size: 9 })
     drawText(item.sku || '-', 320, y, { size: 8, color: gray })
-    drawText(formatCurrency(item.unitCost), 400, y, { size: 9 })
+    drawText(formatCurrency(item.unitCost ?? 0), 400, y, { size: 9 })
     drawText(formatCurrency(itemTotal), 500, y, { size: 9, font: fontBold })
 
     y -= 20

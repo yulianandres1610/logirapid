@@ -97,10 +97,11 @@ export async function generateConsignmentReceipt(data: ConsignmentReceiptData): 
   y -= 15
 
   // Generate and embed order barcode
+  const orderNumberStr = data.orderNumber || 'SIN-NUMERO'
   try {
     const orderBarcodeBuffer = await bwipjs.toBuffer({
       bcid: 'code128',
-      text: data.orderNumber,
+      text: orderNumberStr,
       scale: 2,
       height: 12,
       includetext: true,
@@ -327,12 +328,12 @@ export async function generateConsignmentReceipt(data: ConsignmentReceiptData): 
     colX = margin + 5
 
     // Barcode column - generate barcode image
-    const barcodeValue = line.barcode || line.sku
+    const barcodeValue = line.barcode || line.sku || `SKU-${i + 1}`
     if (barcodeValue) {
       try {
         const productBarcodeBuffer = await bwipjs.toBuffer({
           bcid: 'code128',
-          text: barcodeValue,
+          text: String(barcodeValue), // Ensure it's a string
           scale: 1.5,
           height: 8,
           includetext: true,
@@ -361,14 +362,14 @@ export async function generateConsignmentReceipt(data: ConsignmentReceiptData): 
     colX += colWidths.barcode
 
     // Product name and SKU
-    const productName = truncateText(line.productName, 35)
+    const productName = truncateText(line.productName || 'Producto sin nombre', 35)
     page.drawText(productName, {
       x: colX,
       y: y - 20,
       size: 9,
       font: boldFont
     })
-    page.drawText(`SKU: ${line.sku}`, {
+    page.drawText(`SKU: ${line.sku || '-'}`, {
       x: colX,
       y: y - 32,
       size: 7,

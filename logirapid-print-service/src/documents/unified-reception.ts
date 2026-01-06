@@ -121,10 +121,11 @@ export async function generateUnifiedReception(data: UnifiedReceptionData): Prom
   y -= 15
 
   // Generate and embed order barcode
+  const orderNumberStr = data.orderNumber || 'SIN-NUMERO'
   try {
     const orderBarcodeBuffer = await bwipjs.toBuffer({
       bcid: 'code128',
-      text: data.orderNumber,
+      text: orderNumberStr,
       scale: 2,
       height: 12,
       includetext: true,
@@ -336,12 +337,12 @@ export async function generateUnifiedReception(data: UnifiedReceptionData): Prom
     colX = margin + 5
 
     // Barcode column - generate barcode image
-    const barcodeValue = product.barcode || product.sku
+    const barcodeValue = product.barcode || product.sku || `SKU-${i + 1}`
     if (barcodeValue) {
       try {
         const productBarcodeBuffer = await bwipjs.toBuffer({
           bcid: 'code128',
-          text: barcodeValue,
+          text: String(barcodeValue), // Ensure it's a string
           scale: 1.5,
           height: 8,
           includetext: true,
@@ -370,14 +371,14 @@ export async function generateUnifiedReception(data: UnifiedReceptionData): Prom
     colX += colWidths.barcode
 
     // Product name and SKU
-    const productName = truncateText(product.productName, 30)
+    const productName = truncateText(product.productName || 'Producto sin nombre', 30)
     page.drawText(productName, {
       x: colX,
       y: y - 20,
       size: 9,
       font: boldFont
     })
-    page.drawText(`SKU: ${product.sku}`, {
+    page.drawText(`SKU: ${product.sku || '-'}`, {
       x: colX,
       y: y - 32,
       size: 7,

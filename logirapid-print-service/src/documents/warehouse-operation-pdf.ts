@@ -271,9 +271,11 @@ export async function generateWarehouseOperationPdf(data: WarehouseOperationData
       })
     }
 
+    const productSku = product.sku || '-'
+    const productName = product.name || 'Producto sin nombre'
     drawText(rowNum.toString(), 55, y, { size: 9 })
-    drawText(product.sku.substring(0, 15), 80, y, { size: 9, color: gray })
-    drawText(product.name.substring(0, 35), 160, y, { size: 9 })
+    drawText(productSku.substring(0, 15), 80, y, { size: 9, color: gray })
+    drawText(productName.substring(0, 35), 160, y, { size: 9 })
 
     if (data.operationType === 'adjustment') {
       const systemStock = product.currentStock || 0
