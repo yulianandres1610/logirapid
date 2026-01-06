@@ -44,13 +44,24 @@ async function verifyCredentials(
 
   const apiSecretHash = crypto.createHash('sha256').update(apiSecret).digest('hex')
 
+  // Accept 'active' or 'pending' status (pending means just created, not yet connected)
   const result = await db.query(
-    'SELECT id, company_id FROM print_services WHERE id = $1 AND api_key = $2 AND api_secret_hash = $3 AND status = $4',
-    [serviceId, apiKey, apiSecretHash, 'active']
+    `SELECT id, company_id, status FROM print_services
+     WHERE id = $1 AND api_key = $2 AND api_secret_hash = $3 AND status IN ('active', 'pending')`,
+    [serviceId, apiKey, apiSecretHash]
   )
 
   if (result.rows.length === 0) {
     return { valid: false, error: 'Invalid API credentials or service not active' }
+  }
+
+  // If service is pending, activate it on first successful auth
+  if (result.rows[0].status === 'pending') {
+    await db.query(
+      'UPDATE print_services SET status = $1, last_seen_at = NOW() WHERE id = $2',
+      ['active', serviceId]
+    )
+    console.log(`[Print Jobs Pending] Activated service ${serviceId} on first auth`)
   }
 
   return { valid: true, companyId: result.rows[0].company_id }

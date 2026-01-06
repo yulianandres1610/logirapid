@@ -98,12 +98,12 @@ export async function POST(
     const forwarded = request.headers.get('x-forwarded-for')
     const clientIp = forwarded ? forwarded.split(',')[0].trim() : request.headers.get('x-real-ip') || 'unknown'
 
-    // Update service last_seen_at
+    // Update service last_seen_at and activate if pending/offline
     await db.query(`
       UPDATE print_services SET
         last_seen_at = NOW(),
         last_ip_address = $1,
-        status = CASE WHEN status = 'offline' THEN 'active' ELSE status END
+        status = CASE WHEN status IN ('offline', 'pending') THEN 'active' ELSE status END
       WHERE id = $2
     `, [clientIp, serviceId])
 
