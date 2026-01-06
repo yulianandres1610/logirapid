@@ -121,14 +121,13 @@ export function generatePosReceipt(data: ReceiptData): Buffer {
   // Setting ~6mm margin (48 dots) to center content
   lines.push(`${GS}L\x30\x00`) // Left margin = 48 dots (~6mm)
 
-  // Header - Terminal name or company name centered and bold
+  // Header - Terminal name (tamaño normal para que quepa) y empresa
   lines.push(Commands.ALIGN_CENTER)
-  lines.push(Commands.DOUBLE_SIZE_ON)
   lines.push(Commands.BOLD_ON)
   // Usar nombre del terminal si está disponible, sino el de la empresa
-  lines.push(data.terminalName || data.companyName)
+  const headerName = data.terminalName || data.companyName
+  lines.push(headerName)
   lines.push(Commands.FEED_LINE)
-  lines.push(Commands.NORMAL_SIZE)
   lines.push(Commands.BOLD_OFF)
 
   // Si hay terminal, mostrar empresa debajo
@@ -317,30 +316,33 @@ export function generatePosReceipt(data: ReceiptData): Buffer {
     lines.push(Commands.FEED_LINE)
     lines.push(Commands.ALIGN_CENTER)
 
-    // ESC/POS Barcode: CODE128
-    // GS k m d1...dk NUL - Print barcode
-    // m = 73 (0x49) for CODE128
-    // GS w n - Set barcode width (n = 2-6, default 3)
-    // GS h n - Set barcode height (n = 1-255 dots)
-    // GS H n - Set HRI (Human Readable Interpretation) position
-    //          n = 0: not printed, 1: above, 2: below, 3: both
+    // Limpiar datos para CODE39 (solo alfanuméricos y algunos símbolos)
+    const barcodeContent = barcodeData.replace(/[^A-Z0-9\-\.\ \$\/\+\%]/gi, '').toUpperCase()
 
-    // Set barcode height to 50 dots (~6mm)
-    lines.push(`${GS}h\x32`) // height = 50
+    if (barcodeContent.length > 0) {
+      // ESC/POS Barcode settings
+      // GS h n - Set barcode height (n = 1-255 dots)
+      lines.push(`${GS}h\x40`) // height = 64 dots (~8mm)
 
-    // Set barcode width to 2 (narrow)
-    lines.push(`${GS}w\x02`)
+      // GS w n - Set barcode width (n = 2-6)
+      lines.push(`${GS}w\x02`) // width = 2 (narrow)
 
-    // Print HRI below barcode
-    lines.push(`${GS}H\x02`)
+      // GS H n - Set HRI position (0=none, 1=above, 2=below, 3=both)
+      lines.push(`${GS}H\x02`) // HRI below barcode
 
-    // Print CODE128 barcode
-    // Format: GS k m n d1...dn
-    // m = 73 (CODE128), n = length
-    const barcodeContent = barcodeData.replace(/[^A-Za-z0-9\-]/g, '') // Clean for CODE128
-    const barcodeLen = barcodeContent.length
-    lines.push(`${GS}k\x49${String.fromCharCode(barcodeLen)}${barcodeContent}`)
+      // GS f n - Set HRI font (0=Font A, 1=Font B)
+      lines.push(`${GS}f\x00`) // Font A for HRI
 
+      // Print CODE39 barcode (more compatible than CODE128)
+      // GS k m d1...dk NUL
+      // m = 4 for CODE39
+      lines.push(`${GS}k\x04${barcodeContent}\x00`)
+
+      lines.push(Commands.FEED_LINE)
+    }
+
+    // También imprimir el número como texto por si el código de barras falla
+    lines.push(barcodeData)
     lines.push(Commands.FEED_LINE)
   }
 
