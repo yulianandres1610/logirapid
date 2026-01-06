@@ -423,6 +423,9 @@ export default function WarehouseOperationsPage() {
   const [showPasswordModal, setShowPasswordModal] = useState(false)
   const [pendingOperationType, setPendingOperationType] = useState<OperationType | null>(null)
 
+  // Password verification for exiting to backend
+  const [showExitPasswordModal, setShowExitPasswordModal] = useState(false)
+
   // Fetch warehouse data
   useEffect(() => {
     const fetchWarehouse = async () => {
@@ -723,8 +726,18 @@ export default function WarehouseOperationsPage() {
     } else if (operation.operationType) {
       setOperation(initialOperationState)
     } else {
-      router.push('/dashboard/market/warehouses')
+      // Require password to exit to backend
+      setShowExitPasswordModal(true)
     }
+  }
+
+  const handleExitPasswordConfirm = () => {
+    setShowExitPasswordModal(false)
+    router.push('/dashboard/market/warehouses')
+  }
+
+  const handleExitPasswordClose = () => {
+    setShowExitPasswordModal(false)
   }
 
   const getOperationColor = () => {
@@ -764,7 +777,7 @@ export default function WarehouseOperationsPage() {
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
-      {/* Password Confirmation Modal */}
+      {/* Password Confirmation Modal for sensitive operations */}
       <PasswordConfirmModal
         isOpen={showPasswordModal}
         onClose={handlePasswordClose}
@@ -776,6 +789,16 @@ export default function WarehouseOperationsPage() {
             : 'Esta operacion modificara las cantidades del inventario.'
         }
         operationType={pendingOperationType === 'scrap' ? 'scrap' : 'adjustment'}
+      />
+
+      {/* Password Confirmation Modal for exiting to backend */}
+      <PasswordConfirmModal
+        isOpen={showExitPasswordModal}
+        onClose={handleExitPasswordClose}
+        onConfirm={handleExitPasswordConfirm}
+        title="Salir al Sistema"
+        description="Ingrese su contraseña para salir de las operaciones de almacén y volver al backend."
+        operationType="exit"
       />
 
       {/* Header */}

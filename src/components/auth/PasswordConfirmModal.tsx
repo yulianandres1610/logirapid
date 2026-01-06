@@ -12,7 +12,7 @@ interface PasswordConfirmModalProps {
   onConfirm: () => void
   title?: string
   description?: string
-  operationType?: 'scrap' | 'adjustment' | 'sensitive'
+  operationType?: 'scrap' | 'adjustment' | 'sensitive' | 'exit'
 }
 
 export function PasswordConfirmModal({
@@ -88,6 +88,12 @@ export function PasswordConfirmModal({
           color: 'amber',
           message: 'Esta operación modificará las cantidades del inventario.'
         }
+      case 'exit':
+        return {
+          icon: '🚪',
+          color: 'purple',
+          message: 'Confirma tu identidad para salir al panel de administración.'
+        }
       default:
         return {
           icon: '🔐',
@@ -145,13 +151,15 @@ export function PasswordConfirmModal({
                 'w-14 h-14 rounded-2xl flex items-center justify-center',
                 opInfo.color === 'red' && (theme === 'dark' ? 'bg-red-900/30' : 'bg-red-100'),
                 opInfo.color === 'amber' && (theme === 'dark' ? 'bg-amber-900/30' : 'bg-amber-100'),
-                opInfo.color === 'blue' && (theme === 'dark' ? 'bg-blue-900/30' : 'bg-blue-100')
+                opInfo.color === 'blue' && (theme === 'dark' ? 'bg-blue-900/30' : 'bg-blue-100'),
+                opInfo.color === 'purple' && (theme === 'dark' ? 'bg-purple-900/30' : 'bg-purple-100')
               )}>
                 <ShieldCheck className={cn(
                   'w-7 h-7',
                   opInfo.color === 'red' && 'text-red-500',
                   opInfo.color === 'amber' && 'text-amber-500',
-                  opInfo.color === 'blue' && 'text-blue-500'
+                  opInfo.color === 'blue' && 'text-blue-500',
+                  opInfo.color === 'purple' && 'text-purple-500'
                 )} />
               </div>
               <div>
@@ -176,14 +184,16 @@ export function PasswordConfirmModal({
             'mx-6 mt-4 p-3 rounded-xl flex items-start gap-3',
             opInfo.color === 'red' && (theme === 'dark' ? 'bg-red-900/20 border border-red-800' : 'bg-red-50 border border-red-200'),
             opInfo.color === 'amber' && (theme === 'dark' ? 'bg-amber-900/20 border border-amber-800' : 'bg-amber-50 border border-amber-200'),
-            opInfo.color === 'blue' && (theme === 'dark' ? 'bg-blue-900/20 border border-blue-800' : 'bg-blue-50 border border-blue-200')
+            opInfo.color === 'blue' && (theme === 'dark' ? 'bg-blue-900/20 border border-blue-800' : 'bg-blue-50 border border-blue-200'),
+            opInfo.color === 'purple' && (theme === 'dark' ? 'bg-purple-900/20 border border-purple-800' : 'bg-purple-50 border border-purple-200')
           )}>
             <span className="text-xl flex-shrink-0">{opInfo.icon}</span>
             <p className={cn(
               'text-sm',
               opInfo.color === 'red' && (theme === 'dark' ? 'text-red-300' : 'text-red-700'),
               opInfo.color === 'amber' && (theme === 'dark' ? 'text-amber-300' : 'text-amber-700'),
-              opInfo.color === 'blue' && (theme === 'dark' ? 'text-blue-300' : 'text-blue-700')
+              opInfo.color === 'blue' && (theme === 'dark' ? 'text-blue-300' : 'text-blue-700'),
+              opInfo.color === 'purple' && (theme === 'dark' ? 'text-purple-300' : 'text-purple-700')
             )}>
               {opInfo.message}
             </p>
@@ -276,7 +286,8 @@ export function PasswordConfirmModal({
                   'disabled:opacity-50 disabled:cursor-not-allowed',
                   opInfo.color === 'red' && 'bg-red-600 hover:bg-red-700 text-white',
                   opInfo.color === 'amber' && 'bg-amber-600 hover:bg-amber-700 text-white',
-                  opInfo.color === 'blue' && 'bg-blue-600 hover:bg-blue-700 text-white'
+                  opInfo.color === 'blue' && 'bg-blue-600 hover:bg-blue-700 text-white',
+                  opInfo.color === 'purple' && 'bg-purple-600 hover:bg-purple-700 text-white'
                 )}
               >
                 {loading ? (
