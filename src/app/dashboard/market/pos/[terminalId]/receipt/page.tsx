@@ -553,14 +553,23 @@ function ReceiptContent() {
         console.log('[Receipt] Active services with printers:', activeServices.length)
 
         // Filtrar solo servicios que tienen impresoras térmicas/recibo
-        // Tipos válidos: thermal_80mm, thermal_58mm, pos, receipt
+        // Por tipo O por nombre de impresora (como hace el modal de etiquetas)
         const thermalTypes = ['thermal_80mm', 'thermal_58mm', 'pos', 'receipt', 'thermal']
+        const isThermalPrinter = (p: { printerType: string; printerName: string }) => {
+          const type = (p.printerType || '').toLowerCase()
+          const name = (p.printerName || '').toLowerCase()
+          // Por tipo
+          if (thermalTypes.includes(type)) return true
+          // Por nombre (TM-T = Epson thermal, TSP = Star, receipt, ticket, etc)
+          if (name.includes('tm-t') || name.includes('tm-m') || name.includes('tsp') ||
+              name.includes('receipt') || name.includes('ticket') || name.includes('thermal') ||
+              name.includes('termica') || name.includes('pos')) return true
+          return false
+        }
+
         const servicesWithThermal = activeServices.map((service: { id: number; serviceName: string; serviceCode: string; printers: Array<{ id: number; printerName: string; isOnline: boolean; isDefault: boolean; printerType: string }> }) => ({
           ...service,
-          printers: service.printers.filter(
-            (p: { printerType: string; isOnline: boolean }) =>
-              thermalTypes.includes(p.printerType?.toLowerCase() || '')
-          )
+          printers: service.printers.filter(isThermalPrinter)
         })).filter((s: { printers: unknown[] }) => s.printers.length > 0)
 
         console.log('[Receipt] Services with thermal printers:', servicesWithThermal.length)
@@ -774,20 +783,27 @@ function ReceiptContent() {
           console.log('[Receipt] Auto-print active services:', activeServices.length)
 
           // Find first thermal printer
-          // Tipos válidos: thermal_80mm, thermal_58mm, pos, receipt, thermal
+          // Por tipo O por nombre de impresora
           const thermalTypes = ['thermal_80mm', 'thermal_58mm', 'pos', 'receipt', 'thermal']
+          const isThermalPrinter = (p: { printerType: string; printerName: string }) => {
+            const type = (p.printerType || '').toLowerCase()
+            const name = (p.printerName || '').toLowerCase()
+            if (thermalTypes.includes(type)) return true
+            if (name.includes('tm-t') || name.includes('tm-m') || name.includes('tsp') ||
+                name.includes('receipt') || name.includes('ticket') || name.includes('thermal') ||
+                name.includes('termica') || name.includes('pos')) return true
+            return false
+          }
+
           let thermalPrinter = null
           let serviceId = null
 
           for (const service of activeServices) {
             console.log('[Receipt] Checking service:', service.serviceName, 'printers:', service.printers?.length)
             for (const p of service.printers) {
-              console.log(`[Receipt]   Printer: ${p.printerName} | Type: "${p.printerType}"`)
+              console.log(`[Receipt]   Printer: ${p.printerName} | Type: "${p.printerType}" | isThermal: ${isThermalPrinter(p)}`)
             }
-            const printer = service.printers.find(
-              (p: { printerType: string; isOnline: boolean }) =>
-                thermalTypes.includes(p.printerType?.toLowerCase() || '')
-            )
+            const printer = service.printers.find(isThermalPrinter)
             if (printer) {
               thermalPrinter = printer
               serviceId = service.id
