@@ -210,7 +210,8 @@ function POSSettingsPageContent() {
         const warehousesRes = await fetch('/api/market/warehouses')
         const warehousesData = await warehousesRes.json()
         if (warehousesData.success) {
-          const wh = warehousesData.data
+          // Handle both formats: { data: { warehouses: [...] } } or { data: [...] }
+          const wh = warehousesData.data?.warehouses || warehousesData.data
           setWarehouses(Array.isArray(wh) ? wh : [])
         }
 
