@@ -835,89 +835,143 @@ try {
 
     try {
       if (process.platform === 'win32') {
-        // Windows: Use multiple fallback methods for PDF printing
-        const escapedPrinter = printer.systemName.replace(/"/g, '\\"')
-        const escapedFile = tempFile.replace(/\\/g, '\\\\')
-
+        // Windows: Use PowerShell script file for reliable PDF printing
         console.log(`[Job Processor] Windows PDF: Attempting to print to "${printer.systemName}"`)
 
-        // Method 1: Try using PDFtoPrinter.exe if available (best for silent printing)
-        // Method 2: Use PowerShell with .NET PrintDocument
-        // Method 3: Use Microsoft Edge headless
+        // Create a PowerShell script file to avoid escaping issues
+        const psScriptFile = join(tmpdir(), `pdf-print-${uuidv4()}.ps1`)
+        const printerName = printer.systemName
+        const pdfPath = tempFile
 
-        const psScript = `
-          # Try Method 1: Edge headless printing (works on Windows 10+)
-          try {
-            \$edgePath = (Get-ItemProperty 'HKLM:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\App Paths\\msedge.exe' -ErrorAction SilentlyContinue).'(default)'
-            if (\$edgePath -and (Test-Path \$edgePath)) {
-              Start-Process -FilePath \$edgePath -ArgumentList '--headless', '--disable-gpu', '--print-to-pdf-no-header', "--print-to-printer=\`"${escapedPrinter}\`"", "\`"${escapedFile}\`"" -Wait -NoNewWindow
-              Write-Host "SUCCESS:EDGE"
-              exit 0
-            }
-          } catch { }
+        // PowerShell script that uses multiple methods to print PDF
+        // Build paths without backticks (use single quotes in PowerShell)
+        const psScript = [
+          "param(",
+          `    [string]$PrinterName = '${printerName.replace(/'/g, "''")}',`,
+          `    [string]$PdfPath = '${pdfPath.replace(/\\/g, '\\\\').replace(/'/g, "''")}'`,
+          ")",
+          "",
+          "$ErrorActionPreference = 'SilentlyContinue'",
+          "$success = $false",
+          "",
+          "Write-Host \"Attempting to print: $PdfPath\"",
+          "Write-Host \"To printer: $PrinterName\"",
+          "",
+          "# Method 1: Use SumatraPDF if available (best for silent printing)",
+          "$sumatraPaths = @(",
+          "    \"$env:LOCALAPPDATA\\SumatraPDF\\SumatraPDF.exe\",",
+          "    \"$env:ProgramFiles\\SumatraPDF\\SumatraPDF.exe\",",
+          "    \"${env:ProgramFiles(x86)}\\SumatraPDF\\SumatraPDF.exe\"",
+          ")",
+          "foreach ($sumatra in $sumatraPaths) {",
+          "    if (Test-Path $sumatra) {",
+          "        Write-Host \"Using SumatraPDF: $sumatra\"",
+          "        try {",
+          "            & $sumatra -print-to $PrinterName -silent $PdfPath",
+          "            $success = $true",
+          "            Write-Host \"SUCCESS:SUMATRA\"",
+          "            exit 0",
+          "        } catch {",
+          "            Write-Host \"SumatraPDF failed: $_\"",
+          "        }",
+          "    }",
+          "}",
+          "",
+          "# Method 2: Use Adobe Acrobat Reader (most common)",
+          "$adobePaths = @(",
+          "    \"$env:ProgramFiles\\Adobe\\Acrobat DC\\Acrobat\\Acrobat.exe\",",
+          "    \"${env:ProgramFiles(x86)}\\Adobe\\Acrobat Reader DC\\Reader\\AcroRd32.exe\",",
+          "    \"$env:ProgramFiles\\Adobe\\Acrobat Reader DC\\Reader\\AcroRd32.exe\",",
+          "    \"${env:ProgramFiles(x86)}\\Adobe\\Reader 11.0\\Reader\\AcroRd32.exe\"",
+          ")",
+          "foreach ($adobe in $adobePaths) {",
+          "    if (Test-Path $adobe) {",
+          "        Write-Host \"Using Adobe: $adobe\"",
+          "        try {",
+          "            $proc = Start-Process -FilePath $adobe -ArgumentList '/t', $PdfPath, $PrinterName -PassThru",
+          "            Start-Sleep -Seconds 5",
+          "            if ($proc -and !$proc.HasExited) {",
+          "                $proc.Kill()",
+          "            }",
+          "            Get-Process -Name 'AcroRd32', 'Acrobat' -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue",
+          "            $success = $true",
+          "            Write-Host \"SUCCESS:ADOBE\"",
+          "            exit 0",
+          "        } catch {",
+          "            Write-Host \"Adobe failed: $_\"",
+          "        }",
+          "    }",
+          "}",
+          "",
+          "# Method 3: Use Foxit Reader",
+          "$foxitPaths = @(",
+          "    \"${env:ProgramFiles(x86)}\\Foxit Software\\Foxit Reader\\FoxitReader.exe\",",
+          "    \"$env:ProgramFiles\\Foxit Software\\Foxit Reader\\FoxitReader.exe\",",
+          "    \"${env:ProgramFiles(x86)}\\Foxit Software\\Foxit PDF Reader\\FoxitPDFReader.exe\",",
+          "    \"$env:ProgramFiles\\Foxit Software\\Foxit PDF Reader\\FoxitPDFReader.exe\"",
+          ")",
+          "foreach ($foxit in $foxitPaths) {",
+          "    if (Test-Path $foxit) {",
+          "        Write-Host \"Using Foxit: $foxit\"",
+          "        try {",
+          "            $proc = Start-Process -FilePath $foxit -ArgumentList '/t', $PdfPath, $PrinterName -PassThru",
+          "            Start-Sleep -Seconds 5",
+          "            if ($proc -and !$proc.HasExited) {",
+          "                $proc.Kill()",
+          "            }",
+          "            $success = $true",
+          "            Write-Host \"SUCCESS:FOXIT\"",
+          "            exit 0",
+          "        } catch {",
+          "            Write-Host \"Foxit failed: $_\"",
+          "        }",
+          "    }",
+          "}",
+          "",
+          "# Method 4: Use Windows Print Verb (uses default PDF handler)",
+          "try {",
+          "    Write-Host \"Using Windows Print Verb\"",
+          "    $printJob = New-Object System.Diagnostics.ProcessStartInfo",
+          "    $printJob.FileName = $PdfPath",
+          "    $printJob.Verb = 'print'",
+          "    $printJob.CreateNoWindow = $true",
+          "    $printJob.WindowStyle = [System.Diagnostics.ProcessWindowStyle]::Hidden",
+          "    $process = [System.Diagnostics.Process]::Start($printJob)",
+          "    Start-Sleep -Seconds 5",
+          "    if ($process -and !$process.HasExited) {",
+          "        $process.Kill()",
+          "    }",
+          "    $success = $true",
+          "    Write-Host \"SUCCESS:VERB\"",
+          "    exit 0",
+          "} catch {",
+          "    Write-Host \"Print Verb failed: $_\"",
+          "}",
+          "",
+          "if (-not $success) {",
+          "    Write-Host \"FAILED:ALL - No print method succeeded\"",
+          "    exit 1",
+          "}",
+        ].join('\n')
+        await writeFile(psScriptFile, psScript, 'utf8')
 
-          # Method 2: Try Adobe Reader silent print
-          try {
-            \$adobePaths = @(
-              "\$env:ProgramFiles\\Adobe\\Acrobat Reader DC\\Reader\\AcroRd32.exe",
-              "\$env:ProgramFiles (x86)\\Adobe\\Acrobat Reader DC\\Reader\\AcroRd32.exe",
-              "\$env:ProgramFiles\\Adobe\\Reader 11.0\\Reader\\AcroRd32.exe"
-            )
-            foreach (\$adobePath in \$adobePaths) {
-              if (Test-Path \$adobePath) {
-                Start-Process -FilePath \$adobePath -ArgumentList "/t", "\`"${escapedFile}\`"", "\`"${escapedPrinter}\`"" -Wait
-                Start-Sleep -Seconds 3
-                Stop-Process -Name "AcroRd32" -Force -ErrorAction SilentlyContinue
-                Write-Host "SUCCESS:ADOBE"
-                exit 0
-              }
-            }
-          } catch { }
+        try {
+          const { stdout, stderr } = await execAsync(
+            `powershell -ExecutionPolicy Bypass -File "${psScriptFile}"`,
+            { encoding: 'utf8', timeout: 60000 }
+          )
 
-          # Method 3: Try Foxit Reader
-          try {
-            \$foxitPath = "\$env:ProgramFiles (x86)\\Foxit Software\\Foxit Reader\\FoxitReader.exe"
-            if (Test-Path \$foxitPath) {
-              Start-Process -FilePath \$foxitPath -ArgumentList "/t", "\`"${escapedFile}\`"", "\`"${escapedPrinter}\`"" -Wait
-              Start-Sleep -Seconds 2
-              Stop-Process -Name "FoxitReader" -Force -ErrorAction SilentlyContinue
-              Write-Host "SUCCESS:FOXIT"
-              exit 0
-            }
-          } catch { }
-
-          # Method 4: Use Windows built-in print verb with shell
-          try {
-            \$shell = New-Object -ComObject Shell.Application
-            \$folder = \$shell.Namespace((Split-Path "${escapedFile}"))
-            \$file = \$folder.ParseName((Split-Path "${escapedFile}" -Leaf))
-            \$file.InvokeVerb("Print")
-            Start-Sleep -Seconds 3
-            Write-Host "SUCCESS:SHELL"
-            exit 0
-          } catch { }
-
-          # Method 5: Last resort - open PDF and show print dialog
-          try {
-            Start-Process "${escapedFile}" -Verb Print
-            Start-Sleep -Seconds 2
-            Write-Host "SUCCESS:VERB"
-            exit 0
-          } catch {
-            Write-Host "FAILED:ALL"
-            exit 1
+          console.log(`[Job Processor] Windows PDF print output: ${stdout || '(empty)'}`)
+          if (stderr) {
+            console.log(`[Job Processor] Windows PDF print stderr: ${stderr}`)
           }
-        `
 
-        const { stdout, stderr } = await execAsync(
-          `powershell -ExecutionPolicy Bypass -Command "${psScript.replace(/\n/g, ' ').replace(/\r/g, '')}"`,
-          { encoding: 'utf8', timeout: 60000 }
-        )
-
-        console.log(`[Job Processor] Windows PDF print output: ${stdout || stderr}`)
-
-        if (stdout.includes('FAILED:ALL')) {
-          throw new Error('All PDF printing methods failed')
+          if (stdout.includes('FAILED:ALL') || (!stdout.includes('SUCCESS') && stderr && stderr.includes('failed'))) {
+            throw new Error('All PDF printing methods failed')
+          }
+        } finally {
+          // Clean up script file
+          setTimeout(() => unlink(psScriptFile).catch(() => {}), 5000)
         }
       } else if (process.platform === 'darwin') {
         // macOS: use lp command and capture output

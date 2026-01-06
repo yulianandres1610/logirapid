@@ -258,25 +258,23 @@ export function generatePosReceipt(data: ReceiptData): Buffer {
 
   for (const payment of data.payments) {
     const currency = payment.currency || 'USD'
-    const amountStr = currency === 'CUP' || currency === localCurrency
-      ? formatLocalCurrency(payment.amount)
-      : formatCurrency(payment.amount)
 
-    lines.push(formatLine(payment.method + ':', amountStr, PAPER_WIDTH))
+    // Método de pago: solo $ y número (sin símbolo de moneda)
+    lines.push(formatLine(payment.method + ':', formatCurrency(payment.amount), PAPER_WIDTH))
     lines.push(Commands.FEED_LINE)
 
-    // Para efectivo, mostrar monto entregado y cambio
+    // Para efectivo, mostrar monto entregado y cambio CON símbolo de moneda
     if (payment.amountTendered !== undefined && payment.amountTendered > 0) {
       const tenderedStr = currency === 'CUP' || currency === localCurrency
         ? formatLocalCurrency(payment.amountTendered)
-        : formatCurrency(payment.amountTendered)
+        : `${formatCurrency(payment.amountTendered)} USD`
       lines.push(formatLine('  Entregado:', tenderedStr, PAPER_WIDTH))
       lines.push(Commands.FEED_LINE)
 
       if (payment.changeAmount !== undefined && payment.changeAmount > 0) {
         const changeStr = currency === 'CUP' || currency === localCurrency
           ? formatLocalCurrency(payment.changeAmount)
-          : formatCurrency(payment.changeAmount)
+          : `${formatCurrency(payment.changeAmount)} USD`
         lines.push(Commands.BOLD_ON)
         lines.push(formatLine('  Cambio:', changeStr, PAPER_WIDTH))
         lines.push(Commands.BOLD_OFF)
